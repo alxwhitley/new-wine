@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+supabase
+openai
+anthropic
+pypdf2
+python-dotenv
+python-multipart
+PyJWT
