@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routers import chat, search, document, ingest
+from app.routers import chat, search, document, ingest
 
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])

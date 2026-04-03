@@ -20,7 +20,8 @@ import subprocess
 import pdfplumber
 import docx
 
-from rhemata.services.chunker import chunk_pages, token_len
+sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
+from app.services.chunker import chunk_pages, token_len
 
 # ── Config ────────────────────────────────────────────────────────────────────
 

@@ -2,8 +2,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ..db.supabase import get_supabase
-from ..services.embeddings import embed_text
+from app.db.supabase import get_supabase
+from app.services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
 

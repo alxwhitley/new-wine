@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from ..db.supabase import get_supabase
+from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
