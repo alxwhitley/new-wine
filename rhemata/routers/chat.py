@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
-from rhemata.auth import get_optional_user
-from rhemata.db.supabase import get_supabase
-from rhemata.services.embeddings import embed_text
+from ..auth import get_optional_user
+from ..db.supabase import get_supabase
+from ..services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
 

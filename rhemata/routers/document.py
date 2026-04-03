@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from rhemata.db.supabase import get_supabase
+from ..db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 

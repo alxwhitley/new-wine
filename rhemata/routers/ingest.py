@@ -4,11 +4,11 @@ import uuid
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
-from rhemata.db.supabase import get_supabase
-from rhemata.services.extractor import extract_text_from_pdf
-from rhemata.services.metadata import extract_metadata
-from rhemata.services.chunker import chunk_text
-from rhemata.services.embeddings import embed_text
+from ..db.supabase import get_supabase
+from ..services.extractor import extract_text_from_pdf
+from ..services.metadata import extract_metadata
+from ..services.chunker import chunk_text
+from ..services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
 
