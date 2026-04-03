@@ -10,7 +10,7 @@ app = FastAPI(title="Rhemata", description="Theological knowledge base and AI ch
 
 allowed_origins = [
     o.strip()
-    for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    for o in os.environ.get("ALLOWED_ORIGINS", "").split(",")
     if o.strip()
 ]
 
