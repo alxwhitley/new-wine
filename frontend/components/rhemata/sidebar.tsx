@@ -35,19 +35,19 @@ export function Sidebar({
   onSignInClick,
 }: SidebarProps) {
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border pt-6">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6">
       {/* Wordmark */}
-      <div className="flex h-16 items-center px-4 border-b border-sidebar-border">
+      <div className="pb-4">
         <h1 className="font-serif text-2xl font-semibold text-foreground tracking-tight">
           Rhemata
         </h1>
       </div>
 
       {/* New Chat Button */}
-      <div className="p-4">
+      <div className="mb-4">
         <Button
           onClick={onNewChat}
-          className="w-full justify-start gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+          className="w-full justify-start gap-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
           New Chat
@@ -55,9 +55,9 @@ export function Sidebar({
       </div>
 
       {/* Conversation History */}
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="flex-1 overflow-y-auto -mx-2 px-2">
         {isLoggedIn ? (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {conversations.map((conversation) => (
               <button
                 key={conversation.id}
@@ -70,7 +70,7 @@ export function Sidebar({
                     : "bg-transparent"
                 )}
               >
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-1">
                   <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
@@ -103,7 +103,7 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-sidebar-border p-4">
+      <div className="mt-auto pb-4 px-4">
         <p className="text-xs text-muted-foreground text-center">
           Theological Research Assistant
         </p>

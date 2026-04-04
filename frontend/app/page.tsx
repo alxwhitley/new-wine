@@ -105,7 +105,7 @@ export default function Home() {
       <main className="ml-64 flex flex-1 flex-col min-w-0">
         {isEmpty ? (
           /* Empty state */
-          <div className="flex flex-col items-center justify-center min-h-screen px-6">
+          <div className="flex flex-col items-center justify-center h-screen px-6">
             <h2 className="font-serif text-3xl font-semibold text-foreground">
               Welcome to Rhemata
             </h2>
@@ -119,7 +119,7 @@ export default function Home() {
               <ChatInput onSend={handleSend} disabled={chatLoading} />
             </div>
 
-            <div className="flex flex-col items-center w-full max-w-xl mt-3 gap-2">
+            <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
