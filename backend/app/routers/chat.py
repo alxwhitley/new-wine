@@ -70,6 +70,9 @@ def expand_query(question: str) -> list[str]:
     return [question]
 
 
+INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "false").lower() == "true"
+
+
 def hybrid_search_rrf(query: str, db, top_k: int = 20) -> dict[str, tuple[float, dict]]:
     """Run vector + FTS search for a single query, return {chunk_id: (rrf_score, chunk)}."""
     embedding = embed_text(query)
@@ -78,6 +81,7 @@ def hybrid_search_rrf(query: str, db, top_k: int = 20) -> dict[str, tuple[float,
         vector_result = db.rpc("match_chunks", {
             "query_embedding": embedding,
             "match_count": top_k,
+            "include_copyrighted": INCLUDE_COPYRIGHTED,
         }).execute()
     except Exception:
         logger.exception("Vector search RPC failed for query: %s", query[:100])
@@ -87,6 +91,7 @@ def hybrid_search_rrf(query: str, db, top_k: int = 20) -> dict[str, tuple[float,
         fts_result = db.rpc("search_chunks_fts", {
             "query_text": query,
             "match_count": top_k,
+            "include_copyrighted": INCLUDE_COPYRIGHTED,
         }).execute()
     except Exception:
         logger.exception("FTS search RPC failed for query: %s", query[:100])
@@ -249,8 +254,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             return
 
         context = "\n\n---\n\n".join(
-            f"[Chunk {c['id']}] (from \"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')})\n{c['content']}"
-            for c in chunks
+            f"[Source {i+1}] (source_type={c.get('source_type', 'sermon')}) \"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}, chunk {c.get('chunk_index', i)}\n{c['content']}"
+            for i, c in enumerate(chunks)
         )
 
         # Build conversation history for Claude

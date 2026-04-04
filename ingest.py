@@ -152,7 +152,7 @@ def already_ingested(source_hash: str) -> bool:
     return len(result.data) > 0
 
 
-def insert_document(metadata: dict, file_path: str) -> str:
+def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False) -> str:
     """Insert a document row and return its UUID."""
     doc_id = str(uuid.uuid4())
     supabase.table("documents").insert({
@@ -166,6 +166,7 @@ def insert_document(metadata: dict, file_path: str) -> str:
         "source":      metadata.get("source_name"),  # mirrors source_name
         "topic_tags":  metadata.get("topic_tags", []),
         "file_path":   file_path,
+        "is_copyrighted": is_copyrighted,
     }).execute()
     return doc_id
 
@@ -189,10 +190,10 @@ def insert_chunks(doc_id: str, chunks: list[tuple[str, int]], author: str = None
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def ingest_file(file_path: Path, dry_run: bool = False) -> str:
+def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False) -> str:
     """Returns 'processed', 'skipped', or 'failed'."""
     print(f"\n{'='*60}")
-    print(f"Processing: {file_path.name}")
+    print(f"Processing: {file_path.name} {'[COPYRIGHTED]' if is_copyrighted else '[OPEN]'}")
     print('='*60)
 
     # 0. Duplicate check via file content hash
@@ -247,7 +248,7 @@ def ingest_file(file_path: Path, dry_run: bool = False) -> str:
 
     # 4. Insert document row
     print("Inserting document record...")
-    doc_id = insert_document(metadata, str(file_path))
+    doc_id = insert_document(metadata, str(file_path), is_copyrighted=is_copyrighted)
     print(f"  Document ID: {doc_id}")
 
     # 5. Embed + insert chunks
@@ -261,13 +262,20 @@ def ingest_file(file_path: Path, dry_run: bool = False) -> str:
 def main():
     dry_run = "--dry-run" in sys.argv
 
-    files = sorted(
-        f for f in DOCS_FOLDER.iterdir()
-        if f.suffix.lower() in SUPPORTED_EXTENSIONS
-    )
+    # Scan pdf/open/ and pdf/copyrighted/ subdirectories
+    open_dir = DOCS_FOLDER / "open"
+    copyrighted_dir = DOCS_FOLDER / "copyrighted"
+
+    files: list[tuple[Path, bool]] = []  # (path, is_copyrighted)
+
+    for folder, copyrighted in [(open_dir, False), (copyrighted_dir, True)]:
+        if folder.is_dir():
+            for f in sorted(folder.iterdir()):
+                if f.suffix.lower() in SUPPORTED_EXTENSIONS:
+                    files.append((f, copyrighted))
 
     if not files:
-        print(f"No supported files found in {DOCS_FOLDER}")
+        print(f"No supported files found in {open_dir} or {copyrighted_dir}")
         return
 
     if dry_run:
@@ -276,8 +284,8 @@ def main():
         print(f"Found {len(files)} file(s) to process")
 
     processed = skipped = failed = 0
-    for file_path in files:
-        result = ingest_file(file_path, dry_run=dry_run)
+    for file_path, is_copyrighted in files:
+        result = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)
         if result == "processed":
             processed += 1
         elif result == "skipped":

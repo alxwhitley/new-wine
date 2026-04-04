@@ -9,18 +9,26 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 ```
 /Users/alexwhitley/Desktop/rhemata/
 ├── ingest.py                  # Standalone PDF ingestion script
-├── pdf/                       # Drop PDFs here to ingest
+���── pdf/                       # Source documents for ingestion
+│   ├── open/                  # Non-copyrighted documents
+│   └── copyrighted/           # Copyrighted documents (is_copyrighted=true)
+├── migrations/                # SQL migrations (run in Supabase SQL Editor)
 ├── CLAUDE.md                  # This file
-└── rhemata/                   # Backend package
+└── backend/app/               # Backend package
     ├── main.py                # FastAPI app entry point
-    └── routers/
-        ├── chat.py            # /chat endpoint — retrieval + LLM
-        ├── ingest.py          # /ingest endpoint
-        ├── search.py          # /search endpoint
-        └── document.py        # /document endpoint
-    └── services/
-        ├── embeddings.py
-        └── metadata.py
+    ├── .env                   # Environment variables
+    ├── routers/
+    │   ├── chat.py            # /chat endpoint — retrieval + LLM
+    │   ├── ingest.py          # /ingest endpoint
+    │   ├── search.py          # /search endpoint
+    │   └── document.py        # /document endpoint
+    ���── services/
+    │   ├── embeddings.py
+    │   ├── chunker.py
+    │   ├── metadata.py
+    │   └── extractor.py
+    └── db/
+        └── supabase.py
 
 /Users/alexwhitley/Desktop/rhemata/frontend/
 ├── package.json
@@ -34,7 +42,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 ### Start Backend
 ```bash
 cd /Users/alexwhitley/Desktop/rhemata
-kill -9 $(lsof -t -i:8000) 2>/dev/null; python3 -m uvicorn rhemata.main:app --reload --log-level debug
+kill -9 $(lsof -t -i:8000) 2>/dev/null; python3 -m uvicorn app.main:app --app-dir backend --reload --log-level debug
 ```
 
 ### Start Frontend
@@ -45,7 +53,7 @@ cd /Users/alexwhitley/Desktop/rhemata/frontend && npm run dev
 
 ### Ingest PDFs
 ```bash
-# Drop PDFs into /Users/alexwhitley/Desktop/rhemata/pdf/
+# Drop files into pdf/open/ or pdf/copyrighted/
 cd /Users/alexwhitley/Desktop/rhemata && python3 ingest.py
 ```
 
@@ -70,7 +78,9 @@ kill -9 $(lsof -t -i:8000)
 - **Supabase** with pgvector enabled
 - Two tables: `documents` and `chunks`
 - `documents.source_type` — `'sermon'` (citable) | `'background'` (informs LLM, never cited)
+- `documents.is_copyrighted` — boolean, default false. Copyrighted docs stay in DB but are excluded from retrieval when `INCLUDE_COPYRIGHTED=false`
 - Vector similarity via `match_chunks` SQL function (HNSW index)
+- Both `match_chunks` and `search_chunks_fts` accept `include_copyrighted` boolean param
 
 ---
 
@@ -85,11 +95,13 @@ kill -9 $(lsof -t -i:8000)
 
 ---
 
-## Environment Variables (in .env)
+## Environment Variables (in backend/app/.env)
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`
 - `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SERVICE_KEY`
+- `SUPABASE_JWT_JWKS_URL`
+- `INCLUDE_COPYRIGHTED` — `true`/`false` (default `false`). Controls whether copyrighted documents appear in search results
 
 ---
 

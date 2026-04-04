@@ -1,13 +1,22 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
-import Sidebar from "@/components/sidebar/Sidebar";
-import CenterPanel from "@/components/center/CenterPanel";
+import { Sidebar } from "@/components/rhemata/sidebar";
+import { ChatMessage } from "@/components/rhemata/chat-message";
+import { ChatInput } from "@/components/rhemata/chat-input";
+import { SourcePanel } from "@/components/rhemata/source-panel";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
+import type { Citation } from "@/lib/api";
+
+const SUGGESTIONS = [
+  "What is the baptism of the Holy Spirit?",
+  "Is speaking in tongues for today?",
+  "How do I hear God's voice?",
+];
 
 export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
@@ -31,6 +40,17 @@ export default function Home() {
     loadMessages,
   } = useConversations(user?.id);
 
+  // Source panel state
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [selectedCitationIndex, setSelectedCitationIndex] = useState<number | null>(null);
+  const [isSourcePanelOpen, setIsSourcePanelOpen] = useState(false);
+
+  // Auto-scroll
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, chatLoading]);
+
   const handleSend = useCallback(
     async (question: string) => {
       const newConvId = await sendMessage(question);
@@ -44,29 +64,125 @@ export default function Home() {
 
   function handleNewChat() {
     clearMessages();
+    setIsSourcePanelOpen(false);
+    setSelectedCitation(null);
   }
 
   async function handleSelectConversation(id: string) {
+    setIsSourcePanelOpen(false);
+    setSelectedCitation(null);
     const msgs = await loadMessages(id);
     loadConversation(id, msgs);
   }
 
+  function handleCitationClick(citation: Citation, index: number) {
+    setSelectedCitation(citation);
+    setSelectedCitationIndex(index);
+    setIsSourcePanelOpen(true);
+  }
+
+  function handleCloseSourcePanel() {
+    setIsSourcePanelOpen(false);
+    setSelectedCitation(null);
+    setSelectedCitationIndex(null);
+  }
+
+  const isEmpty = messages.length === 0;
+
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen bg-background">
+      {/* Left Sidebar */}
       <Sidebar
-        isLoggedIn={!!user}
         conversations={conversations}
         activeConversationId={conversationId}
+        isLoggedIn={!!user}
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
       />
-      <CenterPanel
-        messages={messages}
-        chatLoading={chatLoading}
-        chatError={chatError}
-        onSendMessage={handleSend}
+
+      {/* Main Content Area */}
+      <main className="ml-64 flex flex-1 flex-col min-w-0">
+        {isEmpty ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center min-h-screen px-6">
+            <h2 className="font-serif text-3xl font-semibold text-foreground">
+              Welcome to Rhemata
+            </h2>
+            <p className="text-muted-foreground max-w-md text-center mt-3">
+              Your theological research assistant. Ask questions about
+              Scripture, church history, systematic theology, and
+              charismatic traditions.
+            </p>
+
+            <div className="w-full max-w-3xl mt-8">
+              <ChatInput onSend={handleSend} disabled={chatLoading} />
+            </div>
+
+            <div className="flex flex-col items-center w-full max-w-xl mt-3 gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => handleSend(s)}
+                  className="w-full text-left rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {chatError && (
+              <p className="text-sm text-red-400 mt-4">{chatError}</p>
+            )}
+          </div>
+        ) : (
+          /* Chat thread */
+          <>
+            <div className="flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-3xl px-6 py-8">
+                {messages.map((message, i) => (
+                  <ChatMessage
+                    key={i}
+                    role={message.role}
+                    content={message.content}
+                    citations={message.citations}
+                    onCitationClick={handleCitationClick}
+                  />
+                ))}
+
+                {chatLoading && (
+                  <div style={{ animation: "fade-in 0.2s ease-out" }}>
+                    <div className="text-lg text-muted-foreground flex gap-0.5">
+                      <span style={{ animation: "pulse-dot 1.4s infinite ease-in-out", animationDelay: "0s" }}>.</span>
+                      <span style={{ animation: "pulse-dot 1.4s infinite ease-in-out", animationDelay: "0.2s" }}>.</span>
+                      <span style={{ animation: "pulse-dot 1.4s infinite ease-in-out", animationDelay: "0.4s" }}>.</span>
+                    </div>
+                  </div>
+                )}
+
+                {chatError && (
+                  <p className="text-sm text-red-400 mt-2">{chatError}</p>
+                )}
+
+                <div ref={bottomRef} />
+              </div>
+            </div>
+
+            {/* Fixed Input Bar */}
+            <ChatInput onSend={handleSend} disabled={chatLoading} />
+          </>
+        )}
+      </main>
+
+      {/* Right Source Panel */}
+      <SourcePanel
+        citation={selectedCitation}
+        citationIndex={selectedCitationIndex}
+        isOpen={isSourcePanelOpen}
+        onClose={handleCloseSourcePanel}
       />
+
+      {/* Auth */}
       <AuthButton
         user={user}
         onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}

@@ -1,16 +1,91 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@theme {
-  --color-rh-bg: #1f1e1d;
-  --color-rh-sidebar: #1b1b19;
-  --color-rh-surface: #262624;
-  --color-rh-border: #2a2a28;
-  --color-rh-border-strong: #3c3c38;
-  --color-rh-text: #e6e6e6;
-  --color-rh-text-muted: #c1c1b8;
-  --color-rh-gold: #b49238;
-  --color-rh-gold-hover: #c9a843;
-  --color-rh-gold-light: #d4b96a;
+@custom-variant dark (&:is(.dark *));
+
+/* Rhemata Dark Theme */
+:root {
+  --background: #1f1e1d;
+  --foreground: #e6e6e6;
+  --card: #262624;
+  --card-foreground: #e6e6e6;
+  --popover: #262624;
+  --popover-foreground: #e6e6e6;
+  --primary: #b49238;
+  --primary-foreground: #1b1b19;
+  --secondary: #262624;
+  --secondary-foreground: #e6e6e6;
+  --muted: #262624;
+  --muted-foreground: #c1c1b8;
+  --accent: #262624;
+  --accent-foreground: #e6e6e6;
+  --destructive: #b91c1c;
+  --destructive-foreground: #fef2f2;
+  --border: #3c3c38;
+  --input: #3c3c38;
+  --ring: #b49238;
+  --radius: 0.5rem;
+  --sidebar: #1b1b19;
+  --sidebar-foreground: #e6e6e6;
+  --sidebar-primary: #b49238;
+  --sidebar-primary-foreground: #1b1b19;
+  --sidebar-accent: #262624;
+  --sidebar-accent-foreground: #e6e6e6;
+  --sidebar-border: #3c3c38;
+  --sidebar-ring: #b49238;
+  --citation: #d4b96a;
+  --citation-foreground: #1b1b19;
+  --gold: #b49238;
+  --gold-hover: #c9a843;
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-serif: var(--font-lora), "Lora", Georgia, serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-citation: var(--citation);
+  --color-citation-foreground: var(--citation-foreground);
+  --color-gold: var(--gold);
+  --color-gold-hover: var(--gold-hover);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 *,
@@ -22,44 +97,16 @@
 }
 
 * {
-  outline: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background-color: #1f1e1d;
-  color: #e6e6e6;
-  font-family: var(--font-inter), "Inter", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-lora), "Lora", serif;
-}
-
-input,
-textarea,
-button,
-select {
-  font: inherit;
-  color: inherit;
-  border: none;
-  outline: none;
-  background: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: #c1c1b8;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
 }
 
 ::-webkit-scrollbar {
@@ -71,7 +118,7 @@ a {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3c3c38;
+  background: var(--border);
   border-radius: 10px;
 }
 

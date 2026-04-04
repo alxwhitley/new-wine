@@ -27,19 +27,19 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
           fontSize: "13px",
           fontWeight: 500,
           fontFamily: "var(--font-inter), Inter, sans-serif",
-          color: "#c1c1b8",
+          color: "var(--muted-foreground)",
           background: "transparent",
-          border: "1px solid #3c3c38",
+          border: "1px solid var(--border)",
           cursor: "pointer",
           transition: "border-color 150ms, color 150ms",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = "#b49238";
-          e.currentTarget.style.color = "#e6e6e6";
+          e.currentTarget.style.borderColor = "var(--gold)";
+          e.currentTarget.style.color = "var(--foreground)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = "#3c3c38";
-          e.currentTarget.style.color = "#c1c1b8";
+          e.currentTarget.style.borderColor = "var(--border)";
+          e.currentTarget.style.color = "var(--muted-foreground)";
         }}
       >
         Sign in
@@ -56,9 +56,9 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
           borderRadius: "7px",
           fontSize: "13px",
           fontFamily: "var(--font-inter), Inter, sans-serif",
-          color: "#c1c1b8",
+          color: "var(--muted-foreground)",
           background: "transparent",
-          border: "1px solid #3c3c38",
+          border: "1px solid var(--border)",
           cursor: "pointer",
           transition: "border-color 150ms, color 150ms",
           maxWidth: "200px",
@@ -67,13 +67,13 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
           whiteSpace: "nowrap",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = "#b49238";
-          e.currentTarget.style.color = "#e6e6e6";
+          e.currentTarget.style.borderColor = "var(--gold)";
+          e.currentTarget.style.color = "var(--foreground)";
         }}
         onMouseLeave={(e) => {
           if (!menuOpen) {
-            e.currentTarget.style.borderColor = "#3c3c38";
-            e.currentTarget.style.color = "#c1c1b8";
+            e.currentTarget.style.borderColor = "var(--border)";
+            e.currentTarget.style.color = "var(--muted-foreground)";
           }
         }}
       >
@@ -91,8 +91,8 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
               position: "absolute",
               top: "calc(100% + 6px)",
               right: 0,
-              background: "#262624",
-              border: "1px solid #3c3c38",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
               borderRadius: "8px",
               padding: "4px",
               zIndex: 51,
@@ -113,17 +113,17 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
                 borderRadius: "6px",
                 fontSize: "13px",
                 fontFamily: "var(--font-inter), Inter, sans-serif",
-                color: "#c1c1b8",
+                color: "var(--muted-foreground)",
                 cursor: "pointer",
                 transition: "background 150ms, color 150ms",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#1f1e1d";
-                e.currentTarget.style.color = "#e6e6e6";
+                e.currentTarget.style.background = "var(--background)";
+                e.currentTarget.style.color = "var(--foreground)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#c1c1b8";
+                e.currentTarget.style.color = "var(--muted-foreground)";
               }}
             >
               <LogOut size={14} strokeWidth={1.8} />

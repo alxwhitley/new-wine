@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Lora } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,8 +14,8 @@ const lora = Lora({
 });
 
 export const metadata: Metadata = {
-  title: "Rhemata",
-  description: "Theological knowledge base for charismatic and spirit-filled Christians",
+  title: "Rhemata — Theological Research Assistant",
+  description: "AI-powered theological research tool for charismatic Christians",
 };
 
 export default function RootLayout({
@@ -23,9 +24,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} ${lora.variable} antialiased`}>
+    <html lang="en" className="dark">
+      <body className={`${inter.variable} ${lora.variable} font-sans antialiased`}>
         {children}
+        {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
   );

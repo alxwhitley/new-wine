@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -6,6 +7,8 @@ from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
+
+INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "false").lower() == "true"
 
 router = APIRouter()
 
@@ -19,6 +22,7 @@ async def search(q: str = Query(..., description="Search query")):
         chunks_result = db.rpc("match_chunks", {
             "query_embedding": embedding,
             "match_count": 10,
+            "include_copyrighted": INCLUDE_COPYRIGHTED,
         }).execute()
 
         chunks = chunks_result.data

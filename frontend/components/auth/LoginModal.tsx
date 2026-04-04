@@ -41,9 +41,9 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
     width: "100%",
     padding: "10px 14px",
     borderRadius: "8px",
-    border: "1px solid #3c3c38",
-    background: "#262624",
-    color: "#e6e6e6",
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    color: "var(--foreground)",
     fontSize: "14px",
     fontFamily: "var(--font-inter), Inter, sans-serif",
     outline: "none",
@@ -67,8 +67,8 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
         style={{
           width: "100%",
           maxWidth: "380px",
-          background: "#1f1e1d",
-          border: "1px solid #2a2a28",
+          background: "var(--background)",
+          border: "1px solid var(--border)",
           borderRadius: "14px",
           padding: "32px",
           position: "relative",
@@ -80,14 +80,14 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
             position: "absolute",
             top: "16px",
             right: "16px",
-            color: "#c1c1b8",
+            color: "var(--muted-foreground)",
             cursor: "pointer",
             padding: "4px",
             borderRadius: "6px",
             transition: "color 150ms",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "#e6e6e6"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "#c1c1b8"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--foreground)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted-foreground)"; }}
         >
           <X size={18} strokeWidth={1.8} />
         </button>
@@ -97,12 +97,12 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
             style={{
               padding: "10px 14px",
               borderRadius: "8px",
-              background: "#262624",
-              borderLeft: "3px solid #b49238",
+              background: "var(--card)",
+              borderLeft: "3px solid var(--gold)",
               marginBottom: "20px",
               fontSize: "13px",
               lineHeight: "1.5",
-              color: "#e6e6e6",
+              color: "var(--foreground)",
               fontFamily: "var(--font-inter), Inter, sans-serif",
             }}
           >
@@ -115,7 +115,7 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
             fontFamily: "var(--font-lora), Lora, serif",
             fontSize: "20px",
             fontWeight: 600,
-            color: "#e6e6e6",
+            color: "var(--foreground)",
             marginBottom: "24px",
           }}
         >
@@ -124,14 +124,14 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
 
         {signUpSuccess ? (
           <div style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
-            <p style={{ fontSize: "14px", color: "#e6e6e6", marginBottom: "8px" }}>
+            <p style={{ fontSize: "14px", color: "var(--foreground)", marginBottom: "8px" }}>
               Check your email for a confirmation link.
             </p>
             <button
               onClick={() => { setMode("signin"); setSignUpSuccess(false); setError(null); }}
               style={{
                 fontSize: "13px",
-                color: "#b49238",
+                color: "var(--gold)",
                 cursor: "pointer",
                 fontFamily: "inherit",
               }}
@@ -160,7 +160,7 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
             />
 
             {error && (
-              <p style={{ fontSize: "13px", color: "#e57373", margin: 0 }}>{error}</p>
+              <p style={{ fontSize: "13px", color: "var(--destructive)", margin: 0 }}>{error}</p>
             )}
 
             <button
@@ -170,8 +170,8 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
                 width: "100%",
                 padding: "10px",
                 borderRadius: "8px",
-                background: submitting ? "#8a7230" : "#b49238",
-                color: "#1f1e1d",
+                background: submitting ? "var(--gold-hover)" : "var(--gold)",
+                color: "var(--primary-foreground)",
                 fontSize: "14px",
                 fontWeight: 600,
                 fontFamily: "var(--font-inter), Inter, sans-serif",
@@ -179,8 +179,8 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
                 transition: "background 150ms",
                 border: "none",
               }}
-              onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#c9a33f"; }}
-              onMouseLeave={(e) => { if (!submitting) e.currentTarget.style.background = "#b49238"; }}
+              onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "var(--gold-hover)"; }}
+              onMouseLeave={(e) => { if (!submitting) e.currentTarget.style.background = "var(--gold)"; }}
             >
               {submitting
                 ? "..."
@@ -192,7 +192,7 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
             <p
               style={{
                 fontSize: "13px",
-                color: "#c1c1b8",
+                color: "var(--muted-foreground)",
                 textAlign: "center",
                 fontFamily: "var(--font-inter), Inter, sans-serif",
                 margin: 0,
@@ -203,7 +203,7 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
                 type="button"
                 onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); }}
                 style={{
-                  color: "#b49238",
+                  color: "var(--gold)",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   fontSize: "inherit",
