@@ -1,6 +1,6 @@
 "use client";
 
-import { X, BookOpen } from "lucide-react";
+import { X, BookOpen, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Citation } from "@/lib/api";
 
@@ -62,6 +62,19 @@ export function SourcePanel({ citation, citationIndex, isOpen, onClose }: Source
             <p className="text-sm text-muted-foreground mb-6">
               {citation.author}
             </p>
+          )}
+
+          {/* Source link */}
+          {citation.url && (
+            <a
+              href={citation.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-6 inline-flex items-center gap-1.5 text-sm text-gold hover:text-gold-hover transition-colors"
+            >
+              View source
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
           )}
 
           {/* Excerpt */}

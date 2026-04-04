@@ -6,6 +6,7 @@ export interface Citation {
   document_title: string;
   author: string;
   content: string;
+  url?: string;
 }
 
 export interface ChatResponse {

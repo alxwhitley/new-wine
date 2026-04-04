@@ -233,6 +233,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 "document_title": c.get("title"),
                 "author": c.get("author"),
                 "content": c["content"],
+                "url": c.get("url"),
             }
             for c in chunks
             if c.get("source_type") != "background"

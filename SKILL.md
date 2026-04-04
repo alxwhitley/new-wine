@@ -90,6 +90,7 @@ repo/
 - `file_path` (text)
 - `source_type` (text) — `'sermon'` | `'background'`
 - `source_name` (text)
+- `url` (text, nullable) — source URL (e.g. YouTube link for scraped transcripts)
 - `created_at` (timestamptz)
 
 **`chunks` table** — one row per text chunk
@@ -145,14 +146,27 @@ repo/
 ---
 
 ## Content Rules
-- Only ingest PDFs that Alex personally owns
+- Only ingest documents that Alex personally owns or has rights to
 - New Wine Magazine is on hold — do not plan ingestion until copyright is resolved
 - Current documents are single-column — no multi-column OCR handling needed
 
 ---
 
+## YouTube Scraping Pipeline
+- Script: `/Users/alexwhitley/Desktop/Cowork OS/Rhemata/scrape_youtube.py`
+- Tracker: `/Users/alexwhitley/Desktop/Cowork OS/Rhemata/rhemata_youtube_tracker.xlsx`
+- Cookies: `/Users/alexwhitley/Desktop/Cowork OS/Rhemata/youtube_cookies.txt` (required — YouTube blocks without auth)
+- Pipeline: yt-dlp (video listing with cookies) → `youtube-transcript-api` (transcript via cookies session) → Claude Haiku (cleaning) → structured .txt with metadata headers → `pdf/copyrighted/`
+- .txt header format: `TITLE`, `SPEAKER`, `CHANNEL`, `SOURCE_URL`, `PUBLISHED`, `DURATION_MIN`, `SOURCE_TYPE` (parsed by `ingest.py` → `url` column)
+- `ingest.py` supports `.txt` files: parses KEY: VALUE headers before first blank line, extracts `SOURCE_URL` into `documents.url`
+- **Python 3.9 constraint**: do not use `str | None` union syntax — use `Optional[str]` or untyped defaults
+
+---
+
 ## Corpus
-- 16 documents currently ingested (111 chunks after re-chunking)
+- 21 documents ingested (~496 chunks)
+- 11 open (sermon outlines, theology papers)
+- 10 copyrighted (John Bevere TV YouTube transcripts, with `url` populated)
 
 ---
 
@@ -199,6 +213,8 @@ Full brand spec: `/mnt/project/rhemata-brand.md`
 ---
 
 ## Remaining
+- **YouTube cookies not yet exported** — scraper cannot pull new transcripts until Alex exports cookies from Arc (via "Get cookies.txt LOCALLY" extension) and saves to `Cowork OS/Rhemata/youtube_cookies.txt`
+- **match_chunks and search_chunks_fts RPCs** need to be verified — migration 002 added `url` to return tables; confirm both RPCs return `url` in Supabase SQL Editor
 - Gemini audit items not yet implemented: context compaction, RLS hardening, prompt caching
 
 ---

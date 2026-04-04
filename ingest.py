@@ -26,7 +26,7 @@ from app.services.chunker import chunk_pages, token_len
 # ── Config ────────────────────────────────────────────────────────────────────
 
 DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/pdf")
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 OPENAI_API_KEY    = os.environ["OPENAI_API_KEY"]
@@ -88,6 +88,35 @@ def extract_doc(path: Path) -> list[str]:
     )
     raw = result.stdout.strip()
     return [raw] if raw else []
+
+
+def extract_txt(path: Path) -> tuple[list[str], dict[str, str]]:
+    """Extract text from a .txt file. Parses optional metadata headers at the top.
+    Headers are lines matching KEY: VALUE before the first blank line.
+    Returns (pages, headers_dict)."""
+    raw = path.read_text(encoding="utf-8").strip()
+    headers: dict[str, str] = {}
+    body = raw
+
+    # Parse metadata headers (lines before first blank line)
+    lines = raw.split("\n")
+    header_end = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            header_end = i + 1
+            break
+        if ":" in stripped:
+            key, _, value = stripped.partition(":")
+            headers[key.strip().upper()] = value.strip()
+            header_end = i + 1
+        else:
+            break
+
+    if headers:
+        body = "\n".join(lines[header_end:]).strip()
+
+    return [body] if body else [], headers
 
 
 # ── Metadata Extraction ───────────────────────────────────────────────────────
@@ -152,10 +181,10 @@ def already_ingested(source_hash: str) -> bool:
     return len(result.data) > 0
 
 
-def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False) -> str:
+def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None) -> str:
     """Insert a document row and return its UUID."""
     doc_id = str(uuid.uuid4())
-    supabase.table("documents").insert({
+    row = {
         "id":          doc_id,
         "title":       metadata.get("title"),
         "author":      metadata.get("author"),
@@ -167,7 +196,15 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
         "topic_tags":  metadata.get("topic_tags", []),
         "file_path":   file_path,
         "is_copyrighted": is_copyrighted,
-    }).execute()
+    }
+    if url:
+        row["url"] = url
+    try:
+        supabase.table("documents").insert(row).execute()
+    except Exception:
+        # url column may not exist yet — retry without it
+        row.pop("url", None)
+        supabase.table("documents").insert(row).execute()
     return doc_id
 
 
@@ -204,13 +241,20 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
     # 1. Extract text
     ext = file_path.suffix.lower()
-    extractors = {
-        ".pdf": extract_pages,
-        ".docx": extract_docx,
-        ".doc": extract_doc,
-    }
-    print(f"Extracting text ({ext})...")
-    pages = extractors[ext](file_path)
+    txt_headers: dict[str, str] = {}
+    if ext == ".txt":
+        print(f"Extracting text ({ext})...")
+        pages, txt_headers = extract_txt(file_path)
+        if txt_headers:
+            print(f"  Parsed headers: {txt_headers}")
+    else:
+        extractors = {
+            ".pdf": extract_pages,
+            ".docx": extract_docx,
+            ".doc": extract_doc,
+        }
+        print(f"Extracting text ({ext})...")
+        pages = extractors[ext](file_path)
     if not pages or not any(pages):
         print("  ⚠️  No text extracted — skipping")
         return "failed"
@@ -247,8 +291,9 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         return "processed"
 
     # 4. Insert document row
+    source_url = txt_headers.get("SOURCE_URL") if txt_headers else None
     print("Inserting document record...")
-    doc_id = insert_document(metadata, str(file_path), is_copyrighted=is_copyrighted)
+    doc_id = insert_document(metadata, str(file_path), is_copyrighted=is_copyrighted, url=source_url)
     print(f"  Document ID: {doc_id}")
 
     # 5. Embed + insert chunks
