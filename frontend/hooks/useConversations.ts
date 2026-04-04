@@ -41,6 +41,12 @@ export function useConversations(userId: string | undefined) {
     [],
   );
 
+  const deleteConversation = useCallback(async (id: string) => {
+    await supabase.from("messages").delete().eq("conversation_id", id);
+    await supabase.from("conversations").delete().eq("id", id);
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
   const loadMessages = useCallback(async (conversationId: string): Promise<Message[]> => {
     const { data } = await supabase
       .from("messages")
@@ -52,5 +58,5 @@ export function useConversations(userId: string | undefined) {
     return data.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
   }, []);
 
-  return { conversations, fetchConversations, addOrUpdate, loadMessages };
+  return { conversations, fetchConversations, addOrUpdate, deleteConversation, loadMessages };
 }

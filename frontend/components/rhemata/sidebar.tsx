@@ -1,6 +1,7 @@
 "use client";
 
-import { Plus, MessageSquare, LogIn } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, MessageSquare, LogIn, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/hooks/useConversations";
@@ -11,6 +12,7 @@ interface SidebarProps {
   isLoggedIn: boolean;
   onNewChat: () => void;
   onSelectConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
   onSignInClick: () => void;
 }
 
@@ -32,8 +34,25 @@ export function Sidebar({
   isLoggedIn,
   onNewChat,
   onSelectConversation,
+  onDeleteConversation,
   onSignInClick,
 }: SidebarProps) {
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+        setConfirmingId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpenId]);
+
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6">
       {/* Wordmark */}
@@ -59,29 +78,96 @@ export function Sidebar({
         {isLoggedIn ? (
           <div className="space-y-2">
             {conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                onClick={() => onSelectConversation(conversation.id)}
-                className={cn(
-                  "w-full rounded-lg px-3 py-2 text-left transition-colors",
-                  "hover:bg-sidebar-accent",
-                  activeConversationId === conversation.id
-                    ? "bg-sidebar-accent"
-                    : "bg-transparent"
-                )}
-              >
-                <div className="flex items-start gap-1">
-                  <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {conversation.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {relativeTime(conversation.updated_at)}
-                    </p>
+              <div key={conversation.id} className="group relative">
+                <button
+                  onClick={() => onSelectConversation(conversation.id)}
+                  className={cn(
+                    "w-full rounded-lg px-3 py-2 text-left transition-colors",
+                    "hover:bg-sidebar-accent",
+                    activeConversationId === conversation.id
+                      ? "bg-sidebar-accent"
+                      : "bg-transparent"
+                  )}
+                >
+                  <div className="flex items-start gap-1">
+                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="text-sm font-medium text-foreground"
+                        style={{
+                          WebkitMaskImage: "linear-gradient(to right, black 70%, transparent 100%)",
+                          maskImage: "linear-gradient(to right, black 70%, transparent 100%)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {conversation.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {relativeTime(conversation.updated_at)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+
+                {/* Three-dot menu button — visible on hover */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpenId(menuOpenId === conversation.id ? null : conversation.id);
+                    setConfirmingId(null);
+                  }}
+                  className="absolute right-2 top-2 hidden rounded p-1 text-muted-foreground transition-colors hover:text-foreground group-hover:block"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+
+                {/* Dropdown menu */}
+                {menuOpenId === conversation.id && (
+                  <div
+                    ref={menuRef}
+                    className="absolute right-0 top-9 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[120px]"
+                  >
+                    {confirmingId === conversation.id ? (
+                      <div className="px-3 py-2">
+                        <p className="text-xs text-muted-foreground mb-2">Delete?</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              onDeleteConversation(conversation.id);
+                              setMenuOpenId(null);
+                              setConfirmingId(null);
+                            }}
+                            className="rounded px-2 py-1 text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => {
+                              setMenuOpenId(null);
+                              setConfirmingId(null);
+                            }}
+                            className="rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmingId(conversation.id);
+                        }}
+                        className="flex w-full items-center gap-2 text-sm px-3 py-2 text-destructive hover:bg-sidebar-accent transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         ) : (

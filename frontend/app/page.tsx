@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/rhemata/sidebar";
 import { ChatMessage } from "@/components/rhemata/chat-message";
 import { ChatInput } from "@/components/rhemata/chat-input";
 import { SourcePanel } from "@/components/rhemata/source-panel";
+import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import type { Citation } from "@/lib/api";
@@ -37,6 +38,7 @@ export default function Home() {
   const {
     conversations,
     addOrUpdate,
+    deleteConversation,
     loadMessages,
   } = useConversations(user?.id);
 
@@ -75,6 +77,13 @@ export default function Home() {
     loadConversation(id, msgs);
   }
 
+  async function handleDeleteConversation(id: string) {
+    await deleteConversation(id);
+    if (conversationId === id) {
+      clearMessages();
+    }
+  }
+
   function handleCitationClick(citation: Citation, index: number) {
     setSelectedCitation(citation);
     setSelectedCitationIndex(index);
@@ -89,6 +98,14 @@ export default function Home() {
 
   const isEmpty = messages.length === 0;
 
+  function getGreeting() {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return "Good morning, what would you like to learn about?";
+    if (h >= 12 && h < 17) return "Good afternoon, what would you like to learn about?";
+    if (h >= 17 && h < 21) return "Good evening, what would you like to learn about?";
+    return "You\u2019re up late. What would you like to explore?";
+  }
+
   return (
     <div className="flex h-screen bg-background">
       {/* Left Sidebar */}
@@ -98,22 +115,29 @@ export default function Home() {
         isLoggedIn={!!user}
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
+        onDeleteConversation={handleDeleteConversation}
         onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
       />
 
       {/* Main Content Area */}
-      <main className="ml-64 flex flex-1 flex-col min-w-0">
+      <main className="ml-64 flex flex-1 flex-col min-w-0 h-screen">
+        {/* Top Bar */}
+        <div className="flex h-14 shrink-0 items-center border-b border-border px-6">
+          <div className="ml-auto">
+            <AuthButton
+              user={user}
+              onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
+              onSignOut={signOut}
+            />
+          </div>
+        </div>
+
         {isEmpty ? (
           /* Empty state */
-          <div className="flex flex-col items-center justify-center h-screen px-6">
-            <h2 className="font-serif text-3xl font-semibold text-foreground">
-              Welcome to Rhemata
+          <div className="flex flex-1 flex-col items-center justify-center px-6">
+            <h2 className="font-serif text-3xl font-semibold text-foreground text-center max-w-lg">
+              {getGreeting()}
             </h2>
-            <p className="text-muted-foreground max-w-md text-center mt-3">
-              Your theological research assistant. Ask questions about
-              Scripture, church history, systematic theology, and
-              charismatic traditions.
-            </p>
 
             <div className="w-full max-w-3xl mt-8">
               <ChatInput onSend={handleSend} disabled={chatLoading} />
@@ -139,7 +163,7 @@ export default function Home() {
           /* Chat thread */
           <>
             <div className="flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-3xl px-6 py-8">
+              <div className="mx-auto max-w-3xl px-6 pt-8 pb-8">
                 {messages.map((message, i) => (
                   <ChatMessage
                     key={i}
@@ -150,15 +174,7 @@ export default function Home() {
                   />
                 ))}
 
-                {chatLoading && (
-                  <div style={{ animation: "fade-in 0.2s ease-out" }}>
-                    <div className="text-lg text-muted-foreground flex gap-0.5">
-                      <span style={{ animation: "pulse-dot 1.4s infinite ease-in-out", animationDelay: "0s" }}>.</span>
-                      <span style={{ animation: "pulse-dot 1.4s infinite ease-in-out", animationDelay: "0.2s" }}>.</span>
-                      <span style={{ animation: "pulse-dot 1.4s infinite ease-in-out", animationDelay: "0.4s" }}>.</span>
-                    </div>
-                  </div>
-                )}
+                {chatLoading && <LoadingIndicator />}
 
                 {chatError && (
                   <p className="text-sm text-red-400 mt-2">{chatError}</p>
@@ -180,13 +196,6 @@ export default function Home() {
         citationIndex={selectedCitationIndex}
         isOpen={isSourcePanelOpen}
         onClose={handleCloseSourcePanel}
-      />
-
-      {/* Auth */}
-      <AuthButton
-        user={user}
-        onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
-        onSignOut={signOut}
       />
       {showLogin && (
         <LoginModal
