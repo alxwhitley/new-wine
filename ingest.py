@@ -307,11 +307,16 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 def main():
     dry_run = "--dry-run" in sys.argv
 
-    # Scan pdf/open/ and pdf/copyrighted/ subdirectories
+    # Scan pdf/ root, pdf/open/, and pdf/copyrighted/ subdirectories
     open_dir = DOCS_FOLDER / "open"
     copyrighted_dir = DOCS_FOLDER / "copyrighted"
 
     files: list[tuple[Path, bool]] = []  # (path, is_copyrighted)
+
+    # Root-level files (non-copyrighted)
+    for f in sorted(DOCS_FOLDER.iterdir()):
+        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS:
+            files.append((f, False))
 
     for folder, copyrighted in [(open_dir, False), (copyrighted_dir, True)]:
         if folder.is_dir():
