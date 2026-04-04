@@ -56,6 +56,21 @@ function renderTextWithCitations(
   });
 }
 
+function stripXmlTags(text: string): string {
+  // Extract content inside <answer> tags if present
+  const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/);
+  if (answerMatch) {
+    return answerMatch[1].trim();
+  }
+  // Otherwise strip all known XML tags and their content
+  let cleaned = text;
+  cleaned = cleaned.replace(/<thinking>[\s\S]*?<\/thinking>/g, "");
+  cleaned = cleaned.replace(/<research_analysis>[\s\S]*?<\/research_analysis>/g, "");
+  // Strip any remaining XML-style tags (opening, closing, self-closing)
+  cleaned = cleaned.replace(/<\/?[a-z_]+>/gi, "");
+  return cleaned.trim();
+}
+
 export function ChatMessage({
   role,
   content,
@@ -74,6 +89,7 @@ export function ChatMessage({
     );
   }
 
+  const cleanedContent = stripXmlTags(content);
   const hasCitations = citations.length > 0;
 
   return (
@@ -129,7 +145,7 @@ export function ChatMessage({
             },
           }}
         >
-          {content}
+          {cleanedContent}
         </ReactMarkdown>
       </div>
     </div>
