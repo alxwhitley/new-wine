@@ -70,7 +70,7 @@ def expand_query(question: str) -> list[str]:
     return [question]
 
 
-INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "false").lower() == "true"
+INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
 
 
 def hybrid_search_rrf(query: str, db, top_k: int = 20) -> dict[str, tuple[float, dict]]:
