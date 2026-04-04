@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
@@ -23,6 +24,7 @@ export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const {
     messages,
     loading: chatLoading,
@@ -108,22 +110,43 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Left Sidebar */}
+      {/* Sidebar */}
       <Sidebar
         conversations={conversations}
         activeConversationId={conversationId}
         isLoggedIn={!!user}
+        user={user}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
         onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
+        onSignOut={signOut}
       />
 
       {/* Main Content Area */}
-      <main className="ml-64 flex flex-1 flex-col min-w-0 h-screen">
+      <main className="md:ml-64 flex flex-1 flex-col min-w-0 h-screen">
         {/* Top Bar */}
-        <div className="flex h-14 shrink-0 items-center border-b border-border px-6">
-          <div className="ml-auto">
+        <div className="flex h-14 shrink-0 items-center border-b border-border px-4 md:px-6 z-30">
+          {/* Mobile: hamburger */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
+          {/* Mobile: centered wordmark */}
+          <h1 className="md:hidden flex-1 text-center font-serif text-lg font-semibold text-foreground">
+            Rhemata
+          </h1>
+
+          {/* Mobile: spacer to balance hamburger */}
+          <div className="md:hidden min-w-[44px]" />
+
+          {/* Desktop: auth button */}
+          <div className="hidden md:flex ml-auto">
             <AuthButton
               user={user}
               onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
@@ -134,8 +157,8 @@ export default function Home() {
 
         {isEmpty ? (
           /* Empty state */
-          <div className="flex flex-1 flex-col items-center justify-center px-6">
-            <h2 className="font-serif text-3xl font-semibold text-foreground text-center max-w-lg">
+          <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6">
+            <h2 className="font-serif text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg">
               {getGreeting()}
             </h2>
 
@@ -148,7 +171,7 @@ export default function Home() {
                 <button
                   key={s}
                   onClick={() => handleSend(s)}
-                  className="w-full text-left rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
+                  className="w-full min-h-[44px] text-left rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
                 >
                   {s}
                 </button>
@@ -163,7 +186,7 @@ export default function Home() {
           /* Chat thread */
           <>
             <div className="flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-3xl px-6 pt-8 pb-8">
+              <div className="mx-auto max-w-3xl px-4 md:px-6 pt-8 pb-8">
                 {messages.map((message, i) => (
                   <ChatMessage
                     key={i}
@@ -174,7 +197,9 @@ export default function Home() {
                   />
                 ))}
 
-                {chatLoading && <LoadingIndicator />}
+                {chatLoading && messages.length > 0 && messages[messages.length - 1].content === "" && (
+                  <LoadingIndicator />
+                )}
 
                 {chatError && (
                   <p className="text-sm text-red-400 mt-2">{chatError}</p>

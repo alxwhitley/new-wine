@@ -1,19 +1,24 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, MessageSquare, LogIn, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, MessageSquare, LogIn, MoreHorizontal, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/hooks/useConversations";
+import type { User } from "@supabase/supabase-js";
 
 interface SidebarProps {
   conversations: Conversation[];
   activeConversationId: string | null;
   isLoggedIn: boolean;
+  user: User | null;
+  isOpen: boolean;
+  onClose: () => void;
   onNewChat: () => void;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onSignInClick: () => void;
+  onSignOut: () => void;
 }
 
 function relativeTime(iso: string): string {
@@ -32,10 +37,14 @@ export function Sidebar({
   conversations,
   activeConversationId,
   isLoggedIn,
+  user,
+  isOpen,
+  onClose,
   onNewChat,
   onSelectConversation,
   onDeleteConversation,
   onSignInClick,
+  onSignOut,
 }: SidebarProps) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -53,20 +62,46 @@ export function Sidebar({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpenId]);
 
-  return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6">
-      {/* Wordmark */}
-      <div className="pb-4">
+  // Lock body scroll when drawer is open on mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen]);
+
+  function handleSelectConversation(id: string) {
+    onSelectConversation(id);
+    onClose();
+  }
+
+  function handleNewChat() {
+    onNewChat();
+    onClose();
+  }
+
+  const sidebarContent = (
+    <>
+      {/* Wordmark + close button (mobile) */}
+      <div className="flex items-center justify-between pb-4">
         <h1 className="font-serif text-2xl font-semibold text-foreground tracking-tight">
           Rhemata
         </h1>
+        <button
+          onClick={onClose}
+          className="rounded p-1 text-muted-foreground hover:text-foreground md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* New Chat Button */}
       <div className="mb-4">
         <Button
-          onClick={onNewChat}
-          className="w-full justify-start gap-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={handleNewChat}
+          className="w-full min-h-[44px] justify-start gap-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
           New Chat
@@ -80,9 +115,9 @@ export function Sidebar({
             {conversations.map((conversation) => (
               <div key={conversation.id} className="group relative">
                 <button
-                  onClick={() => onSelectConversation(conversation.id)}
+                  onClick={() => handleSelectConversation(conversation.id)}
                   className={cn(
-                    "w-full rounded-lg px-3 py-2 text-left transition-colors",
+                    "w-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-colors",
                     "hover:bg-sidebar-accent",
                     activeConversationId === conversation.id
                       ? "bg-sidebar-accent"
@@ -117,7 +152,7 @@ export function Sidebar({
                     setMenuOpenId(menuOpenId === conversation.id ? null : conversation.id);
                     setConfirmingId(null);
                   }}
-                  className="absolute right-2 top-2 hidden rounded p-1 text-muted-foreground transition-colors hover:text-foreground group-hover:block"
+                  className="absolute right-2 top-2 hidden min-h-[44px] min-w-[44px] items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-foreground group-hover:flex"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
@@ -179,12 +214,34 @@ export function Sidebar({
               variant="outline"
               size="sm"
               onClick={onSignInClick}
-              className="gap-2"
+              className="gap-2 min-h-[44px]"
             >
               <LogIn className="h-3.5 w-3.5" />
               Sign in
             </Button>
           </div>
+        )}
+      </div>
+
+      {/* Mobile-only: profile/email above footer */}
+      <div className="md:hidden border-t border-sidebar-border pt-4 pb-2 px-1">
+        {user ? (
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground truncate max-w-[160px]">{user.email}</p>
+            <button
+              onClick={onSignOut}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-2"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onSignInClick}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
+          >
+            Sign in
+          </button>
         )}
       </div>
 
@@ -194,6 +251,33 @@ export function Sidebar({
           Theological Research Assistant
         </p>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar — always visible */}
+      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile drawer overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6 transition-transform duration-300 md:hidden",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

@@ -28,9 +28,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="bg-background px-6 pb-6">
+    <div className="bg-background px-4 md:px-6 pb-6">
       <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -38,7 +38,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             placeholder="Enter your prompt..."
             disabled={disabled}
             rows={1}
-            className="min-w-0 flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+            className="min-w-0 flex-1 resize-none bg-transparent py-0 text-sm leading-normal text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
             style={{
               minHeight: "24px",
               maxHeight: "200px",
@@ -53,7 +53,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             type="submit"
             disabled={!input.trim() || disabled}
             size="icon"
-            className="h-8 w-8 shrink-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="min-h-[44px] min-w-[44px] shrink-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
             <span className="sr-only">Send message</span>

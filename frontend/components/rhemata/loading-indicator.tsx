@@ -26,7 +26,7 @@ export function LoadingIndicator() {
 
   return (
     <p
-      className={`text-sm text-muted-foreground italic text-center transition-opacity duration-500 ${
+      className={`text-sm text-muted-foreground italic text-left transition-opacity duration-500 ${
         visible ? "opacity-100" : "opacity-0"
       }`}
     >
