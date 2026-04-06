@@ -80,6 +80,7 @@ export default function Home() {
   }
 
   async function handleDeleteConversation(id: string) {
+    console.log("[DELETE TRACE] 4. handleDeleteConversation called in page.tsx for:", id);
     await deleteConversation(id);
     if (conversationId === id) {
       clearMessages();

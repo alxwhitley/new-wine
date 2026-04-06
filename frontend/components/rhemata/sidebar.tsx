@@ -149,6 +149,7 @@ export function Sidebar({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    console.log("[DELETE TRACE] 1. Three-dot menu opened for:", conversation.id);
                     setMenuOpenId(menuOpenId === conversation.id ? null : conversation.id);
                     setConfirmingId(null);
                   }}
@@ -169,6 +170,7 @@ export function Sidebar({
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
+                              console.log("[DELETE TRACE] 3. Confirm click — calling onDeleteConversation for:", conversation.id);
                               onDeleteConversation(conversation.id);
                               setMenuOpenId(null);
                               setConfirmingId(null);
@@ -192,6 +194,7 @@ export function Sidebar({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          console.log("[DELETE TRACE] 2. First click — showing confirm for:", conversation.id);
                           setConfirmingId(conversation.id);
                         }}
                         className="flex w-full items-center gap-2 text-sm px-3 py-2 text-destructive hover:bg-sidebar-accent transition-colors"

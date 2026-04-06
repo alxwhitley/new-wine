@@ -42,9 +42,24 @@ export function useConversations(userId: string | undefined) {
   );
 
   const deleteConversation = useCallback(async (id: string) => {
-    await supabase.from("messages").delete().eq("conversation_id", id);
-    await supabase.from("conversations").delete().eq("id", id);
-    setConversations((prev) => prev.filter((c) => c.id !== id));
+    console.log("[DELETE TRACE] 5. deleteConversation called in useConversations for:", id);
+    try {
+      const { error: msgErr } = await supabase.from("messages").delete().eq("conversation_id", id);
+      if (msgErr) {
+        console.error("Failed to delete messages:", msgErr);
+        return;
+      }
+
+      const { error: convErr } = await supabase.from("conversations").delete().eq("id", id);
+      if (convErr) {
+        console.error("Failed to delete conversation:", convErr);
+        return;
+      }
+
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("Unexpected error deleting conversation:", err);
+    }
   }, []);
 
   const loadMessages = useCallback(async (conversationId: string): Promise<Message[]> => {
