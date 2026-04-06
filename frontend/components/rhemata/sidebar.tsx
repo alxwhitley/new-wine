@@ -153,7 +153,10 @@ export function Sidebar({
                     setMenuOpenId(menuOpenId === conversation.id ? null : conversation.id);
                     setConfirmingId(null);
                   }}
-                  className="absolute right-2 top-2 hidden min-h-[44px] min-w-[44px] items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-foreground group-hover:flex"
+                  className={cn(
+                    "absolute right-2 top-2 min-h-[44px] min-w-[44px] items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-foreground",
+                    menuOpenId === conversation.id ? "hidden" : "hidden group-hover:flex"
+                  )}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
