@@ -171,7 +171,9 @@ export function Sidebar({
                         <p className="text-xs text-muted-foreground mb-2">Delete?</p>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => {
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
                               console.log("[DELETE TRACE] 3. Confirm click — calling onDeleteConversation for:", conversation.id);
                               onDeleteConversation(conversation.id);
                               setMenuOpenId(null);
@@ -182,7 +184,9 @@ export function Sidebar({
                             Delete
                           </button>
                           <button
-                            onClick={() => {
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setMenuOpenId(null);
                               setConfirmingId(null);
                             }}
