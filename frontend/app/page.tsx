@@ -101,13 +101,14 @@ export default function Home() {
 
   const isEmpty = messages.length === 0;
 
-  function getGreeting() {
+  const [greeting, setGreeting] = useState("What would you like to learn about?");
+  useEffect(() => {
     const h = new Date().getHours();
-    if (h >= 5 && h < 12) return "Good morning, what would you like to learn about?";
-    if (h >= 12 && h < 17) return "Good afternoon, what would you like to learn about?";
-    if (h >= 17 && h < 21) return "Good evening, what would you like to learn about?";
-    return "You\u2019re up late. What would you like to explore?";
-  }
+    if (h >= 5 && h < 12) setGreeting("Good morning, what would you like to learn about?");
+    else if (h >= 12 && h < 17) setGreeting("Good afternoon, what would you like to learn about?");
+    else if (h >= 17 && h < 21) setGreeting("Good evening, what would you like to learn about?");
+    else setGreeting("You\u2019re up late. What would you like to explore?");
+  }, []);
 
   return (
     <div className="flex h-screen bg-background">
@@ -160,7 +161,7 @@ export default function Home() {
           /* Empty state */
           <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6">
             <h2 className="font-serif text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg">
-              {getGreeting()}
+              {greeting}
             </h2>
 
             <div className="w-full max-w-3xl mt-8">
