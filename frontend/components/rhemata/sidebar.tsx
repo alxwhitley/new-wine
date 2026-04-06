@@ -101,26 +101,23 @@ export function Sidebar({
             {conversations.map((conversation) => (
               <div key={conversation.id} className="group relative">
                 {confirmingId === conversation.id ? (
-                  <div className="flex w-full min-h-[44px] items-center justify-between rounded-lg bg-destructive/10 px-3 py-2">
-                    <p className="text-sm text-destructive">Delete this conversation?</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          console.log("[DELETE TRACE] 3. Confirm click firing for:", conversation.id);
-                          onDeleteConversation(conversation.id);
-                          setConfirmingId(null);
-                        }}
-                        className="rounded px-3 py-1 text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors min-h-[32px]"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => setConfirmingId(null)}
-                        className="rounded px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[32px]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                  <div className="flex w-full min-h-[44px] items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2">
+                    <button
+                      onClick={() => {
+                        console.log("[DELETE TRACE] 3. Confirm click firing for:", conversation.id);
+                        onDeleteConversation(conversation.id);
+                        setConfirmingId(null);
+                      }}
+                      className="flex-1 rounded px-3 py-1 text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors min-h-[32px]"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setConfirmingId(null)}
+                      className="flex-1 rounded px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[32px]"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 ) : (
                   <>
