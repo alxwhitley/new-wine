@@ -58,8 +58,8 @@ export function Sidebar({
         setConfirmingId(null);
       }
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
   }, [menuOpenId]);
 
   // Lock body scroll when drawer is open on mobile
@@ -162,6 +162,8 @@ export function Sidebar({
                 {menuOpenId === conversation.id && (
                   <div
                     ref={menuRef}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
                     className="absolute right-0 top-9 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[120px]"
                   >
                     {confirmingId === conversation.id ? (
