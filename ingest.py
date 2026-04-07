@@ -25,7 +25,7 @@ from app.services.chunker import chunk_pages, token_len
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/pdf")
+DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/corpus")
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]

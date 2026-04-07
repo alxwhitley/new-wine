@@ -57,7 +57,7 @@ repo/
 | Database | Supabase (PostgreSQL + pgvector) |
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Chat / LLM | Anthropic Claude Haiku |
-| Reranking | Cohere Rerank 4 Fast |
+| Retrieval | Hybrid search: pgvector + PostgreSQL FTS, fused via RRF |
 | OCR | EasyOCR + Claude Vision (fallback) |
 
 ---
@@ -68,9 +68,9 @@ repo/
 
 1. User types a query in the chat interface
 2. Frontend POSTs to `/chat` on the FastAPI backend (field: `question`, plus `anon_id` for guests)
-3. Backend generates an OpenAI embedding of the query
-4. pgvector runs cosine similarity search, returns top 20 chunks
-5. Cohere Rerank 4 Fast reranks to top 5 (fallback to original top 5 if Cohere fails)
+3. Backend expands query into 3 semantic variants via Claude Haiku (`expand_query()`)
+4. For each variant: pgvector cosine similarity (top 20) + PostgreSQL full-text search (top 20)
+5. Results fused via Reciprocal Rank Fusion (RRF_K=60), deduplicated, top 10 selected
 6. Backend assembles prompt: system instructions + retrieved chunks (tagged with `source_type`) + query
 7. Claude Haiku generates a response, streamed back via SSE
 8. Frontend renders response with inline citation tags
@@ -127,7 +127,7 @@ repo/
 
 ## Key Decisions Already Made
 
-- **HNSW indexing** over ivfflat for pgvector (faster, more accurate)
+- **HNSW indexing** over ivfflat for pgvector (faster, more accurate); `match_chunks` sets `hnsw.ef_search=200` (migration 003) to fix recall on small corpus
 - **Page-level citations** — not chunk-level. The full page a chunk belongs to is surfaced as the citation context
 - **Two-tier content model:**
   - `source_type = 'sermon'` — citable, renders citation tags in frontend
@@ -135,8 +135,8 @@ repo/
   - System prompt explicitly instructs Claude on this distinction; chunks tagged with `source_type` in prompt header
 - **Metadata trimmed for LLM** — each chunk in the prompt only receives Title, Author, and chunk reference (no UUIDs, file paths, or topic tags)
 - **Recursive character text splitting** — 1000 char chunks, 200 char overlap (20%), separators: `\n\n` → `\n` → `. ` → ` ` → `""`
-- **Cohere reranking** — retrieve top 20 from pgvector, rerank to top 5 via Cohere Rerank 4 Fast; graceful fallback to original top 5
-- **k=5 retrieval** post-rerank (to be bumped to 10-15 once more content is ingested)
+- **Hybrid search with RRF** — query expansion (3 variants via Claude Haiku) → vector search + FTS per variant → Reciprocal Rank Fusion (K=60) → top 10 chunks. `/search` endpoint uses vector-only (no FTS/RRF)
+- **k=10 retrieval** post-RRF (was k=5 with Cohere reranking, now replaced by hybrid search)
 - **Claude Vision** as OCR fallback for corrupted/unreadable PDF pages
 - **Single-column PDFs only** for now — current content is not multi-column, multi-column OCR logic not needed yet
 - **CORS middleware** — `ALLOWED_ORIGINS` env var (comma-separated), updated with Vercel production URL
@@ -158,14 +158,17 @@ repo/
 - Cookies: `/Users/alexwhitley/Desktop/Cowork OS/Rhemata/youtube_cookies.txt` (required — YouTube blocks without auth)
 - Pipeline: yt-dlp (video listing with cookies) → `youtube-transcript-api` (transcript via cookies session) → Claude Haiku (cleaning) → structured .txt with metadata headers → `pdf/copyrighted/`
 - .txt header format: `TITLE`, `SPEAKER`, `CHANNEL`, `SOURCE_URL`, `PUBLISHED`, `DURATION_MIN`, `SOURCE_TYPE` (parsed by `ingest.py` → `url` column)
-- `ingest.py` supports `.txt` files: parses KEY: VALUE headers before first blank line, extracts `SOURCE_URL` into `documents.url`
+- `ingest.py` supports `.pdf`, `.docx`, `.doc`, and `.txt` files
+- `.txt` ingestion: parses KEY: VALUE headers before first blank line, extracts `SOURCE_URL` into `documents.url`
+- `.docx` uses `python-docx`, `.doc` uses macOS `textutil`
+- `ingest.py` scans `pdf/` root, `pdf/open/`, and `pdf/copyrighted/` directories
 - **Python 3.9 constraint**: do not use `str | None` union syntax — use `Optional[str]` or untyped defaults
 
 ---
 
 ## Corpus
-- 21 documents ingested (~496 chunks)
-- 11 open (sermon outlines, theology papers)
+- 27 documents ingested (500 chunks)
+- 17 open (sermon outlines, theology papers, Holy Spirit teaching — `.pdf`, `.docx`, `.doc` formats)
 - 10 copyrighted (John Bevere TV YouTube transcripts, with `url` populated)
 
 ---
@@ -174,8 +177,9 @@ repo/
 - Centered chat input as primary interaction (not a sidebar topic browser)
 - Perplexity-style inline citations rendered as gold-highlighted tags
 - Clicking a citation opens a source panel with document title, author, and page content
-- Sidebar for conversation history (authenticated users)
+- Sidebar for conversation history (authenticated users); delete via inline confirm bar (three-dot → confirm row replaces conversation row)
 - Auth flow: login modal triggered by AuthButton, sidebar sign-in link, or guest limit reached
+- Supabase client used directly from frontend for conversations/messages CRUD (anon key, session managed by SDK)
 - Guest users get 6 free queries before prompted to sign up
 
 ---
@@ -213,9 +217,13 @@ Full brand spec: `/mnt/project/rhemata-brand.md`
 ---
 
 ## Remaining
+- **RLS policies needed on `conversations` and `messages` tables** — frontend deletes (and all CRUD) use Supabase anon key from the browser; without DELETE policies, deletes silently fail and rows reappear on refresh. SELECT policies may also be missing.
+- **`increment_guest_query()` SQL function missing from migrations** — called at `chat.py:200` but definition not in `migrations/`; must exist directly in Supabase or guest rate limiting silently fails
+- **Remove delete trace logs** — `[DELETE TRACE]` console.logs in `sidebar.tsx`, `page.tsx`, and `useConversations.ts` should be removed once delete is confirmed working end-to-end
+- **Run migration 003 in Supabase SQL Editor** (`migrations/003_fix_hnsw_ef_search.sql`) — converts `match_chunks` to PLPGSQL with `hnsw.ef_search=200` to fix vector search returning 0 results for many queries
 - **YouTube cookies not yet exported** — scraper cannot pull new transcripts until Alex exports cookies from Arc (via "Get cookies.txt LOCALLY" extension) and saves to `Cowork OS/Rhemata/youtube_cookies.txt`
-- **match_chunks and search_chunks_fts RPCs** need to be verified — migration 002 added `url` to return tables; confirm both RPCs return `url` in Supabase SQL Editor
-- Gemini audit items not yet implemented: context compaction, RLS hardening, prompt caching
+- **source_hash dedup unreliable** — re-ingesting the same files produces different hashes (possibly due to OS-level file metadata changes), causing duplicates. Consider switching dedup to title+author or file_path matching
+- Gemini audit items not yet implemented: context compaction, prompt caching
 
 ---
 
