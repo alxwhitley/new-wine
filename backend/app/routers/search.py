@@ -49,6 +49,15 @@ def _strip_metadata_header(text: Optional[str]) -> Optional[str]:
     return text
 
 
+def _clean_author(author: Optional[str]) -> Optional[str]:
+    """Truncate author at opening parenthesis."""
+    if not author:
+        return author
+    if "(" in author:
+        return author[:author.index("(")].rstrip() or None
+    return author
+
+
 @router.get("/documents")
 async def search_documents(
     q: Optional[str] = Query(None, description="Keyword search query"),
@@ -71,7 +80,7 @@ async def search_documents(
             results.append({
                 "id": row["id"],
                 "title": row.get("title"),
-                "author": row.get("author"),
+                "author": _clean_author(row.get("author")),
                 "issue": row.get("issue"),
                 "year": row.get("year"),
                 "content_summary": _strip_metadata_header(row.get("content_summary")),

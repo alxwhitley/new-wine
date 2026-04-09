@@ -73,8 +73,15 @@ async def get_article(document_id: str):
             else:
                 parts.append(content[CHUNK_OVERLAP:] if len(content) > CHUNK_OVERLAP else content)
 
-        # Strip markdown bold/italic markers
         full_text = "\n".join(parts)
+
+        # Strip metadata header: [New Wine | Jan 1973 | Title by Author]
+        if full_text.startswith("["):
+            bracket_end = full_text.find("]")
+            if bracket_end != -1:
+                full_text = full_text[bracket_end + 1:].lstrip("\n")
+
+        # Strip markdown bold/italic markers
         full_text = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", full_text)
 
         # Clean author: truncate at opening parenthesis
