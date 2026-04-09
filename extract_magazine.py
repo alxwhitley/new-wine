@@ -46,6 +46,51 @@ MONTH_MAP = {
     "09": "September", "10": "October", "11": "November", "12": "December",
 }
 
+VALID_TAGS = {
+    "Baptism in the Spirit", "Speaking in Tongues", "Prophetic Ministry",
+    "Word of Knowledge", "Word of Wisdom", "Discerning of Spirits",
+    "Miracles and Signs", "The Nine Gifts", "Stirring Up Gifts",
+    "Moving in the Spirit", "Fruit of the Spirit", "Fresh Anointing",
+    "Filling of the Spirit", "Power for Service",
+    "Hearing God's Voice", "Dreams and Visions", "Interpreting Your Dreams",
+    "Encounters with God", "Divine Appointments", "Supernatural Peace",
+    "Manifestations of God", "Intimacy with Jesus", "Atmosphere of Worship",
+    "Spiritual Sight", "Knowing God's Heart", "Personal Revelation",
+    "Walking in the Spirit", "Led by the Spirit",
+    "Intercessory Prayer", "Authority of the Believer",
+    "Tearing Down Strongholds", "Resisting the Enemy", "Victory in Christ",
+    "Deliverance from Bondage", "Casting Out Demons", "Spiritual Weapons",
+    "Breaking Negative Patterns", "Binding and Loosing", "Armor of God",
+    "Warfare in Prayer", "Fasting and Prayer", "Protecting Your Mind",
+    "Divine Healing", "Praying for the Sick", "Inner Healing",
+    "Emotional Wholeness", "Healing of Memories", "Health and Vitality",
+    "Overcoming Fear", "Freedom from Anxiety", "Restoration of Soul",
+    "Physical Miracles", "The Will to Heal", "Faith for Healing",
+    "God's Comfort", "Wholeness in Christ",
+    "Biblical Leadership", "Fivefold Ministry", "Apostolic Oversight",
+    "Prophetic Direction", "Pastoral Care", "Delegated Authority",
+    "Spiritual Covering", "Accountability in Leadership",
+    "Covenant Relationships", "Mentoring Relationships",
+    "Leading with Integrity", "Servant Leadership", "Team Ministry",
+    "Equipping the Saints", "Elders and Deacons",
+    "Spiritual Maturity", "Walking with God", "Discipleship and Mentoring",
+    "Accountability in Christ", "Knowing God's Will", "Character of Christ",
+    "Honoring Biblical Authority", "Submission to God",
+    "Faith and Perseverance", "Stewardship and Finances",
+    "Spiritual Disciplines", "Dying to Self", "Holiness and Sanctification",
+    "Body Ministry",
+    "Kingdom of God", "Word and Spirit", "Biblical Authority",
+    "The New Covenant", "The Lordship of Christ", "Grace and Mercy",
+    "Salvation and Repentance", "End Times Prophecy", "The Rapture",
+    "Second Coming", "The Trinity", "Blood of Jesus", "Heaven and Eternity",
+    "Restoration of All Things",
+    "Biblical Marriage", "Christian Parenting", "Family Life",
+    "Relationship Restoration", "Communication in Marriage",
+    "Raising Godly Children", "Singleness and Purity",
+    "Friendship in Christ", "Honoring Your Parents", "Forgiving Others",
+    "Love and Sacrifice", "Conflict Resolution", "The Christian Home",
+}
+
 # -- CLIENTS -----------------------------------------------------------------
 
 _gemini_client = None
@@ -217,6 +262,9 @@ Rules:
 - Use the table of contents as ground truth - find exactly those articles
 - Do not include: letters to editor, order forms, subscription info, \
 staff boxes, ads, table of contents itself
+- Exclude any article that is a Bible Study, Bible lesson, Scripture study, or study guide. \
+These are reference materials not theological teaching articles. If an article title contains \
+'Bible Study', 'Bible Lesson', or 'Study Guide' skip it entirely.
 - Do include: main articles, editorial, forum sections
 - Output as JSON array with this structure:
   [
@@ -231,6 +279,9 @@ given a section of raw transcribed magazine text that contains one specific arti
 Your job is to extract and clean up ONLY the article specified, formatting it as markdown, \
 and assign topic tags from the taxonomy below.
 
+If this article is a Bible Study, Bible lesson, or study guide, \
+return an empty JSON object: {} and do not extract it.
+
 Rules:
 - Extract the full article text for the specified title and author
 - Do NOT include the article title or author name at the start — these are already in metadata
@@ -244,10 +295,23 @@ Rules:
   - Normal paragraphs separated by blank lines
   - No H1 - that will be the title
 
-After extracting the article body, also assign 5-8 topic tags from the following taxonomy. \
-Choose only tags that genuinely match the article content — do not force tags that don't fit.
+After extracting the article body, assign 5-8 topic tags from the taxonomy below.
 
-Available tags: Baptism in the Spirit, Speaking in Tongues, Prophetic Ministry, \
+STRICT RULES for assigning tags:
+- Only assign a tag if the article DIRECTLY teaches on that topic for at least one full paragraph
+- Do NOT assign a tag for:
+  - Passing mentions or single sentence references
+  - Historical or biographical context
+  - Tangential connections
+  - Topics that are merely implied but not taught
+- Ask yourself: 'Would a reader searching for this topic find substantial, helpful content on it \
+in this article?' If no, do not assign the tag.
+- It is better to assign 3 highly accurate tags than 8 loosely related ones
+- Never assign a tag just because a word in the tag appears in the article
+- You MUST only return tags from this exact list. Do not create new tags. Do not modify tag names. \
+Copy them exactly.
+
+TAXONOMY: Baptism in the Spirit, Speaking in Tongues, Prophetic Ministry, \
 Word of Knowledge, Word of Wisdom, Discerning of Spirits, Miracles and Signs, \
 The Nine Gifts, Stirring Up Gifts, Moving in the Spirit, Fruit of the Spirit, \
 Fresh Anointing, Filling of the Spirit, Power for Service, Hearing God's Voice, \
@@ -388,6 +452,13 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
             # Fallback: treat entire response as body text, no tags
             body = body_raw
             topic_tags = []
+
+        # Validate tags against taxonomy
+        valid_tags = [t for t in topic_tags if t in VALID_TAGS]
+        invalid_tags = [t for t in topic_tags if t not in VALID_TAGS]
+        if invalid_tags:
+            print(f"    Removed invalid tags: {invalid_tags}")
+        topic_tags = valid_tags
 
         tags_str = ", ".join(topic_tags) if topic_tags else ""
 
