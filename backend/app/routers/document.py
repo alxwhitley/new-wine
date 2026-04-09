@@ -1,4 +1,5 @@
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException
 
@@ -72,15 +73,24 @@ async def get_article(document_id: str):
             else:
                 parts.append(content[CHUNK_OVERLAP:] if len(content) > CHUNK_OVERLAP else content)
 
+        # Strip markdown bold/italic markers
+        full_text = "\n".join(parts)
+        full_text = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", full_text)
+
+        # Clean author: truncate at opening parenthesis
+        author = doc.get("author") or ""
+        if "(" in author:
+            author = author[:author.index("(")].rstrip()
+
         return {
             "id": doc["id"],
             "title": doc.get("title"),
-            "author": doc.get("author"),
+            "author": author or None,
             "issue": doc.get("issue"),
             "year": doc.get("year"),
             "source_name": doc.get("source_name"),
             "url": doc.get("url"),
-            "content": "\n".join(parts),
+            "content": full_text,
         }
     except HTTPException:
         raise
