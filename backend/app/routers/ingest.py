@@ -52,7 +52,7 @@ async def ingest(
         author = metadata.get("author")
         year = metadata.get("year")
 
-        for i, (chunk_content, page_num) in enumerate(chunks):
+        for i, chunk_content in enumerate(chunks):
             prefix = f"Author: {author} | Year: {year} | "
             embedding = embed_text(prefix + chunk_content)
             db.table("chunks").insert({
@@ -61,7 +61,7 @@ async def ingest(
                 "chunk_index": i,
                 "content": chunk_content,
                 "embedding": embedding,
-                "page_number": page_num,
+                "page_number": 0,
                 "source_hash": source_hash,
             }).execute()
 

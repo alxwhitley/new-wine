@@ -6,6 +6,8 @@ from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
+CHUNK_OVERLAP = 200
+
 router = APIRouter()
 
 
@@ -34,4 +36,54 @@ async def get_document(document_id: str):
         raise
     except Exception:
         logger.exception("Unhandled error in /document endpoint")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+@router.get("/{document_id}/article")
+async def get_article(document_id: str):
+    try:
+        db = get_supabase()
+
+        doc_result = (
+            db.table("documents")
+            .select("id, title, author, issue, year, source_name, url")
+            .eq("id", document_id)
+            .execute()
+        )
+        if not doc_result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        doc = doc_result.data[0]
+
+        chunks_result = (
+            db.table("chunks")
+            .select("chunk_index, content")
+            .eq("document_id", document_id)
+            .order("chunk_index")
+            .execute()
+        )
+
+        # Reassemble full text, trimming overlap from all chunks except the first
+        parts = []
+        for chunk in chunks_result.data:
+            content = chunk.get("content", "")
+            if chunk["chunk_index"] == 0:
+                parts.append(content)
+            else:
+                parts.append(content[CHUNK_OVERLAP:] if len(content) > CHUNK_OVERLAP else content)
+
+        return {
+            "id": doc["id"],
+            "title": doc.get("title"),
+            "author": doc.get("author"),
+            "issue": doc.get("issue"),
+            "year": doc.get("year"),
+            "source_name": doc.get("source_name"),
+            "url": doc.get("url"),
+            "content": "\n".join(parts),
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unhandled error in /document/%s/article endpoint", document_id)
         raise HTTPException(status_code=500, detail="An internal error occurred")

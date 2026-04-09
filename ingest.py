@@ -13,7 +13,7 @@ import json
 import hashlib
 from pathlib import Path
 
-import anthropic
+from groq import Groq
 import openai
 from supabase import create_client
 import subprocess
@@ -21,14 +21,14 @@ import pdfplumber
 import docx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
-from app.services.chunker import chunk_pages, token_len
+from app.services.chunker import chunk_text, token_len
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/corpus")
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+GROQ_API_KEY      = os.environ["GROQ_API_KEY"]
 OPENAI_API_KEY    = os.environ["OPENAI_API_KEY"]
 SUPABASE_URL      = os.environ["SUPABASE_URL"]
 SUPABASE_KEY      = os.environ["SUPABASE_SERVICE_KEY"]
@@ -38,7 +38,7 @@ EMBEDDING_DIM    = 1536
 
 # ── Clients ───────────────────────────────────────────────────────────────────
 
-anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+groq_client      = Groq(api_key=GROQ_API_KEY)
 openai_client    = openai.OpenAI(api_key=OPENAI_API_KEY)
 supabase         = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -143,22 +143,22 @@ First page text:
 Return only the JSON object. No explanation, no markdown.
 """
 
-    response = anthropic_client.messages.create(
-        model="claude-haiku-4-5-20251001",
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}]
     )
 
-    raw = response.content[0].text.strip()
+    raw = (response.choices[0].message.content or "").strip()
 
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        # Try to extract JSON if Claude added any surrounding text
+        # Try to extract JSON if LLM added any surrounding text
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if match:
             return json.loads(match.group())
-        raise ValueError(f"Claude returned non-JSON metadata: {raw}")
+        raise ValueError(f"LLM returned non-JSON metadata: {raw}")
 
 # ── Embedding ─────────────────────────────────────────────────────────────────
 
@@ -184,6 +184,16 @@ def already_ingested(source_hash: str) -> bool:
 def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None) -> str:
     """Insert a document row and return its UUID."""
     doc_id = str(uuid.uuid4())
+    st = metadata.get("source_type", "")
+    if st == "sermon":
+        source_kind = "sermon_transcript"
+        citation_mode = "citable"
+    elif st == "background":
+        source_kind = "background_note"
+        citation_mode = "silent_context"
+    else:
+        source_kind = "unknown"
+        citation_mode = "silent_context"
     row = {
         "id":          doc_id,
         "title":       metadata.get("title"),
@@ -191,7 +201,9 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
         "year":        metadata.get("year"),
         "issue":       metadata.get("issue"),
         "source_name": metadata.get("source_name"),
-        "source_type": metadata.get("source_type"),
+        "source_type": st,
+        "source_kind": source_kind,
+        "citation_mode": citation_mode,
         "source":      metadata.get("source_name"),  # mirrors source_name
         "topic_tags":  metadata.get("topic_tags", []),
         "file_path":   file_path,
@@ -208,10 +220,10 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
     return doc_id
 
 
-def insert_chunks(doc_id: str, chunks: list[tuple[str, int]], author: str = None, year: int = None, source_hash: str = None):
+def insert_chunks(doc_id: str, chunks: list[str], author: str = None, year: int = None, source_hash: str = None):
     """Embed and insert all chunks for a document."""
-    for idx, (text, page_num) in enumerate(chunks):
-        print(f"  Embedding chunk {idx + 1}/{len(chunks)} (page {page_num})...")
+    for idx, text in enumerate(chunks):
+        print(f"  Embedding chunk {idx + 1}/{len(chunks)}...")
         prefix = f"Author: {author} | Year: {year} | "
         embedding = embed_text(prefix + text)
 
@@ -221,7 +233,7 @@ def insert_chunks(doc_id: str, chunks: list[tuple[str, int]], author: str = None
             "content":     text,
             "embedding":   embedding,
             "chunk_index": idx,
-            "page_number": page_num,
+            "page_number": 0,
             "source_hash": source_hash,
         }).execute()
 
@@ -262,7 +274,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     print(f"  {len(pages)} pages extracted")
 
     # 2. Auto-detect metadata from first page
-    print("Detecting metadata via Claude...")
+    print("Detecting metadata via Groq...")
     metadata = extract_metadata(pages[0], file_path.name)
     print(f"  Title:   {metadata.get('title')}")
     print(f"  Author:  {metadata.get('author')}")
@@ -270,9 +282,10 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     print(f"  Source:  {metadata.get('source_name')}")
     print(f"  Tags:    {metadata.get('topic_tags')}")
 
-    # 3. Chunk by paragraph
-    print("Chunking by paragraph...")
-    chunks = chunk_pages(pages)
+    # 3. Chunk by token
+    print("Chunking...")
+    content = "\n\n".join(p for p in pages if p.strip())
+    chunks = chunk_text(content)
     print(f"  {len(chunks)} chunks created")
 
     if dry_run:
@@ -281,9 +294,9 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         prefix = f"Author: {author} | Year: {year} | "
         preview = chunks[:3]
         print(f"\n  [DRY RUN] Previewing first {len(preview)} of {len(chunks)} chunks:\n")
-        for idx, (text, page_num) in enumerate(preview):
+        for idx, text in enumerate(preview):
             tokens = token_len(text)
-            print(f"  ── Chunk {idx + 1} | Page {page_num} | {tokens} tokens ──")
+            print(f"  ── Chunk {idx + 1} | {tokens} tokens ──")
             print(f"  Embed prefix: {prefix}")
             print(f"  Content: {text[:300]}{'...' if len(text) > 300 else ''}")
             print()

@@ -165,3 +165,53 @@ export async function getDocument(id: string): Promise<DocumentResponse> {
   if (!res.ok) throw new Error("Document fetch failed");
   return res.json();
 }
+
+// Document-level search (search_documents RPC)
+export interface DocumentSearchResult {
+  id: string;
+  title: string;
+  author: string;
+  issue: string | null;
+  year: number | null;
+  content_summary: string | null;
+  rank: number;
+}
+
+export interface DocumentSearchResponse {
+  results: DocumentSearchResult[];
+  count: number;
+}
+
+export async function searchDocumentsFts(params: {
+  q?: string;
+  author?: string;
+  source_kind?: string;
+  include_copyrighted?: boolean;
+}): Promise<DocumentSearchResponse> {
+  const sp = new URLSearchParams();
+  if (params.q) sp.set("q", params.q);
+  if (params.author) sp.set("author", params.author);
+  if (params.source_kind) sp.set("source_kind", params.source_kind);
+  if (params.include_copyrighted !== undefined) sp.set("include_copyrighted", String(params.include_copyrighted));
+  const res = await fetch(`${API_URL}/search/documents?${sp.toString()}`);
+  if (!res.ok) throw new Error("Document search failed");
+  return res.json();
+}
+
+// Full article reader
+export interface ArticleResponse {
+  id: string;
+  title: string;
+  author: string;
+  issue: string | null;
+  year: number | null;
+  source_name: string | null;
+  url: string | null;
+  content: string;
+}
+
+export async function getArticle(id: string): Promise<ArticleResponse> {
+  const res = await fetch(`${API_URL}/document/${id}/article`);
+  if (!res.ok) throw new Error("Article fetch failed");
+  return res.json();
+}

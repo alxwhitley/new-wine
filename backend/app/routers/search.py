@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -8,7 +9,7 @@ from app.services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
 
-INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "false").lower() == "true"
+INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
 
 router = APIRouter()
 
@@ -35,4 +36,52 @@ async def search(q: str = Query(..., description="Search query")):
         }
     except Exception:
         logger.exception("Unhandled error in /search endpoint")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+def _strip_metadata_header(text: Optional[str]) -> Optional[str]:
+    """Remove everything up to and including the first ']' character."""
+    if not text:
+        return text
+    idx = text.find("]")
+    if idx != -1:
+        return text[idx + 1:].lstrip()
+    return text
+
+
+@router.get("/documents")
+async def search_documents(
+    q: Optional[str] = Query(None, description="Keyword search query"),
+    author: Optional[str] = Query(None, description="Author name filter"),
+    source_kind: Optional[str] = Query("magazine_article", description="Filter by source_kind"),
+    include_copyrighted: bool = Query(True, description="Include copyrighted content"),
+):
+    try:
+        db = get_supabase()
+
+        result = db.rpc("search_documents", {
+            "query_text": q,
+            "author_filter": author,
+            "source_kind_filter": source_kind,
+            "include_copyrighted": include_copyrighted,
+        }).execute()
+
+        results = []
+        for row in result.data:
+            results.append({
+                "id": row["id"],
+                "title": row.get("title"),
+                "author": row.get("author"),
+                "issue": row.get("issue"),
+                "year": row.get("year"),
+                "content_summary": _strip_metadata_header(row.get("content_summary")),
+                "rank": row.get("rank"),
+            })
+
+        return {
+            "results": results,
+            "count": len(results),
+        }
+    except Exception:
+        logger.exception("Unhandled error in /search/documents endpoint")
         raise HTTPException(status_code=500, detail="An internal error occurred")

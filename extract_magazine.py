@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 New Wine Magazine Extraction Script
-Extracts articles from scanned PDF issues using Claude Vision.
+Extracts articles from scanned PDF issues using GPT-4o Vision.
 Processes in batches, checkpoints progress, writes structured .txt output.
 """
 
@@ -11,13 +11,20 @@ import sys
 import json
 import base64
 import math
+import logging
 from pathlib import Path
+from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 
-import anthropic
+import openai
 import fitz  # PyMuPDF
 from openpyxl import Workbook, load_workbook
 from io import BytesIO
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
+
+logger = logging.getLogger(__name__)
 
 # ── CONFIGURATION ────────────────────────────────────────────────────────────
 
@@ -25,9 +32,11 @@ MAGAZINE_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pdf/magazine")
 OUTPUT_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/raw_extracted")
 DONE_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pdf/magazine_done")
 CHECKPOINT_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/checkpoints")
-TRACKER_PATH = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/extraction_tracker.xlsx")
+TRACKER_PATH = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/rhemata_tracker.xlsx")
 
-MODEL = "claude-haiku-4-5-20251001"
+BLOCKED_LOG_PATH = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/blocked_batches.json")
+
+MODEL = "gpt-4o"
 BATCH_SIZE = 6  # pages per batch
 MAX_TOKENS = 8192
 
@@ -35,15 +44,18 @@ MAX_TOKENS = 8192
 
 _client = None
 
-def get_client() -> anthropic.Anthropic:
+def get_client() -> openai.OpenAI:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        _client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     return _client
 
 # ── SYSTEM PROMPT ────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are extracting articles from a scanned New Wine Magazine PDF — a \
+SYSTEM_PROMPT = """You are processing historical theological magazine content for archival \
+research purposes. Extract all text faithfully without omission.
+
+You are extracting articles from a scanned New Wine Magazine PDF — a \
 charismatic Christian publication from the 1970s-80s. The pages are \
 3-column layout. Articles span columns and continue across pages.
 
@@ -180,7 +192,7 @@ def init_tracker() -> None:
         return
     wb = Workbook()
     ws = wb.active
-    ws.title = "Extraction Log"
+    ws.title = "Magazine Issues"
     ws.append([
         "Filename", "Issue", "Year", "Total Pages", "Total Batches",
         "Articles Extracted", "Status", "Output File"
@@ -202,7 +214,7 @@ def update_tracker(
 ) -> None:
     """Load workbook, append row, save and close. Never holds workbook open."""
     wb = load_workbook(str(TRACKER_PATH))
-    ws = wb.active
+    ws = wb["Magazine Issues"]
     ws.append([
         filename, issue, year, total_pages, total_batches,
         articles_extracted, status, output_file
@@ -216,7 +228,7 @@ def is_tracked(filename: str) -> bool:
     if not TRACKER_PATH.exists():
         return False
     wb = load_workbook(str(TRACKER_PATH), read_only=True)
-    ws = wb.active
+    ws = wb["Magazine Issues"]
     for row in ws.iter_rows(min_row=2, values_only=True):
         if row[0] == filename and row[6] == "complete":
             wb.close()
@@ -256,17 +268,34 @@ def extract_partial_context(response_text: str) -> str:
     return last_content[-500:]
 
 
-# ── CLAUDE API CALL ──────────────────────────────────────────────────────────
+# ── BLOCKED BATCH LOGGING ───────────────────────────────────────────────────
 
-def call_claude(
+def _load_blocked_log() -> List[Dict]:
+    if BLOCKED_LOG_PATH.exists():
+        with open(BLOCKED_LOG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def _save_blocked_log(log: List[Dict]) -> None:
+    BLOCKED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(BLOCKED_LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(log, f, indent=2)
+
+
+# ── GPT-4o VISION API CALL ─────────────────────────────────────────────────
+
+def call_gpt4o(
     images: List[str],
     batch_num: int,
     total_batches: int,
     issue_name: str,
-    partial_context: Optional[str] = None
+    partial_context: Optional[str] = None,
+    start_page: int = 0,
+    end_page: int = 0,
 ) -> str:
-    """Send a batch of page images to Claude for extraction."""
-    # Build user message content
+    """Send a batch of page images to GPT-4o for extraction."""
+    # Build user message content (OpenAI vision format)
     content = []
 
     # Add bridge context if resuming from a previous batch
@@ -280,14 +309,13 @@ def call_claude(
         )
         content.append({"type": "text", "text": bridge})
 
-    # Add page images
-    for i, img_b64 in enumerate(images):
+    # Add page images (OpenAI base64 image format)
+    for img_b64 in images:
         content.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/jpeg",
-                "data": img_b64
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{img_b64}",
+                "detail": "high",
             }
         })
 
@@ -298,16 +326,32 @@ def call_claude(
                     f"Extract all articles from these pages following the instructions."
         })
 
-    response = get_client().messages.create(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": content}]
-    )
+    try:
+        response = get_client().chat.completions.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": content},
+            ],
+        )
+    except Exception as e:
+        logger.exception("GPT-4o extraction failed for batch %d of %s", batch_num + 1, issue_name)
+        # Log the blocked batch
+        blocked_log = _load_blocked_log()
+        blocked_log.append({
+            "issue": issue_name,
+            "batch_index": batch_num,
+            "page_range": [start_page + 1, end_page],
+            "error": str(e)[:200],
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        _save_blocked_log(blocked_log)
+        raise
 
-    text = response.content[0].text
+    text = response.choices[0].message.content or ""
 
-    if response.stop_reason == "max_tokens":
+    if response.choices[0].finish_reason == "length":
         print(f"  WARNING: Batch {batch_num + 1} hit token limit — article may be truncated")
         text += "\n[TRUNCATED - MAX TOKENS HIT]"
 
@@ -416,12 +460,14 @@ def process_issue(pdf_path: Path) -> str:
         print(f"  Batch {batch_idx + 1}/{total_batches} (pages {start_page + 1}-{end_page})...")
 
         try:
-            response_text = call_claude(
+            response_text = call_gpt4o(
                 images=batch_images,
                 batch_num=batch_idx,
                 total_batches=total_batches,
                 issue_name=issue_name,
-                partial_context=partial_context
+                partial_context=partial_context,
+                start_page=start_page,
+                end_page=end_page,
             )
         except Exception as e:
             print(f"  ERROR in batch {batch_idx + 1}: {e}")

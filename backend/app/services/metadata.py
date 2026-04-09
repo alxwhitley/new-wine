@@ -2,9 +2,11 @@ import json
 import logging
 import os
 
-import anthropic
+from groq import Groq
 
 logger = logging.getLogger(__name__)
+
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 _client = None
 
@@ -12,7 +14,7 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        _client = Groq(api_key=os.environ["GROQ_API_KEY"])
     return _client
 
 
@@ -21,8 +23,8 @@ def extract_metadata(text: str) -> dict:
     sample = " ".join(words)
 
     try:
-        message = _get_client().messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = _get_client().chat.completions.create(
+            model=GROQ_MODEL,
             max_tokens=1024,
             messages=[
                 {
@@ -39,11 +41,22 @@ def extract_metadata(text: str) -> dict:
             ],
         )
     except Exception:
-        logger.exception("Anthropic metadata extraction call failed")
+        logger.exception("Groq metadata extraction call failed")
         raise
 
-    raw = message.content[0].text
+    raw = response.choices[0].message.content or ""
     # Strip markdown code fences if present
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
-    return json.loads(raw)
+    result = json.loads(raw)
+    st = result.get("source_type", "")
+    if st == "sermon":
+        result["source_kind"] = "sermon_transcript"
+        result["citation_mode"] = "citable"
+    elif st == "background":
+        result["source_kind"] = "background_note"
+        result["citation_mode"] = "silent_context"
+    else:
+        result["source_kind"] = "unknown"
+        result["citation_mode"] = "silent_context"
+    return result

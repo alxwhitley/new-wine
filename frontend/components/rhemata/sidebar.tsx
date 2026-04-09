@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, MessageSquare, LogIn, MoreHorizontal, X } from "lucide-react";
+import { Plus, MessageSquare, LogIn, MoreHorizontal, X, Search } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/hooks/useConversations";
@@ -81,6 +82,18 @@ export function Sidebar({
         >
           <X className="h-5 w-5" />
         </button>
+      </div>
+
+      {/* Search Link */}
+      <div className="mb-2">
+        <Link
+          href="/search"
+          onClick={onClose}
+          className="flex w-full min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+        >
+          <Search className="h-4 w-4" />
+          Search
+        </Link>
       </div>
 
       {/* New Chat Button */}

@@ -13,7 +13,7 @@ The primary product model is **Magisterium AI**. The primary UX model is **Perpl
 ---
 
 ## Who It's For
-Charismatic and Spirit-filled Christians who want to research theology from within their tradition. The content library is built from documents Alex personally owns and has rights to — sermon outlines, theology papers, and similar material. New Wine Magazine (300 issues) is a future content source pending copyright clearance and must not be ingested yet.
+Charismatic and Spirit-filled Christians who want to research theology from within their tradition. The content library is built from documents Alex personally owns and has rights to — sermon outlines, theology papers, and similar material. New Wine Magazine extraction and ingestion pipeline is now operational (2 issues ingested, 16 articles, 1,215 chunks).
 
 ---
 
@@ -39,7 +39,21 @@ repo/
 │   ├── requirements.txt   # pinned via pip freeze
 │   ├── railway.toml
 │   └── nixpacks.toml      # locks Python 3.9
-└── pdf/               # source documents for ingestion
+├── corpus/            # clean text ready for ingestion
+│   ├── open/          # non-copyrighted documents
+│   └── copyrighted/   # copyrighted documents (merged magazine articles, transcripts)
+├── pipeline/          # extraction artifacts
+│   ├── raw_extracted/ # raw Claude Vision output (pre-merge)
+│   ├── checkpoints/   # per-issue extraction checkpoints
+│   ├── extraction_tracker.xlsx
+│   ├── merge_log.json
+│   └── ingestion_log.json
+├── pdf/               # source PDFs
+│   ├── magazine/      # unprocessed magazine PDFs
+│   └── magazine_done/ # processed magazine PDFs
+├── extract_magazine.py  # Claude Vision PDF extraction
+├── merge_articles.py    # article merge (batch-split detection)
+└── ingest_magazine.py   # Supabase ingestion (documents + chunks + articles)
 ```
 
 - All imports use `from app.x import y` (absolute, not relative)
@@ -103,6 +117,16 @@ repo/
 - `source_hash` (text)
 - `created_at` (timestamptz)
 
+**`articles` table** — magazine article metadata (migration 004)
+- `id` (uuid)
+- `document_id` (uuid, FK → documents, CASCADE delete)
+- `title`, `author`, `magazine`, `issue`, `date` (text)
+- `year` (int), `month` (int)
+- `categories`, `keywords`, `scripture_refs`, `people_mentioned` (text[])
+- `summary` (text), `word_count` (int)
+- `source_type` (text, default 'magazine'), `is_copyrighted` (bool, default true)
+- GIN indexes on categories, keywords, scripture_refs, people_mentioned, and FTS on title+author+summary
+
 **`guest_sessions` table** — server-side guest query tracking
 - `id` (uuid)
 - `anon_id` (text, unique)
@@ -147,8 +171,10 @@ repo/
 
 ## Content Rules
 - Only ingest documents that Alex personally owns or has rights to
-- New Wine Magazine is on hold — do not plan ingestion until copyright is resolved
-- Current documents are single-column — no multi-column OCR handling needed
+- New Wine Magazine pipeline is operational — `is_copyrighted=true`, controlled by `INCLUDE_COPYRIGHTED` env var
+- `INCLUDE_COPYRIGHTED=true` in local `.env` and defaults true in `chat.py` (copyrighted content appears in chat results)
+- `documents.source` for magazine articles is stored as `"New Wine"` (not "New Wine Magazine")
+- Current non-magazine documents are single-column — no multi-column OCR handling needed
 
 ---
 
@@ -161,15 +187,44 @@ repo/
 - `ingest.py` supports `.pdf`, `.docx`, `.doc`, and `.txt` files
 - `.txt` ingestion: parses KEY: VALUE headers before first blank line, extracts `SOURCE_URL` into `documents.url`
 - `.docx` uses `python-docx`, `.doc` uses macOS `textutil`
-- `ingest.py` scans `pdf/` root, `pdf/open/`, and `pdf/copyrighted/` directories
+- `ingest.py` scans `corpus/` root, `corpus/open/`, and `corpus/copyrighted/` directories
 - **Python 3.9 constraint**: do not use `str | None` union syntax — use `Optional[str]` or untyped defaults
 
 ---
 
+## Magazine Extraction Pipeline
+
+Three-script pipeline for New Wine Magazine (and future magazines):
+
+1. **`extract_magazine.py`** — Claude Vision (Haiku) extracts articles from scanned PDF pages
+   - PyMuPDF for PDF→image at 300 DPI, BATCH_SIZE=6, MAX_TOKENS=8192
+   - Per-batch JSON checkpointing with resume support
+   - Atomic Excel tracker (load/write/save/close per call)
+   - Thematic stitching: last full paragraph bridges between batches
+   - Detects `stop_reason == "max_tokens"` and appends `[TRUNCATED - MAX TOKENS HIT]`
+   - Filtering rules: include only teaching-focused content; skip worksheets, testimonials, local news, ads, Q&A, conversational forums
+
+2. **`merge_articles.py`** — detects and merges batch-split articles
+   - Title normalization: strips continuation markers, section prefixes (Forum, Bible Study, Letters to)
+   - Three-pass matching: strict (exact/substring) → keyword overlap with stemming-lite → orphan fallback
+   - Cleans embedded batch boundaries from content (missing ARTICLE END cases)
+   - Truncation detection: flags articles with `TRUNCATED: YES` in output, logs in merge_log.json
+   - Output: `corpus/copyrighted/` or `corpus/open/`
+
+3. **`ingest_magazine.py`** — ingests merged articles into Supabase
+   - Three tables per article: documents → chunks → articles
+   - Token-based chunking: tiktoken cl100k_base, 600 tokens target, 80 overlap
+   - Metadata prefix on each chunk: `[{MAGAZINE} | {DATE} | {TITLE} by {AUTHOR}]`
+   - Per-article checkpoint in `pipeline/ingestion_log.json`
+   - Articles table migration must be run manually in Supabase SQL Editor first (migration 004)
+
+---
+
 ## Corpus
-- 27 documents ingested (500 chunks)
+- 43 documents ingested (~1,715 chunks)
 - 17 open (sermon outlines, theology papers, Holy Spirit teaching — `.pdf`, `.docx`, `.doc` formats)
-- 10 copyrighted (John Bevere TV YouTube transcripts, with `url` populated)
+- 10 copyrighted transcripts (John Bevere TV YouTube, with `url` populated)
+- 16 copyrighted magazine articles (New Wine Magazine, 2 issues: Feb 1974, Feb 1981)
 
 ---
 
@@ -206,9 +261,10 @@ Full brand spec: `/mnt/project/rhemata-brand.md`
 
 ### Backend env vars (Railway)
 - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
-- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `COHERE_API_KEY`
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 - `SUPABASE_JWT_JWKS_URL`
 - `ALLOWED_ORIGINS`
+- `INCLUDE_COPYRIGHTED` — not set in railway.toml; defaults to `true` in chat.py, `false` in search.py; check Railway dashboard
 
 ### Frontend env vars (Vercel)
 - `NEXT_PUBLIC_API_URL`
@@ -223,6 +279,13 @@ Full brand spec: `/mnt/project/rhemata-brand.md`
 - **Run migration 003 in Supabase SQL Editor** (`migrations/003_fix_hnsw_ef_search.sql`) — converts `match_chunks` to PLPGSQL with `hnsw.ef_search=200` to fix vector search returning 0 results for many queries
 - **YouTube cookies not yet exported** — scraper cannot pull new transcripts until Alex exports cookies from Arc (via "Get cookies.txt LOCALLY" extension) and saves to `Cowork OS/Rhemata/youtube_cookies.txt`
 - **source_hash dedup unreliable** — re-ingesting the same files produces different hashes (possibly due to OS-level file metadata changes), causing duplicates. Consider switching dedup to title+author or file_path matching
+- **Chunk count anomaly** — most articles produce 84-92 chunks for what should be ~2,000-5,000 word articles at 600 token/chunk. Investigate whether chunking overlap is creating excessive chunks or if content is larger than expected.
+- **Two articles with only 1 chunk each** — "The Wealth in My World" (1974) and "A Higher Vision" (1981) are suspiciously short; may indicate extraction missed content
+- **Three 1981 articles have unresolved authors** — extraction couldn't identify authors from scanned pages; may need manual correction in articles table
+- **SUBTITLE leaking into article titles** — "We Stand Together" and "The Wealth in My World" have SUBTITLE text embedded in title field in ingestion_log.json keys (DB titles are clean)
+- **`INCLUDE_COPYRIGHTED` not confirmed on Railway** — check Railway dashboard; if unset, chat.py defaults true, search.py defaults false (inconsistent behavior)
+- **Extraction tracker has stale entry** — tracker Excel tracks by filename+status; must manually delete rows to re-extract an issue (no built-in re-run flag)
+- **API key limited to Haiku** — extraction uses `claude-haiku-4-5-20251001`; quality may benefit from Sonnet upgrade when available
 - Gemini audit items not yet implemented: context compaction, prompt caching
 
 ---

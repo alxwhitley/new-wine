@@ -16,9 +16,11 @@ from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 
 import openai
-import tiktoken
 from dotenv import load_dotenv
 from supabase import create_client
+
+sys.path.insert(0, str(Path("/Users/alexwhitley/Desktop/rhemata/backend")))
+from app.services.chunker import chunk_text
 
 # ── CONFIGURATION ────────────────────────────────────────────────────────────
 
@@ -26,12 +28,12 @@ BASE_DIR = Path("/Users/alexwhitley/Desktop/rhemata")
 INPUT_COPYRIGHTED = BASE_DIR / "corpus" / "copyrighted"
 INPUT_OPEN = BASE_DIR / "corpus" / "open"
 INGESTION_LOG_PATH = BASE_DIR / "pipeline" / "ingestion_log.json"
+QA_LOG_PATH = BASE_DIR / "pipeline" / "qa_log.json"
+NEEDS_REVIEW_DIR = BASE_DIR / "pipeline" / "needs_review"
 ENV_PATH = BASE_DIR / "backend" / "app" / ".env"
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536
-CHUNK_TARGET_TOKENS = 600
-CHUNK_OVERLAP_TOKENS = 80
 
 # ── ENVIRONMENT ──────────────────────────────────────────────────────────────
 
@@ -45,7 +47,6 @@ OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
-enc = tiktoken.get_encoding("cl100k_base")
 
 
 # ── MIGRATION ────────────────────────────────────────────────────────────────
@@ -126,6 +127,20 @@ def is_ingested(log: Dict, filename: str, title: str) -> bool:
     file_log = log.get(filename, {})
     entry = file_log.get(title, {})
     return entry.get("status") in ("ingested", "partial")
+
+
+def load_qa_log() -> List[Dict]:
+    """Load existing QA log or return empty list."""
+    if QA_LOG_PATH.exists():
+        with open(QA_LOG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def save_qa_log(qa_log: List[Dict]) -> None:
+    """Save QA log to disk."""
+    with open(QA_LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(qa_log, f, indent=2)
 
 
 # ── PARSING ──────────────────────────────────────────────────────────────────
@@ -242,45 +257,6 @@ def primary_author(author_str: str) -> str:
     return parts[0].strip()
 
 
-# ── CHUNKING (TOKEN-BASED) ──────────────────────────────────────────────────
-
-def token_chunk(text: str, target: int, overlap: int) -> List[str]:
-    """Split text into chunks of approximately `target` tokens with `overlap`."""
-    tokens = enc.encode(text)
-    if len(tokens) <= target:
-        return [text] if text.strip() else []
-
-    chunks = []
-    start = 0
-    while start < len(tokens):
-        end = min(start + target, len(tokens))
-        chunk_tokens = tokens[start:end]
-        chunk_text = enc.decode(chunk_tokens)
-
-        # Try to break at a paragraph or sentence boundary
-        if end < len(tokens):
-            # Look for last paragraph break
-            last_para = chunk_text.rfind("\n\n")
-            if last_para > len(chunk_text) * 0.5:
-                chunk_text = chunk_text[:last_para]
-                end = start + len(enc.encode(chunk_text))
-            else:
-                # Look for last sentence break
-                last_period = chunk_text.rfind(". ")
-                if last_period > len(chunk_text) * 0.5:
-                    chunk_text = chunk_text[:last_period + 1]
-                    end = start + len(enc.encode(chunk_text))
-
-        if chunk_text.strip():
-            chunks.append(chunk_text.strip())
-
-        # Advance by (end - start - overlap) tokens
-        advance = max(end - start - overlap, 1)
-        start = start + advance
-
-    return chunks
-
-
 # ── EMBEDDING ────────────────────────────────────────────────────────────────
 
 def embed_text(text: str) -> Optional[List[float]]:
@@ -316,7 +292,9 @@ def insert_document(art: ArticleData, is_copyrighted: bool) -> Optional[str]:
         "author": author,
         "source": art.magazine,
         "source_name": f"New Wine Magazine Issue {art.issue}" if art.magazine else None,
-        "source_type": "sermon",
+        "source_type": "magazine_article",
+        "source_kind": "magazine_article",
+        "citation_mode": "citable",
         "year": year,
         "issue": art.issue,
         "topic_tags": art.categories,
@@ -335,11 +313,11 @@ def insert_chunks(doc_id: str, content: str, art: ArticleData) -> int:
     """Chunk content, embed, and insert. Returns number of chunks inserted."""
     prefix = f"[{art.magazine} | {art.date} | {art.title} by {primary_author(art.author)}]\n\n"
 
-    chunks = token_chunk(content, CHUNK_TARGET_TOKENS, CHUNK_OVERLAP_TOKENS)
+    chunks = chunk_text(content)
     inserted = 0
 
-    for idx, chunk_text in enumerate(chunks):
-        prefixed = prefix + chunk_text
+    for idx, chunk_content in enumerate(chunks):
+        prefixed = prefix + chunk_content
         embedding = embed_text(prefixed)
         if embedding is None:
             print(f"    Skipping chunk {idx + 1} — embedding failed")
@@ -381,7 +359,7 @@ def insert_article(doc_id: str, art: ArticleData, is_copyrighted: bool) -> bool:
         "people_mentioned": art.people_mentioned,
         "summary": art.summary,
         "word_count": len(art.content.split()),
-        "source_type": "magazine",
+        "source_type": "magazine_article",
         "is_copyrighted": is_copyrighted,
     }
     try:
@@ -428,6 +406,59 @@ def process_file(
 
         if is_ingested(log, filename, art.title):
             print(f"  [{filename}] → {art.title} → already ingested, skipping")
+            continue
+
+        # QA gate
+        word_count = len(art.content.split())
+        has_title = bool(art.title and art.title.strip())
+        has_author = bool(art.author and art.author.strip())
+        alpha_ratio = sum(c.isalpha() for c in art.content) / max(len(art.content), 1)
+        is_truncated = '[TRUNCATED' in art.content or '[CONTINUED' in art.content
+        paragraph_count = len([p for p in art.content.split('\n\n') if p.strip()])
+
+        qa_flags = []
+        if word_count < 150:
+            qa_flags.append('low_word_count')
+        if not has_title:
+            qa_flags.append('missing_title')
+        if not has_author:
+            qa_flags.append('missing_author')
+        if alpha_ratio < 0.70:
+            qa_flags.append('low_alpha_ratio')
+        if is_truncated:
+            qa_flags.append('truncated')
+        if paragraph_count < 2:
+            qa_flags.append('low_paragraph_count')
+
+        qa_status = 'needs_review' if qa_flags else 'ok'
+
+        if qa_status == 'needs_review':
+            print(f"  [{filename}] → {art.title} → QA FAILED: {qa_flags}")
+            NEEDS_REVIEW_DIR.mkdir(parents=True, exist_ok=True)
+            issue_part = art.issue.replace('-', '_') if art.issue else 'unknown'
+            title_slug = re.sub(r'[^\w\s]', '', art.title.lower())
+            title_slug = re.sub(r'\s+', '_', title_slug.strip())[:60]
+            review_path = NEEDS_REVIEW_DIR / f"{issue_part}_{title_slug}.txt"
+            review_path.write_text(art.content, encoding="utf-8")
+            qa_log = load_qa_log()
+            qa_log.append({
+                "title": art.title,
+                "author": art.author,
+                "issue": art.issue,
+                "word_count": word_count,
+                "alpha_ratio": round(alpha_ratio, 3),
+                "paragraph_count": paragraph_count,
+                "is_truncated": is_truncated,
+                "qa_flags": qa_flags,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            save_qa_log(qa_log)
+            log[filename][art.title] = {
+                "status": "qa_failed",
+                "qa_flags": qa_flags,
+                "ingested_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            save_ingestion_log(log)
             continue
 
         print(f"  [{filename}] → {art.title}", end="")

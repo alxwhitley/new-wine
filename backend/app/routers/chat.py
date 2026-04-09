@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-import anthropic
+from groq import Groq
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 system_prompt = (Path(__file__).resolve().parent.parent / "system_prompt.txt").read_text()
 
+GROQ_MODEL = "llama-3.3-70b-versatile"
 RRF_K = 60  # Reciprocal Rank Fusion constant
 
 router = APIRouter()
@@ -31,15 +32,15 @@ _ai = None
 def _get_ai():
     global _ai
     if _ai is None:
-        _ai = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        _ai = Groq(api_key=os.environ["GROQ_API_KEY"])
     return _ai
 
 
 def expand_query(question: str) -> list[str]:
-    """Ask Haiku to rewrite the query into 3 search variants."""
+    """Ask Llama to rewrite the query into 3 search variants."""
     try:
-        response = _get_ai().messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = _get_ai().chat.completions.create(
+            model=GROQ_MODEL,
             max_tokens=256,
             messages=[{
                 "role": "user",
@@ -55,7 +56,7 @@ def expand_query(question: str) -> list[str]:
         logger.exception("Query expansion call failed, falling back to original query")
         return [question]
 
-    raw = response.content[0].text.strip()
+    raw = (response.choices[0].message.content or "").strip()
     try:
         variants = json.loads(raw)
         if isinstance(variants, list) and len(variants) >= 1:
@@ -73,14 +74,14 @@ def expand_query(question: str) -> list[str]:
 INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
 
 
-def hybrid_search_rrf(query: str, db, top_k: int = 20) -> dict[str, tuple[float, dict]]:
+def hybrid_search_rrf(query: str, db, vector_k: int = 40, fts_k: int = 30) -> dict[str, tuple[float, dict]]:
     """Run vector + FTS search for a single query, return {chunk_id: (rrf_score, chunk)}."""
     embedding = embed_text(query)
 
     try:
         vector_result = db.rpc("match_chunks", {
             "query_embedding": embedding,
-            "match_count": top_k,
+            "match_count": vector_k,
             "include_copyrighted": INCLUDE_COPYRIGHTED,
         }).execute()
     except Exception:
@@ -90,7 +91,7 @@ def hybrid_search_rrf(query: str, db, top_k: int = 20) -> dict[str, tuple[float,
     try:
         fts_result = db.rpc("search_chunks_fts", {
             "query_text": query,
-            "match_count": top_k,
+            "match_count": fts_k,
             "include_copyrighted": INCLUDE_COPYRIGHTED,
         }).execute()
     except Exception:
@@ -116,6 +117,27 @@ def hybrid_search_rrf(query: str, db, top_k: int = 20) -> dict[str, tuple[float,
             scores[cid] = (score, chunk)
 
     return scores
+
+
+def _is_citable(chunk: dict) -> bool:
+    """Return True if this chunk should appear in citations."""
+    mode = chunk.get("citation_mode")
+    if mode:
+        return mode == "citable"
+    # Fallback for rows without citation_mode
+    return chunk.get("source_type") == "sermon"
+
+
+def fetch_neighbor_chunks(document_id: str, chunk_index: int, db) -> list[dict]:
+    """Fetch the chunks immediately before and after the given chunk_index in the same document."""
+    neighbors = []
+    for idx in [chunk_index - 1, chunk_index + 1]:
+        if idx < 0:
+            continue
+        result = db.table("chunks").select("*").eq("document_id", document_id).eq("chunk_index", idx).limit(1).execute()
+        if result.data:
+            neighbors.append(result.data[0])
+    return neighbors
 
 
 class ChatMessage(BaseModel):
@@ -211,21 +233,48 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
         # Step 1: Expand query into variants
         variants = expand_query(request.question)
+        variant_weights = [1.0, 0.8, 0.6]
 
-        # Step 2: Run hybrid search for each variant
+        # Step 2: Run hybrid search for each variant with weighted RRF SUM
         all_scores: dict[str, tuple[float, dict]] = {}
-        for variant in variants:
+        for i, variant in enumerate(variants):
+            weight = variant_weights[i] if i < len(variant_weights) else 0.5
             variant_scores = hybrid_search_rrf(variant, db)
             for cid, (score, chunk) in variant_scores.items():
+                weighted = score * weight
                 if cid in all_scores:
-                    if score > all_scores[cid][0]:
-                        all_scores[cid] = (score, chunk)
+                    all_scores[cid] = (all_scores[cid][0] + weighted, all_scores[cid][1])
                 else:
-                    all_scores[cid] = (score, chunk)
+                    all_scores[cid] = (weighted, chunk)
 
-        # Step 3: Deduplicate and take top 10
-        ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)[:10]
-        chunks = [chunk for _, (_, chunk) in ranked]
+        # Step 3: Document-level collapse — max 2 chunks per document
+        ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
+        doc_counts: dict[str, int] = {}
+        collapsed: list[tuple[str, tuple[float, dict]]] = []
+        for cid, (score, chunk) in ranked:
+            did = chunk.get("document_id", "")
+            doc_counts[did] = doc_counts.get(did, 0) + 1
+            if doc_counts[did] <= 2:
+                collapsed.append((cid, (score, chunk)))
+        top_chunks = collapsed[:10]
+        chunks = [chunk for _, (_, chunk) in top_chunks]
+
+        # Step 4: Neighbor chunk expansion — fetch ±1 chunk_index, cap at 12 total
+        seen_ids = {c["id"] for c in chunks}
+        expanded = list(chunks)
+        for c in chunks:
+            if len(expanded) >= 12:
+                break
+            neighbors = fetch_neighbor_chunks(c.get("document_id", ""), c.get("chunk_index", 0), db)
+            for n in neighbors:
+                if n["id"] not in seen_ids and len(expanded) < 12:
+                    # Copy parent metadata to neighbor
+                    for key in ("title", "author", "source_type", "source_kind", "citation_mode", "url"):
+                        if key not in n and key in c:
+                            n[key] = c[key]
+                    seen_ids.add(n["id"])
+                    expanded.append(n)
+        chunks = expanded
 
         citations = [
             {
@@ -236,7 +285,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 "url": c.get("url"),
             }
             for c in chunks
-            if c.get("source_type") != "background"
+            if _is_citable(c)
         ]
 
     except HTTPException:
@@ -255,12 +304,12 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             return
 
         context = "\n\n---\n\n".join(
-            f"[Source {i+1}] (source_type={c.get('source_type', 'sermon')}) \"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}, chunk {c.get('chunk_index', i)}\n{c['content']}"
+            f"[Source {i+1}] (source_kind={c.get('source_kind') or c.get('source_type', 'unknown')}, citation_mode={c.get('citation_mode', 'citable')}) \"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}, chunk {c.get('chunk_index', i)}\n{c['content']}"
             for i, c in enumerate(chunks)
         )
 
-        # Build conversation history for Claude
-        history = []
+        # Build conversation history for Groq
+        history = [{"role": "system", "content": system_prompt}]
         for msg in request.messages:
             if msg.role in ("user", "assistant"):
                 history.append({"role": msg.role, "content": msg.content})
@@ -269,46 +318,36 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             "content": f"Sources:\n{context}\n\nQuestion: {request.question}",
         })
 
-        # Stream from Anthropic, extracting only <answer> content
+        # Stream from Groq, extracting only <answer> content
         raw_full = []
         answer_parts = []
         in_answer = False
         buffer = ""
 
         try:
-            with _get_ai().messages.stream(
-                model="claude-haiku-4-5-20251001",
+            stream = _get_ai().chat.completions.create(
+                model=GROQ_MODEL,
                 max_tokens=4096,
-                system=system_prompt,
                 messages=history,
-            ) as stream:
-                for text in stream.text_stream:
-                    raw_full.append(text)
-                    buffer += text
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if not delta or not delta.content:
+                    continue
+                text = delta.content
+                raw_full.append(text)
+                buffer += text
 
-                    if not in_answer:
-                        # Check if <answer> tag has appeared in the buffer
-                        tag_pos = buffer.find("<answer>")
-                        if tag_pos != -1:
-                            in_answer = True
-                            # Emit anything after the opening tag
-                            after_tag = buffer[tag_pos + len("<answer>"):]
-                            buffer = after_tag
-                            # Check if closing tag is already in this chunk
-                            close_pos = buffer.find("</answer>")
-                            if close_pos != -1:
-                                part = buffer[:close_pos]
-                                if part:
-                                    answer_parts.append(part)
-                                    yield _sse(json.dumps({"token": part}))
-                                in_answer = False
-                                buffer = ""
-                            elif buffer:
-                                answer_parts.append(buffer)
-                                yield _sse(json.dumps({"token": buffer}))
-                                buffer = ""
-                    else:
-                        # Inside <answer> — check for closing tag
+                if not in_answer:
+                    # Check if <answer> tag has appeared in the buffer
+                    tag_pos = buffer.find("<answer>")
+                    if tag_pos != -1:
+                        in_answer = True
+                        # Emit anything after the opening tag
+                        after_tag = buffer[tag_pos + len("<answer>"):]
+                        buffer = after_tag
+                        # Check if closing tag is already in this chunk
                         close_pos = buffer.find("</answer>")
                         if close_pos != -1:
                             part = buffer[:close_pos]
@@ -317,15 +356,29 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                                 yield _sse(json.dumps({"token": part}))
                             in_answer = False
                             buffer = ""
-                        else:
-                            # Yield buffer but keep last 9 chars in case
-                            # "</answer>" spans across chunks
-                            safe_len = len(buffer) - 9
-                            if safe_len > 0:
-                                safe = buffer[:safe_len]
-                                answer_parts.append(safe)
-                                yield _sse(json.dumps({"token": safe}))
-                                buffer = buffer[safe_len:]
+                        elif buffer:
+                            answer_parts.append(buffer)
+                            yield _sse(json.dumps({"token": buffer}))
+                            buffer = ""
+                else:
+                    # Inside <answer> — check for closing tag
+                    close_pos = buffer.find("</answer>")
+                    if close_pos != -1:
+                        part = buffer[:close_pos]
+                        if part:
+                            answer_parts.append(part)
+                            yield _sse(json.dumps({"token": part}))
+                        in_answer = False
+                        buffer = ""
+                    else:
+                        # Yield buffer but keep last 9 chars in case
+                        # "</answer>" spans across chunks
+                        safe_len = len(buffer) - 9
+                        if safe_len > 0:
+                            safe = buffer[:safe_len]
+                            answer_parts.append(safe)
+                            yield _sse(json.dumps({"token": safe}))
+                            buffer = buffer[safe_len:]
         except Exception:
             logger.exception("Chat LLM stream failed")
             yield _sse(json.dumps({"error": "AI service temporarily unavailable"}))
