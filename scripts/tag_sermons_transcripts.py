@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Tag Existing Articles
+Tag Sermons & Transcripts
 
-Backfills topic_tags for all magazine articles.
-Uses Groq Llama 3.3 70B to assign 5-8 tags from the Rhemata taxonomy.
-Validates tags against the taxonomy and retries if too few valid tags.
+Backfills topic_tags for all non-magazine documents (sermons, papers, books, other).
+Uses Groq Llama 3.3 70B to assign 3-6 tags from the Rhemata taxonomy.
+Stricter than the magazine tagger — only tags that are a main theme of the document.
+Validates tags against the taxonomy and retries if fewer than 2 valid tags.
 """
 
 import os
@@ -16,10 +17,10 @@ from dotenv import load_dotenv
 from groq import Groq
 from supabase import create_client
 
-load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
-MAX_CONTENT_CHARS = 3000
+MAX_CONTENT_CHARS = 4000
 
 VALID_TAGS = {
     "Baptism in the Spirit", "Speaking in Tongues", "Prophetic Ministry",
@@ -68,15 +69,16 @@ VALID_TAGS = {
 
 TAXONOMY_LIST = ", ".join(sorted(VALID_TAGS))
 
-SYSTEM_PROMPT = f"""Based on this article excerpt, assign 5-8 topic tags from the taxonomy below.
+SYSTEM_PROMPT = f"""You are a theological taxonomy classifier. Based on this document, assign 3-6 topic tags from the taxonomy below.
 
-STRICT RULES for assigning tags:
-- Only assign a tag if the article DIRECTLY teaches on that topic for at least one full paragraph
-- Do NOT assign a tag for passing mentions, historical context, tangential connections, or merely implied topics
-- Ask yourself: 'Would a reader searching for this topic find substantial, helpful content in this article?' If no, do not assign the tag.
-- It is better to assign 3 highly accurate tags than 8 loosely related ones
-- Never assign a tag just because a word in the tag appears in the article
-- You MUST only return tags from this exact list. Do not create new tags. Do not modify tag names. Copy them exactly.
+STRICT RULES:
+- Only assign a tag if the document CENTERS on that topic as a MAIN THEME — the topic must be a core subject the author is teaching, not a passing reference
+- A single sentence or brief mention does NOT qualify. The topic must be developed across multiple paragraphs or be a clear structural focus of the document
+- Ask yourself: 'Is this topic one of the 3-6 things this document is primarily ABOUT?' If no, do not assign it
+- Prefer fewer, highly accurate tags over more loosely related ones
+- 3-4 tags is ideal for a focused document. Only use 5-6 if the document genuinely covers that many distinct themes in depth
+- Never assign a tag just because a keyword from the tag appears in the text
+- You MUST only return tags from the exact list below. Do not create new tags. Do not modify tag names. Copy them exactly as written.
 
 Return JSON only: {{"topic_tags": ["tag1", "tag2", ...]}}
 
@@ -87,16 +89,13 @@ TAXONOMY (use ONLY these exact tags):
 def _parse_groq_json(raw):
     """Parse JSON from Groq response, handling code fences and trailing text."""
     json_str = raw
-    # Strip markdown code fences
     fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
     if fence_match:
         json_str = fence_match.group(1).strip()
-    # Try parsing as-is first
     try:
         return json.loads(json_str)
     except json.JSONDecodeError:
         pass
-    # Extract first JSON object {...}
     obj_match = re.search(r"\{[\s\S]*?\}", json_str)
     if obj_match:
         try:
@@ -106,14 +105,14 @@ def _parse_groq_json(raw):
     raise json.JSONDecodeError("No valid JSON found", json_str, 0)
 
 
-def _call_groq(groq, content):
+def _call_groq(groq, system_prompt, content):
     """Call Groq and return raw response text."""
     response = groq.chat.completions.create(
         model=GROQ_MODEL,
         max_tokens=512,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"ARTICLE:\n{content}"},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"DOCUMENT:\n{content}"},
         ],
     )
     return (response.choices[0].message.content or "").strip()
@@ -123,36 +122,30 @@ def run():
     db = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
     groq = Groq(api_key=os.environ["GROQ_API_KEY"])
 
-    # Fetch all magazine articles
+    # Fetch all non-magazine documents
     docs_result = (
         db.table("documents")
-        .select("id, title, author, topic_tags")
-        .eq("source_kind", "magazine_article")
+        .select("id, title, author, source_type, source_kind, topic_tags")
+        .neq("source_kind", "magazine_article")
         .execute()
     )
 
-    SKIP_PATTERNS = ["bible study", "bible lesson", "study guide"]
-    docs = [
-        d for d in docs_result.data
-        if not any(p in (d.get("title") or "").lower() for p in SKIP_PATTERNS)
-    ]
-    skipped = len(docs_result.data) - len(docs)
-
+    docs = docs_result.data
     if not docs:
-        print("No magazine articles found.")
+        print("No non-magazine documents found.")
         return
 
-    if skipped:
-        print(f"Skipped {skipped} Bible Study/lesson article(s)")
-    print(f"Found {len(docs)} magazine article(s) to tag\n")
+    print(f"Found {len(docs)} document(s) to tag\n")
 
     tagged_count = 0
+    retried_count = 0
 
     for doc in docs:
         doc_id = doc["id"]
         title = doc.get("title", "Unknown")
+        source_type = doc.get("source_type", "?")
 
-        # Fetch ALL chunks, ordered by chunk_index
+        # Fetch all chunks ordered by chunk_index
         chunks_result = (
             db.table("chunks")
             .select("chunk_index, content")
@@ -169,14 +162,16 @@ def run():
         content = "\n\n".join(c["content"] for c in chunks_result.data)
         content = content[:MAX_CONTENT_CHARS]
 
-        # Call Groq — first attempt
+        # First attempt
+        raw = ""
         try:
-            raw = _call_groq(groq, content)
+            raw = _call_groq(groq, SYSTEM_PROMPT, content)
             result = _parse_groq_json(raw)
             tags = result.get("topic_tags", [])
         except Exception as e:
             print(f"  Failed: {title} — {e}")
-            print(f"  Raw response: {raw[:500]}")
+            if raw:
+                print(f"  Raw response: {raw[:500]}")
             continue
 
         # Validate tags against taxonomy
@@ -185,31 +180,38 @@ def run():
         if invalid_tags:
             print(f"  Removed invalid tags: {invalid_tags}")
 
-        # Retry if fewer than 3 valid tags
-        if len(valid_tags) < 3:
-            print(f"  Only {len(valid_tags)} valid tag(s), retrying...")
+        # Retry once if fewer than 2 valid tags
+        if len(valid_tags) < 2:
+            retried_count += 1
+            print(f"  Only {len(valid_tags)} valid tag(s) for '{title}', retrying...")
             try:
-                raw = _call_groq(groq, content)
+                raw = _call_groq(groq, SYSTEM_PROMPT, content)
                 result = _parse_groq_json(raw)
                 retry_tags = result.get("topic_tags", [])
                 retry_valid = [t for t in retry_tags if t in VALID_TAGS]
+                retry_invalid = [t for t in retry_tags if t not in VALID_TAGS]
+                if retry_invalid:
+                    print(f"  Retry removed invalid: {retry_invalid}")
                 if len(retry_valid) > len(valid_tags):
                     valid_tags = retry_valid
             except Exception as e:
                 print(f"  Retry failed: {e}")
 
         if not valid_tags:
-            print(f"  Skipped: {title} — no valid tags")
+            print(f"  Skipped: {title} — no valid tags after retry")
             continue
+
+        # Cap at 6 tags
+        valid_tags = valid_tags[:6]
 
         # Update document in Supabase
         db.table("documents").update({"topic_tags": valid_tags}).eq("id", doc_id).execute()
 
         tagged_count += 1
-        print(f"  Tagged: {title} → {valid_tags}")
+        print(f"  [{source_type}] Tagged: {title} → {valid_tags}")
 
     print(f"\n{'='*60}")
-    print(f"Done. {tagged_count} article(s) tagged.")
+    print(f"Done. {tagged_count}/{len(docs)} document(s) tagged. {retried_count} retried.")
 
 
 if __name__ == "__main__":

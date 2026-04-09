@@ -6,8 +6,8 @@ Pass 1: Vision extraction via Gemini Flash 2.0 (full issue, all pages)
 Pass 2: Article segmentation via Groq Llama 3.3 70B
 Pass 3: QA inspection via Groq Llama 3.3 70B
 
-Input:  pipeline/01_to_extract/*.pdf
-Output: pipeline/02_extracted/{issue_stem}/*.md
+Input:  sources/magazine/01_to_extract/*.pdf
+Output: sources/magazine/02_extracted/{issue_stem}/*.md
 """
 
 import os
@@ -24,18 +24,18 @@ from pdf2image import convert_from_path
 from openpyxl import Workbook, load_workbook
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 # -- CONFIGURATION -----------------------------------------------------------
 
-ROOT = Path(__file__).resolve().parent
-TO_EXTRACT_DIR = ROOT / "pipeline" / "01_to_extract"
-EXTRACTED_DIR = ROOT / "pipeline" / "02_extracted"
-PDF_DONE_DIR = ROOT / "pipeline" / "05_pdf_extracted"
-TRACKER_PATH = ROOT / "pipeline" / "rhemata_tracker.xlsx"
+ROOT = Path(__file__).resolve().parent.parent
+TO_EXTRACT_DIR = ROOT / "sources" / "magazine" / "01_to_extract"
+EXTRACTED_DIR = ROOT / "sources" / "magazine" / "02_extracted"
+PDF_DONE_DIR = ROOT / "sources" / "magazine" / "05_archived"
+TRACKER_PATH = ROOT / "sources" / "magazine" / "rhemata_tracker.xlsx"
 
 GEMINI_MODEL = "gemini-2.5-flash"
 GROQ_MODEL = "llama-3.3-70b-versatile"

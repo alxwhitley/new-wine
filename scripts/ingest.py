@@ -20,13 +20,80 @@ import subprocess
 import pdfplumber
 import docx
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.chunker import chunk_text, token_len
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/corpus")
+DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/sources")
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+MAX_TAG_CHARS = 4000
+
+VALID_TAGS = {
+    "Baptism in the Spirit", "Speaking in Tongues", "Prophetic Ministry",
+    "Word of Knowledge", "Word of Wisdom", "Discerning of Spirits",
+    "Miracles and Signs", "The Nine Gifts", "Stirring Up Gifts",
+    "Moving in the Spirit", "Fruit of the Spirit", "Fresh Anointing",
+    "Filling of the Spirit", "Power for Service",
+    "Hearing God's Voice", "Dreams and Visions", "Interpreting Your Dreams",
+    "Encounters with God", "Divine Appointments", "Supernatural Peace",
+    "Manifestations of God", "Intimacy with Jesus", "Atmosphere of Worship",
+    "Spiritual Sight", "Knowing God's Heart", "Personal Revelation",
+    "Walking in the Spirit", "Led by the Spirit",
+    "Intercessory Prayer", "Authority of the Believer",
+    "Tearing Down Strongholds", "Resisting the Enemy", "Victory in Christ",
+    "Deliverance from Bondage", "Casting Out Demons", "Spiritual Weapons",
+    "Breaking Negative Patterns", "Binding and Loosing", "Armor of God",
+    "Warfare in Prayer", "Fasting and Prayer", "Protecting Your Mind",
+    "Divine Healing", "Praying for the Sick", "Inner Healing",
+    "Emotional Wholeness", "Healing of Memories", "Health and Vitality",
+    "Overcoming Fear", "Freedom from Anxiety", "Restoration of Soul",
+    "Physical Miracles", "The Will to Heal", "Faith for Healing",
+    "God's Comfort", "Wholeness in Christ",
+    "Biblical Leadership", "Fivefold Ministry", "Apostolic Oversight",
+    "Prophetic Direction", "Pastoral Care", "Delegated Authority",
+    "Spiritual Covering", "Accountability in Leadership",
+    "Covenant Relationships", "Mentoring Relationships",
+    "Leading with Integrity", "Servant Leadership", "Team Ministry",
+    "Equipping the Saints", "Elders and Deacons",
+    "Spiritual Maturity", "Walking with God", "Discipleship and Mentoring",
+    "Accountability in Christ", "Knowing God's Will", "Character of Christ",
+    "Honoring Biblical Authority", "Submission to God",
+    "Faith and Perseverance", "Stewardship and Finances",
+    "Spiritual Disciplines", "Dying to Self", "Holiness and Sanctification",
+    "Body Ministry",
+    "Kingdom of God", "Word and Spirit", "Biblical Authority",
+    "The New Covenant", "The Lordship of Christ", "Grace and Mercy",
+    "Salvation and Repentance", "End Times Prophecy", "The Rapture",
+    "Second Coming", "The Trinity", "Blood of Jesus", "Heaven and Eternity",
+    "Restoration of All Things",
+    "Biblical Marriage", "Christian Parenting", "Family Life",
+    "Relationship Restoration", "Communication in Marriage",
+    "Raising Godly Children", "Singleness and Purity",
+    "Friendship in Christ", "Honoring Your Parents", "Forgiving Others",
+    "Love and Sacrifice", "Conflict Resolution", "The Christian Home",
+}
+
+TAXONOMY_LIST = ", ".join(sorted(VALID_TAGS))
+
+TAG_SYSTEM_PROMPT = f"""You are a theological taxonomy classifier. Based on this document, assign 3-6 topic tags from the taxonomy below.
+
+STRICT RULES:
+- Only assign a tag if the document CENTERS on that topic as a MAIN THEME — the topic must be a core subject the author is teaching, not a passing reference
+- A single sentence or brief mention does NOT qualify. The topic must be developed across multiple paragraphs or be a clear structural focus of the document
+- Ask yourself: 'Is this topic one of the 3-6 things this document is primarily ABOUT?' If no, do not assign it
+- Prefer fewer, highly accurate tags over more loosely related ones
+- 3-4 tags is ideal for a focused document. Only use 5-6 if the document genuinely covers that many distinct themes in depth
+- Never assign a tag just because a keyword from the tag appears in the text
+- You MUST only return tags from the exact list below. Do not create new tags. Do not modify tag names. Copy them exactly as written.
+
+Return JSON only: {{"topic_tags": ["tag1", "tag2", ...]}}
+
+TAXONOMY (use ONLY these exact tags):
+{TAXONOMY_LIST}"""
 
 GROQ_API_KEY      = os.environ["GROQ_API_KEY"]
 OPENAI_API_KEY    = os.environ["OPENAI_API_KEY"]
@@ -237,6 +304,87 @@ def insert_chunks(doc_id: str, chunks: list[str], author: str = None, year: int 
             "source_hash": source_hash,
         }).execute()
 
+# ── Topic Tagging ────────────────────────────────────────────────────────────
+
+def _parse_tag_json(raw):
+    """Parse JSON from Groq response, handling code fences and trailing text."""
+    json_str = raw
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+    if fence_match:
+        json_str = fence_match.group(1).strip()
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        pass
+    obj_match = re.search(r"\{[\s\S]*?\}", json_str)
+    if obj_match:
+        try:
+            return json.loads(obj_match.group())
+        except json.JSONDecodeError:
+            pass
+    raise json.JSONDecodeError("No valid JSON found", json_str, 0)
+
+
+def _call_groq_tags(content):
+    """Call Groq for topic tagging and return raw response text."""
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        max_tokens=512,
+        messages=[
+            {"role": "system", "content": TAG_SYSTEM_PROMPT},
+            {"role": "user", "content": f"DOCUMENT:\n{content}"},
+        ],
+    )
+    return (response.choices[0].message.content or "").strip()
+
+
+def tag_document(doc_id, chunks):
+    """Assign validated topic tags to a document from its chunk content.
+    Non-fatal — returns the tag list or empty list on failure."""
+    content = "\n\n".join(chunks)[:MAX_TAG_CHARS]
+
+    raw = ""
+    try:
+        raw = _call_groq_tags(content)
+        result = _parse_tag_json(raw)
+        tags = result.get("topic_tags", [])
+    except Exception as e:
+        print(f"  Tagging failed: {e}")
+        if raw:
+            print(f"  Raw response: {raw[:500]}")
+        return []
+
+    valid_tags = [t for t in tags if t in VALID_TAGS]
+    invalid_tags = [t for t in tags if t not in VALID_TAGS]
+    if invalid_tags:
+        print(f"  Removed invalid tags: {invalid_tags}")
+
+    # Retry once if fewer than 2 valid tags
+    if len(valid_tags) < 2:
+        print(f"  Only {len(valid_tags)} valid tag(s), retrying...")
+        try:
+            raw = _call_groq_tags(content)
+            result = _parse_tag_json(raw)
+            retry_tags = result.get("topic_tags", [])
+            retry_valid = [t for t in retry_tags if t in VALID_TAGS]
+            if len(retry_valid) > len(valid_tags):
+                valid_tags = retry_valid
+        except Exception as e:
+            print(f"  Retry failed: {e}")
+
+    # Cap at 6 tags
+    valid_tags = valid_tags[:6]
+
+    if valid_tags:
+        try:
+            supabase.table("documents").update({"topic_tags": valid_tags}).eq("id", doc_id).execute()
+        except Exception as e:
+            print(f"  Failed to update topic_tags: {e}")
+            return []
+
+    return valid_tags
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False) -> str:
@@ -276,6 +424,20 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     # 2. Auto-detect metadata from first page
     print("Detecting metadata via Groq...")
     metadata = extract_metadata(pages[0], file_path.name)
+
+    # Override metadata with parsed .txt headers if available
+    if txt_headers:
+        if txt_headers.get("SPEAKER"):
+            metadata["author"] = txt_headers["SPEAKER"]
+        if txt_headers.get("URL"):
+            metadata["_url"] = txt_headers["URL"]
+        elif txt_headers.get("SOURCE_URL"):
+            metadata["_url"] = txt_headers["SOURCE_URL"]
+        if txt_headers.get("TITLE"):
+            metadata["title"] = txt_headers["TITLE"]
+        if txt_headers.get("SOURCE_TYPE"):
+            metadata["source_type"] = txt_headers["SOURCE_TYPE"].lower()
+
     print(f"  Title:   {metadata.get('title')}")
     print(f"  Author:  {metadata.get('author')}")
     print(f"  Year:    {metadata.get('year')}")
@@ -304,7 +466,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         return "processed"
 
     # 4. Insert document row
-    source_url = txt_headers.get("SOURCE_URL") if txt_headers else None
+    source_url = metadata.get("_url") or (txt_headers.get("SOURCE_URL") if txt_headers else None)
     print("Inserting document record...")
     doc_id = insert_document(metadata, str(file_path), is_copyrighted=is_copyrighted, url=source_url)
     print(f"  Document ID: {doc_id}")
@@ -313,32 +475,36 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     print(f"Embedding and inserting {len(chunks)} chunks...")
     insert_chunks(doc_id, chunks, author=metadata.get("author"), year=metadata.get("year"), source_hash=source_hash)
 
-    print(f"✅  Done: {file_path.name}")
+    # 6. Tag document from chunk content
+    print("Tagging document...")
+    assigned_tags = tag_document(doc_id, chunks)
+    if assigned_tags:
+        print(f"  Tags: {assigned_tags}")
+    else:
+        print("  No valid tags assigned")
+
+    print(f"Done: {file_path.name}")
     return "processed"
 
 
 def main():
     dry_run = "--dry-run" in sys.argv
 
-    # Scan pdf/ root, pdf/open/, and pdf/copyrighted/ subdirectories
-    open_dir = DOCS_FOLDER / "open"
-    copyrighted_dir = DOCS_FOLDER / "copyrighted"
+    # Scan sources/documents/ and sources/youtube/cleaned/
+    scan_dirs = [
+        DOCS_FOLDER / "documents",
+        DOCS_FOLDER / "youtube" / "cleaned",
+    ]
 
-    files: list[tuple[Path, bool]] = []  # (path, is_copyrighted)
-
-    # Root-level files (non-copyrighted)
-    for f in sorted(DOCS_FOLDER.iterdir()):
-        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS:
-            files.append((f, False))
-
-    for folder, copyrighted in [(open_dir, False), (copyrighted_dir, True)]:
+    files: list[Path] = []
+    for folder in scan_dirs:
         if folder.is_dir():
             for f in sorted(folder.iterdir()):
-                if f.suffix.lower() in SUPPORTED_EXTENSIONS:
-                    files.append((f, copyrighted))
+                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS:
+                    files.append(f)
 
     if not files:
-        print(f"No supported files found in {open_dir} or {copyrighted_dir}")
+        print(f"No supported files found in {scan_dirs}")
         return
 
     if dry_run:
@@ -346,8 +512,15 @@ def main():
     else:
         print(f"Found {len(files)} file(s) to process")
 
+    def _is_copyrighted(path: Path) -> bool:
+        s = str(path)
+        if "sources/youtube/" in s or "sources/magazine/" in s:
+            return True
+        return False
+
     processed = skipped = failed = 0
-    for file_path, is_copyrighted in files:
+    for file_path in files:
+        is_copyrighted = _is_copyrighted(file_path)
         result = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)
         if result == "processed":
             processed += 1

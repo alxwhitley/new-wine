@@ -104,7 +104,10 @@ export default function SearchPage() {
 
         <div className="prose prose-invert max-w-none">
           <ReactMarkdown>
-            {article.content}
+            {article.content
+              .replace(/^#\s+[^\n]*\n?/, "")
+              .replace(/^\*by\s+[^\n]*\n?/, "")
+              .trimStart()}
           </ReactMarkdown>
         </div>
       </div>

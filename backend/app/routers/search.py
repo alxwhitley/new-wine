@@ -58,11 +58,13 @@ def _clean_author(author: Optional[str]) -> Optional[str]:
     return author
 
 
+# To include sermon transcripts in search results, change the default below to None
+# source_kind: Optional[str] = Query(None, description="Filter by source_kind"),
 @router.get("/documents")
 async def search_documents(
     q: Optional[str] = Query(None, description="Keyword search query"),
     author: Optional[str] = Query(None, description="Author name filter"),
-    source_kind: Optional[str] = Query("magazine_article", description="Filter by source_kind"),
+    source_kind: Optional[str] = Query("magazine_article", description="Filter by source_kind — excludes sermon_transcript by default"),
     include_copyrighted: bool = Query(True, description="Include copyrighted content"),
 ):
     try:

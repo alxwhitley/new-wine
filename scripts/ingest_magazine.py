@@ -2,11 +2,11 @@
 """
 Magazine Ingestion Script
 
-Reads approved .md articles from pipeline/03_approved/{issue_stem}/,
+Reads approved .md articles from sources/magazine/03_approved/{issue_stem}/,
 parses frontmatter metadata, chunks body text, and inserts into
 Supabase documents + chunks tables.
 
-After successful ingestion, moves the issue folder to pipeline/04_ingested/.
+After successful ingestion, moves the issue folder to sources/magazine/04_ingested/.
 """
 
 import os
@@ -19,10 +19,10 @@ from typing import Dict
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 # Add backend to path so chunker/embeddings resolve
-sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from supabase import create_client
 from app.services.embeddings import embed_text
@@ -33,10 +33,10 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 # -- CONFIGURATION -----------------------------------------------------------
 
-ROOT = Path(__file__).resolve().parent
-APPROVED_DIR = ROOT / "pipeline" / "03_approved"
-INGESTED_DIR = ROOT / "pipeline" / "04_ingested"
-TRACKER_PATH = ROOT / "pipeline" / "rhemata_tracker.xlsx"
+ROOT = Path(__file__).resolve().parent.parent
+APPROVED_DIR = ROOT / "sources" / "magazine" / "03_approved"
+INGESTED_DIR = ROOT / "sources" / "magazine" / "04_ingested"
+TRACKER_PATH = ROOT / "sources" / "magazine" / "rhemata_tracker.xlsx"
 
 # -- SUPABASE ----------------------------------------------------------------
 
