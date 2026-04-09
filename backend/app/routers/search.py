@@ -99,3 +99,41 @@ async def search_documents(
     except Exception:
         logger.exception("Unhandled error in /search/documents endpoint")
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+@router.get("/documents/browse")
+async def browse_documents(
+    source_kind: Optional[str] = Query("magazine_article", description="Filter by source_kind"),
+    include_copyrighted: bool = Query(True, description="Include copyrighted content"),
+):
+    """List all documents of a given source_kind, ordered by year/issue descending."""
+    try:
+        db = get_supabase()
+        query = (
+            db.table("documents")
+            .select("id, title, author, issue, year")
+            .order("year", desc=True)
+            .order("issue", desc=True)
+        )
+        if source_kind:
+            query = query.eq("source_kind", source_kind)
+        if not include_copyrighted:
+            query = query.eq("is_copyrighted", False)
+
+        result = query.execute()
+
+        return {
+            "results": [
+                {
+                    "id": row["id"],
+                    "title": row.get("title"),
+                    "author": _clean_author(row.get("author")),
+                    "issue": row.get("issue"),
+                    "year": row.get("year"),
+                    "highlighted_snippet": None,
+                    "rank": 0,
+                }
+                for row in result.data
+            ],
+            "count": len(result.data),
+        }

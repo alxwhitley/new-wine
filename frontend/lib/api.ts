@@ -198,6 +198,19 @@ export async function searchDocumentsFts(params: {
   return res.json();
 }
 
+// Browse all documents (no search query)
+export async function browseDocuments(params?: {
+  source_kind?: string;
+  include_copyrighted?: boolean;
+}): Promise<DocumentSearchResponse> {
+  const sp = new URLSearchParams();
+  if (params?.source_kind) sp.set("source_kind", params.source_kind);
+  if (params?.include_copyrighted !== undefined) sp.set("include_copyrighted", String(params.include_copyrighted));
+  const res = await fetch(`${API_URL}/search/documents/browse?${sp.toString()}`);
+  if (!res.ok) throw new Error("Browse request failed");
+  return res.json();
+}
+
 // Full article reader
 export interface ArticleResponse {
   id: string;

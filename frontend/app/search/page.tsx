@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { Search, ArrowLeft, Loader2, Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,7 +8,7 @@ import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
-import { searchDocumentsFts, getArticle } from "@/lib/api";
+import { searchDocumentsFts, browseDocuments, getArticle } from "@/lib/api";
 import type { DocumentSearchResult, ArticleResponse } from "@/lib/api";
 
 export default function SearchPage() {
@@ -27,16 +27,39 @@ export default function SearchPage() {
   const [count, setCount] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // Browse state (default listing before any search)
+  const [browseResults, setBrowseResults] = useState<DocumentSearchResult[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(true);
 
   // Article reader state
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [articleLoading, setArticleLoading] = useState(false);
+
+  // Load all magazine articles on mount
+  useEffect(() => {
+    browseDocuments({
+      source_kind: "magazine_article",
+      include_copyrighted: true,
+    })
+      .then((res) => {
+        setBrowseResults(res.results);
+      })
+      .catch(() => {
+        // Silent fail — browse is non-critical
+      })
+      .finally(() => {
+        setBrowseLoading(false);
+      });
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
     setSearching(true);
     setError(null);
     setArticle(null);
+    setHasSearched(true);
     try {
       const trimmed = query.trim();
       const res = await searchDocumentsFts({
@@ -160,8 +183,8 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* Results */}
-        {!searching && !articleLoading && count !== null && (
+        {/* Search Results */}
+        {!searching && !articleLoading && hasSearched && count !== null && (
           <div className="mt-8 space-y-3">
             {results.length === 0 ? (
               <p className="text-center text-muted-foreground mt-12">
@@ -191,6 +214,42 @@ export default function SearchPage() {
                         dangerouslySetInnerHTML={{ __html: doc.highlighted_snippet }}
                       />
                     )}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Browse listing (before any search) */}
+        {!searching && !articleLoading && !hasSearched && (
+          <div className="mt-8 space-y-3">
+            {browseLoading ? (
+              <div className="flex justify-center mt-12">
+                <Loader2 className="h-6 w-6 text-gold animate-spin" />
+              </div>
+            ) : browseResults.length === 0 ? (
+              <p className="text-center text-muted-foreground mt-12">
+                No articles yet
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground mb-4">
+                  {browseResults.length} article{browseResults.length !== 1 ? "s" : ""}
+                </p>
+                {browseResults.map((doc) => (
+                  <button
+                    key={doc.id}
+                    onClick={() => handleCardClick(doc.id)}
+                    className="group w-full text-left rounded-lg border border-border bg-card p-4 transition-colors hover:border-gold/40"
+                    style={{ borderLeftWidth: "3px" }}
+                  >
+                    <h3 className="font-serif text-foreground group-hover:text-citation transition-colors leading-snug">
+                      {doc.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {[doc.author, doc.issue, doc.year].filter(Boolean).join(" \u00b7 ")}
+                    </p>
                   </button>
                 ))}
               </>

@@ -14,6 +14,8 @@ import os
 import re
 import sys
 import json
+import time
+import argparse
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -633,8 +635,9 @@ def process_issue(pdf_path: Path) -> str:
 
 # -- MAIN --------------------------------------------------------------------
 
-def run():
-    """Scan 01_to_extract/ and process all PDFs."""
+def run(time_limit_min=None):
+    """Scan 01_to_extract/ and process all PDFs.
+    If time_limit_min is set, stop after the current PDF once the limit is reached."""
     TO_EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
     EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
     PDF_DONE_DIR.mkdir(parents=True, exist_ok=True)
@@ -645,18 +648,32 @@ def run():
         return
 
     print(f"Found {len(pdfs)} PDF(s) to process")
+    if time_limit_min:
+        print(f"Time limit: {time_limit_min} minutes")
 
+    start_time = time.time()
     processed = failed = 0
     for pdf_path in pdfs:
+        if time_limit_min:
+            elapsed_min = (time.time() - start_time) / 60
+            if elapsed_min >= time_limit_min:
+                print(f"\nTime limit reached ({elapsed_min:.1f} min) — stopping.")
+                break
+
         result = process_issue(pdf_path)
         if result == "processed":
             processed += 1
         else:
             failed += 1
 
+    elapsed = (time.time() - start_time) / 60
     print(f"\n{'='*60}")
-    print(f"Done. {processed} processed, {failed} failed.")
+    print(f"Done. {processed} processed, {failed} failed. ({elapsed:.1f} min)")
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description="New Wine Magazine extraction pipeline")
+    parser.add_argument("--time-limit", type=float, default=None,
+                        help="Stop after this many minutes (finishes current PDF first)")
+    args = parser.parse_args()
+    run(time_limit_min=args.time_limit)
