@@ -103,9 +103,11 @@ export default function SearchPage() {
 
         <div className="border-t border-border my-6" />
 
-        <ReactMarkdown className="prose prose-invert max-w-none">
-          {article.content}
-        </ReactMarkdown>
+        <div className="prose prose-invert max-w-none">
+          <ReactMarkdown>
+            {article.content}
+          </ReactMarkdown>
+        </div>
       </div>
     </div>
   ) : (
