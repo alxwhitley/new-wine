@@ -41,7 +41,6 @@ export default function SearchPage() {
       const trimmed = query.trim();
       const res = await searchDocumentsFts({
         q: trimmed,
-        author: trimmed,
         source_kind: "magazine_article",
         include_copyrighted: true,
       });

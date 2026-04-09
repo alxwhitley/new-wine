@@ -88,6 +88,8 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
     author = meta.get("AUTHOR", "")
     issue = meta.get("ISSUE", "")
     date = meta.get("DATE", "")
+    topic_tags_raw = meta.get("TOPIC_TAGS", "")
+    topic_tags = [t.strip() for t in topic_tags_raw.split(",") if t.strip()] if topic_tags_raw else []
 
     # Clean author: truncate at parenthesis
     if "(" in author:
@@ -120,6 +122,7 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
         "is_copyrighted": True,
         "issue": issue or None,
         "year": year,
+        "topic_tags": topic_tags if topic_tags else None,
     }
 
     doc_result = db.table("documents").insert(doc_data).execute()

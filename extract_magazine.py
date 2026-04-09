@@ -228,7 +228,8 @@ staff boxes, ads, table of contents itself
 PASS2_BODY_SYSTEM = """You are an expert magazine transcription editor. You will be \
 given a section of raw transcribed magazine text that contains one specific article.
 
-Your job is to extract and clean up ONLY the article specified, formatting it as markdown.
+Your job is to extract and clean up ONLY the article specified, formatting it as markdown, \
+and assign topic tags from the taxonomy below.
 
 Rules:
 - Extract the full article text for the specified title and author
@@ -242,7 +243,47 @@ Rules:
   - Pull quotes as > *italic blockquote*
   - Normal paragraphs separated by blank lines
   - No H1 - that will be the title
-- Return ONLY the formatted article body text, nothing else"""
+
+After extracting the article body, also assign 5-8 topic tags from the following taxonomy. \
+Choose only tags that genuinely match the article content — do not force tags that don't fit.
+
+Available tags: Baptism in the Spirit, Speaking in Tongues, Prophetic Ministry, \
+Word of Knowledge, Word of Wisdom, Discerning of Spirits, Miracles and Signs, \
+The Nine Gifts, Stirring Up Gifts, Moving in the Spirit, Fruit of the Spirit, \
+Fresh Anointing, Filling of the Spirit, Power for Service, Hearing God's Voice, \
+Dreams and Visions, Interpreting Your Dreams, Encounters with God, Divine Appointments, \
+Supernatural Peace, Manifestations of God, Intimacy with Jesus, Atmosphere of Worship, \
+Spiritual Sight, Knowing God's Heart, Personal Revelation, Walking in the Spirit, \
+Led by the Spirit, Intercessory Prayer, Authority of the Believer, \
+Tearing Down Strongholds, Resisting the Enemy, Victory in Christ, \
+Deliverance from Bondage, Casting Out Demons, Spiritual Weapons, \
+Breaking Negative Patterns, Binding and Loosing, Armor of God, Warfare in Prayer, \
+Fasting and Prayer, Protecting Your Mind, Divine Healing, Praying for the Sick, \
+Inner Healing, Emotional Wholeness, Healing of Memories, Health and Vitality, \
+Overcoming Fear, Freedom from Anxiety, Restoration of Soul, Physical Miracles, \
+The Will to Heal, Faith for Healing, God's Comfort, Wholeness in Christ, \
+Biblical Leadership, Fivefold Ministry, Apostolic Oversight, Prophetic Direction, \
+Pastoral Care, Delegated Authority, Spiritual Covering, Accountability in Leadership, \
+Covenant Relationships, Mentoring Relationships, Leading with Integrity, \
+Servant Leadership, Team Ministry, Equipping the Saints, Elders and Deacons, \
+Spiritual Maturity, Walking with God, Discipleship and Mentoring, \
+Accountability in Christ, Knowing God's Will, Character of Christ, \
+Honoring Biblical Authority, Submission to God, Faith and Perseverance, \
+Stewardship and Finances, Spiritual Disciplines, Dying to Self, \
+Holiness and Sanctification, Body Ministry, Kingdom of God, Word and Spirit, \
+Biblical Authority, The New Covenant, The Lordship of Christ, Grace and Mercy, \
+Salvation and Repentance, End Times Prophecy, The Rapture, Second Coming, \
+The Trinity, Blood of Jesus, Heaven and Eternity, Restoration of All Things, \
+Biblical Marriage, Christian Parenting, Family Life, Relationship Restoration, \
+Communication in Marriage, Raising Godly Children, Singleness and Purity, \
+Friendship in Christ, Honoring Your Parents, Forgiving Others, Love and Sacrifice, \
+Conflict Resolution, The Christian Home
+
+Return your response as JSON only:
+{
+  "topic_tags": ["Tag One", "Tag Two", ...],
+  "body": "The full formatted article body text..."
+}"""
 
 
 def _extract_toc(raw_text: str) -> str:
@@ -336,7 +377,19 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
             ],
         )
 
-        body = (body_response.choices[0].message.content or "").strip()
+        body_raw = (body_response.choices[0].message.content or "").strip()
+
+        # Parse JSON response for body + topic_tags
+        try:
+            body_json = _parse_groq_json(body_raw)
+            body = body_json.get("body", "")
+            topic_tags = body_json.get("topic_tags", [])
+        except (json.JSONDecodeError, ValueError):
+            # Fallback: treat entire response as body text, no tags
+            body = body_raw
+            topic_tags = []
+
+        tags_str = ", ".join(topic_tags) if topic_tags else ""
 
         slug = slugify(title)
         filename = f"{idx:02d}_{slug}.md"
@@ -350,6 +403,7 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
             f"PAGE_START: {page_start}\n"
             f"PAGE_END: {page_end}\n"
             f"SOURCE_TYPE: magazine_article\n"
+            f"TOPIC_TAGS: {tags_str}\n"
             f"---\n\n"
             f"# {title}\n"
             f"*by {author}*\n\n"
