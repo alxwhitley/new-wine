@@ -77,13 +77,16 @@ async def search_documents(
 
         results = []
         for row in result.data:
+            snippet = row.get("highlighted_snippet")
+            if snippet:
+                snippet = _strip_metadata_header(snippet)
             results.append({
                 "id": row["id"],
                 "title": row.get("title"),
                 "author": _clean_author(row.get("author")),
                 "issue": row.get("issue"),
                 "year": row.get("year"),
-                "content_summary": _strip_metadata_header(row.get("content_summary")),
+                "highlighted_snippet": snippet,
                 "rank": row.get("rank"),
             })
 

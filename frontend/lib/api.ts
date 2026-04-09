@@ -173,7 +173,7 @@ export interface DocumentSearchResult {
   author: string;
   issue: string | null;
   year: number | null;
-  content_summary: string | null;
+  highlighted_snippet: string | null;
   rank: number;
 }
 

@@ -182,10 +182,11 @@ export default function SearchPage() {
                     <p className="text-xs text-muted-foreground mt-1">
                       {[doc.author, doc.issue, doc.year].filter(Boolean).join(" \u00b7 ")}
                     </p>
-                    {doc.content_summary && (
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                        {doc.content_summary}
-                      </p>
+                    {doc.highlighted_snippet && (
+                      <p
+                        className="text-sm text-muted-foreground mt-2 line-clamp-2"
+                        dangerouslySetInnerHTML={{ __html: doc.highlighted_snippet }}
+                      />
                     )}
                   </button>
                 ))}

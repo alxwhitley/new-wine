@@ -102,6 +102,12 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-lora), "Lora", serif;
 }
 
+mark {
+  background: transparent;
+  color: #d4b96a;
+  font-weight: 600;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }
