@@ -64,22 +64,21 @@ async def get_article(document_id: str):
             .execute()
         )
 
-        # Reassemble full text, trimming overlap from all chunks except the first
+        # Reassemble full text: strip per-chunk metadata header, then trim overlap
         parts = []
         for chunk in chunks_result.data:
             content = chunk.get("content", "")
+            # Strip metadata header from each chunk: [New Wine | ...]
+            if content.startswith("["):
+                bracket_end = content.find("]")
+                if bracket_end != -1:
+                    content = content[bracket_end + 1:].lstrip()
             if chunk["chunk_index"] == 0:
                 parts.append(content)
             else:
                 parts.append(content[CHUNK_OVERLAP:] if len(content) > CHUNK_OVERLAP else content)
 
         full_text = "\n".join(parts)
-
-        # Strip metadata header: [New Wine | Jan 1973 | Title by Author]
-        if full_text.startswith("["):
-            bracket_end = full_text.find("]")
-            if bracket_end != -1:
-                full_text = full_text[bracket_end + 1:].lstrip("\n")
 
         # Strip markdown bold/italic markers
         full_text = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", full_text)
