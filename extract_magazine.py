@@ -1,602 +1,537 @@
 #!/usr/bin/env python3
 """
-New Wine Magazine Extraction Script
-Extracts articles from scanned PDF issues using GPT-4o Vision.
-Processes in batches, checkpoints progress, writes structured .txt output.
+New Wine Magazine Extraction Pipeline (3-pass)
+
+Pass 1: Vision extraction via Gemini Flash 2.0 (full issue, all pages)
+Pass 2: Article segmentation via Groq Llama 3.3 70B
+Pass 3: QA inspection via Groq Llama 3.3 70B
+
+Input:  pipeline/01_to_extract/*.pdf
+Output: pipeline/02_extracted/{issue_stem}/*.md
 """
 
 import os
 import re
 import sys
 import json
-import base64
-import math
 import logging
 from pathlib import Path
-from datetime import datetime
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 
-import openai
-import fitz  # PyMuPDF
+from google import genai
+from groq import Groq
+from pdf2image import convert_from_path
 from openpyxl import Workbook, load_workbook
-from io import BytesIO
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-# ── CONFIGURATION ────────────────────────────────────────────────────────────
+# -- CONFIGURATION -----------------------------------------------------------
 
-MAGAZINE_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pdf/magazine")
-OUTPUT_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/raw_extracted")
-DONE_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pdf/magazine_done")
-CHECKPOINT_DIR = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/checkpoints")
-TRACKER_PATH = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/rhemata_tracker.xlsx")
+ROOT = Path(__file__).resolve().parent
+TO_EXTRACT_DIR = ROOT / "pipeline" / "01_to_extract"
+EXTRACTED_DIR = ROOT / "pipeline" / "02_extracted"
+PDF_DONE_DIR = ROOT / "pipeline" / "05_pdf_extracted"
+TRACKER_PATH = ROOT / "pipeline" / "rhemata_tracker.xlsx"
 
-BLOCKED_LOG_PATH = Path("/Users/alexwhitley/Desktop/rhemata/pipeline/blocked_batches.json")
+GEMINI_MODEL = "gemini-2.5-flash"
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
-MODEL = "gpt-4o"
-BATCH_SIZE = 6  # pages per batch
-MAX_TOKENS = 8192
+MONTH_MAP = {
+    "01": "January", "02": "February", "03": "March", "04": "April",
+    "05": "May", "06": "June", "07": "July", "08": "August",
+    "09": "September", "10": "October", "11": "November", "12": "December",
+}
 
-# ── CLIENT (lazy init — not needed for dry run) ─────────────────────────────
+# -- CLIENTS -----------------------------------------------------------------
 
-_client = None
-
-def get_client() -> openai.OpenAI:
-    global _client
-    if _client is None:
-        _client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    return _client
-
-# ── SYSTEM PROMPT ────────────────────────────────────────────────────────────
-
-SYSTEM_PROMPT = """You are processing historical theological magazine content for archival \
-research purposes. Extract all text faithfully without omission.
-
-You are extracting articles from a scanned New Wine Magazine PDF — a \
-charismatic Christian publication from the 1970s-80s. The pages are \
-3-column layout. Articles span columns and continue across pages.
-
-TABLE OF CONTENTS (batch 1 only):
-If this is batch 1 and a table of contents page is visible, extract it first:
-TABLE OF CONTENTS
-- [Article Title] | [Author] | Page [X]
-(note if any entry is: editorial, advertisement, bible study, Q&A, \
-testimonial, forum)
-END TABLE OF CONTENTS
-
-INCLUDE ONLY teaching-focused content. An article qualifies if \
-its PRIMARY purpose is to teach a biblical principle, theological \
-concept, or spiritual practice. It may use illustrations or \
-examples but the core must be instructional.
-
-ALWAYS SKIP — do not extract, do not mention in output:
-- Bible study worksheets (fill-in-the-blank, question lists, \
-scripture lookup exercises)
-- Testimonials and personal salvation stories
-- Local church news, event reports, conference recaps
-- Historical accounts of what God did in a specific city/region \
-even if they contain spiritual language
-- Firsthand narratives primarily structured as "here is what \
-happened to us/our church"
-- Letters to the editor
-- Advertisements
-- Editorials that are announcements or housekeeping
-- Q&A sections and reader questions
-- Forum discussions that are primarily conversational exchange \
-rather than sustained theological teaching
-
-BORDERLINE CASES — apply this test:
-If you removed all the story/narrative/local context, would \
-substantial transferable teaching content remain? \
-If YES → include. If NO → skip.
-
-Forum and panel discussions: include ONLY if the participants \
-are making sustained theological arguments, not just sharing \
-opinions or telling stories. If it reads like a conversation, \
-skip it. If it reads like teaching in dialogue form, include it.
-
-When skipping content, note it internally as: \
-[SKIPPED: reason] \
-but do not include these notes in the output file.
-
-FOR EACH qualifying ARTICLE extract the following.
-
-ARTICLE START
-TITLE: [title]
-AUTHOR: [full name — infer if only surname given, note assumption]
-MAGAZINE: New Wine
-ISSUE: [issue identifier from filename]
-DATE: [Month Year]
-CATEGORIES: [comma-separated from: apostolic, church, Christian living, \
-community, discipleship, deliverance, family, finances, healing, kingdom, \
-leadership, prayer, prophecy, revival, spiritual warfare, worship]
-CATEGORY REASONING: [1-2 sentences]
-
-CONTENT:
-[Full article text. Preserve subtitles. Fix obvious OCR errors. \
-Maintain paragraph breaks. Do not summarize — full text only.]
-
-BOOKS MENTIONED: [Title by Author, or None]
-ARTICLE END
-
-If an article is cut off at the end of your pages, write:
-[CONTINUED IN NEXT BATCH]
-
-End with:
-BOOKS IN THIS BATCH: [Title by Author | one per line, or None]"""
+_gemini_client = None
+_groq_client = None
 
 
-# ── PDF TO IMAGES ────────────────────────────────────────────────────────────
-
-def pdf_to_base64_images(pdf_path: Path) -> List[str]:
-    """Convert PDF pages to base64-encoded JPEG images at 300 DPI using PyMuPDF."""
-    print(f"  Converting PDF to images at 300 DPI...")
-    doc = fitz.open(str(pdf_path))
-    # 300 DPI = 300/72 = 4.1667x zoom
-    zoom = 300 / 72
-    matrix = fitz.Matrix(zoom, zoom)
-    images = []
-    for page in doc:
-        pix = page.get_pixmap(matrix=matrix)
-        # Convert to JPEG via PIL for quality control
-        img_data = pix.tobytes("jpeg")
-        b64 = base64.b64encode(img_data).decode("utf-8")
-        images.append(b64)
-    doc.close()
-    print(f"  {len(images)} page images created")
-    return images
+def get_gemini():
+    global _gemini_client
+    if _gemini_client is None:
+        _gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    return _gemini_client
 
 
-# ── METADATA PARSING ─────────────────────────────────────────────────────────
+def get_groq():
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    return _groq_client
 
-def parse_metadata(filename: str) -> Dict[str, Optional[str]]:
-    """Parse issue metadata from filename like NewWineMagazine_Issue_02-1974.pdf"""
-    meta = {"issue": None, "year": None, "month": None}
-    match = re.search(r'Issue_(\d+)-(\d{4})', filename)
+
+# -- METADATA PARSING --------------------------------------------------------
+
+def parse_issue_meta(filename: str) -> Dict[str, Optional[str]]:
+    """Parse issue/year from filename like NewWineMagazine_Issue_02-1974.pdf"""
+    match = re.search(r"Issue_(\d+)-(\d{4})", filename)
     if match:
-        meta["issue"] = match.group(1)
-        meta["year"] = match.group(2)
-    # Try to extract month if present
-    month_match = re.search(r'(\w+)_Issue', filename)
-    if month_match:
-        meta["month"] = month_match.group(1)
-    return meta
+        month_num = match.group(1)
+        year = match.group(2)
+        issue = f"{month_num}-{year}"
+        month_name = MONTH_MAP.get(month_num, month_num)
+        return {"issue": issue, "year": year, "month_num": month_num, "date": f"{month_name} {year}"}
+    return {"issue": None, "year": None, "month_num": None, "date": None}
 
 
-# ── CHECKPOINT MANAGEMENT ────────────────────────────────────────────────────
-
-def load_checkpoint(issue_stem: str) -> Optional[Dict]:
-    """Load checkpoint file for an issue if it exists."""
-    cp_path = CHECKPOINT_DIR / f"{issue_stem}.json"
-    if cp_path.exists():
-        with open(cp_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return None
+def slugify(text: str) -> str:
+    """Convert title to a filename-safe slug."""
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "_", text)
+    return text[:60].rstrip("_")
 
 
-def save_checkpoint(issue_stem: str, checkpoint: Dict) -> None:
-    """Write checkpoint file to disk."""
-    cp_path = CHECKPOINT_DIR / f"{issue_stem}.json"
-    with open(cp_path, "w", encoding="utf-8") as f:
-        json.dump(checkpoint, f, indent=2)
-
-
-# ── TRACKER (ATOMIC EXCEL SAVES) ────────────────────────────────────────────
+# -- TRACKER -----------------------------------------------------------------
 
 def init_tracker() -> None:
-    """Create tracker workbook with headers if it doesn't exist."""
-    if TRACKER_PATH.exists():
-        return
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Magazine Issues"
-    ws.append([
-        "Filename", "Issue", "Year", "Total Pages", "Total Batches",
-        "Articles Extracted", "Status", "Output File"
-    ])
-    wb.save(str(TRACKER_PATH))
-    wb.close()
-    print(f"  Created tracker: {TRACKER_PATH}")
-
-
-def update_tracker(
-    filename: str,
-    issue: Optional[str],
-    year: Optional[str],
-    total_pages: int,
-    total_batches: int,
-    articles_extracted: int,
-    status: str,
-    output_file: str
-) -> None:
-    """Load workbook, append row, save and close. Never holds workbook open."""
-    wb = load_workbook(str(TRACKER_PATH))
-    ws = wb["Magazine Issues"]
-    ws.append([
-        filename, issue, year, total_pages, total_batches,
-        articles_extracted, status, output_file
-    ])
-    wb.save(str(TRACKER_PATH))
-    wb.close()
-
-
-def is_tracked(filename: str) -> bool:
-    """Check if a filename is already in the tracker with status 'complete'."""
     if not TRACKER_PATH.exists():
-        return False
-    wb = load_workbook(str(TRACKER_PATH), read_only=True)
-    ws = wb["Magazine Issues"]
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[0] == filename and row[6] == "complete":
-            wb.close()
-            return True
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Magazine Issues"
+        ws.append([
+            "Filename", "Issue", "Year", "Pages", "Pass1", "Pass2", "Pass3",
+            "Articles", "Pass_Count", "Warn_Count", "Flag_Count", "Status",
+        ])
+        wb.save(str(TRACKER_PATH))
+        wb.close()
+        return
+    EXPECTED_HEADERS = [
+        "Filename", "Issue", "Year", "Pages", "Pass1", "Pass2", "Pass3",
+        "Articles", "Pass_Count", "Warn_Count", "Flag_Count", "Status",
+    ]
+    wb = load_workbook(str(TRACKER_PATH))
+    if "Extraction" not in wb.sheetnames:
+        ws = wb.create_sheet("Extraction")
+        ws.append(EXPECTED_HEADERS)
+        wb.save(str(TRACKER_PATH))
     wb.close()
-    return False
 
 
-# ── THEMATIC STITCHING ───────────────────────────────────────────────────────
+def update_tracker_row(filename: str, data: Dict) -> None:
+    """Update or append a row in the tracker for the given filename."""
+    wb = load_workbook(str(TRACKER_PATH))
+    ws = wb["Extraction"]
 
-def extract_partial_context(response_text: str) -> str:
-    """Extract the last full paragraph from the last CONTENT: block.
-    A full paragraph ends with a period before a double newline or end of string.
-    Falls back to last 500 characters if no clean boundary found."""
-    # Find the last CONTENT: block
-    content_blocks = re.findall(
-        r'CONTENT:\s*\n(.*?)(?=\n(?:BOOKS MENTIONED|ARTICLE END|\[CONTINUED))',
-        response_text,
-        re.DOTALL
-    )
-    if not content_blocks:
-        # Fallback: last 500 chars of entire response
-        return response_text.strip()[-500:]
+    # Find existing row
+    target_row = None
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
+        if row[0].value == filename:
+            target_row = row_idx
+            break
 
-    last_content = content_blocks[-1].strip()
+    col_map = {}
+    for idx, cell in enumerate(ws[1], start=1):
+        col_map[cell.value] = idx
 
-    # Split into paragraphs (double newline separated)
-    paragraphs = re.split(r'\n\n+', last_content)
+    if target_row:
+        for key, val in data.items():
+            if key in col_map:
+                ws.cell(row=target_row, column=col_map[key], value=val)
+    else:
+        row_data = [None] * len(col_map)
+        row_data[col_map["Filename"] - 1] = filename
+        for key, val in data.items():
+            if key in col_map:
+                row_data[col_map[key] - 1] = val
+        ws.append(row_data)
 
-    # Find last paragraph that ends with a period
-    for para in reversed(paragraphs):
-        para = para.strip()
-        if para and para.endswith('.'):
-            return para
-
-    # Fallback: last 500 chars of the content block
-    return last_content[-500:]
-
-
-# ── BLOCKED BATCH LOGGING ───────────────────────────────────────────────────
-
-def _load_blocked_log() -> List[Dict]:
-    if BLOCKED_LOG_PATH.exists():
-        with open(BLOCKED_LOG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    wb.save(str(TRACKER_PATH))
+    wb.close()
 
 
-def _save_blocked_log(log: List[Dict]) -> None:
-    BLOCKED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(BLOCKED_LOG_PATH, "w", encoding="utf-8") as f:
-        json.dump(log, f, indent=2)
+# -- PASS 1: VISION EXTRACTION (Gemini Flash 2.0) ----------------------------
+
+PASS1_PROMPT = """You are a faithful transcription assistant. Your only job is to \
+read the text exactly as it appears on each page of this magazine scan.
+
+Rules:
+- Transcribe every word exactly as printed. Do not paraphrase, \
+summarize, or add any text that is not on the page.
+- Mark each page boundary with: === PAGE {page_start} === (use the page number provided)
+- Skip these page types entirely (output nothing for them): \
+cover page, back cover, full-page illustrations with no text, \
+order forms, subscription cards, advertisement pages
+- Include: article text, section headings, author names, pull quotes, \
+sidebars, letters to editor, editorial, table of contents
+- Preserve paragraph breaks with a blank line
+- Do not add any commentary or notes"""
+
+PASS1_BATCH_SIZE = 5
 
 
-# ── GPT-4o VISION API CALL ─────────────────────────────────────────────────
+def pass1_extract(pdf_path: Path, issue_dir: Path) -> int:
+    """Extract raw text from PDF via Gemini Vision in batches. Returns page count."""
+    print(f"  PASS 1: Vision extraction via Gemini...")
 
-def call_gpt4o(
-    images: List[str],
-    batch_num: int,
-    total_batches: int,
-    issue_name: str,
-    partial_context: Optional[str] = None,
-    start_page: int = 0,
-    end_page: int = 0,
-) -> str:
-    """Send a batch of page images to GPT-4o for extraction."""
-    # Build user message content (OpenAI vision format)
-    content = []
+    images = convert_from_path(str(pdf_path), dpi=200)
+    page_count = len(images)
+    print(f"  {page_count} pages converted at 200 DPI")
 
-    # Add bridge context if resuming from a previous batch
-    if partial_context and batch_num > 0:
-        bridge = (
-            f"[BRIDGE CONTEXT - last paragraph of previous batch for continuity]:\n"
-            f"{partial_context}\n\n"
-            f"This is batch {batch_num + 1} of {total_batches} for issue: {issue_name}.\n"
-            f"If the above bridge context ends mid-article, continue that article "
-            f"seamlessly before processing new content on these pages."
+    client = get_gemini()
+    all_text_parts = []
+
+    for batch_start in range(0, page_count, PASS1_BATCH_SIZE):
+        batch_end = min(batch_start + PASS1_BATCH_SIZE, page_count)
+        batch_images = images[batch_start:batch_end]
+        page_num_start = batch_start + 1
+        page_num_end = batch_end
+
+        print(f"  Batch: pages {page_num_start}-{page_num_end}...")
+
+        prompt = PASS1_PROMPT.replace("{page_start}", str(page_num_start))
+        prompt += (
+            f"\n\nYou are processing pages {page_num_start} through {page_num_end}. "
+            f"Number them === PAGE {page_num_start} === through === PAGE {page_num_end} ===."
         )
-        content.append({"type": "text", "text": bridge})
 
-    # Add page images (OpenAI base64 image format)
-    for img_b64 in images:
-        content.append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{img_b64}",
-                "detail": "high",
-            }
-        })
+        content = [prompt] + list(batch_images)
+        response = client.models.generate_content(model=GEMINI_MODEL, contents=content)
+        all_text_parts.append(response.text)
 
-    if not partial_context or batch_num == 0:
-        content.append({
-            "type": "text",
-            "text": f"This is batch {batch_num + 1} of {total_batches} for issue: {issue_name}. "
-                    f"Extract all articles from these pages following the instructions."
-        })
+    raw_text = "\n\n".join(all_text_parts)
 
-    try:
-        response = get_client().chat.completions.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
+    # Save raw transcription
+    issue_dir.mkdir(parents=True, exist_ok=True)
+    (issue_dir / "raw_text.txt").write_text(raw_text, encoding="utf-8")
+    print(f"  Raw text saved ({len(raw_text)} chars)")
+
+    return page_count
+
+
+# -- PASS 2: ARTICLE SEGMENTATION (Groq Llama 3.3 70B) ----------------------
+
+PASS2_TOC_SYSTEM = """You are an expert magazine editor. You will be given the full \
+transcribed text of a New Wine Magazine issue and its table of contents.
+
+Your job is to identify each article and return ONLY a metadata index. \
+Do NOT include article body text.
+
+Rules:
+- Use the table of contents as ground truth - find exactly those articles
+- Do not include: letters to editor, order forms, subscription info, \
+staff boxes, ads, table of contents itself
+- Do include: main articles, editorial, forum sections
+- Output as JSON array with this structure:
+  [
+    {"title": "Article Title", "author": "Author Name", "page_start": 4, "page_end": 10}
+  ]
+- page_start and page_end refer to the === PAGE N === markers in the text
+- Return ONLY the JSON array, nothing else"""
+
+PASS2_BODY_SYSTEM = """You are an expert magazine transcription editor. You will be \
+given a section of raw transcribed magazine text that contains one specific article.
+
+Your job is to extract and clean up ONLY the article specified, formatting it as markdown.
+
+Rules:
+- Extract the full article text for the specified title and author
+- Do NOT include the article title or author name at the start — these are already in metadata
+- Start the body text directly with the first paragraph of content
+- Do not add, invent, or paraphrase any text
+- Do not include text from other articles that may appear in the page range
+- Format as markdown:
+  - Section headings as ## H2
+  - Any quoted scripture passages that are indented or set apart visually as > blockquote
+  - Pull quotes as > *italic blockquote*
+  - Normal paragraphs separated by blank lines
+  - No H1 - that will be the title
+- Return ONLY the formatted article body text, nothing else"""
+
+
+def _extract_toc(raw_text: str) -> str:
+    """Extract table of contents section from raw text."""
+    # Look for PAGE 3 area where TOC usually lives
+    toc_lines = []
+    in_toc = False
+    for line in raw_text.split("\n"):
+        if "=== PAGE 3 ===" in line or "=== PAGE 2 ===" in line:
+            in_toc = True
+            continue
+        if in_toc and line.startswith("=== PAGE"):
+            break
+        if in_toc:
+            toc_lines.append(line)
+    return "\n".join(toc_lines).strip() if toc_lines else "(No table of contents found)"
+
+
+def _extract_page_range(raw_text: str, page_start: int, page_end: int) -> str:
+    """Extract text between === PAGE page_start === and === PAGE page_end+1 ===."""
+    lines = raw_text.split("\n")
+    result = []
+    capturing = False
+    for line in lines:
+        page_match = re.match(r"=== PAGE (\d+) ===", line)
+        if page_match:
+            page_num = int(page_match.group(1))
+            if page_num >= page_start and page_num <= page_end:
+                capturing = True
+                continue
+            elif page_num > page_end:
+                break
+        if capturing:
+            result.append(line)
+    return "\n".join(result).strip()
+
+
+def _parse_groq_json(raw_response: str):
+    """Parse JSON from Groq response, handling markdown code fences."""
+    json_str = raw_response
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw_response, re.DOTALL)
+    if fence_match:
+        json_str = fence_match.group(1).strip()
+    return json.loads(json_str)
+
+
+def pass2_segment(issue_dir: Path, meta: Dict) -> int:
+    """Segment raw text into individual article .md files. Returns article count."""
+    print(f"  PASS 2: Article segmentation via Groq...")
+
+    raw_text = (issue_dir / "raw_text.txt").read_text(encoding="utf-8")
+    toc = _extract_toc(raw_text)
+
+    # Step 1: Get article metadata index (small response, no body text)
+    print(f"  Step 2a: Extracting article index from TOC...")
+    toc_response = get_groq().chat.completions.create(
+        model=GROQ_MODEL,
+        max_tokens=2048,
+        messages=[
+            {"role": "system", "content": PASS2_TOC_SYSTEM},
+            {"role": "user", "content": f"TABLE OF CONTENTS:\n{toc}\n\nFULL MAGAZINE TEXT:\n{raw_text}"},
+        ],
+    )
+
+    toc_raw = (toc_response.choices[0].message.content or "").strip()
+    articles_meta = _parse_groq_json(toc_raw)
+    print(f"  Found {len(articles_meta)} articles in index")
+
+    # Step 2: Extract each article body individually
+    for idx, article in enumerate(articles_meta, start=1):
+        title = article.get("title", "Untitled")
+        author = article.get("author", "Unknown")
+        page_start = article.get("page_start", 1)
+        page_end = article.get("page_end", page_start)
+
+        print(f"  Step 2b: Extracting [{idx}/{len(articles_meta)}] {title}...")
+
+        # Get raw text for this article's page range
+        page_text = _extract_page_range(raw_text, page_start, page_end)
+
+        body_response = get_groq().chat.completions.create(
+            model=GROQ_MODEL,
+            max_tokens=8192,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": content},
+                {"role": "system", "content": PASS2_BODY_SYSTEM},
+                {"role": "user", "content": (
+                    f"Extract the article titled \"{title}\" by {author} "
+                    f"from the following magazine text (pages {page_start}-{page_end}):\n\n"
+                    f"{page_text}"
+                )},
             ],
         )
-    except Exception as e:
-        logger.exception("GPT-4o extraction failed for batch %d of %s", batch_num + 1, issue_name)
-        # Log the blocked batch
-        blocked_log = _load_blocked_log()
-        blocked_log.append({
-            "issue": issue_name,
-            "batch_index": batch_num,
-            "page_range": [start_page + 1, end_page],
-            "error": str(e)[:200],
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        })
-        _save_blocked_log(blocked_log)
-        raise
 
-    text = response.choices[0].message.content or ""
+        body = (body_response.choices[0].message.content or "").strip()
 
-    if response.choices[0].finish_reason == "length":
-        print(f"  WARNING: Batch {batch_num + 1} hit token limit — article may be truncated")
-        text += "\n[TRUNCATED - MAX TOKENS HIT]"
+        slug = slugify(title)
+        filename = f"{idx:02d}_{slug}.md"
 
-    return text
+        frontmatter = (
+            f"---\n"
+            f"TITLE: {title}\n"
+            f"AUTHOR: {author}\n"
+            f"ISSUE: {meta.get('issue', '')}\n"
+            f"DATE: {meta.get('date', '')}\n"
+            f"PAGE_START: {page_start}\n"
+            f"PAGE_END: {page_end}\n"
+            f"SOURCE_TYPE: magazine_article\n"
+            f"---\n\n"
+            f"# {title}\n"
+            f"*by {author}*\n\n"
+            f"{body}"
+        )
+
+        (issue_dir / filename).write_text(frontmatter, encoding="utf-8")
+
+    print(f"  {len(articles_meta)} articles segmented")
+    return len(articles_meta)
 
 
-# ── OUTPUT STITCHING ─────────────────────────────────────────────────────────
+# -- PASS 3: QA INSPECTION (Groq Llama 3.3 70B) -----------------------------
 
-def stitch_output(batch_outputs: Dict[str, str]) -> str:
-    """Merge all batch outputs into a single document.
-    Handles [CONTINUED IN NEXT BATCH] markers by joining article fragments."""
-    # Sort by batch index
-    sorted_keys = sorted(batch_outputs.keys(), key=lambda x: int(x))
-    parts = [batch_outputs[k] for k in sorted_keys]
+PASS3_SYSTEM = """You are a quality inspector for magazine article transcriptions.
 
-    merged = "\n\n".join(parts)
+Check this article for the following issues:
+1. Does it start mid-sentence or mid-word? (truncation)
+2. Does it end abruptly without a concluding sentence? (truncation)
+3. Are there any duplicate sentences or paragraphs? (overlap)
+4. Does the body text match the title and author? (mismatch)
+5. Is the word count reasonable for a magazine article? (min 200 words)
+6. Are there any obvious OCR errors or garbled text?
 
-    # Clean up continuation markers — join split articles
-    merged = re.sub(
-        r'\[CONTINUED IN NEXT BATCH\]\s*ARTICLE END\s*\n*.*?ARTICLE START\s*\n'
-        r'TITLE: \[continued\].*?\nCONTENT:\s*\n?',
-        '\n',
-        merged,
-        flags=re.DOTALL | re.IGNORECASE
+Respond with JSON only:
+{
+  "status": "PASS" or "WARN" or "FLAG",
+  "issues": ["list of issues found, empty if none"],
+  "confidence": 0.0 to 1.0,
+  "word_count": number
+}"""
+
+
+def pass3_qa(issue_dir: Path) -> Dict[str, int]:
+    """Run QA on each .md article file. Returns {pass, warn, flag} counts."""
+    print(f"  PASS 3: QA inspection via Groq...")
+
+    md_files = sorted(issue_dir.glob("*.md"))
+    if not md_files:
+        print(f"  No .md files found")
+        return {"pass": 0, "warn": 0, "flag": 0}
+
+    flagged_dir = issue_dir / "flagged"
+    qa_results = []
+    counts = {"pass": 0, "warn": 0, "flag": 0}
+
+    for md_path in md_files:
+        content = md_path.read_text(encoding="utf-8")
+
+        try:
+            response = get_groq().chat.completions.create(
+                model=GROQ_MODEL,
+                max_tokens=1024,
+                messages=[
+                    {"role": "system", "content": PASS3_SYSTEM},
+                    {"role": "user", "content": content},
+                ],
+            )
+            raw = (response.choices[0].message.content or "").strip()
+            # Parse JSON
+            json_str = raw
+            fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+            if fence_match:
+                json_str = fence_match.group(1).strip()
+            result = json.loads(json_str)
+        except Exception as e:
+            logger.warning("QA failed for %s: %s", md_path.name, e)
+            result = {"status": "WARN", "issues": [f"QA parse error: {e}"], "confidence": 0.0, "word_count": 0}
+
+        status = result.get("status", "WARN").upper()
+        result["file"] = md_path.name
+
+        if status == "FLAG":
+            flagged_dir.mkdir(exist_ok=True)
+            md_path.rename(flagged_dir / md_path.name)
+            counts["flag"] += 1
+        elif status == "WARN":
+            # Prepend warning block to file
+            issues_str = "\n".join(f"  - {i}" for i in result.get("issues", []))
+            warning_block = f"<!-- QA WARNINGS:\n{issues_str}\n-->\n\n"
+            md_path.write_text(warning_block + content, encoding="utf-8")
+            counts["warn"] += 1
+        else:
+            counts["pass"] += 1
+
+        qa_results.append(result)
+
+    # Save QA report
+    (issue_dir / "qa_report.json").write_text(
+        json.dumps(qa_results, indent=2), encoding="utf-8"
     )
 
-    # Also handle simpler continuation patterns
-    merged = merged.replace("[CONTINUED IN NEXT BATCH]", "")
-
-    return merged.strip()
+    print(f"  QA results: {counts['pass']} pass, {counts['warn']} warn, {counts['flag']} flag")
+    return counts
 
 
-def count_articles(text: str) -> int:
-    """Count ARTICLE START markers in the output."""
-    return len(re.findall(r'ARTICLE START', text))
-
-
-# ── PROCESS SINGLE ISSUE ────────────────────────────────────────────────────
+# -- PROCESS SINGLE ISSUE ---------------------------------------------------
 
 def process_issue(pdf_path: Path) -> str:
-    """Process a single magazine issue. Returns 'processed', 'skipped', or 'failed'."""
+    """Run all 3 passes on a single PDF. Returns 'processed' or 'failed'."""
     filename = pdf_path.name
     issue_stem = pdf_path.stem
-    output_file = OUTPUT_DIR / f"{issue_stem}.txt"
+    meta = parse_issue_meta(filename)
+    issue_dir = EXTRACTED_DIR / issue_stem
 
     print(f"\n{'='*60}")
     print(f"Processing: {filename}")
+    print(f"  Issue: {meta.get('issue')}  Date: {meta.get('date')}")
     print(f"{'='*60}")
 
-    # Check tracker
-    if is_tracked(filename):
-        print(f"  Already tracked as complete — skipping")
-        return "skipped"
-
-    # Check checkpoint
-    checkpoint = load_checkpoint(issue_stem)
-    if checkpoint and checkpoint.get("status") == "complete":
-        print(f"  Checkpoint shows complete — skipping")
-        return "skipped"
-
-    # Parse metadata
-    meta = parse_metadata(filename)
-    print(f"  Issue: {meta['issue']}  Year: {meta['year']}")
-
-    # Convert PDF to images
-    images = pdf_to_base64_images(pdf_path)
-    total_pages = len(images)
-    total_batches = math.ceil(total_pages / BATCH_SIZE)
-    print(f"  {total_pages} pages → {total_batches} batches of {BATCH_SIZE}")
-
-    # Initialize or resume checkpoint
-    if checkpoint and checkpoint.get("status") == "in_progress":
-        completed_batches = set(checkpoint.get("completed_batches", []))
-        batch_outputs = checkpoint.get("batch_outputs", {})
-        partial_context = checkpoint.get("partial_context")
-        print(f"  Resuming from checkpoint — {len(completed_batches)}/{total_batches} batches done")
-    else:
-        completed_batches = set()
-        batch_outputs = {}
-        partial_context = None
-        checkpoint = {
-            "filename": filename,
-            "total_batches": total_batches,
-            "completed_batches": [],
-            "batch_outputs": {},
-            "partial_context": None,
-            "status": "in_progress"
-        }
-        save_checkpoint(issue_stem, checkpoint)
-
-    # Process each batch
-    issue_name = f"{meta.get('issue', '??')}-{meta.get('year', '????')}"
-
-    for batch_idx in range(total_batches):
-        if batch_idx in completed_batches:
-            print(f"  Batch {batch_idx + 1}/{total_batches} — already done, skipping")
-            # Recover partial_context from this batch for next batch
-            if str(batch_idx) in batch_outputs:
-                partial_context = extract_partial_context(batch_outputs[str(batch_idx)])
-            continue
-
-        start_page = batch_idx * BATCH_SIZE
-        end_page = min(start_page + BATCH_SIZE, total_pages)
-        batch_images = images[start_page:end_page]
-
-        print(f"  Batch {batch_idx + 1}/{total_batches} (pages {start_page + 1}-{end_page})...")
-
-        try:
-            response_text = call_gpt4o(
-                images=batch_images,
-                batch_num=batch_idx,
-                total_batches=total_batches,
-                issue_name=issue_name,
-                partial_context=partial_context,
-                start_page=start_page,
-                end_page=end_page,
-            )
-        except Exception as e:
-            print(f"  ERROR in batch {batch_idx + 1}: {e}")
-            return "failed"
-
-        # Store batch output
-        batch_outputs[str(batch_idx)] = response_text
-        completed_batches.add(batch_idx)
-
-        # Extract partial context for next batch
-        partial_context = extract_partial_context(response_text)
-
-        # Save checkpoint after every successful batch
-        checkpoint["completed_batches"] = sorted(list(completed_batches))
-        checkpoint["batch_outputs"] = batch_outputs
-        checkpoint["partial_context"] = partial_context
-        save_checkpoint(issue_stem, checkpoint)
-
-        print(f"  Batch {batch_idx + 1} complete — checkpoint saved")
-
-    # All batches done — stitch output
-    print(f"  Stitching {len(batch_outputs)} batches...")
-    full_output = stitch_output(batch_outputs)
-    article_count = count_articles(full_output)
-    print(f"  {article_count} articles extracted")
-
-    # ── OPERATION ORDER (P0 Fix 3) ──
-    # 1. Write .txt output file
-    try:
-        output_file.write_text(full_output, encoding="utf-8")
-        print(f"  Output written: {output_file}")
-    except Exception as e:
-        print(f"  ERROR writing output: {e}")
-        return "failed"
-
-    # 2. Update tracker — if this fails, do NOT move PDF
-    try:
-        update_tracker(
-            filename=filename,
-            issue=meta.get("issue"),
-            year=meta.get("year"),
-            total_pages=total_pages,
-            total_batches=total_batches,
-            articles_extracted=article_count,
-            status="complete",
-            output_file=str(output_file)
-        )
-        print(f"  Tracker updated")
-    except Exception as e:
-        print(f"  ERROR updating tracker: {e}")
-        print(f"  PDF left in input folder for retry")
-        return "failed"
-
-    # 3. Move PDF to done
-    try:
-        dest = DONE_DIR / filename
-        pdf_path.rename(dest)
-        print(f"  PDF moved to: {dest}")
-    except Exception as e:
-        print(f"  WARNING: Could not move PDF: {e}")
-
-    # 4. Update checkpoint status to complete
-    checkpoint["status"] = "complete"
-    save_checkpoint(issue_stem, checkpoint)
-
-    print(f"  Done: {filename}")
-    return "processed"
-
-
-# ── MAIN ─────────────────────────────────────────────────────────────────────
-
-def run():
-    """Scan magazine directory and process all PDF issues."""
-    # Create directories if needed
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    DONE_DIR.mkdir(parents=True, exist_ok=True)
-    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Initialize tracker
     init_tracker()
 
-    # Find PDFs to process
-    pdfs = sorted(MAGAZINE_DIR.glob("*.pdf"))
+    try:
+        # Pass 1: Vision extraction
+        page_count = pass1_extract(pdf_path, issue_dir)
+        update_tracker_row(filename, {
+            "Issue": meta.get("issue"),
+            "Year": meta.get("year"),
+            "Pages": page_count,
+            "Pass1": "complete",
+            "Status": "pass1_done",
+        })
+
+        # Pass 2: Article segmentation
+        article_count = pass2_segment(issue_dir, meta)
+        update_tracker_row(filename, {
+            "Articles": article_count,
+            "Pass2": "complete",
+            "Status": "pass2_done",
+        })
+
+        # Pass 3: QA inspection
+        qa_counts = pass3_qa(issue_dir)
+        update_tracker_row(filename, {
+            "Pass3": "complete",
+            "Pass_Count": qa_counts["pass"],
+            "Warn_Count": qa_counts["warn"],
+            "Flag_Count": qa_counts["flag"],
+            "Status": "complete",
+        })
+
+        # Move PDF to done
+        PDF_DONE_DIR.mkdir(parents=True, exist_ok=True)
+        dest = PDF_DONE_DIR / filename
+        pdf_path.rename(dest)
+        print(f"  PDF moved to: {dest}")
+
+        print(f"  DONE: {filename}")
+        return "processed"
+
+    except Exception as e:
+        logger.exception("Failed processing %s", filename)
+        update_tracker_row(filename, {"Status": f"failed: {str(e)[:100]}"})
+        return "failed"
+
+
+# -- MAIN --------------------------------------------------------------------
+
+def run():
+    """Scan 01_to_extract/ and process all PDFs."""
+    TO_EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
+    EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
+    PDF_DONE_DIR.mkdir(parents=True, exist_ok=True)
+
+    pdfs = sorted(TO_EXTRACT_DIR.glob("*.pdf"))
     if not pdfs:
-        print(f"No PDFs found in {MAGAZINE_DIR}")
+        print(f"No PDFs found in {TO_EXTRACT_DIR}")
         return
 
     print(f"Found {len(pdfs)} PDF(s) to process")
 
-    processed = skipped = failed = 0
+    processed = failed = 0
     for pdf_path in pdfs:
         result = process_issue(pdf_path)
         if result == "processed":
             processed += 1
-        elif result == "skipped":
-            skipped += 1
         else:
             failed += 1
 
     print(f"\n{'='*60}")
-    print(f"Done. {processed} processed, {skipped} skipped, {failed} failed.")
-
-
-def dry_run():
-    """Convert page 1 of the first PDF only. No API calls, no file writes."""
-    pdfs = sorted(MAGAZINE_DIR.glob("*.pdf"))
-    if not pdfs:
-        print(f"No PDFs found in {MAGAZINE_DIR}")
-        return
-
-    pdf_path = pdfs[0]
-    print(f"DRY RUN — targeting: {pdf_path.name}")
-
-    doc = fitz.open(str(pdf_path))
-    zoom = 300 / 72
-    matrix = fitz.Matrix(zoom, zoom)
-    page = doc[0]
-    pix = page.get_pixmap(matrix=matrix)
-    img_data = pix.tobytes("jpeg")
-    size_kb = len(img_data) / 1024
-    doc.close()
-
-    print(f"  Page 1 image size: {size_kb:.1f} KB (300 DPI JPEG)")
-    print(f"  Would process: {pdf_path.name}")
-    print(f"DRY RUN COMPLETE")
+    print(f"Done. {processed} processed, {failed} failed.")
 
 
 if __name__ == "__main__":
-    if "--dry-run" in sys.argv:
-        dry_run()
-    else:
-        run()
+    run()

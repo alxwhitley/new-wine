@@ -1,0 +1,8 @@
+google-genai>=1.0.0
+pdf2image>=1.17.0
+groq
+supabase
+openai
+openpyxl
+tiktoken
+python-dotenv

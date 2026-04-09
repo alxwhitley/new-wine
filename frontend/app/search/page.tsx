@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { Search, ArrowLeft, Loader2, Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
@@ -102,9 +103,9 @@ export default function SearchPage() {
 
         <div className="border-t border-border my-6" />
 
-        <div className="text-foreground leading-relaxed text-base whitespace-pre-line">
+        <ReactMarkdown className="prose prose-invert max-w-none">
           {article.content}
-        </div>
+        </ReactMarkdown>
       </div>
     </div>
   ) : (
