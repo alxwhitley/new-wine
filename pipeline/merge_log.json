@@ -1,0 +1,119 @@
+[
+  {
+    "filename": "NewWineMagazine_Issue_02-1974.txt",
+    "processed_at": "2026-04-06 19:49:16",
+    "status": "merged",
+    "output_path": "/Users/alexwhitley/Desktop/rhemata/corpus/copyrighted/NewWineMagazine_Issue_02-1974.txt",
+    "raw_blocks_found": 10,
+    "articles_after_merge": 8,
+    "merges_performed": [
+      {
+        "title": "The Mandate of Unity",
+        "blocks_merged": 2
+      },
+      {
+        "title": "Thou Shalt Not Steal",
+        "blocks_merged": 2
+      }
+    ],
+    "orphan_continuations": []
+  },
+  {
+    "filename": "NewWineMagazine_Issue_02-1981.txt",
+    "processed_at": "2026-04-06 19:49:16",
+    "status": "merged",
+    "output_path": "/Users/alexwhitley/Desktop/rhemata/corpus/copyrighted/NewWineMagazine_Issue_02-1981.txt",
+    "raw_blocks_found": 10,
+    "articles_after_merge": 8,
+    "merges_performed": [
+      {
+        "title": "Perspective for a Decade: Getting Involved",
+        "blocks_merged": 2
+      },
+      {
+        "title": "Just Around the Corner: The Importance of the Individual",
+        "blocks_merged": 2
+      }
+    ],
+    "orphan_continuations": [
+      {
+        "orphan_title": "Beyond Charisma Into Covenant (continuation from previous batch)",
+        "appended_to": "Perspective for a Decade: Getting Involved"
+      },
+      {
+        "orphan_title": "Entering The Land (continued from previous batch)",
+        "appended_to": "Just Around the Corner: The Importance of the Individual"
+      }
+    ]
+  },
+  {
+    "filename": "NewWineMagazine_Issue_01-1973.txt",
+    "processed_at": "2026-04-07 10:26:22",
+    "status": "merged",
+    "output_path": "/Users/alexwhitley/Desktop/rhemata/corpus/copyrighted/NewWineMagazine_Issue_01-1973.txt",
+    "raw_blocks_found": 6,
+    "articles_after_merge": 5,
+    "merges_performed": [
+      {
+        "title": "Forum",
+        "blocks_merged": 2
+      }
+    ],
+    "orphan_continuations": [
+      {
+        "orphan_title": "[Untitled - Continuation of discussion on salvation, grace, and Christian maturity]",
+        "appended_to": "Forum"
+      }
+    ],
+    "truncated_articles": []
+  },
+  {
+    "filename": "NewWineMagazine_Issue_10-1969.txt",
+    "processed_at": "2026-04-07 17:47:53",
+    "status": "merged",
+    "output_path": "/Users/alexwhitley/Desktop/rhemata/corpus/copyrighted/NewWineMagazine_Issue_10-1969.txt",
+    "raw_blocks_found": 5,
+    "articles_after_merge": 4,
+    "merges_performed": [
+      {
+        "title": "Words",
+        "blocks_merged": 2
+      }
+    ],
+    "orphan_continuations": [],
+    "truncated_articles": []
+  },
+  {
+    "filename": "NewWineMagazine_Issue_11-1969.txt",
+    "processed_at": "2026-04-07 17:47:53",
+    "status": "merged",
+    "output_path": "/Users/alexwhitley/Desktop/rhemata/corpus/copyrighted/NewWineMagazine_Issue_11-1969.txt",
+    "raw_blocks_found": 5,
+    "articles_after_merge": 5,
+    "merges_performed": [],
+    "orphan_continuations": [],
+    "truncated_articles": []
+  },
+  {
+    "filename": "NewWineMagazine_Issue_01-1970.txt",
+    "processed_at": "2026-04-07 18:22:20",
+    "status": "merged",
+    "output_path": "/Users/alexwhitley/Desktop/rhemata/corpus/copyrighted/NewWineMagazine_Issue_01-1970.txt",
+    "raw_blocks_found": 5,
+    "articles_after_merge": 5,
+    "merges_performed": [],
+    "orphan_continuations": [],
+    "truncated_articles": []
+  },
+  {
+    "filename": "NewWineMagazine_Issue_01-1971.txt",
+    "processed_at": "2026-04-07 18:22:20",
+    "status": "merged",
+    "output_path": "/Users/alexwhitley/Desktop/rhemata/corpus/copyrighted/NewWineMagazine_Issue_01-1971.txt",
+    "raw_blocks_found": 5,
+    "articles_after_merge": 5,
+    "merges_performed": [],
+    "orphan_continuations": [],
+    "truncated_articles": []
+  }
+]
