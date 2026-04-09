@@ -7,3 +7,8 @@ node_modules/
 .next/
 .DS_Store
 frontend/node_modules
+sources/youtube/cleaned/
+sources/youtube/raw/
+sources/youtube/ingested/
+sources/magazine/
+sources/documents/
