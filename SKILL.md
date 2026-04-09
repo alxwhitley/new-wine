@@ -158,6 +158,7 @@ repo/
 - **Ingest auto-tagging** — ingest.py tags every new document post-chunk-insert via Groq Llama 3.3 70B; strict 3–6 tags, main themes only, non-fatal
 - **is_copyrighted path-based** — `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false
 - **Sermon transcripts excluded from search** — search_documents RPC defaults source_kind to "magazine_article"; transcripts available in chat retrieval only
+- **All scripts in `scripts/`** — no Python files at project root; all use `Path(__file__).resolve().parent.parent` for project root
 
 ---
 
@@ -352,6 +353,8 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 ## Remaining / Known Issues
 
 - **Full 300-issue batch not yet run** — only 4 articles ingested from issue 03-1973
+- **Migration 012 not yet run** — needs to be applied in Supabase SQL Editor
+- **scrape_youtube.py dead Haiku code** — `clean_with_haiku()`, `import anthropic`, `ANTHROPIC_API_KEY` check in `main()` are unused since cleaning moved to `clean_transcripts.py`; safe to remove
 - **content_summary not auto-populated** on new article inserts (trigger only updates fts_weighted, not content_summary)
 - **Tagging retry logic** sometimes needs improvement for complex articles
 - **Guest query limit** — `increment_guest_query()` SQL function needs migration file
