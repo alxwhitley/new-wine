@@ -36,6 +36,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 ROOT = Path(__file__).resolve().parent.parent
 APPROVED_DIR = ROOT / "sources" / "magazine" / "03_approved"
 INGESTED_DIR = ROOT / "sources" / "magazine" / "04_ingested"
+ARCHIVED_DIR = ROOT / "sources" / "magazine" / "05_archived"
 TRACKER_PATH = ROOT / "sources" / "magazine" / "rhemata_tracker.xlsx"
 
 # -- SUPABASE ----------------------------------------------------------------
@@ -178,6 +179,15 @@ def ingest_issue(issue_dir: Path) -> Dict:
         except Exception as e:
             logger.exception("Failed to ingest %s", md_path.name)
             skipped += 1
+
+    # Archive any PDF(s) in the issue folder before moving .md files to ingested
+    pdf_files = sorted(issue_dir.glob("*.pdf"))
+    if pdf_files:
+        ARCHIVED_DIR.mkdir(parents=True, exist_ok=True)
+        for pdf_path in pdf_files:
+            archive_dest = ARCHIVED_DIR / pdf_path.name
+            shutil.move(str(pdf_path), str(archive_dest))
+            print(f"  PDF archived to: {archive_dest}")
 
     # Move to ingested
     INGESTED_DIR.mkdir(parents=True, exist_ok=True)

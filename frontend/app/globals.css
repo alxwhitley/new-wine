@@ -108,6 +108,12 @@ mark {
   font-weight: 600;
 }
 
+/* Full viewport height with mobile browser chrome accounted for. */
+.h-dvh-safe {
+  height: 100vh;   /* fallback for browsers without dvh */
+  height: 100dvh;  /* dynamic viewport: excludes retracted address bar */
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }

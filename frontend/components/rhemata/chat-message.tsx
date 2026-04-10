@@ -80,7 +80,7 @@ export function ChatMessage({
   if (role === "user") {
     return (
       <div className="flex justify-end mb-6">
-        <div className="max-w-[75%] rounded-2xl bg-card px-4 py-3">
+        <div className="max-w-[75%] rounded-3xl bg-card px-4 py-3">
           <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
             {content}
           </p>

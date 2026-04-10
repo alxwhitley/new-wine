@@ -111,7 +111,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh-safe overflow-hidden bg-background">
       {/* Sidebar */}
       <Sidebar
         conversations={conversations}
@@ -128,7 +128,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <main className="md:ml-64 flex flex-1 flex-col min-w-0 h-screen">
+      <main className="md:ml-64 flex flex-1 flex-col min-w-0 min-h-0">
         {/* Top Bar */}
         <div className="flex h-14 shrink-0 items-center border-b border-border px-4 md:px-6 z-30">
           {/* Mobile: hamburger */}
@@ -173,7 +173,7 @@ export default function Home() {
                 <button
                   key={s}
                   onClick={() => handleSend(s)}
-                  className="w-full min-h-[44px] text-left rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
+                  className="w-full min-h-[44px] text-left rounded-3xl border border-border bg-card px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
                 >
                   {s}
                 </button>
@@ -187,7 +187,7 @@ export default function Home() {
         ) : (
           /* Chat thread */
           <>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto min-h-0">
               <div className="mx-auto max-w-3xl px-4 md:px-6 pt-8 pb-8">
                 {messages.map((message, i) => (
                   <ChatMessage

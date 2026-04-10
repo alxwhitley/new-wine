@@ -200,9 +200,9 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Mobile-only: profile/email above footer */}
-      <div className="md:hidden border-t border-sidebar-border pt-4 pb-2 px-1">
-        {user ? (
+      {/* Mobile-only: profile/email above footer (signed-in users only) */}
+      {user && (
+        <div className="md:hidden border-t border-sidebar-border pt-4 pb-2 px-1">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground truncate max-w-[160px]">{user.email}</p>
             <button
@@ -212,15 +212,8 @@ export function Sidebar({
               Sign out
             </button>
           </div>
-        ) : (
-          <button
-            onClick={onSignInClick}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
-          >
-            Sign in
-          </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="mt-auto pb-4 px-4">
@@ -249,7 +242,7 @@ export function Sidebar({
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6 transition-transform duration-300 md:hidden",
+          "fixed left-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6 transition-transform duration-300 md:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >

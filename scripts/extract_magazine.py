@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 ROOT = Path(__file__).resolve().parent.parent
 TO_EXTRACT_DIR = ROOT / "sources" / "magazine" / "01_to_extract"
 EXTRACTED_DIR = ROOT / "sources" / "magazine" / "02_extracted"
-PDF_DONE_DIR = ROOT / "sources" / "magazine" / "05_archived"
+PDF_FAILED_DIR = ROOT / "sources" / "magazine" / "06_failed"
 TRACKER_PATH = ROOT / "sources" / "magazine" / "rhemata_tracker.xlsx"
 
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -212,6 +212,30 @@ sidebars, letters to editor, editorial, table of contents
 
 PASS1_BATCH_SIZE = 5
 
+# Layout continuation markers to strip from Pass 1 output.
+# Preserves authorial "To be continued ..." and mid-sentence uses of "continued".
+# Pass A removes "(Continued on next page)" plus the orphan folio number on the following line.
+_CONT_MARKER_WITH_FOLIO = re.compile(
+    r"^[ \t]*\(?[ \t]*[Cc]ontinued[ \t]+on[ \t]+next[ \t]+page[ \t]*\)?[ \t]*\n"
+    r"[ \t]*\d+[ \t]*(?=\n|$)",
+    re.MULTILINE,
+)
+# Pass B removes standalone markers: "(Continued on/from page N)", "(continued on pg. N)",
+# bare "Continued from page N", and any remaining "(Continued on next page)".
+_CONT_MARKER = re.compile(
+    r"^[ \t]*\(?[ \t]*[Cc]ontinued[ \t]+"
+    r"(?:(?:on|from)[ \t]+(?:page|pg\.?)[ \t]+\d+|on[ \t]+next[ \t]+page)"
+    r"[ \t]*\)?[ \t]*(?=\n|$)",
+    re.MULTILINE,
+)
+
+
+def _scrub_continuation_markers(text: str) -> str:
+    """Strip layout continuation markers from Gemini Pass 1 output."""
+    text = _CONT_MARKER_WITH_FOLIO.sub("", text)
+    text = _CONT_MARKER.sub("", text)
+    return text
+
 
 def pass1_extract(pdf_path: Path, issue_dir: Path) -> int:
     """Extract raw text from PDF via Gemini Vision in batches. Returns page count."""
@@ -240,7 +264,15 @@ def pass1_extract(pdf_path: Path, issue_dir: Path) -> int:
 
         content = [prompt] + list(batch_images)
         response = client.models.generate_content(model=GEMINI_MODEL, contents=content)
-        all_text_parts.append(response.text)
+        batch_text = response.text
+        if not batch_text:
+            logger.warning(
+                "Gemini returned empty text for pages %d-%d of %s "
+                "(all skip-pages, safety filter, or model refusal) — substituting empty string and continuing",
+                page_num_start, page_num_end, pdf_path.name,
+            )
+            batch_text = ""
+        all_text_parts.append(batch_text)
 
     raw_text = "\n\n".join(all_text_parts)
 
@@ -290,6 +322,7 @@ Rules:
 - Start the body text directly with the first paragraph of content
 - Do not add, invent, or paraphrase any text
 - Do not include text from other articles that may appear in the page range
+- If you see a [CONTINUED] marker in the input, it separates non-contiguous page spans of the same article that were stitched together because the article jumped pages. Treat the surrounding text as one continuous article, do not include the [CONTINUED] marker in your output, and bridge across it naturally.
 - Format as markdown:
   - Section headings as ## H2
   - Any quoted scripture passages that are indented or set apart visually as > blockquote
@@ -387,6 +420,83 @@ def _extract_page_range(raw_text: str, page_start: int, page_end: int) -> str:
     return "\n".join(result).strip()
 
 
+# -- CONTINUATION RESOLUTION ------------------------------------------------
+
+# Case-insensitive: "continued on page N", "continued on pg N", "continued on p. N"
+_CONT_ON_REF = re.compile(
+    r"continued\s+on\s+(?:page|pg\.?|p\.)\s+(\d+)",
+    re.IGNORECASE,
+)
+# Case-insensitive: "continued from page N", "continued from pg N", "continued from p. N"
+_CONT_FROM_REF = re.compile(
+    r"continued\s+from\s+(?:page|pg\.?|p\.)\s+(\d+)",
+    re.IGNORECASE,
+)
+_PAGE_HEADER = re.compile(r"=== PAGE (\d+) ===")
+
+
+def resolve_continuations(raw_text: str) -> Dict[int, List[int]]:
+    """Scan raw_text for continuation markers and build a source_page -> [dest_pages] map.
+
+    Uses === PAGE N === headers to determine which page each marker lives on.
+    Both "continued on page X" (current -> X) and "continued from page X" (X -> current)
+    markers contribute to the map. Destinations are deduplicated in insertion order.
+    Self-references (X -> X) are skipped.
+    """
+    mapping: Dict[int, List[int]] = {}
+    current_page = None
+
+    for line in raw_text.split("\n"):
+        page_match = _PAGE_HEADER.match(line)
+        if page_match:
+            current_page = int(page_match.group(1))
+            continue
+        if current_page is None:
+            continue
+        for m in _CONT_ON_REF.finditer(line):
+            dest = int(m.group(1))
+            if dest != current_page:
+                mapping.setdefault(current_page, []).append(dest)
+        for m in _CONT_FROM_REF.finditer(line):
+            source = int(m.group(1))
+            if source != current_page:
+                mapping.setdefault(source, []).append(current_page)
+
+    # Dedupe while preserving insertion order
+    return {k: list(dict.fromkeys(v)) for k, v in mapping.items()}
+
+
+def _article_spans(
+    page_start: int,
+    page_end: int,
+    cont_map: Dict[int, List[int]],
+    max_hops: int = 5,
+) -> List[tuple]:
+    """Build list of (start, end) page-range tuples for an article, following continuation chains.
+
+    Primary span is (page_start, page_end). Each continuation destination is added as a
+    single-page span. BFS-chased up to max_hops with visited-set cycle prevention so that
+    chains like {4: [18], 18: [22]} expand to [(4,5), (18,18), (22,22)] for an article
+    whose index says page_start=4, page_end=5.
+    """
+    spans = [(page_start, page_end)]
+    visited = set(range(page_start, page_end + 1))
+    queue = list(range(page_start, page_end + 1))
+    hops = 0
+    while queue and hops < max_hops:
+        next_queue = []
+        for p in queue:
+            for dest in cont_map.get(p, []):
+                if dest in visited:
+                    continue
+                visited.add(dest)
+                spans.append((dest, dest))
+                next_queue.append(dest)
+        queue = next_queue
+        hops += 1
+    return spans
+
+
 def _parse_groq_json(raw_response: str):
     """Parse JSON from Groq response, handling markdown code fences."""
     json_str = raw_response
@@ -401,6 +511,14 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
     print(f"  PASS 2: Article segmentation via Groq...")
 
     raw_text = (issue_dir / "raw_text.txt").read_text(encoding="utf-8")
+
+    # Build continuation map from the UNSCRUBBED text, then scrub in-memory
+    # for all downstream consumers (TOC extraction, Pass 2a, Pass 2b).
+    continuations_map = resolve_continuations(raw_text)
+    if continuations_map:
+        print(f"  Continuations detected: {continuations_map}")
+    raw_text = _scrub_continuation_markers(raw_text)
+
     toc = _extract_toc(raw_text)
 
     # Step 1: Get article metadata index (small response, no body text)
@@ -427,8 +545,14 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
 
         print(f"  Step 2b: Extracting [{idx}/{len(articles_meta)}] {title}...")
 
-        # Get raw text for this article's page range
-        page_text = _extract_page_range(raw_text, page_start, page_end)
+        # Get raw text for this article, stitching in any continuation spans
+        spans = _article_spans(page_start, page_end, continuations_map)
+        if len(spans) == 1:
+            page_text = _extract_page_range(raw_text, page_start, page_end)
+        else:
+            parts = [_extract_page_range(raw_text, s, e) for s, e in spans]
+            page_text = "\n\n[CONTINUED]\n\n".join(p for p in parts if p)
+            print(f"    Stitched continuation spans: {spans}")
 
         body_response = get_groq().chat.completions.create(
             model=GROQ_MODEL,
@@ -618,9 +742,9 @@ def process_issue(pdf_path: Path) -> str:
             "Status": "complete",
         })
 
-        # Move PDF to done
-        PDF_DONE_DIR.mkdir(parents=True, exist_ok=True)
-        dest = PDF_DONE_DIR / filename
+        # Move PDF into the extracted issue folder alongside the .md files
+        # so it rides with the folder through 03_approved/ until ingest archives it
+        dest = issue_dir / filename
         pdf_path.rename(dest)
         print(f"  PDF moved to: {dest}")
 
@@ -630,17 +754,24 @@ def process_issue(pdf_path: Path) -> str:
     except Exception as e:
         logger.exception("Failed processing %s", filename)
         update_tracker_row(filename, {"Status": f"failed: {str(e)[:100]}"})
+        try:
+            PDF_FAILED_DIR.mkdir(parents=True, exist_ok=True)
+            failed_dest = PDF_FAILED_DIR / filename
+            pdf_path.rename(failed_dest)
+            print(f"  PDF moved to failed queue: {failed_dest}")
+        except Exception:
+            logger.exception("Could not move failed PDF %s to %s", filename, PDF_FAILED_DIR)
         return "failed"
 
 
 # -- MAIN --------------------------------------------------------------------
 
-def run(time_limit_min=None):
+def run(time_limit_min=None, max_issues=None):
     """Scan 01_to_extract/ and process all PDFs.
-    If time_limit_min is set, stop after the current PDF once the limit is reached."""
+    If time_limit_min is set, stop after the current PDF once the limit is reached.
+    If max_issues is set, stop after that many issues have been attempted (processed + failed)."""
     TO_EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
     EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
-    PDF_DONE_DIR.mkdir(parents=True, exist_ok=True)
 
     pdfs = sorted(TO_EXTRACT_DIR.glob("*.pdf"))
     if not pdfs:
@@ -650,6 +781,8 @@ def run(time_limit_min=None):
     print(f"Found {len(pdfs)} PDF(s) to process")
     if time_limit_min:
         print(f"Time limit: {time_limit_min} minutes")
+    if max_issues:
+        print(f"Max issues: {max_issues}")
 
     start_time = time.time()
     processed = failed = 0
@@ -659,6 +792,9 @@ def run(time_limit_min=None):
             if elapsed_min >= time_limit_min:
                 print(f"\nTime limit reached ({elapsed_min:.1f} min) — stopping.")
                 break
+        if max_issues is not None and (processed + failed) >= max_issues:
+            print(f"\nMax issues reached ({max_issues}) — stopping.")
+            break
 
         result = process_issue(pdf_path)
         if result == "processed":
@@ -675,5 +811,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="New Wine Magazine extraction pipeline")
     parser.add_argument("--time-limit", type=float, default=None,
                         help="Stop after this many minutes (finishes current PDF first)")
+    parser.add_argument("--max-issues", type=int, default=None,
+                        help="Stop after this many issues have been attempted (processed + failed)")
     args = parser.parse_args()
-    run(time_limit_min=args.time_limit)
+    run(time_limit_min=args.time_limit, max_issues=args.max_issues)

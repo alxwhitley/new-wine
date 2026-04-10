@@ -28,9 +28,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="bg-background px-4 md:px-6 pb-6">
+    <div className="shrink-0 bg-background px-4 md:px-6 pb-6">
       <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-        <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-2 rounded-3xl border border-border bg-card px-4 py-3">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
