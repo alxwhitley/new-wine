@@ -146,3 +146,6 @@ async def browse_documents(
             ],
             "count": len(result.data),
         }
+    except Exception:
+        logger.exception("Unhandled error in /search/documents/browse endpoint")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
