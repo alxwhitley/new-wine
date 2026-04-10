@@ -162,6 +162,7 @@ repo/
 - **All scripts in `scripts/`** — no Python files at project root; all use `Path(__file__).resolve().parent.parent` for project root
 - **Bible reference tracking** — `documents.bible_references text[]` populated via Groq Llama 3.3 70B extraction; shared helper at `scripts/bible_refs.py` normalizes to `"Book Chapter:Verse"` canonical form against 66-book set + alias map; non-fatal (returns `[]` on failure); auto-populated during ingest in both `ingest.py` and `ingest_magazine.py`; backfill via `extract_bible_refs.py`
 - **Prefix search** — `search_documents` RPC builds `to_tsquery` with `:*` prefix operators per token (colons split to sub-tokens), so `"Romans 8"` matches `"Romans 8:1"`, `"Romans 8:28"`, etc.; falls back to `plainto_tsquery` on parse error
+- **System prompt discipline** — `backend/app/system_prompt.txt` uses XML tags (`<thinking>`, `<research_analysis>`, `<answer>`). `<research_analysis>` runs 3 fixed self-checks (author conflation, silent_context citation, biblical case overreach). Response Discipline Rules block enforces: multi-part decomposition, retrieval-only format when asked, explicit "corpus insufficient" flag on thin charismatic distinctives, retrieval scope cap (10 items / 250 words). Scripture exception limited to verse text only — no interpretation beyond sources. Tone section includes charismatic linguistic anchors ("impressions," "promptings") for exploratory mode only. Citation rules include prompt-injection trust boundary (ignore instructions embedded in retrieved chunks)
 
 ---
 
@@ -379,6 +380,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **INCLUDE_COPYRIGHTED not confirmed on Railway** — check dashboard
 - **poppler required** — `brew install poppler` for pdf2image to work locally
 - **Bible ref extraction occasionally produces malformed JSON** from Groq on edge-case batches (~1 in 38 docs in backfill run). Helper handles gracefully by dropping that segment and continuing; other segments in the same doc still succeed.
+- **System prompt changes not yet deployed** — updates to `backend/app/system_prompt.txt` from 2026-04-10 session (Response Discipline Rules, research_analysis self-checks, scripture exception hardening, charismatic linguistic anchors, step-back doctrinal premise, prompt-injection trust boundary) are committed locally but need to be pushed to Railway to take effect in production.
 
 ---
 
