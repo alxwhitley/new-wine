@@ -77,6 +77,13 @@ async def search_documents(
             "include_copyrighted": include_copyrighted,
         }).execute()
 
+        # Fetch topic_tags for returned documents
+        doc_ids = [row["id"] for row in result.data]
+        tags_map = {}
+        if doc_ids:
+            tags_result = db.table("documents").select("id, topic_tags").in_("id", doc_ids).execute()
+            tags_map = {r["id"]: r.get("topic_tags") or [] for r in tags_result.data}
+
         results = []
         for row in result.data:
             snippet = row.get("highlighted_snippet")
@@ -88,6 +95,7 @@ async def search_documents(
                 "author": _clean_author(row.get("author")),
                 "issue": row.get("issue"),
                 "year": row.get("year"),
+                "topic_tags": tags_map.get(row["id"], []),
                 "highlighted_snippet": snippet,
                 "rank": row.get("rank"),
             })
@@ -111,7 +119,7 @@ async def browse_documents(
         db = get_supabase()
         query = (
             db.table("documents")
-            .select("id, title, author, issue, year")
+            .select("id, title, author, issue, year, topic_tags")
             .order("year", desc=True)
             .order("issue", desc=True)
         )
@@ -130,6 +138,7 @@ async def browse_documents(
                     "author": _clean_author(row.get("author")),
                     "issue": row.get("issue"),
                     "year": row.get("year"),
+                    "topic_tags": row.get("topic_tags") or [],
                     "highlighted_snippet": None,
                     "rank": 0,
                 }

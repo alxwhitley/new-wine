@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, MessageSquare, LogIn, MoreHorizontal, X, Search } from "lucide-react";
+import { Plus, LogIn, MoreHorizontal, X, Search } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -84,8 +84,19 @@ export function Sidebar({
         </button>
       </div>
 
+      {/* New Chat */}
+      <div className="mb-1">
+        <button
+          onClick={handleNewChat}
+          className="flex w-full min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          New Chat
+        </button>
+      </div>
+
       {/* Search Link */}
-      <div className="mb-2">
+      <div className="mb-4">
         <Link
           href="/search"
           onClick={onClose}
@@ -96,21 +107,14 @@ export function Sidebar({
         </Link>
       </div>
 
-      {/* New Chat Button */}
-      <div className="mb-4">
-        <Button
-          onClick={handleNewChat}
-          className="w-full min-h-[44px] justify-start gap-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </Button>
-      </div>
-
       {/* Conversation History */}
       <div className="flex-1 overflow-y-auto -mx-2 px-2">
         {isLoggedIn ? (
-          <div className="space-y-2">
+          <>
+            <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+              Recents
+            </p>
+            <div className="space-y-2">
             {conversations.map((conversation) => (
               <div key={conversation.id} className="group relative">
                 {confirmingId === conversation.id ? (
@@ -144,24 +148,21 @@ export function Sidebar({
                           : "bg-transparent"
                       )}
                     >
-                      <div className="flex items-start gap-1">
-                        <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className="text-sm font-medium text-foreground"
-                            style={{
-                              WebkitMaskImage: "linear-gradient(to right, black 70%, transparent 100%)",
-                              maskImage: "linear-gradient(to right, black 70%, transparent 100%)",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {conversation.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {relativeTime(conversation.updated_at)}
-                          </p>
-                        </div>
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="text-sm font-medium text-foreground"
+                          style={{
+                            WebkitMaskImage: "linear-gradient(to right, black 70%, transparent 100%)",
+                            maskImage: "linear-gradient(to right, black 70%, transparent 100%)",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {conversation.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {relativeTime(conversation.updated_at)}
+                        </p>
                       </div>
                     </button>
 
@@ -179,7 +180,8 @@ export function Sidebar({
                 )}
               </div>
             ))}
-          </div>
+            </div>
+          </>
         ) : (
           <div className="px-3 py-6 text-center">
             <p className="text-xs text-muted-foreground mb-4">

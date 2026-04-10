@@ -265,7 +265,15 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **GET /document/{id}/article** — reassembles full article from chunks
   - Strips per-chunk metadata headers, trims overlap, strips markdown bold/italic
   - Cleans author (truncates at parenthesis)
+- **GET /search/documents/browse** — lists all documents of a source_kind, ordered by year/issue DESC
+  - Parameters: `source_kind`, `include_copyrighted`
+  - Returns same shape as search_documents (id, title, author, issue, year, topic_tags, highlighted_snippet=null, rank=0)
+  - Both `/search/documents` and `/search/documents/browse` return `topic_tags` (secondary lookup on doc IDs for search; direct select for browse)
 - **Search page at /search** — sidebar, search bar, result cards, article reader
+  - Browse listing on initial load (all magazine articles, before any search)
+  - `hasSearched` state flag distinguishes "no search yet" (show browse) vs "searched with no results" (show empty state)
+  - Result cards show author-only metadata (no date/year/issue)
+  - Topic tag pills on cards: rounded, `#d4b96a` gold text on `rgba(212, 185, 106, 0.12)` background
   - `ReactMarkdown` renders article body in reader view (title/byline stripped to avoid duplication)
   - `dangerouslySetInnerHTML` renders `<mark>` highlighted snippets in result cards
   - `mark` styled with gold color (#d4b96a), transparent background, font-weight 600
@@ -301,8 +309,8 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - Centered chat input as primary interaction
 - Perplexity-style inline citations rendered as gold-highlighted tags
 - Clicking a citation opens a source panel with document title, author, and page content
-- Sidebar for conversation history (authenticated users); Search link in sidebar
-- Search page at `/search` with keyword search, result cards, and full article reader
+- Sidebar: "Rhemata" wordmark, New Chat (plain, above Search), Search link, "Recents" section label, conversation history (title + timestamp, no icons)
+- Search page at `/search` with keyword search, browse-all default listing, result cards with topic tag pills, and full article reader
 - Auth flow: login modal triggered by AuthButton, sidebar sign-in link, or guest limit reached
 - Guest users get 6 free queries before prompted to sign up
 
@@ -312,7 +320,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **Name:** Rhemata
 - **Fonts:** Lora (headings/logo), Inter (UI/body)
 - **Dark theme** — near-black backgrounds, warm neutrals
-- **Gold accents** — `#b49238` (CTA), `#d4b96a` (citations/highlights)
+- **Gold accents** — `#d4b96a` (citations/highlights/tag pills), `rgba(212, 185, 106, 0.12)` (tag pill backgrounds)
 - **Voice:** Scholarly but accessible. Conviction, not performance. Serves the researcher, not the spectacle.
 
 ---

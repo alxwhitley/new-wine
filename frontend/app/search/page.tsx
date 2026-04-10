@@ -119,9 +119,11 @@ export default function SearchPage() {
           {article.title}
         </h1>
 
-        <p className="text-sm text-muted-foreground mt-2">
-          {[article.author, article.issue, article.year].filter(Boolean).join(" \u00b7 ")}
-        </p>
+        {article.author && (
+          <p className="text-sm text-muted-foreground mt-2">
+            {article.author}
+          </p>
+        )}
 
         <div className="border-t border-border my-6" />
 
@@ -205,14 +207,29 @@ export default function SearchPage() {
                     <h3 className="font-serif text-foreground group-hover:text-citation transition-colors leading-snug">
                       {doc.title}
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {[doc.author, doc.issue, doc.year].filter(Boolean).join(" \u00b7 ")}
-                    </p>
+                    {doc.author && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {doc.author}
+                      </p>
+                    )}
                     {doc.highlighted_snippet && (
                       <p
                         className="text-sm text-muted-foreground mt-2 line-clamp-2"
                         dangerouslySetInnerHTML={{ __html: doc.highlighted_snippet }}
                       />
+                    )}
+                    {doc.topic_tags && doc.topic_tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {doc.topic_tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
+                            style={{ backgroundColor: "rgba(212, 185, 106, 0.12)", color: "#d4b96a" }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </button>
                 ))}
@@ -247,9 +264,24 @@ export default function SearchPage() {
                     <h3 className="font-serif text-foreground group-hover:text-citation transition-colors leading-snug">
                       {doc.title}
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {[doc.author, doc.issue, doc.year].filter(Boolean).join(" \u00b7 ")}
-                    </p>
+                    {doc.author && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {doc.author}
+                      </p>
+                    )}
+                    {doc.topic_tags && doc.topic_tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {doc.topic_tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
+                            style={{ backgroundColor: "rgba(212, 185, 106, 0.12)", color: "#d4b96a" }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </button>
                 ))}
               </>
