@@ -120,7 +120,8 @@ repo/
 - `is_copyrighted` (boolean, default false)
 - `year` (int), `issue` (text), `url` (text, nullable)
 - `topic_tags` (text[]) — assigned from taxonomy
-- `fts_weighted` (tsvector) — weighted FTS on title, author, source_name, topic_tags
+- `bible_references` (text[], default `'{}'`) — canonical refs like `"Romans 8:28"`; GIN indexed
+- `fts_weighted` (tsvector) — weighted FTS on title (A), author (A), source_name (B), bible_references (C, colons stripped)
 - `content_summary` (text) — first chunk content for display
 - `created_at` (timestamptz)
 
@@ -159,6 +160,8 @@ repo/
 - **is_copyrighted path-based** — `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false
 - **Sermon transcripts excluded from search** — search_documents RPC defaults source_kind to "magazine_article"; transcripts available in chat retrieval only
 - **All scripts in `scripts/`** — no Python files at project root; all use `Path(__file__).resolve().parent.parent` for project root
+- **Bible reference tracking** — `documents.bible_references text[]` populated via Groq Llama 3.3 70B extraction; shared helper at `scripts/bible_refs.py` normalizes to `"Book Chapter:Verse"` canonical form against 66-book set + alias map; non-fatal (returns `[]` on failure); auto-populated during ingest in both `ingest.py` and `ingest_magazine.py`; backfill via `extract_bible_refs.py`
+- **Prefix search** — `search_documents` RPC builds `to_tsquery` with `:*` prefix operators per token (colons split to sub-tokens), so `"Romans 8"` matches `"Romans 8:1"`, `"Romans 8:28"`, etc.; falls back to `plainto_tsquery` on parse error
 
 ---
 
@@ -257,7 +260,8 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **GET /search/documents** — document-level FTS via `search_documents` RPC function
   - Parameters: `q`, `author`, `source_kind`, `include_copyrighted`
   - Returns: id, title, author, issue, year, highlighted_snippet, rank
-  - `fts_weighted` column includes title, author, source_name, topic_tags (weighted A/B)
+  - `fts_weighted` column includes title (A), author (A), source_name (B), bible_references (C, colons stripped)
+  - **Prefix tsquery builder** — tokenizes query, strips non-alphanumerics, appends `:*` to each token, AND-joins; `"Romans 8"` matches `"Romans 8:1"`, `"Romans 8:28"`, etc. Falls back to `plainto_tsquery` on parse error.
   - `ts_headline` generates keyword-highlighted snippets from best-matching chunk
   - Markdown/metadata stripped from snippets via nested `regexp_replace`
   - Fallback to first 200 chars if no FTS match in chunk content
@@ -284,9 +288,11 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 
 | Script | Purpose |
 |---|---|
-| `scripts/extract_magazine.py` | 3-pass Gemini/Groq extraction pipeline (Vision → Segmentation → QA) |
-| `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase |
-| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal) |
+| `scripts/extract_magazine.py` | 3-pass Gemini/Groq extraction pipeline (Vision → Segmentation → QA). Supports `--max-issues N` and `--time-limit`. Continuation resolver (BFS, depth 5) handles "continued on page N" markers. PDFs archived into `02_extracted/{issue_stem}/` after extraction. Empty Gemini batches log warning + substitute `""` (non-fatal). |
+| `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase. Auto-populates `bible_references`. Archives PDFs to `05_archived/` on success. |
+| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. |
+| `scripts/bible_refs.py` | Shared Bible reference extractor (Groq Llama 3.3 70B). `extract_bible_references(content) -> List[str]`. Segments at ~12k chars, normalizes against 66-book canonical set + alias map, dedupes. Non-fatal (returns `[]`). |
+| `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force` (re-process docs that already have refs). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
 | `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run) |
@@ -302,6 +308,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - 21 YouTube transcripts ingested (sermon_transcript)
 - 4 copyrighted magazine articles (New Wine Magazine, issue 03-1973) — all tagged
 - 35 chunks across magazine articles
+- **All 38 backfilled docs have `bible_references` populated** (2026-04-10). 35/38 had refs (2 to 138 each); 3 with no refs (session notes, zoom outlines, marketplace calling)
 
 ---
 
@@ -361,7 +368,9 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 ## Remaining / Known Issues
 
 - **Full 300-issue batch not yet run** — only 4 articles ingested from issue 03-1973
-- **Migration 012 not yet run** — needs to be applied in Supabase SQL Editor
+- **Migration 012 not yet run** — needs to be applied in Supabase SQL Editor (Migration 013 for `bible_references` is applied as of 2026-04-10)
+- **`sources/youtube/youtube_tracker.xlsx` still tracked** — needs `git rm --cached sources/youtube/youtube_tracker.xlsx` to finish the earlier `sources/` cleanup. Shows up as modified on every commit.
+- **Issue_03-1973 cleanup A/B/C options** never resolved in the continuation-resolver session — was left in `02_extracted/` in an uncertain state.
 - **scrape_youtube.py dead Haiku code** — `clean_with_haiku()`, `import anthropic`, `ANTHROPIC_API_KEY` check in `main()` are unused since cleaning moved to `clean_transcripts.py`; safe to remove
 - **content_summary not auto-populated** on new article inserts (trigger only updates fts_weighted, not content_summary)
 - **Tagging retry logic** sometimes needs improvement for complex articles
@@ -369,6 +378,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **RLS policies needed** on `conversations` and `messages` tables
 - **INCLUDE_COPYRIGHTED not confirmed on Railway** — check dashboard
 - **poppler required** — `brew install poppler` for pdf2image to work locally
+- **Bible ref extraction occasionally produces malformed JSON** from Groq on edge-case batches (~1 in 38 docs in backfill run). Helper handles gracefully by dropping that segment and continuing; other segments in the same doc still succeed.
 
 ---
 
