@@ -79,7 +79,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   if (role === "user") {
     return (
-      <div className="flex justify-end mb-6">
+      <div className="flex justify-end mb-4">
         <div className="max-w-[75%] rounded-3xl bg-card px-4 py-3">
           <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
             {content}
@@ -93,7 +93,7 @@ export function ChatMessage({
   const hasCitations = citations.length > 0;
 
   return (
-    <div className="mb-6">
+    <div className="mb-4 border-t border-[#3c3c38] pt-3">
       <div className="max-w-none prose-rhemata">
         <ReactMarkdown
           components={{
