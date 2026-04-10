@@ -25,6 +25,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.chunker import chunk_text, token_len
+from bible_refs import extract_bible_references
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -248,7 +249,7 @@ def already_ingested(source_hash: str) -> bool:
     return len(result.data) > 0
 
 
-def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None) -> str:
+def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None, bible_refs=None) -> str:
     """Insert a document row and return its UUID."""
     doc_id = str(uuid.uuid4())
     st = metadata.get("source_type", "")
@@ -273,6 +274,7 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
         "citation_mode": citation_mode,
         "source":      metadata.get("source_name"),  # mirrors source_name
         "topic_tags":  metadata.get("topic_tags", []),
+        "bible_references": bible_refs or [],
         "file_path":   file_path,
         "is_copyrighted": is_copyrighted,
     }
@@ -281,8 +283,9 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
     try:
         supabase.table("documents").insert(row).execute()
     except Exception:
-        # url column may not exist yet — retry without it
+        # url/bible_references columns may not exist yet — retry without them
         row.pop("url", None)
+        row.pop("bible_references", None)
         supabase.table("documents").insert(row).execute()
     return doc_id
 
@@ -465,10 +468,25 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         print("  [DRY RUN] No data written to Supabase.")
         return "processed"
 
-    # 4. Insert document row
+    # 4. Extract Bible references from chunk content (non-fatal)
+    print("Extracting Bible references...")
+    bible_refs = extract_bible_references(content)
+    if bible_refs:
+        preview = ", ".join(bible_refs[:5]) + (f" ... (+{len(bible_refs) - 5})" if len(bible_refs) > 5 else "")
+        print(f"  {len(bible_refs)} reference(s): {preview}")
+    else:
+        print("  No Bible references found")
+
+    # 5. Insert document row
     source_url = metadata.get("_url") or (txt_headers.get("SOURCE_URL") if txt_headers else None)
     print("Inserting document record...")
-    doc_id = insert_document(metadata, str(file_path), is_copyrighted=is_copyrighted, url=source_url)
+    doc_id = insert_document(
+        metadata,
+        str(file_path),
+        is_copyrighted=is_copyrighted,
+        url=source_url,
+        bible_refs=bible_refs,
+    )
     print(f"  Document ID: {doc_id}")
 
     # 5. Embed + insert chunks

@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from supabase import create_client
 from app.services.embeddings import embed_text
 from app.services.chunker import chunk_text
+from bible_refs import extract_bible_references
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -112,6 +113,11 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
 
     db = get_db()
 
+    # Extract Bible references from body (non-fatal — returns [] on failure)
+    bible_refs = extract_bible_references(body)
+    if bible_refs:
+        print(f"  Bible refs: {len(bible_refs)} found ({', '.join(bible_refs[:5])}{'...' if len(bible_refs) > 5 else ''})")
+
     # Insert document
     doc_data = {
         "title": title,
@@ -124,6 +130,7 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
         "issue": issue or None,
         "year": year,
         "topic_tags": topic_tags if topic_tags else None,
+        "bible_references": bible_refs,
     }
 
     doc_result = db.table("documents").insert(doc_data).execute()
