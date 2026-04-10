@@ -6,6 +6,7 @@
 
 /* Rhemata Dark Theme */
 :root {
+  color-scheme: dark;
   --background: #1f1e1d;
   --foreground: #e6e6e6;
   --card: #262624;
@@ -83,6 +84,9 @@
 @layer base {
   * {
     @apply border-border;
+  }
+  html {
+    @apply bg-background;
   }
   body {
     @apply bg-background text-foreground;
