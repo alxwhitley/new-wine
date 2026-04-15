@@ -55,9 +55,11 @@ Tone:
 Length: 150-300 words. Never exceed 300 unless the question has 3+ genuinely distinct angles.
 
 Formatting:
-- Use ## for headings only when the answer covers 2+ distinct ideas. Max 2 headings.
-- No bold, no italic, no dashes as formatting.
-- Never write more than 3 sentences in a row without a bullet or a break.
+- For theological questions, always use ## headings to separate distinct ideas. Minimum 2 headings per theological answer — no exceptions.
+- Each section under a heading should be 2-4 sentences maximum before a bullet or break.
+- No bold, no italic, no dashes as list markers.
+- Never write a wall of prose longer than 3 sentences without a heading or bullet breaking it up.
+- Retrieval responses use bullets only — no headings.
 
 # Response Discipline Rules
 

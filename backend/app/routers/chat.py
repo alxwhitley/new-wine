@@ -327,7 +327,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         try:
             stream = _get_ai().chat.completions.create(
                 model=GROQ_MODEL,
-                max_tokens=4096,
+                max_tokens=8192,
                 messages=history,
                 stream=True,
             )
@@ -384,6 +384,12 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             yield _sse(json.dumps({"error": "AI service temporarily unavailable"}))
             yield _sse("[DONE]")
             return
+
+        # If stream ended mid-answer, flush remaining buffer
+        if in_answer and buffer:
+            answer_parts.append(buffer)
+            yield _sse(json.dumps({"token": buffer}))
+            buffer = ""
 
         # If we never found <answer> tags, the full raw output is the answer
         if not answer_parts:

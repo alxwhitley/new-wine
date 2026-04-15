@@ -122,42 +122,6 @@ def get_transcript_text(client, video_id: str):
         return None
 
 
-# ── Haiku cleaning ────────────────────────────────────────────────────────────
-
-CLEANING_PROMPT = """You are cleaning a YouTube sermon transcript for a theological research database.
-
-Your job:
-1. Remove ALL advertisement segments, sponsor reads, and promotional content (e.g. "Go to goodranchers.com", "Use code JOHN", "Thanks to our partners", subscription pitches, merch plugs, book promotions)
-2. Remove non-speech markers: [music], [laughter], [applause], [clears throat], [cough], etc.
-3. Remove filler artifacts from auto-captions: repeated phrases, mid-sentence restarts where the same phrase appears twice in a row
-4. Preserve ALL theological content verbatim — do not summarize, paraphrase, or remove any sermon content
-5. Return only the cleaned transcript text with no commentary, preamble, or explanation
-
-Return only the cleaned text."""
-
-
-def clean_with_haiku(raw_text: str):
-    """
-    Send raw transcript to Claude Haiku for cleaning.
-    Returns (cleaned_text, haiku_succeeded: bool).
-    """
-    try:
-        import anthropic
-        client = anthropic.Anthropic()
-        message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=8192,
-            messages=[{
-                "role": "user",
-                "content": f"{CLEANING_PROMPT}\n\n---\n\n{raw_text}"
-            }]
-        )
-        return message.content[0].text.strip(), True
-    except Exception as e:
-        print(f"     ⚠  Haiku cleaning failed ({e}) — saving raw transcript")
-        return raw_text, False
-
-
 # ── File helpers ──────────────────────────────────────────────────────────────
 
 def format_date(date_str: str) -> str:
@@ -288,10 +252,6 @@ def save_tracker(wb):
 def main():
     load_env(ENV_PATH)
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("✗ ANTHROPIC_API_KEY not set. Add it to /Users/alexwhitley/Desktop/rhemata/.env")
-        sys.exit(1)
-
     ytdlp = find_ytdlp()
     if not ytdlp:
         print("✗ yt-dlp not found. Run: pip3 install yt-dlp")
@@ -386,18 +346,14 @@ def main():
                 stats["no_transcript"] += 1
                 continue
 
-            # 3. Clean with Haiku
-            print(f"     ✎  Cleaning with Haiku...")
-            cleaned_text, haiku_ok = clean_with_haiku(raw_text)
-            note = "" if haiku_ok else "Haiku failed — raw transcript saved"
-
-            # 4. Write file
+            # 3. Write raw transcript file
             fname    = make_filename(vid["date"], ch["handle"], title)
             out_path = OUTPUT_DIR / fname
             try:
-                write_transcript_file(out_path, ch, vid, cleaned_text)
-                word_count = len(cleaned_text.split())
-                print(f"     ✓  {fname} ({word_count:,} words){' [raw]' if not haiku_ok else ''}")
+                write_transcript_file(out_path, ch, vid, raw_text)
+                word_count = len(raw_text.split())
+                note = ""
+                print(f"     ✓  {fname} ({word_count:,} words)")
                 log_row(wb, ch, vid, "Yes", str(out_path), word_count, note)
                 scraped_urls.add(url)
                 stats["new"] += 1

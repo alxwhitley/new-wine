@@ -11,6 +11,7 @@ import sys
 import uuid
 import json
 import hashlib
+import shutil
 from pathlib import Path
 
 from groq import Groq
@@ -536,12 +537,20 @@ def main():
             return True
         return False
 
+    ingested_dir = DOCS_FOLDER / "youtube" / "ingested"
+
     processed = skipped = failed = 0
     for file_path in files:
         is_copyrighted = _is_copyrighted(file_path)
         result = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)
         if result == "processed":
             processed += 1
+            # Move successfully ingested YouTube transcripts to ingested/
+            if not dry_run and "sources/youtube/cleaned" in str(file_path):
+                ingested_dir.mkdir(parents=True, exist_ok=True)
+                dest = ingested_dir / file_path.name
+                shutil.move(str(file_path), str(dest))
+                print(f"  Moved to: {dest}")
         elif result == "skipped":
             skipped += 1
         else:
