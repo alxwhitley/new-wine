@@ -352,13 +352,18 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         try:
             import anthropic
             client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-            with client.messages.stream(
+            stream = client.messages.create(
                 model="claude-sonnet-4-5-20250514",
                 max_tokens=1500,
                 system=ANSWER_SYSTEM_PROMPT,
                 messages=history,
-            ) as stream:
-              for text in stream.text_stream:
+                stream=True,
+            )
+            for event in stream:
+                if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                    text = event.delta.text
+                else:
+                    continue
                 raw_full.append(text)
                 buffer += text
 
