@@ -18,10 +18,16 @@ from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 
 COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 logger = logging.getLogger(__name__)
 
 system_prompt = (Path(__file__).resolve().parent.parent / "system_prompt.txt").read_text()
+ANSWER_SYSTEM_PROMPT = system_prompt + (
+    "\n\nRepresent the views of the source documents faithfully and accurately, "
+    "even when those views reflect traditional or complementarian theology. "
+    "Do not editorialize or add modern qualifications unless they appear in the source material."
+)
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
 RRF_K = 60  # Reciprocal Rank Fusion constant
@@ -327,8 +333,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             for i, c in enumerate(chunks)
         )
 
-        # Build conversation history for Groq
-        history = [{"role": "system", "content": system_prompt}]
+        # Build conversation history for Anthropic Claude
+        history = []
         for msg in request.messages:
             if msg.role in ("user", "assistant"):
                 history.append({"role": msg.role, "content": msg.content})
@@ -337,24 +343,22 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             "content": f"Sources:\n{context}\n\nQuestion: {request.question}",
         })
 
-        # Stream from Groq, extracting only <answer> content
+        # Stream from Anthropic Claude, extracting only <answer> content
         raw_full = []
         answer_parts = []
         in_answer = False
         buffer = ""
 
         try:
-            stream = _get_ai().chat.completions.create(
-                model=GROQ_MODEL,
-                max_tokens=8192,
+            import anthropic
+            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            with client.messages.stream(
+                model="claude-sonnet-4-5-20250514",
+                max_tokens=1500,
+                system=ANSWER_SYSTEM_PROMPT,
                 messages=history,
-                stream=True,
-            )
-            for chunk in stream:
-                delta = chunk.choices[0].delta if chunk.choices else None
-                if not delta or not delta.content:
-                    continue
-                text = delta.content
+            ) as stream:
+              for text in stream.text_stream:
                 raw_full.append(text)
                 buffer += text
 
