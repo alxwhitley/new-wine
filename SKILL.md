@@ -61,7 +61,9 @@ repo/
 ├── scripts/                   # All pipeline scripts
 │   ├── scrape_youtube.py      # YouTube transcript scraper (yt-dlp + Supabase dedupe, raw only — no cleaning)
 │   ├── youtube_pipeline.sh    # Full YouTube pipeline: scrape → clean → ingest
+│   ├── whisper_transcribe.py   # Whisper medium + Groq clean (batch from no_captions/ or single URL)
 │   ├── clean_transcripts.py   # Clean raw transcripts via Groq Llama 3.3 70B
+│   ├── fix_article_json.py    # One-off migration: fix raw JSON chunks in Supabase (run 2026-04-17, 30 fixed)
 │   ├── extract_magazine.py    # 3-pass Gemini/Groq extraction pipeline
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; moves YouTube transcripts to ingested/ on success
@@ -87,12 +89,14 @@ repo/
 | Backend | Python 3.9 / FastAPI, deployed to Railway |
 | Database | Supabase (PostgreSQL + pgvector) |
 | Embeddings | OpenAI `text-embedding-3-small` (1536 dims) |
-| Chat / Query Expansion / Metadata / Tagging / Transcript Cleaning LLM | Groq Llama 3.3 70B (`llama-3.3-70b-versatile`) |
+| Answer Generation LLM | Anthropic Claude Sonnet 4.5 (`claude-sonnet-4-5`) via `anthropic` SDK |
+| Query Expansion / Metadata / Tagging / Transcript Cleaning LLM | Groq Llama 3.3 70B (`llama-3.3-70b-versatile`) |
 | Vision / OCR (magazine extraction) | Gemini 2.5 Flash (`gemini-2.5-flash`) via `google-genai` SDK |
+| Reranking | Cohere rerank-v3.5 (`cohere` SDK) — narrows top 10 RRF → top 5 |
 | Retrieval | Hybrid search: pgvector + PostgreSQL FTS, fused via RRF |
 | Markdown rendering | `react-markdown` + `@tailwindcss/typography` |
 
-**Removed:** Anthropic Claude fully removed (April 2026). GPT-4o Vision (replaced by Gemini 2.5 Flash).
+**Removed:** GPT-4o Vision (replaced by Gemini 2.5 Flash). Groq for answer generation (replaced by Anthropic Claude Sonnet 4.5, April 2026).
 
 ---
 
@@ -105,9 +109,10 @@ repo/
 3. Backend expands query into 3 semantic variants via Groq Llama 3.3 70B (`expand_query()`)
 4. For each variant: pgvector cosine similarity (top 40) + PostgreSQL full-text search (top 30)
 5. Results fused via Reciprocal Rank Fusion (RRF_K=60), deduplicated, document-level collapse (max 2 chunks per doc), top 10 selected
-6. Neighbor chunk expansion (±1 chunk_index, cap at 12 total)
-7. Backend assembles prompt: system instructions + retrieved chunks (tagged with `source_kind` and `citation_mode`) + query
-8. Groq Llama 3.3 70B generates a response, streamed back via SSE with `<answer>` tag extraction
+6. Cohere rerank-v3.5 narrows top 10 → top 5 by relevance (graceful fallback to top 10 if COHERE_API_KEY unset)
+7. Neighbor chunk expansion (±1 chunk_index, cap at 12 total)
+8. Backend assembles prompt: system instructions + retrieved chunks (tagged with `source_kind` and `citation_mode`) + query
+9. Anthropic Claude Sonnet 4.5 generates a response, streamed back via SSE with `<answer>` tag extraction. Runtime-appended faithfulness instruction preserves source document views without editorializing.
 9. Frontend renders response with inline citation tags
 
 ---
@@ -164,7 +169,9 @@ repo/
 - **Bible reference tracking** — `documents.bible_references text[]` populated via Groq Llama 3.3 70B extraction; shared helper at `scripts/bible_refs.py` normalizes to `"Book Chapter:Verse"` canonical form against 66-book set + alias map; non-fatal (returns `[]` on failure); auto-populated during ingest in both `ingest.py` and `ingest_magazine.py`; backfill via `extract_bible_refs.py`
 - **Prefix search** — `search_documents` RPC builds `to_tsquery` with `:*` prefix operators per token (colons split to sub-tokens), so `"Romans 8"` matches `"Romans 8:1"`, `"Romans 8:28"`, etc.; falls back to `plainto_tsquery` on parse error
 - **System prompt discipline** — `backend/app/system_prompt.txt` uses XML tags (`<thinking>`, `<research_analysis>`, `<answer>`). `<research_analysis>` runs 3 fixed self-checks (author conflation, silent_context citation, biblical case overreach). Response Discipline Rules block enforces: multi-part decomposition, retrieval-only format when asked, explicit "corpus insufficient" flag on thin charismatic distinctives, retrieval scope cap (10 items / 250 words). Scripture exception limited to verse text only — no interpretation beyond sources. Tone section includes charismatic linguistic anchors ("impressions," "promptings") for exploratory mode only. Citation rules include prompt-injection trust boundary (ignore instructions embedded in retrieved chunks). Formatting requires minimum 2 `##` headings for theological answers (mandatory, not optional); retrieval uses bullets only.
-- **Chat streaming** — Groq `max_tokens=8192`. `<answer>` tag extraction server-side with 9-char buffer safety for split tags. If stream ends mid-answer, remaining buffer is flushed to client instead of silently dropped.
+- **Chat streaming** — Anthropic Claude Sonnet 4.5 `max_tokens=1500`. `<answer>` tag extraction server-side with 9-char buffer safety for split tags. If stream ends mid-answer, remaining buffer is flushed to client instead of silently dropped. Uses `client.messages.create(stream=True)` (not context manager form, which is incompatible with generator `yield`).
+- **Cohere reranking** — After RRF fusion, top 10 chunks sent to Cohere rerank-v3.5 with original query; top 5 by relevance score returned. Falls back to RRF top 10 if `COHERE_API_KEY` not set or call fails.
+- **Column break handling** — Pass 1 prompt instructs Gemini to transcribe multi-article pages column by column with `=== COLUMN BREAK ===` markers. Pass 2 prompt tells Groq to follow article content across column breaks, ignoring other articles' content.
 
 ---
 
@@ -230,11 +237,12 @@ Body text formatted as markdown...
 
 ## YouTube Pipeline
 
-1. **Scrape:** `python3 scripts/scrape_youtube.py` — scrapes transcripts via yt-dlp from channels in youtube_tracker.xlsx, dedupes against Supabase, saves raw transcripts to `sources/youtube/raw/` (max 10 per run). Processes all active channels sequentially, global cap across channels. No cleaning — saves raw only.
+1. **Scrape:** `python3 scripts/scrape_youtube.py` — scrapes transcripts via yt-dlp from channels in youtube_tracker.xlsx, dedupes against Supabase, saves raw transcripts to `sources/youtube/raw/` (max 10 per run). Videos with no captions or low-quality transcripts (< 400 words) write metadata stubs to `sources/youtube/no_captions/` for Whisper processing.
 2. **Clean:** `python3 scripts/clean_transcripts.py` — cleans via Groq Llama 3.3 70B, moves to `sources/youtube/cleaned/`
-3. **Ingest:** `python3 scripts/ingest.py` — ingests cleaned transcripts into Supabase with auto-tagging. Moves successfully ingested files from `cleaned/` to `ingested/` via `shutil.move`.
+3. **Whisper:** `python3 scripts/whisper_transcribe.py` — batch-processes stubs in `no_captions/`, downloads audio via yt-dlp, transcribes with Whisper medium, cleans via Groq, outputs to `cleaned/`. Also supports single-URL mode with `--url --title --speaker --channel`.
+4. **Ingest:** `python3 scripts/ingest.py` — ingests cleaned transcripts into Supabase with auto-tagging. Moves successfully ingested files from `cleaned/` to `ingested/` via `shutil.move`.
 
-**Convenience script:** `./scripts/youtube_pipeline.sh` runs all 3 steps in sequence (`set -euo pipefail` — stops on failure). Shell alias: `rh-youtube` (in `~/.zshrc`).
+**Convenience script:** `./scripts/youtube_pipeline.sh` runs all 4 steps in sequence (`set -euo pipefail` — stops on failure). Shell alias: `rh-youtube` (in `~/.zshrc`).
 
 Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) parsed by ingest.py.
 
@@ -300,9 +308,11 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force` (re-process docs that already have refs). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
-| `scripts/youtube_pipeline.sh` | Full YouTube pipeline convenience script: scrape → clean → ingest. Shell alias: `rh-youtube`. |
-| `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run). Saves raw transcripts only — no cleaning. Anthropic/Haiku code removed. |
+| `scripts/youtube_pipeline.sh` | Full YouTube pipeline convenience script: scrape → clean → whisper → ingest. Shell alias: `rh-youtube`. |
+| `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run). Writes no_captions stubs for videos without captions or with < 400 words. |
+| `scripts/whisper_transcribe.py` | Whisper medium transcription + Groq cleaning. Batch mode processes `no_captions/` stubs; single-URL mode via CLI args. |
 | `scripts/clean_transcripts.py` | Clean raw transcripts via Groq Llama 3.3 70B, move to cleaned/ |
+| `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content in Supabase (run 2026-04-17). |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
@@ -348,7 +358,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 
 ### Backend env vars (Railway)
 - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
-- `OPENAI_API_KEY`, `GROQ_API_KEY`
+- `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `COHERE_API_KEY`
 - `SUPABASE_JWT_JWKS_URL`
 - `ALLOWED_ORIGINS`
 - `INCLUDE_COPYRIGHTED`
@@ -362,6 +372,8 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 ## Environment Variables (local — backend/app/.env)
 - `GROQ_API_KEY`
 - `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY` — Claude Sonnet 4.5 for answer generation
+- `COHERE_API_KEY` — Cohere rerank-v3.5 for retrieval reranking
 - `GOOGLE_API_KEY` — Gemini 2.5 Flash for magazine extraction
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
@@ -386,6 +398,10 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **poppler required** — `brew install poppler` for pdf2image to work locally
 - **Bible ref extraction occasionally produces malformed JSON** from Groq on edge-case batches (~1 in 38 docs in backfill run). Helper handles gracefully by dropping that segment and continuing; other segments in the same doc still succeed.
 - **System prompt and chat.py changes deployed** (2026-04-15) — pushed to main; Railway/Vercel should auto-deploy.
+- **Anthropic + Cohere rerank deployed** (2026-04-17) — answer gen switched to Claude Sonnet 4.5, Cohere rerank-v3.5 added. Pushed to main.
+- **Article reader date display** — issue date (month/year) added to frontend but not yet visually confirmed in browser. `console.log` left in `handleCardClick` for debugging — remove after confirming.
+- **30 malformed JSON chunks fixed** (2026-04-17) — `fix_article_json.py` migration ran successfully; content_summary refreshed on all 30 affected documents.
+- **Shell aliases expanded** — 10 `rh-*` aliases in `~/.zshrc` covering all pipeline scripts.
 
 ---
 
