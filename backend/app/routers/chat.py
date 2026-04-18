@@ -17,6 +17,8 @@ from app.auth import get_optional_user
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 
+COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
+
 logger = logging.getLogger(__name__)
 
 system_prompt = (Path(__file__).resolve().parent.parent / "system_prompt.txt").read_text()
@@ -258,6 +260,23 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 collapsed.append((cid, (score, chunk)))
         top_chunks = collapsed[:10]
         chunks = [chunk for _, (_, chunk) in top_chunks]
+
+        # Step 3.5: Cohere rerank — narrow top 10 → top 5 by relevance
+        if COHERE_API_KEY and len(chunks) > 0:
+            try:
+                import cohere
+                co = cohere.ClientV2(api_key=COHERE_API_KEY)
+                docs = [c.get("content", "") for c in chunks]
+                rerank_result = co.rerank(
+                    model="rerank-v3.5",
+                    query=request.question,
+                    documents=docs,
+                    top_n=5,
+                )
+                chunks = [chunks[r.index] for r in rerank_result.results]
+                logger.info("Cohere rerank: %d → %d chunks", len(docs), len(chunks))
+            except Exception:
+                logger.exception("Cohere rerank failed, using RRF top 10")
 
         # Step 4: Neighbor chunk expansion — fetch ±1 chunk_index, cap at 12 total
         seen_ids = {c["id"] for c in chunks}
