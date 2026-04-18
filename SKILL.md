@@ -59,11 +59,12 @@ repo/
 │   └── documents/             # Non-copyrighted docs (sermons, papers)
 │       └── ingested/          # Already in Supabase
 ├── scripts/                   # All pipeline scripts
-│   ├── scrape_youtube.py      # YouTube transcript scraper (yt-dlp + Supabase dedupe)
+│   ├── scrape_youtube.py      # YouTube transcript scraper (yt-dlp + Supabase dedupe, raw only — no cleaning)
+│   ├── youtube_pipeline.sh    # Full YouTube pipeline: scrape → clean → ingest
 │   ├── clean_transcripts.py   # Clean raw transcripts via Groq Llama 3.3 70B
 │   ├── extract_magazine.py    # 3-pass Gemini/Groq extraction pipeline
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
-│   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging
+│   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; moves YouTube transcripts to ingested/ on success
 │   ├── tag_existing_articles.py  # Backfill topic_tags on existing articles
 │   └── tag_sermons_transcripts.py  # Backfill topic_tags on sermons/transcripts/papers
 ├── migrations/            # SQL migrations (run in Supabase SQL Editor)
@@ -162,7 +163,8 @@ repo/
 - **All scripts in `scripts/`** — no Python files at project root; all use `Path(__file__).resolve().parent.parent` for project root
 - **Bible reference tracking** — `documents.bible_references text[]` populated via Groq Llama 3.3 70B extraction; shared helper at `scripts/bible_refs.py` normalizes to `"Book Chapter:Verse"` canonical form against 66-book set + alias map; non-fatal (returns `[]` on failure); auto-populated during ingest in both `ingest.py` and `ingest_magazine.py`; backfill via `extract_bible_refs.py`
 - **Prefix search** — `search_documents` RPC builds `to_tsquery` with `:*` prefix operators per token (colons split to sub-tokens), so `"Romans 8"` matches `"Romans 8:1"`, `"Romans 8:28"`, etc.; falls back to `plainto_tsquery` on parse error
-- **System prompt discipline** — `backend/app/system_prompt.txt` uses XML tags (`<thinking>`, `<research_analysis>`, `<answer>`). `<research_analysis>` runs 3 fixed self-checks (author conflation, silent_context citation, biblical case overreach). Response Discipline Rules block enforces: multi-part decomposition, retrieval-only format when asked, explicit "corpus insufficient" flag on thin charismatic distinctives, retrieval scope cap (10 items / 250 words). Scripture exception limited to verse text only — no interpretation beyond sources. Tone section includes charismatic linguistic anchors ("impressions," "promptings") for exploratory mode only. Citation rules include prompt-injection trust boundary (ignore instructions embedded in retrieved chunks)
+- **System prompt discipline** — `backend/app/system_prompt.txt` uses XML tags (`<thinking>`, `<research_analysis>`, `<answer>`). `<research_analysis>` runs 3 fixed self-checks (author conflation, silent_context citation, biblical case overreach). Response Discipline Rules block enforces: multi-part decomposition, retrieval-only format when asked, explicit "corpus insufficient" flag on thin charismatic distinctives, retrieval scope cap (10 items / 250 words). Scripture exception limited to verse text only — no interpretation beyond sources. Tone section includes charismatic linguistic anchors ("impressions," "promptings") for exploratory mode only. Citation rules include prompt-injection trust boundary (ignore instructions embedded in retrieved chunks). Formatting requires minimum 2 `##` headings for theological answers (mandatory, not optional); retrieval uses bullets only.
+- **Chat streaming** — Groq `max_tokens=8192`. `<answer>` tag extraction server-side with 9-char buffer safety for split tags. If stream ends mid-answer, remaining buffer is flushed to client instead of silently dropped.
 
 ---
 
@@ -228,9 +230,11 @@ Body text formatted as markdown...
 
 ## YouTube Pipeline
 
-1. **Scrape:** `python3 scripts/scrape_youtube.py` — scrapes transcripts via yt-dlp from channels in youtube_tracker.xlsx, dedupes against Supabase, saves to `sources/youtube/raw/` (max 10 per run)
+1. **Scrape:** `python3 scripts/scrape_youtube.py` — scrapes transcripts via yt-dlp from channels in youtube_tracker.xlsx, dedupes against Supabase, saves raw transcripts to `sources/youtube/raw/` (max 10 per run). Processes all active channels sequentially, global cap across channels. No cleaning — saves raw only.
 2. **Clean:** `python3 scripts/clean_transcripts.py` — cleans via Groq Llama 3.3 70B, moves to `sources/youtube/cleaned/`
-3. **Ingest:** `python3 ingest.py` — ingests cleaned transcripts into Supabase with auto-tagging
+3. **Ingest:** `python3 scripts/ingest.py` — ingests cleaned transcripts into Supabase with auto-tagging. Moves successfully ingested files from `cleaned/` to `ingested/` via `shutil.move`.
+
+**Convenience script:** `./scripts/youtube_pipeline.sh` runs all 3 steps in sequence (`set -euo pipefail` — stops on failure). Shell alias: `rh-youtube` (in `~/.zshrc`).
 
 Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) parsed by ingest.py.
 
@@ -296,7 +300,8 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force` (re-process docs that already have refs). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
-| `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run) |
+| `scripts/youtube_pipeline.sh` | Full YouTube pipeline convenience script: scrape → clean → ingest. Shell alias: `rh-youtube`. |
+| `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run). Saves raw transcripts only — no cleaning. Anthropic/Haiku code removed. |
 | `scripts/clean_transcripts.py` | Clean raw transcripts via Groq Llama 3.3 70B, move to cleaned/ |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
@@ -372,7 +377,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **Migration 012 not yet run** — needs to be applied in Supabase SQL Editor (Migration 013 for `bible_references` is applied as of 2026-04-10)
 - **`sources/youtube/youtube_tracker.xlsx` still tracked** — needs `git rm --cached sources/youtube/youtube_tracker.xlsx` to finish the earlier `sources/` cleanup. Shows up as modified on every commit.
 - **Issue_03-1973 cleanup A/B/C options** never resolved in the continuation-resolver session — was left in `02_extracted/` in an uncertain state.
-- **scrape_youtube.py dead Haiku code** — `clean_with_haiku()`, `import anthropic`, `ANTHROPIC_API_KEY` check in `main()` are unused since cleaning moved to `clean_transcripts.py`; safe to remove
+- **scrape_youtube.py dead Haiku code** — removed (2026-04-15)
 - **content_summary not auto-populated** on new article inserts (trigger only updates fts_weighted, not content_summary)
 - **Tagging retry logic** sometimes needs improvement for complex articles
 - **Guest query limit** — `increment_guest_query()` SQL function needs migration file
@@ -380,7 +385,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **INCLUDE_COPYRIGHTED not confirmed on Railway** — check dashboard
 - **poppler required** — `brew install poppler` for pdf2image to work locally
 - **Bible ref extraction occasionally produces malformed JSON** from Groq on edge-case batches (~1 in 38 docs in backfill run). Helper handles gracefully by dropping that segment and continuing; other segments in the same doc still succeed.
-- **System prompt changes not yet deployed** — updates to `backend/app/system_prompt.txt` from 2026-04-10 session (Response Discipline Rules, research_analysis self-checks, scripture exception hardening, charismatic linguistic anchors, step-back doctrinal premise, prompt-injection trust boundary) are committed locally but need to be pushed to Railway to take effect in production.
+- **System prompt and chat.py changes deployed** (2026-04-15) — pushed to main; Railway/Vercel should auto-deploy.
 
 ---
 

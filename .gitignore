@@ -10,5 +10,7 @@ frontend/node_modules
 sources/youtube/cleaned/
 sources/youtube/raw/
 sources/youtube/ingested/
+sources/youtube/no_captions/
+sources/youtube/no_captions/done/
 sources/magazine/
 sources/documents/

@@ -208,6 +208,7 @@ order forms, subscription cards, advertisement pages
 - Include: article text, section headings, author names, pull quotes, \
 sidebars, letters to editor, editorial, table of contents
 - Preserve paragraph breaks with a blank line
+- When a page contains two or more SEPARATE articles sharing the same page (i.e., one article ends partway down and a new article heading begins on the same page), transcribe the page COLUMN BY COLUMN, left to right. Finish the entire left column before starting the right column. Insert the marker === COLUMN BREAK === between columns. Do NOT interleave content from different columns.
 - Do not add any commentary or notes"""
 
 PASS1_BATCH_SIZE = 5
@@ -323,6 +324,7 @@ Rules:
 - Do not add, invent, or paraphrase any text
 - Do not include text from other articles that may appear in the page range
 - If you see a [CONTINUED] marker in the input, it separates non-contiguous page spans of the same article that were stitched together because the article jumped pages. Treat the surrounding text as one continuous article, do not include the [CONTINUED] marker in your output, and bridge across it naturally.
+- The raw text may contain === COLUMN BREAK === markers indicating a multi-column page layout. These are layout markers only — do not include them in your output. The article you are extracting may continue after a === COLUMN BREAK === marker; follow the content belonging to this article across column breaks, ignoring any content that belongs to other articles.
 - Format as markdown:
   - Section headings as ## H2
   - Any quoted scripture passages that are indented or set apart visually as > blockquote
@@ -578,6 +580,10 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
             # Fallback: treat entire response as body text, no tags
             body = body_raw
             topic_tags = []
+
+        if not body.strip():
+            print(f"    ⚠ Empty body for '{title}' — skipping .md write")
+            continue
 
         # Validate tags against taxonomy
         valid_tags = [t for t in topic_tags if t in VALID_TAGS]

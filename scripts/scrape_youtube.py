@@ -25,10 +25,11 @@ from supabase import create_client
 from youtube_transcript_api import YouTubeTranscriptApi
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-ENV_PATH      = Path("/Users/alexwhitley/Desktop/rhemata/backend/app/.env")
-TRACKER_PATH  = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/youtube_tracker.xlsx")
-OUTPUT_DIR    = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/raw")
-COOKIES_PATH  = Path("/Users/alexwhitley/Desktop/rhemata/scripts/youtube_cookies.txt")
+ENV_PATH         = Path("/Users/alexwhitley/Desktop/rhemata/backend/app/.env")
+TRACKER_PATH     = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/youtube_tracker.xlsx")
+OUTPUT_DIR       = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/raw")
+NO_CAPTIONS_DIR  = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/no_captions")
+COOKIES_PATH     = Path("/Users/alexwhitley/Desktop/rhemata/scripts/youtube_cookies.txt")
 
 SKIP_TITLE_KEYWORDS = ["#shorts", "trailer", "promo", "highlights"]
 
@@ -136,6 +137,22 @@ def make_filename(date_str: str, handle: str, title: str) -> str:
     handle_clean = handle.lstrip('@')
     date_clean = date_str if (date_str and date_str != "unknown") else "00000000"
     return f"{date_clean}_{handle_clean}_{safe_title}.txt"
+
+
+def write_no_captions_file(channel: dict, video: dict) -> Path:
+    """Write a metadata stub to sources/youtube/no_captions/ for later
+    Whisper transcription. Returns the written path."""
+    NO_CAPTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    fname = make_filename(video["date"], channel["handle"], video["title"])
+    path = NO_CAPTIONS_DIR / fname
+    path.write_text(
+        f"URL: {video['url']}\n"
+        f"TITLE: {video['title']}\n"
+        f"SPEAKER: {channel['speaker']}\n"
+        f"CHANNEL: {channel['name']}\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def write_transcript_file(path: Path, channel: dict, video: dict,
@@ -330,17 +347,11 @@ def main():
             # 1. Pull transcript
             raw_text = get_transcript_text(transcript_client, vid["id"])
 
-            if not raw_text:
-                print(f"     ✗ No transcript available")
-                log_row(wb, ch, vid, "No", "", 0, "No transcript available")
-                scraped_urls.add(url)
-                save_tracker(wb)
-                stats["no_transcript"] += 1
-                continue
-
-            if not raw_text.strip():
-                print(f"     ✗ Transcript empty")
-                log_row(wb, ch, vid, "No", "", 0, "Empty transcript")
+            if not raw_text or not raw_text.strip():
+                reason = "No Captions" if not raw_text else "Empty transcript"
+                print(f"     ⚑  {reason} — queuing for Whisper")
+                stub_path = write_no_captions_file(ch, vid)
+                log_row(wb, ch, vid, "No Captions", str(stub_path), 0, reason)
                 scraped_urls.add(url)
                 save_tracker(wb)
                 stats["no_transcript"] += 1

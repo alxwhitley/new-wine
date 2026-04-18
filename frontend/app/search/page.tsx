@@ -81,6 +81,7 @@ export default function SearchPage() {
     setError(null);
     try {
       const data = await getArticle(id);
+      console.log("Article API response:", data);
       setArticle(data);
     } catch {
       setError("Failed to load article.");
@@ -122,6 +123,17 @@ export default function SearchPage() {
         {article.author && (
           <p className="text-sm text-muted-foreground mt-2">
             {article.author}
+          </p>
+        )}
+
+        {article.issue && (
+          <p className="text-xs mt-1" style={{ color: "#c1c1b8" }}>
+            {(() => {
+              const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+              const [mm, yyyy] = article.issue.split("-");
+              const monthIdx = parseInt(mm, 10) - 1;
+              return months[monthIdx] && yyyy ? `${months[monthIdx]} ${yyyy}` : article.issue;
+            })()}
           </p>
         )}
 
