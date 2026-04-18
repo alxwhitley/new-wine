@@ -353,7 +353,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             import anthropic
             client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
             stream = client.messages.create(
-                model="claude-sonnet-4-5-20250514",
+                model="claude-sonnet-4-5",
                 max_tokens=1500,
                 system=ANSWER_SYSTEM_PROMPT,
                 messages=history,
