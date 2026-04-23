@@ -6,8 +6,8 @@ Pipeline:
   1. Load env vars from .env
   2. Read active channels from tracker
   3. Fetch video list via yt-dlp
-  4. Pull transcript via youtube-transcript-api
-  5. Join transcript segments
+  4. Download audio via yt-dlp
+  5. Transcribe with local Whisper (base model)
   6. Write structured .txt to sources/youtube/raw/
   7. Update tracker immediately after each video
 """
@@ -17,19 +17,20 @@ import re
 import sys
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import openpyxl
+import whisper
 from supabase import create_client
-from youtube_transcript_api import YouTubeTranscriptApi
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ENV_PATH         = Path("/Users/alexwhitley/Desktop/rhemata/backend/app/.env")
 TRACKER_PATH     = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/youtube_tracker.xlsx")
 OUTPUT_DIR       = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/raw")
-NO_CAPTIONS_DIR  = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/no_captions")
 COOKIES_PATH     = Path("/Users/alexwhitley/Desktop/rhemata/scripts/youtube_cookies.txt")
+WHISPER_MODEL    = "base"
 
 SKIP_TITLE_KEYWORDS = ["#shorts", "trailer", "promo", "highlights"]
 
@@ -71,11 +72,22 @@ def find_ytdlp():
     return None
 
 
-def get_video_list(ytdlp: str, channel_url: str) -> list:
-    cmd = [ytdlp, "--flat-playlist",
-           "--print", "%(id)s|%(title)s|%(upload_date)s|%(duration)s"]
+def _ytdlp_base_args(ytdlp: str) -> list:
+    """Common yt-dlp flags: force IPv4, set player client, cookies."""
+    args = [
+        ytdlp, "-4",
+        "--extractor-args", "youtube:player_client=android_vr,web_safari",
+    ]
     if COOKIES_PATH.exists():
-        cmd += ["--cookies", str(COOKIES_PATH)]
+        args += ["--cookies", str(COOKIES_PATH)]
+    return args
+
+
+def get_video_list(ytdlp: str, channel_url: str) -> list:
+    cmd = _ytdlp_base_args(ytdlp) + [
+        "--flat-playlist",
+        "--print", "%(id)s|%(title)s|%(upload_date)s|%(duration)s",
+    ]
     cmd.append(channel_url)
     result = subprocess.run(cmd, capture_output=True, text=True)
     videos = []
@@ -100,26 +112,37 @@ def get_video_list(ytdlp: str, channel_url: str) -> list:
     return videos
 
 
-def build_transcript_client():
-    """Create YouTubeTranscriptApi client with cookies if available."""
-    if COOKIES_PATH.exists():
-        import requests as req
-        from http.cookiejar import MozillaCookieJar
-        jar = MozillaCookieJar(str(COOKIES_PATH))
-        jar.load(ignore_discard=True, ignore_expires=True)
-        session = req.Session()
-        session.cookies = jar
-        return YouTubeTranscriptApi(http_client=session)
-    return YouTubeTranscriptApi()
+AUDIO_EXTENSIONS = {".m4a", ".mp3", ".opus", ".ogg", ".webm", ".wav"}
 
 
-def get_transcript_text(client, video_id: str):
-    """Pull transcript via youtube-transcript-api. Returns plain text or None."""
+def download_audio(ytdlp: str, video_url: str, tmp_dir: str) -> str:
+    """Download audio from a YouTube video via yt-dlp. Returns path to audio file or None."""
+    out_template = os.path.join(tmp_dir, "%(id)s.%(ext)s")
+    cmd = _ytdlp_base_args(ytdlp) + [
+        "-x",
+        "-o", out_template,
+        video_url,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        error_lines = [l for l in result.stderr.splitlines() if l.strip().startswith("ERROR")]
+        error_msg = error_lines[-1] if error_lines else result.stderr.strip().splitlines()[-1]
+        print(f"     yt-dlp audio error: {error_msg[:200]}")
+        return None
+    # Find the downloaded audio file (any format — Whisper handles all of them)
+    for f in os.listdir(tmp_dir):
+        if os.path.splitext(f)[1].lower() in AUDIO_EXTENSIONS:
+            return os.path.join(tmp_dir, f)
+    return None
+
+
+def transcribe_audio(model, audio_path: str):
+    """Transcribe an audio file with Whisper. Returns text or None."""
     try:
-        transcript = client.fetch(video_id, languages=["en"])
-        return " ".join(seg.text for seg in transcript)
+        result = model.transcribe(audio_path, language="en")
+        return result.get("text", "").strip() or None
     except Exception as e:
-        print(f"     transcript-api: {type(e).__name__}: {str(e)[:120]}")
+        print(f"     Whisper error: {type(e).__name__}: {str(e)[:120]}")
         return None
 
 
@@ -137,22 +160,6 @@ def make_filename(date_str: str, handle: str, title: str) -> str:
     handle_clean = handle.lstrip('@')
     date_clean = date_str if (date_str and date_str != "unknown") else "00000000"
     return f"{date_clean}_{handle_clean}_{safe_title}.txt"
-
-
-def write_no_captions_file(channel: dict, video: dict) -> Path:
-    """Write a metadata stub to sources/youtube/no_captions/ for later
-    Whisper transcription. Returns the written path."""
-    NO_CAPTIONS_DIR.mkdir(parents=True, exist_ok=True)
-    fname = make_filename(video["date"], channel["handle"], video["title"])
-    path = NO_CAPTIONS_DIR / fname
-    path.write_text(
-        f"URL: {video['url']}\n"
-        f"TITLE: {video['title']}\n"
-        f"SPEAKER: {channel['speaker']}\n"
-        f"CHANNEL: {channel['name']}\n",
-        encoding="utf-8",
-    )
-    return path
 
 
 def write_transcript_file(path: Path, channel: dict, video: dict,
@@ -275,7 +282,11 @@ def main():
         sys.exit(1)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    transcript_client = build_transcript_client()
+
+    print(f"Loading Whisper model '{WHISPER_MODEL}'...")
+    model = whisper.load_model(WHISPER_MODEL)
+    print(f"Whisper:  {WHISPER_MODEL} model loaded")
+
     db = init_supabase()
     print(f"yt-dlp:   {ytdlp}")
     print(f"Cookies:  {COOKIES_PATH}{' ✓' if COOKIES_PATH.exists() else ' ✗ (not found — may be IP-blocked)'}")
@@ -288,7 +299,7 @@ def main():
 
     print(f"{len(channels)} active channel(s) | {len(scraped_urls)} already scraped | max transcripts: {MAX_TRANSCRIPTS}\n")
 
-    stats = {"new": 0, "skipped": 0, "no_transcript": 0, "errors": 0, "supabase_skip": 0}
+    stats = {"new": 0, "skipped": 0, "errors": 0, "supabase_skip": 0}
     done = False
 
     for ch in channels:
@@ -338,34 +349,43 @@ def main():
 
             print(f"  → {title[:70]} [{stats['new']}/{MAX_TRANSCRIPTS} saved]")
 
-            # 0. Supabase dedupe — skip if already ingested
+            # Supabase dedupe — skip if already ingested
             if already_in_supabase(db, title, ch["speaker"]):
                 print(f"     SKIP — already in Supabase: {title[:70]}")
                 stats["supabase_skip"] += 1
                 continue
 
-            # 1. Pull transcript
-            raw_text = get_transcript_text(transcript_client, vid["id"])
+            # Download audio → transcribe with Whisper
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                print(f"     Downloading audio...")
+                audio_path = download_audio(ytdlp, url, tmp_dir)
+                if not audio_path:
+                    print(f"     ✗ Audio download failed")
+                    log_row(wb, ch, vid, "No", "", 0, "Audio download failed")
+                    scraped_urls.add(url)
+                    save_tracker(wb)
+                    stats["errors"] += 1
+                    continue
 
-            if not raw_text or not raw_text.strip():
-                reason = "No Captions" if not raw_text else "Empty transcript"
-                print(f"     ⚑  {reason} — queuing for Whisper")
-                stub_path = write_no_captions_file(ch, vid)
-                log_row(wb, ch, vid, "No Captions", str(stub_path), 0, reason)
+                print(f"     Transcribing with Whisper...")
+                raw_text = transcribe_audio(model, audio_path)
+
+            if not raw_text:
+                print(f"     ✗ Whisper transcription failed")
+                log_row(wb, ch, vid, "No", "", 0, "Whisper transcription failed")
                 scraped_urls.add(url)
                 save_tracker(wb)
-                stats["no_transcript"] += 1
+                stats["errors"] += 1
                 continue
 
-            # 3. Write raw transcript file
+            # Write transcript file
             fname    = make_filename(vid["date"], ch["handle"], title)
             out_path = OUTPUT_DIR / fname
             try:
                 write_transcript_file(out_path, ch, vid, raw_text)
                 word_count = len(raw_text.split())
-                note = ""
                 print(f"     ✓  {fname} ({word_count:,} words)")
-                log_row(wb, ch, vid, "Yes", str(out_path), word_count, note)
+                log_row(wb, ch, vid, "Yes", str(out_path), word_count, "")
                 scraped_urls.add(url)
                 stats["new"] += 1
             except Exception as e:
@@ -381,7 +401,6 @@ def main():
     print(f"  ✓ New transcripts   : {stats['new']}")
     print(f"  ⏭  Skipped          : {stats['skipped']}")
     print(f"  ⏭  Already in DB    : {stats['supabase_skip']}")
-    print(f"  ✗ No transcript     : {stats['no_transcript']}")
     print(f"  ✗ Errors            : {stats['errors']}")
     print(f"  Output: {OUTPUT_DIR}")
 

@@ -17,14 +17,25 @@ import json
 import time
 import argparse
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 
+import fitz  # PyMuPDF
+from PIL import Image
 from google import genai
+from google.genai import types
 from groq import Groq
-from pdf2image import convert_from_path
 from openpyxl import Workbook, load_workbook
 from dotenv import load_dotenv
+
+from bible_refs import normalize_refs, _normalize_ref
+
+try:
+    import pytesseract
+    _HAS_PYTESSERACT = True
+except ImportError:
+    _HAS_PYTESSERACT = False
 
 load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
@@ -41,6 +52,19 @@ TRACKER_PATH = ROOT / "sources" / "magazine" / "rhemata_tracker.xlsx"
 
 GEMINI_MODEL = "gemini-2.5-flash"
 GROQ_MODEL = "llama-3.3-70b-versatile"
+
+SAFETY_SETTINGS = [
+    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+]
+
+PASS1_SYSTEM_INSTRUCTION = (
+    "You are a neutral, literal archival transcription engine. "
+    "Transcribe all text exactly as it appears. You are a tool for historical research; "
+    "do not filter theological terminology or metaphysical descriptions."
+)
 
 MONTH_MAP = {
     "01": "January", "02": "February", "03": "March", "04": "April",
@@ -106,6 +130,12 @@ def get_gemini():
     return _gemini_client
 
 
+def reset_gemini():
+    """Force a fresh Gemini client on next get_gemini() call."""
+    global _gemini_client
+    _gemini_client = None
+
+
 def get_groq():
     global _groq_client
     if _groq_client is None:
@@ -161,6 +191,46 @@ def init_tracker() -> None:
     wb.close()
 
 
+_REVIEW_HEADERS = ["Issue", "Article Title", "Failure Reason", "Output Folder", "Timestamp"]
+
+
+def _ensure_review_sheet() -> None:
+    """Create the 'Review Needed' sheet in the tracker if it doesn't exist."""
+    wb = load_workbook(str(TRACKER_PATH))
+    if "Review Needed" not in wb.sheetnames:
+        ws = wb.create_sheet("Review Needed")
+        ws.append(_REVIEW_HEADERS)
+        wb.save(str(TRACKER_PATH))
+    wb.close()
+
+
+def log_failure(issue: str, article_title: str, reason: str,
+                issue_dir: Path) -> None:
+    """Log a failure to the 'Review Needed' tracker sheet and review_needed.log."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    output_folder = str(issue_dir)
+
+    # Append to tracker sheet
+    try:
+        _ensure_review_sheet()
+        wb = load_workbook(str(TRACKER_PATH))
+        ws = wb["Review Needed"]
+        ws.append([issue, article_title, reason, output_folder, timestamp])
+        wb.save(str(TRACKER_PATH))
+        wb.close()
+    except Exception as exc:
+        logger.warning("Failed to write to Review Needed sheet: %s", exc)
+
+    # Append to review_needed.log in the issue folder
+    try:
+        issue_dir.mkdir(parents=True, exist_ok=True)
+        log_path = issue_dir / "review_needed.log"
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {article_title} | {reason}\n")
+    except Exception as exc:
+        logger.warning("Failed to write review_needed.log: %s", exc)
+
+
 def update_tracker_row(filename: str, data: Dict) -> None:
     """Update or append a row in the tracker for the given filename."""
     wb = load_workbook(str(TRACKER_PATH))
@@ -195,23 +265,45 @@ def update_tracker_row(filename: str, data: Dict) -> None:
 
 # -- PASS 1: VISION EXTRACTION (Gemini Flash 2.0) ----------------------------
 
-PASS1_PROMPT = """You are a faithful transcription assistant. Your only job is to \
-read the text exactly as it appears on each page of this magazine scan.
+PASS1_PROMPT = """Transcribe every word exactly as printed on each page of this magazine scan.
 
 Rules:
-- Transcribe every word exactly as printed. Do not paraphrase, \
-summarize, or add any text that is not on the page.
-- Mark each page boundary with: === PAGE {page_start} === (use the page number provided)
-- Skip these page types entirely (output nothing for them): \
-cover page, back cover, full-page illustrations with no text, \
-order forms, subscription cards, advertisement pages
-- Include: article text, section headings, author names, pull quotes, \
-sidebars, letters to editor, editorial, table of contents
-- Preserve paragraph breaks with a blank line
-- When a page contains two or more SEPARATE articles sharing the same page (i.e., one article ends partway down and a new article heading begins on the same page), transcribe the page COLUMN BY COLUMN, left to right. Finish the entire left column before starting the right column. Insert the marker === COLUMN BREAK === between columns. Do NOT interleave content from different columns.
-- Do not add any commentary or notes"""
+- Transcribe every word exactly as printed. Do not paraphrase, summarize, or add any text \
+that is not on the page.
+- For advertisement pages, set is_advertisement to true and leave content empty.
+- For cover pages, back covers, full-page illustrations with no text, order forms, \
+and subscription cards, set is_advertisement to true and leave content empty.
+- Include: article text, section headings, author names, pull quotes, sidebars, \
+letters to editor, editorial, table of contents.
+- Preserve paragraph breaks with a blank line in the content string.
+- When a page contains two or more SEPARATE articles sharing the same page, transcribe \
+the page COLUMN BY COLUMN, left to right. Finish the entire left column before starting \
+the right column. Insert the marker === COLUMN BREAK === between columns.
+- Do not add any commentary or notes.
+
+Return a JSON object with this exact structure:
+{"pages": [{"page_number": <int>, "content": "<transcribed text>", "is_advertisement": <bool>}]}
+
+You MUST return one entry in the pages array for every page image provided, even if the \
+page is an advertisement (use empty content for those).
+
+EXAMPLES of correct transcription for pages with theological content:
+
+Example 1 input: A magazine page discussing spiritual warfare.
+Example 1 output:
+{"pages": [{"page_number": 7, "content": "## Spiritual Warfare: The Battle for the Mind\n\nThe apostle Paul reminds us that we wrestle not against flesh and blood, but against principalities, against powers, against the rulers of the darkness of this world, against spiritual wickedness in high places (Ephesians 6:12). As believers, we must learn to wage war in the spiritual realm using the weapons God has provided.", "is_advertisement": false}]}
+
+Example 2 input: A magazine page discussing deliverance ministry.
+Example 2 output:
+{"pages": [{"page_number": 14, "content": "## Freedom from Demonic Influence\n\nJesus demonstrated authority over demons throughout His earthly ministry. In Mark 5, He confronted the man possessed by a legion of unclean spirits, commanding them to come out. This encounter reveals that demonic bondage is real, but the power of Christ is greater. The ministry of deliverance remains vital for the church today.", "is_advertisement": false}]}"""
 
 PASS1_BATCH_SIZE = 5
+
+PASS1_CONFIG = types.GenerateContentConfig(
+    system_instruction=PASS1_SYSTEM_INSTRUCTION,
+    safety_settings=SAFETY_SETTINGS,
+    response_mime_type="application/json",
+)
 
 # Layout continuation markers to strip from Pass 1 output.
 # Preserves authorial "To be continued ..." and mid-sentence uses of "continued".
@@ -231,6 +323,40 @@ _CONT_MARKER = re.compile(
 )
 
 
+# Bible reference regex: matches "Book Chapter:Verse" patterns inline.
+# Handles numbered books (1/2/3), abbreviated and full names, verse ranges.
+_BIBLE_BOOK_NAMES = (
+    r"(?:(?:[1-3]\s*)?(?:"
+    r"Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|"
+    r"Samuel|Kings|Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|"
+    r"Ecclesiastes|Song of Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|"
+    r"Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|"
+    r"Zephaniah|Haggai|Zechariah|Malachi|"
+    r"Matthew|Mark|Luke|John|Acts|Romans|Corinthians|Galatians|"
+    r"Ephesians|Philippians|Colossians|Thessalonians|Timothy|Titus|"
+    r"Philemon|Hebrews|James|Peter|Jude|Revelation|"
+    # Common abbreviations
+    r"Gen|Exo?|Lev|Num|Deut?|Josh|Judg|Sam|Kgs|Chr|Neh|Est|"
+    r"Psa?|Prov?|Eccl?|Isa|Jer|Lam|Ezek?|Dan|Hos|Mic|Hab|Zeph|"
+    r"Zech|Mal|Matt?|Mk|Lk|Jn|Rom|Cor|Gal|Eph|Phil|Col|"
+    r"Thess?|Tim|Tit|Phm|Heb|Jas|Pet|Rev"
+    r")\.?)"
+)
+_BIBLE_REF_RE = re.compile(
+    _BIBLE_BOOK_NAMES + r"\s+(\d+)(?:[:\.](\d+[\-,\s\d]*))?",
+    re.IGNORECASE,
+)
+
+
+def _extract_bible_refs_regex(text: str) -> List[str]:
+    """Extract Bible references from text using regex only (no LLM).
+    Returns normalized, deduped list."""
+    raw_refs = []
+    for m in _BIBLE_REF_RE.finditer(text):
+        raw_refs.append(m.group(0).strip().rstrip("."))
+    return normalize_refs(raw_refs)
+
+
 def _scrub_continuation_markers(text: str) -> str:
     """Strip layout continuation markers from Gemini Pass 1 output."""
     text = _CONT_MARKER_WITH_FOLIO.sub("", text)
@@ -238,49 +364,301 @@ def _scrub_continuation_markers(text: str) -> str:
     return text
 
 
+def _check_finish_reason(response, label: str) -> bool:
+    """Log the finish_reason from Gemini response candidates.
+    Returns True if a SAFETY block was detected."""
+    safety_blocked = False
+    try:
+        if response.candidates:
+            for i, cand in enumerate(response.candidates):
+                if cand.finish_reason and cand.finish_reason != "STOP":
+                    logger.warning(
+                        "%s — candidate %d finish_reason: %s",
+                        label, i, cand.finish_reason,
+                    )
+                    if cand.finish_reason == "SAFETY":
+                        safety_blocked = True
+    except Exception:
+        pass
+    return safety_blocked
+
+
+def _call_gemini_batch(client, prompt: str, batch_images: list,
+                       label: str) -> tuple:
+    """Call Gemini with PASS1_CONFIG, parse JSON pages array.
+    Returns (list_of_page_dicts_or_None, safety_triggered_bool)."""
+    content = [prompt] + list(batch_images)
+    response = client.models.generate_content(
+        model=GEMINI_MODEL, contents=content, config=PASS1_CONFIG,
+    )
+    safety_triggered = _check_finish_reason(response, label)
+
+    raw = response.text or ""
+    if not raw.strip():
+        logger.warning("%s — Gemini returned empty response", label)
+        return None, safety_triggered
+
+    try:
+        parsed = json.loads(raw)
+        pages = parsed.get("pages", [])
+        if not pages:
+            logger.warning("%s — JSON parsed but 'pages' array is empty", label)
+            return None, safety_triggered
+        return pages, safety_triggered
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("%s — JSON parse failed: %s", label, exc)
+        return None, safety_triggered
+
+
+def _ocr_fallback_page(client, image, page_num: int,
+                       pdf_name: str) -> Optional[dict]:
+    """Fall back to pytesseract OCR + Gemini text-only cleanup for a single page.
+    Returns a page dict or None."""
+    if not _HAS_PYTESSERACT:
+        logger.warning(
+            "Page %d of %s: pytesseract not installed — skipping OCR fallback",
+            page_num, pdf_name,
+        )
+        return None
+
+    try:
+        ocr_text = pytesseract.image_to_string(image)
+    except Exception as exc:
+        logger.warning(
+            "Page %d of %s: pytesseract failed: %s", page_num, pdf_name, exc,
+        )
+        return None
+
+    if len(ocr_text.strip()) < 50:
+        logger.warning(
+            "Page %d of %s: OCR returned only %d chars — skipping",
+            page_num, pdf_name, len(ocr_text.strip()),
+        )
+        return None
+
+    # Send OCR text to Gemini text-only (no image) for cleanup
+    cleanup_prompt = (
+        "Fix OCR errors in this archival magazine page transcription. "
+        "Preserve all theological terminology exactly as written — do not filter or censor "
+        "any religious, spiritual warfare, or metaphysical language. "
+        "Return JSON only:\n"
+        f'{{"pages": [{{"page_number": {page_num}, "content": "<cleaned text>", '
+        f'"is_advertisement": false}}]}}\n\n'
+        f"Raw OCR text:\n{ocr_text}"
+    )
+
+    label = f"OCR-cleanup p{page_num} of {pdf_name}"
+    try:
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[cleanup_prompt],
+            config=PASS1_CONFIG,
+        )
+        safety_hit = _check_finish_reason(response, label)
+        if safety_hit:
+            # Even text-only got blocked — return raw OCR as best effort
+            logger.warning(
+                "Page %d of %s: OCR cleanup also hit SAFETY — using raw OCR",
+                page_num, pdf_name,
+            )
+            return {"page_number": page_num, "content": ocr_text.strip(),
+                    "is_advertisement": False}
+
+        raw = response.text or ""
+        if raw.strip():
+            parsed = json.loads(raw)
+            pages = parsed.get("pages", [])
+            if pages:
+                logger.info(
+                    "Page %d of %s: vision failed, used pytesseract+Gemini text fallback",
+                    page_num, pdf_name,
+                )
+                return pages[0]
+    except Exception as exc:
+        logger.warning(
+            "Page %d of %s: OCR cleanup failed: %s — using raw OCR",
+            page_num, pdf_name, exc,
+        )
+        return {"page_number": page_num, "content": ocr_text.strip(),
+                "is_advertisement": False}
+
+    # Gemini returned empty even on text-only — use raw OCR
+    logger.warning(
+        "Page %d of %s: OCR cleanup returned empty — using raw OCR",
+        page_num, pdf_name,
+    )
+    return {"page_number": page_num, "content": ocr_text.strip(),
+            "is_advertisement": False}
+
+
+def _extract_single_page(client, image, page_num: int,
+                         pdf_name: str) -> Optional[dict]:
+    """Retry a single page extraction via vision, falling back to OCR if needed.
+    Returns a page dict or None."""
+    label = f"single-page retry p{page_num} of {pdf_name}"
+    prompt = PASS1_PROMPT + (
+        f"\n\nYou are processing page {page_num} only. "
+        f"Return exactly one entry with page_number {page_num}."
+    )
+    pages, safety_triggered = _call_gemini_batch(client, prompt, [image], label)
+
+    if pages:
+        return pages[0]
+
+    # Vision failed or got safety-blocked — try OCR fallback
+    if safety_triggered:
+        logger.warning(
+            "Page %d of %s: SAFETY block on vision — attempting OCR fallback",
+            page_num, pdf_name,
+        )
+    return _ocr_fallback_page(client, image, page_num, pdf_name)
+
+
 def pass1_extract(pdf_path: Path, issue_dir: Path) -> int:
     """Extract raw text from PDF via Gemini Vision in batches. Returns page count."""
     print(f"  PASS 1: Vision extraction via Gemini...")
 
-    images = convert_from_path(str(pdf_path), dpi=200)
-    page_count = len(images)
+    doc = fitz.open(str(pdf_path))
+    page_count = len(doc)
+    images = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=200)
+        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        images.append(img)
+    doc.close()
     print(f"  {page_count} pages converted at 200 DPI")
 
     client = get_gemini()
-    all_text_parts = []
+    # Collect page dicts keyed by page number
+    extracted_pages = {}  # type: Dict[int, dict]
 
     for batch_start in range(0, page_count, PASS1_BATCH_SIZE):
         batch_end = min(batch_start + PASS1_BATCH_SIZE, page_count)
         batch_images = images[batch_start:batch_end]
         page_num_start = batch_start + 1
         page_num_end = batch_end
+        expected_count = batch_end - batch_start
 
         print(f"  Batch: pages {page_num_start}-{page_num_end}...")
 
-        prompt = PASS1_PROMPT.replace("{page_start}", str(page_num_start))
-        prompt += (
+        prompt = PASS1_PROMPT + (
             f"\n\nYou are processing pages {page_num_start} through {page_num_end}. "
-            f"Number them === PAGE {page_num_start} === through === PAGE {page_num_end} ===."
+            f"Return exactly {expected_count} entries with page_number "
+            f"{page_num_start} through {page_num_end}."
         )
 
-        content = [prompt] + list(batch_images)
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=content)
-        batch_text = response.text
-        if not batch_text:
-            logger.warning(
-                "Gemini returned empty text for pages %d-%d of %s "
-                "(all skip-pages, safety filter, or model refusal) — substituting empty string and continuing",
-                page_num_start, page_num_end, pdf_path.name,
-            )
-            batch_text = ""
-        all_text_parts.append(batch_text)
+        label = f"batch p{page_num_start}-{page_num_end} of {pdf_path.name}"
+        pages, safety_triggered = _call_gemini_batch(client, prompt, batch_images, label)
 
-    raw_text = "\n\n".join(all_text_parts)
+        if pages is None and not safety_triggered:
+            # Full batch failed (not safety) — retry once
+            logger.warning("%s — retrying full batch", label)
+            pages, safety_triggered = _call_gemini_batch(
+                client, prompt, batch_images, label + " (retry)",
+            )
+
+        # Determine which pages need single-page retry
+        needs_single_retry = False
+        if safety_triggered:
+            logger.warning(
+                "SAFETY block on %s — splitting to single-page retries",
+                label,
+            )
+            needs_single_retry = True
+
+        if pages:
+            for p in pages:
+                pn = p.get("page_number")
+                if pn is not None:
+                    extracted_pages[pn] = p
+            returned = len(pages)
+            if returned < expected_count:
+                logger.warning(
+                    "%s — got %d/%d pages, retrying missing pages individually",
+                    label, returned, expected_count,
+                )
+                needs_single_retry = True
+        else:
+            needs_single_retry = True
+
+        if needs_single_retry:
+            returned_nums = {p.get("page_number") for p in pages} if pages else set()
+            for pn in range(page_num_start, page_num_end + 1):
+                if pn not in returned_nums and pn not in extracted_pages:
+                    logger.info("  Retrying page %d individually...", pn)
+                    result = _extract_single_page(
+                        client, images[pn - 1], pn, pdf_path.name,
+                    )
+                    if result:
+                        extracted_pages[pn] = result
+                    elif safety_triggered:
+                        issue_id = parse_issue_meta(pdf_path.name).get("issue", pdf_path.stem)
+                        log_failure(issue_id, f"Page {pn}", "SAFETY block after all retries", issue_dir)
+
+        # Reset client after safety trigger to avoid context poisoning
+        if safety_triggered:
+            logger.info("Safety trigger detected — resetting Gemini client for next batch")
+            reset_gemini()
+            client = get_gemini()
+
+    # -- Page gap check --
+    missing = [pn for pn in range(1, page_count + 1) if pn not in extracted_pages]
+    if missing:
+        logger.warning(
+            "Missing pages after batch extraction: %s — retrying individually",
+            missing,
+        )
+        for pn in missing:
+            result = _extract_single_page(client, images[pn - 1], pn, pdf_path.name)
+            if result:
+                extracted_pages[pn] = result
+            else:
+                logger.warning("Page %d of %s could not be extracted", pn, pdf_path.name)
+                issue_id = parse_issue_meta(pdf_path.name).get("issue", pdf_path.stem)
+                log_failure(issue_id, f"Page {pn}", "Empty output after all retries", issue_dir)
+
+    # -- Hard checksum: abort if pages still missing after all retries --
+    still_missing = [pn for pn in range(1, page_count + 1) if pn not in extracted_pages]
+    if still_missing:
+        logger.error(
+            "ABORTING %s — %d page(s) still missing after all retries: %s",
+            pdf_path.name, len(still_missing), still_missing,
+        )
+        issue_id = parse_issue_meta(pdf_path.name).get("issue", pdf_path.stem)
+        log_failure(
+            issue_id, "(whole issue)",
+            f"Missing {len(still_missing)} page(s) after all retries: {still_missing}",
+            issue_dir,
+        )
+        # Still save partial raw_text for debugging
+        text_parts = []
+        for pn in sorted(extracted_pages.keys()):
+            page = extracted_pages[pn]
+            content = (page.get("content") or "").strip()
+            if page.get("is_advertisement", False) or not content:
+                continue
+            text_parts.append(f"=== PAGE {pn} ===")
+            text_parts.append(content)
+        issue_dir.mkdir(parents=True, exist_ok=True)
+        (issue_dir / "raw_text.txt").write_text("\n\n".join(text_parts), encoding="utf-8")
+        return -1
+
+    # -- Assemble raw_text.txt in the legacy === PAGE N === format --
+    text_parts = []
+    for pn in sorted(extracted_pages.keys()):
+        page = extracted_pages[pn]
+        content = (page.get("content") or "").strip()
+        if page.get("is_advertisement", False) or not content:
+            continue
+        text_parts.append(f"=== PAGE {pn} ===")
+        text_parts.append(content)
+
+    raw_text = "\n\n".join(text_parts)
 
     # Save raw transcription
     issue_dir.mkdir(parents=True, exist_ok=True)
     (issue_dir / "raw_text.txt").write_text(raw_text, encoding="utf-8")
-    print(f"  Raw text saved ({len(raw_text)} chars)")
+    print(f"  Raw text saved ({len(raw_text)} chars, {len(extracted_pages)}/{page_count} pages extracted)")
 
     return page_count
 
@@ -301,11 +679,17 @@ staff boxes, ads, table of contents itself
 These are reference materials not theological teaching articles. If an article title contains \
 'Bible Study', 'Bible Lesson', or 'Study Guide' skip it entirely.
 - Do include: main articles, editorial, forum sections
+- Look for "Continued on page X" and "Continued from page X" markers in the text. If an \
+article starts on pages 4-5 but has a continuation on page 18, include ALL pages in the \
+source_pages list: [4, 5, 18].
 - Output as JSON array with this structure:
   [
-    {"title": "Article Title", "author": "Author Name", "page_start": 4, "page_end": 10}
+    {"title": "Article Title", "author": "Author Name", "page_start": 4, "page_end": 10, \
+"source_pages": [4, 5, 6, 7, 8, 9, 10]}
   ]
-- page_start and page_end refer to the === PAGE N === markers in the text
+- page_start and page_end refer to the primary === PAGE N === markers in the text
+- source_pages is the full list of pages containing content for this article, \
+including any continuation pages
 - Return ONLY the JSON array, nothing else"""
 
 PASS2_BODY_SYSTEM = """You are an expert magazine transcription editor. You will be \
@@ -583,6 +967,12 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
 
         if not body.strip():
             print(f"    ⚠ Empty body for '{title}' — skipping .md write")
+            log_failure(
+                meta.get("issue", ""),
+                title,
+                f"Empty article body (pages {page_start}-{page_end})",
+                issue_dir,
+            )
             continue
 
         # Validate tags against taxonomy
@@ -593,6 +983,12 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
         topic_tags = valid_tags
 
         tags_str = ", ".join(topic_tags) if topic_tags else ""
+
+        # Extract Bible references via regex (fast, no LLM)
+        bible_refs = _extract_bible_refs_regex(body)
+        bible_refs_str = ", ".join(bible_refs) if bible_refs else ""
+        if bible_refs:
+            print(f"    Bible refs (regex): {len(bible_refs)} found")
 
         slug = slugify(title)
         filename = f"{idx:02d}_{slug}.md"
@@ -607,6 +1003,7 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
             f"PAGE_END: {page_end}\n"
             f"SOURCE_TYPE: magazine_article\n"
             f"TOPIC_TAGS: {tags_str}\n"
+            f"BIBLE_REFS: {bible_refs_str}\n"
             f"---\n\n"
             f"# {title}\n"
             f"*by {author}*\n\n"
@@ -623,24 +1020,47 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
 
 PASS3_SYSTEM = """You are a quality inspector for magazine article transcriptions.
 
-Check this article for the following issues:
-1. Does it start mid-sentence or mid-word? (truncation)
-2. Does it end abruptly without a concluding sentence? (truncation)
-3. Are there any duplicate sentences or paragraphs? (overlap)
-4. Does the body text match the title and author? (mismatch)
-5. Is the word count reasonable for a magazine article? (min 200 words)
-6. Are there any obvious OCR errors or garbled text?
+Analyze this article and extract the following information:
+
+1. first_10_words: The first 10 words of the article body (after any frontmatter/title/byline)
+2. last_10_words: The last 10 words of the article body
+3. word_count: Total word count of the body text
+4. starts_mid_sentence: Does the body start mid-sentence or mid-word? (true/false)
+5. has_duplicate_paragraphs: Are there any duplicate sentences or paragraphs? (true/false)
+6. body_matches_title: Does the body text match the title and author? (true/false)
+7. has_garbled_text: Are there obvious OCR errors or garbled text? (true/false)
+8. issues: List of specific issues found (empty array if none)
 
 Respond with JSON only:
 {
-  "status": "PASS" or "WARN" or "FLAG",
-  "issues": ["list of issues found, empty if none"],
-  "confidence": 0.0 to 1.0,
-  "word_count": number
+  "first_10_words": "string",
+  "last_10_words": "string",
+  "word_count": number,
+  "starts_mid_sentence": bool,
+  "has_duplicate_paragraphs": bool,
+  "body_matches_title": bool,
+  "has_garbled_text": bool,
+  "issues": ["list of issues found"]
 }"""
 
+# Words that suggest an article was truncated mid-sentence at the end
+_CONTINUATION_WORDS = {
+    "a", "an", "the", "and", "but", "or", "nor", "for", "yet", "so",
+    "in", "on", "at", "to", "of", "by", "with", "from", "as", "is",
+    "was", "are", "were", "be", "been", "being", "that", "this", "which",
+    "who", "whom", "whose", "into", "than", "not", "its", "his", "her",
+}
 
-def pass3_qa(issue_dir: Path) -> Dict[str, int]:
+
+def _check_truncation(last_words: str) -> bool:
+    """Return True if the last word suggests mid-sentence truncation."""
+    words = last_words.strip().split()
+    if not words:
+        return False
+    return words[-1].lower().rstrip(".,;:!?") in _CONTINUATION_WORDS
+
+
+def pass3_qa(issue_dir: Path, issue: str = "") -> Dict[str, int]:
     """Run QA on each .md article file. Returns {pass, warn, flag} counts."""
     print(f"  PASS 3: QA inspection via Groq...")
 
@@ -666,7 +1086,6 @@ def pass3_qa(issue_dir: Path) -> Dict[str, int]:
                 ],
             )
             raw = (response.choices[0].message.content or "").strip()
-            # Parse JSON
             json_str = raw
             fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
             if fence_match:
@@ -674,18 +1093,59 @@ def pass3_qa(issue_dir: Path) -> Dict[str, int]:
             result = json.loads(json_str)
         except Exception as e:
             logger.warning("QA failed for %s: %s", md_path.name, e)
-            result = {"status": "WARN", "issues": [f"QA parse error: {e}"], "confidence": 0.0, "word_count": 0}
+            result = {
+                "first_10_words": "", "last_10_words": "",
+                "word_count": 0, "starts_mid_sentence": False,
+                "has_duplicate_paragraphs": False, "body_matches_title": True,
+                "has_garbled_text": False,
+                "issues": [f"QA parse error: {e}"],
+            }
 
-        status = result.get("status", "WARN").upper()
+        # Determine status from extracted signals
+        issues = list(result.get("issues", []))
+        word_count = result.get("word_count", 0)
+        last_words = result.get("last_10_words", "")
+
+        # Python-side truncation check
+        if _check_truncation(last_words):
+            issues.append(f"Possible truncation: ends with '{last_words.split()[-1]}'")
+
+        if result.get("starts_mid_sentence"):
+            issues.append("Starts mid-sentence")
+        if result.get("has_duplicate_paragraphs"):
+            issues.append("Duplicate paragraphs detected")
+        if not result.get("body_matches_title", True):
+            issues.append("Body does not match title/author")
+        if result.get("has_garbled_text"):
+            issues.append("Garbled/OCR errors detected")
+        if word_count and word_count < 200:
+            issues.append(f"Very short article ({word_count} words)")
+
+        # FLAG if critical issues, WARN if minor, PASS if clean
+        has_truncation = result.get("starts_mid_sentence") or _check_truncation(last_words)
+        has_mismatch = not result.get("body_matches_title", True)
+        if has_mismatch or (word_count and word_count < 100):
+            status = "FLAG"
+        elif issues:
+            status = "WARN"
+        else:
+            status = "PASS"
+
+        result["status"] = status
+        result["issues"] = issues
         result["file"] = md_path.name
 
         if status == "FLAG":
             flagged_dir.mkdir(exist_ok=True)
             md_path.rename(flagged_dir / md_path.name)
             counts["flag"] += 1
+            # Extract title from frontmatter for logging
+            title_match = re.search(r"^TITLE:\s*(.+)$", content, re.MULTILINE)
+            flag_title = title_match.group(1).strip() if title_match else md_path.stem
+            flag_reasons = "; ".join(issues) if issues else "Flagged by QA"
+            log_failure(issue, flag_title, f"QA FLAG: {flag_reasons}", issue_dir)
         elif status == "WARN":
-            # Prepend warning block to file
-            issues_str = "\n".join(f"  - {i}" for i in result.get("issues", []))
+            issues_str = "\n".join(f"  - {i}" for i in issues)
             warning_block = f"<!-- QA WARNINGS:\n{issues_str}\n-->\n\n"
             md_path.write_text(warning_block + content, encoding="utf-8")
             counts["warn"] += 1
@@ -722,6 +1182,21 @@ def process_issue(pdf_path: Path) -> str:
     try:
         # Pass 1: Vision extraction
         page_count = pass1_extract(pdf_path, issue_dir)
+
+        if page_count < 0:
+            # Missing pages after all retries — abort before Pass 2
+            update_tracker_row(filename, {
+                "Issue": meta.get("issue"),
+                "Year": meta.get("year"),
+                "Pass1": "aborted_missing_pages",
+                "Status": "aborted: missing pages",
+            })
+            PDF_FAILED_DIR.mkdir(parents=True, exist_ok=True)
+            failed_dest = PDF_FAILED_DIR / filename
+            pdf_path.rename(failed_dest)
+            print(f"  PDF moved to failed queue: {failed_dest}")
+            return "failed"
+
         update_tracker_row(filename, {
             "Issue": meta.get("issue"),
             "Year": meta.get("year"),
@@ -739,7 +1214,7 @@ def process_issue(pdf_path: Path) -> str:
         })
 
         # Pass 3: QA inspection
-        qa_counts = pass3_qa(issue_dir)
+        qa_counts = pass3_qa(issue_dir, issue=meta.get("issue", ""))
         update_tracker_row(filename, {
             "Pass3": "complete",
             "Pass_Count": qa_counts["pass"],

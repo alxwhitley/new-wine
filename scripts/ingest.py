@@ -425,9 +425,10 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
     print(f"  {len(pages)} pages extracted")
 
-    # 2. Auto-detect metadata from first page
+    # 2. Auto-detect metadata from first non-empty page
     print("Detecting metadata via Groq...")
-    metadata = extract_metadata(pages[0], file_path.name)
+    first_text = next((p for p in pages if p.strip()), pages[0])
+    metadata = extract_metadata(first_text, file_path.name)
 
     # Override metadata with parsed .txt headers if available
     if txt_headers:
@@ -509,10 +510,11 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 def main():
     dry_run = "--dry-run" in sys.argv
 
-    # Scan sources/documents/ and sources/youtube/cleaned/
+    # Scan sources/documents/, sources/youtube/cleaned/, and sources/web/derek_prince/raw/
     scan_dirs = [
         DOCS_FOLDER / "documents",
         DOCS_FOLDER / "youtube" / "cleaned",
+        DOCS_FOLDER / "web" / "derek_prince" / "raw",
     ]
 
     files: list[Path] = []
@@ -537,7 +539,8 @@ def main():
             return True
         return False
 
-    ingested_dir = DOCS_FOLDER / "youtube" / "ingested"
+    yt_ingested_dir = DOCS_FOLDER / "youtube" / "ingested"
+    dp_ingested_dir = DOCS_FOLDER / "web" / "derek_prince" / "ingested"
 
     processed = skipped = failed = 0
     for file_path in files:
@@ -545,12 +548,19 @@ def main():
         result = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)
         if result == "processed":
             processed += 1
-            # Move successfully ingested YouTube transcripts to ingested/
-            if not dry_run and "sources/youtube/cleaned" in str(file_path):
-                ingested_dir.mkdir(parents=True, exist_ok=True)
-                dest = ingested_dir / file_path.name
-                shutil.move(str(file_path), str(dest))
-                print(f"  Moved to: {dest}")
+            if not dry_run:
+                # Move successfully ingested YouTube transcripts to ingested/
+                if "sources/youtube/cleaned" in str(file_path):
+                    yt_ingested_dir.mkdir(parents=True, exist_ok=True)
+                    dest = yt_ingested_dir / file_path.name
+                    shutil.move(str(file_path), str(dest))
+                    print(f"  Moved to: {dest}")
+                # Move successfully ingested Derek Prince sermons to ingested/
+                elif "sources/web/derek_prince/raw" in str(file_path):
+                    dp_ingested_dir.mkdir(parents=True, exist_ok=True)
+                    dest = dp_ingested_dir / file_path.name
+                    shutil.move(str(file_path), str(dest))
+                    print(f"  Moved to: {dest}")
         elif result == "skipped":
             skipped += 1
         else:

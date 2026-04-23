@@ -92,6 +92,8 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
     date = meta.get("DATE", "")
     topic_tags_raw = meta.get("TOPIC_TAGS", "")
     topic_tags = [t.strip() for t in topic_tags_raw.split(",") if t.strip()] if topic_tags_raw else []
+    frontmatter_refs_raw = meta.get("BIBLE_REFS", "")
+    frontmatter_refs = [r.strip() for r in frontmatter_refs_raw.split(",") if r.strip()] if frontmatter_refs_raw else []
 
     # Clean author: truncate at parenthesis
     if "(" in author:
@@ -114,7 +116,14 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
     db = get_db()
 
     # Extract Bible references from body (non-fatal — returns [] on failure)
+    # Merge with any refs already extracted by regex during Pass 2
     bible_refs = extract_bible_references(body)
+    if frontmatter_refs:
+        seen = set(bible_refs)
+        for r in frontmatter_refs:
+            if r not in seen:
+                bible_refs.append(r)
+                seen.add(r)
     if bible_refs:
         print(f"  Bible refs: {len(bible_refs)} found ({', '.join(bible_refs[:5])}{'...' if len(bible_refs) > 5 else ''})")
 
