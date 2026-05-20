@@ -12,13 +12,19 @@ interface WordToken {
   morph: string;
 }
 
+interface CorpusQuote {
+  text: string;
+  author: string;
+  source: string;
+}
+
 interface WordDefinition {
   strongs: string;
   word: string;
   transliteration: string;
   gloss: string;
   meaning: string;
-  occurrences: { reference: string; text: string }[];
+  corpusQuotes: CorpusQuote[];
 }
 
 // Placeholder: John 1:1 interlinear
@@ -45,10 +51,9 @@ const PLACEHOLDER_DEFINITIONS: Record<string, WordDefinition> = {
     gloss: "beginning, origin, first cause",
     meaning:
       "From G0756; a commencement, or (concrete) chief (in various applications of order, time, place or rank). Used of the beginning of the world (John 1:1), of the Gospel (Mark 1:1), and of the first principles of a matter (Hebrews 5:12).",
-    occurrences: [
-      { reference: "John 1:1", text: "In the beginning was the Word" },
-      { reference: "Genesis 1:1 (LXX)", text: "In the beginning God created the heaven and the earth" },
-      { reference: "Colossians 1:18", text: "He is the beginning, the firstborn from the dead" },
+    corpusQuotes: [
+      { text: "The word arch\u0113 points us back before time began \u2014 to the eternal origin of the Logos, who was already there when everything else started.", author: "John Wimber", source: "The Word Made Flesh (sermon)" },
+      { text: "Genesis 1:1 and John 1:1 both open with this word, tying creation to the pre-existence of Christ.", author: "Gordon Fee", source: "New Testament Exegesis" },
     ],
   },
   G3056: {
@@ -58,10 +63,10 @@ const PLACEHOLDER_DEFINITIONS: Record<string, WordDefinition> = {
     gloss: "word, speech, reason",
     meaning:
       "From G3004; something said (including the thought); by implication a topic, also reasoning or motive. In John\u2019s prologue, Logos denotes the pre-existent divine Word, the second person of the Trinity, through whom all things were made.",
-    occurrences: [
-      { reference: "John 1:1", text: "In the beginning was the Word" },
-      { reference: "John 1:14", text: "And the Word became flesh and dwelt among us" },
-      { reference: "Revelation 19:13", text: "His name is called The Word of God" },
+    corpusQuotes: [
+      { text: "Logos is not merely a spoken word \u2014 it is the self-expression of God, the living Word who took on flesh and walked among us.", author: "Sam Storms", source: "The Hope of Glory" },
+      { text: "John chose logos deliberately: for Greeks it meant cosmic reason, for Jews the creative word of Yahweh. Both meanings converge in Jesus.", author: "D.A. Carson", source: "The Gospel According to John" },
+      { text: "When we preach, we are not merely sharing ideas. We are releasing the logos \u2014 the living, active Word that carries the power to transform.", author: "Bill Johnson", source: "The Supernatural Power of a Transformed Mind" },
     ],
   },
   G2316: {
@@ -71,13 +76,130 @@ const PLACEHOLDER_DEFINITIONS: Record<string, WordDefinition> = {
     gloss: "God, a deity",
     meaning:
       "Of uncertain affinity; a deity, especially the supreme Divinity. In the NT used of the one true God, the Father (John 17:3), and applied to Christ (John 1:1, 20:28, Romans 9:5).",
-    occurrences: [
-      { reference: "John 1:1", text: "and the Word was God" },
-      { reference: "John 20:28", text: "Thomas said to Him, 'My Lord and my God!'" },
-      { reference: "Romans 9:5", text: "Christ, who is God over all, blessed forever" },
+    corpusQuotes: [
+      { text: "The Word was not merely divine \u2014 He was God. John\u2019s grammar is precise: theos without the article stresses the nature of the Word, not His identity with the Father.", author: "Gordon Fee", source: "Pauline Christology" },
+      { text: "Thomas\u2019 confession \u2018My Lord and my God\u2019 is the climax of the Fourth Gospel \u2014 the moment a disciple finally sees Jesus for who He truly is.", author: "N.T. Wright", source: "Simply Jesus" },
     ],
   },
 };
+
+function InterlinearBlocks({
+  tokens,
+  selectedStrongs,
+  onSelect,
+}: {
+  tokens: WordToken[];
+  selectedStrongs: string | null;
+  onSelect: (strongs: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {tokens.map((token, i) => {
+        const isSelected = selectedStrongs === token.strongs;
+        return (
+          <button
+            key={i}
+            onClick={() => onSelect(isSelected ? null : token.strongs)}
+            className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px]"
+            style={{
+              borderColor: isSelected ? "#b49238" : "#3c3c38",
+              backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
+            }}
+          >
+            <span className="font-serif text-lg text-foreground">{token.greek}</span>
+            <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
+              {token.english}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function DefinitionPanel({ definition }: { definition: WordDefinition | null }) {
+  if (!definition) {
+    return (
+      <div className="border-t border-border pt-6 text-center">
+        <p className="text-muted-foreground text-sm">Select a word to view its definition</p>
+      </div>
+    );
+  }
+  return (
+    <div className="border-t border-border pt-6">
+      <p className="font-serif text-3xl text-foreground">{definition.word}</p>
+      <p className="text-sm text-muted-foreground mt-1">
+        {definition.transliteration} &middot; {definition.strongs}
+      </p>
+
+      <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+        Definition
+      </p>
+      <p className="text-sm text-foreground leading-relaxed">{definition.gloss}</p>
+
+      <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+        Usage
+      </p>
+      <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
+    </div>
+  );
+}
+
+function CorpusPanel({ definition }: { definition: WordDefinition | null }) {
+  if (!definition) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground text-sm">Select a word to see how it appears in the corpus</p>
+      </div>
+    );
+  }
+  return (
+    <>
+      <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+        From the corpus
+      </p>
+      <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+        {definition.word} ({definition.transliteration})
+      </p>
+
+      <div className="space-y-4">
+        {definition.corpusQuotes.map((quote, i) => (
+          <div key={i} className="rounded-lg border border-border bg-card p-4">
+            <p className="text-sm text-foreground leading-relaxed">&ldquo;{quote.text}&rdquo;</p>
+            <div className="mt-3">
+              <p className="text-xs font-medium text-foreground">{quote.author}</p>
+              <p className="text-xs text-muted-foreground">{quote.source}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function VerseSearch({
+  verseRef,
+  onChange,
+}: {
+  verseRef: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <input
+        type="text"
+        value={verseRef}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Enter verse reference (e.g. John 1:1)"
+        className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
+      />
+      <button className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-gold-hover transition-colors">
+        <Search className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function StudyPage() {
   const [verseRef, setVerseRef] = useState("John 1:1");
@@ -96,163 +218,73 @@ export default function StudyPage() {
         <div className="flex-1" />
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 min-h-0">
-        {/* Left Column: Verse + Interlinear */}
-        <div className="flex-1 overflow-y-auto border-r border-border">
-          <div className="mx-auto max-w-2xl px-4 md:px-6 pt-8 pb-16">
-            {/* Verse Lookup */}
-            <div className="flex gap-2 mb-8">
-              <input
-                type="text"
-                value={verseRef}
-                onChange={(e) => setVerseRef(e.target.value)}
-                placeholder="Enter verse reference (e.g. John 1:1)"
-                className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
-              />
-              <button className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gold-hover transition-colors">
-                <Search className="h-4 w-4" />
-                <span className="hidden sm:inline">Look up</span>
-              </button>
-            </div>
+      {/* Desktop: two-column layout */}
+      <div className="hidden md:flex flex-1 min-h-0">
+        {/* Left Column: Search + Interlinear + Definition (380px fixed) */}
+        <div
+          className="w-[380px] shrink-0 flex flex-col overflow-y-auto"
+          style={{ borderRight: "0.5px solid #3c3c38" }}
+        >
+          <div className="px-4 pt-6 pb-16">
+            <VerseSearch verseRef={verseRef} onChange={setVerseRef} />
 
-            {/* Verse Display */}
-            <div className="mb-6">
-              <p className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: "#c1c1b8" }}>
-                {verseRef}
-              </p>
-              <p className="text-foreground leading-relaxed">
-                In the beginning was the Word, and the Word was with God, and the Word was God.
-              </p>
-            </div>
+            <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
+              {verseRef}
+            </p>
 
-            {/* Interlinear Grid */}
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide mb-4" style={{ color: "#c1c1b8" }}>
-                Interlinear
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {PLACEHOLDER_TOKENS.map((token, i) => {
-                  const isSelected = selectedStrongs === token.strongs;
-                  const hasDef = token.strongs in PLACEHOLDER_DEFINITIONS;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => setSelectedStrongs(isSelected ? null : token.strongs)}
-                      className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px]"
-                      style={{
-                        borderColor: isSelected ? "#b49238" : "#3c3c38",
-                        backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
-                        cursor: hasDef ? "pointer" : "default",
-                      }}
-                    >
-                      <span className="font-serif text-lg text-foreground">{token.greek}</span>
-                      <span className="text-[11px] text-muted-foreground mt-0.5">{token.transliteration}</span>
-                      <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
-                        {token.english}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground mt-0.5">{token.morph}</span>
-                    </button>
-                  );
-                })}
-              </div>
+            <InterlinearBlocks
+              tokens={PLACEHOLDER_TOKENS}
+              selectedStrongs={selectedStrongs}
+              onSelect={setSelectedStrongs}
+            />
+
+            <div className="mt-8">
+              <DefinitionPanel definition={definition} />
             </div>
           </div>
         </div>
 
-        {/* Right Column: Definition Panel */}
-        <div className="hidden md:flex w-96 flex-col overflow-y-auto bg-card">
-          <div className="px-6 pt-8 pb-16">
-            {definition ? (
-              <>
-                <div className="mb-6">
-                  <p className="font-serif text-3xl text-foreground">{definition.word}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {definition.transliteration} &middot; {definition.strongs}
-                  </p>
-                </div>
-
-                <div className="mb-6">
-                  <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
-                    Gloss
-                  </p>
-                  <p className="text-foreground">{definition.gloss}</p>
-                </div>
-
-                <div className="mb-6">
-                  <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
-                    Definition
-                  </p>
-                  <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: "#c1c1b8" }}>
-                    Corpus Occurrences
-                  </p>
-                  <div className="space-y-3">
-                    {definition.occurrences.map((occ, i) => (
-                      <div key={i} className="rounded-lg border border-border p-3">
-                        <p className="text-xs font-medium" style={{ color: "#d4b96a" }}>
-                          {occ.reference}
-                        </p>
-                        <p className="text-sm text-foreground mt-1">{occ.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center pt-32">
-                <p className="text-muted-foreground text-sm">
-                  Select a word to view its definition
-                </p>
-              </div>
-            )}
+        {/* Right Column: Corpus Quotes (flex: 1) */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-6 pt-6 pb-16">
+            <CorpusPanel definition={definition} />
           </div>
         </div>
+      </div>
 
-        {/* Mobile: Definition Bottom Sheet */}
-        {definition && (
-          <div className="md:hidden fixed inset-x-0 bottom-0 z-40 max-h-[60vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card px-4 pt-4 pb-8 shadow-lg">
-            <div className="flex justify-center mb-3">
-              <div className="h-1 w-8 rounded-full" style={{ backgroundColor: "#3c3c38" }} />
+      {/* Mobile: single-column stacked layout */}
+      <div className="flex flex-1 flex-col overflow-y-auto md:hidden">
+        <div className="px-4 pt-6 pb-16">
+          <VerseSearch verseRef={verseRef} onChange={setVerseRef} />
+
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
+            {verseRef}
+          </p>
+
+          <InterlinearBlocks
+            tokens={PLACEHOLDER_TOKENS}
+            selectedStrongs={selectedStrongs}
+            onSelect={setSelectedStrongs}
+          />
+
+          {definition && (
+            <>
+              <div className="mt-8">
+                <DefinitionPanel definition={definition} />
+              </div>
+
+              <div className="mt-8">
+                <CorpusPanel definition={definition} />
+              </div>
+            </>
+          )}
+
+          {!definition && (
+            <div className="mt-8 border-t border-border pt-6 text-center">
+              <p className="text-muted-foreground text-sm">Select a word to view its definition</p>
             </div>
-            <button
-              onClick={() => setSelectedStrongs(null)}
-              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground text-sm min-h-[44px] min-w-[44px] flex items-center justify-center"
-            >
-              &times;
-            </button>
-
-            <p className="font-serif text-2xl text-foreground">{definition.word}</p>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {definition.transliteration} &middot; {definition.strongs}
-            </p>
-
-            <p className="text-xs font-medium uppercase tracking-wide mt-4 mb-1" style={{ color: "#c1c1b8" }}>
-              Gloss
-            </p>
-            <p className="text-foreground text-sm">{definition.gloss}</p>
-
-            <p className="text-xs font-medium uppercase tracking-wide mt-4 mb-1" style={{ color: "#c1c1b8" }}>
-              Definition
-            </p>
-            <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
-
-            <p className="text-xs font-medium uppercase tracking-wide mt-4 mb-2" style={{ color: "#c1c1b8" }}>
-              Corpus Occurrences
-            </p>
-            <div className="space-y-2">
-              {definition.occurrences.map((occ, i) => (
-                <div key={i} className="rounded-lg border border-border p-3">
-                  <p className="text-xs font-medium" style={{ color: "#d4b96a" }}>{occ.reference}</p>
-                  <p className="text-sm text-foreground mt-1">{occ.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
