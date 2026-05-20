@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Search } from "lucide-react";
 import { ModeToggle } from "@/components/rhemata/mode-toggle";
 
@@ -82,6 +82,76 @@ const PLACEHOLDER_DEFINITIONS: Record<string, WordDefinition> = {
     ],
   },
 };
+
+interface HistoryEntry {
+  strongs: string;
+  greek: string;
+  transliteration: string;
+}
+
+function WordHistorySidebar({
+  history,
+  selectedStrongs,
+  onSelect,
+}: {
+  history: HistoryEntry[];
+  selectedStrongs: string | null;
+  onSelect: (strongs: string) => void;
+}) {
+  return (
+    <aside
+      className="hidden md:flex w-64 shrink-0 flex-col h-full"
+      style={{ background: "#1b1b19", borderRight: "0.5px solid #3c3c38" }}
+    >
+      <div className="px-4 pt-6 pb-4">
+        <p
+          className="text-xs font-medium uppercase tracking-wide"
+          style={{ color: "#888780" }}
+        >
+          Word History
+        </p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-2">
+        {history.length === 0 ? (
+          <p className="px-2 text-sm italic text-muted-foreground">
+            Words you select will appear here
+          </p>
+        ) : (
+          <div className="space-y-0.5">
+            {history.map((entry) => {
+              const isActive = selectedStrongs === entry.strongs;
+              return (
+                <button
+                  key={entry.strongs}
+                  onClick={() => onSelect(entry.strongs)}
+                  className="w-full text-left rounded px-3 py-2 transition-colors"
+                  style={{
+                    backgroundColor: isActive ? "#262624" : "transparent",
+                    borderLeft: isActive ? "2px solid #b49238" : "2px solid transparent",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.backgroundColor = "#262624";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+                  }}
+                >
+                  <p className="text-sm" style={{ color: "#e6e6e6" }}>
+                    {entry.greek}
+                  </p>
+                  <p className="text-xs" style={{ color: "#888780" }}>
+                    {entry.transliteration} &middot; {entry.strongs}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
 
 function InterlinearBlocks({
   tokens,
@@ -204,10 +274,39 @@ function VerseSearch({
 export default function StudyPage() {
   const [verseRef, setVerseRef] = useState("John 1:1");
   const [selectedStrongs, setSelectedStrongs] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   const definition = selectedStrongs
     ? PLACEHOLDER_DEFINITIONS[selectedStrongs] ?? null
     : null;
+
+  const handleSelectWord = useCallback(
+    (strongs: string | null) => {
+      if (strongs === null) {
+        setSelectedStrongs(null);
+        return;
+      }
+      setSelectedStrongs(strongs);
+      // Find the token info for this strongs number
+      const token = PLACEHOLDER_TOKENS.find((t) => t.strongs === strongs);
+      if (!token) return;
+      setHistory((prev) => {
+        const filtered = prev.filter((e) => e.strongs !== strongs);
+        return [
+          { strongs: token.strongs, greek: token.greek, transliteration: token.transliteration },
+          ...filtered,
+        ];
+      });
+    },
+    [],
+  );
+
+  const handleHistorySelect = useCallback(
+    (strongs: string) => {
+      setSelectedStrongs(strongs);
+    },
+    [],
+  );
 
   return (
     <div className="flex h-dvh-safe flex-col bg-background">
@@ -218,9 +317,16 @@ export default function StudyPage() {
         <div className="flex-1" />
       </div>
 
-      {/* Desktop: two-column layout */}
+      {/* Desktop: three-column layout */}
       <div className="hidden md:flex flex-1 min-h-0">
-        {/* Left Column: Search + Interlinear + Definition (380px fixed) */}
+        {/* Word History Sidebar */}
+        <WordHistorySidebar
+          history={history}
+          selectedStrongs={selectedStrongs}
+          onSelect={handleHistorySelect}
+        />
+
+        {/* Middle Column: Search + Interlinear + Definition (380px fixed) */}
         <div
           className="w-[380px] shrink-0 flex flex-col overflow-y-auto"
           style={{ borderRight: "0.5px solid #3c3c38" }}
@@ -235,7 +341,7 @@ export default function StudyPage() {
             <InterlinearBlocks
               tokens={PLACEHOLDER_TOKENS}
               selectedStrongs={selectedStrongs}
-              onSelect={setSelectedStrongs}
+              onSelect={handleSelectWord}
             />
 
             <div className="mt-8">
@@ -264,7 +370,7 @@ export default function StudyPage() {
           <InterlinearBlocks
             tokens={PLACEHOLDER_TOKENS}
             selectedStrongs={selectedStrongs}
-            onSelect={setSelectedStrongs}
+            onSelect={handleSelectWord}
           />
 
           {definition && (
