@@ -17,13 +17,30 @@ from app.auth import get_optional_user
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 
+
+def is_word_study_query(question: str) -> bool:
+    q = question.lower()
+    strongs_pattern = re.compile(r'\b[gh]\d{1,4}\b', re.IGNORECASE)
+    if strongs_pattern.search(question):
+        return True
+    word_study_phrases = [
+        "original greek", "original hebrew", "greek word", "hebrew word",
+        "root word", "strong's", "strongs", "lexicon", "what does the word",
+        "definition of the word", "biblical definition", "greek meaning",
+        "hebrew meaning", "word study", "etymology", "transliteration",
+        "what does", "meaning of", "define "
+    ]
+    return any(phrase in q for phrase in word_study_phrases)
+
 COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 logger = logging.getLogger(__name__)
 
-system_prompt = (Path(__file__).resolve().parent.parent / "system_prompt.txt").read_text()
-ANSWER_SYSTEM_PROMPT = system_prompt + (
+_app_dir = Path(__file__).resolve().parent.parent
+system_prompt = (_app_dir / "system_prompt.txt").read_text()
+guardrails = (_app_dir / "theological_guardrails.txt").read_text()
+ANSWER_SYSTEM_PROMPT = system_prompt + "\n\n" + guardrails + (
     "\n\nRepresent the views of the source documents faithfully and accurately, "
     "even when those views reflect traditional or complementarian theology. "
     "Do not editorialize or add modern qualifications unless they appear in the source material."
@@ -154,6 +171,7 @@ class ChatMessage(BaseModel):
 
 
 GUEST_QUERY_LIMIT = 6
+USER_DAILY_QUERY_LIMIT = 65  # ~$2/day at ~$0.03/query
 
 
 class ChatRequest(BaseModel):
@@ -222,8 +240,9 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
     db = get_supabase()
 
-    # Guest query limit check
+    # Query limit checks
     if not user_id:
+        # Guest limit
         if not request.anon_id:
             raise HTTPException(status_code=400, detail="anon_id required for guest users")
         try:
@@ -236,6 +255,18 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             raise
         except Exception:
             logger.exception("Guest query count check failed for anon_id=%s", request.anon_id)
+    else:
+        # Authenticated user daily limit
+        try:
+            result = db.rpc("increment_user_daily_query", {"p_user_id": user_id}).execute()
+            count = result.data if isinstance(result.data, int) else 0
+            logger.info("[USER] user_id=%s daily_query_count=%s", user_id, count)
+            if count > USER_DAILY_QUERY_LIMIT:
+                raise HTTPException(status_code=429, detail="daily_limit_reached")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("User daily query count check failed for user_id=%s", user_id)
 
     try:
 
@@ -264,7 +295,17 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             doc_counts[did] = doc_counts.get(did, 0) + 1
             if doc_counts[did] <= 2:
                 collapsed.append((cid, (score, chunk)))
-        top_chunks = collapsed[:10]
+
+        # Step 3a: Per-author cap — max 3 chunks per unique author
+        author_counts: dict[str, int] = {}
+        author_capped: list[tuple[str, tuple[float, dict]]] = []
+        for cid, (score, chunk) in collapsed:
+            author = chunk.get("author") or "Unknown"
+            author_counts[author] = author_counts.get(author, 0) + 1
+            if author_counts[author] <= 3:
+                author_capped.append((cid, (score, chunk)))
+
+        top_chunks = author_capped[:10]
         chunks = [chunk for _, (_, chunk) in top_chunks]
 
         # Step 3.5: Cohere rerank — narrow top 10 → top 5 by relevance
@@ -301,6 +342,22 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                     expanded.append(n)
         chunks = expanded
 
+        # Step 5: Conditional lexicon retrieval for word-study queries
+        if is_word_study_query(request.question):
+            try:
+                lex_embedding = embed_text(request.question)
+                lex_result = db.rpc("match_lexicon_chunks", {
+                    "query_embedding": lex_embedding,
+                    "match_count": 5,
+                }).execute()
+                if lex_result.data:
+                    for lc in lex_result.data:
+                        lc["_lexicon"] = True
+                    chunks.extend(lex_result.data)
+                    logger.info("Lexicon retrieval: %d chunks appended", len(lex_result.data))
+            except Exception:
+                logger.exception("Lexicon retrieval failed, continuing without")
+
         citations = [
             {
                 "chunk_id": c["id"],
@@ -328,10 +385,20 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             yield _sse("[DONE]")
             return
 
+        regular = [c for c in chunks if not c.get("_lexicon")]
+        lexicon = [c for c in chunks if c.get("_lexicon")]
+
         context = "\n\n---\n\n".join(
             f"[Source {i+1}] (source_kind={c.get('source_kind') or c.get('source_type', 'unknown')}, citation_mode={c.get('citation_mode', 'citable')}) \"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}, chunk {c.get('chunk_index', i)}\n{c['content']}"
-            for i, c in enumerate(chunks)
+            for i, c in enumerate(regular)
         )
+
+        if lexicon:
+            lex_context = "\n\n---\n\n".join(
+                f"[Lexicon] {c['content']}"
+                for c in lexicon
+            )
+            context += "\n\n--- LEXICON CONTEXT (silent_context — do not cite by name) ---\n\n" + lex_context
 
         # Build conversation history for Anthropic Claude
         history = []

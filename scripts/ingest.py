@@ -432,7 +432,9 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
     # Override metadata with parsed .txt headers if available
     if txt_headers:
-        if txt_headers.get("SPEAKER"):
+        if txt_headers.get("AUTHOR"):
+            metadata["author"] = txt_headers["AUTHOR"]
+        elif txt_headers.get("SPEAKER"):
             metadata["author"] = txt_headers["SPEAKER"]
         if txt_headers.get("URL"):
             metadata["_url"] = txt_headers["URL"]
@@ -440,6 +442,8 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
             metadata["_url"] = txt_headers["SOURCE_URL"]
         if txt_headers.get("TITLE"):
             metadata["title"] = txt_headers["TITLE"]
+        if txt_headers.get("SOURCE"):
+            metadata["source_name"] = txt_headers["SOURCE"]
         if txt_headers.get("SOURCE_TYPE"):
             metadata["source_type"] = txt_headers["SOURCE_TYPE"].lower()
 

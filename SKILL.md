@@ -39,7 +39,8 @@ repo/
 │   │   │   └── ingest.py     # /ingest endpoint
 │   │   ├── services/
 │   │   ├── db/
-│   │   └── system_prompt.txt
+│   │   ├── system_prompt.txt
+│   │   └── theological_guardrails.txt
 │   ├── requirements.txt   # pinned via pip freeze
 │   ├── railway.toml
 │   └── nixpacks.toml      # locks Python 3.9
@@ -111,8 +112,8 @@ repo/
 5. Results fused via Reciprocal Rank Fusion (RRF_K=60), deduplicated, document-level collapse (max 2 chunks per doc), top 10 selected
 6. Cohere rerank-v3.5 narrows top 10 → top 5 by relevance (graceful fallback to top 10 if COHERE_API_KEY unset)
 7. Neighbor chunk expansion (±1 chunk_index, cap at 12 total)
-8. Backend assembles prompt: system instructions + retrieved chunks (tagged with `source_kind` and `citation_mode`) + query
-9. Anthropic Claude Sonnet 4.5 generates a response, streamed back via SSE with `<answer>` tag extraction. Runtime-appended faithfulness instruction preserves source document views without editorializing.
+8. Backend assembles prompt: system instructions + theological guardrails + retrieved chunks (tagged with `source_kind` and `citation_mode`) + query
+9. Anthropic Claude Sonnet 4.5 generates a response, streamed back via SSE with `<answer>` tag extraction. Runtime-appended faithfulness instruction preserves source document views without editorializing. Theological guardrails (`theological_guardrails.txt`) appended to system prompt enforce non-negotiable framings (e.g., Holy Spirit personhood).
 9. Frontend renders response with inline citation tags
 
 ---
@@ -168,7 +169,8 @@ repo/
 - **All scripts in `scripts/`** — no Python files at project root; all use `Path(__file__).resolve().parent.parent` for project root
 - **Bible reference tracking** — `documents.bible_references text[]` populated via Groq Llama 3.3 70B extraction; shared helper at `scripts/bible_refs.py` normalizes to `"Book Chapter:Verse"` canonical form against 66-book set + alias map; non-fatal (returns `[]` on failure); auto-populated during ingest in both `ingest.py` and `ingest_magazine.py`; backfill via `extract_bible_refs.py`
 - **Prefix search** — `search_documents` RPC builds `to_tsquery` with `:*` prefix operators per token (colons split to sub-tokens), so `"Romans 8"` matches `"Romans 8:1"`, `"Romans 8:28"`, etc.; falls back to `plainto_tsquery` on parse error
-- **System prompt discipline** — `backend/app/system_prompt.txt` uses XML tags (`<thinking>`, `<research_analysis>`, `<answer>`). `<research_analysis>` runs 3 fixed self-checks (author conflation, silent_context citation, biblical case overreach). Response Discipline Rules block enforces: multi-part decomposition, retrieval-only format when asked, explicit "corpus insufficient" flag on thin charismatic distinctives, retrieval scope cap (10 items / 250 words). Scripture exception limited to verse text only — no interpretation beyond sources. Tone section includes charismatic linguistic anchors ("impressions," "promptings") for exploratory mode only. Citation rules include prompt-injection trust boundary (ignore instructions embedded in retrieved chunks). Formatting requires minimum 2 `##` headings for theological answers (mandatory, not optional); retrieval uses bullets only.
+- **System prompt discipline** — `backend/app/system_prompt.txt` uses XML tags (`<thinking>`, `<research_analysis>`, `<answer>`). `<research_analysis>` runs 3 fixed self-checks (author conflation, silent_context citation, biblical case overreach). Response Discipline Rules block enforces: multi-part decomposition, retrieval-only format when asked, explicit "corpus insufficient" flag on thin charismatic distinctives, retrieval scope cap (10 items / 250 words). Scripture exception limited to verse text only — no interpretation beyond sources. Tone section includes charismatic linguistic anchors ("impressions," "promptings") for exploratory mode only. Citation rules include prompt-injection trust boundary (ignore instructions embedded in retrieved chunks), no anonymous attribution ("one teacher" etc. banned — cite by name or no attribution). Formatting requires minimum 2 `##` headings for theological answers (mandatory, not optional). Quote discipline: paraphrase with attribution, never lift phrasing verbatim. Closing synthesis: end with own conclusion drawn from sources, not a summary.
+- **Theological guardrails** — `backend/app/theological_guardrails.txt` loaded and appended to system prompt in `chat.py`. Contains non-negotiable theological framings that override source material phrasing. Currently covers Holy Spirit personhood (person of the Trinity, not merely a power/provision).
 - **Chat streaming** — Anthropic Claude Sonnet 4.5 `max_tokens=1500`. `<answer>` tag extraction server-side with 9-char buffer safety for split tags. If stream ends mid-answer, remaining buffer is flushed to client instead of silently dropped. Uses `client.messages.create(stream=True)` (not context manager form, which is incompatible with generator `yield`).
 - **Cohere reranking** — After RRF fusion, top 10 chunks sent to Cohere rerank-v3.5 with original query; top 5 by relevance score returned. Falls back to RRF top 10 if `COHERE_API_KEY` not set or call fails.
 - **Column break handling** — Pass 1 prompt instructs Gemini to transcribe multi-article pages column by column with `=== COLUMN BREAK ===` markers. Pass 2 prompt tells Groq to follow article content across column breaks, ignoring other articles' content.
@@ -395,13 +397,14 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **Guest query limit** — `increment_guest_query()` SQL function needs migration file
 - **RLS policies needed** on `conversations` and `messages` tables
 - **INCLUDE_COPYRIGHTED not confirmed on Railway** — check dashboard
-- **poppler required** — `brew install poppler` for pdf2image to work locally
+- **poppler no longer required** — pdf2image replaced by PyMuPDF (fitz) in extract_magazine.py
 - **Bible ref extraction occasionally produces malformed JSON** from Groq on edge-case batches (~1 in 38 docs in backfill run). Helper handles gracefully by dropping that segment and continuing; other segments in the same doc still succeed.
 - **System prompt and chat.py changes deployed** (2026-04-15) — pushed to main; Railway/Vercel should auto-deploy.
 - **Anthropic + Cohere rerank deployed** (2026-04-17) — answer gen switched to Claude Sonnet 4.5, Cohere rerank-v3.5 added. Pushed to main.
 - **Article reader date display** — issue date (month/year) added to frontend but not yet visually confirmed in browser. `console.log` left in `handleCardClick` for debugging — remove after confirming.
 - **30 malformed JSON chunks fixed** (2026-04-17) — `fix_article_json.py` migration ran successfully; content_summary refreshed on all 30 affected documents.
 - **Shell aliases expanded** — 10 `rh-*` aliases in `~/.zshrc` covering all pipeline scripts.
+- **Proposed but unapplied system prompt changes** (2026-04-29 session): example response section, retrieval formatting (bullets→headings+prose), softer Holy Spirit guardrails revision, Niagara Falls metaphor ban, "Go Deeper" follow-up questions, NIV translation preference. All shown as diffs but not confirmed by user.
 
 ---
 

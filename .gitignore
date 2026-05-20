@@ -14,3 +14,5 @@ sources/youtube/no_captions/
 sources/youtube/no_captions/done/
 sources/magazine/
 sources/documents/
+sources/lexicon/*.txt
+sources/lexicon/*.tsv

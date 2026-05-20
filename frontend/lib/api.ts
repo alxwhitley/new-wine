@@ -110,6 +110,9 @@ export async function streamChatMessage(
       if (data.detail === "guest_limit_reached") {
         throw new Error("guest_limit_reached");
       }
+      if (data.detail === "daily_limit_reached") {
+        throw new Error("daily_limit_reached");
+      }
     }
     throw new Error("Chat request failed");
   }

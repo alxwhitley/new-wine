@@ -10,6 +10,7 @@ import { ChatMessage } from "@/components/rhemata/chat-message";
 import { ChatInput } from "@/components/rhemata/chat-input";
 import { SourcePanel } from "@/components/rhemata/source-panel";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
+import { ModeToggle } from "@/components/rhemata/mode-toggle";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import type { Citation } from "@/lib/api";
@@ -24,6 +25,7 @@ export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
+  const [dailyLimitMessage, setDailyLimitMessage] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const {
     messages,
@@ -33,10 +35,16 @@ export default function Home() {
     sendMessage,
     clearMessages,
     loadConversation,
-  } = useChat(accessToken, () => {
-    setLoginReason("You've used your 6 free searches. Create a free account to keep going.");
-    setShowLogin(true);
-  });
+  } = useChat(
+    accessToken,
+    () => {
+      setLoginReason("You've used your 6 free searches. Create a free account to keep going.");
+      setShowLogin(true);
+    },
+    () => {
+      setDailyLimitMessage("You've reached your daily usage limit. Your quota resets at midnight UTC.");
+    },
+  );
   const {
     conversations,
     addOrUpdate,
@@ -139,16 +147,19 @@ export default function Home() {
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Mobile: centered wordmark */}
-          <h1 className="md:hidden flex-1 text-center font-serif text-lg font-semibold text-foreground">
-            Rhemata
-          </h1>
+          {/* Mobile: centered toggle */}
+          <div className="md:hidden flex-1 flex justify-center">
+            <ModeToggle />
+          </div>
 
           {/* Mobile: spacer to balance hamburger */}
           <div className="md:hidden min-w-[44px]" />
 
-          {/* Desktop: auth button */}
-          <div className="hidden md:flex ml-auto">
+          {/* Desktop: centered toggle + auth button */}
+          <div className="hidden md:flex flex-1 justify-center">
+            <ModeToggle />
+          </div>
+          <div className="hidden md:flex">
             <AuthButton
               user={user}
               onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
@@ -183,6 +194,9 @@ export default function Home() {
             {chatError && (
               <p className="text-sm text-red-400 mt-4">{chatError}</p>
             )}
+            {dailyLimitMessage && (
+              <p className="text-sm text-amber-300 mt-4">{dailyLimitMessage}</p>
+            )}
           </div>
         ) : (
           /* Chat thread */
@@ -212,7 +226,12 @@ export default function Home() {
             </div>
 
             {/* Fixed Input Bar */}
-            <ChatInput onSend={handleSend} disabled={chatLoading} />
+            {dailyLimitMessage && (
+              <div className="mx-4 mb-2 rounded-lg bg-amber-900/50 border border-amber-700 px-4 py-3 text-sm text-amber-200">
+                {dailyLimitMessage}
+              </div>
+            )}
+            <ChatInput onSend={handleSend} disabled={chatLoading || !!dailyLimitMessage} />
           </>
         )}
       </main>

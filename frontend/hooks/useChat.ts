@@ -20,6 +20,7 @@ function getAnonId(): string {
 export function useChat(
   accessToken: string | null,
   onGuestLimitReached?: () => void,
+  onDailyLimitReached?: () => void,
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -90,9 +91,13 @@ export function useChat(
         return newConversationId;
       } catch (err) {
         if (err instanceof Error && err.message === "guest_limit_reached") {
-          // Remove the placeholder messages we just added
           setMessages((prev) => prev.slice(0, -2));
           onGuestLimitReached?.();
+          return null;
+        }
+        if (err instanceof Error && err.message === "daily_limit_reached") {
+          setMessages((prev) => prev.slice(0, -2));
+          onDailyLimitReached?.();
           return null;
         }
         setError("Something went wrong. Please try again.");
@@ -101,7 +106,7 @@ export function useChat(
         setLoading(false);
       }
     },
-    [accessToken, conversationId, onGuestLimitReached],
+    [accessToken, conversationId, onGuestLimitReached, onDailyLimitReached],
   );
 
   const clearMessages = useCallback(() => {
