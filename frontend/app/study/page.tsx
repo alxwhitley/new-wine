@@ -234,7 +234,7 @@ function InterlinearBlocks({
               borderColor: isSelected ? "#b49238" : "#3c3c38",
               backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
             }}
-            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#262624"; }}
+            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624"; }}
           >
             <span className="font-serif text-lg text-foreground">{token.greek}</span>
