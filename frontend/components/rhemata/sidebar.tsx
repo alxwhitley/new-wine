@@ -280,10 +280,11 @@ export function Sidebar({
                       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isActive ? "#262624" : "transparent"; }}
                     >
                       <p className="text-sm" style={{ color: "#e6e6e6" }}>
-                        {word.greek_word}
+                        {(word.english_gloss ?? "").split(",")[0].trim() || word.transliteration}
+                        <span style={{ color: "#888780" }}> &middot; {word.strongs_number}</span>
                       </p>
                       <p className="text-xs" style={{ color: "#888780" }}>
-                        {word.transliteration} &middot; {word.strongs_number}
+                        {word.transliteration}
                       </p>
                     </button>
                   );
