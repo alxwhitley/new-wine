@@ -229,11 +229,13 @@ function InterlinearBlocks({
           <button
             key={i}
             onClick={() => onSelect(isSelected ? null : token.strongs)}
-            className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px]"
+            className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px] cursor-pointer"
             style={{
               borderColor: isSelected ? "#b49238" : "#3c3c38",
               backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
             }}
+            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#262624"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624"; }}
           >
             <span className="font-serif text-lg text-foreground">{token.greek}</span>
             <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
