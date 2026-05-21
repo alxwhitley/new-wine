@@ -122,7 +122,7 @@ export function Sidebar({
         <Link
           href={conversations.length > 0 ? "/" : "/"}
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-[#262624]"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer hover:bg-[#262624]"
           style={{
             backgroundColor: isChat ? "#262624" : "transparent",
             color: "#888780",
@@ -134,7 +134,7 @@ export function Sidebar({
         <Link
           href="/search"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-[#262624]"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer hover:bg-[#262624]"
           style={{
             backgroundColor: isDiscover ? "#262624" : "transparent",
             color: "#888780",
@@ -146,7 +146,7 @@ export function Sidebar({
         <Link
           href="/study"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-[#262624]"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer hover:bg-[#262624]"
           style={{
             backgroundColor: isStudy ? "#262624" : "transparent",
             color: "#888780",
@@ -266,16 +266,9 @@ export function Sidebar({
                     <button
                       key={word.id}
                       onClick={() => onSelectSavedWord?.(word.strongs_number)}
-                      className="w-full text-left rounded px-3 py-2 transition-colors"
+                      className="w-full text-left rounded px-3 py-2 transition-colors cursor-pointer hover:bg-[#262624]"
                       style={{
                         backgroundColor: isActive ? "#262624" : "transparent",
-                        borderLeft: isActive ? "2px solid #b49238" : "2px solid transparent",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) e.currentTarget.style.backgroundColor = "#262624";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
                       }}
                     >
                       <p className="text-sm" style={{ color: "#e6e6e6" }}>
