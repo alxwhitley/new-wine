@@ -148,6 +148,14 @@ interface CorpusQuote {
   source: string;
 }
 
+interface CorpusResult {
+  content: string;
+  title: string;
+  author: string;
+  source_kind: string;
+  url: string | null;
+}
+
 interface WordDefinition {
   strongs: string;
   word: string;
@@ -302,7 +310,15 @@ function DefinitionPanel({
   );
 }
 
-function CorpusPanel({ definition, loading }: { definition: WordDefinition | null; loading?: boolean }) {
+function CorpusPanel({
+  definition,
+  results,
+  loading,
+}: {
+  definition: WordDefinition | null;
+  results: CorpusResult[];
+  loading: boolean;
+}) {
   if (!definition && !loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -317,7 +333,12 @@ function CorpusPanel({ definition, loading }: { definition: WordDefinition | nul
         <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
           From the library
         </p>
-        <div className="mt-6 space-y-4">
+        {definition && (
+          <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+            {definition.word} ({definition.transliteration})
+          </p>
+        )}
+        <div className="mt-2 space-y-4">
           {[0, 1, 2].map((i) => (
             <div key={i} className="rounded-lg border border-border bg-card p-4 animate-pulse">
               <div className="h-3 rounded bg-border w-3/4 mb-3" />
@@ -337,10 +358,12 @@ function CorpusPanel({ definition, loading }: { definition: WordDefinition | nul
       <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
         From the library
       </p>
-      <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-        {definition!.word} ({definition!.transliteration})
-      </p>
-      {definition!.corpusQuotes.length === 0 ? (
+      {definition && (
+        <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+          {definition.word} ({definition.transliteration})
+        </p>
+      )}
+      {results.length === 0 ? (
         <div className="py-12 text-center">
           <p className="text-sm" style={{ color: "#c1c1b8" }}>
             No library entries for this word yet — more teaching content coming soon.
@@ -348,12 +371,12 @@ function CorpusPanel({ definition, loading }: { definition: WordDefinition | nul
         </div>
       ) : (
         <div className="space-y-4">
-          {definition!.corpusQuotes.map((quote, i) => (
+          {results.map((r, i) => (
             <div key={i} className="rounded-lg border border-border bg-card p-4">
-              <p className="text-sm text-foreground leading-relaxed">&ldquo;{quote.text}&rdquo;</p>
+              <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
               <div className="mt-3">
-                <p className="text-xs font-medium text-foreground">{quote.author}</p>
-                <p className="text-xs text-muted-foreground">{quote.source}</p>
+                <p className="text-xs font-medium text-foreground">{r.author}</p>
+                <p className="text-xs text-muted-foreground">{r.title}</p>
               </div>
             </div>
           ))}
@@ -542,6 +565,43 @@ export default function StudyPage() {
     ? PLACEHOLDER_DEFINITIONS[selectedStrongs] ?? null
     : null;
 
+  // Corpus results from backend
+  const [corpusResults, setCorpusResults] = useState<CorpusResult[]>([]);
+  const [corpusLoading, setCorpusLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedStrongs) {
+      setCorpusResults([]);
+      return;
+    }
+
+    const token = PLACEHOLDER_TOKENS.find((t) => t.strongs === selectedStrongs);
+    if (!token) {
+      setCorpusResults([]);
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (verseRef.trim()) params.set("verse", verseRef.trim());
+    params.set("transliteration", token.transliteration);
+
+    setCorpusLoading(true);
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/corpus?${params}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("corpus fetch failed");
+        return res.json();
+      })
+      .then((data) => {
+        setCorpusResults(data.results ?? []);
+      })
+      .catch(() => {
+        setCorpusResults([]);
+      })
+      .finally(() => {
+        setCorpusLoading(false);
+      });
+  }, [selectedStrongs, verseRef]);
+
   const handleSelectWord = useCallback(
     (strongs: string | null) => {
       setSelectedStrongs(strongs);
@@ -633,7 +693,7 @@ export default function StudyPage() {
           {/* Right Column: Corpus Quotes */}
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 pt-6 pb-16">
-              <CorpusPanel definition={definition} />
+              <CorpusPanel definition={definition} results={corpusResults} loading={corpusLoading} />
             </div>
           </div>
         </div>
@@ -665,7 +725,7 @@ export default function StudyPage() {
                   />
                 </div>
                 <div className="mt-8">
-                  <CorpusPanel definition={definition} />
+                  <CorpusPanel definition={definition} results={corpusResults} loading={corpusLoading} />
                 </div>
               </>
             )}

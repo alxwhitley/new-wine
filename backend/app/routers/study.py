@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import re
 import logging
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.db.supabase import get_supabase
+from app.services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+CITABLE_SOURCE_KINDS = {"sermon_transcript", "magazine_article"}
 
 # Full 66-book mapping: common names/abbreviations -> verse_id prefix
 BOOK_MAP = {
@@ -163,3 +166,63 @@ async def get_verse(ref: str = Query(..., description="Verse reference, e.g. 'Jo
         "text": row.get("text", ""),
         "translation": row.get("translation", "WEB"),
     }
+
+
+@router.get("/corpus")
+async def get_corpus(
+    verse: Optional[str] = Query(None, description="Verse reference, e.g. 'John 1:1'"),
+    transliteration: Optional[str] = Query(None, description="Transliteration, e.g. 'logos'"),
+):
+    if not verse and not transliteration:
+        raise HTTPException(status_code=400, detail="At least one of verse or transliteration is required")
+
+    # Build semantic query from available params
+    parts = []
+    if verse:
+        parts.append(verse)
+    if transliteration:
+        parts.append(transliteration)
+        parts.append("word")
+    query = " ".join(parts)
+
+    try:
+        embedding = embed_text(query)
+    except Exception:
+        logger.exception("Embedding failed for corpus query: %s", query[:100])
+        raise HTTPException(status_code=500, detail="Embedding service error")
+
+    db = get_supabase()
+
+    try:
+        result = db.rpc("match_chunks", {
+            "query_embedding": embedding,
+            "match_count": 20,
+            "include_copyrighted": True,
+        }).execute()
+    except Exception:
+        logger.exception("match_chunks RPC failed for corpus query")
+        raise HTTPException(status_code=500, detail="Search service error")
+
+    # Filter to citable sermon/magazine chunks, dedupe by document, take top 5
+    seen_docs = set()
+    results = []
+    for chunk in (result.data or []):
+        if chunk.get("citation_mode") != "citable":
+            continue
+        if chunk.get("source_kind") not in CITABLE_SOURCE_KINDS:
+            continue
+        doc_id = chunk.get("document_id")
+        if doc_id in seen_docs:
+            continue
+        seen_docs.add(doc_id)
+        results.append({
+            "content": chunk.get("content", ""),
+            "title": chunk.get("title", ""),
+            "author": chunk.get("author", ""),
+            "source_kind": chunk.get("source_kind", ""),
+            "url": chunk.get("url"),
+        })
+        if len(results) >= 5:
+            break
+
+    return {"results": results}
