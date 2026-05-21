@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Search } from "lucide-react";
-import { ModeToggle } from "@/components/rhemata/mode-toggle";
+import { useState, useCallback, useEffect } from "react";
+import { Search, Menu, Bookmark } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Sidebar } from "@/components/rhemata/sidebar";
+import type { SavedWord } from "@/components/rhemata/sidebar";
+import AuthButton from "@/components/auth/AuthButton";
+import LoginModal from "@/components/auth/LoginModal";
 import { supabase } from "@/lib/supabase";
 
 interface WordToken {
@@ -24,7 +28,6 @@ interface VerseData {
 
 // Full 66-book mapping: lowercase name/abbreviation -> 3-letter SBL code
 const BOOK_MAP: Record<string, string> = {
-  // Old Testament
   genesis: "GEN", gen: "GEN",
   exodus: "EXO", exo: "EXO", exod: "EXO",
   leviticus: "LEV", lev: "LEV",
@@ -64,7 +67,6 @@ const BOOK_MAP: Record<string, string> = {
   haggai: "HAG", hag: "HAG",
   zechariah: "ZEC", zech: "ZEC", zec: "ZEC",
   malachi: "MAL", mal: "MAL",
-  // New Testament
   matthew: "MAT", matt: "MAT", mat: "MAT",
   mark: "MRK", mrk: "MRK",
   luke: "LUK", luk: "LUK",
@@ -94,7 +96,6 @@ const BOOK_MAP: Record<string, string> = {
   revelation: "REV", rev: "REV",
 };
 
-// Reverse mapping: abbreviation -> canonical book name
 const ABBREV_TO_NAME: Record<string, string> = {
   GEN: "Genesis", EXO: "Exodus", LEV: "Leviticus", NUM: "Numbers",
   DEU: "Deuteronomy", JOS: "Joshua", JDG: "Judges", RUT: "Ruth",
@@ -119,35 +120,23 @@ function parseRef(ref: string): { abbrev: string; chapter: number; verse: number
   const trimmed = ref.trim();
   const m = trimmed.match(/^(\d?\s*[A-Za-z ]+?)\s+(\d+):(\d+)$/);
   if (!m) return null;
-
   const bookRaw = m[1].trim().toLowerCase();
   const chapter = parseInt(m[2], 10);
   const verse = parseInt(m[3], 10);
-
-  // Normalize numbered books: "1cor" -> "1 cor"
   const bookNormalized = bookRaw.replace(/^(\d)\s*/, "$1 ").trim();
-
   const abbrev = BOOK_MAP[bookNormalized] ?? BOOK_MAP[bookNormalized.replace(/s$/, "")];
   if (!abbrev) return null;
-
   return { abbrev, chapter, verse };
 }
 
-// Hardcoded fallback data for when Supabase is unavailable
 const FALLBACK_VERSES: Record<string, VerseData> = {
   "JHN.1.1": {
-    verse_id: "JHN.1.1",
-    book: "John",
-    chapter: 1,
-    verse: 1,
+    verse_id: "JHN.1.1", book: "John", chapter: 1, verse: 1,
     text: "In the beginning was the Word, and the Word was with God, and the Word was God.",
     translation: "WEB",
   },
   "JHN.3.16": {
-    verse_id: "JHN.3.16",
-    book: "John",
-    chapter: 3,
-    verse: 16,
+    verse_id: "JHN.3.16", book: "John", chapter: 3, verse: 16,
     text: "For God so loved the world, that he gave his one and only Son, that whoever believes in him should not perish, but have eternal life.",
     translation: "WEB",
   },
@@ -168,7 +157,6 @@ interface WordDefinition {
   corpusQuotes: CorpusQuote[];
 }
 
-// Placeholder: John 1:1 interlinear
 const PLACEHOLDER_TOKENS: WordToken[] = [
   { greek: "\u1F18\u03BD", transliteration: "En", english: "In", strongs: "G1722", morph: "PREP" },
   { greek: "\u1F00\u03C1\u03C7\u1FC7", transliteration: "arch\u0113", english: "the beginning", strongs: "G0746", morph: "N-DSF" },
@@ -224,105 +212,66 @@ const PLACEHOLDER_DEFINITIONS: Record<string, WordDefinition> = {
   },
 };
 
-interface HistoryEntry {
-  strongs: string;
-  greek: string;
-  transliteration: string;
-}
-
-function WordHistorySidebar({
-  history,
-  selectedStrongs,
-  onSelect,
-}: {
-  history: HistoryEntry[];
-  selectedStrongs: string | null;
-  onSelect: (strongs: string) => void;
-}) {
-  return (
-    <aside
-      className="hidden md:flex w-64 shrink-0 flex-col h-full"
-      style={{ background: "#1b1b19", borderRight: "0.5px solid #3c3c38" }}
-    >
-      <div className="px-4 pt-6 pb-4">
-        <p
-          className="text-xs font-medium uppercase tracking-wide"
-          style={{ color: "#888780" }}
-        >
-          Word History
-        </p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-2">
-        {history.length === 0 ? (
-          <p className="px-2 text-sm italic text-muted-foreground">
-            Words you select will appear here
-          </p>
-        ) : (
-          <div className="space-y-0.5">
-            {history.map((entry) => {
-              const isActive = selectedStrongs === entry.strongs;
-              return (
-                <button
-                  key={entry.strongs}
-                  onClick={() => onSelect(entry.strongs)}
-                  className="w-full text-left rounded px-3 py-2 transition-colors"
-                  style={{
-                    backgroundColor: isActive ? "#262624" : "transparent",
-                    borderLeft: isActive ? "2px solid #b49238" : "2px solid transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = "#262624";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
-                  }}
-                >
-                  <p className="text-sm" style={{ color: "#e6e6e6" }}>
-                    {entry.greek}
-                  </p>
-                  <p className="text-xs" style={{ color: "#888780" }}>
-                    {entry.transliteration} &middot; {entry.strongs}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </aside>
-  );
-}
-
 function InterlinearBlocks({
   tokens,
   selectedStrongs,
   onSelect,
+  savedStrongsSet,
+  onToggleSave,
+  isLoggedIn,
 }: {
   tokens: WordToken[];
   selectedStrongs: string | null;
   onSelect: (strongs: string | null) => void;
+  savedStrongsSet: Set<string>;
+  onToggleSave: (token: WordToken) => void;
+  isLoggedIn: boolean;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {tokens.map((token, i) => {
         const isSelected = selectedStrongs === token.strongs;
+        const isSaved = savedStrongsSet.has(token.strongs);
         return (
-          <button
-            key={i}
-            onClick={() => onSelect(isSelected ? null : token.strongs)}
-            className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px]"
-            style={{
-              borderColor: isSelected ? "#b49238" : "#3c3c38",
-              backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
-            }}
-          >
-            <span className="font-serif text-lg text-foreground">{token.greek}</span>
-            <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
-              {token.english}
-            </span>
-            <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
-          </button>
+          <div key={i} className="relative group">
+            <button
+              onClick={() => onSelect(isSelected ? null : token.strongs)}
+              className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px]"
+              style={{
+                borderColor: isSelected ? "#b49238" : "#3c3c38",
+                backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
+              }}
+            >
+              <span className="font-serif text-lg text-foreground">{token.greek}</span>
+              <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
+                {token.english}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+            </button>
+            {/* Bookmark icon — visible on hover, or always if saved */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSave(token);
+              }}
+              title={isLoggedIn ? (isSaved ? "Remove from saved" : "Save word") : "Sign in to save words"}
+              className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full flex items-center justify-center transition-opacity"
+              style={{
+                backgroundColor: "#1b1b19",
+                border: "1px solid #3c3c38",
+                opacity: isSaved ? 1 : undefined,
+              }}
+              // Show on hover via group-hover, always show if saved
+            >
+              <Bookmark
+                className={`h-3 w-3 transition-opacity ${isSaved ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                style={{
+                  color: isSaved ? "#b49238" : "#888780",
+                  fill: isSaved ? "#b49238" : "none",
+                }}
+              />
+            </button>
+          </div>
         );
       })}
     </div>
@@ -343,12 +292,10 @@ function DefinitionPanel({ definition }: { definition: WordDefinition | null }) 
       <p className="text-sm text-muted-foreground mt-1">
         {definition.transliteration} &middot; {definition.strongs}
       </p>
-
       <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
         Definition
       </p>
       <p className="text-sm text-foreground leading-relaxed">{definition.gloss}</p>
-
       <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
         Usage
       </p>
@@ -373,7 +320,6 @@ function CorpusPanel({ definition }: { definition: WordDefinition | null }) {
       <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
         {definition.word} ({definition.transliteration})
       </p>
-
       <div className="space-y-4">
         {definition.corpusQuotes.map((quote, i) => (
           <div key={i} className="rounded-lg border border-border bg-card p-4">
@@ -443,12 +389,73 @@ function VerseDisplay({ verse, error }: { verse: VerseData | null; error: string
 }
 
 export default function StudyPage() {
+  const { user, signIn, signUp, signOut } = useAuth();
+  const [showLogin, setShowLogin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [verseRef, setVerseRef] = useState("John 1:1");
   const [selectedStrongs, setSelectedStrongs] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [verseData, setVerseData] = useState<VerseData | null>(null);
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseError, setVerseError] = useState<string | null>(null);
+
+  // Saved words
+  const [savedWords, setSavedWords] = useState<SavedWord[]>([]);
+  const savedStrongsSet = new Set(savedWords.map((w) => w.strongs_number));
+
+  // Fetch saved words on login
+  useEffect(() => {
+    if (!user) {
+      setSavedWords([]);
+      return;
+    }
+    supabase
+      .from("saved_words")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setSavedWords(data);
+      });
+  }, [user]);
+
+  const toggleSaveWord = useCallback(
+    async (token: WordToken) => {
+      if (!user) {
+        setShowLogin(true);
+        return;
+      }
+
+      const isSaved = savedStrongsSet.has(token.strongs);
+
+      if (isSaved) {
+        // Unsave
+        await supabase
+          .from("saved_words")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("strongs_number", token.strongs);
+        setSavedWords((prev) => prev.filter((w) => w.strongs_number !== token.strongs));
+      } else {
+        // Save
+        const { data } = await supabase
+          .from("saved_words")
+          .insert({
+            user_id: user.id,
+            strongs_number: token.strongs,
+            greek_word: token.greek,
+            transliteration: token.transliteration,
+            english_gloss: token.english,
+          })
+          .select()
+          .single();
+        if (data) {
+          setSavedWords((prev) => [data, ...prev]);
+        }
+      }
+    },
+    [user, savedStrongsSet],
+  );
 
   const lookupVerse = useCallback(async () => {
     const ref = verseRef.trim();
@@ -509,26 +516,12 @@ export default function StudyPage() {
 
   const handleSelectWord = useCallback(
     (strongs: string | null) => {
-      if (strongs === null) {
-        setSelectedStrongs(null);
-        return;
-      }
       setSelectedStrongs(strongs);
-      // Find the token info for this strongs number
-      const token = PLACEHOLDER_TOKENS.find((t) => t.strongs === strongs);
-      if (!token) return;
-      setHistory((prev) => {
-        const filtered = prev.filter((e) => e.strongs !== strongs);
-        return [
-          { strongs: token.strongs, greek: token.greek, transliteration: token.transliteration },
-          ...filtered,
-        ];
-      });
     },
     [],
   );
 
-  const handleHistorySelect = useCallback(
+  const handleSidebarSavedWordSelect = useCallback(
     (strongs: string) => {
       setSelectedStrongs(strongs);
     },
@@ -536,31 +529,83 @@ export default function StudyPage() {
   );
 
   return (
-    <div className="flex h-dvh-safe flex-col bg-background">
-      {/* Top Bar */}
-      <div className="flex h-14 shrink-0 items-center border-b border-border px-4 md:px-6">
-        <div className="flex-1" />
-        <ModeToggle />
-        <div className="flex-1" />
-      </div>
+    <div className="flex h-dvh-safe overflow-hidden bg-background">
+      <Sidebar
+        isLoggedIn={!!user}
+        user={user}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onNewChat={() => { window.location.href = "/"; }}
+        onSignInClick={() => setShowLogin(true)}
+        onSignOut={signOut}
+        savedWords={savedWords}
+        selectedStrongs={selectedStrongs}
+        onSelectSavedWord={handleSidebarSavedWordSelect}
+      />
 
-      {/* Desktop: three-column layout */}
-      <div className="hidden md:flex flex-1 min-h-0">
-        {/* Word History Sidebar */}
-        <WordHistorySidebar
-          history={history}
-          selectedStrongs={selectedStrongs}
-          onSelect={handleHistorySelect}
-        />
+      <main className="md:ml-64 flex flex-1 flex-col min-w-0 min-h-0">
+        {/* Top Bar */}
+        <div className="flex h-14 shrink-0 items-center border-b border-border px-4 md:px-6 z-30">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
-        {/* Middle Column: Search + Interlinear + Definition (380px fixed) */}
-        <div
-          className="w-[380px] shrink-0 flex flex-col overflow-y-auto"
-          style={{ borderRight: "0.5px solid #3c3c38" }}
-        >
+          <div className="flex-1" />
+
+          <div className="hidden md:flex">
+            <AuthButton
+              user={user}
+              onSignInClick={() => setShowLogin(true)}
+              onSignOut={signOut}
+            />
+          </div>
+        </div>
+
+        {/* Desktop: two-column layout */}
+        <div className="hidden md:flex flex-1 min-h-0">
+          {/* Left Column: Search + Interlinear + Definition */}
+          <div
+            className="w-[380px] shrink-0 flex flex-col overflow-y-auto"
+            style={{ borderRight: "0.5px solid #3c3c38" }}
+          >
+            <div className="px-4 pt-6 pb-16">
+              <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
+              <VerseDisplay verse={verseData} error={verseError} />
+
+              <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
+                {verseRef}
+              </p>
+
+              <InterlinearBlocks
+                tokens={PLACEHOLDER_TOKENS}
+                selectedStrongs={selectedStrongs}
+                onSelect={handleSelectWord}
+                savedStrongsSet={savedStrongsSet}
+                onToggleSave={toggleSaveWord}
+                isLoggedIn={!!user}
+              />
+
+              <div className="mt-8">
+                <DefinitionPanel definition={definition} />
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Corpus Quotes */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-6 pt-6 pb-16">
+              <CorpusPanel definition={definition} />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile: single-column stacked layout */}
+        <div className="flex flex-1 flex-col overflow-y-auto md:hidden">
           <div className="px-4 pt-6 pb-16">
             <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
-
             <VerseDisplay verse={verseData} error={verseError} />
 
             <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
@@ -571,58 +616,38 @@ export default function StudyPage() {
               tokens={PLACEHOLDER_TOKENS}
               selectedStrongs={selectedStrongs}
               onSelect={handleSelectWord}
+              savedStrongsSet={savedStrongsSet}
+              onToggleSave={toggleSaveWord}
+              isLoggedIn={!!user}
             />
 
-            <div className="mt-8">
-              <DefinitionPanel definition={definition} />
-            </div>
+            {definition && (
+              <>
+                <div className="mt-8">
+                  <DefinitionPanel definition={definition} />
+                </div>
+                <div className="mt-8">
+                  <CorpusPanel definition={definition} />
+                </div>
+              </>
+            )}
+
+            {!definition && (
+              <div className="mt-8 border-t border-border pt-6 text-center">
+                <p className="text-muted-foreground text-sm">Select a word to view its definition</p>
+              </div>
+            )}
           </div>
         </div>
+      </main>
 
-        {/* Right Column: Corpus Quotes (flex: 1) */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-6 pt-6 pb-16">
-            <CorpusPanel definition={definition} />
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile: single-column stacked layout */}
-      <div className="flex flex-1 flex-col overflow-y-auto md:hidden">
-        <div className="px-4 pt-6 pb-16">
-          <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
-
-          <VerseDisplay verse={verseData} error={verseError} />
-
-          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
-            {verseRef}
-          </p>
-
-          <InterlinearBlocks
-            tokens={PLACEHOLDER_TOKENS}
-            selectedStrongs={selectedStrongs}
-            onSelect={handleSelectWord}
-          />
-
-          {definition && (
-            <>
-              <div className="mt-8">
-                <DefinitionPanel definition={definition} />
-              </div>
-
-              <div className="mt-8">
-                <CorpusPanel definition={definition} />
-              </div>
-            </>
-          )}
-
-          {!definition && (
-            <div className="mt-8 border-t border-border pt-6 text-center">
-              <p className="text-muted-foreground text-sm">Select a word to view its definition</p>
-            </div>
-          )}
-        </div>
-      </div>
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSignIn={signIn}
+          onSignUp={signUp}
+        />
+      )}
     </div>
   );
 }

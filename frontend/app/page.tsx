@@ -10,7 +10,6 @@ import { ChatMessage } from "@/components/rhemata/chat-message";
 import { ChatInput } from "@/components/rhemata/chat-input";
 import { SourcePanel } from "@/components/rhemata/source-panel";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
-import { ModeToggle } from "@/components/rhemata/mode-toggle";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import type { Citation } from "@/lib/api";
@@ -147,18 +146,8 @@ export default function Home() {
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Mobile: centered toggle */}
-          <div className="md:hidden flex-1 flex justify-center">
-            <ModeToggle />
-          </div>
+          <div className="flex-1" />
 
-          {/* Mobile: spacer to balance hamburger */}
-          <div className="md:hidden min-w-[44px]" />
-
-          {/* Desktop: centered toggle + auth button */}
-          <div className="hidden md:flex flex-1 justify-center">
-            <ModeToggle />
-          </div>
           <div className="hidden md:flex">
             <AuthButton
               user={user}

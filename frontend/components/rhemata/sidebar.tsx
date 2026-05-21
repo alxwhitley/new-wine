@@ -1,25 +1,39 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LogIn, MoreHorizontal, X, Search } from "lucide-react";
+import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
+export interface SavedWord {
+  id: string;
+  strongs_number: string;
+  greek_word: string;
+  transliteration: string;
+  english_gloss: string | null;
+}
+
 interface SidebarProps {
-  conversations: Conversation[];
-  activeConversationId: string | null;
   isLoggedIn: boolean;
   user: User | null;
   isOpen: boolean;
   onClose: () => void;
   onNewChat: () => void;
-  onSelectConversation: (id: string) => void;
-  onDeleteConversation: (id: string) => void;
   onSignInClick: () => void;
   onSignOut: () => void;
+  // Chat
+  conversations?: Conversation[];
+  activeConversationId?: string | null;
+  onSelectConversation?: (id: string) => void;
+  onDeleteConversation?: (id: string) => void;
+  // Study
+  savedWords?: SavedWord[];
+  selectedStrongs?: string | null;
+  onSelectSavedWord?: (strongs: string) => void;
 }
 
 function relativeTime(iso: string): string {
@@ -35,21 +49,28 @@ function relativeTime(iso: string): string {
 }
 
 export function Sidebar({
-  conversations,
-  activeConversationId,
   isLoggedIn,
   user,
   isOpen,
   onClose,
   onNewChat,
-  onSelectConversation,
-  onDeleteConversation,
   onSignInClick,
   onSignOut,
+  conversations = [],
+  activeConversationId,
+  onSelectConversation,
+  onDeleteConversation,
+  savedWords = [],
+  selectedStrongs,
+  onSelectSavedWord,
 }: SidebarProps) {
+  const pathname = usePathname();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
-  // Lock body scroll when drawer is open on mobile
+  const isChat = pathname === "/" || pathname.startsWith("/chat");
+  const isDiscover = pathname === "/search";
+  const isStudy = pathname.startsWith("/study");
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -60,7 +81,7 @@ export function Sidebar({
   }, [isOpen]);
 
   function handleSelectConversation(id: string) {
-    onSelectConversation(id);
+    onSelectConversation?.(id);
     onClose();
   }
 
@@ -84,119 +105,194 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* New Chat */}
-      <div className="mb-1">
-        <button
-          onClick={handleNewChat}
-          className="flex w-full min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </button>
-      </div>
+      {/* New Chat CTA */}
+      <button
+        onClick={handleNewChat}
+        className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors mb-4"
+        style={{ backgroundColor: "#b49238", color: "#1b1b19" }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#c9a544"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#b49238"; }}
+      >
+        <Plus className="h-4 w-4" />
+        New Chat
+      </button>
 
-      {/* Search Link */}
-      <div className="mb-4">
+      {/* Nav Items */}
+      <nav className="space-y-0.5 mb-4">
+        <Link
+          href={conversations.length > 0 ? "/" : "/"}
+          onClick={onClose}
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors"
+          style={{
+            backgroundColor: isChat ? "#262624" : "transparent",
+            borderLeft: isChat ? "2px solid #b49238" : "2px solid transparent",
+            color: isChat ? "#e6e6e6" : "#888780",
+          }}
+        >
+          <MessageSquare className="h-4 w-4" />
+          Chat
+        </Link>
         <Link
           href="/search"
           onClick={onClose}
-          className="flex w-full min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors"
+          style={{
+            backgroundColor: isDiscover ? "#262624" : "transparent",
+            borderLeft: isDiscover ? "2px solid #b49238" : "2px solid transparent",
+            color: isDiscover ? "#e6e6e6" : "#888780",
+          }}
         >
-          <Search className="h-4 w-4" />
-          Search
+          <Compass className="h-4 w-4" />
+          Discover
         </Link>
-      </div>
+        <Link
+          href="/study"
+          onClick={onClose}
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors"
+          style={{
+            backgroundColor: isStudy ? "#262624" : "transparent",
+            borderLeft: isStudy ? "2px solid #b49238" : "2px solid transparent",
+            color: isStudy ? "#e6e6e6" : "#888780",
+          }}
+        >
+          <BookOpen className="h-4 w-4" />
+          Study
+        </Link>
+      </nav>
 
-      {/* Conversation History */}
+      {/* Conditional Content */}
       <div className="flex-1 overflow-y-auto -mx-2 px-2">
-        {isLoggedIn ? (
+        {isChat && (
+          isLoggedIn ? (
+            <>
+              <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+                Recents
+              </p>
+              <div className="space-y-2">
+                {conversations.map((conversation) => (
+                  <div key={conversation.id} className="group relative">
+                    {confirmingId === conversation.id ? (
+                      <div className="flex w-full min-h-[44px] items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2">
+                        <button
+                          onClick={() => {
+                            onDeleteConversation?.(conversation.id);
+                            setConfirmingId(null);
+                          }}
+                          className="flex-1 rounded px-3 py-1 text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors min-h-[32px]"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={() => setConfirmingId(null)}
+                          className="flex-1 rounded px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[32px]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleSelectConversation(conversation.id)}
+                          className={cn(
+                            "w-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-colors",
+                            "hover:bg-sidebar-accent",
+                            activeConversationId === conversation.id
+                              ? "bg-sidebar-accent"
+                              : "bg-transparent"
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className="text-sm font-medium text-foreground"
+                              style={{
+                                WebkitMaskImage: "linear-gradient(to right, black 70%, transparent 100%)",
+                                maskImage: "linear-gradient(to right, black 70%, transparent 100%)",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {conversation.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {relativeTime(conversation.updated_at)}
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmingId(conversation.id);
+                          }}
+                          className="absolute right-2 top-2 hidden min-h-[44px] min-w-[44px] items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-foreground group-hover:flex"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="px-3 py-6 text-center">
+              <p className="text-xs text-muted-foreground mb-4">
+                Sign in to save conversations
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSignInClick}
+                className="gap-2 min-h-[44px]"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                Sign in
+              </Button>
+            </div>
+          )
+        )}
+
+        {isStudy && (
           <>
             <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-              Recents
+              Saved Words
             </p>
-            <div className="space-y-2">
-            {conversations.map((conversation) => (
-              <div key={conversation.id} className="group relative">
-                {confirmingId === conversation.id ? (
-                  <div className="flex w-full min-h-[44px] items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2">
+            {savedWords.length === 0 ? (
+              <p className="px-3 text-sm italic text-muted-foreground">
+                No saved words yet
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                {savedWords.map((word) => {
+                  const isActive = selectedStrongs === word.strongs_number;
+                  return (
                     <button
-                      onClick={() => {
-                        console.log("[DELETE TRACE] 3. Confirm click firing for:", conversation.id);
-                        onDeleteConversation(conversation.id);
-                        setConfirmingId(null);
+                      key={word.id}
+                      onClick={() => onSelectSavedWord?.(word.strongs_number)}
+                      className="w-full text-left rounded px-3 py-2 transition-colors"
+                      style={{
+                        backgroundColor: isActive ? "#262624" : "transparent",
+                        borderLeft: isActive ? "2px solid #b49238" : "2px solid transparent",
                       }}
-                      className="flex-1 rounded px-3 py-1 text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors min-h-[32px]"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => setConfirmingId(null)}
-                      className="flex-1 rounded px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[32px]"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => handleSelectConversation(conversation.id)}
-                      className={cn(
-                        "w-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-colors",
-                        "hover:bg-sidebar-accent",
-                        activeConversationId === conversation.id
-                          ? "bg-sidebar-accent"
-                          : "bg-transparent"
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className="text-sm font-medium text-foreground"
-                          style={{
-                            WebkitMaskImage: "linear-gradient(to right, black 70%, transparent 100%)",
-                            maskImage: "linear-gradient(to right, black 70%, transparent 100%)",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {conversation.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {relativeTime(conversation.updated_at)}
-                        </p>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log("[DELETE TRACE] 1. Three-dot clicked, showing confirm for:", conversation.id);
-                        setConfirmingId(conversation.id);
+                      onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = "#262624";
                       }}
-                      className="absolute right-2 top-2 hidden min-h-[44px] min-w-[44px] items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-foreground group-hover:flex"
+                      onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+                      }}
                     >
-                      <MoreHorizontal className="h-4 w-4" />
+                      <p className="text-sm" style={{ color: "#e6e6e6" }}>
+                        {word.greek_word}
+                      </p>
+                      <p className="text-xs" style={{ color: "#888780" }}>
+                        {word.transliteration} &middot; {word.strongs_number}
+                      </p>
                     </button>
-                  </>
-                )}
+                  );
+                })}
               </div>
-            ))}
-            </div>
+            )}
           </>
-        ) : (
-          <div className="px-3 py-6 text-center">
-            <p className="text-xs text-muted-foreground mb-4">
-              Sign in to save conversations
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSignInClick}
-              className="gap-2 min-h-[44px]"
-            >
-              <LogIn className="h-3.5 w-3.5" />
-              Sign in
-            </Button>
-          </div>
         )}
       </div>
 
