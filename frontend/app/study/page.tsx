@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Search } from "lucide-react";
 import { ModeToggle } from "@/components/rhemata/mode-toggle";
+import { supabase } from "@/lib/supabase";
 
 interface WordToken {
   greek: string;
@@ -21,9 +22,120 @@ interface VerseData {
   translation: string;
 }
 
-// Hardcoded fallback data for when API is unavailable
+// Full 66-book mapping: lowercase name/abbreviation -> 3-letter SBL code
+const BOOK_MAP: Record<string, string> = {
+  // Old Testament
+  genesis: "GEN", gen: "GEN",
+  exodus: "EXO", exo: "EXO", exod: "EXO",
+  leviticus: "LEV", lev: "LEV",
+  numbers: "NUM", num: "NUM",
+  deuteronomy: "DEU", deut: "DEU", deu: "DEU",
+  joshua: "JOS", josh: "JOS", jos: "JOS",
+  judges: "JDG", judg: "JDG", jdg: "JDG",
+  ruth: "RUT", rut: "RUT",
+  "1 samuel": "1SA", "1samuel": "1SA", "1 sam": "1SA", "1sam": "1SA", "1sa": "1SA",
+  "2 samuel": "2SA", "2samuel": "2SA", "2 sam": "2SA", "2sam": "2SA", "2sa": "2SA",
+  "1 kings": "1KI", "1kings": "1KI", "1 kgs": "1KI", "1kgs": "1KI", "1ki": "1KI",
+  "2 kings": "2KI", "2kings": "2KI", "2 kgs": "2KI", "2kgs": "2KI", "2ki": "2KI",
+  "1 chronicles": "1CH", "1chronicles": "1CH", "1 chr": "1CH", "1chr": "1CH", "1ch": "1CH",
+  "2 chronicles": "2CH", "2chronicles": "2CH", "2 chr": "2CH", "2chr": "2CH", "2ch": "2CH",
+  ezra: "EZR", ezr: "EZR",
+  nehemiah: "NEH", neh: "NEH",
+  esther: "EST", esth: "EST", est: "EST",
+  job: "JOB",
+  psalms: "PSA", psalm: "PSA", psa: "PSA", ps: "PSA",
+  proverbs: "PRO", prov: "PRO", pro: "PRO",
+  ecclesiastes: "ECC", eccl: "ECC", ecc: "ECC",
+  "song of solomon": "SNG", "song of songs": "SNG", song: "SNG", sng: "SNG", sos: "SNG",
+  isaiah: "ISA", isa: "ISA",
+  jeremiah: "JER", jer: "JER",
+  lamentations: "LAM", lam: "LAM",
+  ezekiel: "EZK", ezek: "EZK", ezk: "EZK",
+  daniel: "DAN", dan: "DAN",
+  hosea: "HOS", hos: "HOS",
+  joel: "JOL", jol: "JOL",
+  amos: "AMO", amo: "AMO",
+  obadiah: "OBA", obad: "OBA", oba: "OBA",
+  jonah: "JON", jon: "JON",
+  micah: "MIC", mic: "MIC",
+  nahum: "NAM", nah: "NAM", nam: "NAM",
+  habakkuk: "HAB", hab: "HAB",
+  zephaniah: "ZEP", zeph: "ZEP", zep: "ZEP",
+  haggai: "HAG", hag: "HAG",
+  zechariah: "ZEC", zech: "ZEC", zec: "ZEC",
+  malachi: "MAL", mal: "MAL",
+  // New Testament
+  matthew: "MAT", matt: "MAT", mat: "MAT",
+  mark: "MRK", mrk: "MRK",
+  luke: "LUK", luk: "LUK",
+  john: "JHN", jhn: "JHN",
+  acts: "ACT", act: "ACT",
+  romans: "ROM", rom: "ROM",
+  "1 corinthians": "1CO", "1corinthians": "1CO", "1 cor": "1CO", "1cor": "1CO", "1co": "1CO",
+  "2 corinthians": "2CO", "2corinthians": "2CO", "2 cor": "2CO", "2cor": "2CO", "2co": "2CO",
+  galatians: "GAL", gal: "GAL",
+  ephesians: "EPH", eph: "EPH",
+  philippians: "PHP", phil: "PHP", php: "PHP",
+  colossians: "COL", col: "COL",
+  "1 thessalonians": "1TH", "1thessalonians": "1TH", "1 thess": "1TH", "1thess": "1TH", "1th": "1TH",
+  "2 thessalonians": "2TH", "2thessalonians": "2TH", "2 thess": "2TH", "2thess": "2TH", "2th": "2TH",
+  "1 timothy": "1TI", "1timothy": "1TI", "1 tim": "1TI", "1tim": "1TI", "1ti": "1TI",
+  "2 timothy": "2TI", "2timothy": "2TI", "2 tim": "2TI", "2tim": "2TI", "2ti": "2TI",
+  titus: "TIT", tit: "TIT",
+  philemon: "PHM", phlm: "PHM", phm: "PHM",
+  hebrews: "HEB", heb: "HEB",
+  james: "JAS", jas: "JAS",
+  "1 peter": "1PE", "1peter": "1PE", "1 pet": "1PE", "1pet": "1PE", "1pe": "1PE",
+  "2 peter": "2PE", "2peter": "2PE", "2 pet": "2PE", "2pet": "2PE", "2pe": "2PE",
+  "1 john": "1JN", "1john": "1JN", "1 jn": "1JN", "1jn": "1JN",
+  "2 john": "2JN", "2john": "2JN", "2 jn": "2JN", "2jn": "2JN",
+  "3 john": "3JN", "3john": "3JN", "3 jn": "3JN", "3jn": "3JN",
+  jude: "JUD", jud: "JUD",
+  revelation: "REV", rev: "REV",
+};
+
+// Reverse mapping: abbreviation -> canonical book name
+const ABBREV_TO_NAME: Record<string, string> = {
+  GEN: "Genesis", EXO: "Exodus", LEV: "Leviticus", NUM: "Numbers",
+  DEU: "Deuteronomy", JOS: "Joshua", JDG: "Judges", RUT: "Ruth",
+  "1SA": "1 Samuel", "2SA": "2 Samuel", "1KI": "1 Kings", "2KI": "2 Kings",
+  "1CH": "1 Chronicles", "2CH": "2 Chronicles", EZR: "Ezra", NEH: "Nehemiah",
+  EST: "Esther", JOB: "Job", PSA: "Psalms", PRO: "Proverbs",
+  ECC: "Ecclesiastes", SNG: "Song of Solomon", ISA: "Isaiah", JER: "Jeremiah",
+  LAM: "Lamentations", EZK: "Ezekiel", DAN: "Daniel", HOS: "Hosea",
+  JOL: "Joel", AMO: "Amos", OBA: "Obadiah", JON: "Jonah",
+  MIC: "Micah", NAM: "Nahum", HAB: "Habakkuk", ZEP: "Zephaniah",
+  HAG: "Haggai", ZEC: "Zechariah", MAL: "Malachi",
+  MAT: "Matthew", MRK: "Mark", LUK: "Luke", JHN: "John",
+  ACT: "Acts", ROM: "Romans", "1CO": "1 Corinthians", "2CO": "2 Corinthians",
+  GAL: "Galatians", EPH: "Ephesians", PHP: "Philippians", COL: "Colossians",
+  "1TH": "1 Thessalonians", "2TH": "2 Thessalonians", "1TI": "1 Timothy",
+  "2TI": "2 Timothy", TIT: "Titus", PHM: "Philemon", HEB: "Hebrews",
+  JAS: "James", "1PE": "1 Peter", "2PE": "2 Peter", "1JN": "1 John",
+  "2JN": "2 John", "3JN": "3 John", JUD: "Jude", REV: "Revelation",
+};
+
+function parseRef(ref: string): { abbrev: string; chapter: number; verse: number } | null {
+  const trimmed = ref.trim();
+  const m = trimmed.match(/^(\d?\s*[A-Za-z ]+?)\s+(\d+):(\d+)$/);
+  if (!m) return null;
+
+  const bookRaw = m[1].trim().toLowerCase();
+  const chapter = parseInt(m[2], 10);
+  const verse = parseInt(m[3], 10);
+
+  // Normalize numbered books: "1cor" -> "1 cor"
+  const bookNormalized = bookRaw.replace(/^(\d)\s*/, "$1 ").trim();
+
+  const abbrev = BOOK_MAP[bookNormalized] ?? BOOK_MAP[bookNormalized.replace(/s$/, "")];
+  if (!abbrev) return null;
+
+  return { abbrev, chapter, verse };
+}
+
+// Hardcoded fallback data for when Supabase is unavailable
 const FALLBACK_VERSES: Record<string, VerseData> = {
-  "john 1:1": {
+  "JHN.1.1": {
     verse_id: "JHN.1.1",
     book: "John",
     chapter: 1,
@@ -31,7 +143,7 @@ const FALLBACK_VERSES: Record<string, VerseData> = {
     text: "In the beginning was the Word, and the Word was with God, and the Word was God.",
     translation: "WEB",
   },
-  "john 3:16": {
+  "JHN.3.16": {
     verse_id: "JHN.3.16",
     book: "John",
     chapter: 3,
@@ -317,7 +429,7 @@ function VerseSearch({
 
 function VerseDisplay({ verse, error }: { verse: VerseData | null; error: string | null }) {
   if (error) {
-    return <p className="text-sm text-red-500 mt-4">{error}</p>;
+    return <p className="text-sm mt-4" style={{ color: "#993c1d" }}>{error}</p>;
   }
   if (!verse) return null;
   return (
@@ -341,16 +453,28 @@ export default function StudyPage() {
   const lookupVerse = useCallback(async () => {
     const ref = verseRef.trim();
     if (!ref) return;
+
+    const parsed = parseRef(ref);
+    if (!parsed) {
+      setVerseError("Verse not found");
+      setVerseData(null);
+      return;
+    }
+
+    const verseId = `${parsed.abbrev}.${parsed.chapter}.${parsed.verse}`;
     setVerseLoading(true);
     setVerseError(null);
     setVerseData(null);
+
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/study/verse?ref=${encodeURIComponent(ref)}`
-      );
-      if (res.status === 404) {
-        // Try fallback
-        const fallback = FALLBACK_VERSES[ref.toLowerCase()];
+      const { data, error } = await supabase
+        .from("verses")
+        .select("*")
+        .eq("verse_id", verseId)
+        .single();
+
+      if (error || !data) {
+        const fallback = FALLBACK_VERSES[verseId];
         if (fallback) {
           setVerseData(fallback);
         } else {
@@ -358,12 +482,17 @@ export default function StudyPage() {
         }
         return;
       }
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data: VerseData = await res.json();
-      setVerseData(data);
+
+      setVerseData({
+        verse_id: data.verse_id,
+        book: ABBREV_TO_NAME[parsed.abbrev] ?? parsed.abbrev,
+        chapter: parsed.chapter,
+        verse: parsed.verse,
+        text: data.text ?? "",
+        translation: data.translation ?? "WEB",
+      });
     } catch {
-      // Fall back to hardcoded data
-      const fallback = FALLBACK_VERSES[ref.toLowerCase()];
+      const fallback = FALLBACK_VERSES[verseId];
       if (fallback) {
         setVerseData(fallback);
       } else {
