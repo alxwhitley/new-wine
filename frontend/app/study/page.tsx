@@ -302,33 +302,63 @@ function DefinitionPanel({
   );
 }
 
-function CorpusPanel({ definition }: { definition: WordDefinition | null }) {
-  if (!definition) {
+function CorpusPanel({ definition, loading }: { definition: WordDefinition | null; loading?: boolean }) {
+  if (!definition && !loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground text-sm">Select a word to see how it appears in the corpus</p>
+        <p className="text-muted-foreground text-sm">Select a word to see how it appears in the library</p>
       </div>
     );
   }
+
+  if (loading) {
+    return (
+      <>
+        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+          From the library
+        </p>
+        <div className="mt-6 space-y-4">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-lg border border-border bg-card p-4 animate-pulse">
+              <div className="h-3 rounded bg-border w-3/4 mb-3" />
+              <div className="h-3 rounded bg-border w-full mb-2" />
+              <div className="h-3 rounded bg-border w-5/6 mb-4" />
+              <div className="h-2.5 rounded bg-border w-1/3 mb-1" />
+              <div className="h-2.5 rounded bg-border w-1/4" />
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-        From the corpus
+        From the library
       </p>
       <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-        {definition.word} ({definition.transliteration})
+        {definition!.word} ({definition!.transliteration})
       </p>
-      <div className="space-y-4">
-        {definition.corpusQuotes.map((quote, i) => (
-          <div key={i} className="rounded-lg border border-border bg-card p-4">
-            <p className="text-sm text-foreground leading-relaxed">&ldquo;{quote.text}&rdquo;</p>
-            <div className="mt-3">
-              <p className="text-xs font-medium text-foreground">{quote.author}</p>
-              <p className="text-xs text-muted-foreground">{quote.source}</p>
+      {definition!.corpusQuotes.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-sm" style={{ color: "#c1c1b8" }}>
+            No library entries for this word yet — more teaching content coming soon.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {definition!.corpusQuotes.map((quote, i) => (
+            <div key={i} className="rounded-lg border border-border bg-card p-4">
+              <p className="text-sm text-foreground leading-relaxed">&ldquo;{quote.text}&rdquo;</p>
+              <div className="mt-3">
+                <p className="text-xs font-medium text-foreground">{quote.author}</p>
+                <p className="text-xs text-muted-foreground">{quote.source}</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
