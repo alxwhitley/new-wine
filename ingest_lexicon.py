@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
+import tiktoken
 import openai
 from supabase import create_client
 from dotenv import load_dotenv
@@ -59,6 +60,9 @@ FILE_CONFIGS = [
     ),
 ]
 
+MAX_EMBED_TOKENS = 8000
+_enc = tiktoken.get_encoding("cl100k_base")
+
 STRONGS_RE = re.compile(r'^[GH]\d+$')
 HTML_TAG_RE = re.compile(r'<[^>]+>')
 
@@ -70,6 +74,15 @@ def strip_html(text: str) -> str:
     cleaned = HTML_TAG_RE.sub(' ', text)
     cleaned = re.sub(r'\s+', ' ', cleaned)
     return cleaned.strip()
+
+
+def truncate_for_embedding(text: str) -> str:
+    """Truncate text to MAX_EMBED_TOKENS tokens if it exceeds the limit."""
+    tokens = _enc.encode(text)
+    if len(tokens) <= MAX_EMBED_TOKENS:
+        return text
+    truncated = _enc.decode(tokens[:MAX_EMBED_TOKENS])
+    return truncated + " [truncated]"
 
 
 def find_header_and_data(lines: List[str]) -> Tuple[Optional[Dict[str, int]], int]:
@@ -239,7 +252,7 @@ def insert_chunk_batch(rows: List[dict]) -> bool:
                 return False
 
 
-def ingest_file(filename: str, title: str) -> Dict[str, int]:
+def ingest_file(filename: str, title: str, max_entries: Optional[int] = None) -> Dict[str, int]:
     """Ingest a single lexicon file. Returns stats dict."""
     filepath = LEXICON_DIR / filename
     stats = {"parsed": 0, "inserted": 0, "skipped": 0}
@@ -254,6 +267,8 @@ def ingest_file(filename: str, title: str) -> Dict[str, int]:
     print('='*60)
 
     entries = parse_file(filepath)
+    if max_entries is not None:
+        entries = entries[:max_entries]
     stats["parsed"] = len(entries)
 
     if not entries:
@@ -289,6 +304,7 @@ def ingest_file(filename: str, title: str) -> Dict[str, int]:
         batch_end = min(batch_start + EMBED_BATCH_SIZE, len(remaining))
         batch = remaining[batch_start:batch_end]
 
+        batch = [truncate_for_embedding(t) for t in batch]
         embeddings = embed_batch(batch)
 
         rows = []
@@ -321,14 +337,36 @@ def ingest_file(filename: str, title: str) -> Dict[str, int]:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def print_resume_status():
+    """Print current chunk counts in Supabase for each lexicon document."""
+    print("\nCurrent Supabase chunk counts:")
+    for _, title in FILE_CONFIGS:
+        result = supabase.table("documents").select("id").eq("title", title).limit(1).execute()
+        if result.data:
+            doc_id = result.data[0]["id"]
+            count_result = supabase.table("chunks").select("id", count="exact").eq("document_id", doc_id).execute()
+            count = count_result.count if count_result.count is not None else 0
+            print(f"  {title}: {count} chunks (doc {doc_id[:8]}...)")
+        else:
+            print(f"  {title}: not yet created")
+    print()
+
+
 def main():
+    test_mode = "--test" in sys.argv
+    max_entries = 50 if test_mode else None
+
     print("Rhemata STEPBible Lexicon Ingestion")
+    if test_mode:
+        print("TEST MODE: limited to 50 entries per file")
     print("="*60)
+
+    print_resume_status()
 
     total_stats = {"parsed": 0, "inserted": 0, "skipped": 0}
 
     for filename, title in FILE_CONFIGS:
-        stats = ingest_file(filename, title)
+        stats = ingest_file(filename, title, max_entries=max_entries)
         for k in total_stats:
             total_stats[k] += stats[k]
 

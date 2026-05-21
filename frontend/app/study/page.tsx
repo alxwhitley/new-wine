@@ -12,6 +12,35 @@ interface WordToken {
   morph: string;
 }
 
+interface VerseData {
+  verse_id: string;
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+  translation: string;
+}
+
+// Hardcoded fallback data for when API is unavailable
+const FALLBACK_VERSES: Record<string, VerseData> = {
+  "john 1:1": {
+    verse_id: "JHN.1.1",
+    book: "John",
+    chapter: 1,
+    verse: 1,
+    text: "In the beginning was the Word, and the Word was with God, and the Word was God.",
+    translation: "WEB",
+  },
+  "john 3:16": {
+    verse_id: "JHN.3.16",
+    book: "John",
+    chapter: 3,
+    verse: 16,
+    text: "For God so loved the world, that he gave his one and only Son, that whoever believes in him should not perish, but have eternal life.",
+    translation: "WEB",
+  },
+};
+
 interface CorpusQuote {
   text: string;
   author: string;
@@ -251,9 +280,13 @@ function CorpusPanel({ definition }: { definition: WordDefinition | null }) {
 function VerseSearch({
   verseRef,
   onChange,
+  onSubmit,
+  loading,
 }: {
   verseRef: string;
   onChange: (v: string) => void;
+  onSubmit: () => void;
+  loading: boolean;
 }) {
   return (
     <div className="flex gap-2">
@@ -261,12 +294,38 @@ function VerseSearch({
         type="text"
         value={verseRef}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onSubmit();
+        }}
         placeholder="Enter verse reference (e.g. John 1:1)"
         className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
       />
-      <button className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-gold-hover transition-colors">
-        <Search className="h-4 w-4" />
+      <button
+        onClick={onSubmit}
+        disabled={loading}
+        className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
+      >
+        {loading ? (
+          <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <Search className="h-4 w-4" />
+        )}
       </button>
+    </div>
+  );
+}
+
+function VerseDisplay({ verse, error }: { verse: VerseData | null; error: string | null }) {
+  if (error) {
+    return <p className="text-sm text-red-500 mt-4">{error}</p>;
+  }
+  if (!verse) return null;
+  return (
+    <div className="mt-4 rounded-lg border border-border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
+        {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
+      </p>
+      <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
     </div>
   );
 }
@@ -275,6 +334,45 @@ export default function StudyPage() {
   const [verseRef, setVerseRef] = useState("John 1:1");
   const [selectedStrongs, setSelectedStrongs] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [verseData, setVerseData] = useState<VerseData | null>(null);
+  const [verseLoading, setVerseLoading] = useState(false);
+  const [verseError, setVerseError] = useState<string | null>(null);
+
+  const lookupVerse = useCallback(async () => {
+    const ref = verseRef.trim();
+    if (!ref) return;
+    setVerseLoading(true);
+    setVerseError(null);
+    setVerseData(null);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/study/verse?ref=${encodeURIComponent(ref)}`
+      );
+      if (res.status === 404) {
+        // Try fallback
+        const fallback = FALLBACK_VERSES[ref.toLowerCase()];
+        if (fallback) {
+          setVerseData(fallback);
+        } else {
+          setVerseError("Verse not found");
+        }
+        return;
+      }
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data: VerseData = await res.json();
+      setVerseData(data);
+    } catch {
+      // Fall back to hardcoded data
+      const fallback = FALLBACK_VERSES[ref.toLowerCase()];
+      if (fallback) {
+        setVerseData(fallback);
+      } else {
+        setVerseError("Verse not found");
+      }
+    } finally {
+      setVerseLoading(false);
+    }
+  }, [verseRef]);
 
   const definition = selectedStrongs
     ? PLACEHOLDER_DEFINITIONS[selectedStrongs] ?? null
@@ -332,7 +430,9 @@ export default function StudyPage() {
           style={{ borderRight: "0.5px solid #3c3c38" }}
         >
           <div className="px-4 pt-6 pb-16">
-            <VerseSearch verseRef={verseRef} onChange={setVerseRef} />
+            <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
+
+            <VerseDisplay verse={verseData} error={verseError} />
 
             <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
               {verseRef}
@@ -361,7 +461,9 @@ export default function StudyPage() {
       {/* Mobile: single-column stacked layout */}
       <div className="flex flex-1 flex-col overflow-y-auto md:hidden">
         <div className="px-4 pt-6 pb-16">
-          <VerseSearch verseRef={verseRef} onChange={setVerseRef} />
+          <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
+
+          <VerseDisplay verse={verseData} error={verseError} />
 
           <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
             {verseRef}

@@ -70,6 +70,10 @@ repo/
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; moves YouTube transcripts to ingested/ on success
 │   ├── tag_existing_articles.py  # Backfill topic_tags on existing articles
 │   └── tag_sermons_transcripts.py  # Backfill topic_tags on sermons/transcripts/papers
+├── scrape_preceptaustin.py # Precept Austin word study scraper (page caching, multi-strategy anchor matching)
+├── ingest_preceptaustin.py # Precept Austin word study ingestion (psycopg2 chunks, OpenAI embeddings)
+├── ingest_lexicon.py      # STEPBible lexicon ingestion (TBESG, TBESH, TFLSJ)
+├── ingest_bible.py        # WEB Bible VPL ingestion into verses table (psycopg2)
 ├── migrations/            # SQL migrations (run in Supabase SQL Editor)
 ├── taxonomy.md            # 100-tag topic taxonomy (8 categories)
 ├── CLAUDE.md              # Claude Code context
@@ -136,6 +140,13 @@ repo/
 - `id` (uuid), `document_id` (FK → documents)
 - `content` (text), `embedding` (vector(1536))
 - `chunk_index` (int), `created_at` (timestamptz)
+
+**`verses` table** — Bible verse text (WEB translation)
+- `id` (uuid), `verse_id` (text, unique — format: `SBL.CHAPTER.VERSE`, e.g. `JHN.3.16`)
+- `book` (text — full name), `book_num` (int — 1-66), `chapter` (int), `verse` (int)
+- `text` (text), `translation` (text, default `'WEB'`)
+- `created_at` (timestamptz)
+- Indexes on `verse_id` and `(book, chapter, verse)`
 
 **`guest_sessions` table** — server-side guest query tracking
 - `id` (uuid), `anon_id` (text, unique)
@@ -318,6 +329,20 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
+### Root-Level Ingestion Scripts
+
+| Script | Purpose |
+|---|---|
+| `scrape_preceptaustin.py` | Scrapes Precept Austin Greek word studies. Page caching to `sources/precept_austin/page_cache/`, randomized sleep (2-5s), 4-strategy anchor matching (exact → case-insensitive → partial → reverse word), quality filters (<100 words, nav bleed, fragmented). `--fetch` runs full pipeline, `--test` limits to 10 entries. Outputs to `sources/precept_austin/raw/` + `index.json`. |
+| `ingest_preceptaustin.py` | Ingests Precept Austin word studies into Supabase. Chunks via psycopg2 `execute_values` with `::vector` cast. Documents via Supabase client. Resume-safe (checks existing documents by title). Uses `backend/app/services/chunker.py` (550 tokens, 80 overlap). |
+| `ingest_lexicon.py` | Ingests STEPBible lexicon files (TBESG, TBESH, TFLSJ). One chunk per lexical entry. tiktoken truncation at 8000 tokens for embedding. Resume-safe (tracks existing chunk counts). `--test` limits to 50 entries per file. |
+| `ingest_bible.py` | Parses WEB VPL file, maps 66 canonical books (VPL→SBL abbreviations), inserts into `verses` table via psycopg2. Batch size 1000, `ON CONFLICT DO NOTHING`. `--test` limits to 100 verses. Skips deuterocanonical books. |
+
+**Data sources:**
+- `sources/precept_austin/` — word study `.txt` files + `index.json` + `page_cache/` (gitignored)
+- `sources/lexicon/` — STEPBible TSV files (TBESG, TBESH, TFLSJ)
+- `sources/bible/eng-web_vpl.txt` — World English Bible verse-per-line file
+
 ---
 
 ## Corpus
@@ -382,6 +407,16 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - `SUPABASE_JWT_JWKS_URL`
 - `INCLUDE_COPYRIGHTED` — `true`/`false` (default `true` in chat.py, `false` in search.py)
 - `ALLOWED_ORIGINS`
+- `SUPABASE_DB_URL` — direct PostgreSQL connection string for psycopg2 (bypasses PostgREST timeouts). Used by `ingest_bible.py`, `ingest_preceptaustin.py`, `ingest_lexicon.py` (psycopg2 variant).
+
+---
+
+## Study Mode (frontend)
+
+- **Route:** `/study` — Study Mode page with interlinear word blocks, definitions, corpus quotes
+- **Layout:** Word History sidebar (w-64) | Study column (380px fixed) | Corpus column (flex:1)
+- **Mode toggle:** `frontend/components/rhemata/mode-toggle.tsx` — Chat/Study toggle with gold active state, appears in top bar of both `/` and `/study`
+- **Current state:** Placeholder data only (John 1:1 with 12 Greek tokens, 3 definitions). Not yet connected to backend or verses table.
 
 ---
 
@@ -405,6 +440,12 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **30 malformed JSON chunks fixed** (2026-04-17) — `fix_article_json.py` migration ran successfully; content_summary refreshed on all 30 affected documents.
 - **Shell aliases expanded** — 10 `rh-*` aliases in `~/.zshrc` covering all pipeline scripts.
 - **Proposed but unapplied system prompt changes** (2026-04-29 session): example response section, retrieval formatting (bullets→headings+prose), softer Holy Spirit guardrails revision, Niagara Falls metaphor ban, "Go Deeper" follow-up questions, NIV translation preference. All shown as diffs but not confirmed by user.
+- **Migration 016 not yet run** — `016_create_verses.sql` (verses table) needs to be applied in Supabase SQL Editor before running `ingest_bible.py`
+- **`ingest_bible.py` not yet run** — depends on migration 016
+- **`scrape_preceptaustin.py` hardened version not yet re-run** — page cache from first run will speed up re-run; first run had 2.6% success rate before DOM fix
+- **`ingest_preceptaustin.py` not yet run** — depends on successful scrape completion
+- **`ingest_lexicon.py` resume needed** — crashed on TFLSJ file due to token limit, now fixed with tiktoken truncation
+- **Study Mode page is placeholder only** — interlinear data, definitions, and corpus quotes are all hardcoded. Needs backend endpoints and verse/lexicon data to be live.
 
 ---
 

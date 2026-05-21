@@ -1,0 +1,58 @@
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+Rhemata STEPBible Lexicon Ingestion
+============================================================
+
+Current Supabase chunk counts:
+  STEPBible Greek Lexicon (TBESG): 11034 chunks (doc ea51f087...)
+  STEPBible Hebrew Lexicon (TBESH): 10258 chunks (doc 13f4879d...)
+  LSJ Greek Lexicon (TFLSJ) — Entries 0-5624: 5709 chunks (doc f3a2ca81...)
+  LSJ Greek Lexicon (TFLSJ) — Extended Entries: 10058 chunks (doc 9f588f1c...)
+
+
+============================================================
+Processing: TBESG - Translators Brief lexicon of Extended Strongs for Greek - STEPBible.org CC BY.txt
+  Title: STEPBible Greek Lexicon (TBESG)
+============================================================
+  Header columns: {'estrong': 0, 'lemma': 3, 'transliteration': 4, 'morph': 5, 'gloss': 6, 'meaning': 7}
+  Data starts at line 91
+  11034 entries parsed
+  Document ID: ea51f087-6292-408e-af71-a9e1b933dc80
+  All 11034 entries already inserted — skipping
+
+============================================================
+Processing: TBESH - Translators Brief lexicon of Extended Strongs for Hebrew - STEPBible.org CC BY.txt
+  Title: STEPBible Hebrew Lexicon (TBESH)
+============================================================
+  Header columns: {'estrong': 0, 'lemma': 3, 'transliteration': 4, 'morph': 5, 'gloss': 6, 'meaning': 7}
+  Data starts at line 55
+  10258 entries parsed
+  Document ID: 13f4879d-01cb-428d-a57f-83f15b1df0a0
+  All 10258 entries already inserted — skipping
+
+============================================================
+Processing: TFLSJ  0-5624 - Translators Formatted full LSJ Bible lexicon - STEPBible.org CC BY.txt
+  Title: LSJ Greek Lexicon (TFLSJ) — Entries 0-5624
+============================================================
+  Header columns: {'estrong': 0, 'lemma': 3, 'transliteration': 4, 'morph': 5, 'gloss': 6, 'meaning': 7}
+  Data starts at line 64
+  5709 entries parsed
+  Document ID: f3a2ca81-9e5b-4ab4-8d0d-89ebe34841a6
+  All 5709 entries already inserted — skipping
+
+============================================================
+Processing: TFLSJ extra - Translators Formatted full LSJ Bible lexicon - STEPBible.org CC BY.txt
+  Title: LSJ Greek Lexicon (TFLSJ) — Extended Entries
+============================================================
+  Header columns: {'estrong': 0, 'lemma': 3, 'transliteration': 4, 'morph': 5, 'gloss': 6, 'meaning': 7}
+  Data starts at line 65
+  5324 entries parsed
+  Document ID: 9f588f1c-03ad-4dff-89e7-2cd1e30e9f39
+  All 5324 entries already inserted — skipping
+
+============================================================
+SUMMARY
+  Total parsed:   32325
+  Total inserted: 32325
+  Total skipped:  0
+============================================================
