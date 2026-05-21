@@ -1,3 +1,4 @@
+// Hover standard: onMouseEnter bg #262624, onMouseLeave bg transparent, cursor pointer
 "use client";
 
 import { useState, useEffect } from "react";
@@ -120,13 +121,15 @@ export function Sidebar({
       {/* Nav Items */}
       <nav className="space-y-0.5 mb-4">
         <Link
-          href={conversations.length > 0 ? "/" : "/"}
+          href="/"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer hover:bg-[#262624]"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
           style={{
             backgroundColor: isChat ? "#262624" : "transparent",
             color: "#888780",
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isChat ? "#262624" : "transparent"; }}
         >
           <MessageSquare className="h-4 w-4" />
           Chat
@@ -134,11 +137,13 @@ export function Sidebar({
         <Link
           href="/search"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer hover:bg-[#262624]"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
           style={{
             backgroundColor: isDiscover ? "#262624" : "transparent",
             color: "#888780",
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isDiscover ? "#262624" : "transparent"; }}
         >
           <Compass className="h-4 w-4" />
           Discover
@@ -146,11 +151,13 @@ export function Sidebar({
         <Link
           href="/study"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer hover:bg-[#262624]"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
           style={{
             backgroundColor: isStudy ? "#262624" : "transparent",
             color: "#888780",
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isStudy ? "#262624" : "transparent"; }}
         >
           <BookOpen className="h-4 w-4" />
           Study
@@ -190,13 +197,12 @@ export function Sidebar({
                       <>
                         <button
                           onClick={() => handleSelectConversation(conversation.id)}
-                          className={cn(
-                            "w-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-colors",
-                            "hover:bg-sidebar-accent",
-                            activeConversationId === conversation.id
-                              ? "bg-sidebar-accent"
-                              : "bg-transparent"
-                          )}
+                          className="w-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-colors cursor-pointer"
+                          style={{
+                            backgroundColor: activeConversationId === conversation.id ? "#262624" : "transparent",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = activeConversationId === conversation.id ? "#262624" : "transparent"; }}
                         >
                           <div className="min-w-0 flex-1">
                             <p
@@ -266,10 +272,12 @@ export function Sidebar({
                     <button
                       key={word.id}
                       onClick={() => onSelectSavedWord?.(word.strongs_number)}
-                      className="w-full text-left rounded px-3 py-2 transition-colors cursor-pointer hover:bg-[#262624]"
+                      className="w-full text-left rounded px-3 py-2 transition-colors cursor-pointer"
                       style={{
                         backgroundColor: isActive ? "#262624" : "transparent",
                       }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isActive ? "#262624" : "transparent"; }}
                     >
                       <p className="text-sm" style={{ color: "#e6e6e6" }}>
                         {word.greek_word}
