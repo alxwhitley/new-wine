@@ -108,13 +108,13 @@ export function Sidebar({
       {/* New Chat CTA */}
       <button
         onClick={handleNewChat}
-        className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors mb-4"
+        className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors mb-4"
         style={{ backgroundColor: "#b49238", color: "#1b1b19" }}
         onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#c9a544"; }}
         onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#b49238"; }}
       >
-        <Plus className="h-4 w-4" />
-        New Chat
+        <Plus className="h-4 w-4 shrink-0" />
+        <span>New Chat</span>
       </button>
 
       {/* Nav Items */}
@@ -122,11 +122,10 @@ export function Sidebar({
         <Link
           href={conversations.length > 0 ? "/" : "/"}
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-[#262624]"
           style={{
             backgroundColor: isChat ? "#262624" : "transparent",
-            borderLeft: isChat ? "2px solid #b49238" : "2px solid transparent",
-            color: isChat ? "#e6e6e6" : "#888780",
+            color: "#888780",
           }}
         >
           <MessageSquare className="h-4 w-4" />
@@ -135,11 +134,10 @@ export function Sidebar({
         <Link
           href="/search"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-[#262624]"
           style={{
             backgroundColor: isDiscover ? "#262624" : "transparent",
-            borderLeft: isDiscover ? "2px solid #b49238" : "2px solid transparent",
-            color: isDiscover ? "#e6e6e6" : "#888780",
+            color: "#888780",
           }}
         >
           <Compass className="h-4 w-4" />
@@ -148,11 +146,10 @@ export function Sidebar({
         <Link
           href="/study"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-[#262624]"
           style={{
             backgroundColor: isStudy ? "#262624" : "transparent",
-            borderLeft: isStudy ? "2px solid #b49238" : "2px solid transparent",
-            color: isStudy ? "#e6e6e6" : "#888780",
+            color: "#888780",
           }}
         >
           <BookOpen className="h-4 w-4" />

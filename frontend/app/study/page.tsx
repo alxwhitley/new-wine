@@ -216,69 +216,48 @@ function InterlinearBlocks({
   tokens,
   selectedStrongs,
   onSelect,
-  savedStrongsSet,
-  onToggleSave,
-  isLoggedIn,
 }: {
   tokens: WordToken[];
   selectedStrongs: string | null;
   onSelect: (strongs: string | null) => void;
-  savedStrongsSet: Set<string>;
-  onToggleSave: (token: WordToken) => void;
-  isLoggedIn: boolean;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {tokens.map((token, i) => {
         const isSelected = selectedStrongs === token.strongs;
-        const isSaved = savedStrongsSet.has(token.strongs);
         return (
-          <div key={i} className="relative group">
-            <button
-              onClick={() => onSelect(isSelected ? null : token.strongs)}
-              className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px]"
-              style={{
-                borderColor: isSelected ? "#b49238" : "#3c3c38",
-                backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
-              }}
-            >
-              <span className="font-serif text-lg text-foreground">{token.greek}</span>
-              <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
-                {token.english}
-              </span>
-              <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
-            </button>
-            {/* Bookmark icon — visible on hover, or always if saved */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSave(token);
-              }}
-              title={isLoggedIn ? (isSaved ? "Remove from saved" : "Save word") : "Sign in to save words"}
-              className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full flex items-center justify-center transition-opacity"
-              style={{
-                backgroundColor: "#1b1b19",
-                border: "1px solid #3c3c38",
-                opacity: isSaved ? 1 : undefined,
-              }}
-              // Show on hover via group-hover, always show if saved
-            >
-              <Bookmark
-                className={`h-3 w-3 transition-opacity ${isSaved ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                style={{
-                  color: isSaved ? "#b49238" : "#888780",
-                  fill: isSaved ? "#b49238" : "none",
-                }}
-              />
-            </button>
-          </div>
+          <button
+            key={i}
+            onClick={() => onSelect(isSelected ? null : token.strongs)}
+            className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px]"
+            style={{
+              borderColor: isSelected ? "#b49238" : "#3c3c38",
+              backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
+            }}
+          >
+            <span className="font-serif text-lg text-foreground">{token.greek}</span>
+            <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
+              {token.english}
+            </span>
+            <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+          </button>
         );
       })}
     </div>
   );
 }
 
-function DefinitionPanel({ definition }: { definition: WordDefinition | null }) {
+function DefinitionPanel({
+  definition,
+  isSaved,
+  onToggleSave,
+  isLoggedIn,
+}: {
+  definition: WordDefinition | null;
+  isSaved: boolean;
+  onToggleSave: () => void;
+  isLoggedIn: boolean;
+}) {
   if (!definition) {
     return (
       <div className="border-t border-border pt-6 text-center">
@@ -287,8 +266,25 @@ function DefinitionPanel({ definition }: { definition: WordDefinition | null }) 
     );
   }
   return (
-    <div className="border-t border-border pt-6">
-      <p className="font-serif text-3xl text-foreground">{definition.word}</p>
+    <div className="border-t border-border pt-6 relative">
+      <button
+        onClick={onToggleSave}
+        title={isLoggedIn ? (isSaved ? "Remove from saved" : "Save word") : "Sign in to save words"}
+        className="absolute top-6 right-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors"
+        style={{
+          backgroundColor: "#262624",
+          border: "1px solid #3c3c38",
+        }}
+      >
+        <Bookmark
+          className="h-4 w-4"
+          style={{
+            color: isSaved ? "#b49238" : "#888780",
+            fill: isSaved ? "#b49238" : "none",
+          }}
+        />
+      </button>
+      <p className="font-serif text-3xl text-foreground pr-10">{definition.word}</p>
       <p className="text-sm text-muted-foreground mt-1">
         {definition.transliteration} &middot; {definition.strongs}
       </p>
@@ -521,6 +517,12 @@ export default function StudyPage() {
     [],
   );
 
+  const handleToggleSaveSelected = useCallback(() => {
+    if (!selectedStrongs) return;
+    const token = PLACEHOLDER_TOKENS.find((t) => t.strongs === selectedStrongs);
+    if (token) toggleSaveWord(token);
+  }, [selectedStrongs, toggleSaveWord]);
+
   const handleSidebarSavedWordSelect = useCallback(
     (strongs: string) => {
       setSelectedStrongs(strongs);
@@ -583,13 +585,15 @@ export default function StudyPage() {
                 tokens={PLACEHOLDER_TOKENS}
                 selectedStrongs={selectedStrongs}
                 onSelect={handleSelectWord}
-                savedStrongsSet={savedStrongsSet}
-                onToggleSave={toggleSaveWord}
-                isLoggedIn={!!user}
               />
 
               <div className="mt-8">
-                <DefinitionPanel definition={definition} />
+                <DefinitionPanel
+                  definition={definition}
+                  isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
+                  onToggleSave={handleToggleSaveSelected}
+                  isLoggedIn={!!user}
+                />
               </div>
             </div>
           </div>
@@ -616,15 +620,17 @@ export default function StudyPage() {
               tokens={PLACEHOLDER_TOKENS}
               selectedStrongs={selectedStrongs}
               onSelect={handleSelectWord}
-              savedStrongsSet={savedStrongsSet}
-              onToggleSave={toggleSaveWord}
-              isLoggedIn={!!user}
             />
 
             {definition && (
               <>
                 <div className="mt-8">
-                  <DefinitionPanel definition={definition} />
+                  <DefinitionPanel
+                    definition={definition}
+                    isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
+                    onToggleSave={handleToggleSaveSelected}
+                    isLoggedIn={!!user}
+                  />
                 </div>
                 <div className="mt-8">
                   <CorpusPanel definition={definition} />
