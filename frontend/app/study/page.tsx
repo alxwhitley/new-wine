@@ -177,6 +177,16 @@ interface CommentaryResult {
   content: string;
 }
 
+interface JewishPerspectiveContent {
+  hebrew_root: string;
+  targumic_usage: string;
+  rabbinic_context: string;
+  messianic_fulfillment: string;
+  sources: string[];
+}
+
+type CorpusTab = "commentaries" | "jewish";
+
 interface WordDefinition {
   strongs: string;
   word: string;
@@ -487,6 +497,76 @@ function CorpusPanel({
     />
   ) : null;
 
+  // Jewish Perspective state
+  const [corpusTab, setCorpusTab] = useState<CorpusTab>("commentaries");
+  const [jpContent, setJpContent] = useState<JewishPerspectiveContent | null>(null);
+  const [jpLoading, setJpLoading] = useState(false);
+  const [jpError, setJpError] = useState(false);
+  const [jpDisclaimer, setJpDisclaimer] = useState(false);
+  const [jpCheckedRef, setJpCheckedRef] = useState<string | null>(null);
+
+  // Reset JP state when verse changes
+  useEffect(() => {
+    setJpContent(null);
+    setJpError(false);
+    setJpCheckedRef(null);
+    setCorpusTab("commentaries");
+  }, [verseRef]);
+
+  const handleJpTabClick = useCallback(async () => {
+    if (corpusTab === "jewish") return;
+    setCorpusTab("jewish");
+
+    // If already loaded for this verse, show it
+    if (jpContent && jpCheckedRef === verseRef) return;
+
+    // Check cache
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/jewish-perspective/${encodeURIComponent(verseRef)}`
+      );
+      if (!res.ok) throw new Error("cache check failed");
+      const data = await res.json();
+      if (data.cached && data.content) {
+        setJpContent(data.content);
+        setJpCheckedRef(verseRef);
+        return;
+      }
+    } catch {
+      // fall through to disclaimer
+    }
+
+    // Not cached — show disclaimer
+    setJpDisclaimer(true);
+  }, [corpusTab, jpContent, jpCheckedRef, verseRef]);
+
+  const handleJpGenerate = useCallback(async () => {
+    setJpDisclaimer(false);
+    setJpLoading(true);
+    setJpError(false);
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/jewish-perspective/${encodeURIComponent(verseRef)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+        }
+      );
+      if (!res.ok) throw new Error("generate failed");
+      const data = await res.json();
+      setJpContent(data.content);
+      setJpCheckedRef(verseRef);
+    } catch {
+      setJpError(true);
+    } finally {
+      setJpLoading(false);
+    }
+  }, [verseRef, accessToken]);
+
   // Word study mode: show full excerpt/article
   if (wordStudyMode && wordStudyDoc) {
     return (
@@ -640,11 +720,170 @@ function CorpusPanel({
       );
     }
 
+    const tabBar = (
+      <div className="flex gap-6 mb-5" style={{ borderBottom: "1px solid #3c3c38" }}>
+        <button
+          onClick={() => setCorpusTab("commentaries")}
+          className="pb-2 text-sm font-medium cursor-pointer transition-colors"
+          style={{
+            color: corpusTab === "commentaries" ? "#e6e6e6" : "#c1c1b8",
+            borderBottom: corpusTab === "commentaries" ? "2px solid #b49238" : "2px solid transparent",
+            marginBottom: "-1px",
+          }}
+        >
+          Commentaries
+        </button>
+        <button
+          onClick={handleJpTabClick}
+          className="pb-2 text-sm font-medium cursor-pointer transition-colors"
+          style={{
+            color: corpusTab === "jewish" ? "#e6e6e6" : "#c1c1b8",
+            borderBottom: corpusTab === "jewish" ? "2px solid #b49238" : "2px solid transparent",
+            marginBottom: "-1px",
+          }}
+        >
+          Jewish Perspective
+        </button>
+      </div>
+    );
+
+    // Jewish Perspective tab content
+    if (corpusTab === "jewish") {
+      return (
+        <>
+          {tabBar}
+          {jpLoading ? (
+            <div className="space-y-3">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border p-4 animate-pulse"
+                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+                >
+                  <div className="h-2.5 rounded bg-border w-1/3 mb-3" />
+                  <div className="h-3 rounded bg-border w-full mb-2" />
+                  <div className="h-3 rounded bg-border w-5/6 mb-2" />
+                  <div className="h-3 rounded bg-border w-4/6" />
+                </div>
+              ))}
+              <p className="text-center text-sm mt-4" style={{ color: "#c1c1b8" }}>
+                Researching Messianic Jewish sources...
+              </p>
+            </div>
+          ) : jpError ? (
+            <div className="py-12 text-center">
+              <p className="text-sm" style={{ color: "#c1c1b8" }}>
+                Unable to generate. Please try again.
+              </p>
+              <button
+                onClick={() => setCorpusTab("commentaries")}
+                className="text-sm mt-3 cursor-pointer hover:underline"
+                style={{ color: "#d4b96a" }}
+              >
+                View Commentaries
+              </button>
+            </div>
+          ) : jpContent ? (
+            <div className="space-y-3">
+              {([
+                { key: "hebrew_root", label: "Hebrew & Aramaic Root" },
+                { key: "targumic_usage", label: "Targumic Usage" },
+                { key: "rabbinic_context", label: "Rabbinic & Second Temple Context" },
+                { key: "messianic_fulfillment", label: "Messianic Fulfillment" },
+              ] as const).map((section) => (
+                <div
+                  key={section.key}
+                  className="rounded-lg border p-4"
+                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+                >
+                  <p
+                    className="font-medium uppercase tracking-wide mb-2"
+                    style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
+                  >
+                    {section.label}
+                  </p>
+                  <p style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
+                    {jpContent[section.key]}
+                  </p>
+                </div>
+              ))}
+              {jpContent.sources && jpContent.sources.length > 0 && (
+                <div
+                  className="rounded-lg border p-4"
+                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+                >
+                  <p
+                    className="font-medium uppercase tracking-wide mb-2"
+                    style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
+                  >
+                    Sources Consulted
+                  </p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {jpContent.sources.map((src, i) => (
+                      <li key={i} style={{ color: "#e6e6e6", fontSize: 13, lineHeight: 1.6 }}>
+                        {src}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <p className="text-sm" style={{ color: "#c1c1b8" }}>
+                Select the Jewish Perspective tab to generate a summary.
+              </p>
+            </div>
+          )}
+          {jpDisclaimer && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center"
+              style={{ backgroundColor: "rgba(27, 27, 25, 0.8)" }}
+              onClick={(e) => { if (e.target === e.currentTarget) { setJpDisclaimer(false); setCorpusTab("commentaries"); } }}
+            >
+              <div
+                className="w-full max-w-[420px] mx-4 rounded-lg border p-6"
+                style={{ backgroundColor: "#262624", borderColor: "#3c3c38" }}
+              >
+                <h3 className="font-serif text-lg" style={{ color: "#d4b96a" }}>
+                  Jewish Perspective
+                </h3>
+                <p className="text-sm mt-3 leading-relaxed" style={{ color: "#c1c1b8" }}>
+                  Generating this summary searches live Messianic Jewish scholarship
+                  sources in real time. This feature is in early access.
+                </p>
+                <p className="text-sm mt-3 leading-relaxed" style={{ color: "#c1c1b8" }}>
+                  Once generated, this summary is saved permanently and free for
+                  everyone who studies this verse after you.
+                </p>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => { setJpDisclaimer(false); setCorpusTab("commentaries"); }}
+                    className="px-4 py-2 text-sm rounded-lg cursor-pointer"
+                    style={{ color: "#c1c1b8" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleJpGenerate}
+                    className="px-4 py-2 text-sm font-medium rounded-lg cursor-pointer text-white"
+                    style={{ backgroundColor: "#b49238" }}
+                  >
+                    Generate
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {flagModalEl}
+        </>
+      );
+    }
+
+    // Commentaries tab (default)
     return (
       <>
-        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-          From the library
-        </p>
+        {tabBar}
         {commentaryLoading ? (
           <SkeletonCards />
         ) : commentaryResults.length === 0 ? (
@@ -654,7 +893,7 @@ function CorpusPanel({
             </p>
           </div>
         ) : (
-          <div className="mt-4 space-y-4">
+          <div className="space-y-4">
             {commentaryResults.map((r, i) => (
               <div
                 key={i}
