@@ -195,10 +195,14 @@ async def get_corpus(
 
     db = get_supabase()
 
+    # When filtering to a specific source_kind, fetch more candidates since
+    # most top-N results may be other source_kinds (e.g. sermon_transcript)
+    fetch_count = 80 if source_kind else 20
+
     try:
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
-            "match_count": 20,
+            "match_count": fetch_count,
             "include_copyrighted": True,
         }).execute()
     except Exception:
