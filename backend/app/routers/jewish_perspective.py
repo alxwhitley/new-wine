@@ -28,7 +28,7 @@ Do not add devotional application or charismatic interpretation.
 Cite every claim by author or organization name.
 Do not fabricate citations.
 
-Output as JSON only with this exact structure:
+Output ONLY raw valid JSON with no preamble, no markdown backticks, and no explanation. Use this exact structure:
 {
   "hebrew_root": "prose text with citations",
   "targumic_usage": "prose text with citations",
@@ -234,7 +234,6 @@ async def generate_jewish_perspective(
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                response_mime_type="application/json",
             ),
         )
         raw_text = response.text
