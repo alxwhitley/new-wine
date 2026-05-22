@@ -8,6 +8,7 @@ import type { SavedWord } from "@/components/rhemata/sidebar";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import { supabase } from "@/lib/supabase";
+import { getAdjacentVerseId } from "@/lib/verse-counts";
 
 interface WordToken {
   greek: string;
@@ -154,6 +155,14 @@ interface CorpusResult {
   author: string;
   source_kind: string;
   url: string | null;
+}
+
+interface CommentaryResult {
+  document_id: string;
+  title: string;
+  author: string;
+  source_kind: string;
+  excerpt: string;
 }
 
 interface WordDefinition {
@@ -310,79 +319,107 @@ function DefinitionPanel({
   );
 }
 
+function SkeletonCards() {
+  return (
+    <div className="mt-2 space-y-4">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="rounded-lg border border-border bg-card p-4 animate-pulse">
+          <div className="h-3 rounded bg-border w-3/4 mb-3" />
+          <div className="h-3 rounded bg-border w-full mb-2" />
+          <div className="h-3 rounded bg-border w-5/6 mb-4" />
+          <div className="h-2.5 rounded bg-border w-1/3 mb-1" />
+          <div className="h-2.5 rounded bg-border w-1/4" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CorpusPanel({
   definition,
-  results,
-  loading,
+  corpusResults,
+  corpusLoading,
+  commentaryResults,
+  commentaryLoading,
+  hasVerse,
 }: {
   definition: WordDefinition | null;
-  results: CorpusResult[];
-  loading: boolean;
+  corpusResults: CorpusResult[];
+  corpusLoading: boolean;
+  commentaryResults: CommentaryResult[];
+  commentaryLoading: boolean;
+  hasVerse: boolean;
 }) {
-  if (!definition && !loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground text-sm">Select a word to see how it appears in the library</p>
-      </div>
-    );
-  }
-
-  if (loading) {
+  // State 2: word selected — show word study corpus results
+  if (definition) {
     return (
       <>
         <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
           From the library
         </p>
-        {definition && (
-          <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-            {definition.word} ({definition.transliteration})
-          </p>
+        <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+          {definition.word} ({definition.transliteration})
+        </p>
+        {corpusLoading ? (
+          <SkeletonCards />
+        ) : corpusResults.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-sm" style={{ color: "#c1c1b8" }}>
+              No library entries for this word yet — more teaching content coming soon.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {corpusResults.map((r, i) => (
+              <div key={i} className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-foreground">{r.author}</p>
+                  <p className="text-xs text-muted-foreground">{r.title}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
-        <div className="mt-2 space-y-4">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="rounded-lg border border-border bg-card p-4 animate-pulse">
-              <div className="h-3 rounded bg-border w-3/4 mb-3" />
-              <div className="h-3 rounded bg-border w-full mb-2" />
-              <div className="h-3 rounded bg-border w-5/6 mb-4" />
-              <div className="h-2.5 rounded bg-border w-1/3 mb-1" />
-              <div className="h-2.5 rounded bg-border w-1/4" />
-            </div>
-          ))}
-        </div>
       </>
     );
   }
 
-  return (
-    <>
-      <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-        From the library
-      </p>
-      {definition && (
-        <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-          {definition.word} ({definition.transliteration})
+  // State 1: verse loaded, no word selected — show commentary
+  if (hasVerse) {
+    return (
+      <>
+        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+          From the library
         </p>
-      )}
-      {results.length === 0 ? (
-        <div className="py-12 text-center">
-          <p className="text-sm" style={{ color: "#c1c1b8" }}>
-            No library entries for this word yet — more teaching content coming soon.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {results.map((r, i) => (
-            <div key={i} className="rounded-lg border border-border bg-card p-4">
-              <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
-              <div className="mt-3">
-                <p className="text-xs font-medium text-foreground">{r.author}</p>
-                <p className="text-xs text-muted-foreground">{r.title}</p>
+        {commentaryLoading ? (
+          <SkeletonCards />
+        ) : commentaryResults.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-sm" style={{ color: "#c1c1b8" }}>
+              No commentary found for this verse.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {commentaryResults.map((r, i) => (
+              <div key={i} className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{r.author}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
+                <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // No verse loaded yet
+  return (
+    <div className="flex items-center justify-center h-full">
+      <p className="text-muted-foreground text-sm">Search a verse to see commentary from the library</p>
+    </div>
   );
 }
 
@@ -508,18 +545,13 @@ export default function StudyPage() {
     [user, savedStrongsSet],
   );
 
-  const lookupVerse = useCallback(async () => {
-    const ref = verseRef.trim();
-    if (!ref) return;
+  const fetchVerseById = useCallback(async (verseId: string) => {
+    const parts = verseId.split(".");
+    if (parts.length !== 3) return;
+    const abbrev = parts[0];
+    const chapter = parseInt(parts[1], 10);
+    const verse = parseInt(parts[2], 10);
 
-    const parsed = parseRef(ref);
-    if (!parsed) {
-      setVerseError("Verse not found");
-      setVerseData(null);
-      return;
-    }
-
-    const verseId = `${parsed.abbrev}.${parsed.chapter}.${parsed.verse}`;
     setVerseLoading(true);
     setVerseError(null);
     setVerseData(null);
@@ -543,9 +575,9 @@ export default function StudyPage() {
 
       setVerseData({
         verse_id: data.verse_id,
-        book: ABBREV_TO_NAME[parsed.abbrev] ?? parsed.abbrev,
-        chapter: parsed.chapter,
-        verse: parsed.verse,
+        book: ABBREV_TO_NAME[abbrev] ?? abbrev,
+        chapter,
+        verse,
         text: data.text ?? "",
         translation: data.translation ?? "WEB",
       });
@@ -559,13 +591,101 @@ export default function StudyPage() {
     } finally {
       setVerseLoading(false);
     }
-  }, [verseRef]);
+  }, []);
+
+  const lookupVerse = useCallback(async () => {
+    const ref = verseRef.trim();
+    if (!ref) return;
+
+    const parsed = parseRef(ref);
+    if (!parsed) {
+      setVerseError("Verse not found");
+      setVerseData(null);
+      return;
+    }
+
+    const verseId = `${parsed.abbrev}.${parsed.chapter}.${parsed.verse}`;
+    await fetchVerseById(verseId);
+  }, [verseRef, fetchVerseById]);
+
+  // Fetch default verse on mount
+  useEffect(() => {
+    const parsed = parseRef(verseRef);
+    if (parsed) {
+      fetchVerseById(`${parsed.abbrev}.${parsed.chapter}.${parsed.verse}`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Stepper navigation
+  const currentVerseId = verseData?.verse_id ?? null;
+  const prevVerseId = currentVerseId ? getAdjacentVerseId(currentVerseId, "prev") : null;
+  const nextVerseId = currentVerseId ? getAdjacentVerseId(currentVerseId, "next") : null;
+
+  const stepVerse = useCallback(async (direction: "prev" | "next") => {
+    if (!currentVerseId) return;
+    const targetId = getAdjacentVerseId(currentVerseId, direction);
+    if (!targetId) return;
+
+    const parts = targetId.split(".");
+    const bookName = ABBREV_TO_NAME[parts[0]] ?? parts[0];
+    setVerseRef(`${bookName} ${parts[1]}:${parts[2]}`);
+    await fetchVerseById(targetId);
+  }, [currentVerseId, fetchVerseById]);
+
+  // Keyboard navigation: ArrowLeft/ArrowRight
+  useEffect(() => {
+    if (!currentVerseId) return;
+
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepVerse("prev");
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepVerse("next");
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [currentVerseId, stepVerse]);
 
   const definition = selectedStrongs
     ? PLACEHOLDER_DEFINITIONS[selectedStrongs] ?? null
     : null;
 
-  // Corpus results from backend
+  // Commentary results (State 1: verse loaded, no word selected)
+  const [commentaryResults, setCommentaryResults] = useState<CommentaryResult[]>([]);
+  const [commentaryLoading, setCommentaryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!verseData?.text) {
+      setCommentaryResults([]);
+      return;
+    }
+
+    setCommentaryLoading(true);
+    const params = new URLSearchParams({ verse_text: verseData.text });
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/commentary?${params}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("commentary fetch failed");
+        return res.json();
+      })
+      .then((data) => {
+        setCommentaryResults(data.results ?? []);
+      })
+      .catch(() => {
+        setCommentaryResults([]);
+      })
+      .finally(() => {
+        setCommentaryLoading(false);
+      });
+  }, [verseData?.text]);
+
+  // Corpus results (State 2: word selected)
   const [corpusResults, setCorpusResults] = useState<CorpusResult[]>([]);
   const [corpusLoading, setCorpusLoading] = useState(false);
 
@@ -584,6 +704,7 @@ export default function StudyPage() {
     const params = new URLSearchParams();
     if (verseRef.trim()) params.set("verse", verseRef.trim());
     params.set("transliteration", token.transliteration);
+    params.set("source_kind", "word_study");
 
     setCorpusLoading(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/corpus?${params}`)
@@ -669,9 +790,29 @@ export default function StudyPage() {
               <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
               <VerseDisplay verse={verseData} error={verseError} />
 
-              <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
-                {verseRef}
-              </p>
+              {verseData && (
+                <div className="flex items-center gap-3 mt-6 mb-4">
+                  <button
+                    onClick={() => stepVerse("prev")}
+                    disabled={!prevVerseId}
+                    className="text-sm font-medium transition-opacity"
+                    style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
+                  >
+                    &larr;
+                  </button>
+                  <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+                    {verseData.book} {verseData.chapter}:{verseData.verse}
+                  </p>
+                  <button
+                    onClick={() => stepVerse("next")}
+                    disabled={!nextVerseId}
+                    className="text-sm font-medium transition-opacity"
+                    style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
+                  >
+                    &rarr;
+                  </button>
+                </div>
+              )}
 
               <InterlinearBlocks
                 tokens={PLACEHOLDER_TOKENS}
@@ -693,7 +834,7 @@ export default function StudyPage() {
           {/* Right Column: Corpus Quotes */}
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 pt-6 pb-16">
-              <CorpusPanel definition={definition} results={corpusResults} loading={corpusLoading} />
+              <CorpusPanel definition={definition} corpusResults={corpusResults} corpusLoading={corpusLoading} commentaryResults={commentaryResults} commentaryLoading={commentaryLoading} hasVerse={!!verseData} />
             </div>
           </div>
         </div>
@@ -704,9 +845,29 @@ export default function StudyPage() {
             <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
             <VerseDisplay verse={verseData} error={verseError} />
 
-            <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-4" style={{ color: "#c1c1b8" }}>
-              {verseRef}
-            </p>
+            {verseData && (
+              <div className="flex items-center gap-3 mt-6 mb-4">
+                <button
+                  onClick={() => stepVerse("prev")}
+                  disabled={!prevVerseId}
+                  className="text-sm font-medium transition-opacity"
+                  style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
+                >
+                  &larr;
+                </button>
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+                  {verseData.book} {verseData.chapter}:{verseData.verse}
+                </p>
+                <button
+                  onClick={() => stepVerse("next")}
+                  disabled={!nextVerseId}
+                  className="text-sm font-medium transition-opacity"
+                  style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
+                >
+                  &rarr;
+                </button>
+              </div>
+            )}
 
             <InterlinearBlocks
               tokens={PLACEHOLDER_TOKENS}
@@ -714,25 +875,17 @@ export default function StudyPage() {
               onSelect={handleSelectWord}
             />
 
-            {definition && (
-              <>
-                <div className="mt-8">
-                  <DefinitionPanel
-                    definition={definition}
-                    isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
-                    onToggleSave={handleToggleSaveSelected}
-                    isLoggedIn={!!user}
-                  />
-                </div>
-                <div className="mt-8">
-                  <CorpusPanel definition={definition} results={corpusResults} loading={corpusLoading} />
-                </div>
-              </>
-            )}
-
-            {!definition && (
-              <div className="mt-8 border-t border-border pt-6 text-center">
-                <p className="text-muted-foreground text-sm">Select a word to view its definition</p>
+            <div className="mt-8">
+              <DefinitionPanel
+                definition={definition}
+                isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
+                onToggleSave={handleToggleSaveSelected}
+                isLoggedIn={!!user}
+              />
+            </div>
+            {(definition || verseData) && (
+              <div className="mt-8">
+                <CorpusPanel definition={definition} corpusResults={corpusResults} corpusLoading={corpusLoading} commentaryResults={commentaryResults} commentaryLoading={commentaryLoading} hasVerse={!!verseData} />
               </div>
             )}
           </div>

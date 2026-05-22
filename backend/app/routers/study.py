@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-CITABLE_SOURCE_KINDS = {"sermon_transcript", "magazine_article"}
+COMMENTARY_SOURCE_KINDS = {"sermon_transcript", "magazine_article"}
+CORPUS_SOURCE_KINDS = {"sermon_transcript", "magazine_article", "word_study"}
 
 # Full 66-book mapping: common names/abbreviations -> verse_id prefix
 BOOK_MAP = {
@@ -172,6 +173,7 @@ async def get_verse(ref: str = Query(..., description="Verse reference, e.g. 'Jo
 async def get_corpus(
     verse: Optional[str] = Query(None, description="Verse reference, e.g. 'John 1:1'"),
     transliteration: Optional[str] = Query(None, description="Transliteration, e.g. 'logos'"),
+    source_kind: Optional[str] = Query(None, description="Filter to a single source_kind, e.g. 'word_study'"),
 ):
     if not verse and not transliteration:
         raise HTTPException(status_code=400, detail="At least one of verse or transliteration is required")
@@ -203,13 +205,19 @@ async def get_corpus(
         logger.exception("match_chunks RPC failed for corpus query")
         raise HTTPException(status_code=500, detail="Search service error")
 
-    # Filter to citable sermon/magazine chunks, dedupe by document, take top 5
+    # Determine allowed source_kinds
+    if source_kind:
+        allowed_kinds = {source_kind}
+    else:
+        allowed_kinds = CORPUS_SOURCE_KINDS
+
+    # Filter to citable chunks, dedupe by document, take top 5
     seen_docs = set()
     results = []
     for chunk in (result.data or []):
         if chunk.get("citation_mode") != "citable":
             continue
-        if chunk.get("source_kind") not in CITABLE_SOURCE_KINDS:
+        if chunk.get("source_kind") not in allowed_kinds:
             continue
         doc_id = chunk.get("document_id")
         if doc_id in seen_docs:
@@ -221,6 +229,54 @@ async def get_corpus(
             "author": chunk.get("author", ""),
             "source_kind": chunk.get("source_kind", ""),
             "url": chunk.get("url"),
+        })
+        if len(results) >= 5:
+            break
+
+    return {"results": results}
+
+
+@router.get("/commentary")
+async def get_commentary(
+    verse_text: str = Query(..., description="Full English verse text"),
+):
+    try:
+        embedding = embed_text(verse_text)
+    except Exception:
+        logger.exception("Embedding failed for commentary query: %s", verse_text[:100])
+        raise HTTPException(status_code=500, detail="Embedding service error")
+
+    db = get_supabase()
+
+    try:
+        result = db.rpc("match_chunks", {
+            "query_embedding": embedding,
+            "match_count": 20,
+            "include_copyrighted": True,
+        }).execute()
+    except Exception:
+        logger.exception("match_chunks RPC failed for commentary query")
+        raise HTTPException(status_code=500, detail="Search service error")
+
+    seen_docs = set()
+    results = []
+    for chunk in (result.data or []):
+        if chunk.get("citation_mode") != "citable":
+            continue
+        if chunk.get("source_kind") not in COMMENTARY_SOURCE_KINDS:
+            continue
+        doc_id = chunk.get("document_id")
+        if doc_id in seen_docs:
+            continue
+        seen_docs.add(doc_id)
+        content = chunk.get("content", "")
+        excerpt = content[:200].rsplit(" ", 1)[0] + "..." if len(content) > 200 else content
+        results.append({
+            "document_id": doc_id,
+            "title": chunk.get("title", ""),
+            "author": chunk.get("author", ""),
+            "source_kind": chunk.get("source_kind", ""),
+            "excerpt": excerpt,
         })
         if len(results) >= 5:
             break
