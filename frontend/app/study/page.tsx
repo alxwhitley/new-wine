@@ -557,17 +557,57 @@ function VerseSearch({
   );
 }
 
-function VerseDisplay({ verse, error }: { verse: VerseData | null; error: string | null }) {
+function VerseDisplay({
+  verse,
+  error,
+  onStepPrev,
+  onStepNext,
+  hasPrev,
+  hasNext,
+}: {
+  verse: VerseData | null;
+  error: string | null;
+  onStepPrev: () => void;
+  onStepNext: () => void;
+  hasPrev: boolean;
+  hasNext: boolean;
+}) {
   if (error) {
     return <p className="text-sm mt-4" style={{ color: "#993c1d" }}>{error}</p>;
   }
   if (!verse) return null;
   return (
-    <div className="mt-4 rounded-lg border border-border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
-        {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
-      </p>
-      <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
+    <div className="mt-4 rounded-lg border border-border bg-card relative" style={{ minHeight: 120 }}>
+      <div className="p-4 pb-10">
+        <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
+          {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
+        </p>
+        <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
+      </div>
+      <div
+        className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-3 py-1.5"
+        style={{ borderTop: "1px solid #3c3c38", backgroundColor: "#262624", borderRadius: "0 0 0.5rem 0.5rem" }}
+      >
+        <button
+          onClick={onStepPrev}
+          disabled={!hasPrev}
+          className="text-sm font-medium"
+          style={{ color: "#c1c1b8", opacity: hasPrev ? 1 : 0.5 }}
+        >
+          &larr;
+        </button>
+        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+          {verse.book} {verse.chapter}:{verse.verse}
+        </p>
+        <button
+          onClick={onStepNext}
+          disabled={!hasNext}
+          className="text-sm font-medium"
+          style={{ color: "#c1c1b8", opacity: hasNext ? 1 : 0.5 }}
+        >
+          &rarr;
+        </button>
+      </div>
     </div>
   );
 }
@@ -1024,37 +1064,22 @@ export default function StudyPage() {
                 <WordStudyPanel doc={wordStudyDoc} definition={wordStudyDefinition} />
               ) : (
                 <>
-                  <VerseDisplay verse={verseData} error={verseError} />
-
-                  {verseData && (
-                    <div className="flex items-center gap-3 mt-6 mb-4">
-                      <button
-                        onClick={() => stepVerse("prev")}
-                        disabled={!prevVerseId}
-                        className="text-sm font-medium transition-opacity"
-                        style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
-                      >
-                        &larr;
-                      </button>
-                      <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-                        {verseData.book} {verseData.chapter}:{verseData.verse}
-                      </p>
-                      <button
-                        onClick={() => stepVerse("next")}
-                        disabled={!nextVerseId}
-                        className="text-sm font-medium transition-opacity"
-                        style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
-                      >
-                        &rarr;
-                      </button>
-                    </div>
-                  )}
-
-                  <InterlinearBlocks
-                    tokens={PLACEHOLDER_TOKENS}
-                    selectedStrongs={selectedStrongs}
-                    onSelect={handleSelectWord}
+                  <VerseDisplay
+                    verse={verseData}
+                    error={verseError}
+                    onStepPrev={() => stepVerse("prev")}
+                    onStepNext={() => stepVerse("next")}
+                    hasPrev={!!prevVerseId}
+                    hasNext={!!nextVerseId}
                   />
+
+                  <div className="mt-4" style={{ minHeight: 96 }}>
+                    <InterlinearBlocks
+                      tokens={PLACEHOLDER_TOKENS}
+                      selectedStrongs={selectedStrongs}
+                      onSelect={handleSelectWord}
+                    />
+                  </div>
 
                   <div className="mt-8">
                     <DefinitionPanel
@@ -1091,37 +1116,22 @@ export default function StudyPage() {
               </>
             ) : (
               <>
-                <VerseDisplay verse={verseData} error={verseError} />
-
-                {verseData && (
-                  <div className="flex items-center gap-3 mt-6 mb-4">
-                    <button
-                      onClick={() => stepVerse("prev")}
-                      disabled={!prevVerseId}
-                      className="text-sm font-medium transition-opacity"
-                      style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
-                    >
-                      &larr;
-                    </button>
-                    <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-                      {verseData.book} {verseData.chapter}:{verseData.verse}
-                    </p>
-                    <button
-                      onClick={() => stepVerse("next")}
-                      disabled={!nextVerseId}
-                      className="text-sm font-medium transition-opacity"
-                      style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
-                    >
-                      &rarr;
-                    </button>
-                  </div>
-                )}
-
-                <InterlinearBlocks
-                  tokens={PLACEHOLDER_TOKENS}
-                  selectedStrongs={selectedStrongs}
-                  onSelect={handleSelectWord}
+                <VerseDisplay
+                  verse={verseData}
+                  error={verseError}
+                  onStepPrev={() => stepVerse("prev")}
+                  onStepNext={() => stepVerse("next")}
+                  hasPrev={!!prevVerseId}
+                  hasNext={!!nextVerseId}
                 />
+
+                <div className="mt-4" style={{ minHeight: 96 }}>
+                  <InterlinearBlocks
+                    tokens={PLACEHOLDER_TOKENS}
+                    selectedStrongs={selectedStrongs}
+                    onSelect={handleSelectWord}
+                  />
+                </div>
 
                 <div className="mt-8">
                   <DefinitionPanel
