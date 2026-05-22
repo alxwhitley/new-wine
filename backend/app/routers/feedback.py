@@ -1,24 +1,17 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Optional
 
-import jwt
-from jwt import PyJWKClient
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from app.auth import get_optional_user
+from app.auth import get_optional_user, require_admin
 from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-ADMIN_EMAIL = "alxwhitley@gmail.com"
-
-_jwks_client = PyJWKClient(os.environ["SUPABASE_JWT_JWKS_URL"])
 
 
 class FeedbackRequest(BaseModel):
@@ -63,36 +56,12 @@ async def submit_feedback(
     return {"status": "ok"}
 
 
-def _require_admin(request: Request) -> str:
-    """Extract JWT, verify email is admin."""
-    auth_header = request.headers.get("authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=403, detail="Not authenticated")
-
-    token = auth_header[7:]
-    try:
-        signing_key = _jwks_client.get_signing_key_from_jwt(token)
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["ES256", "RS256"],
-            options={"verify_aud": False},
-        )
-    except Exception:
-        raise HTTPException(status_code=403, detail="Invalid token")
-
-    if payload.get("email") != ADMIN_EMAIL:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    return payload.get("sub", "")
-
-
 @router.get("")
 async def list_feedback(
     request: Request,
     rating: Optional[str] = Query(None, description="Filter by rating: thumbs_up or thumbs_down"),
     source_type: Optional[str] = Query(None, description="Filter by source_type: chat_answer, commentary, word_study"),
-    user_id: str = Depends(_require_admin),
+    user_id: str = Depends(require_admin),
 ):
     db = get_supabase()
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { streamChatMessage, Citation } from "@/lib/api";
 
 export interface Message {
@@ -27,6 +27,7 @@ export function useChat(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
 
   const sendMessage = useCallback(
     async (question: string) => {
@@ -64,6 +65,7 @@ export function useChat(
             onMeta: (meta) => {
               newConversationId = meta.conversation_id;
               if (meta.conversation_id) {
+                conversationIdRef.current = meta.conversation_id;
                 setConversationId(meta.conversation_id);
               }
               setMessages((prev) => {
@@ -85,7 +87,7 @@ export function useChat(
           },
           {
             token: accessToken,
-            conversationId,
+            conversationId: conversationIdRef.current,
             messages: history.map((m) => ({ role: m.role, content: m.content })),
             anonId: getAnonId(),
           },
@@ -109,15 +111,17 @@ export function useChat(
         setLoading(false);
       }
     },
-    [accessToken, conversationId, onGuestLimitReached, onDailyLimitReached],
+    [accessToken, onGuestLimitReached, onDailyLimitReached],
   );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    conversationIdRef.current = null;
     setConversationId(null);
   }, []);
 
   const loadConversation = useCallback((id: string, msgs: Message[]) => {
+    conversationIdRef.current = id;
     setConversationId(id);
     setMessages(msgs);
   }, []);

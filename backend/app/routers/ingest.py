@@ -2,8 +2,9 @@ import hashlib
 import logging
 import uuid
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 
+from app.auth import get_optional_user
 from app.db.supabase import get_supabase
 from app.services.extractor import extract_text_from_pdf
 from app.services.metadata import extract_metadata
@@ -15,10 +16,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_user(request: Request) -> str:
+    """Require authenticated user. Returns user_id or raises 403."""
+    user_id = get_optional_user(request)
+    if not user_id:
+        raise HTTPException(status_code=403, detail="Authentication required")
+    return user_id
+
+
 @router.post("")
 async def ingest(
+    request: Request,
     file: UploadFile = File(...),
     source_type: str = Form("sermon"),
+    user_id: str = Depends(_require_user),
 ):
     if source_type not in ("sermon", "background"):
         raise HTTPException(status_code=400, detail="source_type must be 'sermon' or 'background'")

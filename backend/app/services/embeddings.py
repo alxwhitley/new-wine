@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import List
 
 from openai import OpenAI
 
@@ -15,7 +16,7 @@ def _get_client():
     return _client
 
 
-def embed_text(text: str) -> list[float]:
+def embed_text(text: str) -> List[float]:
     try:
         response = _get_client().embeddings.create(
             input=text,

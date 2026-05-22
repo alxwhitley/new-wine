@@ -1,51 +1,19 @@
 from __future__ import annotations
 
 import logging
-import os
-from typing import Optional
 
-import jwt
-from jwt import PyJWKClient
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.auth import require_admin
 from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-ADMIN_EMAIL = "alxwhitley@gmail.com"
-
-_jwks_client = PyJWKClient(os.environ["SUPABASE_JWT_JWKS_URL"])
-
-
-def _require_admin(request: Request) -> str:
-    """Extract JWT, verify email is admin. Returns user_id or raises 403."""
-    auth_header = request.headers.get("authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=403, detail="Not authenticated")
-
-    token = auth_header[7:]
-    try:
-        signing_key = _jwks_client.get_signing_key_from_jwt(token)
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["ES256", "RS256"],
-            options={"verify_aud": False},
-        )
-    except Exception:
-        raise HTTPException(status_code=403, detail="Invalid token")
-
-    email = payload.get("email", "")
-    if email != ADMIN_EMAIL:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    return payload.get("sub", "")
-
 
 @router.get("/sources")
-async def list_sources(request: Request, user_id: str = Depends(_require_admin)):
+async def list_sources(request: Request, user_id: str = Depends(require_admin)):
     db = get_supabase()
 
     rows = db.table("source_toggles").select("*").order("created_at").execute()
@@ -90,7 +58,7 @@ async def list_sources(request: Request, user_id: str = Depends(_require_admin))
 
 
 @router.patch("/sources/{toggle_id}")
-async def toggle_source(toggle_id: str, request: Request, user_id: str = Depends(_require_admin)):
+async def toggle_source(toggle_id: str, request: Request, user_id: str = Depends(require_admin)):
     db = get_supabase()
 
     # Get current state

@@ -6,7 +6,7 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 from groq import Groq
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -62,7 +62,7 @@ def _get_ai():
     return _ai
 
 
-def expand_query(question: str) -> list[str]:
+def expand_query(question: str) -> List[str]:
     """Ask Llama to rewrite the query into 3 search variants."""
     try:
         response = _get_ai().chat.completions.create(
@@ -125,7 +125,7 @@ def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True
         logger.exception("FTS search RPC failed for query: %s", query[:100])
         raise
 
-    scores: dict[str, tuple[float, dict]] = {}
+    scores: Dict[str, Tuple[float, dict]] = {}
 
     for rank, chunk in enumerate(vector_result.data):
         cid = chunk["id"]
@@ -155,7 +155,7 @@ def _is_citable(chunk: dict) -> bool:
     return chunk.get("source_type") == "sermon"
 
 
-def fetch_neighbor_chunks(document_id: str, chunk_index: int, db) -> list[dict]:
+def fetch_neighbor_chunks(document_id: str, chunk_index: int, db) -> List[dict]:
     """Fetch the chunks immediately before and after the given chunk_index in the same document."""
     neighbors = []
     for idx in [chunk_index - 1, chunk_index + 1]:
@@ -179,7 +179,7 @@ USER_DAILY_QUERY_LIMIT = 65  # ~$2/day at ~$0.03/query
 class ChatRequest(BaseModel):
     question: str
     conversation_id: Optional[str] = None
-    messages: list[ChatMessage] = []
+    messages: List[ChatMessage] = []
     anon_id: Optional[str] = None
 
     @field_validator("question")
@@ -237,10 +237,6 @@ def _sse(data: str) -> str:
 
 @router.post("")
 async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_optional_user)):
-    # TODO: temporary debug log — remove after confirming auth works
-    logger.info("[DEBUG AUTH] user_id=%s | SUPABASE_JWT_JWKS_URL present=%s",
-                user_id, bool(os.environ.get("SUPABASE_JWT_JWKS_URL")))
-
     db = get_supabase()
 
     # Query limit checks
@@ -282,7 +278,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         variant_weights = [1.0, 0.8, 0.6]
 
         # Step 2: Run hybrid search for each variant with weighted RRF SUM
-        all_scores: dict[str, tuple[float, dict]] = {}
+        all_scores: Dict[str, Tuple[float, dict]] = {}
         for i, variant in enumerate(variants):
             weight = variant_weights[i] if i < len(variant_weights) else 0.5
             variant_scores = hybrid_search_rrf(variant, db, include_copyrighted=include_copyrighted)
@@ -302,8 +298,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
         # Step 3: Document-level collapse — max 2 chunks per document
         ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
-        doc_counts: dict[str, int] = {}
-        collapsed: list[tuple[str, tuple[float, dict]]] = []
+        doc_counts: Dict[str, int] = {}
+        collapsed: List[Tuple[str, Tuple[float, dict]]] = []
         for cid, (score, chunk) in ranked:
             did = chunk.get("document_id", "")
             doc_counts[did] = doc_counts.get(did, 0) + 1
@@ -311,8 +307,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 collapsed.append((cid, (score, chunk)))
 
         # Step 3a: Per-author cap — max 3 chunks per unique author
-        author_counts: dict[str, int] = {}
-        author_capped: list[tuple[str, tuple[float, dict]]] = []
+        author_counts: Dict[str, int] = {}
+        author_capped: List[Tuple[str, Tuple[float, dict]]] = []
         for cid, (score, chunk) in collapsed:
             author = chunk.get("author") or "Unknown"
             author_counts[author] = author_counts.get(author, 0) + 1

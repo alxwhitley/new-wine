@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
-_cache = None  # type: Dict | None
+_cache = None  # type: Optional[Dict]
 _cache_ts = 0.0
 CACHE_TTL = 60  # seconds
 
@@ -61,7 +61,7 @@ def get_disabled_filters():
 
 
 def is_chunk_disabled(chunk, filters=None):
-    # type: (dict, Dict | None) -> bool
+    # type: (dict, Optional[Dict]) -> bool
     """Check if a chunk should be filtered out based on disabled toggles."""
     if filters is None:
         filters = get_disabled_filters()

@@ -6,6 +6,8 @@ Breaking priority: headings → paragraph breaks → sentence boundaries → har
 Uses tiktoken with cl100k_base encoding.
 """
 
+from typing import List
+
 import tiktoken
 
 _enc = tiktoken.get_encoding("cl100k_base")
@@ -16,7 +18,7 @@ def token_len(text: str) -> int:
     return len(_enc.encode(text))
 
 
-def chunk_text(text: str, chunk_target: int = 550, overlap: int = 80) -> list[str]:
+def chunk_text(text: str, chunk_target: int = 550, overlap: int = 80) -> List[str]:
     """Split text into chunks of approximately `chunk_target` tokens with `overlap`."""
     tokens = _enc.encode(text)
     if len(tokens) <= chunk_target:

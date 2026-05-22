@@ -7,9 +7,8 @@ from typing import Optional
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
-
 from app.auth import get_optional_user
+from app.constants import BOOK_MAP
 from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -39,76 +38,6 @@ Output ONLY raw valid JSON with no preamble, no markdown backticks, and no expla
 
 If a section has no source material write: "No source material found for this verse under this category."
 """
-
-# Book map for verse_id lookup
-BOOK_MAP = {
-    "genesis": "GEN", "gen": "GEN",
-    "exodus": "EXO", "exo": "EXO", "exod": "EXO",
-    "leviticus": "LEV", "lev": "LEV",
-    "numbers": "NUM", "num": "NUM",
-    "deuteronomy": "DEU", "deut": "DEU", "deu": "DEU",
-    "joshua": "JOS", "josh": "JOS", "jos": "JOS",
-    "judges": "JDG", "judg": "JDG", "jdg": "JDG",
-    "ruth": "RUT", "rut": "RUT",
-    "1 samuel": "1SA", "1samuel": "1SA", "1 sam": "1SA", "1sam": "1SA", "1sa": "1SA",
-    "2 samuel": "2SA", "2samuel": "2SA", "2 sam": "2SA", "2sam": "2SA", "2sa": "2SA",
-    "1 kings": "1KI", "1kings": "1KI", "1 kgs": "1KI", "1kgs": "1KI", "1ki": "1KI",
-    "2 kings": "2KI", "2kings": "2KI", "2 kgs": "2KI", "2kgs": "2KI", "2ki": "2KI",
-    "1 chronicles": "1CH", "1chronicles": "1CH", "1 chr": "1CH", "1chr": "1CH", "1ch": "1CH",
-    "2 chronicles": "2CH", "2chronicles": "2CH", "2 chr": "2CH", "2chr": "2CH", "2ch": "2CH",
-    "ezra": "EZR", "ezr": "EZR",
-    "nehemiah": "NEH", "neh": "NEH",
-    "esther": "EST", "esth": "EST", "est": "EST",
-    "job": "JOB",
-    "psalms": "PSA", "psalm": "PSA", "psa": "PSA", "ps": "PSA",
-    "proverbs": "PRO", "prov": "PRO", "pro": "PRO",
-    "ecclesiastes": "ECC", "eccl": "ECC", "ecc": "ECC",
-    "song of solomon": "SNG", "song of songs": "SNG", "song": "SNG", "sng": "SNG", "sos": "SNG",
-    "isaiah": "ISA", "isa": "ISA",
-    "jeremiah": "JER", "jer": "JER",
-    "lamentations": "LAM", "lam": "LAM",
-    "ezekiel": "EZK", "ezek": "EZK", "ezk": "EZK",
-    "daniel": "DAN", "dan": "DAN",
-    "hosea": "HOS", "hos": "HOS",
-    "joel": "JOL", "jol": "JOL",
-    "amos": "AMO", "amo": "AMO",
-    "obadiah": "OBA", "obad": "OBA", "oba": "OBA",
-    "jonah": "JON", "jon": "JON",
-    "micah": "MIC", "mic": "MIC",
-    "nahum": "NAM", "nah": "NAM", "nam": "NAM",
-    "habakkuk": "HAB", "hab": "HAB",
-    "zephaniah": "ZEP", "zeph": "ZEP", "zep": "ZEP",
-    "haggai": "HAG", "hag": "HAG",
-    "zechariah": "ZEC", "zech": "ZEC", "zec": "ZEC",
-    "malachi": "MAL", "mal": "MAL",
-    "matthew": "MAT", "matt": "MAT", "mat": "MAT",
-    "mark": "MRK", "mrk": "MRK",
-    "luke": "LUK", "luk": "LUK",
-    "john": "JHN", "jhn": "JHN",
-    "acts": "ACT", "act": "ACT",
-    "romans": "ROM", "rom": "ROM",
-    "1 corinthians": "1CO", "1corinthians": "1CO", "1 cor": "1CO", "1cor": "1CO", "1co": "1CO",
-    "2 corinthians": "2CO", "2corinthians": "2CO", "2 cor": "2CO", "2cor": "2CO", "2co": "2CO",
-    "galatians": "GAL", "gal": "GAL",
-    "ephesians": "EPH", "eph": "EPH",
-    "philippians": "PHP", "phil": "PHP", "php": "PHP",
-    "colossians": "COL", "col": "COL",
-    "1 thessalonians": "1TH", "1thessalonians": "1TH", "1 thess": "1TH", "1thess": "1TH", "1th": "1TH",
-    "2 thessalonians": "2TH", "2thessalonians": "2TH", "2 thess": "2TH", "2thess": "2TH", "2th": "2TH",
-    "1 timothy": "1TI", "1timothy": "1TI", "1 tim": "1TI", "1tim": "1TI", "1ti": "1TI",
-    "2 timothy": "2TI", "2timothy": "2TI", "2 tim": "2TI", "2tim": "2TI", "2ti": "2TI",
-    "titus": "TIT", "tit": "TIT",
-    "philemon": "PHM", "phlm": "PHM", "phm": "PHM",
-    "hebrews": "HEB", "heb": "HEB",
-    "james": "JAS", "jas": "JAS",
-    "1 peter": "1PE", "1peter": "1PE", "1 pet": "1PE", "1pet": "1PE", "1pe": "1PE",
-    "2 peter": "2PE", "2peter": "2PE", "2 pet": "2PE", "2pet": "2PE", "2pe": "2PE",
-    "1 john": "1JN", "1john": "1JN", "1 jn": "1JN", "1jn": "1JN",
-    "2 john": "2JN", "2john": "2JN", "2 jn": "2JN", "2jn": "2JN",
-    "3 john": "3JN", "3john": "3JN", "3 jn": "3JN", "3jn": "3JN",
-    "jude": "JUD", "jud": "JUD",
-    "revelation": "REV", "rev": "REV",
-}
 
 
 def _parse_ref(ref):
@@ -186,10 +115,6 @@ async def get_jewish_perspective(verse_reference: str):
         return {"cached": True, "content": result.data[0]["content"]}
 
     return {"cached": False, "content": None}
-
-
-class GenerateRequest(BaseModel):
-    verse_text: Optional[str] = None
 
 
 @router.post("/{verse_reference}")

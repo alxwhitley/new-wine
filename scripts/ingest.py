@@ -13,6 +13,7 @@ import json
 import hashlib
 import shutil
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 from groq import Groq
 import openai
@@ -34,52 +35,7 @@ DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/sources")
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 MAX_TAG_CHARS = 4000
 
-VALID_TAGS = {
-    "Baptism in the Spirit", "Speaking in Tongues", "Prophetic Ministry",
-    "Word of Knowledge", "Word of Wisdom", "Discerning of Spirits",
-    "Miracles and Signs", "The Nine Gifts", "Stirring Up Gifts",
-    "Moving in the Spirit", "Fruit of the Spirit", "Fresh Anointing",
-    "Filling of the Spirit", "Power for Service",
-    "Hearing God's Voice", "Dreams and Visions", "Interpreting Your Dreams",
-    "Encounters with God", "Divine Appointments", "Supernatural Peace",
-    "Manifestations of God", "Intimacy with Jesus", "Atmosphere of Worship",
-    "Spiritual Sight", "Knowing God's Heart", "Personal Revelation",
-    "Walking in the Spirit", "Led by the Spirit",
-    "Intercessory Prayer", "Authority of the Believer",
-    "Tearing Down Strongholds", "Resisting the Enemy", "Victory in Christ",
-    "Deliverance from Bondage", "Casting Out Demons", "Spiritual Weapons",
-    "Breaking Negative Patterns", "Binding and Loosing", "Armor of God",
-    "Warfare in Prayer", "Fasting and Prayer", "Protecting Your Mind",
-    "Divine Healing", "Praying for the Sick", "Inner Healing",
-    "Emotional Wholeness", "Healing of Memories", "Health and Vitality",
-    "Overcoming Fear", "Freedom from Anxiety", "Restoration of Soul",
-    "Physical Miracles", "The Will to Heal", "Faith for Healing",
-    "God's Comfort", "Wholeness in Christ",
-    "Biblical Leadership", "Fivefold Ministry", "Apostolic Oversight",
-    "Prophetic Direction", "Pastoral Care", "Delegated Authority",
-    "Spiritual Covering", "Accountability in Leadership",
-    "Covenant Relationships", "Mentoring Relationships",
-    "Leading with Integrity", "Servant Leadership", "Team Ministry",
-    "Equipping the Saints", "Elders and Deacons",
-    "Spiritual Maturity", "Walking with God", "Discipleship and Mentoring",
-    "Accountability in Christ", "Knowing God's Will", "Character of Christ",
-    "Honoring Biblical Authority", "Submission to God",
-    "Faith and Perseverance", "Stewardship and Finances",
-    "Spiritual Disciplines", "Dying to Self", "Holiness and Sanctification",
-    "Body Ministry",
-    "Kingdom of God", "Word and Spirit", "Biblical Authority",
-    "The New Covenant", "The Lordship of Christ", "Grace and Mercy",
-    "Salvation and Repentance", "End Times Prophecy", "The Rapture",
-    "Second Coming", "The Trinity", "Blood of Jesus", "Heaven and Eternity",
-    "Restoration of All Things",
-    "Biblical Marriage", "Christian Parenting", "Family Life",
-    "Relationship Restoration", "Communication in Marriage",
-    "Raising Godly Children", "Singleness and Purity",
-    "Friendship in Christ", "Honoring Your Parents", "Forgiving Others",
-    "Love and Sacrifice", "Conflict Resolution", "The Christian Home",
-}
-
-TAXONOMY_LIST = ", ".join(sorted(VALID_TAGS))
+from taxonomy import VALID_TAGS, TAXONOMY_LIST
 
 TAG_SYSTEM_PROMPT = f"""You are a theological taxonomy classifier. Based on this document, assign 3-6 topic tags from the taxonomy below.
 
@@ -113,7 +69,7 @@ supabase         = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── Text Extraction ──────────────────────────────────────────────────────────
 
-def extract_pages(pdf_path: Path) -> list[str]:
+def extract_pages(pdf_path: Path) -> List[str]:
     """Return a list of page text strings from a PDF."""
     pages = []
     with pdfplumber.open(pdf_path) as pdf:
@@ -123,7 +79,7 @@ def extract_pages(pdf_path: Path) -> list[str]:
     return pages
 
 
-def extract_docx(path: Path) -> list[str]:
+def extract_docx(path: Path) -> List[str]:
     """Extract text from a .docx file. Returns a list of strings grouped by
     page breaks, or as a single-element list if no page breaks are found."""
     doc = docx.Document(str(path))
@@ -148,7 +104,7 @@ def extract_docx(path: Path) -> list[str]:
     return pages
 
 
-def extract_doc(path: Path) -> list[str]:
+def extract_doc(path: Path) -> List[str]:
     """Extract text from a .doc file using macOS textutil. Returns a
     single-element list since .doc files have no reliable page boundary info."""
     result = subprocess.run(
@@ -159,12 +115,12 @@ def extract_doc(path: Path) -> list[str]:
     return [raw] if raw else []
 
 
-def extract_txt(path: Path) -> tuple[list[str], dict[str, str]]:
+def extract_txt(path: Path) -> Tuple[List[str], Dict[str, str]]:
     """Extract text from a .txt file. Parses optional metadata headers at the top.
     Headers are lines matching KEY: VALUE before the first blank line.
     Returns (pages, headers_dict)."""
     raw = path.read_text(encoding="utf-8").strip()
-    headers: dict[str, str] = {}
+    headers: Dict[str, str] = {}
     body = raw
 
     # Parse metadata headers (lines before first blank line)
@@ -231,7 +187,7 @@ Return only the JSON object. No explanation, no markdown.
 
 # ── Embedding ─────────────────────────────────────────────────────────────────
 
-def embed_text(text: str) -> list[float]:
+def embed_text(text: str) -> List[float]:
     response = openai_client.embeddings.create(
         input=text,
         model=EMBEDDING_MODEL
@@ -291,7 +247,7 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
     return doc_id
 
 
-def insert_chunks(doc_id: str, chunks: list[str], author: str = None, year: int = None, source_hash: str = None):
+def insert_chunks(doc_id: str, chunks: List[str], author: str = None, year: int = None, source_hash: str = None):
     """Embed and insert all chunks for a document."""
     for idx, text in enumerate(chunks):
         print(f"  Embedding chunk {idx + 1}/{len(chunks)}...")
@@ -405,7 +361,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
     # 1. Extract text
     ext = file_path.suffix.lower()
-    txt_headers: dict[str, str] = {}
+    txt_headers: Dict[str, str] = {}
     if ext == ".txt":
         print(f"Extracting text ({ext})...")
         pages, txt_headers = extract_txt(file_path)
@@ -521,7 +477,7 @@ def main():
         DOCS_FOLDER / "web" / "derek_prince" / "raw",
     ]
 
-    files: list[Path] = []
+    files: List[Path] = []
     for folder in scan_dirs:
         if folder.is_dir():
             for f in sorted(folder.iterdir()):
@@ -547,7 +503,7 @@ def main():
     dp_ingested_dir = DOCS_FOLDER / "web" / "derek_prince" / "ingested"
 
     processed = skipped = failed = 0
-    skip_reasons: dict[str, list[str]] = {}
+    skip_reasons: Dict[str, List[str]] = {}
     for file_path in files:
         is_copyrighted = _is_copyrighted(file_path)
         status, reason = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)

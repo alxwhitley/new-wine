@@ -81,7 +81,6 @@ export default function SearchPage() {
     setError(null);
     try {
       const data = await getArticle(id);
-      console.log("Article API response:", data);
       setArticle(data);
     } catch {
       setError("Failed to load article.");
@@ -226,8 +225,13 @@ export default function SearchPage() {
                     )}
                     {doc.highlighted_snippet && (
                       <p
-                        className="text-sm text-muted-foreground mt-2 line-clamp-2"
-                        dangerouslySetInnerHTML={{ __html: doc.highlighted_snippet }}
+                        className="text-sm text-muted-foreground mt-2 line-clamp-2 [&_mark]:bg-transparent [&_mark]:text-[#d4b96a] [&_mark]:font-semibold"
+                        dangerouslySetInnerHTML={{
+                          __html: doc.highlighted_snippet.replace(
+                            /<(?!\/?mark\b)[^>]*>/gi,
+                            ""
+                          ),
+                        }}
                       />
                     )}
                     {doc.topic_tags && doc.topic_tags.length > 0 && (
