@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
+from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,9 @@ async def get_corpus(
     # Word study lookup: direct DB query by title match instead of vector search.
     # Lexicon entries dominate vector similarity, pushing word studies out of top-N.
     if source_kind == "word_study" and (strongs or transliteration):
+        filters = get_disabled_filters()
+        if "word_study" in filters["source_kinds"]:
+            return {"results": []}
         # Find the document by Strong's number first, fall back to transliteration
         doc_query = db.table("documents").select("id, title, author, source_kind, url").eq("source_kind", "word_study")
         if strongs:
@@ -232,6 +236,8 @@ async def get_corpus(
         return {"results": results[:5]}
 
     # General corpus lookup: semantic search via vector similarity
+    filters = get_disabled_filters()
+
     parts = []
     if verse:
         parts.append(verse)
@@ -250,7 +256,7 @@ async def get_corpus(
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
             "match_count": 20,
-            "include_copyrighted": True,
+            "include_copyrighted": filters["include_copyrighted"],
         }).execute()
     except Exception:
         logger.exception("match_chunks RPC failed for corpus query")
@@ -263,6 +269,8 @@ async def get_corpus(
         if chunk.get("citation_mode") != "citable":
             continue
         if chunk.get("source_kind") not in CORPUS_SOURCE_KINDS:
+            continue
+        if is_chunk_disabled(chunk, filters):
             continue
         doc_id = chunk.get("document_id")
         if doc_id in seen_docs:
@@ -364,6 +372,8 @@ async def get_word_study(document_id: str):
 async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),
 ):
+    filters = get_disabled_filters()
+
     try:
         embedding = embed_text(verse_text)
     except Exception:
@@ -376,7 +386,7 @@ async def get_commentary(
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
             "match_count": 20,
-            "include_copyrighted": True,
+            "include_copyrighted": filters["include_copyrighted"],
         }).execute()
     except Exception:
         logger.exception("match_chunks RPC failed for commentary query")
@@ -388,6 +398,8 @@ async def get_commentary(
         if chunk.get("citation_mode") != "citable":
             continue
         if chunk.get("source_kind") != "commentary":
+            continue
+        if is_chunk_disabled(chunk, filters):
             continue
         doc_id = chunk.get("document_id")
         if doc_id in seen_docs:

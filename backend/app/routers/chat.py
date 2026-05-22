@@ -16,6 +16,7 @@ from pydantic import BaseModel, field_validator
 from app.auth import get_optional_user
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
+from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 
 
 def is_word_study_query(question: str) -> bool:
@@ -96,10 +97,11 @@ def expand_query(question: str) -> list[str]:
     return [question]
 
 
-INCLUDE_COPYRIGHTED = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
+INCLUDE_COPYRIGHTED_ENV = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
 
 
-def hybrid_search_rrf(query: str, db, vector_k: int = 40, fts_k: int = 30) -> dict[str, tuple[float, dict]]:
+def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True):
+    # type: (str, object, int, int, bool) -> dict
     """Run vector + FTS search for a single query, return {chunk_id: (rrf_score, chunk)}."""
     embedding = embed_text(query)
 
@@ -107,7 +109,7 @@ def hybrid_search_rrf(query: str, db, vector_k: int = 40, fts_k: int = 30) -> di
         vector_result = db.rpc("match_chunks", {
             "query_embedding": embedding,
             "match_count": vector_k,
-            "include_copyrighted": INCLUDE_COPYRIGHTED,
+            "include_copyrighted": include_copyrighted,
         }).execute()
     except Exception:
         logger.exception("Vector search RPC failed for query: %s", query[:100])
@@ -117,7 +119,7 @@ def hybrid_search_rrf(query: str, db, vector_k: int = 40, fts_k: int = 30) -> di
         fts_result = db.rpc("search_chunks_fts", {
             "query_text": query,
             "match_count": fts_k,
-            "include_copyrighted": INCLUDE_COPYRIGHTED,
+            "include_copyrighted": include_copyrighted,
         }).execute()
     except Exception:
         logger.exception("FTS search RPC failed for query: %s", query[:100])
@@ -270,6 +272,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
     try:
 
+        # Step 0: Get source filter settings
+        filters = get_disabled_filters()
+        include_copyrighted = filters["include_copyrighted"] and INCLUDE_COPYRIGHTED_ENV
+
         # Step 1: Expand query into variants
         variants = expand_query(request.question)
         variant_weights = [1.0, 0.8, 0.6]
@@ -278,13 +284,20 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         all_scores: dict[str, tuple[float, dict]] = {}
         for i, variant in enumerate(variants):
             weight = variant_weights[i] if i < len(variant_weights) else 0.5
-            variant_scores = hybrid_search_rrf(variant, db)
+            variant_scores = hybrid_search_rrf(variant, db, include_copyrighted=include_copyrighted)
             for cid, (score, chunk) in variant_scores.items():
                 weighted = score * weight
                 if cid in all_scores:
                     all_scores[cid] = (all_scores[cid][0] + weighted, all_scores[cid][1])
                 else:
                     all_scores[cid] = (weighted, chunk)
+
+        # Step 2.5: Filter out disabled source_kinds and source_names
+        all_scores = {
+            cid: (score, chunk)
+            for cid, (score, chunk) in all_scores.items()
+            if not is_chunk_disabled(chunk, filters)
+        }
 
         # Step 3: Document-level collapse — max 2 chunks per document
         ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
