@@ -65,10 +65,10 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 
 ## Key Commands
 
-### Start Backend
+### Deploy Backend
+Backend deploys to Railway via git push to main. There is no local backend.
 ```bash
-cd /Users/alexwhitley/Desktop/rhemata
-kill -9 $(lsof -t -i:8000) 2>/dev/null; python3 -m uvicorn app.main:app --app-dir backend --reload --log-level debug
+git add -A && git commit -m '...' && git push
 ```
 
 ### Start Frontend
@@ -104,11 +104,6 @@ python3 scripts/ingest.py              # Ingest cleaned transcripts → Supabase
 ```bash
 cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_existing_articles.py
 cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts.py
-```
-
-### Kill Port 8000
-```bash
-kill -9 $(lsof -t -i:8000)
 ```
 
 ---
