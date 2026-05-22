@@ -348,6 +348,7 @@ function SkeletonCards() {
 
 function CorpusPanel({
   definition,
+  selectedStrongs,
   corpusResults,
   corpusLoading,
   commentaryResults,
@@ -359,6 +360,7 @@ function CorpusPanel({
   wordStudyLoading,
 }: {
   definition: WordDefinition | null;
+  selectedStrongs: string | null;
   corpusResults: CorpusResult[];
   corpusLoading: boolean;
   commentaryResults: CommentaryResult[];
@@ -397,15 +399,24 @@ function CorpusPanel({
   }
 
   // State 2: word selected — show word study corpus results
-  if (definition) {
+  // Enters when a word is selected from the interlinear grid (selectedStrongs is set)
+  if (selectedStrongs) {
+    const label = definition
+      ? `${definition.word} (${definition.transliteration})`
+      : corpusResults.length > 0
+        ? corpusResults[0].title
+        : null;
+
     return (
       <>
         <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
           From the library
         </p>
-        <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-          {definition.word} ({definition.transliteration})
-        </p>
+        {label && (
+          <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+            {label}
+          </p>
+        )}
         {corpusLoading ? (
           <SkeletonCards />
         ) : corpusResults.length === 0 ? (
@@ -612,10 +623,39 @@ function VerseDisplay({
   );
 }
 
-function WordStudyPanel({ doc, definition }: { doc: WordSearchResult; definition: WordDefinition | null }) {
+function WordStudyPanel({
+  doc,
+  definition,
+  isSaved,
+  onToggleSave,
+  isLoggedIn,
+}: {
+  doc: WordSearchResult;
+  definition: WordDefinition | null;
+  isSaved: boolean;
+  onToggleSave: () => void;
+  isLoggedIn: boolean;
+}) {
   return (
-    <div className="mt-8">
-      <p className="font-serif text-3xl text-foreground">
+    <div className="mt-8 relative">
+      <button
+        onClick={onToggleSave}
+        title={isLoggedIn ? (isSaved ? "Remove from saved" : "Save word") : "Sign in to save words"}
+        className="absolute top-0 right-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors"
+        style={{
+          backgroundColor: "#262624",
+          border: "1px solid #3c3c38",
+        }}
+      >
+        <Bookmark
+          className="h-4 w-4"
+          style={{
+            color: isSaved ? "#b49238" : "#888780",
+            fill: isSaved ? "#b49238" : "none",
+          }}
+        />
+      </button>
+      <p className="font-serif text-3xl text-foreground pr-10">
         {definition?.word || doc.word || doc.transliteration}
       </p>
       <p className="text-sm text-muted-foreground mt-1">
@@ -984,6 +1024,18 @@ export default function StudyPage() {
     if (token) toggleSaveWord(token);
   }, [selectedStrongs, toggleSaveWord]);
 
+  const handleToggleSaveWordStudy = useCallback(() => {
+    if (!wordStudyDoc) return;
+    const syntheticToken: WordToken = {
+      greek: wordStudyDefinition?.word || wordStudyDoc.word || wordStudyDoc.transliteration,
+      transliteration: wordStudyDoc.transliteration,
+      english: wordStudyDefinition?.gloss || wordStudyDoc.word,
+      strongs: wordStudyDoc.strongs_number,
+      morph: "",
+    };
+    toggleSaveWord(syntheticToken);
+  }, [wordStudyDoc, wordStudyDefinition, toggleSaveWord]);
+
   const handleSidebarSavedWordSelect = useCallback(
     (strongs: string) => {
       setSelectedStrongs(strongs);
@@ -993,6 +1045,7 @@ export default function StudyPage() {
 
   const corpusPanelProps = {
     definition,
+    selectedStrongs,
     corpusResults,
     corpusLoading,
     commentaryResults,
@@ -1061,7 +1114,13 @@ export default function StudyPage() {
               <VerseSearch {...verseSearchProps} />
 
               {wordStudyMode && wordStudyDoc ? (
-                <WordStudyPanel doc={wordStudyDoc} definition={wordStudyDefinition} />
+                <WordStudyPanel
+                  doc={wordStudyDoc}
+                  definition={wordStudyDefinition}
+                  isSaved={wordStudyDoc ? savedStrongsSet.has(wordStudyDoc.strongs_number) : false}
+                  onToggleSave={handleToggleSaveWordStudy}
+                  isLoggedIn={!!user}
+                />
               ) : (
                 <>
                   <VerseDisplay
@@ -1109,7 +1168,13 @@ export default function StudyPage() {
 
             {wordStudyMode && wordStudyDoc ? (
               <>
-                <WordStudyPanel doc={wordStudyDoc} definition={wordStudyDefinition} />
+                <WordStudyPanel
+                  doc={wordStudyDoc}
+                  definition={wordStudyDefinition}
+                  isSaved={wordStudyDoc ? savedStrongsSet.has(wordStudyDoc.strongs_number) : false}
+                  onToggleSave={handleToggleSaveWordStudy}
+                  isLoggedIn={!!user}
+                />
                 <div className="mt-8">
                   <CorpusPanel {...corpusPanelProps} />
                 </div>
