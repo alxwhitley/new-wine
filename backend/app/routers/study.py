@@ -173,19 +173,27 @@ async def get_verse(ref: str = Query(..., description="Verse reference, e.g. 'Jo
 async def get_corpus(
     verse: Optional[str] = Query(None, description="Verse reference, e.g. 'John 1:1'"),
     transliteration: Optional[str] = Query(None, description="Transliteration, e.g. 'logos'"),
+    strongs: Optional[str] = Query(None, description="Strong's number, e.g. 'G3056'"),
     source_kind: Optional[str] = Query(None, description="Filter to a single source_kind, e.g. 'word_study'"),
 ):
     if not verse and not transliteration:
         raise HTTPException(status_code=400, detail="At least one of verse or transliteration is required")
 
-    # Build semantic query from available params
-    parts = []
-    if verse:
-        parts.append(verse)
-    if transliteration:
-        parts.append(transliteration)
-        parts.append("word")
-    query = " ".join(parts)
+    # Build semantic query — when targeting word_study, use a query shaped
+    # like Precept Austin titles: "Word study: logos G3056"
+    if source_kind == "word_study" and transliteration:
+        parts = ["Word study:", transliteration]
+        if strongs:
+            parts.append(strongs)
+        query = " ".join(parts)
+    else:
+        parts = []
+        if verse:
+            parts.append(verse)
+        if transliteration:
+            parts.append(transliteration)
+            parts.append("word")
+        query = " ".join(parts)
 
     try:
         embedding = embed_text(query)
@@ -215,6 +223,16 @@ async def get_corpus(
     else:
         allowed_kinds = CORPUS_SOURCE_KINDS
 
+    # When filtering to word_study, require title to match the actual word
+    title_filter = None
+    if source_kind == "word_study" and (strongs or transliteration):
+        title_needles = []
+        if strongs:
+            title_needles.append(strongs.lower())
+        if transliteration:
+            title_needles.append(transliteration.lower())
+        title_filter = title_needles
+
     # Filter to citable chunks, dedupe by document, take top 5
     seen_docs = set()
     results = []
@@ -223,6 +241,10 @@ async def get_corpus(
             continue
         if chunk.get("source_kind") not in allowed_kinds:
             continue
+        if title_filter:
+            title_lower = (chunk.get("title") or "").lower()
+            if not any(needle in title_lower for needle in title_filter):
+                continue
         doc_id = chunk.get("document_id")
         if doc_id in seen_docs:
             continue

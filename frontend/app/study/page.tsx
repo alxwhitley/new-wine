@@ -704,6 +704,7 @@ export default function StudyPage() {
     const params = new URLSearchParams();
     if (verseRef.trim()) params.set("verse", verseRef.trim());
     params.set("transliteration", token.transliteration);
+    params.set("strongs", token.strongs);
     params.set("source_kind", "word_study");
 
     setCorpusLoading(true);
