@@ -484,6 +484,29 @@ function CorpusPanel({
   );
 }
 
+const BOOK_NAMES = [
+  "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
+  "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
+  "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles",
+  "Ezra", "Nehemiah", "Esther", "Job", "Psalms", "Proverbs",
+  "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah",
+  "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
+  "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah",
+  "Haggai", "Zechariah", "Malachi",
+  "Matthew", "Mark", "Luke", "John", "Acts", "Romans",
+  "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians",
+  "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians",
+  "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews",
+  "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John",
+  "Jude", "Revelation",
+];
+
+function matchBooks(input: string): string[] {
+  const trimmed = input.trim().toLowerCase();
+  if (trimmed.length === 0 || /\d/.test(trimmed.replace(/^[123]\s*/, ""))) return [];
+  return BOOK_NAMES.filter((b) => b.toLowerCase().startsWith(trimmed)).slice(0, 5);
+}
+
 function VerseSearch({
   verseRef,
   onChange,
@@ -502,23 +525,17 @@ function VerseSearch({
   onWordStudySelect: (result: WordSearchResult) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!wordSearchOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        // Parent controls open state via onChange clearing
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [wordSearchOpen]);
+  const bookMatches = matchBooks(verseRef);
+  const showBookDropdown = bookMatches.length > 0 && !/\d/.test(verseRef.trim());
+  const showWordDropdown = !showBookDropdown && wordSearchOpen && wordSearchResults.length > 0;
 
   return (
     <div className="relative" ref={containerRef}>
       <div className="flex gap-2">
         <input
+          ref={inputRef}
           type="text"
           value={verseRef}
           onChange={(e) => onChange(e.target.value)}
@@ -540,7 +557,29 @@ function VerseSearch({
           )}
         </button>
       </div>
-      {wordSearchOpen && wordSearchResults.length > 0 && (
+      {showBookDropdown && (
+        <div
+          className="absolute top-full left-0 right-12 mt-1 rounded-lg border shadow-lg z-50 overflow-hidden"
+          style={{ backgroundColor: "#262624", borderColor: "#3c3c38" }}
+        >
+          {bookMatches.map((name) => (
+            <button
+              key={name}
+              onClick={() => {
+                onChange(name + " ");
+                inputRef.current?.focus();
+              }}
+              className="w-full text-left px-4 py-3 text-sm cursor-pointer"
+              style={{ color: "#e6e6e6", borderBottom: "1px solid #3c3c38" }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+      {showWordDropdown && (
         <div
           className="absolute top-full left-0 right-12 mt-1 rounded-lg border border-border bg-card shadow-lg z-50 overflow-hidden"
         >
@@ -855,12 +894,13 @@ export default function StudyPage() {
     }
   }, [verseData?.verse_id]);
 
-  // Debounced word search
+  // Debounced word search (suppressed when book autocomplete is active)
   useEffect(() => {
     const trimmed = verseRef.trim();
     const isPlainWord = trimmed.length >= 2 && !/\d/.test(trimmed);
+    const hasBookMatch = matchBooks(verseRef).length > 0;
 
-    if (!isPlainWord) {
+    if (!isPlainWord || hasBookMatch) {
       setWordSearchResults([]);
       setWordSearchOpen(false);
       return;
