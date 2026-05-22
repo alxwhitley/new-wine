@@ -1,0 +1,1521 @@
+2026-05-22 13:55:32,977 INFO: ============================================================
+2026-05-22 13:55:32,977 INFO: Commentary: Matthew Henry's Commentary
+2026-05-22 13:55:32,977 INFO: ============================================================
+2026-05-22 13:55:33,864 INFO: Fetching: Matthew Henry's Commentary - Genesis (50 chapters)
+2026-05-22 13:55:53,372 INFO:   239 verse entries collected
+2026-05-22 13:55:54,393 INFO:   Tags: Biblical Authority, The Trinity, God's Comfort, Honoring Biblical Authority
+2026-05-22 13:56:45,596 INFO:   Embedded 50/239 chunks
+2026-05-22 13:57:15,204 INFO:   Embedded 100/239 chunks
+2026-05-22 13:57:37,732 INFO:   Embedded 150/239 chunks
+2026-05-22 13:58:06,128 INFO:   Embedded 200/239 chunks
+2026-05-22 13:58:21,159 INFO:   Done: Matthew Henry's Commentary - Genesis (239 chunks)
+2026-05-22 13:58:21,164 INFO: ============================================================
+2026-05-22 13:58:21,164 INFO: Commentary: Adam Clarke's Commentary
+2026-05-22 13:58:21,164 INFO: ============================================================
+2026-05-22 13:58:21,422 INFO: Fetching: Adam Clarke's Commentary - Genesis (50 chapters)
+2026-05-22 13:58:41,702 INFO:   877 verse entries collected
+2026-05-22 13:58:42,170 INFO:   Tags: The Trinity, God's Comfort, Biblical Authority
+2026-05-22 13:59:12,028 INFO:   Embedded 50/877 chunks
+2026-05-22 13:59:36,923 INFO:   Embedded 100/877 chunks
+2026-05-22 14:00:06,872 INFO:   Embedded 150/877 chunks
+2026-05-22 14:00:36,514 INFO:   Embedded 200/877 chunks
+2026-05-22 14:01:01,527 INFO:   Embedded 250/877 chunks
+2026-05-22 14:01:36,763 INFO:   Embedded 300/877 chunks
+2026-05-22 14:02:00,211 INFO:   Embedded 350/877 chunks
+2026-05-22 14:02:29,650 INFO:   Embedded 400/877 chunks
+2026-05-22 14:02:58,782 INFO:   Embedded 450/877 chunks
+2026-05-22 14:03:35,339 INFO:   Embedded 500/877 chunks
+2026-05-22 14:04:17,705 INFO:   Embedded 550/877 chunks
+2026-05-22 14:05:00,538 INFO:   Embedded 600/877 chunks
+2026-05-22 14:05:26,643 INFO:   Embedded 650/877 chunks
+2026-05-22 14:06:10,406 INFO:   Embedded 700/877 chunks
+2026-05-22 14:06:47,315 INFO:   Embedded 750/877 chunks
+2026-05-22 14:07:11,036 INFO:   Embedded 800/877 chunks
+2026-05-22 14:07:30,856 INFO:   Embedded 850/877 chunks
+2026-05-22 14:07:41,945 INFO:   Done: Adam Clarke's Commentary - Genesis (877 chunks)
+2026-05-22 14:07:41,954 INFO: ============================================================
+2026-05-22 14:07:41,955 INFO: Commentary: Jamieson-Fausset-Brown Commentary
+2026-05-22 14:07:41,955 INFO: ============================================================
+2026-05-22 14:07:42,246 INFO: Fetching: Jamieson-Fausset-Brown Commentary - Genesis (50 chapters)
+2026-05-22 14:08:02,170 INFO:   529 verse entries collected
+2026-05-22 14:08:38,115 INFO:   Embedded 50/529 chunks
+2026-05-22 14:09:03,122 INFO:   Embedded 100/529 chunks
+2026-05-22 14:09:40,100 INFO:   Embedded 150/529 chunks
+2026-05-22 14:10:03,197 INFO:   Embedded 200/529 chunks
+2026-05-22 14:10:25,652 INFO:   Embedded 250/529 chunks
+2026-05-22 14:10:55,527 INFO:   Embedded 300/529 chunks
+2026-05-22 14:11:23,791 INFO:   Embedded 350/529 chunks
+2026-05-22 14:11:52,390 INFO:   Embedded 400/529 chunks
+2026-05-22 14:12:17,507 INFO:   Embedded 450/529 chunks
+2026-05-22 14:12:38,800 INFO:   Embedded 500/529 chunks
+2026-05-22 14:12:56,383 INFO:   Done: Jamieson-Fausset-Brown Commentary - Genesis (529 chunks)
+2026-05-22 14:12:56,385 INFO: ============================================================
+2026-05-22 14:12:56,386 INFO: Done. 3 ingested, 0 skipped (17.4 min)
+2026-05-22 14:31:25,916 INFO: ============================================================
+2026-05-22 14:31:25,916 INFO: Commentary: Matthew Henry's Commentary
+2026-05-22 14:31:25,916 INFO: ============================================================
+2026-05-22 14:31:26,854 INFO: Fetching: Matthew Henry's Commentary - John (21 chapters)
+2026-05-22 14:31:36,925 INFO:   96 verse entries collected
+2026-05-22 14:31:37,983 INFO:   Tags: Biblical Authority, The Trinity, The Lordship of Christ, Authority of the Believer
+2026-05-22 14:32:35,495 INFO:   Embedded 50/96 chunks
+2026-05-22 14:33:11,896 INFO:   Done: Matthew Henry's Commentary - John (96 chunks)
+2026-05-22 14:33:11,908 INFO: ============================================================
+2026-05-22 14:33:11,908 INFO: Commentary: Adam Clarke's Commentary
+2026-05-22 14:33:11,908 INFO: ============================================================
+2026-05-22 14:33:12,104 INFO: Fetching: Adam Clarke's Commentary - John (21 chapters)
+2026-05-22 14:33:22,087 INFO:   746 verse entries collected
+2026-05-22 14:33:22,732 INFO:   Tags: Biblical Authority, The Lordship of Christ, The New Covenant, Divine Healing
+2026-05-22 14:33:59,693 INFO:   Embedded 50/746 chunks
+2026-05-22 14:34:37,669 INFO:   Embedded 100/746 chunks
+2026-05-22 14:35:05,678 INFO:   Embedded 150/746 chunks
+2026-05-22 14:35:34,104 INFO:   Embedded 200/746 chunks
+2026-05-22 14:36:05,617 INFO:   Embedded 250/746 chunks
+2026-05-22 14:36:39,033 INFO:   Embedded 300/746 chunks
+2026-05-22 14:37:02,831 INFO:   Embedded 350/746 chunks
+2026-05-22 14:37:25,852 INFO:   Embedded 400/746 chunks
+2026-05-22 14:38:00,973 INFO:   Embedded 450/746 chunks
+2026-05-22 14:38:24,592 INFO:   Embedded 500/746 chunks
+2026-05-22 14:39:05,304 INFO:   Embedded 550/746 chunks
+2026-05-22 14:39:29,867 INFO:   Embedded 600/746 chunks
+2026-05-22 14:39:57,315 INFO:   Embedded 650/746 chunks
+2026-05-22 14:40:19,254 INFO:   Embedded 700/746 chunks
+2026-05-22 14:40:41,637 INFO:   Done: Adam Clarke's Commentary - John (746 chunks)
+2026-05-22 14:40:41,643 INFO: ============================================================
+2026-05-22 14:40:41,643 INFO: Commentary: Jamieson-Fausset-Brown Commentary
+2026-05-22 14:40:41,643 INFO: ============================================================
+2026-05-22 14:40:42,031 INFO: Fetching: Jamieson-Fausset-Brown Commentary - John (21 chapters)
+2026-05-22 14:40:51,037 INFO:   680 verse entries collected
+2026-05-22 14:40:51,760 INFO:   Tags: The Lordship of Christ, Biblical Authority, The Trinity
+2026-05-22 14:41:21,920 INFO:   Embedded 50/680 chunks
+2026-05-22 14:41:55,452 INFO:   Embedded 100/680 chunks
+2026-05-22 14:42:43,201 INFO:   Embedded 150/680 chunks
+2026-05-22 14:43:03,729 INFO:   Embedded 200/680 chunks
+2026-05-22 14:43:25,509 INFO:   Embedded 250/680 chunks
+2026-05-22 14:43:52,300 INFO:   Embedded 300/680 chunks
+2026-05-22 14:44:18,393 INFO:   Embedded 350/680 chunks
+2026-05-22 14:44:52,172 INFO:   Embedded 400/680 chunks
+2026-05-22 14:45:16,295 INFO:   Embedded 450/680 chunks
+2026-05-22 14:46:01,731 INFO:   Embedded 500/680 chunks
+2026-05-22 14:46:29,231 INFO:   Embedded 550/680 chunks
+2026-05-22 14:46:50,511 INFO:   Embedded 600/680 chunks
+2026-05-22 14:47:15,298 INFO:   Embedded 650/680 chunks
+2026-05-22 14:47:39,494 INFO:   Done: Jamieson-Fausset-Brown Commentary - John (680 chunks)
+2026-05-22 14:47:39,496 INFO: ============================================================
+2026-05-22 14:47:39,496 INFO: Done. 3 ingested, 0 skipped (16.2 min)
+2026-05-22 15:27:27,538 INFO: ============================================================
+2026-05-22 15:27:27,538 INFO: Commentary: Matthew Henry's Commentary
+2026-05-22 15:27:27,538 INFO: ============================================================
+2026-05-22 15:27:28,180 INFO: SKIP (exists): Matthew Henry's Commentary - Genesis
+2026-05-22 15:27:28,344 INFO: Fetching: Matthew Henry's Commentary - Exodus (40 chapters)
+2026-05-22 15:27:44,052 INFO:   136 verse entries collected
+2026-05-22 15:27:44,810 INFO:   Tags: Covenant Relationships, Faith and Perseverance, God's Comfort
+2026-05-22 15:28:15,839 INFO:   Embedded 50/136 chunks
+2026-05-22 15:28:44,142 INFO:   Embedded 100/136 chunks
+2026-05-22 15:29:04,713 INFO:   Done: Matthew Henry's Commentary - Exodus (136 chunks)
+2026-05-22 15:29:04,837 INFO: Fetching: Matthew Henry's Commentary - Leviticus (27 chapters)
+2026-05-22 15:29:15,455 INFO:   88 verse entries collected
+2026-05-22 15:29:16,172 INFO:   Tags: Biblical Authority, Honoring Biblical Authority, The Lordship of Christ
+2026-05-22 15:29:42,949 INFO:   Embedded 50/88 chunks
+2026-05-22 15:30:09,604 INFO:   Done: Matthew Henry's Commentary - Leviticus (88 chunks)
+2026-05-22 15:30:09,751 INFO: Fetching: Matthew Henry's Commentary - Numbers (36 chapters)
+2026-05-22 15:30:24,236 INFO:   93 verse entries collected
+2026-05-22 15:30:24,850 INFO:   Tags: Biblical Authority, Covenant Relationships, God's Comfort
+2026-05-22 15:30:49,445 INFO:   Embedded 50/93 chunks
+2026-05-22 15:31:09,336 INFO:   Done: Matthew Henry's Commentary - Numbers (93 chunks)
+2026-05-22 15:31:09,557 INFO: Fetching: Matthew Henry's Commentary - Deuteronomy (34 chapters)
+2026-05-22 15:31:23,381 INFO:   101 verse entries collected
+2026-05-22 15:31:23,855 INFO:   Tags: Biblical Authority, Biblical Leadership, Honoring Biblical Authority
+2026-05-22 15:31:49,628 INFO:   Embedded 50/101 chunks
+2026-05-22 15:32:35,667 INFO:   Embedded 100/101 chunks
+2026-05-22 15:32:35,947 INFO:   Done: Matthew Henry's Commentary - Deuteronomy (101 chunks)
+2026-05-22 15:32:36,053 INFO: Fetching: Matthew Henry's Commentary - Joshua (24 chapters)
+2026-05-22 15:32:45,796 INFO:   69 verse entries collected
+2026-05-22 15:32:46,561 INFO:   Tags: Accountability in Leadership, Biblical Leadership, Submission to God
+2026-05-22 15:33:09,394 INFO:   Embedded 50/69 chunks
+2026-05-22 15:33:18,734 INFO:   Done: Matthew Henry's Commentary - Joshua (69 chunks)
+2026-05-22 15:33:18,821 INFO: Fetching: Matthew Henry's Commentary - Judges (21 chapters)
+2026-05-22 15:33:27,197 INFO:   72 verse entries collected
+2026-05-22 15:33:27,899 INFO:   Tags: Accountability in Leadership, Led by the Spirit
+2026-05-22 15:33:57,437 INFO:   Embedded 50/72 chunks
+2026-05-22 15:34:10,301 INFO:   Done: Matthew Henry's Commentary - Judges (72 chunks)
+2026-05-22 15:34:10,430 INFO: Fetching: Matthew Henry's Commentary - Ruth (4 chapters)
+2026-05-22 15:34:12,252 INFO:   12 verse entries collected
+2026-05-22 15:34:12,673 INFO:   Tags: Biblical Authority, Covenant Relationships, God's Comfort, Stewardship and Finances
+2026-05-22 15:34:23,946 INFO:   Done: Matthew Henry's Commentary - Ruth (12 chunks)
+2026-05-22 15:34:24,014 INFO: Fetching: Matthew Henry's Commentary - 1 Samuel (31 chapters)
+2026-05-22 15:34:37,184 INFO:   103 verse entries collected
+2026-05-22 15:34:38,037 INFO:   Tags: Biblical Authority, Family Life, Accountability in Christ
+2026-05-22 15:34:57,043 INFO:   Embedded 50/103 chunks
+2026-05-22 15:35:19,938 INFO:   Embedded 100/103 chunks
+2026-05-22 15:35:20,766 INFO:   Done: Matthew Henry's Commentary - 1 Samuel (103 chunks)
+2026-05-22 15:35:20,825 INFO: Fetching: Matthew Henry's Commentary - 2 Samuel (24 chapters)
+2026-05-22 15:35:29,659 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/2SA/23.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:35:29,667 WARNING:   No data for matthew-henry 2SA ch 23
+2026-05-22 15:35:29,870 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/2SA/24.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:35:29,872 WARNING:   No data for matthew-henry 2SA ch 24
+2026-05-22 15:35:29,872 INFO:   72 verse entries collected
+2026-05-22 15:35:30,331 INFO:   Tags: Authority of the Believer, Accountability in Leadership
+2026-05-22 15:35:50,576 INFO:   Embedded 50/72 chunks
+2026-05-22 15:36:01,185 INFO:   Done: Matthew Henry's Commentary - 2 Samuel (72 chunks)
+2026-05-22 15:36:01,284 INFO: Fetching: Matthew Henry's Commentary - 1 Kings (22 chapters)
+2026-05-22 15:36:10,122 INFO:   73 verse entries collected
+2026-05-22 15:36:11,193 WARNING: Tagging failed: Extra data: line 3 column 1 (char 244)
+2026-05-22 15:36:30,789 INFO:   Embedded 50/73 chunks
+2026-05-22 15:36:42,931 INFO:   Done: Matthew Henry's Commentary - 1 Kings (73 chunks)
+2026-05-22 15:36:42,998 INFO: Fetching: Matthew Henry's Commentary - 2 Kings (25 chapters)
+2026-05-22 15:36:54,297 INFO:   82 verse entries collected
+2026-05-22 15:36:54,812 INFO:   Tags: Accountability in Christ, Biblical Authority, Authority of the Believer, Resisting the Enemy
+2026-05-22 15:37:19,584 INFO:   Embedded 50/82 chunks
+2026-05-22 15:37:31,847 INFO:   Done: Matthew Henry's Commentary - 2 Kings (82 chunks)
+2026-05-22 15:37:31,906 INFO: Fetching: Matthew Henry's Commentary - 1 Chronicles (29 chapters)
+2026-05-22 15:37:43,055 INFO:   66 verse entries collected
+2026-05-22 15:37:43,481 INFO:   Tags: Accountability in Christ, Biblical Authority, Covenant Relationships, The New Covenant
+2026-05-22 15:38:14,946 INFO:   Embedded 50/66 chunks
+2026-05-22 15:38:20,373 INFO:   Done: Matthew Henry's Commentary - 1 Chronicles (66 chunks)
+2026-05-22 15:38:20,454 INFO: Fetching: Matthew Henry's Commentary - 2 Chronicles (36 chapters)
+2026-05-22 15:38:35,259 INFO:   83 verse entries collected
+2026-05-22 15:38:35,706 INFO:   Tags: Authority of the Believer, Biblical Leadership, God's Comfort, Spiritual Maturity
+2026-05-22 15:39:08,210 INFO:   Embedded 50/83 chunks
+2026-05-22 15:39:20,392 INFO:   Done: Matthew Henry's Commentary - 2 Chronicles (83 chunks)
+2026-05-22 15:39:20,467 INFO: Fetching: Matthew Henry's Commentary - Ezra (10 chapters)
+2026-05-22 15:39:24,415 INFO:   26 verse entries collected
+2026-05-22 15:39:25,012 INFO:   Tags: Covenant Relationships, Restoration of All Things, God's Comfort
+2026-05-22 15:39:36,601 INFO:   Done: Matthew Henry's Commentary - Ezra (26 chunks)
+2026-05-22 15:39:36,656 INFO: Fetching: Matthew Henry's Commentary - Nehemiah (13 chapters)
+2026-05-22 15:39:41,603 INFO:   32 verse entries collected
+2026-05-22 15:39:42,138 INFO:   Tags: Accountability in Christ, Biblical Leadership, Character of Christ, God's Comfort
+2026-05-22 15:39:58,693 INFO:   Done: Matthew Henry's Commentary - Nehemiah (32 chunks)
+2026-05-22 15:39:58,739 INFO: Fetching: Matthew Henry's Commentary - Esther (10 chapters)
+2026-05-22 15:40:02,749 INFO:   21 verse entries collected
+2026-05-22 15:40:03,499 INFO:   Tags: Kingdom of God, Authority of the Believer, The Lordship of Christ
+2026-05-22 15:40:11,688 INFO:   Done: Matthew Henry's Commentary - Esther (21 chunks)
+2026-05-22 15:40:11,757 INFO: Fetching: Matthew Henry's Commentary - Job (42 chapters)
+2026-05-22 15:40:28,782 INFO:   134 verse entries collected
+2026-05-22 15:40:30,494 WARNING: Tagging failed: Expecting ',' delimiter: line 1 column 97 (char 96)
+2026-05-22 15:40:56,902 INFO:   Embedded 50/134 chunks
+2026-05-22 15:41:22,938 INFO:   Embedded 100/134 chunks
+2026-05-22 15:41:39,113 INFO:   Done: Matthew Henry's Commentary - Job (134 chunks)
+2026-05-22 15:41:39,185 INFO: Fetching: Matthew Henry's Commentary - Psalms (150 chapters)
+2026-05-22 15:42:38,936 INFO:   443 verse entries collected
+2026-05-22 15:42:39,356 INFO:   Tags: Character of Christ, Freedom from Anxiety, Victory in Christ, Holiness and Sanctification
+2026-05-22 15:43:08,027 INFO:   Embedded 50/443 chunks
+2026-05-22 15:43:37,366 INFO:   Embedded 100/443 chunks
+2026-05-22 15:43:57,340 INFO:   Embedded 150/443 chunks
+2026-05-22 15:44:17,500 INFO:   Embedded 200/443 chunks
+2026-05-22 15:44:39,779 INFO:   Embedded 250/443 chunks
+2026-05-22 15:45:00,542 INFO:   Embedded 300/443 chunks
+2026-05-22 15:45:17,700 INFO:   Embedded 350/443 chunks
+2026-05-22 15:45:35,731 INFO:   Embedded 400/443 chunks
+2026-05-22 15:45:57,387 INFO:   Done: Matthew Henry's Commentary - Psalms (443 chunks)
+2026-05-22 15:45:57,673 INFO: Fetching: Matthew Henry's Commentary - Proverbs (31 chapters)
+2026-05-22 15:46:10,086 INFO:   519 verse entries collected
+2026-05-22 15:46:10,631 INFO:   Tags: Biblical Authority, Discerning of Spirits, Equipping the Saints
+2026-05-22 15:46:36,273 INFO:   Embedded 50/519 chunks
+2026-05-22 15:46:57,076 INFO:   Embedded 100/519 chunks
+2026-05-22 15:47:15,890 INFO:   Embedded 150/519 chunks
+2026-05-22 15:47:37,909 INFO:   Embedded 200/519 chunks
+2026-05-22 15:48:03,531 INFO:   Embedded 250/519 chunks
+2026-05-22 15:48:19,907 INFO:   Embedded 300/519 chunks
+2026-05-22 15:48:44,331 INFO:   Embedded 350/519 chunks
+2026-05-22 15:49:02,711 INFO:   Embedded 400/519 chunks
+2026-05-22 15:49:23,420 INFO:   Embedded 450/519 chunks
+2026-05-22 15:49:51,441 INFO:   Embedded 500/519 chunks
+2026-05-22 15:50:03,234 INFO:   Done: Matthew Henry's Commentary - Proverbs (519 chunks)
+2026-05-22 15:50:03,427 INFO: Fetching: Matthew Henry's Commentary - Ecclesiastes (12 chapters)
+2026-05-22 15:50:08,376 INFO:   42 verse entries collected
+2026-05-22 15:50:09,244 WARNING: Tagging failed: Extra data: line 3 column 1 (char 123)
+2026-05-22 15:51:05,977 INFO:   Done: Matthew Henry's Commentary - Ecclesiastes (42 chunks)
+2026-05-22 15:51:06,117 INFO: Fetching: Matthew Henry's Commentary - Song of Solomon (8 chapters)
+2026-05-22 15:51:06,362 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:06,364 WARNING:   No data for matthew-henry SNG ch 1
+2026-05-22 15:51:06,626 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:06,628 WARNING:   No data for matthew-henry SNG ch 2
+2026-05-22 15:51:06,874 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:06,876 WARNING:   No data for matthew-henry SNG ch 3
+2026-05-22 15:51:07,094 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:07,100 WARNING:   No data for matthew-henry SNG ch 4
+2026-05-22 15:51:07,328 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:07,332 WARNING:   No data for matthew-henry SNG ch 5
+2026-05-22 15:51:07,571 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:07,572 WARNING:   No data for matthew-henry SNG ch 6
+2026-05-22 15:51:07,857 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:07,858 WARNING:   No data for matthew-henry SNG ch 7
+2026-05-22 15:51:08,103 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:51:08,106 WARNING:   No data for matthew-henry SNG ch 8
+2026-05-22 15:51:08,106 WARNING:   No verse data found for Matthew Henry's Commentary - Song of Solomon
+2026-05-22 15:51:08,202 INFO: Fetching: Matthew Henry's Commentary - Isaiah (66 chapters)
+2026-05-22 15:51:33,358 INFO:   192 verse entries collected
+2026-05-22 15:51:33,713 INFO:   Tags: Biblical Authority, Hearing God's Voice, Prophetic Ministry
+2026-05-22 15:52:03,447 INFO:   Embedded 50/192 chunks
+2026-05-22 15:52:24,393 INFO:   Embedded 100/192 chunks
+2026-05-22 15:52:46,407 INFO:   Embedded 150/192 chunks
+2026-05-22 15:53:11,802 INFO:   Done: Matthew Henry's Commentary - Isaiah (192 chunks)
+2026-05-22 15:53:12,009 INFO: Fetching: Matthew Henry's Commentary - Jeremiah (52 chapters)
+2026-05-22 15:53:32,372 INFO:   148 verse entries collected
+2026-05-22 15:53:32,805 INFO:   Tags: Biblical Authority, Prophetic Ministry, The Lordship of Christ
+2026-05-22 15:53:57,564 INFO:   Embedded 50/148 chunks
+2026-05-22 15:54:32,108 INFO:   Embedded 100/148 chunks
+2026-05-22 15:54:51,075 INFO:   Done: Matthew Henry's Commentary - Jeremiah (148 chunks)
+2026-05-22 15:54:51,243 INFO: Fetching: Matthew Henry's Commentary - Lamentations (5 chapters)
+2026-05-22 15:54:53,503 INFO:   14 verse entries collected
+2026-05-22 15:54:53,879 INFO:   Tags: Biblical Authority, God's Comfort, Restoration of Soul
+2026-05-22 15:55:06,440 INFO:   Done: Matthew Henry's Commentary - Lamentations (14 chunks)
+2026-05-22 15:55:06,544 INFO: Fetching: Matthew Henry's Commentary - Ezekiel (48 chapters)
+2026-05-22 15:55:25,009 INFO:   131 verse entries collected
+2026-05-22 15:55:25,533 INFO:   Tags: Encounters with God, Heaven and Eternity, Prophetic Ministry, The Lordship of Christ
+2026-05-22 15:55:56,989 INFO:   Embedded 50/131 chunks
+2026-05-22 15:56:18,479 INFO:   Embedded 100/131 chunks
+2026-05-22 15:56:33,095 INFO:   Done: Matthew Henry's Commentary - Ezekiel (131 chunks)
+2026-05-22 15:56:33,326 INFO: Fetching: Matthew Henry's Commentary - Daniel (12 chapters)
+2026-05-22 15:56:38,348 INFO:   40 verse entries collected
+2026-05-22 15:56:39,080 INFO:   Tags: Biblical Authority, Kingdom of God, Restoration of All Things
+2026-05-22 15:56:57,011 INFO:   Done: Matthew Henry's Commentary - Daniel (40 chunks)
+2026-05-22 15:56:57,049 INFO: Fetching: Matthew Henry's Commentary - Hosea (14 chapters)
+2026-05-22 15:57:02,648 INFO:   33 verse entries collected
+2026-05-22 15:57:03,041 INFO:   Tags: Biblical Authority, Prophetic Ministry, Authority of the Believer
+2026-05-22 15:57:18,801 INFO:   Done: Matthew Henry's Commentary - Hosea (33 chunks)
+2026-05-22 15:57:18,889 INFO: Fetching: Matthew Henry's Commentary - Joel (3 chapters)
+2026-05-22 15:57:20,263 INFO:   10 verse entries collected
+2026-05-22 15:57:21,193 WARNING: Tagging failed: Expecting value: line 1 column 29 (char 28)
+2026-05-22 15:57:24,952 INFO:   Done: Matthew Henry's Commentary - Joel (10 chunks)
+2026-05-22 15:57:25,020 INFO: Fetching: Matthew Henry's Commentary - Amos (9 chapters)
+2026-05-22 15:57:28,816 INFO:   21 verse entries collected
+2026-05-22 15:57:29,218 INFO:   Tags: Biblical Authority, Prophetic Ministry, Hearing God's Voice
+2026-05-22 15:57:39,003 INFO:   Done: Matthew Henry's Commentary - Amos (21 chunks)
+2026-05-22 15:57:39,083 INFO: Fetching: Matthew Henry's Commentary - Obadiah (1 chapters)
+2026-05-22 15:57:39,446 INFO:   2 verse entries collected
+2026-05-22 15:57:40,019 INFO:   Tags: Accountability in Christ, Authority of the Believer, Resisting the Enemy, Victory in Christ
+2026-05-22 15:57:40,944 INFO:   Done: Matthew Henry's Commentary - Obadiah (2 chunks)
+2026-05-22 15:57:41,010 INFO: Fetching: Matthew Henry's Commentary - Jonah (4 chapters)
+2026-05-22 15:57:41,690 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/JON/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:57:41,695 WARNING:   No data for matthew-henry JON ch 2
+2026-05-22 15:57:41,901 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/JON/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:57:41,904 WARNING:   No data for matthew-henry JON ch 3
+2026-05-22 15:57:42,109 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/JON/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:57:42,114 WARNING:   No data for matthew-henry JON ch 4
+2026-05-22 15:57:42,114 INFO:   3 verse entries collected
+2026-05-22 15:57:42,564 INFO:   Tags: Prophetic Ministry, Prophetic Direction, Authority of the Believer
+2026-05-22 15:57:44,067 INFO:   Done: Matthew Henry's Commentary - Jonah (3 chunks)
+2026-05-22 15:57:44,137 INFO: Fetching: Matthew Henry's Commentary - Micah (7 chapters)
+2026-05-22 15:57:46,759 INFO:   17 verse entries collected
+2026-05-22 15:57:47,158 INFO:   Tags: Biblical Authority, Hearing God's Voice, Prophetic Ministry
+2026-05-22 15:57:53,961 INFO:   Done: Matthew Henry's Commentary - Micah (17 chunks)
+2026-05-22 15:57:54,032 INFO: Fetching: Matthew Henry's Commentary - Nahum (3 chapters)
+2026-05-22 15:57:55,473 INFO:   7 verse entries collected
+2026-05-22 15:57:59,936 INFO:   Done: Matthew Henry's Commentary - Nahum (7 chunks)
+2026-05-22 15:58:00,022 INFO: Fetching: Matthew Henry's Commentary - Habakkuk (3 chapters)
+2026-05-22 15:58:01,206 INFO:   8 verse entries collected
+2026-05-22 15:58:02,113 WARNING: Tagging failed: Expecting ',' delimiter: line 1 column 110 (char 109)
+2026-05-22 15:58:05,847 INFO:   Done: Matthew Henry's Commentary - Habakkuk (8 chunks)
+2026-05-22 15:58:05,917 INFO: Fetching: Matthew Henry's Commentary - Zephaniah (3 chapters)
+2026-05-22 15:58:07,091 INFO:   10 verse entries collected
+2026-05-22 15:58:08,715 WARNING: Tagging failed: Expecting value: line 1 column 70 (char 69)
+2026-05-22 15:58:13,547 INFO:   Done: Matthew Henry's Commentary - Zephaniah (10 chunks)
+2026-05-22 15:58:13,618 INFO: Fetching: Matthew Henry's Commentary - Haggai (2 chapters)
+2026-05-22 15:58:14,396 INFO:   5 verse entries collected
+2026-05-22 15:58:14,980 INFO:   Tags: Biblical Authority, Prophetic Ministry
+2026-05-22 15:58:17,291 INFO:   Done: Matthew Henry's Commentary - Haggai (5 chunks)
+2026-05-22 15:58:17,361 INFO: Fetching: Matthew Henry's Commentary - Zechariah (14 chapters)
+2026-05-22 15:58:23,098 INFO:   34 verse entries collected
+2026-05-22 15:58:23,451 INFO:   Tags: Biblical Authority, Honoring Biblical Authority, Prophetic Ministry
+2026-05-22 15:58:43,337 INFO:   Done: Matthew Henry's Commentary - Zechariah (34 chunks)
+2026-05-22 15:58:43,388 INFO: Fetching: Matthew Henry's Commentary - Malachi (4 chapters)
+2026-05-22 15:58:45,070 INFO:   9 verse entries collected
+2026-05-22 15:58:45,696 INFO:   Tags: Biblical Authority, God's Comfort, Grace and Mercy, Honoring Biblical Authority
+2026-05-22 15:59:08,991 INFO:   Done: Matthew Henry's Commentary - Malachi (9 chunks)
+2026-05-22 15:59:09,078 INFO: Fetching: Matthew Henry's Commentary - Matthew (28 chapters)
+2026-05-22 15:59:17,432 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/19.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:17,436 WARNING:   No data for matthew-henry MAT ch 19
+2026-05-22 15:59:17,719 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/20.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:17,727 WARNING:   No data for matthew-henry MAT ch 20
+2026-05-22 15:59:17,986 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/21.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:17,993 WARNING:   No data for matthew-henry MAT ch 21
+2026-05-22 15:59:18,212 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/22.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:18,216 WARNING:   No data for matthew-henry MAT ch 22
+2026-05-22 15:59:18,478 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/23.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:18,500 WARNING:   No data for matthew-henry MAT ch 23
+2026-05-22 15:59:18,712 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/24.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:18,726 WARNING:   No data for matthew-henry MAT ch 24
+2026-05-22 15:59:19,030 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/25.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:19,040 WARNING:   No data for matthew-henry MAT ch 25
+2026-05-22 15:59:19,360 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/26.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:19,367 WARNING:   No data for matthew-henry MAT ch 26
+2026-05-22 15:59:19,629 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/27.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:19,635 WARNING:   No data for matthew-henry MAT ch 27
+2026-05-22 15:59:19,853 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/28.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 15:59:19,857 WARNING:   No data for matthew-henry MAT ch 28
+2026-05-22 15:59:19,858 INFO:   80 verse entries collected
+2026-05-22 15:59:20,835 INFO:   Tags: Biblical Authority, The Lordship of Christ, Covenant Relationships
+2026-05-22 15:59:59,884 INFO:   Embedded 50/80 chunks
+2026-05-22 16:00:17,660 INFO:   Done: Matthew Henry's Commentary - Matthew (80 chunks)
+2026-05-22 16:00:17,830 INFO: Fetching: Matthew Henry's Commentary - Mark (16 chapters)
+2026-05-22 16:00:24,827 INFO:   69 verse entries collected
+2026-05-22 16:00:25,783 INFO:   Tags: Biblical Authority, The New Covenant, Word and Spirit
+2026-05-22 16:01:04,194 INFO:   Embedded 50/69 chunks
+2026-05-22 16:01:13,487 INFO:   Done: Matthew Henry's Commentary - Mark (69 chunks)
+2026-05-22 16:01:13,641 INFO: Fetching: Matthew Henry's Commentary - Luke (24 chapters)
+2026-05-22 16:01:24,592 INFO:   109 verse entries collected
+2026-05-22 16:01:25,134 INFO:   Tags: Biblical Authority, Authority of the Believer, Word and Spirit
+2026-05-22 16:01:51,573 INFO:   Embedded 50/109 chunks
+2026-05-22 16:02:24,398 INFO:   Embedded 100/109 chunks
+2026-05-22 16:02:31,326 INFO:   Done: Matthew Henry's Commentary - Luke (109 chunks)
+2026-05-22 16:02:31,463 INFO: SKIP (exists): Matthew Henry's Commentary - John
+2026-05-22 16:02:31,646 INFO: Fetching: Matthew Henry's Commentary - Acts (28 chapters)
+2026-05-22 16:02:44,460 INFO:   109 verse entries collected
+2026-05-22 16:02:45,070 INFO:   Tags: Authority of the Believer, Biblical Authority, Led by the Spirit
+2026-05-22 16:03:20,805 INFO:   Embedded 50/109 chunks
+2026-05-22 16:03:50,373 INFO:   Embedded 100/109 chunks
+2026-05-22 16:03:56,993 INFO:   Done: Matthew Henry's Commentary - Acts (109 chunks)
+2026-05-22 16:03:57,322 INFO: Fetching: Matthew Henry's Commentary - Romans (16 chapters)
+2026-05-22 16:04:05,595 INFO:   49 verse entries collected
+2026-05-22 16:04:06,412 INFO:   Tags: Apostolic Oversight, Biblical Authority, The Lordship of Christ, Authority of the Believer
+2026-05-22 16:04:53,377 INFO:   Done: Matthew Henry's Commentary - Romans (49 chunks)
+2026-05-22 16:04:53,542 INFO: Fetching: Matthew Henry's Commentary - 1 Corinthians (16 chapters)
+2026-05-22 16:05:00,528 INFO:   67 verse entries collected
+2026-05-22 16:05:01,205 INFO:   Tags: Apostolic Oversight, Biblical Authority, The Lordship of Christ, Grace and Mercy
+2026-05-22 16:05:38,953 INFO:   Embedded 50/67 chunks
+2026-05-22 16:05:50,010 INFO:   Done: Matthew Henry's Commentary - 1 Corinthians (67 chunks)
+2026-05-22 16:05:50,203 INFO: Fetching: Matthew Henry's Commentary - 2 Corinthians (13 chapters)
+2026-05-22 16:05:55,833 INFO:   38 verse entries collected
+2026-05-22 16:05:56,394 INFO:   Tags: Biblical Authority, The Lordship of Christ, Grace and Mercy
+2026-05-22 16:06:12,664 INFO:   Done: Matthew Henry's Commentary - 2 Corinthians (38 chunks)
+2026-05-22 16:06:12,727 INFO: Fetching: Matthew Henry's Commentary - Galatians (6 chapters)
+2026-05-22 16:06:15,364 INFO:   18 verse entries collected
+2026-05-22 16:06:15,797 INFO:   Tags: Apostolic Oversight, Biblical Authority, Authority of the Believer, Accountability in Leadership
+2026-05-22 16:06:23,745 INFO:   Done: Matthew Henry's Commentary - Galatians (18 chunks)
+2026-05-22 16:06:23,811 INFO: Fetching: Matthew Henry's Commentary - Ephesians (6 chapters)
+2026-05-22 16:06:26,489 INFO:   18 verse entries collected
+2026-05-22 16:06:27,227 INFO:   Tags: Biblical Authority, Grace and Mercy, The Lordship of Christ, The New Covenant
+2026-05-22 16:06:38,474 INFO:   Done: Matthew Henry's Commentary - Ephesians (18 chunks)
+2026-05-22 16:06:38,538 INFO: Fetching: Matthew Henry's Commentary - Philippians (4 chapters)
+2026-05-22 16:06:40,207 INFO:   19 verse entries collected
+2026-05-22 16:06:40,876 INFO:   Tags: Biblical Leadership, Biblical Authority, Authority of the Believer, Spiritual Maturity
+2026-05-22 16:06:52,252 INFO:   Done: Matthew Henry's Commentary - Philippians (19 chunks)
+2026-05-22 16:06:52,328 INFO: Fetching: Matthew Henry's Commentary - Colossians (4 chapters)
+2026-05-22 16:06:53,985 INFO:   17 verse entries collected
+2026-05-22 16:06:54,844 INFO:   Tags: Apostolic Oversight, Faith and Perseverance, Spiritual Maturity
+2026-05-22 16:07:04,648 INFO:   Done: Matthew Henry's Commentary - Colossians (17 chunks)
+2026-05-22 16:07:04,701 INFO: Fetching: Matthew Henry's Commentary - 1 Thessalonians (5 chapters)
+2026-05-22 16:07:06,842 INFO:   18 verse entries collected
+2026-05-22 16:07:07,247 INFO:   Tags: Biblical Authority, Grace and Mercy, The Lordship of Christ
+2026-05-22 16:07:14,901 INFO:   Done: Matthew Henry's Commentary - 1 Thessalonians (18 chunks)
+2026-05-22 16:07:14,950 INFO: Fetching: Matthew Henry's Commentary - 2 Thessalonians (3 chapters)
+2026-05-22 16:07:16,147 INFO:   10 verse entries collected
+2026-05-22 16:07:17,746 INFO:   Tags: Faith and Perseverance, Fruit of the Spirit
+2026-05-22 16:07:25,610 INFO:   Done: Matthew Henry's Commentary - 2 Thessalonians (10 chunks)
+2026-05-22 16:07:25,674 INFO: Fetching: Matthew Henry's Commentary - 1 Timothy (6 chapters)
+2026-05-22 16:07:28,509 INFO:   17 verse entries collected
+2026-05-22 16:07:28,972 INFO:   Tags: Apostolic Oversight, Biblical Authority, Biblical Leadership
+2026-05-22 16:07:40,105 INFO:   Done: Matthew Henry's Commentary - 1 Timothy (17 chunks)
+2026-05-22 16:07:40,167 INFO: Fetching: Matthew Henry's Commentary - 2 Timothy (4 chapters)
+2026-05-22 16:07:42,214 INFO:   13 verse entries collected
+2026-05-22 16:07:43,250 INFO:   Tags: Biblical Authority, Discipleship and Mentoring
+2026-05-22 16:07:48,573 INFO:   Done: Matthew Henry's Commentary - 2 Timothy (13 chunks)
+2026-05-22 16:07:48,680 INFO: Fetching: Matthew Henry's Commentary - Titus (3 chapters)
+2026-05-22 16:07:50,193 INFO:   8 verse entries collected
+2026-05-22 16:07:50,611 INFO:   Tags: Biblical Authority, Faith and Perseverance, Knowing God's Will
+2026-05-22 16:07:57,472 INFO:   Done: Matthew Henry's Commentary - Titus (8 chunks)
+2026-05-22 16:07:57,593 INFO: Fetching: Matthew Henry's Commentary - Philemon (1 chapters)
+2026-05-22 16:07:58,060 INFO:   2 verse entries collected
+2026-05-22 16:07:58,645 INFO:   Tags: Biblical Leadership, Christian Parenting, The Christian Home, Accountability in Christ
+2026-05-22 16:07:59,691 INFO:   Done: Matthew Henry's Commentary - Philemon (2 chunks)
+2026-05-22 16:07:59,740 INFO: Fetching: Matthew Henry's Commentary - Hebrews (13 chapters)
+2026-05-22 16:08:06,205 INFO:   33 verse entries collected
+2026-05-22 16:08:06,898 INFO:   Tags: Biblical Authority, The New Covenant, Honoring Biblical Authority
+2026-05-22 16:08:30,377 ERROR: Failed to ingest matthew-henry Hebrews: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+Traceback (most recent call last):
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
+    total_skipped = 0
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
+    return False
+  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
+    raise APIError(dict(json_obj))
+postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+2026-05-22 16:08:30,909 INFO: Fetching: Matthew Henry's Commentary - James (5 chapters)
+2026-05-22 16:08:35,031 INFO:   13 verse entries collected
+2026-05-22 16:08:35,986 INFO:   Tags: Accountability in Christ, Authority of the Believer, Servant Leadership, The Lordship of Christ
+2026-05-22 16:08:48,807 INFO:   Done: Matthew Henry's Commentary - James (13 chunks)
+2026-05-22 16:08:48,901 INFO: Fetching: Matthew Henry's Commentary - 1 Peter (5 chapters)
+2026-05-22 16:08:51,158 INFO:   22 verse entries collected
+2026-05-22 16:08:51,675 INFO:   Tags: Apostolic Oversight, Biblical Authority, Spiritual Maturity
+2026-05-22 16:09:07,263 INFO:   Done: Matthew Henry's Commentary - 1 Peter (22 chunks)
+2026-05-22 16:09:07,404 INFO: Fetching: Matthew Henry's Commentary - 2 Peter (3 chapters)
+2026-05-22 16:09:08,952 INFO:   14 verse entries collected
+2026-05-22 16:09:09,664 INFO:   Tags: Biblical Authority, Faith and Perseverance, The New Covenant
+2026-05-22 16:09:18,268 INFO:   Done: Matthew Henry's Commentary - 2 Peter (14 chunks)
+2026-05-22 16:09:18,308 INFO: Fetching: Matthew Henry's Commentary - 1 John (5 chapters)
+2026-05-22 16:09:20,821 INFO:   26 verse entries collected
+2026-05-22 16:09:21,856 WARNING: Tagging failed: Extra data: line 3 column 1 (char 141)
+2026-05-22 16:09:42,503 INFO:   Done: Matthew Henry's Commentary - 1 John (26 chunks)
+2026-05-22 16:09:42,571 INFO: Fetching: Matthew Henry's Commentary - 2 John (1 chapters)
+2026-05-22 16:09:43,031 INFO:   5 verse entries collected
+2026-05-22 16:09:43,546 INFO:   Tags: Authority of the Believer, Christian Parenting, Family Life, Spiritual Maturity
+2026-05-22 16:09:46,122 INFO:   Done: Matthew Henry's Commentary - 2 John (5 chunks)
+2026-05-22 16:09:46,180 INFO: Fetching: Matthew Henry's Commentary - 3 John (1 chapters)
+2026-05-22 16:09:46,564 INFO:   4 verse entries collected
+2026-05-22 16:09:46,878 INFO:   Tags: Accountability in Leadership, Biblical Leadership, Elders and Deacons, Spiritual Maturity
+2026-05-22 16:09:49,363 INFO:   Done: Matthew Henry's Commentary - 3 John (4 chunks)
+2026-05-22 16:09:49,415 INFO: Fetching: Matthew Henry's Commentary - Jude (1 chapters)
+2026-05-22 16:09:49,876 INFO:   4 verse entries collected
+2026-05-22 16:09:50,513 INFO:   Tags: Accountability in Leadership, Biblical Leadership, Servant Leadership, The Lordship of Christ
+2026-05-22 16:09:52,181 INFO:   Done: Matthew Henry's Commentary - Jude (4 chunks)
+2026-05-22 16:09:52,229 INFO: Fetching: Matthew Henry's Commentary - Revelation (22 chapters)
+2026-05-22 16:10:01,257 INFO:   56 verse entries collected
+2026-05-22 16:10:02,205 INFO:   Tags: Biblical Authority, The New Covenant, Prophetic Direction
+2026-05-22 16:10:38,243 INFO:   Embedded 50/56 chunks
+2026-05-22 16:10:41,431 INFO:   Done: Matthew Henry's Commentary - Revelation (56 chunks)
+2026-05-22 16:10:41,432 INFO: ============================================================
+2026-05-22 16:10:41,433 INFO: Commentary: Adam Clarke's Commentary
+2026-05-22 16:10:41,433 INFO: ============================================================
+2026-05-22 16:10:41,601 INFO: SKIP (exists): Adam Clarke's Commentary - Genesis
+2026-05-22 16:10:41,713 INFO: Fetching: Adam Clarke's Commentary - Exodus (40 chapters)
+2026-05-22 16:11:03,514 INFO:   705 verse entries collected
+2026-05-22 16:11:04,037 INFO:   Tags: Covenant Relationships, God's Comfort, Victory in Christ
+2026-05-22 16:11:50,140 INFO:   Embedded 50/705 chunks
+2026-05-22 16:12:19,144 INFO:   Embedded 100/705 chunks
+2026-05-22 16:12:40,119 INFO:   Embedded 150/705 chunks
+2026-05-22 16:13:18,659 INFO:   Embedded 200/705 chunks
+2026-05-22 16:13:49,803 INFO:   Embedded 250/705 chunks
+2026-05-22 16:14:20,285 INFO:   Embedded 300/705 chunks
+2026-05-22 16:14:42,165 INFO:   Embedded 350/705 chunks
+2026-05-22 16:15:06,691 INFO:   Embedded 400/705 chunks
+2026-05-22 16:15:32,388 INFO:   Embedded 450/705 chunks
+2026-05-22 16:16:01,423 INFO:   Embedded 500/705 chunks
+2026-05-22 16:16:30,842 INFO:   Embedded 550/705 chunks
+2026-05-22 16:17:08,213 INFO:   Embedded 600/705 chunks
+2026-05-22 16:17:42,321 INFO:   Embedded 650/705 chunks
+2026-05-22 16:18:03,526 INFO:   Embedded 700/705 chunks
+2026-05-22 16:18:04,905 INFO:   Done: Adam Clarke's Commentary - Exodus (705 chunks)
+2026-05-22 16:18:05,202 INFO: Fetching: Adam Clarke's Commentary - Leviticus (27 chapters)
+2026-05-22 16:18:16,146 INFO:   326 verse entries collected
+2026-05-22 16:18:16,807 INFO:   Tags: Biblical Authority, Honoring Biblical Authority, The Lordship of Christ
+2026-05-22 16:18:45,043 INFO:   Embedded 50/326 chunks
+2026-05-22 16:19:03,408 INFO:   Embedded 100/326 chunks
+2026-05-22 16:19:42,903 INFO:   Embedded 150/326 chunks
+2026-05-22 16:20:03,340 INFO:   Embedded 200/326 chunks
+2026-05-22 16:20:27,576 INFO:   Embedded 250/326 chunks
+2026-05-22 16:20:52,136 INFO:   Embedded 300/326 chunks
+2026-05-22 16:21:02,334 INFO:   Done: Adam Clarke's Commentary - Leviticus (326 chunks)
+2026-05-22 16:21:02,654 INFO: Fetching: Adam Clarke's Commentary - Numbers (36 chapters)
+2026-05-22 16:21:17,910 INFO:   15 verse entries collected
+2026-05-22 16:21:18,428 INFO:   Tags: Biblical Authority, Biblical Leadership, Accountability in Leadership
+2026-05-22 16:21:26,022 INFO:   Done: Adam Clarke's Commentary - Numbers (15 chunks)
+2026-05-22 16:21:26,131 INFO: Fetching: Adam Clarke's Commentary - Deuteronomy (34 chapters)
+2026-05-22 16:21:26,382 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:26,389 WARNING:   No data for adam-clarke DEU ch 1
+2026-05-22 16:21:26,654 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:26,660 WARNING:   No data for adam-clarke DEU ch 2
+2026-05-22 16:21:26,920 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:26,923 WARNING:   No data for adam-clarke DEU ch 3
+2026-05-22 16:21:27,119 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:27,123 WARNING:   No data for adam-clarke DEU ch 4
+2026-05-22 16:21:27,401 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:27,414 WARNING:   No data for adam-clarke DEU ch 5
+2026-05-22 16:21:27,671 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:27,675 WARNING:   No data for adam-clarke DEU ch 6
+2026-05-22 16:21:27,936 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:27,943 WARNING:   No data for adam-clarke DEU ch 7
+2026-05-22 16:21:28,225 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:28,226 WARNING:   No data for adam-clarke DEU ch 8
+2026-05-22 16:21:28,565 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/9.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:28,570 WARNING:   No data for adam-clarke DEU ch 9
+2026-05-22 16:21:28,826 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/10.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:28,838 WARNING:   No data for adam-clarke DEU ch 10
+2026-05-22 16:21:29,036 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/11.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:29,043 WARNING:   No data for adam-clarke DEU ch 11
+2026-05-22 16:21:29,303 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/12.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:29,308 WARNING:   No data for adam-clarke DEU ch 12
+2026-05-22 16:21:29,593 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/13.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:29,599 WARNING:   No data for adam-clarke DEU ch 13
+2026-05-22 16:21:29,810 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/14.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:29,819 WARNING:   No data for adam-clarke DEU ch 14
+2026-05-22 16:21:30,053 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/15.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:30,057 WARNING:   No data for adam-clarke DEU ch 15
+2026-05-22 16:21:30,388 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/16.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:30,392 WARNING:   No data for adam-clarke DEU ch 16
+2026-05-22 16:21:30,677 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/17.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:30,679 WARNING:   No data for adam-clarke DEU ch 17
+2026-05-22 16:21:30,866 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/18.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:30,877 WARNING:   No data for adam-clarke DEU ch 18
+2026-05-22 16:21:31,075 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/19.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:31,081 WARNING:   No data for adam-clarke DEU ch 19
+2026-05-22 16:21:31,411 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/20.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:31,421 WARNING:   No data for adam-clarke DEU ch 20
+2026-05-22 16:21:31,701 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/21.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:31,715 WARNING:   No data for adam-clarke DEU ch 21
+2026-05-22 16:21:31,964 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/22.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:31,967 WARNING:   No data for adam-clarke DEU ch 22
+2026-05-22 16:21:32,146 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/23.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:32,150 WARNING:   No data for adam-clarke DEU ch 23
+2026-05-22 16:21:32,386 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/24.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:32,388 WARNING:   No data for adam-clarke DEU ch 24
+2026-05-22 16:21:32,664 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/25.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:32,666 WARNING:   No data for adam-clarke DEU ch 25
+2026-05-22 16:21:32,884 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/26.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:32,889 WARNING:   No data for adam-clarke DEU ch 26
+2026-05-22 16:21:33,074 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/27.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:33,081 WARNING:   No data for adam-clarke DEU ch 27
+2026-05-22 16:21:33,413 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/28.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:33,422 WARNING:   No data for adam-clarke DEU ch 28
+2026-05-22 16:21:33,650 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/29.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:33,656 WARNING:   No data for adam-clarke DEU ch 29
+2026-05-22 16:21:33,894 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/30.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:33,896 WARNING:   No data for adam-clarke DEU ch 30
+2026-05-22 16:21:34,135 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/31.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:34,141 WARNING:   No data for adam-clarke DEU ch 31
+2026-05-22 16:21:34,384 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/32.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:34,387 WARNING:   No data for adam-clarke DEU ch 32
+2026-05-22 16:21:34,653 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/33.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:34,662 WARNING:   No data for adam-clarke DEU ch 33
+2026-05-22 16:21:34,901 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/34.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:21:34,904 WARNING:   No data for adam-clarke DEU ch 34
+2026-05-22 16:21:34,904 WARNING:   No verse data found for Adam Clarke's Commentary - Deuteronomy
+2026-05-22 16:21:35,135 INFO: Fetching: Adam Clarke's Commentary - Joshua (24 chapters)
+2026-05-22 16:21:45,073 INFO:   405 verse entries collected
+2026-05-22 16:21:45,680 INFO:   Tags: Biblical Authority, Biblical Leadership, Covenant Relationships, The New Covenant
+2026-05-22 16:22:07,586 INFO:   Embedded 50/405 chunks
+2026-05-22 16:22:49,998 INFO:   Embedded 100/405 chunks
+2026-05-22 16:23:11,453 INFO:   Embedded 150/405 chunks
+2026-05-22 16:23:35,736 INFO:   Embedded 200/405 chunks
+2026-05-22 16:24:01,660 INFO:   Embedded 250/405 chunks
+2026-05-22 16:24:26,418 INFO:   Embedded 300/405 chunks
+2026-05-22 16:25:03,813 INFO:   Embedded 350/405 chunks
+2026-05-22 16:25:25,941 INFO:   Embedded 400/405 chunks
+2026-05-22 16:25:31,596 INFO:   Done: Adam Clarke's Commentary - Joshua (405 chunks)
+2026-05-22 16:25:31,926 INFO: Fetching: Adam Clarke's Commentary - Judges (21 chapters)
+2026-05-22 16:25:32,481 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:32,490 WARNING:   No data for adam-clarke JDG ch 1
+2026-05-22 16:25:32,733 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:32,737 WARNING:   No data for adam-clarke JDG ch 2
+2026-05-22 16:25:32,986 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:32,989 WARNING:   No data for adam-clarke JDG ch 3
+2026-05-22 16:25:33,261 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:33,269 WARNING:   No data for adam-clarke JDG ch 4
+2026-05-22 16:25:33,558 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:33,565 WARNING:   No data for adam-clarke JDG ch 5
+2026-05-22 16:25:33,839 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:33,850 WARNING:   No data for adam-clarke JDG ch 6
+2026-05-22 16:25:34,115 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:34,118 WARNING:   No data for adam-clarke JDG ch 7
+2026-05-22 16:25:34,342 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:34,347 WARNING:   No data for adam-clarke JDG ch 8
+2026-05-22 16:25:34,605 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/9.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:34,611 WARNING:   No data for adam-clarke JDG ch 9
+2026-05-22 16:25:34,896 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/10.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:34,900 WARNING:   No data for adam-clarke JDG ch 10
+2026-05-22 16:25:35,164 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/11.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:35,170 WARNING:   No data for adam-clarke JDG ch 11
+2026-05-22 16:25:35,401 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/12.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:35,408 WARNING:   No data for adam-clarke JDG ch 12
+2026-05-22 16:25:35,709 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/13.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:35,712 WARNING:   No data for adam-clarke JDG ch 13
+2026-05-22 16:25:35,979 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/14.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:35,982 WARNING:   No data for adam-clarke JDG ch 14
+2026-05-22 16:25:36,200 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/15.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:36,205 WARNING:   No data for adam-clarke JDG ch 15
+2026-05-22 16:25:36,420 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/16.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:36,426 WARNING:   No data for adam-clarke JDG ch 16
+2026-05-22 16:25:36,645 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/17.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:36,653 WARNING:   No data for adam-clarke JDG ch 17
+2026-05-22 16:25:36,860 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/18.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:36,866 WARNING:   No data for adam-clarke JDG ch 18
+2026-05-22 16:25:37,125 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/19.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:37,127 WARNING:   No data for adam-clarke JDG ch 19
+2026-05-22 16:25:37,378 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/20.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:37,383 WARNING:   No data for adam-clarke JDG ch 20
+2026-05-22 16:25:37,656 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/21.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:25:37,661 WARNING:   No data for adam-clarke JDG ch 21
+2026-05-22 16:25:37,662 WARNING:   No verse data found for Adam Clarke's Commentary - Judges
+2026-05-22 16:25:38,523 INFO: Fetching: Adam Clarke's Commentary - Ruth (4 chapters)
+2026-05-22 16:25:40,173 INFO:   62 verse entries collected
+2026-05-22 16:25:40,828 INFO:   Tags: Biblical Authority, Covenant Relationships, Submission to God
+2026-05-22 16:26:08,672 INFO:   Embedded 50/62 chunks
+2026-05-22 16:26:13,789 INFO:   Done: Adam Clarke's Commentary - Ruth (62 chunks)
+2026-05-22 16:26:13,885 INFO: Fetching: Adam Clarke's Commentary - 1 Samuel (31 chapters)
+2026-05-22 16:26:27,068 INFO:   535 verse entries collected
+2026-05-22 16:26:27,747 INFO:   Tags: Biblical Marriage, Family Life, Covenant Relationships
+2026-05-22 16:27:06,426 INFO:   Embedded 50/535 chunks
+2026-05-22 16:27:21,799 ERROR: Failed to ingest adam-clarke 1 Samuel: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+Traceback (most recent call last):
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
+    total_skipped = 0
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
+    return False
+  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
+    raise APIError(dict(json_obj))
+postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+2026-05-22 16:27:22,099 INFO: Fetching: Adam Clarke's Commentary - 2 Samuel (24 chapters)
+2026-05-22 16:27:32,106 INFO:   338 verse entries collected
+2026-05-22 16:27:32,857 INFO:   Tags: Character of Christ, Accountability in Leadership, Biblical Leadership
+2026-05-22 16:28:04,164 INFO:   Embedded 50/338 chunks
+2026-05-22 16:28:36,637 INFO:   Embedded 100/338 chunks
+2026-05-22 16:29:01,367 INFO:   Embedded 150/338 chunks
+2026-05-22 16:29:25,402 INFO:   Embedded 200/338 chunks
+2026-05-22 16:29:46,607 INFO:   Embedded 250/338 chunks
+2026-05-22 16:30:08,844 INFO:   Embedded 300/338 chunks
+2026-05-22 16:30:24,966 INFO:   Done: Adam Clarke's Commentary - 2 Samuel (338 chunks)
+2026-05-22 16:30:25,208 INFO: Fetching: Adam Clarke's Commentary - 1 Kings (22 chapters)
+2026-05-22 16:30:34,505 INFO:   423 verse entries collected
+2026-05-22 16:30:35,227 INFO:   Tags: Biblical Leadership, Accountability in Leadership, Biblical Authority
+2026-05-22 16:31:09,979 INFO:   Embedded 50/423 chunks
+2026-05-22 16:31:34,559 INFO:   Embedded 100/423 chunks
+2026-05-22 16:32:00,789 INFO:   Embedded 150/423 chunks
+2026-05-22 16:32:18,631 INFO:   Embedded 200/423 chunks
+2026-05-22 16:32:40,117 INFO:   Embedded 250/423 chunks
+2026-05-22 16:32:58,382 INFO:   Embedded 300/423 chunks
+2026-05-22 16:33:19,748 INFO:   Embedded 350/423 chunks
+2026-05-22 16:33:40,619 INFO:   Embedded 400/423 chunks
+2026-05-22 16:33:54,846 INFO:   Done: Adam Clarke's Commentary - 1 Kings (423 chunks)
+2026-05-22 16:33:55,145 INFO: Fetching: Adam Clarke's Commentary - 2 Kings (25 chapters)
+2026-05-22 16:34:04,877 INFO:   440 verse entries collected
+2026-05-22 16:34:05,506 INFO:   Tags: Accountability in Leadership, Biblical Authority, Prophetic Ministry
+2026-05-22 16:34:32,967 ERROR: Failed to ingest adam-clarke 2 Kings: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+Traceback (most recent call last):
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
+    total_skipped = 0
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
+    return False
+  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
+    raise APIError(dict(json_obj))
+postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+2026-05-22 16:34:33,960 INFO: Fetching: Adam Clarke's Commentary - 1 Chronicles (29 chapters)
+2026-05-22 16:34:45,916 INFO:   299 verse entries collected
+2026-05-22 16:34:46,694 INFO:   Tags: Biblical Authority, Biblical Leadership, Family Life
+2026-05-22 16:35:16,227 INFO:   Embedded 50/299 chunks
+2026-05-22 16:35:35,649 INFO:   Embedded 100/299 chunks
+2026-05-22 16:35:57,021 INFO:   Embedded 150/299 chunks
+2026-05-22 16:36:17,404 INFO:   Embedded 200/299 chunks
+2026-05-22 16:36:35,002 INFO:   Embedded 250/299 chunks
+2026-05-22 16:36:55,316 INFO:   Done: Adam Clarke's Commentary - 1 Chronicles (299 chunks)
+2026-05-22 16:36:55,551 INFO: Fetching: Adam Clarke's Commentary - 2 Chronicles (36 chapters)
+2026-05-22 16:37:10,679 INFO:   374 verse entries collected
+2026-05-22 16:37:11,669 INFO:   Tags: Biblical Authority, Biblical Leadership, The Lordship of Christ
+2026-05-22 16:37:29,409 INFO:   Embedded 50/374 chunks
+2026-05-22 16:37:50,583 INFO:   Embedded 100/374 chunks
+2026-05-22 16:38:13,531 INFO:   Embedded 150/374 chunks
+2026-05-22 16:38:37,034 INFO:   Embedded 200/374 chunks
+2026-05-22 16:38:54,503 INFO:   Embedded 250/374 chunks
+2026-05-22 16:39:14,216 INFO:   Embedded 300/374 chunks
+2026-05-22 16:39:34,990 INFO:   Embedded 350/374 chunks
+2026-05-22 16:39:44,115 INFO:   Done: Adam Clarke's Commentary - 2 Chronicles (374 chunks)
+2026-05-22 16:39:44,328 INFO: Fetching: Adam Clarke's Commentary - Ezra (10 chapters)
+2026-05-22 16:39:48,469 INFO:   115 verse entries collected
+2026-05-22 16:39:49,297 INFO:   Tags: Biblical Authority, The Lordship of Christ, Restoration of All Things
+2026-05-22 16:40:11,158 INFO:   Embedded 50/115 chunks
+2026-05-22 16:40:35,807 INFO:   Embedded 100/115 chunks
+2026-05-22 16:40:43,642 INFO:   Done: Adam Clarke's Commentary - Ezra (115 chunks)
+2026-05-22 16:40:43,833 INFO: Fetching: Adam Clarke's Commentary - Nehemiah (13 chapters)
+2026-05-22 16:40:48,877 INFO:   191 verse entries collected
+2026-05-22 16:40:49,548 INFO:   Tags: Biblical Authority, Faith and Perseverance, Praying for the Sick, Intercessory Prayer
+2026-05-22 16:41:12,483 INFO:   Embedded 50/191 chunks
+2026-05-22 16:41:58,218 INFO:   Embedded 100/191 chunks
+2026-05-22 16:42:21,367 INFO:   Embedded 150/191 chunks
+2026-05-22 16:42:41,532 INFO:   Done: Adam Clarke's Commentary - Nehemiah (191 chunks)
+2026-05-22 16:42:41,820 INFO: Fetching: Adam Clarke's Commentary - Esther (10 chapters)
+2026-05-22 16:42:46,324 INFO:   105 verse entries collected
+2026-05-22 16:43:23,191 INFO:   Embedded 50/105 chunks
+2026-05-22 16:43:42,831 INFO:   Embedded 100/105 chunks
+2026-05-22 16:43:44,579 INFO:   Done: Adam Clarke's Commentary - Esther (105 chunks)
+2026-05-22 16:43:44,804 INFO: Fetching: Adam Clarke's Commentary - Job (42 chapters)
+2026-05-22 16:44:02,074 INFO:   271 verse entries collected
+2026-05-22 16:44:02,669 INFO:   Tags: Accountability in Christ, Authority of the Believer, Character of Christ, Holiness and Sanctification
+2026-05-22 16:44:38,516 INFO:   Embedded 50/271 chunks
+2026-05-22 16:45:00,022 INFO:   Embedded 100/271 chunks
+2026-05-22 16:45:30,291 INFO:   Embedded 150/271 chunks
+2026-05-22 16:45:56,338 INFO:   Embedded 200/271 chunks
+2026-05-22 16:46:22,989 INFO:   Embedded 250/271 chunks
+2026-05-22 16:46:34,437 INFO:   Done: Adam Clarke's Commentary - Job (271 chunks)
+2026-05-22 16:46:34,786 INFO: Fetching: Adam Clarke's Commentary - Psalms (150 chapters)
+2026-05-22 16:46:35,207 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:35,210 WARNING:   No data for adam-clarke PSA ch 1
+2026-05-22 16:46:35,506 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:35,510 WARNING:   No data for adam-clarke PSA ch 2
+2026-05-22 16:46:35,720 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:35,723 WARNING:   No data for adam-clarke PSA ch 3
+2026-05-22 16:46:36,006 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:36,008 WARNING:   No data for adam-clarke PSA ch 4
+2026-05-22 16:46:36,254 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:36,256 WARNING:   No data for adam-clarke PSA ch 5
+2026-05-22 16:46:36,467 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:36,469 WARNING:   No data for adam-clarke PSA ch 6
+2026-05-22 16:46:36,661 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:36,667 WARNING:   No data for adam-clarke PSA ch 7
+2026-05-22 16:46:36,960 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:36,964 WARNING:   No data for adam-clarke PSA ch 8
+2026-05-22 16:46:37,243 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/9.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:37,247 WARNING:   No data for adam-clarke PSA ch 9
+2026-05-22 16:46:37,468 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/10.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:37,469 WARNING:   No data for adam-clarke PSA ch 10
+2026-05-22 16:46:37,746 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/11.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:37,749 WARNING:   No data for adam-clarke PSA ch 11
+2026-05-22 16:46:37,972 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/12.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:37,974 WARNING:   No data for adam-clarke PSA ch 12
+2026-05-22 16:46:38,198 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/13.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:38,200 WARNING:   No data for adam-clarke PSA ch 13
+2026-05-22 16:46:38,450 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/14.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:38,452 WARNING:   No data for adam-clarke PSA ch 14
+2026-05-22 16:46:38,692 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/15.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:38,694 WARNING:   No data for adam-clarke PSA ch 15
+2026-05-22 16:46:39,025 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/16.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:39,027 WARNING:   No data for adam-clarke PSA ch 16
+2026-05-22 16:46:39,259 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/17.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:39,261 WARNING:   No data for adam-clarke PSA ch 17
+2026-05-22 16:46:39,580 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/18.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:39,582 WARNING:   No data for adam-clarke PSA ch 18
+2026-05-22 16:46:39,855 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/19.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:39,861 WARNING:   No data for adam-clarke PSA ch 19
+2026-05-22 16:46:40,086 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/20.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:40,097 WARNING:   No data for adam-clarke PSA ch 20
+2026-05-22 16:46:40,291 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/21.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:40,293 WARNING:   No data for adam-clarke PSA ch 21
+2026-05-22 16:46:40,583 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/22.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:40,586 WARNING:   No data for adam-clarke PSA ch 22
+2026-05-22 16:46:40,805 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/23.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:40,808 WARNING:   No data for adam-clarke PSA ch 23
+2026-05-22 16:46:41,183 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/24.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:41,186 WARNING:   No data for adam-clarke PSA ch 24
+2026-05-22 16:46:41,439 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/25.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:41,443 WARNING:   No data for adam-clarke PSA ch 25
+2026-05-22 16:46:41,641 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/26.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:41,643 WARNING:   No data for adam-clarke PSA ch 26
+2026-05-22 16:46:41,826 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/27.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:41,829 WARNING:   No data for adam-clarke PSA ch 27
+2026-05-22 16:46:42,081 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/28.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:42,084 WARNING:   No data for adam-clarke PSA ch 28
+2026-05-22 16:46:42,259 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/29.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:42,261 WARNING:   No data for adam-clarke PSA ch 29
+2026-05-22 16:46:42,502 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/30.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:42,507 WARNING:   No data for adam-clarke PSA ch 30
+2026-05-22 16:46:42,699 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/31.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:42,703 WARNING:   No data for adam-clarke PSA ch 31
+2026-05-22 16:46:42,921 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/32.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:42,930 WARNING:   No data for adam-clarke PSA ch 32
+2026-05-22 16:46:43,226 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/33.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:43,230 WARNING:   No data for adam-clarke PSA ch 33
+2026-05-22 16:46:43,486 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/34.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:43,491 WARNING:   No data for adam-clarke PSA ch 34
+2026-05-22 16:46:43,813 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/35.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:43,817 WARNING:   No data for adam-clarke PSA ch 35
+2026-05-22 16:46:44,048 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/36.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:44,049 WARNING:   No data for adam-clarke PSA ch 36
+2026-05-22 16:46:44,293 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/37.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:44,299 WARNING:   No data for adam-clarke PSA ch 37
+2026-05-22 16:46:44,548 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/38.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:44,557 WARNING:   No data for adam-clarke PSA ch 38
+2026-05-22 16:46:44,855 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/39.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:44,859 WARNING:   No data for adam-clarke PSA ch 39
+2026-05-22 16:46:45,193 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/40.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:45,196 WARNING:   No data for adam-clarke PSA ch 40
+2026-05-22 16:46:45,498 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/41.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:45,502 WARNING:   No data for adam-clarke PSA ch 41
+2026-05-22 16:46:45,781 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/42.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:45,784 WARNING:   No data for adam-clarke PSA ch 42
+2026-05-22 16:46:46,074 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/43.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:46,078 WARNING:   No data for adam-clarke PSA ch 43
+2026-05-22 16:46:46,293 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/44.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:46,303 WARNING:   No data for adam-clarke PSA ch 44
+2026-05-22 16:46:46,514 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/45.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:46,517 WARNING:   No data for adam-clarke PSA ch 45
+2026-05-22 16:46:46,783 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/46.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:46,785 WARNING:   No data for adam-clarke PSA ch 46
+2026-05-22 16:46:47,041 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/47.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:47,046 WARNING:   No data for adam-clarke PSA ch 47
+2026-05-22 16:46:47,287 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/48.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:47,293 WARNING:   No data for adam-clarke PSA ch 48
+2026-05-22 16:46:47,506 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/49.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:47,508 WARNING:   No data for adam-clarke PSA ch 49
+2026-05-22 16:46:47,729 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/50.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:47,731 WARNING:   No data for adam-clarke PSA ch 50
+2026-05-22 16:46:48,010 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/51.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:48,014 WARNING:   No data for adam-clarke PSA ch 51
+2026-05-22 16:46:48,283 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/52.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:48,286 WARNING:   No data for adam-clarke PSA ch 52
+2026-05-22 16:46:48,562 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/53.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:48,565 WARNING:   No data for adam-clarke PSA ch 53
+2026-05-22 16:46:48,795 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/54.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:48,798 WARNING:   No data for adam-clarke PSA ch 54
+2026-05-22 16:46:49,038 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/55.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:49,044 WARNING:   No data for adam-clarke PSA ch 55
+2026-05-22 16:46:49,320 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/56.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:49,322 WARNING:   No data for adam-clarke PSA ch 56
+2026-05-22 16:46:49,586 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/57.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:49,588 WARNING:   No data for adam-clarke PSA ch 57
+2026-05-22 16:46:49,797 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/58.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:49,804 WARNING:   No data for adam-clarke PSA ch 58
+2026-05-22 16:46:49,988 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/59.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:49,991 WARNING:   No data for adam-clarke PSA ch 59
+2026-05-22 16:46:50,241 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/60.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:50,245 WARNING:   No data for adam-clarke PSA ch 60
+2026-05-22 16:46:50,510 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/61.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:50,513 WARNING:   No data for adam-clarke PSA ch 61
+2026-05-22 16:46:50,764 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/62.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:50,767 WARNING:   No data for adam-clarke PSA ch 62
+2026-05-22 16:46:50,982 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/63.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:50,985 WARNING:   No data for adam-clarke PSA ch 63
+2026-05-22 16:46:51,243 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/64.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:51,244 WARNING:   No data for adam-clarke PSA ch 64
+2026-05-22 16:46:51,452 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/65.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:51,455 WARNING:   No data for adam-clarke PSA ch 65
+2026-05-22 16:46:51,717 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/66.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:51,720 WARNING:   No data for adam-clarke PSA ch 66
+2026-05-22 16:46:51,916 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/67.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:51,918 WARNING:   No data for adam-clarke PSA ch 67
+2026-05-22 16:46:52,229 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/68.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:52,232 WARNING:   No data for adam-clarke PSA ch 68
+2026-05-22 16:46:52,450 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/69.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:52,453 WARNING:   No data for adam-clarke PSA ch 69
+2026-05-22 16:46:52,733 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/70.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:52,735 WARNING:   No data for adam-clarke PSA ch 70
+2026-05-22 16:46:53,036 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/71.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:53,038 WARNING:   No data for adam-clarke PSA ch 71
+2026-05-22 16:46:53,245 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/72.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:53,248 WARNING:   No data for adam-clarke PSA ch 72
+2026-05-22 16:46:53,509 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/73.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:53,511 WARNING:   No data for adam-clarke PSA ch 73
+2026-05-22 16:46:53,775 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/74.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:53,777 WARNING:   No data for adam-clarke PSA ch 74
+2026-05-22 16:46:54,037 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/75.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:54,038 WARNING:   No data for adam-clarke PSA ch 75
+2026-05-22 16:46:54,322 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/76.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:54,325 WARNING:   No data for adam-clarke PSA ch 76
+2026-05-22 16:46:54,563 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/77.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:54,565 WARNING:   No data for adam-clarke PSA ch 77
+2026-05-22 16:46:54,769 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/78.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:54,771 WARNING:   No data for adam-clarke PSA ch 78
+2026-05-22 16:46:54,954 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/79.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:54,958 WARNING:   No data for adam-clarke PSA ch 79
+2026-05-22 16:46:55,178 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/80.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:55,182 WARNING:   No data for adam-clarke PSA ch 80
+2026-05-22 16:46:55,401 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/81.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:55,406 WARNING:   No data for adam-clarke PSA ch 81
+2026-05-22 16:46:55,589 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/82.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:55,591 WARNING:   No data for adam-clarke PSA ch 82
+2026-05-22 16:46:55,760 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/83.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:55,762 WARNING:   No data for adam-clarke PSA ch 83
+2026-05-22 16:46:55,971 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/84.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:55,975 WARNING:   No data for adam-clarke PSA ch 84
+2026-05-22 16:46:56,211 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/85.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:56,213 WARNING:   No data for adam-clarke PSA ch 85
+2026-05-22 16:46:56,431 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/86.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:56,435 WARNING:   No data for adam-clarke PSA ch 86
+2026-05-22 16:46:56,711 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/87.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:56,716 WARNING:   No data for adam-clarke PSA ch 87
+2026-05-22 16:46:56,928 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/88.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:56,932 WARNING:   No data for adam-clarke PSA ch 88
+2026-05-22 16:46:57,158 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/89.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:57,160 WARNING:   No data for adam-clarke PSA ch 89
+2026-05-22 16:46:57,334 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/90.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:57,339 WARNING:   No data for adam-clarke PSA ch 90
+2026-05-22 16:46:57,552 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/91.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:57,553 WARNING:   No data for adam-clarke PSA ch 91
+2026-05-22 16:46:57,777 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/92.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:57,779 WARNING:   No data for adam-clarke PSA ch 92
+2026-05-22 16:46:58,033 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/93.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:58,036 WARNING:   No data for adam-clarke PSA ch 93
+2026-05-22 16:46:58,230 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/94.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:58,237 WARNING:   No data for adam-clarke PSA ch 94
+2026-05-22 16:46:58,526 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/95.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:58,527 WARNING:   No data for adam-clarke PSA ch 95
+2026-05-22 16:46:58,753 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/96.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:58,757 WARNING:   No data for adam-clarke PSA ch 96
+2026-05-22 16:46:59,001 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/97.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:59,005 WARNING:   No data for adam-clarke PSA ch 97
+2026-05-22 16:46:59,294 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/98.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:59,296 WARNING:   No data for adam-clarke PSA ch 98
+2026-05-22 16:46:59,587 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/99.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:59,589 WARNING:   No data for adam-clarke PSA ch 99
+2026-05-22 16:46:59,795 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/100.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:46:59,799 WARNING:   No data for adam-clarke PSA ch 100
+2026-05-22 16:47:00,102 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/101.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:00,104 WARNING:   No data for adam-clarke PSA ch 101
+2026-05-22 16:47:00,278 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/102.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:00,280 WARNING:   No data for adam-clarke PSA ch 102
+2026-05-22 16:47:00,459 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/103.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:00,462 WARNING:   No data for adam-clarke PSA ch 103
+2026-05-22 16:47:00,677 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/104.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:00,680 WARNING:   No data for adam-clarke PSA ch 104
+2026-05-22 16:47:00,934 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/105.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:00,937 WARNING:   No data for adam-clarke PSA ch 105
+2026-05-22 16:47:01,200 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/106.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:01,202 WARNING:   No data for adam-clarke PSA ch 106
+2026-05-22 16:47:01,432 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/107.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:01,436 WARNING:   No data for adam-clarke PSA ch 107
+2026-05-22 16:47:01,620 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/108.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:01,624 WARNING:   No data for adam-clarke PSA ch 108
+2026-05-22 16:47:01,868 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/109.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:01,874 WARNING:   No data for adam-clarke PSA ch 109
+2026-05-22 16:47:02,058 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/110.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:02,062 WARNING:   No data for adam-clarke PSA ch 110
+2026-05-22 16:47:02,319 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/111.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:02,322 WARNING:   No data for adam-clarke PSA ch 111
+2026-05-22 16:47:02,601 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/112.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:02,604 WARNING:   No data for adam-clarke PSA ch 112
+2026-05-22 16:47:02,812 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/113.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:02,814 WARNING:   No data for adam-clarke PSA ch 113
+2026-05-22 16:47:03,075 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/114.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:03,077 WARNING:   No data for adam-clarke PSA ch 114
+2026-05-22 16:47:03,369 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/115.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:03,372 WARNING:   No data for adam-clarke PSA ch 115
+2026-05-22 16:47:03,609 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/116.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:03,612 WARNING:   No data for adam-clarke PSA ch 116
+2026-05-22 16:47:03,884 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/117.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:03,888 WARNING:   No data for adam-clarke PSA ch 117
+2026-05-22 16:47:04,124 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/118.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:04,126 WARNING:   No data for adam-clarke PSA ch 118
+2026-05-22 16:47:04,359 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/119.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:04,362 WARNING:   No data for adam-clarke PSA ch 119
+2026-05-22 16:47:04,619 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/120.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:04,622 WARNING:   No data for adam-clarke PSA ch 120
+2026-05-22 16:47:04,817 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/121.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:04,819 WARNING:   No data for adam-clarke PSA ch 121
+2026-05-22 16:47:05,101 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/122.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:05,103 WARNING:   No data for adam-clarke PSA ch 122
+2026-05-22 16:47:05,363 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/123.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:05,366 WARNING:   No data for adam-clarke PSA ch 123
+2026-05-22 16:47:05,553 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/124.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:05,556 WARNING:   No data for adam-clarke PSA ch 124
+2026-05-22 16:47:05,871 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/125.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:05,874 WARNING:   No data for adam-clarke PSA ch 125
+2026-05-22 16:47:06,126 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/126.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:06,129 WARNING:   No data for adam-clarke PSA ch 126
+2026-05-22 16:47:06,418 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/127.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:06,420 WARNING:   No data for adam-clarke PSA ch 127
+2026-05-22 16:47:06,699 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/128.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:06,701 WARNING:   No data for adam-clarke PSA ch 128
+2026-05-22 16:47:06,920 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/129.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:06,924 WARNING:   No data for adam-clarke PSA ch 129
+2026-05-22 16:47:07,199 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/130.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:07,205 WARNING:   No data for adam-clarke PSA ch 130
+2026-05-22 16:47:07,486 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/131.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:07,489 WARNING:   No data for adam-clarke PSA ch 131
+2026-05-22 16:47:07,744 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/132.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:07,746 WARNING:   No data for adam-clarke PSA ch 132
+2026-05-22 16:47:07,953 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/133.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:07,956 WARNING:   No data for adam-clarke PSA ch 133
+2026-05-22 16:47:08,182 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/134.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:08,184 WARNING:   No data for adam-clarke PSA ch 134
+2026-05-22 16:47:08,487 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/135.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:08,491 WARNING:   No data for adam-clarke PSA ch 135
+2026-05-22 16:47:08,696 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/136.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:08,698 WARNING:   No data for adam-clarke PSA ch 136
+2026-05-22 16:47:08,915 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/137.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:08,917 WARNING:   No data for adam-clarke PSA ch 137
+2026-05-22 16:47:09,115 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/138.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:09,117 WARNING:   No data for adam-clarke PSA ch 138
+2026-05-22 16:47:09,328 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/139.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:09,332 WARNING:   No data for adam-clarke PSA ch 139
+2026-05-22 16:47:09,616 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/140.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:09,617 WARNING:   No data for adam-clarke PSA ch 140
+2026-05-22 16:47:09,790 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/141.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:09,794 WARNING:   No data for adam-clarke PSA ch 141
+2026-05-22 16:47:09,980 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/142.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:09,982 WARNING:   No data for adam-clarke PSA ch 142
+2026-05-22 16:47:10,234 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/143.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:10,237 WARNING:   No data for adam-clarke PSA ch 143
+2026-05-22 16:47:10,426 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/144.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:10,429 WARNING:   No data for adam-clarke PSA ch 144
+2026-05-22 16:47:10,672 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/145.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:10,674 WARNING:   No data for adam-clarke PSA ch 145
+2026-05-22 16:47:10,856 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/146.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:10,859 WARNING:   No data for adam-clarke PSA ch 146
+2026-05-22 16:47:11,121 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/147.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:11,123 WARNING:   No data for adam-clarke PSA ch 147
+2026-05-22 16:47:11,375 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/148.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:11,377 WARNING:   No data for adam-clarke PSA ch 148
+2026-05-22 16:47:11,638 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/149.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:11,644 WARNING:   No data for adam-clarke PSA ch 149
+2026-05-22 16:47:11,874 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/150.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:11,877 WARNING:   No data for adam-clarke PSA ch 150
+2026-05-22 16:47:11,877 WARNING:   No verse data found for Adam Clarke's Commentary - Psalms
+2026-05-22 16:47:12,624 INFO: Fetching: Adam Clarke's Commentary - Proverbs (31 chapters)
+2026-05-22 16:47:12,865 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:12,867 WARNING:   No data for adam-clarke PRO ch 1
+2026-05-22 16:47:13,093 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:13,095 WARNING:   No data for adam-clarke PRO ch 2
+2026-05-22 16:47:13,292 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:13,295 WARNING:   No data for adam-clarke PRO ch 3
+2026-05-22 16:47:13,510 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:13,513 WARNING:   No data for adam-clarke PRO ch 4
+2026-05-22 16:47:13,728 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:13,733 WARNING:   No data for adam-clarke PRO ch 5
+2026-05-22 16:47:14,006 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:14,010 WARNING:   No data for adam-clarke PRO ch 6
+2026-05-22 16:47:14,280 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:14,286 WARNING:   No data for adam-clarke PRO ch 7
+2026-05-22 16:47:14,544 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:14,547 WARNING:   No data for adam-clarke PRO ch 8
+2026-05-22 16:47:14,788 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/9.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:14,792 WARNING:   No data for adam-clarke PRO ch 9
+2026-05-22 16:47:15,080 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/10.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:15,083 WARNING:   No data for adam-clarke PRO ch 10
+2026-05-22 16:47:15,326 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/11.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:15,328 WARNING:   No data for adam-clarke PRO ch 11
+2026-05-22 16:47:15,589 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/12.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:15,592 WARNING:   No data for adam-clarke PRO ch 12
+2026-05-22 16:47:15,795 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/13.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:15,798 WARNING:   No data for adam-clarke PRO ch 13
+2026-05-22 16:47:16,069 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/14.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:16,075 WARNING:   No data for adam-clarke PRO ch 14
+2026-05-22 16:47:16,292 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/15.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:16,296 WARNING:   No data for adam-clarke PRO ch 15
+2026-05-22 16:47:16,575 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/16.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:16,577 WARNING:   No data for adam-clarke PRO ch 16
+2026-05-22 16:47:16,822 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/17.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:16,826 WARNING:   No data for adam-clarke PRO ch 17
+2026-05-22 16:47:17,081 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/18.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:17,092 WARNING:   No data for adam-clarke PRO ch 18
+2026-05-22 16:47:17,331 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/19.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:17,333 WARNING:   No data for adam-clarke PRO ch 19
+2026-05-22 16:47:17,656 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/20.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:17,658 WARNING:   No data for adam-clarke PRO ch 20
+2026-05-22 16:47:18,041 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/21.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:18,044 WARNING:   No data for adam-clarke PRO ch 21
+2026-05-22 16:47:18,308 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/22.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:18,318 WARNING:   No data for adam-clarke PRO ch 22
+2026-05-22 16:47:18,540 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/23.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:18,542 WARNING:   No data for adam-clarke PRO ch 23
+2026-05-22 16:47:18,814 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/24.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:18,817 WARNING:   No data for adam-clarke PRO ch 24
+2026-05-22 16:47:19,065 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/25.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:19,067 WARNING:   No data for adam-clarke PRO ch 25
+2026-05-22 16:47:19,388 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/26.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:19,392 WARNING:   No data for adam-clarke PRO ch 26
+2026-05-22 16:47:19,684 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/27.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:19,687 WARNING:   No data for adam-clarke PRO ch 27
+2026-05-22 16:47:19,961 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/28.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:19,964 WARNING:   No data for adam-clarke PRO ch 28
+2026-05-22 16:47:20,188 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/29.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:20,190 WARNING:   No data for adam-clarke PRO ch 29
+2026-05-22 16:47:20,452 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/30.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:20,454 WARNING:   No data for adam-clarke PRO ch 30
+2026-05-22 16:47:20,675 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PRO/31.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:20,678 WARNING:   No data for adam-clarke PRO ch 31
+2026-05-22 16:47:20,679 WARNING:   No verse data found for Adam Clarke's Commentary - Proverbs
+2026-05-22 16:47:20,928 INFO: Fetching: Adam Clarke's Commentary - Ecclesiastes (12 chapters)
+2026-05-22 16:47:21,198 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:21,200 WARNING:   No data for adam-clarke ECC ch 1
+2026-05-22 16:47:21,464 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:21,466 WARNING:   No data for adam-clarke ECC ch 2
+2026-05-22 16:47:21,733 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:21,735 WARNING:   No data for adam-clarke ECC ch 3
+2026-05-22 16:47:21,995 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:22,004 WARNING:   No data for adam-clarke ECC ch 4
+2026-05-22 16:47:22,232 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:22,236 WARNING:   No data for adam-clarke ECC ch 5
+2026-05-22 16:47:22,533 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:22,536 WARNING:   No data for adam-clarke ECC ch 6
+2026-05-22 16:47:22,788 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:22,790 WARNING:   No data for adam-clarke ECC ch 7
+2026-05-22 16:47:23,047 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:23,056 WARNING:   No data for adam-clarke ECC ch 8
+2026-05-22 16:47:23,270 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/9.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:23,272 WARNING:   No data for adam-clarke ECC ch 9
+2026-05-22 16:47:23,512 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/10.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:23,514 WARNING:   No data for adam-clarke ECC ch 10
+2026-05-22 16:47:23,730 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/11.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:23,732 WARNING:   No data for adam-clarke ECC ch 11
+2026-05-22 16:47:23,999 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/ECC/12.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:47:24,002 WARNING:   No data for adam-clarke ECC ch 12
+2026-05-22 16:47:24,002 WARNING:   No verse data found for Adam Clarke's Commentary - Ecclesiastes
+2026-05-22 16:47:24,048 INFO: Fetching: Adam Clarke's Commentary - Song of Solomon (8 chapters)
+2026-05-22 16:47:27,193 WARNING:   No verse data found for Adam Clarke's Commentary - Song of Solomon
+2026-05-22 16:47:27,248 INFO: Fetching: Adam Clarke's Commentary - Isaiah (66 chapters)
+2026-05-22 16:47:54,016 INFO:   171 verse entries collected
+2026-05-22 16:47:54,567 INFO:   Tags: Authority of the Believer, God's Comfort, Spiritual Covering
+2026-05-22 16:48:41,237 INFO:   Embedded 50/171 chunks
+2026-05-22 16:49:05,789 INFO:   Embedded 100/171 chunks
+2026-05-22 16:49:30,472 INFO:   Embedded 150/171 chunks
+2026-05-22 16:49:42,686 INFO:   Done: Adam Clarke's Commentary - Isaiah (171 chunks)
+2026-05-22 16:49:42,932 INFO: Fetching: Adam Clarke's Commentary - Jeremiah (52 chapters)
+2026-05-22 16:49:43,404 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:43,406 WARNING:   No data for adam-clarke JER ch 1
+2026-05-22 16:49:43,652 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:43,654 WARNING:   No data for adam-clarke JER ch 2
+2026-05-22 16:49:43,849 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:43,851 WARNING:   No data for adam-clarke JER ch 3
+2026-05-22 16:49:44,029 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:44,032 WARNING:   No data for adam-clarke JER ch 4
+2026-05-22 16:49:44,251 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:44,253 WARNING:   No data for adam-clarke JER ch 5
+2026-05-22 16:49:44,440 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:44,442 WARNING:   No data for adam-clarke JER ch 6
+2026-05-22 16:49:44,685 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:44,687 WARNING:   No data for adam-clarke JER ch 7
+2026-05-22 16:49:44,922 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:44,925 WARNING:   No data for adam-clarke JER ch 8
+2026-05-22 16:49:45,125 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/9.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:45,127 WARNING:   No data for adam-clarke JER ch 9
+2026-05-22 16:49:45,371 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/10.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:45,373 WARNING:   No data for adam-clarke JER ch 10
+2026-05-22 16:49:45,593 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/11.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:45,595 WARNING:   No data for adam-clarke JER ch 11
+2026-05-22 16:49:45,816 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/12.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:45,818 WARNING:   No data for adam-clarke JER ch 12
+2026-05-22 16:49:46,053 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/13.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:46,067 WARNING:   No data for adam-clarke JER ch 13
+2026-05-22 16:49:46,286 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/14.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:46,288 WARNING:   No data for adam-clarke JER ch 14
+2026-05-22 16:49:46,479 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/15.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:46,481 WARNING:   No data for adam-clarke JER ch 15
+2026-05-22 16:49:46,683 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/16.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:46,685 WARNING:   No data for adam-clarke JER ch 16
+2026-05-22 16:49:46,852 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/17.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:46,854 WARNING:   No data for adam-clarke JER ch 17
+2026-05-22 16:49:47,082 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/18.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:47,084 WARNING:   No data for adam-clarke JER ch 18
+2026-05-22 16:49:47,330 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/19.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:47,332 WARNING:   No data for adam-clarke JER ch 19
+2026-05-22 16:49:47,555 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/20.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:47,557 WARNING:   No data for adam-clarke JER ch 20
+2026-05-22 16:49:47,757 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/21.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:47,760 WARNING:   No data for adam-clarke JER ch 21
+2026-05-22 16:49:47,970 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/22.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:47,976 WARNING:   No data for adam-clarke JER ch 22
+2026-05-22 16:49:48,204 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/23.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:48,208 WARNING:   No data for adam-clarke JER ch 23
+2026-05-22 16:49:48,425 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/24.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:48,426 WARNING:   No data for adam-clarke JER ch 24
+2026-05-22 16:49:48,708 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/25.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:48,713 WARNING:   No data for adam-clarke JER ch 25
+2026-05-22 16:49:48,964 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/26.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:48,966 WARNING:   No data for adam-clarke JER ch 26
+2026-05-22 16:49:49,248 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/27.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:49,250 WARNING:   No data for adam-clarke JER ch 27
+2026-05-22 16:49:49,507 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/28.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:49,513 WARNING:   No data for adam-clarke JER ch 28
+2026-05-22 16:49:49,711 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/29.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:49,714 WARNING:   No data for adam-clarke JER ch 29
+2026-05-22 16:49:49,936 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/30.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:49,939 WARNING:   No data for adam-clarke JER ch 30
+2026-05-22 16:49:50,169 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/31.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:50,171 WARNING:   No data for adam-clarke JER ch 31
+2026-05-22 16:49:50,413 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/32.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:50,419 WARNING:   No data for adam-clarke JER ch 32
+2026-05-22 16:49:50,665 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/33.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:50,667 WARNING:   No data for adam-clarke JER ch 33
+2026-05-22 16:49:50,932 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/34.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:50,936 WARNING:   No data for adam-clarke JER ch 34
+2026-05-22 16:49:51,169 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/35.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:51,170 WARNING:   No data for adam-clarke JER ch 35
+2026-05-22 16:49:51,327 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/36.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:51,330 WARNING:   No data for adam-clarke JER ch 36
+2026-05-22 16:49:51,532 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/37.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:51,534 WARNING:   No data for adam-clarke JER ch 37
+2026-05-22 16:49:51,715 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/38.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:51,719 WARNING:   No data for adam-clarke JER ch 38
+2026-05-22 16:49:51,998 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/39.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:52,002 WARNING:   No data for adam-clarke JER ch 39
+2026-05-22 16:49:52,237 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/40.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:52,240 WARNING:   No data for adam-clarke JER ch 40
+2026-05-22 16:49:52,438 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/41.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:52,440 WARNING:   No data for adam-clarke JER ch 41
+2026-05-22 16:49:52,635 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/42.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:52,637 WARNING:   No data for adam-clarke JER ch 42
+2026-05-22 16:49:52,895 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/43.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:52,901 WARNING:   No data for adam-clarke JER ch 43
+2026-05-22 16:49:53,178 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/44.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:53,182 WARNING:   No data for adam-clarke JER ch 44
+2026-05-22 16:49:53,468 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/45.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:53,471 WARNING:   No data for adam-clarke JER ch 45
+2026-05-22 16:49:53,691 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/46.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:53,696 WARNING:   No data for adam-clarke JER ch 46
+2026-05-22 16:49:53,951 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/47.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:53,956 WARNING:   No data for adam-clarke JER ch 47
+2026-05-22 16:49:54,445 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/48.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:54,447 WARNING:   No data for adam-clarke JER ch 48
+2026-05-22 16:49:54,689 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/49.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:54,691 WARNING:   No data for adam-clarke JER ch 49
+2026-05-22 16:49:54,917 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/50.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:54,919 WARNING:   No data for adam-clarke JER ch 50
+2026-05-22 16:49:55,106 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/51.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:55,108 WARNING:   No data for adam-clarke JER ch 51
+2026-05-22 16:49:55,357 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/52.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 16:49:55,359 WARNING:   No data for adam-clarke JER ch 52
+2026-05-22 16:49:55,359 WARNING:   No verse data found for Adam Clarke's Commentary - Jeremiah
+2026-05-22 16:49:55,570 INFO: Fetching: Adam Clarke's Commentary - Lamentations (5 chapters)
+2026-05-22 16:49:57,588 INFO:   108 verse entries collected
+2026-05-22 16:49:58,025 INFO:   Tags: Biblical Authority, Biblical Leadership
+2026-05-22 16:50:22,339 INFO:   Embedded 50/108 chunks
+2026-05-22 16:51:00,357 INFO:   Embedded 100/108 chunks
+2026-05-22 16:51:03,683 INFO:   Done: Adam Clarke's Commentary - Lamentations (108 chunks)
+2026-05-22 16:51:03,961 INFO: Fetching: Adam Clarke's Commentary - Ezekiel (48 chapters)
+2026-05-22 16:51:24,482 INFO:   710 verse entries collected
+2026-05-22 16:51:25,001 INFO:   Tags: Encounters with God, Prophetic Direction
+2026-05-22 16:52:07,278 INFO:   Embedded 50/710 chunks
+2026-05-22 16:52:36,231 INFO:   Embedded 100/710 chunks
+2026-05-22 16:52:57,045 INFO:   Embedded 150/710 chunks
+2026-05-22 16:53:49,160 INFO:   Embedded 200/710 chunks
+2026-05-22 16:54:13,975 INFO:   Embedded 250/710 chunks
+2026-05-22 16:54:33,292 INFO:   Embedded 300/710 chunks
+2026-05-22 16:54:51,682 INFO:   Embedded 350/710 chunks
+2026-05-22 16:55:20,469 INFO:   Embedded 400/710 chunks
+2026-05-22 16:55:42,954 INFO:   Embedded 450/710 chunks
+2026-05-22 16:56:01,265 INFO:   Embedded 500/710 chunks
+2026-05-22 16:56:23,876 INFO:   Embedded 550/710 chunks
+2026-05-22 16:56:50,223 INFO:   Embedded 600/710 chunks
+2026-05-22 16:57:12,279 INFO:   Embedded 650/710 chunks
+2026-05-22 16:57:37,272 INFO:   Embedded 700/710 chunks
+2026-05-22 16:57:40,588 INFO:   Done: Adam Clarke's Commentary - Ezekiel (710 chunks)
+2026-05-22 16:57:40,981 INFO: Fetching: Adam Clarke's Commentary - Daniel (12 chapters)
+2026-05-22 16:57:46,507 INFO:   258 verse entries collected
+2026-05-22 16:57:47,023 INFO:   Tags: Biblical Authority, Accountability in Leadership, Kingdom of God
+2026-05-22 16:58:15,648 INFO:   Embedded 50/258 chunks
+2026-05-22 16:58:35,960 INFO:   Embedded 100/258 chunks
+2026-05-22 16:58:58,521 INFO:   Embedded 150/258 chunks
+2026-05-22 16:59:18,218 INFO:   Embedded 200/258 chunks
+2026-05-22 16:59:49,167 INFO:   Embedded 250/258 chunks
+2026-05-22 16:59:52,226 INFO:   Done: Adam Clarke's Commentary - Daniel (258 chunks)
+2026-05-22 16:59:52,439 INFO: Fetching: Adam Clarke's Commentary - Hosea (14 chapters)
+2026-05-22 16:59:58,433 INFO:   151 verse entries collected
+2026-05-22 16:59:59,379 INFO:   Tags: Accountability in Christ, Biblical Authority, God's Comfort, Holiness and Sanctification
+2026-05-22 17:00:29,271 INFO:   Embedded 50/151 chunks
+2026-05-22 17:00:53,287 INFO:   Embedded 100/151 chunks
+2026-05-22 17:01:16,731 INFO:   Embedded 150/151 chunks
+2026-05-22 17:01:17,100 INFO:   Done: Adam Clarke's Commentary - Hosea (151 chunks)
+2026-05-22 17:01:17,354 INFO: Fetching: Adam Clarke's Commentary - Joel (3 chapters)
+2026-05-22 17:01:17,937 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JOL/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:01:17,943 WARNING:   No data for adam-clarke JOL ch 1
+2026-05-22 17:01:18,175 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JOL/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:01:18,181 WARNING:   No data for adam-clarke JOL ch 2
+2026-05-22 17:01:18,500 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JOL/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:01:18,501 WARNING:   No data for adam-clarke JOL ch 3
+2026-05-22 17:01:18,502 WARNING:   No verse data found for Adam Clarke's Commentary - Joel
+2026-05-22 17:01:18,595 INFO: Fetching: Adam Clarke's Commentary - Amos (9 chapters)
+2026-05-22 17:01:22,411 INFO:   133 verse entries collected
+2026-05-22 17:01:23,001 INFO:   Tags: Biblical Authority, Prophetic Ministry, Word of Knowledge
+2026-05-22 17:02:11,306 INFO:   Embedded 50/133 chunks
+2026-05-22 17:02:34,315 INFO:   Embedded 100/133 chunks
+2026-05-22 17:02:51,622 INFO:   Done: Adam Clarke's Commentary - Amos (133 chunks)
+2026-05-22 17:02:51,759 INFO: Fetching: Adam Clarke's Commentary - Obadiah (1 chapters)
+2026-05-22 17:02:52,426 INFO:   19 verse entries collected
+2026-05-22 17:02:53,020 INFO:   Tags: Biblical Authority, God's Comfort
+2026-05-22 17:03:02,949 INFO:   Done: Adam Clarke's Commentary - Obadiah (19 chunks)
+2026-05-22 17:03:03,021 INFO: Fetching: Adam Clarke's Commentary - Jonah (4 chapters)
+2026-05-22 17:03:04,679 INFO:   45 verse entries collected
+2026-05-22 17:03:05,105 INFO:   Tags: Prophetic Direction, Prophetic Ministry, The Will to Heal
+2026-05-22 17:03:36,154 INFO:   Done: Adam Clarke's Commentary - Jonah (45 chunks)
+2026-05-22 17:03:36,233 INFO: Fetching: Adam Clarke's Commentary - Micah (7 chapters)
+2026-05-22 17:03:38,962 INFO:   96 verse entries collected
+2026-05-22 17:03:39,376 INFO:   Tags: Hearing God's Voice, Prophetic Ministry, Accountability in Christ, Biblical Authority
+2026-05-22 17:04:01,699 INFO:   Embedded 50/96 chunks
+2026-05-22 17:04:29,898 INFO:   Done: Adam Clarke's Commentary - Micah (96 chunks)
+2026-05-22 17:04:30,171 INFO: Fetching: Adam Clarke's Commentary - Nahum (3 chapters)
+2026-05-22 17:04:31,600 INFO:   42 verse entries collected
+2026-05-22 17:04:32,142 INFO:   Tags: God's Comfort, The Lordship of Christ
+2026-05-22 17:04:52,771 INFO:   Done: Adam Clarke's Commentary - Nahum (42 chunks)
+2026-05-22 17:04:52,850 INFO: Fetching: Adam Clarke's Commentary - Habakkuk (3 chapters)
+2026-05-22 17:04:54,086 INFO:   54 verse entries collected
+2026-05-22 17:04:54,645 INFO:   Tags: Biblical Authority, Prophetic Ministry
+2026-05-22 17:05:30,061 INFO:   Embedded 50/54 chunks
+2026-05-22 17:05:31,561 INFO:   Done: Adam Clarke's Commentary - Habakkuk (54 chunks)
+2026-05-22 17:05:31,633 INFO: Fetching: Adam Clarke's Commentary - Zephaniah (3 chapters)
+2026-05-22 17:05:32,835 INFO:   51 verse entries collected
+2026-05-22 17:05:33,385 INFO:   Tags: Biblical Authority, Biblical Leadership, Accountability in Leadership
+2026-05-22 17:06:00,354 INFO:   Embedded 50/51 chunks
+2026-05-22 17:06:00,610 INFO:   Done: Adam Clarke's Commentary - Zephaniah (51 chunks)
+2026-05-22 17:06:00,682 INFO: Fetching: Adam Clarke's Commentary - Haggai (2 chapters)
+2026-05-22 17:06:01,716 INFO:   25 verse entries collected
+2026-05-22 17:06:02,355 INFO:   Tags: Biblical Authority, Biblical Leadership
+2026-05-22 17:06:12,459 INFO:   Done: Adam Clarke's Commentary - Haggai (25 chunks)
+2026-05-22 17:06:12,522 INFO: Fetching: Adam Clarke's Commentary - Zechariah (14 chapters)
+2026-05-22 17:06:18,479 INFO:   179 verse entries collected
+2026-05-22 17:06:19,051 INFO:   Tags: Biblical Authority, Prophetic Ministry, Victory in Christ, Restoration of All Things
+2026-05-22 17:06:51,201 INFO:   Embedded 50/179 chunks
+2026-05-22 17:07:09,965 INFO:   Embedded 100/179 chunks
+2026-05-22 17:07:29,396 INFO:   Embedded 150/179 chunks
+2026-05-22 17:07:41,498 INFO:   Done: Adam Clarke's Commentary - Zechariah (179 chunks)
+2026-05-22 17:07:41,712 INFO: Fetching: Adam Clarke's Commentary - Malachi (4 chapters)
+2026-05-22 17:07:42,221 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAL/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:42,226 WARNING:   No data for adam-clarke MAL ch 1
+2026-05-22 17:07:42,464 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAL/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:42,470 WARNING:   No data for adam-clarke MAL ch 2
+2026-05-22 17:07:42,740 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAL/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:42,746 WARNING:   No data for adam-clarke MAL ch 3
+2026-05-22 17:07:43,002 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAL/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:43,008 WARNING:   No data for adam-clarke MAL ch 4
+2026-05-22 17:07:43,011 WARNING:   No verse data found for Adam Clarke's Commentary - Malachi
+2026-05-22 17:07:43,070 INFO: Fetching: Adam Clarke's Commentary - Matthew (28 chapters)
+2026-05-22 17:07:43,339 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/1.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:43,343 WARNING:   No data for adam-clarke MAT ch 1
+2026-05-22 17:07:43,575 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/2.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:43,582 WARNING:   No data for adam-clarke MAT ch 2
+2026-05-22 17:07:43,866 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/3.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:43,876 WARNING:   No data for adam-clarke MAT ch 3
+2026-05-22 17:07:44,141 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/4.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:44,149 WARNING:   No data for adam-clarke MAT ch 4
+2026-05-22 17:07:44,371 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/5.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:44,374 WARNING:   No data for adam-clarke MAT ch 5
+2026-05-22 17:07:44,645 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/6.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:44,652 WARNING:   No data for adam-clarke MAT ch 6
+2026-05-22 17:07:44,839 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/7.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:44,845 WARNING:   No data for adam-clarke MAT ch 7
+2026-05-22 17:07:45,119 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/8.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:45,124 WARNING:   No data for adam-clarke MAT ch 8
+2026-05-22 17:07:45,391 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/9.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:45,396 WARNING:   No data for adam-clarke MAT ch 9
+2026-05-22 17:07:45,629 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/10.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:45,634 WARNING:   No data for adam-clarke MAT ch 10
+2026-05-22 17:07:45,924 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/11.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:45,929 WARNING:   No data for adam-clarke MAT ch 11
+2026-05-22 17:07:46,159 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/12.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:46,189 WARNING:   No data for adam-clarke MAT ch 12
+2026-05-22 17:07:46,410 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/13.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:46,419 WARNING:   No data for adam-clarke MAT ch 13
+2026-05-22 17:07:46,644 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/14.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:46,650 WARNING:   No data for adam-clarke MAT ch 14
+2026-05-22 17:07:46,880 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/15.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:46,882 WARNING:   No data for adam-clarke MAT ch 15
+2026-05-22 17:07:47,141 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/16.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:47,146 WARNING:   No data for adam-clarke MAT ch 16
+2026-05-22 17:07:47,453 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/17.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:47,458 WARNING:   No data for adam-clarke MAT ch 17
+2026-05-22 17:07:47,758 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/18.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:47,760 WARNING:   No data for adam-clarke MAT ch 18
+2026-05-22 17:07:47,974 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/19.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:47,978 WARNING:   No data for adam-clarke MAT ch 19
+2026-05-22 17:07:48,191 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/20.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:48,198 WARNING:   No data for adam-clarke MAT ch 20
+2026-05-22 17:07:48,426 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/21.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:48,433 WARNING:   No data for adam-clarke MAT ch 21
+2026-05-22 17:07:48,724 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/22.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:48,730 WARNING:   No data for adam-clarke MAT ch 22
+2026-05-22 17:07:49,015 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/23.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:49,021 WARNING:   No data for adam-clarke MAT ch 23
+2026-05-22 17:07:49,246 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/24.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:49,256 WARNING:   No data for adam-clarke MAT ch 24
+2026-05-22 17:07:49,524 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/25.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:49,528 WARNING:   No data for adam-clarke MAT ch 25
+2026-05-22 17:07:49,796 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/26.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:49,801 WARNING:   No data for adam-clarke MAT ch 26
+2026-05-22 17:07:50,030 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/27.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:50,036 WARNING:   No data for adam-clarke MAT ch 27
+2026-05-22 17:07:50,295 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/28.json: Expecting value: line 1 column 1 (char 0)
+2026-05-22 17:07:50,307 WARNING:   No data for adam-clarke MAT ch 28
+2026-05-22 17:07:50,308 WARNING:   No verse data found for Adam Clarke's Commentary - Matthew
+2026-05-22 17:07:50,555 INFO: Fetching: Adam Clarke's Commentary - Mark (16 chapters)
+2026-05-22 17:07:57,156 INFO:   336 verse entries collected
+2026-05-22 17:07:57,758 INFO:   Tags: Biblical Authority, Baptism in the Spirit, The New Covenant, Divine Appointments
+2026-05-22 17:08:34,438 INFO:   Embedded 50/336 chunks
+2026-05-22 17:09:07,594 INFO:   Embedded 100/336 chunks
+2026-05-22 17:09:41,709 INFO:   Embedded 150/336 chunks
+2026-05-22 17:10:09,599 INFO:   Embedded 200/336 chunks
+2026-05-22 17:10:53,093 INFO:   Embedded 250/336 chunks
+2026-05-22 17:11:35,508 INFO:   Embedded 300/336 chunks
+2026-05-22 17:11:58,426 INFO:   Done: Adam Clarke's Commentary - Mark (336 chunks)
+2026-05-22 17:11:58,811 INFO: Fetching: Adam Clarke's Commentary - Luke (24 chapters)
+2026-05-22 17:12:09,339 INFO:   747 verse entries collected
+2026-05-22 17:12:09,951 INFO:   Tags: Biblical Authority, Authority of the Believer
+2026-05-22 17:12:43,164 INFO:   Embedded 50/747 chunks
+2026-05-22 17:13:10,237 INFO:   Embedded 100/747 chunks
+2026-05-22 17:13:40,237 INFO:   Embedded 150/747 chunks
+2026-05-22 17:14:12,040 ERROR: Failed to ingest adam-clarke Luke: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+Traceback (most recent call last):
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
+    total_skipped = 0
+  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
+    return False
+  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
+    raise APIError(dict(json_obj))
+postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+2026-05-22 17:14:12,220 INFO: SKIP (exists): Adam Clarke's Commentary - John
+2026-05-22 17:14:12,446 INFO: Fetching: Adam Clarke's Commentary - Acts (28 chapters)
+2026-05-22 17:14:25,482 INFO:   884 verse entries collected
+2026-05-22 17:14:25,868 INFO:   Tags: Authority of the Believer, Divine Appointments, Filling of the Spirit, Led by the Spirit
+2026-05-22 17:15:08,897 INFO:   Embedded 50/884 chunks
+2026-05-22 17:15:52,140 INFO:   Embedded 100/884 chunks
+2026-05-22 17:16:31,736 INFO:   Embedded 150/884 chunks
+2026-05-22 17:16:58,143 INFO:   Embedded 200/884 chunks
+2026-05-22 17:17:22,414 INFO:   Embedded 250/884 chunks
+2026-05-22 17:17:47,214 INFO:   Embedded 300/884 chunks
+2026-05-22 17:18:13,647 INFO:   Embedded 350/884 chunks
+2026-05-22 17:18:49,034 INFO:   Embedded 400/884 chunks
+2026-05-22 17:19:27,568 INFO:   Embedded 450/884 chunks
+2026-05-22 17:20:04,090 INFO:   Embedded 500/884 chunks
+2026-05-22 17:20:27,326 INFO:   Embedded 550/884 chunks
+2026-05-22 17:20:55,566 INFO:   Embedded 600/884 chunks
+2026-05-22 17:21:36,968 INFO:   Embedded 650/884 chunks
+2026-05-22 17:22:04,131 INFO:   Embedded 700/884 chunks
+2026-05-22 17:22:47,730 INFO:   Embedded 750/884 chunks
+2026-05-22 17:23:11,114 INFO:   Embedded 800/884 chunks
+2026-05-22 17:23:39,483 INFO:   Embedded 850/884 chunks
+2026-05-22 17:23:55,795 INFO:   Done: Adam Clarke's Commentary - Acts (884 chunks)
+2026-05-22 17:23:56,196 INFO: Fetching: Adam Clarke's Commentary - Romans (16 chapters)
+2026-05-22 17:24:03,361 INFO:   419 verse entries collected
+2026-05-22 17:24:03,848 INFO:   Tags: Authority of the Believer, Biblical Authority, Servant Leadership, The Lordship of Christ
+2026-05-22 17:24:43,235 INFO:   Embedded 50/419 chunks
+2026-05-22 17:25:03,543 INFO:   Embedded 100/419 chunks
+2026-05-22 17:25:30,601 INFO:   Embedded 150/419 chunks
+2026-05-22 17:25:56,276 INFO:   Embedded 200/419 chunks
+2026-05-22 17:26:23,558 INFO:   Embedded 250/419 chunks
+2026-05-22 17:26:49,903 INFO:   Embedded 300/419 chunks
+2026-05-22 17:27:28,455 INFO:   Embedded 350/419 chunks
+2026-05-22 17:27:54,883 INFO:   Embedded 400/419 chunks
+2026-05-22 17:28:02,320 INFO:   Done: Adam Clarke's Commentary - Romans (419 chunks)
+2026-05-22 17:28:02,698 INFO: Fetching: Adam Clarke's Commentary - 1 Corinthians (16 chapters)
+2026-05-22 17:28:10,114 INFO:   416 verse entries collected
+2026-05-22 17:28:10,757 INFO:   Tags: Apostolic Oversight, Biblical Authority, Authority of the Believer
+2026-05-22 17:28:37,093 INFO:   Embedded 50/416 chunks
+2026-05-22 17:29:07,267 INFO:   Embedded 100/416 chunks
+2026-05-22 17:29:35,244 INFO:   Embedded 150/416 chunks
+2026-05-22 17:30:02,305 INFO:   Embedded 200/416 chunks
+2026-05-22 17:30:48,173 INFO:   Embedded 250/416 chunks
+2026-05-22 17:31:17,509 INFO:   Embedded 300/416 chunks
+2026-05-22 17:31:42,997 INFO:   Embedded 350/416 chunks
+2026-05-22 17:32:10,819 INFO:   Embedded 400/416 chunks
+2026-05-22 17:32:20,717 INFO:   Done: Adam Clarke's Commentary - 1 Corinthians (416 chunks)
+2026-05-22 17:32:21,057 INFO: Fetching: Adam Clarke's Commentary - 2 Corinthians (13 chapters)
+2026-05-22 17:32:26,830 INFO:   253 verse entries collected
+2026-05-22 17:32:27,489 INFO:   Tags: Authority of the Believer, God's Comfort, Grace and Mercy, Spiritual Maturity
+2026-05-22 17:32:53,561 INFO:   Embedded 50/253 chunks
+2026-05-22 17:33:23,639 INFO:   Embedded 100/253 chunks
+2026-05-22 17:34:04,410 INFO:   Embedded 150/253 chunks
+2026-05-22 17:34:38,710 INFO:   Embedded 200/253 chunks
+2026-05-22 17:35:13,319 INFO:   Embedded 250/253 chunks
+2026-05-22 17:35:14,339 INFO:   Done: Adam Clarke's Commentary - 2 Corinthians (253 chunks)
+2026-05-22 17:35:14,536 INFO: Fetching: Adam Clarke's Commentary - Galatians (6 chapters)
+2026-05-22 17:35:17,178 INFO:   147 verse entries collected
+2026-05-22 17:35:17,670 INFO:   Tags: Biblical Authority, The Lordship of Christ, Biblical Leadership, Freedom from Anxiety
+2026-05-22 17:35:51,036 INFO:   Embedded 50/147 chunks
+2026-05-22 17:36:16,805 INFO:   Embedded 100/147 chunks
+2026-05-22 17:36:48,674 INFO:   Done: Adam Clarke's Commentary - Galatians (147 chunks)
+2026-05-22 17:36:49,017 INFO: Fetching: Adam Clarke's Commentary - Ephesians (6 chapters)
+2026-05-22 17:36:52,189 INFO:   153 verse entries collected
+2026-05-22 17:36:52,709 INFO:   Tags: Biblical Authority, Holiness and Sanctification, Grace and Mercy
+2026-05-22 17:37:18,800 INFO:   Embedded 50/153 chunks
+2026-05-22 17:38:03,049 INFO:   Embedded 100/153 chunks
+2026-05-22 17:38:37,759 INFO:   Embedded 150/153 chunks
+2026-05-22 17:38:40,299 INFO:   Done: Adam Clarke's Commentary - Ephesians (153 chunks)
+2026-05-22 17:38:40,577 INFO: Fetching: Adam Clarke's Commentary - Philippians (4 chapters)
+2026-05-22 17:38:42,545 INFO:   103 verse entries collected
+2026-05-22 17:38:43,037 INFO:   Tags: Apostolic Oversight, Biblical Leadership, Equipping the Saints, Spiritual Maturity
+2026-05-22 17:39:11,149 INFO:   Embedded 50/103 chunks
+2026-05-22 17:40:07,197 INFO:   Embedded 100/103 chunks
+2026-05-22 17:40:08,476 INFO:   Done: Adam Clarke's Commentary - Philippians (103 chunks)
+2026-05-22 17:40:08,657 INFO: Fetching: Adam Clarke's Commentary - Colossians (4 chapters)
+2026-05-22 17:40:10,526 INFO:   91 verse entries collected
+2026-05-22 17:40:11,021 INFO:   Tags: Apostolic Oversight, Biblical Authority, The Lordship of Christ, Grace and Mercy
+2026-05-22 17:40:39,328 INFO:   Embedded 50/91 chunks
+2026-05-22 17:41:08,661 INFO:   Done: Adam Clarke's Commentary - Colossians (91 chunks)
+2026-05-22 17:41:08,840 INFO: Fetching: Adam Clarke's Commentary - 1 Thessalonians (5 chapters)
+2026-05-22 17:41:10,908 INFO:   86 verse entries collected
+2026-05-22 17:41:11,327 INFO:   Tags: Faith and Perseverance, Love and Sacrifice, Biblical Authority
+2026-05-22 17:41:35,109 INFO:   Embedded 50/86 chunks
+2026-05-22 17:42:09,727 INFO:   Done: Adam Clarke's Commentary - 1 Thessalonians (86 chunks)
+2026-05-22 17:42:09,928 INFO: Fetching: Adam Clarke's Commentary - 2 Thessalonians (3 chapters)
+2026-05-22 17:42:11,482 INFO:   45 verse entries collected
+2026-05-22 17:42:11,843 INFO:   Tags: End Times Prophecy, God's Comfort, Victory in Christ, The Lordship of Christ
+2026-05-22 17:42:40,243 INFO:   Done: Adam Clarke's Commentary - 2 Thessalonians (45 chunks)
+2026-05-22 17:42:40,455 INFO: Fetching: Adam Clarke's Commentary - 1 Timothy (6 chapters)
+2026-05-22 17:42:43,134 INFO:   112 verse entries collected
+2026-05-22 17:42:43,824 INFO:   Tags: Apostolic Oversight, Biblical Authority, Spiritual Maturity, The New Covenant
+2026-05-22 17:43:20,449 INFO:   Embedded 50/112 chunks
+2026-05-22 17:44:00,562 INFO:   Embedded 100/112 chunks
+2026-05-22 17:44:07,890 INFO:   Done: Adam Clarke's Commentary - 1 Timothy (112 chunks)
+2026-05-22 17:44:08,221 INFO: Fetching: Adam Clarke's Commentary - 2 Timothy (4 chapters)
+2026-05-22 17:44:09,953 INFO:   83 verse entries collected
+2026-05-22 17:44:10,521 INFO:   Tags: Authority of the Believer, Discipleship and Mentoring, Faith and Perseverance, Spiritual Maturity
+2026-05-22 17:44:46,861 INFO:   Embedded 50/83 chunks
+2026-05-22 17:45:00,361 INFO:   Done: Adam Clarke's Commentary - 2 Timothy (83 chunks)
+2026-05-22 17:45:00,553 INFO: Fetching: Adam Clarke's Commentary - Titus (3 chapters)
+2026-05-22 17:45:01,936 INFO:   46 verse entries collected
+2026-05-22 17:45:02,368 INFO:   Tags: Biblical Authority, The New Covenant, Divine Appointments

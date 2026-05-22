@@ -1,0 +1,577 @@
+2026-05-22 10:34:52,706  INFO  SUCCESS  597a9304-f157-4cf8-92a6-a75bf606c986  Word Study: Abandon (egkataleipo, G1459)  118.1s
+2026-05-22 10:36:54,812  INFO  SUCCESS  353b071c-e67a-4a27-93c6-843728bfe739  Word Study: Abba (abba, G0005)  122.1s
+2026-05-22 10:37:42,456  INFO  SUCCESS  f378f0a7-e4f7-4001-a12c-7414e7241681  Word Study: Abhor (apostugeo, G0655)  47.6s
+2026-05-22 10:38:12,438  INFO  SUCCESS  89d877ec-732d-4a1a-9ef8-6854d84c9ada  Word Study: Abhor (bdelusso, G0948)  30.0s
+2026-05-22 10:38:41,663  INFO  SUCCESS  4823121b-9bfd-4f82-9b7a-7fa2d6c797b4  Word Study: Abide (epimeno, G1961)  29.2s
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-05-22 10:48:16,186  INFO  SUCCESS  597a9304-f157-4cf8-92a6-a75bf606c986  Word Study: Abandon (egkataleipo, G1459)  78.5s
+2026-05-22 10:49:28,269  INFO  SUCCESS  353b071c-e67a-4a27-93c6-843728bfe739  Word Study: Abba (abba, G0005)  71.8s
+2026-05-22 10:50:05,540  INFO  SUCCESS  f378f0a7-e4f7-4001-a12c-7414e7241681  Word Study: Abhor (apostugeo, G0655)  36.9s
+2026-05-22 10:50:30,087  INFO  SUCCESS  89d877ec-732d-4a1a-9ef8-6854d84c9ada  Word Study: Abhor (bdelusso, G0948)  24.4s
+2026-05-22 10:50:54,790  INFO  SUCCESS  4823121b-9bfd-4f82-9b7a-7fa2d6c797b4  Word Study: Abide (epimeno, G1961)  24.4s
+2026-05-22 10:52:18,078  INFO  SUCCESS  bba12fdd-1021-491a-8cd8-3817f2b2187b  Word Study: Abide (meno, G3306)  82.5s
+2026-05-22 10:53:27,694  INFO  SUCCESS  af967012-bcc1-416d-b660-75170b077d8e  Word Study: Able (dunamai, G1410)  69.4s
+2026-05-22 10:53:52,083  INFO  SUCCESS  a53c4d3f-4374-4d68-ad5b-e29d4cfd7340  Word Study: Able (dunateo, G1414)  24.1s
+2026-05-22 10:54:18,814  INFO  SUCCESS  af2a3f6e-1fe5-4a5b-95f2-70d41acecc1b  Word Study: Able (dunatos, G1415)  26.4s
+2026-05-22 10:54:33,219  INFO  SUCCESS  de70004d-dc4a-4983-83bd-2e9e895327b8  Word Study: Able to teach (didaktikos, G1317)  14.2s
+2026-05-22 10:54:52,836  INFO  SUCCESS  3511ed53-852b-4b78-ab24-10ef46278dd7  Word Study: Abolish (katargeo, G2673)  19.2s
+2026-05-22 10:55:04,492  INFO  SUCCESS  3624863c-90d3-4d62-b2ed-5e6854a64e16  Word Study: Abominable (athemitos, G0111)  11.5s
+2026-05-22 10:55:17,503  INFO  SUCCESS  fe75bf3c-42d7-4e64-8779-63da7dbd934c  Word Study: Abomination (bdelugma, G0946)  12.8s
+2026-05-22 10:55:54,179  INFO  SUCCESS  60e894a2-04c8-46fc-9e2a-21a400ed1aad  Word Study: Abound (perisseuo, G4052)  36.3s
+2026-05-22 10:56:40,845  INFO  SUCCESS  2bf25bca-23be-498a-8eb0-9406530fa156  Word Study: Abounded (huperperisseuo, G5248)  46.1s
+2026-05-22 10:56:50,732  INFO  SUCCESS  28a3931e-91a5-445a-b356-d69e27b08d69  Word Study: Abounding in riches (plouteo, G4147)  9.7s
+2026-05-22 11:01:12,470  INFO  SUCCESS  5ec3e653-1b5e-4a80-8a2d-0dba5bec805a  Word Study: Above (ano, G0507)  261.3s
+2026-05-22 11:01:55,673  INFO  SUCCESS  f4e148a5-0184-4b97-b1c8-e55622100451  Word Study: Above reproach (amomos, G0299)  43.0s
+2026-05-22 11:02:07,004  INFO  SUCCESS  a16d0ef9-8b76-4d58-b7e2-45c91fc072b6  Word Study: Above reproach (anegkletos, G0410)  11.1s
+2026-05-22 11:03:46,364  INFO  SUCCESS  04437453-fbe4-4e0a-95c5-4a62e8c60c9d  Word Study: Above reproach (anepileptos, G0423)  98.7s
+2026-05-22 11:17:25,470  INFO  SUCCESS  52bef530-a8a1-48ca-ba91-7d450bfd6993  Word Study: Abstain (apechomai_or_apecho, G0568)  818.2s
+2026-05-22 11:18:06,367  INFO  SUCCESS  0615ac1a-1311-4dc4-bbf4-720d0cb40654  Word Study: Abstain (aphistemi, G0868)  40.3s
+2026-05-22 11:19:33,059  INFO  SUCCESS  29b9c105-1dd1-43a7-a29e-e4be6c21c910  Word Study: Abundance (perisseia, G4050)  86.2s
+2026-05-22 11:22:26,876  INFO  SUCCESS  e6a77468-50c1-40cb-9599-82601353821c  Word Study: Accept (dechomai, G1209)  172.8s
+2026-05-22 11:23:44,059  INFO  SUCCESS  b537d8a4-16f7-4152-a045-4c866a245340  Word Study: Accept (prosdechomai, G4327)  76.8s
+2026-05-22 11:25:37,846  INFO  SUCCESS  0f982b49-186a-46d4-a058-fb107a22eaaf  Word Study: Accept (proslambano, G4355)  113.1s
+2026-05-22 11:25:59,454  INFO  SUCCESS  6f7ed1a3-58f2-4799-a739-3532e719f9c3  Word Study: Acceptable (euarestos, G2101)  21.4s
+2026-05-22 11:26:47,226  INFO  SUCCESS  98805755-ce84-4ed8-a025-29337ce7f436  Word Study: Acceptable (favorable) (dektos, G1184)  47.4s
+2026-05-22 11:26:56,304  INFO  SUCCESS  734c0922-ac81-49b2-8023-02a6c7f71d1f  Word Study: Acceptance (apodoche, G0594)  8.8s
+2026-05-22 11:29:10,714  INFO  SUCCESS  d49416db-de3f-45ee-89e2-83d42d5afa32  Word Study: Access (prosagoge, G4318)  134.0s
+2026-05-22 11:30:23,315  INFO  SUCCESS  4bc0d9af-2230-4c5d-a399-e72d7c6cddd4  Word Study: Accomplish (katergazomai, G2716)  72.2s
+2026-05-22 11:30:47,742  INFO  SUCCESS  5f267960-3016-427d-b35a-ba304c965b3e  Word Study: Accomplished (epiteleo, G2005)  24.1s
+2026-05-22 11:31:02,271  INFO  SUCCESS  1d5f17e0-b181-4514-98da-82a1e659fbc7  Word Study: Accomplished (plerophoreo, G4135)  14.3s
+2026-05-22 11:31:17,498  INFO  SUCCESS  661d1689-2d72-4751-84ed-da7fb90f4227  Word Study: Accountable (hupodikos, G5267)  15.0s
+2026-05-22 11:31:25,572  INFO  SUCCESS  2be6e3ad-1310-4217-b762-709e745f68ae  Word Study: Accumulate (episoreuo, G2002)  7.8s
+2026-05-22 11:31:36,114  INFO  SUCCESS  637bc0dd-7542-42bb-a7be-e44ce3aeb5b1  Word Study: Accurately (akribos, G0199)  10.3s
+2026-05-22 11:31:52,006  INFO  SUCCESS  3df9f41d-dbd9-43ec-81a0-ff29755d4937  Word Study: Accursed (anathema) (anathema, G0331)  15.7s
+2026-05-22 11:32:07,094  INFO  SUCCESS  7c1bdcf4-509d-4aa6-89d1-95011204a863  Word Study: Accuse (kategoreo, G2723)  14.8s
+2026-05-22 11:32:11,809  INFO  SUCCESS  5239ddd6-4e20-4ada-9f8f-713899789c16  Word Study: Accused, accusatio (kategoria, G2724)  4.6s
+2026-05-22 11:32:23,189  INFO  SUCCESS  24712237-a4ec-42aa-8334-85958013ceae  Word Study: Act like men (andrizo, G0407)  11.0s
+2026-05-22 11:33:46,301  INFO  SUCCESS  6b64fa7e-5675-4a90-8bcc-f1947adbde00  Word Study: Act unbecomingly (aschemoneo, G0807)  82.3s
+2026-05-22 11:33:56,935  INFO  SUCCESS  89c8fe18-b992-4b67-ae79-e7de8c5e833a  Word Study: Active (energes, G1756)  10.4s
+2026-05-22 11:35:48,090  INFO  SUCCESS  8f540210-eaf2-4d9d-ba75-2d96057462a6  Word Study: Active service (strateuomai, G4754)  110.4s
+2026-05-22 11:36:22,984  INFO  SUCCESS  4fea5be9-2464-4c65-9723-c31135009517  Word Study: Add (epichoregeo, G2023)  34.6s
+2026-05-22 11:36:33,783  INFO  SUCCESS  b149b8da-0916-48c2-854c-c944bd4d415f  Word Study: Addicted to win (paroinos, G3943)  10.5s
+2026-05-22 11:39:02,305  INFO  SUCCESS  63e90a82-5c96-4f57-bd1c-6b45987a4b41  Word Study: Address (epikaleomai, G1941)  148.0s
+2026-05-22 11:39:18,451  INFO  SUCCESS  17b17350-82a1-4ece-b88f-03dd4f34420f  Word Study: Adequate (artios, G0739)  16.0s
+2026-05-22 11:39:46,431  INFO  SUCCESS  0d382e03-f135-4c25-a42d-b866b7883813  Word Study: Adequate (hikanos, G2425)  27.5s
+2026-05-22 11:39:57,382  INFO  SUCCESS  445eef8c-6fd9-4ea7-b554-791563cdfab4  Word Study: Adjure (enorkizo, G1775)  10.8s
+2026-05-22 11:40:21,527  INFO  SUCCESS  eca4f1d3-4bac-43ab-940b-e282ae4a39a8  Word Study: Administration (oikonomia, G3622)  23.8s
+2026-05-22 11:42:13,278  INFO  SUCCESS  baadb43d-543a-4508-92fd-bb735ed4e6f1  Word Study: Admonish (noutheteo, G3560)  111.2s
+2026-05-22 11:43:27,943  INFO  SUCCESS  d986e9a9-8319-4ec4-9742-7b5b300f33fa  Word Study: Adoption as sons (huiothesia, G5206)  74.4s
+2026-05-22 11:43:56,591  INFO  SUCCESS  869ddfda-7393-4181-b645-64d1bc7df10e  Word Study: Adorn (kosmeo, G2885)  28.4s
+2026-05-22 11:44:03,414  INFO  SUCCESS  e8546a8b-4c41-4edb-9ad6-9369a3b7b320  Word Study: Adulterating (doloo, G1389)  6.6s
+2026-05-22 11:44:09,044  INFO  SUCCESS  65f16311-c650-40a7-a7fa-adf965d31108  Word Study: Adulterers (moichos, G3432)  5.5s
+2026-05-22 11:44:26,245  INFO  SUCCESS  ac305a0b-45de-4e5c-a04c-3869d80cd24a  Word Study: Adulteress (moichalis, G3428)  17.0s
+2026-05-22 11:44:46,924  INFO  SUCCESS  93ca0ff7-b131-4ae8-85de-5a937b8142f3  Word Study: Advance (prokopto, G4298)  20.4s
+2026-05-22 11:44:56,407  INFO  SUCCESS  af45d0c0-e436-423a-9b36-70ac6b112b2b  Word Study: Adversary (antidikos, G0476)  9.3s
+2026-05-22 11:45:10,394  INFO  SUCCESS  abf73d83-4aa8-4415-9466-5865486029f1  Word Study: Affairs (pragmateia, G4230)  13.8s
+2026-05-22 11:46:19,613  INFO  SUCCESS  b24d4546-5d54-4364-a64b-2580c91becb8  Word Study: Affection (splagchnon, G4698)  68.6s
+2026-05-22 11:47:12,456  INFO  SUCCESS  5f9abb64-d5c2-4270-b4f8-cc06f2983ab4  Word Study: Afflict (thlibo, G2346)  52.6s
+2026-05-22 11:49:13,777  INFO  SUCCESS  12aae1e2-e7dc-4ebd-89b3-06a990523814  Word Study: Affliction (thlipsis, G2347)  120.9s
+2026-05-22 11:50:06,322  INFO  SUCCESS  a1fd5f9f-33f4-408d-afd2-72ce015a9fc6  Word Study: Afraid, be (phobeo, G5399)  52.3s
+2026-05-22 11:50:23,315  INFO  SUCCESS  70dc2c78-55d7-462e-b230-5c07896bc475  Word Study: Agains (enantios, G1727)  16.8s
+2026-05-22 11:52:47,664  INFO  SUCCESS  fce8d886-731d-4913-a706-acc126b56722  Word Study: Age (aion, G0165)  144.0s
+2026-05-22 11:52:52,298  INFO  SUCCESS  a01992c6-b6ae-4ab7-a256-275d615cee11  Word Study: Agony (agonia, G0074)  4.6s
+2026-05-22 11:53:17,930  INFO  SUCCESS  520a8224-9293-4b1c-a399-cbd4e7201ec0  Word Study: Air (aer, G0109)  25.5s
+2026-05-22 11:56:36,215  INFO  SUCCESS  23ff72ed-fa94-4499-ae2a-29ef214e3d40  Word Study: Alarmed (pturo, G4426)  197.2s
+2026-05-22 11:57:02,333  INFO  SUCCESS  519df87a-fde6-4931-8371-11d47712f43c  Word Study: Alert (gregoreuo, G1127)  25.9s
+2026-05-22 11:58:03,460  INFO  SUCCESS  edac2502-fac7-4332-8068-53ae93859c99  Word Study: Alien (parepidemos, G3927)  60.6s
+2026-05-22 11:59:00,589  INFO  SUCCESS  03e91841-9d14-4d71-b133-0e48019e01cc  Word Study: Alien (paroikos, G3941)  56.8s
+2026-05-22 11:59:35,015  INFO  SUCCESS  6b3aed9a-8b3a-4b2f-a132-d55969a28306  Word Study: Alienated (apallotrioo, G0526)  34.2s
+2026-05-22 12:00:40,147  INFO  SUCCESS  cdf10aa7-02d2-4cc7-91d7-aecbe04f810b  Word Study: All the more (perissosteros, G4057)  64.7s
+2026-05-22 12:00:45,516  INFO  SUCCESS  070aa270-8fa8-4685-b653-1e115d40ee05  Word Study: All time (dienekes, G1336)  5.2s
+2026-05-22 12:03:22,010  INFO  SUCCESS  d641f78c-f57d-45ca-bc0d-a6e1d67a0874  Word Study: Almighty (pantokrator, G3841)  155.9s
+2026-05-22 12:04:50,662  INFO  SUCCESS  8df916e6-fd13-4956-8817-6da3383419e6  Word Study: Alms (charity) (eleemosune, G1654)  87.9s
+2026-05-22 12:04:55,127  INFO  SUCCESS  4e70a27b-1fde-4e26-8399-8731ef1bd8d8  Word Study: Already suffered (propascho, G4310)  4.4s
+2026-05-22 12:06:20,408  INFO  SUCCESS  1323f06d-a5fd-42f9-9c05-ba638501479a  Word Study: Altar (thusiasterion, G2379)  84.6s
+2026-05-22 12:06:31,227  INFO  SUCCESS  b6131414-7c44-40a9-a358-6b8427a31d81  Word Study: Altar of incense (thumiasterion, G2369)  10.6s
+2026-05-22 12:06:35,511  INFO  SUCCESS  5f535aff-f153-48d6-8490-731cc5f66c50  Word Study: Always (pantote, G3842)  4.2s
+2026-05-22 12:08:15,590  INFO  SUCCESS  d7958c64-9158-49d8-969a-a020008630aa  Word Study: Am (eimi, G1510)  99.6s
+2026-05-22 12:08:36,149  INFO  SUCCESS  7dbf547b-17c0-477a-92d6-335269f8e43e  Word Study: Amazed (ekplesso, G1605)  20.4s
+2026-05-22 12:09:19,447  INFO  SUCCESS  27eec6a1-c827-4a83-9e63-37b87dbd0823  Word Study: Amazed (existemi, G1839)  43.1s
+2026-05-22 12:10:01,315  INFO  SUCCESS  bba230bc-5a06-47e3-b262-c19cbdad62d1  Word Study: Amazed (thaumazo, G2296)  41.5s
+2026-05-22 12:11:08,945  INFO  SUCCESS  a86e19ea-0bb2-4008-a2c2-31eb19983a6a  Word Study: Ambassador (presbeuo, G4243)  67.4s
+2026-05-22 12:12:40,709  INFO  SUCCESS  adbd7f50-67d2-4ac9-80e0-6927dca32d34  Word Study: Amen (amen, G0281)  91.4s
+2026-05-22 12:12:50,427  INFO  SUCCESS  c0c6108e-8031-422b-a04c-fa65bb39ff41  Word Study: Anchor (agkura, G0045)  9.5s
+2026-05-22 12:14:31,935  INFO  SUCCESS  9077f0ed-cd5b-45a2-8cc3-d4d22db8e1a0  Word Study: Angel (aggelosangelos, G0032)  101.1s
+2026-05-22 12:16:08,641  INFO  SUCCESS  95ac22da-2f13-4463-a011-2771540206b1  Word Study: Anger (orge, G3709)  95.9s
+2026-05-22 12:16:22,626  INFO  SUCCESS  73991cb2-8c61-4d47-9e49-b709dfd4a42b  Word Study: Anger (parorgismos, G3950)  13.7s
+2026-05-22 12:17:12,067  INFO  SUCCESS  3b1ef320-49fe-4ebc-9096-dea87a5a38a6  Word Study: Anger (thumos, G2372)  49.2s
+2026-05-22 12:17:22,834  INFO  SUCCESS  8acf946f-8fd8-4fe6-a4e2-de1233ba6d1c  Word Study: Angry (prosochthizo, G4360)  10.5s
+2026-05-22 12:17:43,907  INFO  SUCCESS  79c2343a-3d7a-49ea-8015-59c40fdc49e9  Word Study: Angry, be (orgizo, G3710)  20.8s
+2026-05-22 12:18:44,531  INFO  SUCCESS  56cf87c3-1a62-473e-bbe7-eb9c2b76c251  Word Study: Announce (anaggelloanangello, G0312)  60.2s
+2026-05-22 12:20:10,223  INFO  SUCCESS  ebda9ef3-9f35-481b-b6fa-56ab0b660b3a  Word Study: Annoyed (diaponeo, G1278)  85.2s
+2026-05-22 12:21:51,255  INFO  SUCCESS  df677f35-60cf-415c-ba7c-407bd6f63512  Word Study: Anoint (chrio, G5548)  100.3s
+2026-05-22 12:22:15,308  INFO  SUCCESS  b77794a6-79d8-439e-892c-18084d19dddc  Word Study: Anointing (chrisma, G5545)  23.7s
+2026-05-22 12:22:31,308  INFO  SUCCESS  7b7630a2-3d92-44d7-bb21-d7d3dbc68064  Word Study: Answer back (antapokrinomai, G0470)  15.8s
+2026-05-22 12:22:48,430  INFO  SUCCESS  d0a61348-4c49-4f67-9556-31ff038e8ada  Word Study: Antichrist (antichristos, G0500)  16.9s
+2026-05-22 12:24:14,448  INFO  SUCCESS  52ebdb49-48e1-412b-bc6f-61db23377c78  Word Study: Anxiety (merimna, G3308)  85.4s
+2026-05-22 12:25:45,746  INFO  SUCCESS  4f233d0f-0afd-48cd-8fc0-c6ed7b2ffa33  Word Study: Anxious (merimnao, G3309)  91.0s
+2026-05-22 13:10:20,442  INFO  SUCCESS  45354afd-d6f2-457f-bd3c-aa5c8b8f7129  Word Study: Anxious longing (apokaradokia, G0603)  2674.0s
+2026-05-22 13:10:20,443  INFO  TIME LIMIT reached after 8603s
+Found 1779 word_study documents
+Already completed: 0
+[1/1779] OK Word Study: Abandon (egkataleipo, G1459) — 78.5s
+[2/1779] OK Word Study: Abba (abba, G0005) — 71.8s
+[3/1779] OK Word Study: Abhor (apostugeo, G0655) — 36.9s
+[4/1779] OK Word Study: Abhor (bdelusso, G0948) — 24.4s
+[5/1779] OK Word Study: Abide (epimeno, G1961) — 24.4s
+[6/1779] OK Word Study: Abide (meno, G3306) — 82.5s
+[7/1779] OK Word Study: Able (dunamai, G1410) — 69.4s
+[8/1779] OK Word Study: Able (dunateo, G1414) — 24.1s
+[9/1779] OK Word Study: Able (dunatos, G1415) — 26.4s
+[10/1779] OK Word Study: Able to teach (didaktikos, G1317) — 14.2s
+[11/1779] OK Word Study: Abolish (katargeo, G2673) — 19.2s
+[12/1779] OK Word Study: Abominable (athemitos, G0111) — 11.5s
+[13/1779] OK Word Study: Abomination (bdelugma, G0946) — 12.8s
+[14/1779] OK Word Study: Abound (perisseuo, G4052) — 36.3s
+[15/1779] OK Word Study: Abounded (huperperisseuo, G5248) — 46.1s
+[16/1779] OK Word Study: Abounding in riches (plouteo, G4147) — 9.7s
+[17/1779] OK Word Study: Above (ano, G0507) — 261.3s
+[18/1779] OK Word Study: Above reproach (amomos, G0299) — 43.0s
+[19/1779] OK Word Study: Above reproach (anegkletos, G0410) — 11.1s
+[20/1779] OK Word Study: Above reproach (anepileptos, G0423) — 98.7s
+[21/1779] OK Word Study: Abstain (apechomai_or_apecho, G0568) — 818.2s
+[22/1779] OK Word Study: Abstain (aphistemi, G0868) — 40.3s
+[23/1779] OK Word Study: Abundance (perisseia, G4050) — 86.2s
+[24/1779] OK Word Study: Accept (dechomai, G1209) — 172.8s
+[25/1779] OK Word Study: Accept (prosdechomai, G4327) — 76.8s
+[26/1779] OK Word Study: Accept (proslambano, G4355) — 113.1s
+[27/1779] OK Word Study: Acceptable (euarestos, G2101) — 21.4s
+[28/1779] OK Word Study: Acceptable (favorable) (dektos, G1184) — 47.4s
+[29/1779] OK Word Study: Acceptance (apodoche, G0594) — 8.8s
+[30/1779] OK Word Study: Access (prosagoge, G4318) — 134.0s
+[31/1779] OK Word Study: Accomplish (katergazomai, G2716) — 72.2s
+[32/1779] OK Word Study: Accomplished (epiteleo, G2005) — 24.1s
+[33/1779] OK Word Study: Accomplished (plerophoreo, G4135) — 14.3s
+[34/1779] OK Word Study: Accountable (hupodikos, G5267) — 15.0s
+[35/1779] OK Word Study: Accumulate (episoreuo, G2002) — 7.8s
+[36/1779] OK Word Study: Accurately (akribos, G0199) — 10.3s
+[37/1779] OK Word Study: Accursed (anathema) (anathema, G0331) — 15.7s
+[38/1779] OK Word Study: Accuse (kategoreo, G2723) — 14.8s
+[39/1779] OK Word Study: Accused, accusatio (kategoria, G2724) — 4.6s
+[40/1779] OK Word Study: Act like men (andrizo, G0407) — 11.0s
+[41/1779] OK Word Study: Act unbecomingly (aschemoneo, G0807) — 82.3s
+[42/1779] OK Word Study: Active (energes, G1756) — 10.4s
+[43/1779] OK Word Study: Active service (strateuomai, G4754) — 110.4s
+[44/1779] OK Word Study: Add (epichoregeo, G2023) — 34.6s
+[45/1779] OK Word Study: Addicted to win (paroinos, G3943) — 10.5s
+[46/1779] OK Word Study: Address (epikaleomai, G1941) — 148.0s
+[47/1779] OK Word Study: Adequate (artios, G0739) — 16.0s
+[48/1779] OK Word Study: Adequate (hikanos, G2425) — 27.5s
+[49/1779] OK Word Study: Adjure (enorkizo, G1775) — 10.8s
+[50/1779] OK Word Study: Administration (oikonomia, G3622) — 23.8s
+[51/1779] OK Word Study: Admonish (noutheteo, G3560) — 111.2s
+[52/1779] OK Word Study: Adoption as sons (huiothesia, G5206) — 74.4s
+[53/1779] OK Word Study: Adorn (kosmeo, G2885) — 28.4s
+[54/1779] OK Word Study: Adulterating (doloo, G1389) — 6.6s
+[55/1779] OK Word Study: Adulterers (moichos, G3432) — 5.5s
+[56/1779] OK Word Study: Adulteress (moichalis, G3428) — 17.0s
+[57/1779] OK Word Study: Advance (prokopto, G4298) — 20.4s
+[58/1779] OK Word Study: Adversary (antidikos, G0476) — 9.3s
+[59/1779] OK Word Study: Affairs (pragmateia, G4230) — 13.8s
+[60/1779] OK Word Study: Affection (splagchnon, G4698) — 68.6s
+[61/1779] OK Word Study: Afflict (thlibo, G2346) — 52.6s
+[62/1779] OK Word Study: Affliction (thlipsis, G2347) — 120.9s
+[63/1779] OK Word Study: Afraid, be (phobeo, G5399) — 52.3s
+[64/1779] OK Word Study: Agains (enantios, G1727) — 16.8s
+[65/1779] OK Word Study: Age (aion, G0165) — 144.0s
+[66/1779] OK Word Study: Agony (agonia, G0074) — 4.6s
+[67/1779] OK Word Study: Air (aer, G0109) — 25.5s
+[68/1779] OK Word Study: Alarmed (pturo, G4426) — 197.2s
+[69/1779] OK Word Study: Alert (gregoreuo, G1127) — 25.9s
+[70/1779] OK Word Study: Alien (parepidemos, G3927) — 60.6s
+[71/1779] OK Word Study: Alien (paroikos, G3941) — 56.8s
+[72/1779] OK Word Study: Alienated (apallotrioo, G0526) — 34.2s
+[73/1779] OK Word Study: All the more (perissosteros, G4057) — 64.7s
+[74/1779] OK Word Study: All time (dienekes, G1336) — 5.2s
+[75/1779] OK Word Study: Almighty (pantokrator, G3841) — 155.9s
+[76/1779] OK Word Study: Alms (charity) (eleemosune, G1654) — 87.9s
+[77/1779] OK Word Study: Already suffered (propascho, G4310) — 4.4s
+[78/1779] OK Word Study: Altar (thusiasterion, G2379) — 84.6s
+[79/1779] OK Word Study: Altar of incense (thumiasterion, G2369) — 10.6s
+[80/1779] OK Word Study: Always (pantote, G3842) — 4.2s
+[81/1779] OK Word Study: Am (eimi, G1510) — 99.6s
+[82/1779] OK Word Study: Amazed (ekplesso, G1605) — 20.4s
+[83/1779] OK Word Study: Amazed (existemi, G1839) — 43.1s
+[84/1779] OK Word Study: Amazed (thaumazo, G2296) — 41.5s
+[85/1779] OK Word Study: Ambassador (presbeuo, G4243) — 67.4s
+[86/1779] OK Word Study: Amen (amen, G0281) — 91.4s
+[87/1779] OK Word Study: Anchor (agkura, G0045) — 9.5s
+[88/1779] OK Word Study: Angel (aggelosangelos, G0032) — 101.1s
+[89/1779] OK Word Study: Anger (orge, G3709) — 95.9s
+[90/1779] OK Word Study: Anger (parorgismos, G3950) — 13.7s
+[91/1779] OK Word Study: Anger (thumos, G2372) — 49.2s
+[92/1779] OK Word Study: Angry (prosochthizo, G4360) — 10.5s
+[93/1779] OK Word Study: Angry, be (orgizo, G3710) — 20.8s
+[94/1779] OK Word Study: Announce (anaggelloanangello, G0312) — 60.2s
+[95/1779] OK Word Study: Annoyed (diaponeo, G1278) — 85.2s
+[96/1779] OK Word Study: Anoint (chrio, G5548) — 100.3s
+[97/1779] OK Word Study: Anointing (chrisma, G5545) — 23.7s
+[98/1779] OK Word Study: Answer back (antapokrinomai, G0470) — 15.8s
+[99/1779] OK Word Study: Antichrist (antichristos, G0500) — 16.9s
+[100/1779] OK Word Study: Anxiety (merimna, G3308) — 85.4s
+[101/1779] OK Word Study: Anxious (merimnao, G3309) — 91.0s
+[102/1779] OK Word Study: Anxious longing (apokaradokia, G0603) — 2674.0s
+
+Time limit (120m) reached. Stopping gracefully.
+
+============================================================
+DONE in 8603s (143.4m)
+  Processed: 102
+  Skipped:   0
+  Failed:    0
+2026-05-22 17:12:12,684  INFO  SKIPPED  597a9304-f157-4cf8-92a6-a75bf606c986  Word Study: Abandon (egkataleipo, G1459)  already completed
+2026-05-22 17:12:12,685  INFO  SKIPPED  353b071c-e67a-4a27-93c6-843728bfe739  Word Study: Abba (abba, G0005)  already completed
+2026-05-22 17:12:12,685  INFO  SKIPPED  f378f0a7-e4f7-4001-a12c-7414e7241681  Word Study: Abhor (apostugeo, G0655)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  89d877ec-732d-4a1a-9ef8-6854d84c9ada  Word Study: Abhor (bdelusso, G0948)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  4823121b-9bfd-4f82-9b7a-7fa2d6c797b4  Word Study: Abide (epimeno, G1961)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  bba12fdd-1021-491a-8cd8-3817f2b2187b  Word Study: Abide (meno, G3306)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  af967012-bcc1-416d-b660-75170b077d8e  Word Study: Able (dunamai, G1410)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  a53c4d3f-4374-4d68-ad5b-e29d4cfd7340  Word Study: Able (dunateo, G1414)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  af2a3f6e-1fe5-4a5b-95f2-70d41acecc1b  Word Study: Able (dunatos, G1415)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  de70004d-dc4a-4983-83bd-2e9e895327b8  Word Study: Able to teach (didaktikos, G1317)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  3511ed53-852b-4b78-ab24-10ef46278dd7  Word Study: Abolish (katargeo, G2673)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  3624863c-90d3-4d62-b2ed-5e6854a64e16  Word Study: Abominable (athemitos, G0111)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  fe75bf3c-42d7-4e64-8779-63da7dbd934c  Word Study: Abomination (bdelugma, G0946)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  60e894a2-04c8-46fc-9e2a-21a400ed1aad  Word Study: Abound (perisseuo, G4052)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  2bf25bca-23be-498a-8eb0-9406530fa156  Word Study: Abounded (huperperisseuo, G5248)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  28a3931e-91a5-445a-b356-d69e27b08d69  Word Study: Abounding in riches (plouteo, G4147)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  5ec3e653-1b5e-4a80-8a2d-0dba5bec805a  Word Study: Above (ano, G0507)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  f4e148a5-0184-4b97-b1c8-e55622100451  Word Study: Above reproach (amomos, G0299)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  a16d0ef9-8b76-4d58-b7e2-45c91fc072b6  Word Study: Above reproach (anegkletos, G0410)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  04437453-fbe4-4e0a-95c5-4a62e8c60c9d  Word Study: Above reproach (anepileptos, G0423)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  52bef530-a8a1-48ca-ba91-7d450bfd6993  Word Study: Abstain (apechomai_or_apecho, G0568)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  0615ac1a-1311-4dc4-bbf4-720d0cb40654  Word Study: Abstain (aphistemi, G0868)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  29b9c105-1dd1-43a7-a29e-e4be6c21c910  Word Study: Abundance (perisseia, G4050)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  e6a77468-50c1-40cb-9599-82601353821c  Word Study: Accept (dechomai, G1209)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  b537d8a4-16f7-4152-a045-4c866a245340  Word Study: Accept (prosdechomai, G4327)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  0f982b49-186a-46d4-a058-fb107a22eaaf  Word Study: Accept (proslambano, G4355)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  6f7ed1a3-58f2-4799-a739-3532e719f9c3  Word Study: Acceptable (euarestos, G2101)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  98805755-ce84-4ed8-a025-29337ce7f436  Word Study: Acceptable (favorable) (dektos, G1184)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  734c0922-ac81-49b2-8023-02a6c7f71d1f  Word Study: Acceptance (apodoche, G0594)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  d49416db-de3f-45ee-89e2-83d42d5afa32  Word Study: Access (prosagoge, G4318)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  4bc0d9af-2230-4c5d-a399-e72d7c6cddd4  Word Study: Accomplish (katergazomai, G2716)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  5f267960-3016-427d-b35a-ba304c965b3e  Word Study: Accomplished (epiteleo, G2005)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  1d5f17e0-b181-4514-98da-82a1e659fbc7  Word Study: Accomplished (plerophoreo, G4135)  already completed
+2026-05-22 17:12:12,686  INFO  SKIPPED  661d1689-2d72-4751-84ed-da7fb90f4227  Word Study: Accountable (hupodikos, G5267)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  2be6e3ad-1310-4217-b762-709e745f68ae  Word Study: Accumulate (episoreuo, G2002)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  637bc0dd-7542-42bb-a7be-e44ce3aeb5b1  Word Study: Accurately (akribos, G0199)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  3df9f41d-dbd9-43ec-81a0-ff29755d4937  Word Study: Accursed (anathema) (anathema, G0331)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  7c1bdcf4-509d-4aa6-89d1-95011204a863  Word Study: Accuse (kategoreo, G2723)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  5239ddd6-4e20-4ada-9f8f-713899789c16  Word Study: Accused, accusatio (kategoria, G2724)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  24712237-a4ec-42aa-8334-85958013ceae  Word Study: Act like men (andrizo, G0407)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  6b64fa7e-5675-4a90-8bcc-f1947adbde00  Word Study: Act unbecomingly (aschemoneo, G0807)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  89c8fe18-b992-4b67-ae79-e7de8c5e833a  Word Study: Active (energes, G1756)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  8f540210-eaf2-4d9d-ba75-2d96057462a6  Word Study: Active service (strateuomai, G4754)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  4fea5be9-2464-4c65-9723-c31135009517  Word Study: Add (epichoregeo, G2023)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  b149b8da-0916-48c2-854c-c944bd4d415f  Word Study: Addicted to win (paroinos, G3943)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  63e90a82-5c96-4f57-bd1c-6b45987a4b41  Word Study: Address (epikaleomai, G1941)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  17b17350-82a1-4ece-b88f-03dd4f34420f  Word Study: Adequate (artios, G0739)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  0d382e03-f135-4c25-a42d-b866b7883813  Word Study: Adequate (hikanos, G2425)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  445eef8c-6fd9-4ea7-b554-791563cdfab4  Word Study: Adjure (enorkizo, G1775)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  eca4f1d3-4bac-43ab-940b-e282ae4a39a8  Word Study: Administration (oikonomia, G3622)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  baadb43d-543a-4508-92fd-bb735ed4e6f1  Word Study: Admonish (noutheteo, G3560)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  d986e9a9-8319-4ec4-9742-7b5b300f33fa  Word Study: Adoption as sons (huiothesia, G5206)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  869ddfda-7393-4181-b645-64d1bc7df10e  Word Study: Adorn (kosmeo, G2885)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  e8546a8b-4c41-4edb-9ad6-9369a3b7b320  Word Study: Adulterating (doloo, G1389)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  65f16311-c650-40a7-a7fa-adf965d31108  Word Study: Adulterers (moichos, G3432)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  ac305a0b-45de-4e5c-a04c-3869d80cd24a  Word Study: Adulteress (moichalis, G3428)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  93ca0ff7-b131-4ae8-85de-5a937b8142f3  Word Study: Advance (prokopto, G4298)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  af45d0c0-e436-423a-9b36-70ac6b112b2b  Word Study: Adversary (antidikos, G0476)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  abf73d83-4aa8-4415-9466-5865486029f1  Word Study: Affairs (pragmateia, G4230)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  b24d4546-5d54-4364-a64b-2580c91becb8  Word Study: Affection (splagchnon, G4698)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  5f9abb64-d5c2-4270-b4f8-cc06f2983ab4  Word Study: Afflict (thlibo, G2346)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  12aae1e2-e7dc-4ebd-89b3-06a990523814  Word Study: Affliction (thlipsis, G2347)  already completed
+2026-05-22 17:12:12,687  INFO  SKIPPED  a1fd5f9f-33f4-408d-afd2-72ce015a9fc6  Word Study: Afraid, be (phobeo, G5399)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  70dc2c78-55d7-462e-b230-5c07896bc475  Word Study: Agains (enantios, G1727)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  fce8d886-731d-4913-a706-acc126b56722  Word Study: Age (aion, G0165)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  a01992c6-b6ae-4ab7-a256-275d615cee11  Word Study: Agony (agonia, G0074)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  520a8224-9293-4b1c-a399-cbd4e7201ec0  Word Study: Air (aer, G0109)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  23ff72ed-fa94-4499-ae2a-29ef214e3d40  Word Study: Alarmed (pturo, G4426)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  519df87a-fde6-4931-8371-11d47712f43c  Word Study: Alert (gregoreuo, G1127)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  edac2502-fac7-4332-8068-53ae93859c99  Word Study: Alien (parepidemos, G3927)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  03e91841-9d14-4d71-b133-0e48019e01cc  Word Study: Alien (paroikos, G3941)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  6b3aed9a-8b3a-4b2f-a132-d55969a28306  Word Study: Alienated (apallotrioo, G0526)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  cdf10aa7-02d2-4cc7-91d7-aecbe04f810b  Word Study: All the more (perissosteros, G4057)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  070aa270-8fa8-4685-b653-1e115d40ee05  Word Study: All time (dienekes, G1336)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  d641f78c-f57d-45ca-bc0d-a6e1d67a0874  Word Study: Almighty (pantokrator, G3841)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  8df916e6-fd13-4956-8817-6da3383419e6  Word Study: Alms (charity) (eleemosune, G1654)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  4e70a27b-1fde-4e26-8399-8731ef1bd8d8  Word Study: Already suffered (propascho, G4310)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  1323f06d-a5fd-42f9-9c05-ba638501479a  Word Study: Altar (thusiasterion, G2379)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  b6131414-7c44-40a9-a358-6b8427a31d81  Word Study: Altar of incense (thumiasterion, G2369)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  5f535aff-f153-48d6-8490-731cc5f66c50  Word Study: Always (pantote, G3842)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  d7958c64-9158-49d8-969a-a020008630aa  Word Study: Am (eimi, G1510)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  7dbf547b-17c0-477a-92d6-335269f8e43e  Word Study: Amazed (ekplesso, G1605)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  27eec6a1-c827-4a83-9e63-37b87dbd0823  Word Study: Amazed (existemi, G1839)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  bba230bc-5a06-47e3-b262-c19cbdad62d1  Word Study: Amazed (thaumazo, G2296)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  a86e19ea-0bb2-4008-a2c2-31eb19983a6a  Word Study: Ambassador (presbeuo, G4243)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  adbd7f50-67d2-4ac9-80e0-6927dca32d34  Word Study: Amen (amen, G0281)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  c0c6108e-8031-422b-a04c-fa65bb39ff41  Word Study: Anchor (agkura, G0045)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  9077f0ed-cd5b-45a2-8cc3-d4d22db8e1a0  Word Study: Angel (aggelosangelos, G0032)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  95ac22da-2f13-4463-a011-2771540206b1  Word Study: Anger (orge, G3709)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  73991cb2-8c61-4d47-9e49-b709dfd4a42b  Word Study: Anger (parorgismos, G3950)  already completed
+2026-05-22 17:12:12,688  INFO  SKIPPED  3b1ef320-49fe-4ebc-9096-dea87a5a38a6  Word Study: Anger (thumos, G2372)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  8acf946f-8fd8-4fe6-a4e2-de1233ba6d1c  Word Study: Angry (prosochthizo, G4360)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  79c2343a-3d7a-49ea-8015-59c40fdc49e9  Word Study: Angry, be (orgizo, G3710)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  56cf87c3-1a62-473e-bbe7-eb9c2b76c251  Word Study: Announce (anaggelloanangello, G0312)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  ebda9ef3-9f35-481b-b6fa-56ab0b660b3a  Word Study: Annoyed (diaponeo, G1278)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  df677f35-60cf-415c-ba7c-407bd6f63512  Word Study: Anoint (chrio, G5548)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  b77794a6-79d8-439e-892c-18084d19dddc  Word Study: Anointing (chrisma, G5545)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  7b7630a2-3d92-44d7-bb21-d7d3dbc68064  Word Study: Answer back (antapokrinomai, G0470)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  d0a61348-4c49-4f67-9556-31ff038e8ada  Word Study: Antichrist (antichristos, G0500)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  52ebdb49-48e1-412b-bc6f-61db23377c78  Word Study: Anxiety (merimna, G3308)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  4f233d0f-0afd-48cd-8fc0-c6ed7b2ffa33  Word Study: Anxious (merimnao, G3309)  already completed
+2026-05-22 17:12:12,689  INFO  SKIPPED  45354afd-d6f2-457f-bd3c-aa5c8b8f7129  Word Study: Anxious longing (apokaradokia, G0603)  already completed
+2026-05-22 17:12:45,030  INFO  SUCCESS  6f4133c4-d07d-4dce-927a-dbce809d4338  Word Study: Apart (choris, G5565)  32.0s
+2026-05-22 17:13:08,185  INFO  SUCCESS  2ed74526-9d2f-4960-8fcb-6515cc1b0032  Word Study: Apostasy (apostasia, G0646)  23.0s
+2026-05-22 17:13:28,652  INFO  SUCCESS  568087bf-1e61-4223-b57e-b26b23f7a925  Word Study: Apostle (apostolos, G0652)  20.0s
+2026-05-22 17:13:36,763  INFO  SUCCESS  3d606efe-ba53-4a7c-ae2f-e77478245ea6  Word Study: Apostleship (apostole, G0651)  7.9s
+2026-05-22 17:14:44,680  INFO  SUCCESS  ca38ac54-0f28-4092-b2e6-1c171598f3c0  Word Study: Appearance (schema, G4976)  67.7s
+2026-05-22 17:15:08,415  INFO  SUCCESS  3124ad5f-ea66-467d-98dd-3c30008c11cf  Word Study: Appeared (epiphaino, G2014)  23.5s
+2026-05-22 17:16:56,030  INFO  SUCCESS  1748f5b4-c2fb-46ac-9a34-18cbd416d7e6  Word Study: Appeared (phaneroo, G5319)  107.3s
+2026-05-22 17:18:21,835  INFO  SUCCESS  461047e2-db33-49d3-9a9f-62a1bd921f43  Word Study: Appearing (epiphaneia, G2015)  84.2s
+2026-05-22 17:18:41,663  INFO  SUCCESS  5f827fb2-6f43-4639-908a-7192add1bb75  Word Study: Applying (pareisphero, G3923)  19.6s
+2026-05-22 17:19:29,823  INFO  SUCCESS  4c218b89-228b-4e46-a12c-e290c7c2cafd  Word Study: Appoint (kathistemi, G2525)  48.0s
+2026-05-22 17:21:20,469  INFO  SUCCESS  4d36d054-2672-478f-8b2f-00a02d9becf5  Word Study: Appoint (tasso, G5021)  110.3s
+2026-05-22 17:22:37,681  INFO  SUCCESS  c5035bf0-343e-406c-94ab-7d7be7b7361f  Word Study: Appointed (keimai, G2749)  77.0s
+2026-05-22 17:24:18,103  INFO  SUCCESS  6bb97222-415c-4610-943e-de529dcc9b4e  Word Study: Approve (dokimazo, G1381)  100.2s
+2026-05-22 17:26:06,325  INFO  SUCCESS  6657055a-e68d-4d77-ac5f-b2dfde695a34  Word Study: Approve (suneudokeo, G4909)  107.9s
+2026-05-22 17:26:25,742  INFO  SUCCESS  5504b481-0a6d-4b68-b0c9-b2284c6baea7  Word Study: Approved (dokimos, G1384)  18.9s
+2026-05-22 17:26:33,486  INFO  SUCCESS  35a38379-1a20-4d07-825b-e2267d4a5950  Word Study: Archangel (archaggelos, G0743)  7.5s
+2026-05-22 17:26:47,292  INFO  SUCCESS  dae0b156-3575-44df-881e-940a45952ac0  Word Study: Arise (anistemi, G0450)  13.6s
+2026-05-22 17:28:03,074  INFO  SUCCESS  e0fe78ee-ccf2-45fa-9e07-7b36c3eb6cd6  Word Study: Armor (hoplon, G3696)  75.5s
+2026-05-22 17:28:15,914  INFO  SUCCESS  aec3a33c-887a-4c0e-a7a7-09fbd0848944  Word Study: Aroma (osme, G3744)  12.6s
+2026-05-22 17:29:04,321  INFO  SUCCESS  c1afe6aa-42f2-4a15-b87b-88a4b51ed033  Word Study: Around (kuklo, G2945)  48.1s
+2026-05-22 17:29:51,579  INFO  SUCCESS  bf1e3938-2a5b-432e-8332-0daae556430f  Word Study: Arrive (attain) (katantao, G2658)  46.9s
+2026-05-22 17:31:02,141  INFO  SUCCESS  e454bec6-ccf9-4344-aefe-4e60fbc690fd  Word Study: Arrogant (huperephanos, G5244)  70.3s
+2026-05-22 17:31:19,125  INFO  SUCCESS  68215503-9ae2-4211-9400-c3a96a6d0399  Word Study: Arrogant (huperogkos, G5246)  16.7s
+2026-05-22 17:31:29,304  INFO  SUCCESS  ecd4d5ad-85b8-411c-8ab3-ff80bba2d92e  Word Study: Arrogant (phusioo, G5448)  9.8s
+2026-05-22 17:32:19,238  INFO  SUCCESS  bce94f89-c9fa-4ff5-b0d4-6f058361193f  Word Study: Arrows (belos, G0956)  49.6s
+2026-05-22 17:33:39,209  INFO  SUCCESS  6fd21405-7d0f-498d-9fc4-c0ee49f34b7a  Word Study: Ashamed (aischunomai, G0153)  79.6s
+2026-05-22 17:33:39,516  ERROR  FAILED   5aff84eb-b2f5-4c95-bdac-77cf87ea7a97  Word Study: Ashamed (epaischunomai, G1870)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:39,753  ERROR  FAILED   a4bcb94d-a332-4cb5-b70f-d85e32933000  Word Study: Ask (aiteo, G0154)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:40,013  ERROR  FAILED   c47daf90-be9e-46c5-9b17-31951bc0fa77  Word Study: Ask (erotao, G2065)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:40,295  ERROR  FAILED   0361b53b-a77d-4494-87c6-c54faf66fdf3  Word Study: Aspire (philotimeomai, G5389)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:40,593  ERROR  FAILED   68fd3cf2-3eaf-4dad-a6c3-044843f5a213  Word Study: Asps (aspis, G0785)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:40,804  ERROR  FAILED   444f8205-5c98-4016-9fdc-ce0549f3d55a  Word Study: Assembling together (episunagoge, G1997)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:41,024  ERROR  FAILED   8560250b-ead9-4326-9b37-162a1b91de0f  Word Study: Assurance (hupostasis, G5287)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:41,279  ERROR  FAILED   02e1e187-b2c9-4d69-b3f0-5729e1b620e1  Word Study: At home (endemeo, G1736)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:42,243  ERROR  FAILED   a31582e8-e34b-45b6-b5ce-db80195fd62a  Word Study: Attain (arrive, come) (phthano, G5348)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:42,486  ERROR  FAILED   8ae44cda-bec5-4821-af00-0dfe8b6720f3  Word Study: Attend continually (proskartereo, G4342)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:42,675  ERROR  FAILED   7bb1c3dc-81e9-411c-a08f-d69bef58aa89  Word Study: Attested (apodeiknumi, G0584)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:42,879  ERROR  FAILED   77b65312-f40f-47b8-8d74-80635c294731  Word Study: Author (archegos, G0747)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:43,085  ERROR  FAILED   fef5023e-2eb1-45b4-a375-30e4e77346d0  Word Study: Authority (epitage, G2003)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:43,296  ERROR  FAILED   f1b671db-d73c-4213-b41e-109458ae69b7  Word Study: Authority (exousia, G1849)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:43,499  ERROR  FAILED   9aeca163-09a7-45ea-835d-15d2b84690e8  Word Study: Authority (kuriotes, G2963)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:43,975  ERROR  FAILED   ab664efe-33ed-4f99-85b0-da93518cf96a  Word Study: Avenge (ekdikeo, G1556)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:44,186  ERROR  FAILED   ec4f7826-6fa0-4bc7-ae8d-f2fc8204f584  Word Study: Avenger (ekdikos, G1558)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:44,449  ERROR  FAILED   893566bc-1094-4680-a056-6cb03006a195  Word Study: Avoid (ekklino, G1578)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:44,683  ERROR  FAILED   c2571fad-88e7-4ea3-89ce-16c435ca2ecc  Word Study: Avoid (periistemi, G4026)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:44,894  ERROR  FAILED   6cee378a-7eb0-4627-8ffe-3cf239ade755  Word Study: Awake (diegeiro, G1326)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:45,126  ERROR  FAILED   fb330202-d030-4514-ba4c-a5b2cbaf786c  Word Study: Babe (nepios, G3516)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:45,358  ERROR  FAILED   29b43200-ffd0-4ac1-9c1a-bd257b8da1a2  Word Study: Babes (brephos, G1025)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:45,556  ERROR  FAILED   589ec544-adcb-4b58-ac9a-18a3917510a0  Word Study: Backbiting (katalalos, G2637)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:45,785  ERROR  FAILED   40352f85-a3ff-4b8e-82cb-a4f30616c6ba  Word Study: Bad (phaulos, G5337)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:45,978  ERROR  FAILED   2b1c8dd2-1cf5-43c4-8469-c1232a3c082b  Word Study: Bad (sapros, G4550)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:46,193  ERROR  FAILED   fb7d15c8-833c-452f-9f03-d471c2267530  Word Study: Baptism (baptisma, G0908)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:46,522  ERROR  FAILED   09d5cd39-1193-4ebe-8147-ea9bd94b21ce  Word Study: Baptize (baptizo, G0907)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:46,727  ERROR  FAILED   3e95f37c-a4e2-4b22-8b00-9d8a3ccda3a1  Word Study: Barren (argos, G0692)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:46,988  ERROR  FAILED   be38d743-492b-4d99-9069-73f11d503a3b  Word Study: Barrier (phragmos, G5418)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:47,195  ERROR  FAILED   fedc8b65-530a-4df9-ad35-599505cec668  Word Study: Basket (mdios, G3426)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:47,383  ERROR  FAILED   fea918d4-f898-40d1-9c2b-f93e110d781e  Word Study: Baskets (spuris, G4711)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:47,599  ERROR  FAILED   b263d9a4-5c1a-4ae5-92f6-d838e5e0690d  Word Study: Be a burden (epibareo, G1912)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:47,809  ERROR  FAILED   657a8560-07e3-46c7-9854-c57fceaf8b97  Word Study: Be able (exischuo, G1840)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:48,027  ERROR  FAILED   fd278802-6fcc-4ca7-8203-4a819203dc0d  Word Study: Be absent (ekdemeo, G1553)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:48,245  ERROR  FAILED   95055d7b-6476-43b9-b53d-ea027e99bf71  Word Study: Be alert (agrupneo, G0069)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:48,445  ERROR  FAILED   9ecbdef3-14fd-4bcd-9ce1-adbb74ff7f0e  Word Study: Be diligent (spoudazo, G4704)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:48,702  ERROR  FAILED   6864ca1c-935c-4c53-a63a-253f71f7259d  Word Study: Be miserable (talaiporeo, G5003)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:49,172  ERROR  FAILED   03c168dd-b8df-4b84-83e1-673b9abcfb29  Word Study: Be of good courage (tharrheo, G2292)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:49,356  ERROR  FAILED   6deea44e-f084-4559-8662-5b2398da7f2e  Word Study: Be silenced (epistomizo, G1993)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:49,580  ERROR  FAILED   47383182-b8ee-4196-a961-13847965fa8f  Word Study: Be sober (nepho, G3525)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:49,775  ERROR  FAILED   4ffa6789-d7a6-40ba-91a8-3e8f6a15136d  Word Study: Be strong (endunamoo, G1743)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:49,963  ERROR  FAILED   f8338bee-05db-4763-8993-1009311e5d23  Word Study: Be Strong (krataioo, G2901)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:50,173  ERROR  FAILED   6f9c19ce-4b54-4fb3-b582-012a276d2bd2  Word Study: Bear (anaphero, G0399)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:50,375  ERROR  FAILED   2e4f5bfb-5a1e-4283-914c-5c0ad9a06206  Word Study: Bear (anechomai, G0430)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:50,560  ERROR  FAILED   82114334-267e-4b6f-969b-f4883a852dbd  Word Study: Bear up (hupophero, G5297)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:50,758  ERROR  FAILED   8edaee89-0a08-4113-b8f9-e9607159f6ea  Word Study: Bearing fruit (karpophoreo, G2592)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:50,972  ERROR  FAILED   b92623d6-f79d-44db-97d7-8dd470af22ae  Word Study: Bears (stego, G4722)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:51,201  ERROR  FAILED   9df30062-85d2-4dda-b7ee-a2b77e1a7840  Word Study: Bears witness (summartureo, G4828)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:51,390  ERROR  FAILED   0dbef4b1-3a6d-41f3-93a1-f5d5ad56a7a6  Word Study: Beat (dero, G1194)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:51,609  ERROR  FAILED   9b315f8b-3477-4e99-bab9-fdd3c7e6f595  Word Study: Beat (kolaphizo, G2852)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:51,802  ERROR  FAILED   0affa226-8104-418f-9e8e-0032527d2265  Word Study: Beaten with rods (rhabidizo, G4463)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:51,993  ERROR  FAILED   4c65f1bb-687a-491d-ab45-08b016d4a91a  Word Study: Became alive (anazao, G0326)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:52,214  ERROR  FAILED   4be50434-81ac-411a-b146-3a27171a7cc5  Word Study: Became fools (moraino, G3471)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:52,405  ERROR  FAILED   45a29702-dcb7-47ee-9430-11c672b91d56  Word Study: Became futile (mataioo, G3154)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:52,613  ERROR  FAILED   356ad156-2eba-44e3-ae86-fec62e03357d  Word Study: Become useless, unprofitabl (achreioo, G0889)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:52,859  ERROR  FAILED   ad2968e6-596f-4477-80a0-e64080d52af8  Word Study: Bed (koite, G2845)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:53,047  ERROR  FAILED   6b1a17fd-81ec-4ef0-8a29-84bb221c40b8  Word Study: Before (katenopion, G2714)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:53,336  ERROR  FAILED   7bed31fd-8ba1-4129-ad87-64334f6f0b5d  Word Study: Beg (deomai, G1189)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:53,546  ERROR  FAILED   31710b88-f192-4885-a2be-1a02b6df8ee0  Word Study: Beget again (anagennao, G0313)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:53,744  ERROR  FAILED   f51b8ff0-beb1-4d77-9399-f9ca79657484  Word Study: Begin (enarchomai, G1728)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:53,946  ERROR  FAILED   c4173670-0381-4e4e-bee0-18bf701200a3  Word Study: Beginning (arche, G0746)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:54,172  ERROR  FAILED   83e92912-fca4-4da0-a893-661214972701  Word Study: Behavior (anastrophe, G0391)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:54,416  ERROR  FAILED   33370327-76ff-42c0-8149-da7bfec0ce3c  Word Study: Behold (idou, G2400)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:54,649  ERROR  FAILED   b81ecf83-274b-4b2b-9373-c4b2727a85de  Word Study: Behold (katoptrizomai, G2734)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:54,850  ERROR  FAILED   ea1f4bf5-5a40-4945-acec-fc554472162f  Word Study: Believe (pisteuo, G4100)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:55,032  ERROR  FAILED   cd9911e1-b246-4ae3-89f8-2b0d3a59136c  Word Study: Believe, not (apisteo, G0569)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:55,220  ERROR  FAILED   7789501d-cc19-4af7-a6e0-fcc17dd65b0b  Word Study: Belly (koilia, G2836)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:55,420  ERROR  FAILED   42db352d-b475-4f71-8157-cb1f47fa8ab6  Word Study: Beloved (agapao, G0025)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:55,670  ERROR  FAILED   b9ac1098-9c04-4084-b567-2f44f7a4055a  Word Study: Beloved (agapetos, G0027)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:55,863  ERROR  FAILED   b90559d8-e8a9-40da-902f-d1875a6d05b7  Word Study: Bereft (aporphanizo, G0642)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:56,077  ERROR  FAILED   4ff98c5f-b0f8-4467-a68d-2823c93fef96  Word Study: Besetting (perikeimai, G4029)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:56,279  ERROR  FAILED   157431f5-8a9e-4609-8875-5e7d08411588  Word Study: Better (kreittonkreisson, G2909)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:56,589  ERROR  FAILED   b2b25493-6b8e-4a54-8dc8-45b866f29cd3  Word Study: Bewail (pentheo, G3996)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:56,776  ERROR  FAILED   c05b26a2-8553-49b4-a890-b343535f5819  Word Study: Beware (pay or give attention) (prosecho, G4337)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:56,976  ERROR  FAILED   634fb60a-72bd-4206-a756-1ec8522831a4  Word Study: Beyond reproach (akatagnostos, G0176)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:57,195  ERROR  FAILED   c3d00c76-4ee1-4e96-8fd6-1eac6be8076b  Word Study: Bitterness (pikra, G4088)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:57,396  ERROR  FAILED   864442b7-2778-47c5-affa-c1895f16f8a0  Word Study: Black (zophos, G2217)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:57,594  ERROR  FAILED   7b6f6487-c217-4b91-810c-0109207313c6  Word Study: Blameless (amemptos, G0273)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:57,808  ERROR  FAILED   869b2512-20fd-4bda-a34c-f57bc1e89979  Word Study: Blameless (amometos, G0298)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:58,013  ERROR  FAILED   81497bb7-d68c-4480-bad4-d59424b4727d  Word Study: Blameless (aproskopos, G0677)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:58,215  ERROR  FAILED   117f860e-437e-4f9f-b593-5995a0398b4a  Word Study: Blamelessly (amemptos, G0274)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:33:58,438  ERROR  FAILED   ba54b5e7-6196-4a76-a682-badfb492a91d  Word Study: Blaspheme (blasphemeo, G0987)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:00,741  ERROR  FAILED   97a8d9bf-eb3d-4716-9c53-c28788e9a76f  Word Study: Blasphemy (blasphemia, G0988)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:01,012  ERROR  FAILED   d3c72f03-496c-4a98-8a94-c2a8ead8ac57  Word Study: Bless (eulogeo, G2127)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:01,207  ERROR  FAILED   358e36ca-abd5-4412-b03a-e1e0d99fea77  Word Study: Blessed (eulogetos, G2128)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:02,182  ERROR  FAILED   02cc6b73-a595-4450-8343-83bbc0711bec  Word Study: Blessed (makarios, G3107)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:02,422  ERROR  FAILED   733a6d23-5c9a-44b5-8718-f3d312131f12  Word Study: Blessing (eulogia, G2129)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:02,634  ERROR  FAILED   0012c6e3-1c96-4ca9-b1b2-7eb48ecec480  Word Study: Blessing (makarismos, G3108)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:02,913  ERROR  FAILED   fab6b82e-2438-4bda-9bed-c1057fc98663  Word Study: Blind (tuphlos, G5185)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:03,178  ERROR  FAILED   188a06ba-8b1e-4ed5-9687-f4d7e3f5f3d5  Word Study: Blood (haima, G0129)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:03,468  ERROR  FAILED   4e6433c8-24bf-4982-943b-9f517ffb6217  Word Study: Boast (perpereuomai, G4068)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:03,705  ERROR  FAILED   4e2103e2-09f8-4844-a835-afdfb0965fcd  Word Study: Boastful (alazon, G0213)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:03,899  ERROR  FAILED   5f336ca2-53da-4c6b-bcbb-ee063b4715a7  Word Study: Boastful (alazoneia, G0212)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:04,153  ERROR  FAILED   cf828307-966f-440c-9a06-b5deef03d1f2  Word Study: Boastful (kenodoxos, G2755)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:04,357  ERROR  FAILED   f3b622bb-ae37-428b-9b71-b210204bd716  Word Study: Boasting (kauchesis, G2746)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:04,545  ERROR  FAILED   090c4ac8-e10a-4e8c-a40c-57ee998d5f50  Word Study: Bodies (kolon, G2966)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:04,749  ERROR  FAILED   f35341db-3a0f-4aa1-aa22-12dcc504b618  Word Study: Body (soma, G4983)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:04,945  ERROR  FAILED   67aa2159-0a88-4b22-9bfc-6605efa1f6ca  Word Study: Boldly (tolmeros, G5112)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:05,174  ERROR  FAILED   5efa78df-89a5-44f6-9e7a-8f7068978407  Word Study: Boldness (parrhesiazomai, G3955)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:05,370  ERROR  FAILED   14c92b61-0ee9-44d9-b9aa-575dd4aee9dc  Word Study: Bond, bondage (sundesmos, G4886)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:05,618  ERROR  FAILED   b0cd561e-73bf-4c04-84ae-e13c64696ab6  Word Study: Bondservant (doulos, G1401)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:05,874  ERROR  FAILED   a11a5356-0886-4d6a-9ee5-8028331c3bde  Word Study: Born (gennao, G1080)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:06,146  ERROR  FAILED   9b3e617e-96c1-4f2f-bbc3-fbad1316a06e  Word Study: Borrow (daneizo, G1155)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:06,347  ERROR  FAILED   34ca0f57-8f3d-4f16-a1bb-1e10164f8d2b  Word Study: Both (amphoteros, G0297)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:06,590  ERROR  FAILED   0b998d67-da71-4d85-8635-687c31de66f7  Word Study: Bother (kopos, G2873)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:06,823  ERROR  FAILED   355ba5b0-79dd-4fa6-818d-e60f7bb23f8f  Word Study: Bought with a price (agorazo, G0059)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:07,053  ERROR  FAILED   7a287009-13a6-4690-902d-3fda18be5926  Word Study: Bow (kampto, G2578)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:07,297  ERROR  FAILED   575d6a08-c18d-45b5-b2e4-cba70d637476  Word Study: Bow (klino, G2827)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:07,518  ERROR  FAILED   b3afb319-63ae-47c3-ba7e-74606640fcc0  Word Study: Box (pukteuo, G4438)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:07,705  ERROR  FAILED   53ea36c0-0e65-4d00-9308-5477bfba98c5  Word Study: Breadth (platos, G4114)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:07,953  ERROR  FAILED   eecb6a1f-1e09-499d-be80-23a16633c60c  Word Study: Break in (diorusso, G1358)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:08,156  ERROR  FAILED   5f100910-b97d-43a8-926d-6e819cf5a994  Word Study: Breastplate (thorax, G2382)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:08,374  ERROR  FAILED   0235a378-1778-4e2d-b06c-112b75354d81  Word Study: Brethren (adelphotes, G0081)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:08,584  ERROR  FAILED   511f48d9-849c-4ad7-b428-7629787867ec  Word Study: Bring into (eisphero, G1533)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:08,795  ERROR  FAILED   2d9414b4-a56e-4cb5-83f5-ae6dcae65490  Word Study: Bring us to (prosago, G4317)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:09,072  ERROR  FAILED   8ef99c1c-11b2-41ea-973e-7097aaf5f9d1  Word Study: Bring/brought (offer, present) (prosphero, G4374)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:09,292  ERROR  FAILED   27732c86-81ed-4395-ae3b-fb5f4c0bbd56  Word Study: Broken (suntribo, G4937)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:09,497  ERROR  FAILED   92941316-0704-443f-927b-bff1badd5e07  Word Study: Brother (adelphos, G0080)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:09,719  ERROR  FAILED   35f559dc-1b63-4f11-b8fc-c5a6a5bc1429  Word Study: Brought us forth (apekueo, G0616)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:09,910  ERROR  FAILED   ce85600d-6e83-4b2f-b46e-abf7fbd85a02  Word Study: Brutal (anemeros, G0434)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:10,109  ERROR  FAILED   31e04211-a113-4088-8877-151329e2e8b7  Word Study: Build up (oikodomeo, G3618)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:10,354  ERROR  FAILED   3be4c019-b7fa-4f6b-b5e3-0806a348d976  Word Study: Build upon (epoikodomeo, G2026)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:10,564  ERROR  FAILED   b6febc1d-76e3-4fe3-b7ba-39f20d51df52  Word Study: Building (oikodome, G3619)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:10,951  ERROR  FAILED   b64f56d5-0e90-416b-90cc-c8d9fa7f23dd  Word Study: Built together (sunoikodomeo, G4925)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:11,146  ERROR  FAILED   aef306ef-a849-4c05-9d14-64e9cee507c4  Word Study: Burn (ekkaio, G1572)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:11,360  ERROR  FAILED   1e07f103-3f48-4e62-9713-733fabfc2a3e  Word Study: Burn (katakaio, G2618)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:11,545  ERROR  FAILED   9449f57f-8e37-45de-a634-e4e411df78df  Word Study: Burn (puroo, G4448)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:11,756  ERROR  FAILED   50584a7f-2421-41d5-9f38-5b1db8bca55b  Word Study: Burnt Offering (holokautoma, G3646)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:12,004  ERROR  FAILED   1c671c15-cbfc-44c1-a2af-fc76acb28637  Word Study: Business (ergasia, G2039)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:12,207  ERROR  FAILED   beac39b7-b9d0-4699-a18f-9ea1db500ec4  Word Study: Bystanders (paristemi, G3936)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:12,472  ERROR  FAILED   6750f1f3-817e-48f7-bc6f-c1e740bf7fed  Word Study: Call (kaleo, G2564)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:12,686  ERROR  FAILED   0519b022-d988-45b4-a078-fb89970889fb  Word Study: Called (kletos, G2822)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:12,897  ERROR  FAILED   8f465032-f507-4c6a-bfee-092ddcd0ec66  Word Study: Calling (klesis, G2821)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:13,117  ERROR  FAILED   b5f35f43-6339-4599-a12b-aae8db2bf9cf  Word Study: Callous, become (apalgeo, G0524)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:13,424  ERROR  FAILED   f0d1e2a7-30ad-495e-9b3f-f21705e01ca3  Word Study: Cancel out (exaleipho, G1813)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:13,638  ERROR  FAILED   353e195c-7ae8-4c94-952e-f786fa086300  Word Study: Cannot be shaken (asaleutos, G0761)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:13,832  ERROR  FAILED   cd5d1ea9-c833-4b46-ac96-6c60c932f83b  Word Study: Cannot lie (apseudes, G0893)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:14,032  ERROR  FAILED   5fc08085-ad2a-4209-bddb-f25ea00e9d79  Word Study: Captive (aichmalosia, G0161)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:14,236  ERROR  FAILED   98022055-4bd0-47b1-b887-b6623376c972  Word Study: Captive (aichmalotos, G0164)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:14,437  ERROR  FAILED   35f96afe-a4b0-47c4-b6f6-dd890d73001f  Word Study: Capture (zogreo, G2221)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:14,643  ERROR  FAILED   e89bac9a-1279-4f12-879c-adab7283cf8d  Word Study: Careful, be (phrontizo, G5431)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:14,937  ERROR  FAILED   322ffacd-2996-461b-9ee7-b91af5983721  Word Study: Carnal (sarx, G4561)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:15,283  ERROR  FAILED   00436617-c8a9-46bd-a5bb-b0ff220df06c  Word Study: Carousing (komos, G2970)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:15,509  ERROR  FAILED   3f449b8e-d3dc-475e-9fbd-0e3c0cb366e8  Word Study: Carried away (sunapago, G4879)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:15,692  ERROR  FAILED   326b2392-e47f-4724-8c38-65942db899cd  Word Study: Carry about (periphero, G4064)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:15,889  ERROR  FAILED   c67269a8-0af5-4b07-acbb-7d142f98d659  Word Study: Carry away (exelko, G1828)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:16,137  ERROR  FAILED   884da40e-fe4a-4d5c-8911-086dd097ffbf  Word Study: Cast off (apotithemi, G0659)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:16,387  ERROR  FAILED   0abf9c43-6f5c-4fe8-8930-85c6752c2e7b  Word Study: Cast...into hell (tartaroo, G5020)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:16,580  ERROR  FAILED   62783121-da4c-4768-9869-9f5bad7f2205  Word Study: Casting upon (epirrhipto, G1977)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:16,781  ERROR  FAILED   42b86e7d-d985-49a4-8afc-1564a6759b6e  Word Study: Caught up (harpazo, G0726)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:16,993  ERROR  FAILED   0ed01fd8-d8b4-4788-bb42-31ef869d3728  Word Study: Cause trouble (enochleo, G1776)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:17,215  ERROR  FAILED   dc49defb-613a-4886-b363-fc1072bb7054  Word Study: Ceased (pauo, G3973)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:17,433  ERROR  FAILED   3d2618a4-a977-40ea-b1f2-55b23a3b6217  Word Study: Celebrate (euphraino, G2165)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:17,647  ERROR  FAILED   3ef84c50-0731-4bf6-b3d6-685796686ebf  Word Study: Certain (bebaios, G0949)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:17,847  ERROR  FAILED   51ce8961-2bd5-4f1d-aa2d-c93280be2cab  Word Study: Certificate of debt (cheirographon, G5498)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:18,063  ERROR  FAILED   aa62974c-e9ef-48e1-bcc6-e81cb78bb8a0  Word Study: Chain (halusis, G0254)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:18,256  ERROR  FAILED   2e5cd2a6-6f8a-4e8b-ad8d-208bcb7abaa6  Word Study: Challenging (prokaleo, G4292)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:18,537  ERROR  FAILED   c6646dac-09da-4346-ad24-281fe315bb2a  Word Study: Change (allasso, G0236)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:18,782  ERROR  FAILED   adb0b1f8-bba0-42fa-a8cc-a8b3864e3116  Word Study: Change (metathesis, G3331)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:18,978  ERROR  FAILED   df901401-f747-4654-8da7-e442bb0d0c5e  Word Study: Character (tropos, G5158)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:19,213  ERROR  FAILED   96e10d18-5782-4deb-a586-facdb36f6c1a  Word Study: Charity (agape, G0026)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:19,438  ERROR  FAILED   2369057a-71ec-4110-ba5f-83dcca53e6ab  Word Study: Chaste (hagnos, G0053)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:19,949  ERROR  FAILED   e4a49cf6-fd0f-484e-a74d-7de7354c0d62  Word Study: Cherish (thalpo, G2282)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:20,158  ERROR  FAILED   bee76019-ffa1-4f1e-82ac-7b6c161b68da  Word Study: Cherubim (cheroubin, G5502)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:20,441  ERROR  FAILED   190b5ff9-8891-4903-8256-ee820b70c0f8  Word Study: Child, children (teknon, G5043)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:20,650  ERROR  FAILED   c959b86b-c6e1-44f2-bdfb-72ede6ef9165  Word Study: Children (paidion, G3813)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:20,855  ERROR  FAILED   100bfbc8-8110-4aa6-aed0-00c4b34b5ba5  Word Study: Choice (ekloge, G1589)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:21,073  ERROR  FAILED   adb79467-ca79-41e4-9136-25c98919c568  Word Study: Chose (haireomai, G0138)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:21,369  ERROR  FAILED   ff9ee228-0166-4ee9-b065-fc4be0c06698  Word Study: Chose, choose (eklegoeklegomai, G1586)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:21,597  ERROR  FAILED   00fcdadf-1e9d-4ca3-86ff-99ac06fb8db9  Word Study: Chosen (eklektos, G1588)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:21,805  ERROR  FAILED   799abb81-0b19-4015-9ea1-0810f30f74a6  Word Study: Christ (Christos, G5547)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:22,002  ERROR  FAILED   485fd15b-12bd-4dd8-8e8a-6f1c112da503  Word Study: Christian (Christianos, G5546)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:22,206  ERROR  FAILED   a2a26d78-fac5-4b4a-9759-2556e155ebe2  Word Study: Church (ekklesiaecclesia, G1577)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:22,401  ERROR  FAILED   c9dc4ecf-0526-4fe8-b4ec-ea4d289bb81a  Word Study: Circumcise (peritemno, G4059)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:22,601  ERROR  FAILED   03ce2a24-90ee-45c8-bfb8-1bb60128e0a4  Word Study: Circumcision (peritome, G4061)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:22,805  ERROR  FAILED   ba3ac78e-ee29-4a14-8445-42d3700d378b  Word Study: Citizenship (politeuma, G4175)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:22,999  ERROR  FAILED   983feed6-b4fb-4054-916c-6f2de0d5812f  Word Study: Clean, cleanses (ekkathairo, G1571)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:23,529  ERROR  FAILED   c1d7e9ab-ea9e-407d-b30f-17a104e4725c  Word Study: Cleansed (katharizo, G2511)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:23,746  ERROR  FAILED   86f35fd3-c56f-4c68-9c48-c0cee27a779f  Word Study: Cleansing (katharotes, G2514)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:23,980  ERROR  FAILED   bb7c55db-ba20-4b70-bc97-7a082ca8b33f  Word Study: Clear (haplous, G0573)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:24,237  ERROR  FAILED   967ce21d-7b7f-4c27-87cf-b48ef20ef1e1  Word Study: Clear (katharos, G2513)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:24,453  ERROR  FAILED   ba03f54f-0c46-48fa-92f6-50b9ea1c857e  Word Study: Clearer (katadelos, G2612)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:24,654  ERROR  FAILED   a1bdf724-68a1-43fa-b2b0-7178a4d71583  Word Study: Clearly seen (kathorao, G2529)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:24,895  ERROR  FAILED   6429db6c-3f6a-4239-8bd6-006729c14bf4  Word Study: Cleverly devised (sophizo, G4679)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:25,123  ERROR  FAILED   8c80bc70-434a-4ab8-93d5-63d6c7878a49  Word Study: Cling (kollao, G2853)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:25,415  ERROR  FAILED   4479860f-9f00-4ed0-9942-b351abea010c  Word Study: Clothe (enduo, G1746)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:25,662  ERROR  FAILED   918630ca-d8d1-410d-8920-167cd5a2557e  Word Study: Clothe yourself (egkomboomai, G1463)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:25,935  ERROR  FAILED   59cefbef-043c-4392-8060-cf29b50442e5  Word Study: Clothe, clothed (periballo, G4016)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:26,247  ERROR  FAILED   1889f061-eb30-4382-bdcd-7553df33e8ae  Word Study: Clothes (himation, G2440)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:26,510  ERROR  FAILED   dc237b47-630c-4e03-8894-c98b7f18f4a3  Word Study: Coarse Jesting (eutrapelia, G2160)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:26,831  ERROR  FAILED   eedff04b-1518-4a59-9044-7321d659124c  Word Study: Collected a tenth (dekatoo, G1183)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:27,151  ERROR  FAILED   6e26f437-df66-4bf6-b45f-0a9bc53a0b17  Word Study: Come (deute, G1205)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:27,453  ERROR  FAILED   bf0f73a7-bf0a-461e-9cdb-40e7a95d3018  Word Study: Come (erchomai, G2064)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:27,720  ERROR  FAILED   35dfde4d-328d-47bf-a174-c3a2bf884439  Word Study: Come in (pareiserchomai, G3922)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:27,956  ERROR  FAILED   eb5020eb-81ce-4b64-8cef-73682bc778d8  Word Study: Come short (hustereo, G5302)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:28,189  ERROR  FAILED   9ad8bbb9-2e62-4008-81aa-703734968037  Word Study: Come to aid (boetheo, G0997)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:28,438  ERROR  FAILED   2f817bcd-be28-42b1-9bec-736c0524b94e  Word Study: Come to...senses (ananepho, G0366)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:29,019  ERROR  FAILED   130855f8-d39d-472c-a4d6-9b9eb3abfc15  Word Study: Come upon (eperchomai, G1904)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:29,369  ERROR  FAILED   dbcc0271-564a-49a9-850f-77cba745900f  Word Study: Coming (parousia, G3952)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:29,614  ERROR  FAILED   2a9eaf8b-6f22-4a71-b7be-525bd38d4631  Word Study: Command (paraggello, G3853)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:29,896  ERROR  FAILED   0b581fae-3bf6-4175-9175-50fc0347b125  Word Study: Commandments (entole, G1785)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:30,105  ERROR  FAILED   9c1d7c09-5bba-4122-bb90-e1b958380e06  Word Study: Commandments (paraggelia, G3852)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:30,399  ERROR  FAILED   5b1afefc-d19f-4b74-9c80-30f6e5526892  Word Study: Commend (sunistemisunistao, G4921)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:30,646  ERROR  FAILED   000adbd7-1ed5-4f06-9cbc-490121513765  Word Study: Commit adultery (moicheuo, G3431)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:31,046  ERROR  FAILED   84875995-f150-40e7-883a-75919901bbba  Word Study: Common (koinos, G2839)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:31,374  ERROR  FAILED   52e64bb0-e4ed-4db3-8934-eb45be762f89  Word Study: Communion (koinonia, G2842)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:31,619  ERROR  FAILED   d3fe641f-eed0-408d-8388-9de9e0877931  Word Study: Compare (homoioo, G3666)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:31,834  ERROR  FAILED   ec7ba9dc-6093-4833-8a84-0af8c299d818  Word Study: Compassion (eleos, G1656)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:32,085  ERROR  FAILED   0d7b3eb7-18b6-4a0f-a2fe-dadef45baa08  Word Study: Compassion (oikteiro, G3627)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:32,753  ERROR  FAILED   66ff1681-c963-4059-a20b-8de6a437b840  Word Study: Compassion (oiktirmos, G3628)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:32,970  ERROR  FAILED   27d9331d-2af5-4c0c-9614-425900ebe4b7  Word Study: Compete (agonizomai, G0075)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:33,176  ERROR  FAILED   b6f03580-2b41-409f-ac05-cf70f2dfc450  Word Study: Compete (athleo, G0118)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:33,422  ERROR  FAILED   346194b8-7c2d-4bf1-bb4d-80a679366fc9  Word Study: Complaint (goggusmos, G1112)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:33,644  ERROR  FAILED   f2f90e8b-53a5-4820-9858-a8ebd060ebfa  Word Study: Complete (holokleros, G3648)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:33,925  ERROR  FAILED   61e63494-1b78-4795-bdc2-da67682866ba  Word Study: Complete (katartizo, G2675)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:34,553  ERROR  FAILED   2f50491c-db1a-4461-a623-13dccc81a636  Word Study: Complete (teleios, G5046)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:34,758  ERROR  FAILED   659f261d-c37e-4a04-9cde-356da1c19f57  Word Study: Comprehend (katalambano, G2638)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:34,973  ERROR  FAILED   204f5032-8b69-43c5-8f2c-f0267e1b1264  Word Study: Compulsion (anagke, G0318)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:35,171  ERROR  FAILED   938477e8-0584-4f2c-b2ed-4e84ef1f9104  Word Study: Conceited (tuphoo, G5187)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:35,393  ERROR  FAILED   d6d80a18-c861-4a8f-86c9-d0904af16341  Word Study: Conceive (sullambano, G4815)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:35,676  ERROR  FAILED   071594e4-58d7-4c1c-b7d8-138db9ae53be  Word Study: Condemn (kataginosko, G2607)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:35,889  ERROR  FAILED   e92adf03-b184-44a3-9771-b25643435096  Word Study: Condemn (katakrino, G2632)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:36,085  ERROR  FAILED   e3e4dfe6-8db1-423e-9bd3-38d915360310  Word Study: Condemnation (Judgment) (krima, G2917)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:36,316  ERROR  FAILED   06ec04dd-9f2b-4af4-878c-ab6c5efeea92  Word Study: Condemnation (katakrima, G2631)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:36,540  ERROR  FAILED   fb597d6a-430d-4c74-be42-fb7f69f17aa1  Word Study: Conduct (anastrepho, G0390)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:36,741  ERROR  FAILED   810e027c-0dfb-4940-a97e-1033172954c5  Word Study: Conduct (politeuomai, G4176)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
+2026-05-22 17:34:36,960  ERROR  FAILED   df4424cb-5055-491a-9d2d-bef3fb4a5175  Word Study: Confess (exomologeo, G1843)  Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha
