@@ -165,6 +165,7 @@ interface CorpusResult {
   author: string;
   source_kind: string;
   url: string | null;
+  is_excerpt?: boolean;
 }
 
 interface CommentaryResult {
@@ -412,6 +413,10 @@ function CorpusPanel({
             <p className="text-sm" style={{ color: "#c1c1b8" }}>
               No library entries for this word yet — more teaching content coming soon.
             </p>
+          </div>
+        ) : corpusResults.length === 1 && corpusResults[0].is_excerpt ? (
+          <div className="prose prose-invert prose-sm max-w-none">
+            <ReactMarkdown>{corpusResults[0].content}</ReactMarkdown>
           </div>
         ) : (
           <div className="space-y-4">

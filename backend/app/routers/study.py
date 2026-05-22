@@ -194,16 +194,42 @@ async def get_corpus(
 
         results = []
         for doc in (doc_result.data or []):
-            # Fetch top chunks for this document, ordered by chunk_index
-            chunk_result = db.table("chunks").select("content").eq("document_id", doc["id"]).order("chunk_index").limit(5).execute()
-            for chunk in (chunk_result.data or []):
-                results.append({
-                    "content": chunk.get("content", ""),
-                    "title": doc.get("title", ""),
-                    "author": doc.get("author", ""),
-                    "source_kind": doc.get("source_kind", ""),
-                    "url": doc.get("url"),
-                })
+            # Try excerpts table first
+            excerpt_found = False
+            try:
+                excerpt_result = (
+                    db.table("excerpts")
+                    .select("content")
+                    .eq("document_id", doc["id"])
+                    .eq("excerpt_type", "word_study_article")
+                    .limit(1)
+                    .execute()
+                )
+                if excerpt_result.data:
+                    results.append({
+                        "content": excerpt_result.data[0]["content"],
+                        "title": doc.get("title", ""),
+                        "author": doc.get("author", ""),
+                        "source_kind": doc.get("source_kind", ""),
+                        "url": doc.get("url"),
+                        "is_excerpt": True,
+                    })
+                    excerpt_found = True
+            except Exception:
+                pass  # excerpts table may not exist yet
+
+            if not excerpt_found:
+                # Fall back to raw chunks
+                chunk_result = db.table("chunks").select("content").eq("document_id", doc["id"]).order("chunk_index").limit(5).execute()
+                for chunk in (chunk_result.data or []):
+                    results.append({
+                        "content": chunk.get("content", ""),
+                        "title": doc.get("title", ""),
+                        "author": doc.get("author", ""),
+                        "source_kind": doc.get("source_kind", ""),
+                        "url": doc.get("url"),
+                        "is_excerpt": False,
+                    })
         return {"results": results[:5]}
 
     # General corpus lookup: semantic search via vector similarity
