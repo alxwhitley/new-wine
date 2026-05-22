@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Search, Menu, Bookmark } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import type { SavedWord } from "@/components/rhemata/sidebar";
@@ -25,6 +26,15 @@ interface VerseData {
   verse: number;
   text: string;
   translation: string;
+}
+
+interface WordSearchResult {
+  id: string;
+  title: string;
+  author: string;
+  word: string;
+  transliteration: string;
+  strongs_number: string;
 }
 
 // Full 66-book mapping: lowercase name/abbreviation -> 3-letter SBL code
@@ -342,6 +352,10 @@ function CorpusPanel({
   commentaryResults,
   commentaryLoading,
   hasVerse,
+  wordStudyMode,
+  wordStudyDoc,
+  wordStudyContent,
+  wordStudyLoading,
 }: {
   definition: WordDefinition | null;
   corpusResults: CorpusResult[];
@@ -349,7 +363,38 @@ function CorpusPanel({
   commentaryResults: CommentaryResult[];
   commentaryLoading: boolean;
   hasVerse: boolean;
+  wordStudyMode: boolean;
+  wordStudyDoc: WordSearchResult | null;
+  wordStudyContent: string | null;
+  wordStudyLoading: boolean;
 }) {
+  // Word study mode: show full excerpt/article
+  if (wordStudyMode && wordStudyDoc) {
+    return (
+      <>
+        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+          From the library
+        </p>
+        <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+          {wordStudyDoc.word || wordStudyDoc.transliteration} ({wordStudyDoc.transliteration})
+        </p>
+        {wordStudyLoading ? (
+          <SkeletonCards />
+        ) : wordStudyContent ? (
+          <div className="prose prose-invert prose-sm max-w-none">
+            <ReactMarkdown>{wordStudyContent}</ReactMarkdown>
+          </div>
+        ) : (
+          <div className="py-12 text-center">
+            <p className="text-sm" style={{ color: "#c1c1b8" }}>
+              No content available for this word study yet.
+            </p>
+          </div>
+        )}
+      </>
+    );
+  }
+
   // State 2: word selected — show word study corpus results
   if (definition) {
     return (
@@ -428,35 +473,81 @@ function VerseSearch({
   onChange,
   onSubmit,
   loading,
+  wordSearchResults,
+  wordSearchOpen,
+  onWordStudySelect,
 }: {
   verseRef: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   loading: boolean;
+  wordSearchResults: WordSearchResult[];
+  wordSearchOpen: boolean;
+  onWordStudySelect: (result: WordSearchResult) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!wordSearchOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        // Parent controls open state via onChange clearing
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [wordSearchOpen]);
+
   return (
-    <div className="flex gap-2">
-      <input
-        type="text"
-        value={verseRef}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") onSubmit();
-        }}
-        placeholder="Enter verse reference (e.g. John 1:1)"
-        className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
-      />
-      <button
-        onClick={onSubmit}
-        disabled={loading}
-        className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
-      >
-        {loading ? (
-          <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <Search className="h-4 w-4" />
-        )}
-      </button>
+    <div className="relative" ref={containerRef}>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={verseRef}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSubmit();
+          }}
+          placeholder="Search verse or word (e.g. John 1:1 or faith)"
+          className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
+        />
+        <button
+          onClick={onSubmit}
+          disabled={loading}
+          className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
+        >
+          {loading ? (
+            <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Search className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+      {wordSearchOpen && wordSearchResults.length > 0 && (
+        <div
+          className="absolute top-full left-0 right-12 mt-1 rounded-lg border border-border bg-card shadow-lg z-50 overflow-hidden"
+        >
+          {wordSearchResults.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => onWordStudySelect(r)}
+              className="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer"
+              style={{ borderBottom: "1px solid #3c3c38" }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              <span className="text-foreground font-medium">{r.word || r.transliteration}</span>
+              <span className="text-muted-foreground">
+                {r.word && r.transliteration && r.word !== r.transliteration ? ` (${r.transliteration})` : ""}
+              </span>
+              {r.strongs_number && (
+                <span style={{ color: "#d4b96a" }}> &middot; {r.strongs_number}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -476,6 +567,36 @@ function VerseDisplay({ verse, error }: { verse: VerseData | null; error: string
   );
 }
 
+function WordStudyPanel({ doc, definition }: { doc: WordSearchResult; definition: WordDefinition | null }) {
+  return (
+    <div className="mt-8">
+      <p className="font-serif text-3xl text-foreground">
+        {definition?.word || doc.word || doc.transliteration}
+      </p>
+      <p className="text-sm text-muted-foreground mt-1">
+        {doc.transliteration} &middot; {doc.strongs_number}
+      </p>
+
+      {definition && (
+        <>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+            Definition
+          </p>
+          <p className="text-sm text-foreground leading-relaxed">{definition.gloss}</p>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+            Usage
+          </p>
+          <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
+        </>
+      )}
+
+      <p className="text-sm mt-8" style={{ color: "#c1c1b8" }}>
+        Enter a verse reference above to see this word in context
+      </p>
+    </div>
+  );
+}
+
 export default function StudyPage() {
   const { user, signIn, signUp, signOut } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
@@ -486,6 +607,16 @@ export default function StudyPage() {
   const [verseData, setVerseData] = useState<VerseData | null>(null);
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseError, setVerseError] = useState<string | null>(null);
+
+  // Word search state
+  const [wordSearchResults, setWordSearchResults] = useState<WordSearchResult[]>([]);
+  const [wordSearchOpen, setWordSearchOpen] = useState(false);
+
+  // Word study mode state
+  const [wordStudyMode, setWordStudyMode] = useState(false);
+  const [wordStudyDoc, setWordStudyDoc] = useState<WordSearchResult | null>(null);
+  const [wordStudyContent, setWordStudyContent] = useState<string | null>(null);
+  const [wordStudyLoading, setWordStudyLoading] = useState(false);
 
   // Saved words
   const [savedWords, setSavedWords] = useState<SavedWord[]>([]);
@@ -597,6 +728,12 @@ export default function StudyPage() {
     const ref = verseRef.trim();
     if (!ref) return;
 
+    // Reset word study mode on verse lookup
+    setWordStudyMode(false);
+    setWordStudyDoc(null);
+    setWordStudyContent(null);
+    setWordSearchOpen(false);
+
     const parsed = parseRef(ref);
     if (!parsed) {
       setVerseError("Verse not found");
@@ -615,6 +752,66 @@ export default function StudyPage() {
       fetchVerseById(`${parsed.abbrev}.${parsed.chapter}.${parsed.verse}`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced word search
+  useEffect(() => {
+    const trimmed = verseRef.trim();
+    const isPlainWord = trimmed.length >= 2 && !/\d/.test(trimmed);
+
+    if (!isPlainWord) {
+      setWordSearchResults([]);
+      setWordSearchOpen(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/wordsearch?q=${encodeURIComponent(trimmed)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("wordsearch failed");
+          return res.json();
+        })
+        .then((data) => {
+          setWordSearchResults(data.results ?? []);
+          setWordSearchOpen((data.results ?? []).length > 0);
+        })
+        .catch(() => {
+          setWordSearchResults([]);
+          setWordSearchOpen(false);
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [verseRef]);
+
+  // Handle word study selection from dropdown
+  const handleWordStudySelect = useCallback((result: WordSearchResult) => {
+    setWordStudyMode(true);
+    setWordStudyDoc(result);
+    setWordSearchOpen(false);
+    setVerseData(null);
+    setVerseError(null);
+    setSelectedStrongs(null);
+    setCommentaryResults([]);
+    setCorpusResults([]);
+    setVerseRef(result.word || result.transliteration);
+
+    // Fetch word study content
+    setWordStudyLoading(true);
+    setWordStudyContent(null);
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/wordstudy/${result.id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("wordstudy fetch failed");
+        return res.json();
+      })
+      .then((data) => {
+        setWordStudyContent(data.content ?? null);
+      })
+      .catch(() => {
+        setWordStudyContent(null);
+      })
+      .finally(() => {
+        setWordStudyLoading(false);
+      });
   }, []);
 
   // Stepper navigation
@@ -655,6 +852,11 @@ export default function StudyPage() {
 
   const definition = selectedStrongs
     ? PLACEHOLDER_DEFINITIONS[selectedStrongs] ?? null
+    : null;
+
+  // Definition for word study mode (match by strongs_number)
+  const wordStudyDefinition = wordStudyDoc?.strongs_number
+    ? PLACEHOLDER_DEFINITIONS[wordStudyDoc.strongs_number] ?? null
     : null;
 
   // Commentary results (State 1: verse loaded, no word selected)
@@ -744,6 +946,29 @@ export default function StudyPage() {
     [],
   );
 
+  const corpusPanelProps = {
+    definition,
+    corpusResults,
+    corpusLoading,
+    commentaryResults,
+    commentaryLoading,
+    hasVerse: !!verseData,
+    wordStudyMode,
+    wordStudyDoc,
+    wordStudyContent,
+    wordStudyLoading,
+  };
+
+  const verseSearchProps = {
+    verseRef,
+    onChange: setVerseRef,
+    onSubmit: lookupVerse,
+    loading: verseLoading,
+    wordSearchResults,
+    wordSearchOpen,
+    onWordStudySelect: handleWordStudySelect,
+  };
+
   return (
     <div className="flex h-dvh-safe overflow-hidden bg-background">
       <Sidebar
@@ -788,54 +1013,61 @@ export default function StudyPage() {
             style={{ borderRight: "0.5px solid #3c3c38" }}
           >
             <div className="px-4 pt-6 pb-16">
-              <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
-              <VerseDisplay verse={verseData} error={verseError} />
+              <VerseSearch {...verseSearchProps} />
 
-              {verseData && (
-                <div className="flex items-center gap-3 mt-6 mb-4">
-                  <button
-                    onClick={() => stepVerse("prev")}
-                    disabled={!prevVerseId}
-                    className="text-sm font-medium transition-opacity"
-                    style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
-                  >
-                    &larr;
-                  </button>
-                  <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-                    {verseData.book} {verseData.chapter}:{verseData.verse}
-                  </p>
-                  <button
-                    onClick={() => stepVerse("next")}
-                    disabled={!nextVerseId}
-                    className="text-sm font-medium transition-opacity"
-                    style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
-                  >
-                    &rarr;
-                  </button>
-                </div>
+              {wordStudyMode && wordStudyDoc ? (
+                <WordStudyPanel doc={wordStudyDoc} definition={wordStudyDefinition} />
+              ) : (
+                <>
+                  <VerseDisplay verse={verseData} error={verseError} />
+
+                  {verseData && (
+                    <div className="flex items-center gap-3 mt-6 mb-4">
+                      <button
+                        onClick={() => stepVerse("prev")}
+                        disabled={!prevVerseId}
+                        className="text-sm font-medium transition-opacity"
+                        style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
+                      >
+                        &larr;
+                      </button>
+                      <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+                        {verseData.book} {verseData.chapter}:{verseData.verse}
+                      </p>
+                      <button
+                        onClick={() => stepVerse("next")}
+                        disabled={!nextVerseId}
+                        className="text-sm font-medium transition-opacity"
+                        style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
+                      >
+                        &rarr;
+                      </button>
+                    </div>
+                  )}
+
+                  <InterlinearBlocks
+                    tokens={PLACEHOLDER_TOKENS}
+                    selectedStrongs={selectedStrongs}
+                    onSelect={handleSelectWord}
+                  />
+
+                  <div className="mt-8">
+                    <DefinitionPanel
+                      definition={definition}
+                      isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
+                      onToggleSave={handleToggleSaveSelected}
+                      isLoggedIn={!!user}
+                    />
+                  </div>
+                </>
               )}
-
-              <InterlinearBlocks
-                tokens={PLACEHOLDER_TOKENS}
-                selectedStrongs={selectedStrongs}
-                onSelect={handleSelectWord}
-              />
-
-              <div className="mt-8">
-                <DefinitionPanel
-                  definition={definition}
-                  isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
-                  onToggleSave={handleToggleSaveSelected}
-                  isLoggedIn={!!user}
-                />
-              </div>
             </div>
           </div>
 
           {/* Right Column: Corpus Quotes */}
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 pt-6 pb-16">
-              <CorpusPanel definition={definition} corpusResults={corpusResults} corpusLoading={corpusLoading} commentaryResults={commentaryResults} commentaryLoading={commentaryLoading} hasVerse={!!verseData} />
+              <CorpusPanel {...corpusPanelProps} />
             </div>
           </div>
         </div>
@@ -843,51 +1075,63 @@ export default function StudyPage() {
         {/* Mobile: single-column stacked layout */}
         <div className="flex flex-1 flex-col overflow-y-auto md:hidden">
           <div className="px-4 pt-6 pb-16">
-            <VerseSearch verseRef={verseRef} onChange={setVerseRef} onSubmit={lookupVerse} loading={verseLoading} />
-            <VerseDisplay verse={verseData} error={verseError} />
+            <VerseSearch {...verseSearchProps} />
 
-            {verseData && (
-              <div className="flex items-center gap-3 mt-6 mb-4">
-                <button
-                  onClick={() => stepVerse("prev")}
-                  disabled={!prevVerseId}
-                  className="text-sm font-medium transition-opacity"
-                  style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
-                >
-                  &larr;
-                </button>
-                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-                  {verseData.book} {verseData.chapter}:{verseData.verse}
-                </p>
-                <button
-                  onClick={() => stepVerse("next")}
-                  disabled={!nextVerseId}
-                  className="text-sm font-medium transition-opacity"
-                  style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
-                >
-                  &rarr;
-                </button>
-              </div>
-            )}
+            {wordStudyMode && wordStudyDoc ? (
+              <>
+                <WordStudyPanel doc={wordStudyDoc} definition={wordStudyDefinition} />
+                <div className="mt-8">
+                  <CorpusPanel {...corpusPanelProps} />
+                </div>
+              </>
+            ) : (
+              <>
+                <VerseDisplay verse={verseData} error={verseError} />
 
-            <InterlinearBlocks
-              tokens={PLACEHOLDER_TOKENS}
-              selectedStrongs={selectedStrongs}
-              onSelect={handleSelectWord}
-            />
+                {verseData && (
+                  <div className="flex items-center gap-3 mt-6 mb-4">
+                    <button
+                      onClick={() => stepVerse("prev")}
+                      disabled={!prevVerseId}
+                      className="text-sm font-medium transition-opacity"
+                      style={{ color: "#c1c1b8", opacity: prevVerseId ? 1 : 0.5 }}
+                    >
+                      &larr;
+                    </button>
+                    <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+                      {verseData.book} {verseData.chapter}:{verseData.verse}
+                    </p>
+                    <button
+                      onClick={() => stepVerse("next")}
+                      disabled={!nextVerseId}
+                      className="text-sm font-medium transition-opacity"
+                      style={{ color: "#c1c1b8", opacity: nextVerseId ? 1 : 0.5 }}
+                    >
+                      &rarr;
+                    </button>
+                  </div>
+                )}
 
-            <div className="mt-8">
-              <DefinitionPanel
-                definition={definition}
-                isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
-                onToggleSave={handleToggleSaveSelected}
-                isLoggedIn={!!user}
-              />
-            </div>
-            {(definition || verseData) && (
-              <div className="mt-8">
-                <CorpusPanel definition={definition} corpusResults={corpusResults} corpusLoading={corpusLoading} commentaryResults={commentaryResults} commentaryLoading={commentaryLoading} hasVerse={!!verseData} />
-              </div>
+                <InterlinearBlocks
+                  tokens={PLACEHOLDER_TOKENS}
+                  selectedStrongs={selectedStrongs}
+                  onSelect={handleSelectWord}
+                />
+
+                <div className="mt-8">
+                  <DefinitionPanel
+                    definition={definition}
+                    isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
+                    onToggleSave={handleToggleSaveSelected}
+                    isLoggedIn={!!user}
+                  />
+                </div>
+                {(definition || verseData) && (
+                  <div className="mt-8">
+                    <CorpusPanel {...corpusPanelProps} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

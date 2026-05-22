@@ -256,6 +256,85 @@ async def get_corpus(
     return {"results": results}
 
 
+def _parse_word_study_title(title):
+    # type: (str) -> tuple
+    """Extract word, transliteration, strongs from 'Word Study: Word (transliteration, G3056)'."""
+    m = re.search(r'\(([^,]+),\s*(G\d+|H\d+)\)', title)
+    if m:
+        transliteration = m.group(1).strip()
+        strongs = m.group(2).strip()
+        word_part = title.split("(")[0]
+        if ":" in word_part:
+            word = word_part.split(":", 1)[1].strip()
+        else:
+            word = word_part.strip()
+        return word, transliteration, strongs
+    return "", "", ""
+
+
+@router.get("/wordsearch")
+async def word_search(
+    q: str = Query(..., min_length=1, description="Search term, e.g. 'faith' or 'logos'"),
+):
+    db = get_supabase()
+    result = (
+        db.table("documents")
+        .select("id, title, author")
+        .eq("source_kind", "word_study")
+        .ilike("title", f"%{q}%")
+        .limit(10)
+        .execute()
+    )
+
+    results = []
+    for doc in (result.data or []):
+        word, transliteration, strongs = _parse_word_study_title(doc["title"])
+        results.append({
+            "id": doc["id"],
+            "title": doc["title"],
+            "author": doc.get("author", ""),
+            "word": word,
+            "transliteration": transliteration,
+            "strongs_number": strongs,
+        })
+    return {"results": results}
+
+
+@router.get("/wordstudy/{document_id}")
+async def get_word_study(document_id: str):
+    db = get_supabase()
+
+    # Try excerpts table first
+    try:
+        excerpt_result = (
+            db.table("excerpts")
+            .select("content")
+            .eq("document_id", document_id)
+            .eq("excerpt_type", "word_study_article")
+            .limit(1)
+            .execute()
+        )
+        if excerpt_result.data:
+            return {"content": excerpt_result.data[0]["content"], "source": "excerpt"}
+    except Exception:
+        pass  # excerpts table may not exist yet
+
+    # Fall back to concatenated chunks
+    chunk_result = (
+        db.table("chunks")
+        .select("content")
+        .eq("document_id", document_id)
+        .order("chunk_index")
+        .execute()
+    )
+    chunks = chunk_result.data or []
+    if not chunks:
+        raise HTTPException(status_code=404, detail="No content found")
+
+    content = "\n\n".join(c["content"] for c in chunks)
+    return {"content": content, "source": "chunks"}
+
+
 @router.get("/commentary")
 async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),
