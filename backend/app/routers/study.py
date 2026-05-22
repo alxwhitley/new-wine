@@ -179,21 +179,41 @@ async def get_corpus(
     if not verse and not transliteration:
         raise HTTPException(status_code=400, detail="At least one of verse or transliteration is required")
 
-    # Build semantic query — when targeting word_study, use a query shaped
-    # like Precept Austin titles: "Word study: logos G3056"
-    if source_kind == "word_study" and transliteration:
-        parts = ["Word study:", transliteration]
+    db = get_supabase()
+
+    # Word study lookup: direct DB query by title match instead of vector search.
+    # Lexicon entries dominate vector similarity, pushing word studies out of top-N.
+    if source_kind == "word_study" and (strongs or transliteration):
+        # Find the document by Strong's number first, fall back to transliteration
+        doc_query = db.table("documents").select("id, title, author, source_kind, url").eq("source_kind", "word_study")
         if strongs:
-            parts.append(strongs)
-        query = " ".join(parts)
-    else:
-        parts = []
-        if verse:
-            parts.append(verse)
-        if transliteration:
-            parts.append(transliteration)
-            parts.append("word")
-        query = " ".join(parts)
+            doc_query = doc_query.ilike("title", f"%{strongs}%")
+        elif transliteration:
+            doc_query = doc_query.ilike("title", f"%{transliteration}%")
+        doc_result = doc_query.limit(5).execute()
+
+        results = []
+        for doc in (doc_result.data or []):
+            # Fetch top chunks for this document, ordered by chunk_index
+            chunk_result = db.table("chunks").select("content").eq("document_id", doc["id"]).order("chunk_index").limit(5).execute()
+            for chunk in (chunk_result.data or []):
+                results.append({
+                    "content": chunk.get("content", ""),
+                    "title": doc.get("title", ""),
+                    "author": doc.get("author", ""),
+                    "source_kind": doc.get("source_kind", ""),
+                    "url": doc.get("url"),
+                })
+        return {"results": results[:5]}
+
+    # General corpus lookup: semantic search via vector similarity
+    parts = []
+    if verse:
+        parts.append(verse)
+    if transliteration:
+        parts.append(transliteration)
+        parts.append("word")
+    query = " ".join(parts)
 
     try:
         embedding = embed_text(query)
@@ -201,37 +221,15 @@ async def get_corpus(
         logger.exception("Embedding failed for corpus query: %s", query[:100])
         raise HTTPException(status_code=500, detail="Embedding service error")
 
-    db = get_supabase()
-
-    # When filtering to a specific source_kind, fetch more candidates since
-    # most top-N results may be other source_kinds (e.g. sermon_transcript)
-    fetch_count = 80 if source_kind else 20
-
     try:
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
-            "match_count": fetch_count,
+            "match_count": 20,
             "include_copyrighted": True,
         }).execute()
     except Exception:
         logger.exception("match_chunks RPC failed for corpus query")
         raise HTTPException(status_code=500, detail="Search service error")
-
-    # Determine allowed source_kinds
-    if source_kind:
-        allowed_kinds = {source_kind}
-    else:
-        allowed_kinds = CORPUS_SOURCE_KINDS
-
-    # When filtering to word_study, require title to match the actual word
-    title_filter = None
-    if source_kind == "word_study" and (strongs or transliteration):
-        title_needles = []
-        if strongs:
-            title_needles.append(strongs.lower())
-        if transliteration:
-            title_needles.append(transliteration.lower())
-        title_filter = title_needles
 
     # Filter to citable chunks, dedupe by document, take top 5
     seen_docs = set()
@@ -239,12 +237,8 @@ async def get_corpus(
     for chunk in (result.data or []):
         if chunk.get("citation_mode") != "citable":
             continue
-        if chunk.get("source_kind") not in allowed_kinds:
+        if chunk.get("source_kind") not in CORPUS_SOURCE_KINDS:
             continue
-        if title_filter:
-            title_lower = (chunk.get("title") or "").lower()
-            if not any(needle in title_lower for needle in title_filter):
-                continue
         doc_id = chunk.get("document_id")
         if doc_id in seen_docs:
             continue
