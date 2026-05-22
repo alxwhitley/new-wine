@@ -68,7 +68,7 @@ export interface ChatMessagePayload {
 
 export interface StreamCallbacks {
   onToken: (token: string) => void;
-  onMeta: (meta: { citations: Citation[]; conversation_id: string | null }) => void;
+  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null }) => void;
   onError: (error: string) => void;
 }
 

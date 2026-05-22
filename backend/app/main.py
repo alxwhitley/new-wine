@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import chat, search, document, ingest, study, admin
+from app.routers import chat, search, document, ingest, study, admin, feedback
 
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])
@@ -30,6 +30,7 @@ app.include_router(document.router, prefix="/document", tags=["document"])
 app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 app.include_router(study.router, prefix="/study", tags=["study"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+app.include_router(feedback.router, prefix="/feedback", tags=["feedback"])
 
 @app.get("/")
 async def root():

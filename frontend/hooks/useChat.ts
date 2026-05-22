@@ -5,6 +5,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  messageId?: string | null;
 }
 
 function getAnonId(): string {
@@ -65,16 +66,18 @@ export function useChat(
               if (meta.conversation_id) {
                 setConversationId(meta.conversation_id);
               }
-              if (meta.citations?.length) {
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last && last.role === "assistant") {
-                    updated[updated.length - 1] = { ...last, citations: meta.citations };
-                  }
-                  return updated;
-                });
-              }
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last && last.role === "assistant") {
+                  updated[updated.length - 1] = {
+                    ...last,
+                    ...(meta.citations?.length ? { citations: meta.citations } : {}),
+                    ...(meta.message_id ? { messageId: meta.message_id } : {}),
+                  };
+                }
+                return updated;
+              });
             },
             onError: (errMsg) => {
               setError(errMsg);

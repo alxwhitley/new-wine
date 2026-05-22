@@ -192,15 +192,24 @@ export default function Home() {
           <>
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="mx-auto max-w-3xl px-4 md:px-6 pt-8 pb-8">
-                {messages.map((message, i) => (
-                  <ChatMessage
-                    key={i}
-                    role={message.role}
-                    content={message.content}
-                    citations={message.citations}
-                    onCitationClick={handleCitationClick}
-                  />
-                ))}
+                {messages.map((message, i) => {
+                  // Find the preceding user question for assistant messages
+                  const question = message.role === "assistant" && i > 0 && messages[i - 1].role === "user"
+                    ? messages[i - 1].content
+                    : undefined;
+                  return (
+                    <ChatMessage
+                      key={i}
+                      role={message.role}
+                      content={message.content}
+                      citations={message.citations}
+                      messageId={message.messageId}
+                      question={question}
+                      accessToken={accessToken}
+                      onCitationClick={handleCitationClick}
+                    />
+                  );
+                })}
 
                 {chatLoading && messages.length > 0 && messages[messages.length - 1].content === "" && (
                   <LoadingIndicator />

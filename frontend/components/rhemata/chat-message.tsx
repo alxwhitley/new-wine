@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
+import { ThumbsUp, ThumbsDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { Citation } from "@/lib/api";
 
@@ -7,6 +9,9 @@ interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  messageId?: string | null;
+  question?: string;
+  accessToken?: string | null;
   onCitationClick?: (citation: Citation, index: number) => void;
 }
 
@@ -71,10 +76,171 @@ function stripXmlTags(text: string): string {
   return cleaned.trim();
 }
 
+function FeedbackModal({
+  onSubmit,
+  onClose,
+}: {
+  onSubmit: (comment: string) => void;
+  onClose: () => void;
+}) {
+  const [comment, setComment] = useState("");
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(27, 27, 25, 0.8)" }}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+    >
+      <div
+        className="w-full max-w-md mx-4 rounded-lg border p-6"
+        style={{ backgroundColor: "#262624", borderColor: "#3c3c38" }}
+      >
+        <h3 className="font-serif text-lg text-foreground">What went wrong?</h3>
+        <p className="text-xs mt-1 mb-4" style={{ color: "#c1c1b8" }}>
+          Your feedback helps improve Rhemata
+        </p>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Describe the issue..."
+          rows={4}
+          className="w-full rounded-lg border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold resize-none"
+          style={{ backgroundColor: "#1f1e1d", borderColor: "#3c3c38" }}
+        />
+        <div className="flex justify-end gap-3 mt-4">
+          <button
+            onClick={() => onSubmit("")}
+            className="px-4 py-2 text-sm rounded-lg cursor-pointer"
+            style={{ color: "#c1c1b8" }}
+          >
+            Skip
+          </button>
+          <button
+            onClick={() => onSubmit(comment)}
+            className="px-4 py-2 text-sm font-medium rounded-lg cursor-pointer text-white"
+            style={{ backgroundColor: "#b49238" }}
+          >
+            Submit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeedbackButtons({
+  messageId,
+  question,
+  accessToken,
+  isComplete,
+}: {
+  messageId?: string | null;
+  question?: string;
+  accessToken?: string | null;
+  isComplete: boolean;
+}) {
+  const [rating, setRating] = useState<"thumbs_up" | "thumbs_down" | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showThanks, setShowThanks] = useState(false);
+
+  if (!isComplete) return null;
+
+  async function submitFeedback(r: "thumbs_up" | "thumbs_down", comment?: string) {
+    setRating(r);
+    setShowThanks(true);
+    setTimeout(() => setShowThanks(false), 2000);
+
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+      const body: Record<string, unknown> = {
+        rating: r,
+        question: question || "",
+      };
+      if (messageId) body.message_id = messageId;
+      if (comment) body.comment = comment;
+      if (!accessToken) {
+        body.anon_id = localStorage.getItem("rhemata_anon_id") || undefined;
+      }
+
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/feedback`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+    } catch {
+      // Non-blocking — don't disrupt UX
+    }
+  }
+
+  if (showThanks) {
+    return (
+      <div className="flex items-center gap-1 mt-2">
+        <span className="text-xs" style={{ color: "#c1c1b8" }}>Thanks for the feedback</span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-1 mt-2">
+        <button
+          onClick={() => { if (!rating) submitFeedback("thumbs_up"); }}
+          className="p-1 rounded transition-colors cursor-pointer"
+          title="Good answer"
+        >
+          <ThumbsUp
+            className="h-4 w-4 transition-colors"
+            style={{
+              color: rating === "thumbs_up" ? "#b49238" : "#c1c1b8",
+              fill: rating === "thumbs_up" ? "#b49238" : "none",
+            }}
+            onMouseEnter={(e) => { if (!rating) e.currentTarget.style.color = "#b49238"; }}
+            onMouseLeave={(e) => { if (!rating) e.currentTarget.style.color = rating === "thumbs_up" ? "#b49238" : "#c1c1b8"; }}
+          />
+        </button>
+        <button
+          onClick={() => { if (!rating) setShowModal(true); }}
+          className="p-1 rounded transition-colors cursor-pointer"
+          title="Bad answer"
+        >
+          <ThumbsDown
+            className="h-4 w-4 transition-colors"
+            style={{
+              color: rating === "thumbs_down" ? "#e05252" : "#c1c1b8",
+              fill: rating === "thumbs_down" ? "#e05252" : "none",
+            }}
+            onMouseEnter={(e) => { if (!rating) e.currentTarget.style.color = "#e05252"; }}
+            onMouseLeave={(e) => { if (!rating) e.currentTarget.style.color = rating === "thumbs_down" ? "#e05252" : "#c1c1b8"; }}
+          />
+        </button>
+      </div>
+      {showModal && (
+        <FeedbackModal
+          onSubmit={(comment) => {
+            setShowModal(false);
+            submitFeedback("thumbs_down", comment || undefined);
+          }}
+          onClose={() => {
+            setShowModal(false);
+            submitFeedback("thumbs_down");
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export function ChatMessage({
   role,
   content,
   citations = [],
+  messageId,
+  question,
+  accessToken,
   onCitationClick,
 }: ChatMessageProps) {
   if (role === "user") {
@@ -91,6 +257,7 @@ export function ChatMessage({
 
   const cleanedContent = stripXmlTags(content);
   const hasCitations = citations.length > 0;
+  const isComplete = content.length > 0;
 
   return (
     <div className="mb-4 border-t border-[#3c3c38] pt-3">
@@ -148,6 +315,12 @@ export function ChatMessage({
           {cleanedContent}
         </ReactMarkdown>
       </div>
+      <FeedbackButtons
+        messageId={messageId}
+        question={question}
+        accessToken={accessToken}
+        isComplete={isComplete}
+      />
     </div>
   );
 }

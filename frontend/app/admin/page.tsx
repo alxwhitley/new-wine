@@ -15,6 +15,16 @@ interface SourceToggle {
   doc_count: number | null;
 }
 
+interface FeedbackEntry {
+  id: string;
+  question: string;
+  rating: string;
+  comment: string | null;
+  created_at: string;
+  user_id: string | null;
+  anon_id: string | null;
+}
+
 function ToggleSwitch({
   enabled,
   onToggle,
@@ -61,6 +71,8 @@ export default function AdminPage() {
   const router = useRouter();
   const [sources, setSources] = useState<SourceToggle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [feedbackEntries, setFeedbackEntries] = useState<FeedbackEntry[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
 
   // Auth guard
   useEffect(() => {
@@ -84,6 +96,22 @@ export default function AdminPage() {
       .then((data) => setSources(data.sources ?? []))
       .catch(() => setSources([]))
       .finally(() => setLoading(false));
+  }, [accessToken]);
+
+  // Fetch feedback
+  useEffect(() => {
+    if (!accessToken) return;
+
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/feedback`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch feedback");
+        return res.json();
+      })
+      .then((data) => setFeedbackEntries(data.feedback ?? []))
+      .catch(() => setFeedbackEntries([]))
+      .finally(() => setFeedbackLoading(false));
   }, [accessToken]);
 
   const handleToggle = useCallback(
@@ -182,7 +210,7 @@ export default function AdminPage() {
             )}
 
             {/* Source toggles */}
-            <section>
+            <section className="mb-10">
               <h2
                 className="text-xs font-medium uppercase tracking-wide mb-4"
                 style={{ color: "#c1c1b8" }}
@@ -216,6 +244,61 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
+            </section>
+
+            {/* Feedback */}
+            <section>
+              <h2
+                className="text-xs font-medium uppercase tracking-wide mb-4"
+                style={{ color: "#c1c1b8" }}
+              >
+                Feedback
+              </h2>
+              {feedbackLoading ? (
+                <SkeletonRows />
+              ) : feedbackEntries.length === 0 ? (
+                <div
+                  className="rounded-lg border p-6 text-center"
+                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+                >
+                  <p className="text-sm" style={{ color: "#c1c1b8" }}>No feedback yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {feedbackEntries.map((f) => (
+                    <div
+                      key={f.id}
+                      className="rounded-lg border p-4"
+                      style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className="mt-1.5 inline-block h-2 w-2 rounded-full shrink-0"
+                          style={{
+                            backgroundColor: f.rating === "thumbs_up" ? "#4ade80" : "#ef4444",
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground">{f.question}</p>
+                          {f.comment && (
+                            <p className="text-xs mt-1" style={{ color: "#c1c1b8" }}>
+                              {f.comment}
+                            </p>
+                          )}
+                          <p className="text-xs mt-2" style={{ color: "#888780" }}>
+                            {new Date(f.created_at).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           </>
         )}

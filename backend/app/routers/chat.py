@@ -195,8 +195,8 @@ class ChatRequest(BaseModel):
 
 def _save_conversation(
     db, user_id: str, conversation_id: Optional[str], question: str, answer: str,
-) -> str:
-    """Save the exchange to Supabase. Returns the conversation_id."""
+) -> tuple:
+    """Save the exchange to Supabase. Returns (conversation_id, assistant_message_id)."""
     is_new = conversation_id is None
     if is_new:
         conversation_id = str(uuid.uuid4())
@@ -211,6 +211,7 @@ def _save_conversation(
     else:
         logger.info("Appending to existing conversation %s for user %s", conversation_id, user_id)
 
+    assistant_message_id = str(uuid.uuid4())
     result = db.table("messages").insert([
         {
             "id": str(uuid.uuid4()),
@@ -219,7 +220,7 @@ def _save_conversation(
             "content": question,
         },
         {
-            "id": str(uuid.uuid4()),
+            "id": assistant_message_id,
             "conversation_id": conversation_id,
             "role": "assistant",
             "content": answer,
@@ -227,7 +228,7 @@ def _save_conversation(
     ]).execute()
     logger.info("Messages insert result: %d row(s) for conversation %s", len(result.data) if result.data else 0, conversation_id)
 
-    return conversation_id
+    return conversation_id, assistant_message_id
 
 
 def _sse(data: str) -> str:
@@ -509,9 +510,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
         # Save conversation if authenticated
         conversation_id = None
+        message_id = None
         if user_id:
             try:
-                conversation_id = _save_conversation(
+                conversation_id, message_id = _save_conversation(
                     db, user_id, request.conversation_id, request.question, answer,
                 )
                 logger.info("Conversation saved successfully: %s", conversation_id)
@@ -521,7 +523,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             logger.debug("Skipping conversation save — no authenticated user")
 
         # Send metadata and close
-        yield _sse(json.dumps({"citations": citations, "conversation_id": conversation_id}))
+        yield _sse(json.dumps({"citations": citations, "conversation_id": conversation_id, "message_id": message_id}))
         yield _sse("[DONE]")
 
     return StreamingResponse(generate(), media_type="text/event-stream")
