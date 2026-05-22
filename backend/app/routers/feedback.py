@@ -27,6 +27,8 @@ class FeedbackRequest(BaseModel):
     comment: Optional[str] = None
     question: str
     anon_id: Optional[str] = None
+    source_type: Optional[str] = None  # 'chat_answer', 'commentary', 'word_study'
+    source_document_id: Optional[str] = None
 
 
 @router.post("", status_code=201)
@@ -45,9 +47,12 @@ async def submit_feedback(
         "comment": body.comment,
         "user_id": user_id,
         "anon_id": body.anon_id,
+        "source_type": body.source_type,
     }
     if body.message_id:
         row["message_id"] = body.message_id
+    if body.source_document_id:
+        row["source_document_id"] = body.source_document_id
 
     try:
         db.table("feedback").insert(row).execute()
@@ -86,6 +91,7 @@ def _require_admin(request: Request) -> str:
 async def list_feedback(
     request: Request,
     rating: Optional[str] = Query(None, description="Filter by rating: thumbs_up or thumbs_down"),
+    source_type: Optional[str] = Query(None, description="Filter by source_type: chat_answer, commentary, word_study"),
     user_id: str = Depends(_require_admin),
 ):
     db = get_supabase()
@@ -93,6 +99,11 @@ async def list_feedback(
     query = db.table("feedback").select("*").order("created_at", desc=True).limit(50)
     if rating:
         query = query.eq("rating", rating)
+    if source_type:
+        if source_type == "chat_answer":
+            query = query.is_("source_type", "null")
+        else:
+            query = query.eq("source_type", source_type)
 
     result = query.execute()
     return {"feedback": result.data or []}

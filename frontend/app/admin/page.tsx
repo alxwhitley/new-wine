@@ -23,7 +23,17 @@ interface FeedbackEntry {
   created_at: string;
   user_id: string | null;
   anon_id: string | null;
+  source_type: string | null;
+  source_document_id: string | null;
 }
+
+type FeedbackTab = "chat_answer" | "commentary" | "word_study";
+
+const FEEDBACK_TABS: { key: FeedbackTab; label: string }[] = [
+  { key: "chat_answer", label: "Chat Answers" },
+  { key: "commentary", label: "Commentary" },
+  { key: "word_study", label: "Word Studies" },
+];
 
 function ToggleSwitch({
   enabled,
@@ -73,6 +83,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [feedbackEntries, setFeedbackEntries] = useState<FeedbackEntry[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(true);
+  const [feedbackTab, setFeedbackTab] = useState<FeedbackTab>("chat_answer");
 
   // Auth guard
   useEffect(() => {
@@ -98,11 +109,15 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
   }, [accessToken]);
 
-  // Fetch feedback
+  // Fetch feedback (re-fetch on tab change)
   useEffect(() => {
     if (!accessToken) return;
 
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/feedback`, {
+    setFeedbackLoading(true);
+    const params = new URLSearchParams();
+    params.set("source_type", feedbackTab);
+
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/feedback?${params}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then((res) => {
@@ -112,7 +127,7 @@ export default function AdminPage() {
       .then((data) => setFeedbackEntries(data.feedback ?? []))
       .catch(() => setFeedbackEntries([]))
       .finally(() => setFeedbackLoading(false));
-  }, [accessToken]);
+  }, [accessToken, feedbackTab]);
 
   const handleToggle = useCallback(
     async (id: string) => {
@@ -254,6 +269,25 @@ export default function AdminPage() {
               >
                 Feedback
               </h2>
+
+              {/* Tabs */}
+              <div className="flex gap-6 mb-6" style={{ borderBottom: "1px solid #3c3c38" }}>
+                {FEEDBACK_TABS.map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setFeedbackTab(tab.key)}
+                    className="pb-2 text-sm font-medium cursor-pointer transition-colors"
+                    style={{
+                      color: feedbackTab === tab.key ? "#b49238" : "#888780",
+                      borderBottom: feedbackTab === tab.key ? "2px solid #b49238" : "2px solid transparent",
+                      marginBottom: "-1px",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
               {feedbackLoading ? (
                 <SkeletonRows />
               ) : feedbackEntries.length === 0 ? (

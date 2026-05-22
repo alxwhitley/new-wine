@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Search, Menu, Bookmark } from "lucide-react";
+import { Search, Menu, Bookmark, Flag } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/rhemata/sidebar";
@@ -347,6 +347,66 @@ function SkeletonCards() {
   );
 }
 
+function FlagModal({
+  heading,
+  sourceName,
+  author,
+  onSubmit,
+  onClose,
+}: {
+  heading: string;
+  sourceName: string;
+  author: string;
+  onSubmit: (comment: string) => void;
+  onClose: () => void;
+}) {
+  const [comment, setComment] = useState("");
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(27, 27, 25, 0.8)" }}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+    >
+      <div
+        className="w-full max-w-md mx-4 rounded-lg border p-6"
+        style={{ backgroundColor: "#262624", borderColor: "#3c3c38" }}
+      >
+        <h3 className="font-serif text-lg text-foreground">{heading}</h3>
+        <p className="text-xs mt-1 mb-4" style={{ color: "#c1c1b8" }}>
+          {sourceName} &middot; {author}
+        </p>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Describe the theological concern..."
+          rows={4}
+          className="w-full rounded-lg border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold resize-none"
+          style={{ backgroundColor: "#1f1e1d", borderColor: "#3c3c38" }}
+        />
+        <div className="flex justify-end gap-3 mt-4">
+          <button
+            onClick={() => onSubmit("")}
+            className="px-4 py-2 text-sm rounded-lg cursor-pointer"
+            style={{ color: "#c1c1b8" }}
+          >
+            Skip
+          </button>
+          <button
+            onClick={() => onSubmit(comment)}
+            className="px-4 py-2 text-sm font-medium rounded-lg cursor-pointer text-white"
+            style={{ backgroundColor: "#b49238" }}
+          >
+            Submit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CorpusPanel({
   definition,
   selectedStrongs,
@@ -362,6 +422,8 @@ function CorpusPanel({
   activeCommentary,
   onCommentaryClick,
   onCommentaryBack,
+  verseRef,
+  accessToken,
 }: {
   definition: WordDefinition | null;
   selectedStrongs: string | null;
@@ -377,17 +439,84 @@ function CorpusPanel({
   activeCommentary: CommentaryResult | null;
   onCommentaryClick: (result: CommentaryResult) => void;
   onCommentaryBack: () => void;
+  verseRef: string;
+  accessToken: string | null;
 }) {
+  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
+  const [flagModal, setFlagModal] = useState<{
+    sourceType: string;
+    documentId: string;
+    heading: string;
+    sourceName: string;
+    author: string;
+  } | null>(null);
+
+  const submitFlag = useCallback(
+    async (comment: string) => {
+      if (!flagModal) return;
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            rating: "thumbs_down",
+            question: verseRef,
+            comment: comment || null,
+            source_type: flagModal.sourceType,
+            source_document_id: flagModal.documentId,
+          }),
+        });
+      } catch {
+        // silently fail
+      }
+      setFlaggedIds((prev) => new Set(prev).add(flagModal.documentId));
+      setFlagModal(null);
+    },
+    [flagModal, verseRef, accessToken],
+  );
+  const flagModalEl = flagModal ? (
+    <FlagModal
+      heading={flagModal.heading}
+      sourceName={flagModal.sourceName}
+      author={flagModal.author}
+      onSubmit={submitFlag}
+      onClose={() => setFlagModal(null)}
+    />
+  ) : null;
+
   // Word study mode: show full excerpt/article
   if (wordStudyMode && wordStudyDoc) {
     return (
       <>
-        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-          From the library
-        </p>
-        <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-          {wordStudyDoc.word || wordStudyDoc.transliteration} ({wordStudyDoc.transliteration})
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+              From the library
+            </p>
+            <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+              {wordStudyDoc.word || wordStudyDoc.transliteration} ({wordStudyDoc.transliteration})
+            </p>
+          </div>
+          {!flaggedIds.has(wordStudyDoc.id) && (
+            <button
+              onClick={() => setFlagModal({
+                sourceType: "word_study",
+                documentId: wordStudyDoc.id,
+                heading: "Flag Word Study",
+                sourceName: wordStudyDoc.title,
+                author: wordStudyDoc.author,
+              })}
+              className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer shrink-0"
+              style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
+              title="Flag this content"
+            >
+              <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
+            </button>
+          )}
+        </div>
         {wordStudyLoading ? (
           <SkeletonCards />
         ) : wordStudyContent ? (
@@ -401,6 +530,7 @@ function CorpusPanel({
             </p>
           </div>
         )}
+        {flagModalEl}
       </>
     );
   }
@@ -449,6 +579,7 @@ function CorpusPanel({
             ))}
           </div>
         )}
+        {flagModalEl}
       </>
     );
   }
@@ -459,16 +590,35 @@ function CorpusPanel({
     if (activeCommentary) {
       return (
         <>
-          <button
-            onClick={onCommentaryBack}
-            className="text-sm mb-4 cursor-pointer hover:underline"
-            style={{ color: "#c1c1b8" }}
-          >
-            &larr; Back
-          </button>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={onCommentaryBack}
+              className="text-sm cursor-pointer hover:underline"
+              style={{ color: "#c1c1b8" }}
+            >
+              &larr; Back
+            </button>
+            {!flaggedIds.has(activeCommentary.document_id) && (
+              <button
+                onClick={() => setFlagModal({
+                  sourceType: "commentary",
+                  documentId: activeCommentary.document_id,
+                  heading: "Flag Commentary",
+                  sourceName: activeCommentary.title,
+                  author: activeCommentary.author,
+                })}
+                className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer"
+                style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
+                title="Flag this content"
+              >
+                <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
+              </button>
+            )}
+          </div>
           <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{activeCommentary.author}</p>
           <p className="text-xs mt-0.5 mb-6" style={{ color: "#c1c1b8" }}>{activeCommentary.title}</p>
           <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{activeCommentary.content}</p>
+          {flagModalEl}
         </>
       );
     }
@@ -491,11 +641,30 @@ function CorpusPanel({
             {commentaryResults.map((r, i) => (
               <div
                 key={i}
-                className="rounded-lg border border-border bg-card p-4 cursor-pointer transition-colors"
+                className="rounded-lg border border-border bg-card p-4 cursor-pointer transition-colors relative group"
                 onClick={() => onCommentaryClick(r)}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#4a4a44"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; }}
               >
+                {!flaggedIds.has(r.document_id) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFlagModal({
+                        sourceType: "commentary",
+                        documentId: r.document_id,
+                        heading: "Flag Commentary",
+                        sourceName: r.title,
+                        author: r.author,
+                      });
+                    }}
+                    className="absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
+                    title="Flag this content"
+                  >
+                    <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
+                  </button>
+                )}
                 <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{r.author}</p>
                 <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
                 <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
@@ -503,15 +672,19 @@ function CorpusPanel({
             ))}
           </div>
         )}
+        {flagModalEl}
       </>
     );
   }
 
   // No verse loaded yet
   return (
-    <div className="flex items-center justify-center h-full">
-      <p className="text-muted-foreground text-sm">Search a verse to see commentary from the library</p>
-    </div>
+    <>
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground text-sm">Search a verse to see commentary from the library</p>
+      </div>
+      {flagModalEl}
+    </>
   );
 }
 
@@ -753,7 +926,7 @@ function WordStudyPanel({
 }
 
 export default function StudyPage() {
-  const { user, signIn, signUp, signOut } = useAuth();
+  const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -1147,6 +1320,8 @@ export default function StudyPage() {
     activeCommentary,
     onCommentaryClick: setActiveCommentary,
     onCommentaryBack: () => setActiveCommentary(null),
+    verseRef,
+    accessToken,
   };
 
   const verseSearchProps = {
