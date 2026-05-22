@@ -36,6 +36,7 @@ repo/
 │   │   │   ├── chat.py       # /chat endpoint — retrieval + LLM
 │   │   │   ├── search.py     # /search + /search/documents endpoints
 │   │   │   ├── document.py   # /document/{id} + /document/{id}/article
+│   │   │   ├── study.py      # /study/verse + /study/corpus endpoints
 │   │   │   └── ingest.py     # /ingest endpoint
 │   │   ├── services/
 │   │   ├── db/
@@ -147,6 +148,13 @@ repo/
 - `text` (text), `translation` (text, default `'WEB'`)
 - `created_at` (timestamptz)
 - Indexes on `verse_id` and `(book, chapter, verse)`
+
+**`saved_words` table** — user's saved Greek words for Study mode
+- `id` (uuid), `user_id` (uuid, FK → auth.users, cascade delete)
+- `strongs_number` (text), `greek_word` (text), `transliteration` (text), `english_gloss` (text, nullable)
+- `created_at` (timestamptz)
+- Unique constraint on `(user_id, strongs_number)`
+- RLS enabled: users can only manage their own rows (`auth.uid() = user_id`)
 
 **`guest_sessions` table** — server-side guest query tracking
 - `id` (uuid), `anon_id` (text, unique)
@@ -316,7 +324,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 |---|---|
 | `scripts/extract_magazine.py` | 3-pass Gemini/Groq extraction pipeline (Vision → Segmentation → QA). Supports `--max-issues N` and `--time-limit`. Continuation resolver (BFS, depth 5) handles "continued on page N" markers. PDFs archived into `02_extracted/{issue_stem}/` after extraction. Empty Gemini batches log warning + substitute `""` (non-fatal). |
 | `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase. Auto-populates `bible_references`. Archives PDFs to `05_archived/` on success. |
-| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. |
+| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. Skip reason tracking: `ingest_file()` returns `(status, reason)` tuples; `main()` prints grouped summary table of all skipped/failed files with reasons at end of run. |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq Llama 3.3 70B). `extract_bible_references(content) -> List[str]`. Segments at ~12k chars, normalizes against 66-book canonical set + alias map, dedupes. Non-fatal (returns `[]`). |
 | `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force` (re-process docs that already have refs). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
@@ -359,7 +367,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - Centered chat input as primary interaction
 - Perplexity-style inline citations rendered as gold-highlighted tags
 - Clicking a citation opens a source panel with document title, author, and page content
-- Sidebar: "Rhemata" wordmark, New Chat (plain, above Search), Search link, "Recents" section label, conversation history (title + timestamp, no icons)
+- Sidebar: Shared across all routes. "Rhemata" wordmark, gold "New Chat" CTA (`#b49238`), nav items (Chat/Discover/Study), conditional content (Recents on chat, Saved Words on study). Hover via `onMouseEnter`/`onMouseLeave` inline handlers (`#262624`).
 - Search page at `/search` with keyword search, browse-all default listing, result cards with topic tag pills, and full article reader
 - Auth flow: login modal triggered by AuthButton, sidebar sign-in link, or guest limit reached
 - Guest users get 6 free queries before prompted to sign up
@@ -414,9 +422,14 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 ## Study Mode (frontend)
 
 - **Route:** `/study` — Study Mode page with interlinear word blocks, definitions, corpus quotes
-- **Layout:** Word History sidebar (w-64) | Study column (380px fixed) | Corpus column (flex:1)
-- **Mode toggle:** `frontend/components/rhemata/mode-toggle.tsx` — Chat/Study toggle with gold active state, appears in top bar of both `/` and `/study`
-- **Current state:** Placeholder data only (John 1:1 with 12 Greek tokens, 3 definitions). Not yet connected to backend or verses table.
+- **Layout:** Shared sidebar (w-64) with Saved Words list | Study column (380px fixed) | Corpus column (flex:1)
+- **Sidebar:** Shared `sidebar.tsx` across Chat and Study. Uses `usePathname()` for active route. Chat shows Recents; Study shows Saved Words. Nav items: Chat (MessageSquare), Discover (Compass), Study (BookOpen). Gold "New Chat" CTA (`#b49238`). Hover standard: `onMouseEnter` bg `#262624`, `onMouseLeave` transparent.
+- **Saved words:** `saved_words` table in Supabase (migration 017). RLS policy scoped to `auth.uid()`. Toggle save/unsave from definition panel bookmark icon. Sidebar shows English gloss + Strong's number, transliteration below.
+- **Verse lookup:** Direct Supabase query from frontend (`verses` table, keyed by `verse_id`). Client-side `parseRef()` with full 66-book `BOOK_MAP` + `ABBREV_TO_NAME`.
+- **Corpus panel ("From the Library"):** Backend `GET /study/corpus?verse=...&transliteration=...` endpoint. Embeds query via OpenAI, runs `match_chunks` RPC (match_count=20, include_copyrighted=true), filters to `citation_mode='citable'` + `source_kind IN ('sermon_transcript', 'magazine_article')`, dedupes by document, returns top 5. Frontend shows skeleton loader, empty state, or real results.
+- **Backend router:** `backend/app/routers/study.py` — `GET /study/verse` (parses ref, queries verses table) and `GET /study/corpus` (semantic search). Registered in `main.py` with `prefix="/study"`.
+- **Interlinear blocks:** Hover color `#2f2f2c` (since resting bg is `#262624`). No bookmark icons on word blocks.
+- **Current state:** Placeholder interlinear data (John 1:1 with 12 Greek tokens, 3 definitions). Verse lookup, saved words, and corpus panel are live.
 
 ---
 
@@ -445,7 +458,10 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **`scrape_preceptaustin.py` hardened version not yet re-run** — page cache from first run will speed up re-run; first run had 2.6% success rate before DOM fix
 - **`ingest_preceptaustin.py` not yet run** — depends on successful scrape completion
 - **`ingest_lexicon.py` resume needed** — crashed on TFLSJ file due to token limit, now fixed with tiktoken truncation
-- **Study Mode page is placeholder only** — interlinear data, definitions, and corpus quotes are all hardcoded. Needs backend endpoints and verse/lexicon data to be live.
+- **Study Mode interlinear data is placeholder only** — John 1:1 tokens and 3 definitions are hardcoded. Verse lookup, saved words, and corpus panel are live. Needs real interlinear data source and lexicon wiring.
+- **Migration 017 (saved_words)** — `migrations/017_create_saved_words.sql` needs to be applied in Supabase SQL Editor if not already run.
+- **10 YouTube transcripts ingested (2026-05-22)** — side effect of running skip tracking test against `youtube/ingested/`. These had different MD5 hashes than stored (likely re-cleaned). 1 duplicate ("Your Calling Is Holy" by Derek Prince) was found and the older copy deleted.
+- **`mode-toggle.tsx` is orphaned** — `frontend/components/rhemata/mode-toggle.tsx` exists but is no longer imported anywhere. Can be deleted.
 
 ---
 

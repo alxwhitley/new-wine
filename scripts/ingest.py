@@ -391,8 +391,8 @@ def tag_document(doc_id, chunks):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False) -> str:
-    """Returns 'processed', 'skipped', or 'failed'."""
+def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False) -> tuple:
+    """Returns (status, reason) where status is 'processed', 'skipped', or 'failed'."""
     print(f"\n{'='*60}")
     print(f"Processing: {file_path.name} {'[COPYRIGHTED]' if is_copyrighted else '[OPEN]'}")
     print('='*60)
@@ -401,7 +401,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     source_hash = hashlib.md5(file_path.read_bytes()).hexdigest()
     if not dry_run and already_ingested(source_hash):
         print(f"  ⏭️  Already ingested — skipping")
-        return "skipped"
+        return ("skipped", "already_ingested")
 
     # 1. Extract text
     ext = file_path.suffix.lower()
@@ -421,7 +421,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         pages = extractors[ext](file_path)
     if not pages or not any(pages):
         print("  ⚠️  No text extracted — skipping")
-        return "failed"
+        return ("failed", "empty_content")
 
     print(f"  {len(pages)} pages extracted")
 
@@ -472,7 +472,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
             print(f"  Content: {text[:300]}{'...' if len(text) > 300 else ''}")
             print()
         print("  [DRY RUN] No data written to Supabase.")
-        return "processed"
+        return ("processed", None)
 
     # 4. Extract Bible references from chunk content (non-fatal)
     print("Extracting Bible references...")
@@ -508,7 +508,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         print("  No valid tags assigned")
 
     print(f"Done: {file_path.name}")
-    return "processed"
+    return ("processed", None)
 
 
 def main():
@@ -547,10 +547,11 @@ def main():
     dp_ingested_dir = DOCS_FOLDER / "web" / "derek_prince" / "ingested"
 
     processed = skipped = failed = 0
+    skip_reasons: dict[str, list[str]] = {}
     for file_path in files:
         is_copyrighted = _is_copyrighted(file_path)
-        result = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)
-        if result == "processed":
+        status, reason = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)
+        if status == "processed":
             processed += 1
             if not dry_run:
                 # Move successfully ingested YouTube transcripts to ingested/
@@ -565,13 +566,26 @@ def main():
                     dest = dp_ingested_dir / file_path.name
                     shutil.move(str(file_path), str(dest))
                     print(f"  Moved to: {dest}")
-        elif result == "skipped":
+        elif status == "skipped":
             skipped += 1
+            skip_reasons.setdefault(reason, []).append(file_path.name)
         else:
             failed += 1
+            skip_reasons.setdefault(reason, []).append(file_path.name)
 
     print(f"\n{'='*60}")
     print(f"Done. {processed} processed, {skipped} skipped, {failed} failed.")
+
+    if skip_reasons:
+        print(f"\n{'─'*60}")
+        print("Skip/Fail Breakdown:")
+        print(f"{'─'*60}")
+        for reason, filenames in sorted(skip_reasons.items(), key=lambda x: -len(x[1])):
+            print(f"  {reason}: {len(filenames)} file(s)")
+            for name in filenames[:5]:
+                print(f"    • {name}")
+            if len(filenames) > 5:
+                print(f"    ... and {len(filenames) - 5} more")
 
 
 if __name__ == "__main__":
