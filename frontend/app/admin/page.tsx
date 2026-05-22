@@ -163,7 +163,13 @@ export default function AdminPage() {
   }
 
   const globalToggles = sources.filter((s) => s.identifier_type === "global");
-  const sourceToggles = sources.filter((s) => s.identifier_type !== "global");
+  const commentaryToggles = sources.filter(
+    (s) => s.identifier_type === "source_name" && s.label.includes("Commentary")
+  );
+  const commentaryIds = new Set(commentaryToggles.map((s) => s.id));
+  const sourceToggles = sources.filter(
+    (s) => s.identifier_type !== "global" && !commentaryIds.has(s.id)
+  );
 
   return (
     <div
@@ -260,6 +266,45 @@ export default function AdminPage() {
                 ))}
               </div>
             </section>
+
+            {/* Commentary toggles */}
+            {commentaryToggles.length > 0 && (
+              <section className="mb-10">
+                <h2
+                  className="text-xs font-medium uppercase tracking-wide mb-4"
+                  style={{ color: "#c1c1b8" }}
+                >
+                  Commentaries
+                </h2>
+                <div className="space-y-3">
+                  {commentaryToggles.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between rounded-lg border p-4"
+                      style={{
+                        borderColor: "#3c3c38",
+                        backgroundColor: "#262624",
+                      }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          {s.label}
+                        </p>
+                        {s.doc_count !== null && (
+                          <p className="text-xs mt-0.5" style={{ color: "#c1c1b8" }}>
+                            {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
+                          </p>
+                        )}
+                      </div>
+                      <ToggleSwitch
+                        enabled={s.enabled}
+                        onToggle={() => handleToggle(s.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Feedback */}
             <section>
