@@ -113,6 +113,23 @@ ABBREVIATIONS = {
     r"\be\.g\.\s*": "for example, ",
     r"\bviz\.\s*": "namely, ",
     r"\bq\.d\.\s*": "as if to say, ",
+    # Book name abbreviations
+    r"\bJoh\.": "John",
+    r"\bJoh ": "John ",
+    r"\bMat\.": "Matthew",
+    r"\bMk\.": "Mark",
+    r"\bLk\.": "Luke",
+    r"\bRom\.": "Romans",
+    r"\bCor\.": "Corinthians",
+    r"\bRev\.": "Revelation",
+    r"\bEph\.": "Ephesians",
+    r"\bPhil\.": "Philippians",
+    r"\bCol\.": "Colossians",
+    r"\bThess\.": "Thessalonians",
+    r"\bTim\.": "Timothy",
+    r"\bHeb\.": "Hebrews",
+    r"\bJas\.": "James",
+    r"\bPet\.": "Peter",
 }
 
 # ── Tagging (reused from ingest.py) ─────────────────────────────────────────

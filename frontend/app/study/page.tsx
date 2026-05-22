@@ -615,9 +615,26 @@ function CorpusPanel({
               </button>
             )}
           </div>
-          <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{activeCommentary.author}</p>
-          <p className="text-xs mt-0.5 mb-6" style={{ color: "#c1c1b8" }}>{activeCommentary.title}</p>
-          <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{activeCommentary.content}</p>
+          <p className="text-xs mb-6" style={{ color: "#c1c1b8" }}>
+            {activeCommentary.title} &middot; {activeCommentary.author}
+          </p>
+          <div className="mx-auto" style={{ maxWidth: 680 }}>
+            {activeCommentary.content
+              .split(/\n\n+/)
+              .flatMap((block) =>
+                block.split(/(?<=\.)\s+(?=[A-Z])/)
+              )
+              .filter((p) => p.trim())
+              .map((para, i) => (
+                <p
+                  key={i}
+                  className="text-foreground mb-4"
+                  style={{ fontSize: 15, lineHeight: 1.7 }}
+                >
+                  {para.trim()}
+                </p>
+              ))}
+          </div>
           {flagModalEl}
         </>
       );
