@@ -91,6 +91,7 @@ def setup_logging():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", action="store_true", help="Run on 5 docs, print output, no DB writes")
+    parser.add_argument("--time-limit", type=int, default=None, help="Stop after this many minutes (graceful)")
     args = parser.parse_args()
 
     logger = setup_logging()
@@ -149,7 +150,14 @@ def main():
     failed_list = []  # type: List[Tuple[str, str, str]]
     batch_start = time.time()
 
+    time_limit_seconds = args.time_limit * 60 if args.time_limit else None
+
     for i, doc in enumerate(all_docs, 1):
+        if time_limit_seconds and (time.time() - batch_start) >= time_limit_seconds:
+            print(f"\nTime limit ({args.time_limit}m) reached. Stopping gracefully.")
+            logger.info("TIME LIMIT reached after %.0fs", time.time() - batch_start)
+            break
+
         doc_id = doc["id"]
         title = doc["title"]
 
