@@ -222,7 +222,7 @@ async def generate_jewish_perspective(
     from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     model_id = "gemini-2.5-flash"
 
     user_message = "Verse: {}\nVerse text: {}".format(ref, verse_text)
