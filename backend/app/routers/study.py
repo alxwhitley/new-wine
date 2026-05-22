@@ -401,6 +401,7 @@ async def get_commentary(
             "author": chunk.get("author", ""),
             "source_kind": chunk.get("source_kind", ""),
             "excerpt": excerpt,
+            "content": content,
         })
         if len(results) >= 5:
             break

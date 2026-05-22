@@ -97,6 +97,9 @@ BOOKS = [
     ("3JN", "3 John", 1), ("JUD", "Jude", 1), ("REV", "Revelation", 22),
 ]
 
+OT_BOOKS = BOOKS[:39]  # Genesis through Malachi
+NT_BOOKS = BOOKS[39:]  # Matthew through Revelation
+
 BOOK_ID_TO_NAME = {b[0]: b[1] for b in BOOKS}
 BOOK_NAME_TO_ID = {b[1].lower(): b[0] for b in BOOKS}
 
@@ -399,6 +402,8 @@ def main():
     parser.add_argument("--commentary", type=str, choices=list(COMMENTARIES.keys()),
                         help="Ingest only this commentary (default: all)")
     parser.add_argument("--book", type=str, help="Ingest only this book (e.g. 'Genesis', 'ROM')")
+    parser.add_argument("--testament", type=str, choices=["ot", "nt"],
+                        help="Ingest only OT (Genesis-Malachi) or NT (Matthew-Revelation)")
     parser.add_argument("--test", action="store_true",
                         help="Test mode: ingest only Genesis for each commentary")
     parser.add_argument("--time-limit", type=int, default=0,
@@ -425,6 +430,10 @@ def main():
         books_to_process = matching
     elif args.test:
         books_to_process = [BOOKS[0]]  # Genesis only
+    elif args.testament == "ot":
+        books_to_process = OT_BOOKS
+    elif args.testament == "nt":
+        books_to_process = NT_BOOKS
     else:
         books_to_process = BOOKS
 

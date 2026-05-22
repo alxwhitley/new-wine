@@ -174,6 +174,7 @@ interface CommentaryResult {
   author: string;
   source_kind: string;
   excerpt: string;
+  content: string;
 }
 
 interface WordDefinition {
@@ -358,6 +359,9 @@ function CorpusPanel({
   wordStudyDoc,
   wordStudyContent,
   wordStudyLoading,
+  activeCommentary,
+  onCommentaryClick,
+  onCommentaryBack,
 }: {
   definition: WordDefinition | null;
   selectedStrongs: string | null;
@@ -370,6 +374,9 @@ function CorpusPanel({
   wordStudyDoc: WordSearchResult | null;
   wordStudyContent: string | null;
   wordStudyLoading: boolean;
+  activeCommentary: CommentaryResult | null;
+  onCommentaryClick: (result: CommentaryResult) => void;
+  onCommentaryBack: () => void;
 }) {
   // Word study mode: show full excerpt/article
   if (wordStudyMode && wordStudyDoc) {
@@ -448,6 +455,24 @@ function CorpusPanel({
 
   // State 1: verse loaded, no word selected — show commentary
   if (hasVerse) {
+    // Reader view: show full commentary content
+    if (activeCommentary) {
+      return (
+        <>
+          <button
+            onClick={onCommentaryBack}
+            className="text-sm mb-4 cursor-pointer hover:underline"
+            style={{ color: "#c1c1b8" }}
+          >
+            &larr; Back
+          </button>
+          <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{activeCommentary.author}</p>
+          <p className="text-xs mt-0.5 mb-6" style={{ color: "#c1c1b8" }}>{activeCommentary.title}</p>
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{activeCommentary.content}</p>
+        </>
+      );
+    }
+
     return (
       <>
         <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
@@ -464,7 +489,13 @@ function CorpusPanel({
         ) : (
           <div className="mt-4 space-y-4">
             {commentaryResults.map((r, i) => (
-              <div key={i} className="rounded-lg border border-border bg-card p-4">
+              <div
+                key={i}
+                className="rounded-lg border border-border bg-card p-4 cursor-pointer transition-colors"
+                onClick={() => onCommentaryClick(r)}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#4a4a44"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; }}
+              >
                 <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{r.author}</p>
                 <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
                 <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
@@ -1003,10 +1034,12 @@ export default function StudyPage() {
   // Commentary results (State 1: verse loaded, no word selected)
   const [commentaryResults, setCommentaryResults] = useState<CommentaryResult[]>([]);
   const [commentaryLoading, setCommentaryLoading] = useState(false);
+  const [activeCommentary, setActiveCommentary] = useState<CommentaryResult | null>(null);
 
   useEffect(() => {
     if (!verseData?.text) {
       setCommentaryResults([]);
+      setActiveCommentary(null);
       return;
     }
 
@@ -1111,6 +1144,9 @@ export default function StudyPage() {
     wordStudyDoc,
     wordStudyContent,
     wordStudyLoading,
+    activeCommentary,
+    onCommentaryClick: setActiveCommentary,
+    onCommentaryBack: () => setActiveCommentary(null),
   };
 
   const verseSearchProps = {
