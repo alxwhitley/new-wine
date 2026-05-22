@@ -414,9 +414,9 @@ function CorpusPanel({
               No library entries for this word yet — more teaching content coming soon.
             </p>
           </div>
-        ) : corpusResults.length === 1 && corpusResults[0].is_excerpt ? (
+        ) : corpusResults.some((r) => r.is_excerpt) ? (
           <div className="prose prose-invert prose-sm max-w-none">
-            <ReactMarkdown>{corpusResults[0].content}</ReactMarkdown>
+            <ReactMarkdown>{corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}</ReactMarkdown>
           </div>
         ) : (
           <div className="space-y-4">
