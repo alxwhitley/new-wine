@@ -215,8 +215,8 @@ async def get_corpus(
                         "is_excerpt": True,
                     })
                     excerpt_found = True
-            except Exception:
-                pass  # excerpts table may not exist yet
+            except Exception as e:
+                logger.warning("Excerpts lookup failed for doc %s: %s", doc["id"], str(e)[:200])
 
             if not excerpt_found:
                 # Fall back to raw chunks

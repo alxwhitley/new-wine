@@ -693,6 +693,10 @@ export default function StudyPage() {
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseError, setVerseError] = useState<string | null>(null);
 
+  // Interlinear tokens — placeholder for now, will be replaced with real data source
+  // TODO: fetch real interlinear data from API/DB when available
+  const [tokens, setTokens] = useState<WordToken[]>(PLACEHOLDER_TOKENS);
+
   // Word search state
   const [wordSearchResults, setWordSearchResults] = useState<WordSearchResult[]>([]);
   const [wordSearchOpen, setWordSearchOpen] = useState(false);
@@ -839,6 +843,18 @@ export default function StudyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reset interlinear state when verse changes
+  useEffect(() => {
+    setSelectedStrongs(null);
+    // TODO: fetch real interlinear tokens for the current verse
+    // For now, only show placeholder tokens for John 1:1
+    if (verseData?.verse_id === "JHN.1.1") {
+      setTokens(PLACEHOLDER_TOKENS);
+    } else {
+      setTokens([]);
+    }
+  }, [verseData?.verse_id]);
+
   // Debounced word search
   useEffect(() => {
     const trimmed = verseRef.trim();
@@ -982,7 +998,7 @@ export default function StudyPage() {
       return;
     }
 
-    const token = PLACEHOLDER_TOKENS.find((t) => t.strongs === selectedStrongs);
+    const token = tokens.find((t) => t.strongs === selectedStrongs);
     if (!token) {
       setCorpusResults([]);
       return;
@@ -1009,7 +1025,7 @@ export default function StudyPage() {
       .finally(() => {
         setCorpusLoading(false);
       });
-  }, [selectedStrongs, verseRef]);
+  }, [selectedStrongs, verseRef, tokens]);
 
   const handleSelectWord = useCallback(
     (strongs: string | null) => {
@@ -1020,9 +1036,9 @@ export default function StudyPage() {
 
   const handleToggleSaveSelected = useCallback(() => {
     if (!selectedStrongs) return;
-    const token = PLACEHOLDER_TOKENS.find((t) => t.strongs === selectedStrongs);
+    const token = tokens.find((t) => t.strongs === selectedStrongs);
     if (token) toggleSaveWord(token);
-  }, [selectedStrongs, toggleSaveWord]);
+  }, [selectedStrongs, tokens, toggleSaveWord]);
 
   const handleToggleSaveWordStudy = useCallback(() => {
     if (!wordStudyDoc) return;
@@ -1134,7 +1150,7 @@ export default function StudyPage() {
 
                   <div className="mt-4" style={{ minHeight: 96 }}>
                     <InterlinearBlocks
-                      tokens={PLACEHOLDER_TOKENS}
+                      tokens={tokens}
                       selectedStrongs={selectedStrongs}
                       onSelect={handleSelectWord}
                     />
@@ -1192,7 +1208,7 @@ export default function StudyPage() {
 
                 <div className="mt-4" style={{ minHeight: 96 }}>
                   <InterlinearBlocks
-                    tokens={PLACEHOLDER_TOKENS}
+                    tokens={tokens}
                     selectedStrongs={selectedStrongs}
                     onSelect={handleSelectWord}
                   />
