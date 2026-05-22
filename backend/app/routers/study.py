@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-COMMENTARY_SOURCE_KINDS = {"sermon_transcript", "magazine_article"}
 CORPUS_SOURCE_KINDS = {"sermon_transcript", "magazine_article", "word_study"}
 
 # Full 66-book mapping: common names/abbreviations -> verse_id prefix
@@ -388,7 +387,7 @@ async def get_commentary(
     for chunk in (result.data or []):
         if chunk.get("citation_mode") != "citable":
             continue
-        if chunk.get("source_kind") not in COMMENTARY_SOURCE_KINDS:
+        if chunk.get("source_kind") != "commentary":
             continue
         doc_id = chunk.get("document_id")
         if doc_id in seen_docs:
