@@ -166,16 +166,53 @@ def _is_citable(chunk: dict) -> bool:
     return chunk.get("source_type") == "sermon"
 
 
-def fetch_neighbor_chunks(document_id: str, chunk_index: int, db) -> List[dict]:
-    """Fetch the chunks immediately before and after the given chunk_index in the same document."""
-    neighbors = []
-    for idx in [chunk_index - 1, chunk_index + 1]:
-        if idx < 0:
+def fetch_neighbor_chunks_batch(chunks: List[dict], seen_ids: set, db) -> List[dict]:
+    """Fetch ±1 neighbor chunks for all given chunks in a single query."""
+    # Collect all needed (document_id, chunk_index) pairs
+    needed = set()  # type: set
+    chunk_parents = {}  # type: Dict[str, dict]  # "doc_id:idx" -> parent chunk
+    for c in chunks:
+        doc_id = c.get("document_id", "")
+        idx = c.get("chunk_index", 0)
+        for neighbor_idx in [idx - 1, idx + 1]:
+            if neighbor_idx < 0:
+                continue
+            key = "%s:%d" % (doc_id, neighbor_idx)
+            needed.add(key)
+            chunk_parents[key] = c
+
+    if not needed:
+        return []
+
+    # Build OR filter: (doc_id, chunk_index) pairs
+    # Supabase REST doesn't support tuple IN, so use .or_() with eq conditions
+    or_parts = []
+    for key in needed:
+        doc_id, idx_str = key.rsplit(":", 1)
+        or_parts.append("and(document_id.eq.%s,chunk_index.eq.%s)" % (doc_id, idx_str))
+
+    # Supabase .or_() has URL length limits — batch if needed
+    BATCH = 30
+    all_neighbors = []  # type: List[dict]
+    or_list = list(or_parts)
+    for i in range(0, len(or_list), BATCH):
+        batch_filter = ",".join(or_list[i:i + BATCH])
+        result = db.table("chunks").select("*").or_(batch_filter).execute()
+        all_neighbors.extend(result.data or [])
+
+    # Dedupe, skip already-seen, and copy parent metadata
+    results = []
+    for n in all_neighbors:
+        if n["id"] in seen_ids:
             continue
-        result = db.table("chunks").select("*").eq("document_id", document_id).eq("chunk_index", idx).limit(1).execute()
-        if result.data:
-            neighbors.append(result.data[0])
-    return neighbors
+        key = "%s:%d" % (n.get("document_id", ""), n.get("chunk_index", 0))
+        parent = chunk_parents.get(key)
+        if parent:
+            for k in ("title", "author", "source_type", "source_kind", "citation_mode", "url"):
+                if k not in n and k in parent:
+                    n[k] = parent[k]
+        results.append(n)
+    return results
 
 
 class ChatMessage(BaseModel):
@@ -346,21 +383,15 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             except Exception:
                 logger.exception("Cohere rerank failed, using RRF top 10")
 
-        # Step 4: Neighbor chunk expansion — fetch ±1 chunk_index, cap at 12 total
+        # Step 4: Neighbor chunk expansion — batch fetch ±1 chunk_index, cap at 12 total
         seen_ids = {c["id"] for c in chunks}
+        neighbors = fetch_neighbor_chunks_batch(chunks, seen_ids, db)
         expanded = list(chunks)
-        for c in chunks:
+        for n in neighbors:
             if len(expanded) >= 12:
                 break
-            neighbors = fetch_neighbor_chunks(c.get("document_id", ""), c.get("chunk_index", 0), db)
-            for n in neighbors:
-                if n["id"] not in seen_ids and len(expanded) < 12:
-                    # Copy parent metadata to neighbor
-                    for key in ("title", "author", "source_type", "source_kind", "citation_mode", "url"):
-                        if key not in n and key in c:
-                            n[key] = c[key]
-                    seen_ids.add(n["id"])
-                    expanded.append(n)
+            seen_ids.add(n["id"])
+            expanded.append(n)
         chunks = expanded
 
         # Step 5: Conditional lexicon retrieval for word-study queries
