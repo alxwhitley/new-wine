@@ -217,8 +217,6 @@ function InterlinearBlocks({
   loading: boolean;
   isNT: boolean;
 }) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
   const cardStyle = {
     backgroundColor: "#262624",
     border: "1px solid #3c3c38",
@@ -256,83 +254,30 @@ function InterlinearBlocks({
     return null;
   }
 
-  const tooltipStyle = {
-    backgroundColor: "#1b1b19",
-    border: "1px solid #b49238",
-    borderRadius: 6,
-    padding: "8px 12px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-  };
-
   return (
     <div style={cardStyle}>
       <div className="flex flex-wrap gap-3">
         {tokens.map((token, i) => {
           const isSelected = selectedStrongs === token.strongs;
-          const isHovered = hoveredIndex === i && !isSelected;
-
           return (
-            <div key={i} className="relative flex flex-col items-center">
-              {/* Hover tooltip — above the word */}
-              {isHovered && (
-                <div
-                  className="absolute z-10 flex flex-col items-center whitespace-nowrap"
-                  style={{
-                    ...tooltipStyle,
-                    bottom: "calc(100% + 6px)",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                  }}
-                >
-                  <span className="font-serif text-lg text-foreground">{token.greek}</span>
-                  <span className="text-xs font-medium mt-0.5" style={{ color: "#d4b96a" }}>
-                    {token.english}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
-                </div>
-              )}
-
-              {/* Word unit */}
-              <button
-                onClick={() => onSelect(isSelected ? null : token.strongs)}
-                onMouseEnter={() => setHoveredIndex(i)}
-                onMouseLeave={() => setHoveredIndex(null)}
-                className="flex flex-col items-center cursor-pointer py-1 px-1 transition-all"
-                style={{
-                  borderBottom: isSelected
-                    ? "2px solid #b49238"
-                    : isHovered
-                      ? "1px solid #b49238"
-                      : "2px solid transparent",
-                }}
-              >
-                <span className="font-serif text-lg text-foreground">{token.greek}</span>
-                <span className="text-xs mt-0.5" style={{ color: "#c1c1b8" }}>
-                  {token.english}
-                </span>
-                <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
-              </button>
-
-              {/* Selected detail block — below the word, in flow */}
-              {isSelected && (
-                <div
-                  className="mt-1 flex flex-col items-center"
-                  style={{
-                    ...tooltipStyle,
-                    position: "relative",
-                  }}
-                >
-                  <span className="font-serif text-lg text-foreground">{token.greek}</span>
-                  <span className="text-xs font-medium mt-0.5" style={{ color: "#d4b96a" }}>
-                    {token.english}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
-                  {token.morph && (
-                    <span className="text-[10px] text-muted-foreground mt-0.5">{token.morph}</span>
-                  )}
-                </div>
-              )}
-            </div>
+            <button
+              key={i}
+              onClick={() => onSelect(isSelected ? null : token.strongs)}
+              className="flex flex-col items-center rounded-lg px-3 py-2 transition-colors min-w-[64px] cursor-pointer"
+              style={{
+                borderColor: isSelected ? "#b49238" : "transparent",
+                border: isSelected ? "1px solid #b49238" : "1px solid transparent",
+                backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent",
+              }}
+              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent"; }}
+            >
+              <span className="font-serif text-lg text-foreground">{token.greek}</span>
+              <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
+                {token.english}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+            </button>
           );
         })}
       </div>
