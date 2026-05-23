@@ -168,22 +168,45 @@ def parse_file(filepath: Path) -> List[Dict[str, str]]:
 
         meaning_idx = col_map.get('meaning')
         if meaning_idx is not None and meaning_idx < len(fields):
-            raw_meaning = fields[meaning_idx].strip()
-            if raw_meaning:
-                entry['meaning'] = strip_html(raw_meaning)
+            raw_meaning_text = fields[meaning_idx].strip()
+            if raw_meaning_text:
+                entry['raw_meaning'] = raw_meaning_text
+                entry['meaning'] = strip_html(raw_meaning_text)
 
         entries.append(entry)
 
     return entries
 
 
-def format_chunk_content(entry: Dict[str, str]) -> str:
-    """Format a lexicon entry into chunk content text."""
+BOLD_RE = re.compile(r'<b>([^<]+)</b>')
+
+
+def extract_bold_meanings(html_meaning: str) -> str:
+    """Extract bolded sub-definitions from Abbott-Smith HTML meaning field.
+    Returns a clean comma-separated string like 'a word, a saying, speech, doctrine'."""
+    bolds = BOLD_RE.findall(html_meaning)
+    # First bold is usually the lemma itself — skip it
+    if bolds:
+        bolds = bolds[1:]
+    # Filter out very short or unhelpful entries
+    cleaned = []
+    for b in bolds:
+        b = b.strip()
+        if len(b) < 2 or b in ('id.', 'al.', 'cf.'):
+            continue
+        cleaned.append(b)
+    return ', '.join(cleaned)
+
+
+def format_chunk_content(entry: Dict[str, str], brief: bool = False) -> str:
+    """Format a lexicon entry into chunk content text.
+    If brief=True, use only gloss + extracted bold sub-meanings (no raw Abbott-Smith)."""
     strongs = entry['strongs']
     translit = entry.get('transliteration', '')
     lemma = entry.get('lemma', '')
     gloss = entry['gloss']
     meaning = entry.get('meaning', '')
+    raw_meaning = entry.get('raw_meaning', '')
 
     parts = []
     if translit and lemma:
@@ -195,7 +218,12 @@ def format_chunk_content(entry: Dict[str, str]) -> str:
     else:
         parts.append(f"Strong's {strongs}: {gloss}.")
 
-    if meaning:
+    if brief and raw_meaning:
+        # Extract clean sub-definitions from the HTML
+        bold_meanings = extract_bold_meanings(raw_meaning)
+        if bold_meanings:
+            parts.append(bold_meanings)
+    elif meaning:
         parts.append(meaning)
 
     return ' '.join(parts)
@@ -252,8 +280,44 @@ def insert_chunk_batch(rows: List[dict]) -> bool:
                 return False
 
 
-def ingest_file(filename: str, title: str, max_entries: Optional[int] = None) -> Dict[str, int]:
-    """Ingest a single lexicon file. Returns stats dict."""
+def delete_document(title: str) -> None:
+    """Delete a document and all its chunks by title via Supabase REST API."""
+    result = supabase.table("documents").select("id").eq("title", title).limit(1).execute()
+    if not result.data:
+        print(f"  No document found with title: {title}")
+        return
+    doc_id = result.data[0]["id"]
+
+    chunk_count = supabase.table("chunks").select("id", count="exact").eq("document_id", doc_id).execute()
+    total = chunk_count.count if chunk_count.count is not None else 0
+    print(f"  Deleting {total} chunks for doc {doc_id[:12]}...")
+
+    deleted = 0
+    while True:
+        batch = (
+            supabase.table("chunks")
+            .select("id")
+            .eq("document_id", doc_id)
+            .limit(50)
+            .execute()
+        )
+        if not batch.data:
+            break
+        for row in batch.data:
+            supabase.table("chunks").delete().eq("id", row["id"]).execute()
+            deleted += 1
+        if deleted % 500 == 0 or deleted >= total:
+            print(f"    Deleted {deleted}/{total} chunks...")
+        time.sleep(0.2)
+    print(f"  Chunks deleted.")
+
+    supabase.table("documents").delete().eq("id", doc_id).execute()
+    print(f"  Deleted document {doc_id[:12]}... ({title})")
+
+
+def ingest_file(filename: str, title: str, max_entries: Optional[int] = None, brief: bool = False) -> Dict[str, int]:
+    """Ingest a single lexicon file. Returns stats dict.
+    If brief=True, store only gloss + extracted bold sub-meanings (for TBESG)."""
     filepath = LEXICON_DIR / filename
     stats = {"parsed": 0, "inserted": 0, "skipped": 0}
 
@@ -264,6 +328,8 @@ def ingest_file(filename: str, title: str, max_entries: Optional[int] = None) ->
     print(f"\n{'='*60}")
     print(f"Processing: {filename}")
     print(f"  Title: {title}")
+    if brief:
+        print("  Mode: BRIEF (gloss + bold sub-meanings only)")
     print('='*60)
 
     entries = parse_file(filepath)
@@ -284,7 +350,7 @@ def ingest_file(filename: str, title: str, max_entries: Optional[int] = None) ->
     # Format all chunk content
     chunk_texts = []  # type: List[str]
     for entry in entries:
-        chunk_texts.append(format_chunk_content(entry))
+        chunk_texts.append(format_chunk_content(entry, brief=brief))
 
     # Resume: skip entries that are already inserted
     start_from = existing_chunks
@@ -353,11 +419,38 @@ def print_resume_status():
 
 
 def main():
-    test_mode = "--test" in sys.argv
-    max_entries = 50 if test_mode else None
+    import argparse
+    parser = argparse.ArgumentParser(description="Rhemata STEPBible Lexicon Ingestion")
+    parser.add_argument("--test", action="store_true", help="Limit to 50 entries per file")
+    parser.add_argument("--lexicon", type=str, default=None,
+                        help="Run a single lexicon: TBESG, TBESH, or TFLSJ")
+    parser.add_argument("--delete", action="store_true",
+                        help="Delete existing document + chunks before ingesting")
+    parser.add_argument("--sample", type=int, default=0,
+                        help="Print N sample chunks after parsing (before ingesting)")
+    args = parser.parse_args()
+
+    max_entries = 50 if args.test else None
+
+    # Map --lexicon shorthand to FILE_CONFIGS entries
+    LEXICON_MAP = {
+        "TBESG": [FILE_CONFIGS[0]],
+        "TBESH": [FILE_CONFIGS[1]],
+        "TFLSJ": [FILE_CONFIGS[2], FILE_CONFIGS[3]],
+    }
+
+    if args.lexicon:
+        key = args.lexicon.upper()
+        if key not in LEXICON_MAP:
+            print(f"Unknown lexicon: {args.lexicon}. Choose from: {', '.join(LEXICON_MAP.keys())}")
+            sys.exit(1)
+        configs = LEXICON_MAP[key]
+        print(f"Single lexicon mode: {key}")
+    else:
+        configs = FILE_CONFIGS
 
     print("Rhemata STEPBible Lexicon Ingestion")
-    if test_mode:
+    if args.test:
         print("TEST MODE: limited to 50 entries per file")
     print("="*60)
 
@@ -365,8 +458,26 @@ def main():
 
     total_stats = {"parsed": 0, "inserted": 0, "skipped": 0}
 
-    for filename, title in FILE_CONFIGS:
-        stats = ingest_file(filename, title, max_entries=max_entries)
+    for filename, title in configs:
+        brief = "TBESG" in title
+
+        if args.delete:
+            print(f"\nDeleting existing data for: {title}")
+            delete_document(title)
+
+        if args.sample > 0:
+            # Parse and print samples, then continue to ingest
+            filepath = LEXICON_DIR / filename
+            entries = parse_file(filepath)
+            if max_entries is not None:
+                entries = entries[:max_entries]
+            print(f"\n  Sample chunks ({args.sample}):")
+            for i, entry in enumerate(entries[:args.sample]):
+                chunk = format_chunk_content(entry, brief=brief)
+                print(f"  [{i}] {chunk[:200]}")
+            print()
+
+        stats = ingest_file(filename, title, max_entries=max_entries, brief=brief)
         for k in total_stats:
             total_stats[k] += stats[k]
 

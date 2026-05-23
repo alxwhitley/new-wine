@@ -1587,17 +1587,17 @@ export default function StudyPage() {
     ? tokens.find((t) => t.strongs === selectedStrongs) ?? null
     : null;
 
-  // Parse lexicon content: first sentence = definition, rest = usage
+  // Parse lexicon content into definition + usage
+  // New TBESG brief format: "Strong's G3056 (logos / λόγος): word. a word, a saying, declaration, ..."
+  // After colon: "word. sub-meanings..." — gloss before dot, sub-meanings after
   let lexDef = "";
   let lexUsage = "";
   if (lexiconContent) {
-    // Content format: "Strong's G3056 (logos / λόγος): gloss. Meaning text..."
-    // Strip the "Strong's ... : gloss." prefix, then split remainder
     const colonIdx = lexiconContent.indexOf(":");
     const afterColon = colonIdx >= 0 ? lexiconContent.slice(colonIdx + 1).trim() : lexiconContent;
     const dotIdx = afterColon.indexOf(".");
     if (dotIdx >= 0) {
-      lexDef = afterColon.slice(0, dotIdx + 1).trim();
+      lexDef = afterColon.slice(0, dotIdx).trim();
       const rest = afterColon.slice(dotIdx + 1).trim();
       lexUsage = rest.length > 200 ? rest.slice(0, 200).trimEnd() + "…" : rest;
     } else {
