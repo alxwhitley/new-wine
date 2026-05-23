@@ -54,19 +54,34 @@ def parse_ref(ref: str):
 @router.get("/lexicon")
 async def get_lexicon_entry(strongs: str = Query(..., description="Strong's number, e.g. 'G3056'")):
     db = get_supabase()
+
+    # List all lexicon documents for debugging
+    all_lexicon = (
+        db.table("documents")
+        .select("id, title")
+        .eq("source_kind", "lexicon")
+        .execute()
+    )
+    for d in (all_lexicon.data or []):
+        logger.info("LEXICON doc: id=%s title=%s", d["id"], d["title"])
+
     # Find TBESG document specifically (brief Strongs lexicon, not academic LSJ)
     doc = (
         db.table("documents")
-        .select("id")
+        .select("id, title")
         .eq("source_kind", "lexicon")
         .ilike("title", "%TBESG%")
         .limit(1)
         .execute()
     )
     if not doc.data:
+        logger.warning("LEXICON: No TBESG document found, returning None")
         return {"content": None}
 
     doc_id = doc.data[0]["id"]
+    doc_title = doc.data[0]["title"]
+    logger.info("LEXICON: Using doc_id=%s title=%s for strongs=%s", doc_id, doc_title, strongs)
+
     result = (
         db.table("chunks")
         .select("content")
@@ -76,8 +91,10 @@ async def get_lexicon_entry(strongs: str = Query(..., description="Strong's numb
         .execute()
     )
     if result.data:
+        logger.info("LEXICON: Found chunk for %s, content preview: %s", strongs, result.data[0]["content"][:120])
         return {"content": result.data[0]["content"]}
 
+    logger.warning("LEXICON: No chunk found for strongs=%s in doc=%s", strongs, doc_id)
     return {"content": None}
 
 
