@@ -266,12 +266,38 @@ def find_or_create_document(title: str) -> Tuple[str, int]:
 
 
 def insert_chunk_batch(rows: List[dict]) -> bool:
-    """Insert a small batch of chunks with retry logic. Returns True on success."""
+    """Insert a small batch of chunks via psycopg2 with ON CONFLICT DO NOTHING."""
+    import psycopg2
+    from psycopg2.extras import execute_values
+    db_url = os.environ.get("SUPABASE_DB_URL")
+    if not db_url:
+        print("    ERROR: SUPABASE_DB_URL not set")
+        return False
+
+    values = []
+    for r in rows:
+        embedding_str = "[%s]" % ",".join(str(v) for v in r["embedding"])
+        values.append((r["id"], r["document_id"], r["content"], embedding_str, r["chunk_index"]))
+
     for attempt in range(MAX_RETRIES):
         try:
-            supabase.table("chunks").insert(rows).execute()
+            conn = psycopg2.connect(db_url)
+            with conn.cursor() as cur:
+                execute_values(
+                    cur,
+                    "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) "
+                    "VALUES %s ON CONFLICT DO NOTHING",
+                    values,
+                    template="(%s, %s, %s, %s::vector, %s)",
+                )
+            conn.commit()
+            conn.close()
             return True
         except Exception as e:
+            try:
+                conn.close()
+            except Exception:
+                pass
             if attempt < MAX_RETRIES - 1:
                 print(f"    Insert failed (attempt {attempt + 1}/{MAX_RETRIES}), retrying in {RETRY_WAIT}s: {e}")
                 time.sleep(RETRY_WAIT)
