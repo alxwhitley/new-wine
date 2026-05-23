@@ -255,28 +255,30 @@ function InterlinearBlocks({
   }
 
   return (
-    <div style={cardStyle}>
-      <div className="flex flex-wrap gap-2">
+    <div style={{ ...cardStyle, padding: 0 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px' }}>
         {tokens.map((token, i) => {
           const isSelected = selectedStrongs === token.strongs;
           return (
             <button
               key={i}
               onClick={() => onSelect(isSelected ? null : token.strongs)}
-              className="flex flex-col items-center rounded transition-colors cursor-pointer"
+              className="rounded transition-colors"
               style={{
-                padding: "6px 8px",
+                padding: '4px 6px',
+                textAlign: 'center',
+                cursor: 'pointer',
                 border: isSelected ? "1px solid #b49238" : "1px solid transparent",
                 backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent",
               }}
               onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent"; }}
             >
-              <span className="font-serif text-sm leading-tight text-foreground">{token.greek}</span>
-              <span className="text-xs font-medium leading-tight" style={{ color: "#d4b96a" }}>
+              <span className="font-serif" style={{ fontSize: '14px', display: 'block', lineHeight: '1.2' }}>{token.greek}</span>
+              <span className="font-medium" style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', color: "#d4b96a" }}>
                 {token.english}
               </span>
-              <span className="text-xs text-muted-foreground leading-tight">{token.strongs}</span>
+              <span style={{ fontSize: '10px', display: 'block', lineHeight: '1.2', opacity: 0.6 }}>{token.strongs}</span>
             </button>
           );
         })}
