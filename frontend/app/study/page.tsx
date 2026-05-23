@@ -192,6 +192,7 @@ interface WordDefinition {
   word: string;
   transliteration: string;
   gloss: string;
+  lexiconDefinition: string;
   meaning: string;
   corpusQuotes: CorpusQuote[];
 }
@@ -326,16 +327,24 @@ function DefinitionPanel({
       </button>
       <p className="font-serif text-3xl text-foreground pr-10">{definition.word}</p>
       <p className="text-sm text-muted-foreground mt-1">
-        {definition.transliteration} &middot; {definition.strongs}
+        {definition.transliteration} &middot; {definition.strongs} &middot; {definition.gloss}
       </p>
-      <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
-        Definition
-      </p>
-      <p className="text-sm text-foreground leading-relaxed">{definition.gloss}</p>
-      <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
-        Usage
-      </p>
-      <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
+      {definition.lexiconDefinition && (
+        <>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+            Definition
+          </p>
+          <p className="text-sm text-foreground leading-relaxed">{definition.lexiconDefinition}</p>
+        </>
+      )}
+      {definition.meaning && (
+        <>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+            Usage
+          </p>
+          <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
+        </>
+      )}
     </div>
   );
 }
@@ -1556,17 +1565,54 @@ export default function StudyPage() {
       });
   }, [selectedStrongs, verseRef, tokens]);
 
-  // Build definition from interlinear token data + corpus results
+  // Lexicon definition fetch (TBESG)
+  const [lexiconContent, setLexiconContent] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedStrongs) {
+      setLexiconContent(null);
+      return;
+    }
+    const params = new URLSearchParams({ strongs: selectedStrongs });
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        setLexiconContent(data?.content ?? null);
+      })
+      .catch(() => setLexiconContent(null));
+  }, [selectedStrongs]);
+
+  // Build definition from interlinear token data + lexicon + corpus results
   const selectedToken = selectedStrongs
     ? tokens.find((t) => t.strongs === selectedStrongs) ?? null
     : null;
+
+  // Parse lexicon content: first sentence = definition, rest = usage
+  let lexDef = "";
+  let lexUsage = "";
+  if (lexiconContent) {
+    // Content format: "Strong's G3056 (logos / λόγος): gloss. Meaning text..."
+    // Strip the "Strong's ... : gloss." prefix, then split remainder
+    const colonIdx = lexiconContent.indexOf(":");
+    const afterColon = colonIdx >= 0 ? lexiconContent.slice(colonIdx + 1).trim() : lexiconContent;
+    const dotIdx = afterColon.indexOf(".");
+    if (dotIdx >= 0) {
+      lexDef = afterColon.slice(0, dotIdx + 1).trim();
+      const rest = afterColon.slice(dotIdx + 1).trim();
+      lexUsage = rest.length > 300 ? rest.slice(0, 300).trimEnd() + "…" : rest;
+    } else {
+      lexDef = afterColon;
+    }
+  }
+
   const definition: WordDefinition | null = selectedToken
     ? {
         strongs: selectedToken.strongs,
         word: selectedToken.greek,
         transliteration: selectedToken.transliteration,
         gloss: selectedToken.english,
-        meaning: corpusResults.length > 0 ? corpusResults[0].content : "",
+        lexiconDefinition: lexDef,
+        meaning: lexUsage,
         corpusQuotes: [],
       }
     : null;

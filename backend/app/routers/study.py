@@ -51,6 +51,36 @@ def parse_ref(ref: str):
     return abbrev, chapter, verse
 
 
+@router.get("/lexicon")
+async def get_lexicon_entry(strongs: str = Query(..., description="Strong's number, e.g. 'G3056'")):
+    db = get_supabase()
+    # Find lexicon documents
+    docs = (
+        db.table("documents")
+        .select("id")
+        .eq("source_kind", "lexicon")
+        .execute()
+    )
+    doc_ids = [d["id"] for d in (docs.data or [])]
+    if not doc_ids:
+        return {"content": None}
+
+    # Search chunks for matching Strong's number
+    for doc_id in doc_ids:
+        result = (
+            db.table("chunks")
+            .select("content")
+            .eq("document_id", doc_id)
+            .ilike("content", f"Strong's {strongs} %")
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return {"content": result.data[0]["content"]}
+
+    return {"content": None}
+
+
 @router.get("/interlinear")
 async def get_interlinear(verse_id: str = Query(..., description="SBL verse ID, e.g. 'JHN.1.1'")):
     db = get_supabase()
