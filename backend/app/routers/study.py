@@ -51,6 +51,19 @@ def parse_ref(ref: str):
     return abbrev, chapter, verse
 
 
+@router.get("/interlinear")
+async def get_interlinear(verse_id: str = Query(..., description="SBL verse ID, e.g. 'JHN.1.1'")):
+    db = get_supabase()
+    result = (
+        db.table("interlinear_words")
+        .select("greek_word, transliteration, strongs_number, english_gloss, morphology, word_position")
+        .eq("verse_id", verse_id)
+        .order("word_position")
+        .execute()
+    )
+    return result.data or []
+
+
 @router.get("/verse")
 async def get_verse(ref: str = Query(..., description="Verse reference, e.g. 'John 3:16'")):
     parsed = parse_ref(ref)

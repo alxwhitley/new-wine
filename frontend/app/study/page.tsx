@@ -196,70 +196,57 @@ interface WordDefinition {
   corpusQuotes: CorpusQuote[];
 }
 
-const PLACEHOLDER_TOKENS: WordToken[] = [
-  { greek: "\u1F18\u03BD", transliteration: "En", english: "In", strongs: "G1722", morph: "PREP" },
-  { greek: "\u1F00\u03C1\u03C7\u1FC7", transliteration: "arch\u0113", english: "the beginning", strongs: "G0746", morph: "N-DSF" },
-  { greek: "\u1F26\u03BD", transliteration: "\u0113n", english: "was", strongs: "G2258", morph: "V-IXI-3S" },
-  { greek: "\u1F41", transliteration: "ho", english: "the", strongs: "G3588", morph: "T-NSM" },
-  { greek: "\u03BB\u03CC\u03B3\u03BF\u03C2", transliteration: "logos", english: "Word", strongs: "G3056", morph: "N-NSM" },
-  { greek: "\u03BA\u03B1\u1F76", transliteration: "kai", english: "and", strongs: "G2532", morph: "CONJ" },
-  { greek: "\u1F41", transliteration: "ho", english: "the", strongs: "G3588", morph: "T-NSM" },
-  { greek: "\u03BB\u03CC\u03B3\u03BF\u03C2", transliteration: "logos", english: "Word", strongs: "G3056", morph: "N-NSM" },
-  { greek: "\u1F26\u03BD", transliteration: "\u0113n", english: "was", strongs: "G2258", morph: "V-IXI-3S" },
-  { greek: "\u03C0\u03C1\u1F78\u03C2", transliteration: "pros", english: "with", strongs: "G4314", morph: "PREP" },
-  { greek: "\u03C4\u1F78\u03BD", transliteration: "ton", english: "the", strongs: "G3588", morph: "T-ASM" },
-  { greek: "\u03B8\u03B5\u03CC\u03BD", transliteration: "theon", english: "God", strongs: "G2316", morph: "N-ASM" },
-];
-
-const PLACEHOLDER_DEFINITIONS: Record<string, WordDefinition> = {
-  G0746: {
-    strongs: "G0746",
-    word: "\u1F00\u03C1\u03C7\u03AE",
-    transliteration: "arch\u0113",
-    gloss: "beginning, origin, first cause",
-    meaning:
-      "From G0756; a commencement, or (concrete) chief (in various applications of order, time, place or rank). Used of the beginning of the world (John 1:1), of the Gospel (Mark 1:1), and of the first principles of a matter (Hebrews 5:12).",
-    corpusQuotes: [
-      { text: "The word arch\u0113 points us back before time began \u2014 to the eternal origin of the Logos, who was already there when everything else started.", author: "John Wimber", source: "The Word Made Flesh (sermon)" },
-      { text: "Genesis 1:1 and John 1:1 both open with this word, tying creation to the pre-existence of Christ.", author: "Gordon Fee", source: "New Testament Exegesis" },
-    ],
-  },
-  G3056: {
-    strongs: "G3056",
-    word: "\u03BB\u03CC\u03B3\u03BF\u03C2",
-    transliteration: "logos",
-    gloss: "word, speech, reason",
-    meaning:
-      "From G3004; something said (including the thought); by implication a topic, also reasoning or motive. In John\u2019s prologue, Logos denotes the pre-existent divine Word, the second person of the Trinity, through whom all things were made.",
-    corpusQuotes: [
-      { text: "Logos is not merely a spoken word \u2014 it is the self-expression of God, the living Word who took on flesh and walked among us.", author: "Sam Storms", source: "The Hope of Glory" },
-      { text: "John chose logos deliberately: for Greeks it meant cosmic reason, for Jews the creative word of Yahweh. Both meanings converge in Jesus.", author: "D.A. Carson", source: "The Gospel According to John" },
-      { text: "When we preach, we are not merely sharing ideas. We are releasing the logos \u2014 the living, active Word that carries the power to transform.", author: "Bill Johnson", source: "The Supernatural Power of a Transformed Mind" },
-    ],
-  },
-  G2316: {
-    strongs: "G2316",
-    word: "\u03B8\u03B5\u03CC\u03C2",
-    transliteration: "theos",
-    gloss: "God, a deity",
-    meaning:
-      "Of uncertain affinity; a deity, especially the supreme Divinity. In the NT used of the one true God, the Father (John 17:3), and applied to Christ (John 1:1, 20:28, Romans 9:5).",
-    corpusQuotes: [
-      { text: "The Word was not merely divine \u2014 He was God. John\u2019s grammar is precise: theos without the article stresses the nature of the Word, not His identity with the Father.", author: "Gordon Fee", source: "Pauline Christology" },
-      { text: "Thomas\u2019 confession \u2018My Lord and my God\u2019 is the climax of the Fourth Gospel \u2014 the moment a disciple finally sees Jesus for who He truly is.", author: "N.T. Wright", source: "Simply Jesus" },
-    ],
-  },
-};
+// NT book SBL codes for checking if a verse has Greek interlinear data
+const NT_BOOKS = new Set([
+  "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO",
+  "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI",
+  "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN",
+  "3JN", "JUD", "REV",
+]);
 
 function InterlinearBlocks({
   tokens,
   selectedStrongs,
   onSelect,
+  loading,
+  isNT,
 }: {
   tokens: WordToken[];
   selectedStrongs: string | null;
   onSelect: (strongs: string | null) => void;
+  loading: boolean;
+  isNT: boolean;
 }) {
+  if (loading) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <div
+            key={i}
+            className="flex flex-col items-center rounded-lg border px-3 py-2 min-w-[64px] animate-pulse"
+            style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+          >
+            <div className="h-5 w-10 rounded bg-border mb-1" />
+            <div className="h-3 w-8 rounded bg-border mb-0.5" />
+            <div className="h-2.5 w-10 rounded bg-border" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!isNT) {
+    return (
+      <p className="text-sm py-4" style={{ color: "#c1c1b8" }}>
+        No Greek interlinear available for this verse
+      </p>
+    );
+  }
+
+  if (tokens.length === 0) {
+    return null;
+  }
+
   return (
     <div className="flex flex-wrap gap-2">
       {tokens.map((token, i) => {
@@ -1192,9 +1179,8 @@ export default function StudyPage() {
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseError, setVerseError] = useState<string | null>(null);
 
-  // Interlinear tokens — placeholder for now, will be replaced with real data source
-  // TODO: fetch real interlinear data from API/DB when available
-  const [tokens, setTokens] = useState<WordToken[]>(PLACEHOLDER_TOKENS);
+  const [tokens, setTokens] = useState<WordToken[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
 
   // Word search state
   const [wordSearchResults, setWordSearchResults] = useState<WordSearchResult[]>([]);
@@ -1342,16 +1328,40 @@ export default function StudyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reset interlinear state when verse changes
+  // Fetch interlinear tokens when verse changes
   useEffect(() => {
     setSelectedStrongs(null);
-    // TODO: fetch real interlinear tokens for the current verse
-    // For now, only show placeholder tokens for John 1:1
-    if (verseData?.verse_id === "JHN.1.1") {
-      setTokens(PLACEHOLDER_TOKENS);
-    } else {
-      setTokens([]);
-    }
+    setTokens([]);
+
+    const verseId = verseData?.verse_id;
+    if (!verseId) return;
+
+    const book = verseId.split(".")[0];
+    if (!NT_BOOKS.has(book)) return;
+
+    setTokensLoading(true);
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/interlinear?verse_id=${encodeURIComponent(verseId)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("interlinear fetch failed");
+        return res.json();
+      })
+      .then((data: Array<{ greek_word: string; transliteration: string; strongs_number: string; english_gloss: string; morphology: string; word_position: number }>) => {
+        setTokens(
+          data.map((w) => ({
+            greek: w.greek_word,
+            transliteration: w.transliteration || "",
+            english: w.english_gloss || "",
+            strongs: w.strongs_number || "",
+            morph: w.morphology || "",
+          }))
+        );
+      })
+      .catch(() => {
+        setTokens([]);
+      })
+      .finally(() => {
+        setTokensLoading(false);
+      });
   }, [verseData?.verse_id]);
 
   // Debounced word search (suppressed when book autocomplete is active)
@@ -1451,14 +1461,23 @@ export default function StudyPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [currentVerseId, stepVerse]);
 
-  const definition = selectedStrongs
-    ? PLACEHOLDER_DEFINITIONS[selectedStrongs] ?? null
+  // Build definition from the interlinear token data
+  const selectedToken = selectedStrongs
+    ? tokens.find((t) => t.strongs === selectedStrongs) ?? null
+    : null;
+  const definition: WordDefinition | null = selectedToken
+    ? {
+        strongs: selectedToken.strongs,
+        word: selectedToken.greek,
+        transliteration: selectedToken.transliteration,
+        gloss: selectedToken.english,
+        meaning: "",
+        corpusQuotes: [],
+      }
     : null;
 
-  // Definition for word study mode (match by strongs_number)
-  const wordStudyDefinition = wordStudyDoc?.strongs_number
-    ? PLACEHOLDER_DEFINITIONS[wordStudyDoc.strongs_number] ?? null
-    : null;
+  // Definition for word study mode — no placeholder data available
+  const wordStudyDefinition: WordDefinition | null = null;
 
   // Commentary results (State 1: verse loaded, no word selected)
   const [commentaryResults, setCommentaryResults] = useState<CommentaryResult[]>([]);
@@ -1545,14 +1564,14 @@ export default function StudyPage() {
   const handleToggleSaveWordStudy = useCallback(() => {
     if (!wordStudyDoc) return;
     const syntheticToken: WordToken = {
-      greek: wordStudyDefinition?.word || wordStudyDoc.word || wordStudyDoc.transliteration,
+      greek: wordStudyDoc.word || wordStudyDoc.transliteration,
       transliteration: wordStudyDoc.transliteration,
-      english: wordStudyDefinition?.gloss || wordStudyDoc.word,
+      english: wordStudyDoc.word,
       strongs: wordStudyDoc.strongs_number,
       morph: "",
     };
     toggleSaveWord(syntheticToken);
-  }, [wordStudyDoc, wordStudyDefinition, toggleSaveWord]);
+  }, [wordStudyDoc, toggleSaveWord]);
 
   const handleSidebarSavedWordSelect = useCallback(
     (strongs: string) => {
@@ -1660,6 +1679,8 @@ export default function StudyPage() {
                       tokens={tokens}
                       selectedStrongs={selectedStrongs}
                       onSelect={handleSelectWord}
+                      loading={tokensLoading}
+                      isNT={!!verseData?.verse_id && NT_BOOKS.has(verseData.verse_id.split(".")[0])}
                     />
                   </div>
 
@@ -1718,6 +1739,8 @@ export default function StudyPage() {
                     tokens={tokens}
                     selectedStrongs={selectedStrongs}
                     onSelect={handleSelectWord}
+                    loading={tokensLoading}
+                    isNT={!!verseData?.verse_id && NT_BOOKS.has(verseData.verse_id.split(".")[0])}
                   />
                 </div>
 
