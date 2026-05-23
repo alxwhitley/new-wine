@@ -217,29 +217,38 @@ function InterlinearBlocks({
   loading: boolean;
   isNT: boolean;
 }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const cardStyle = {
+    backgroundColor: "#262624",
+    border: "1px solid #3c3c38",
+    borderRadius: 8,
+    padding: 16,
+  };
+
   if (loading) {
     return (
-      <div className="flex flex-wrap gap-2">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-          <div
-            key={i}
-            className="flex flex-col items-center rounded-lg border px-3 py-2 min-w-[64px] animate-pulse"
-            style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
-          >
-            <div className="h-5 w-10 rounded bg-border mb-1" />
-            <div className="h-3 w-8 rounded bg-border mb-0.5" />
-            <div className="h-2.5 w-10 rounded bg-border" />
-          </div>
-        ))}
+      <div style={cardStyle}>
+        <div className="flex flex-wrap gap-3">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="flex flex-col items-center animate-pulse" style={{ minWidth: 48 }}>
+              <div className="h-5 w-10 rounded bg-border mb-1" />
+              <div className="h-3 w-8 rounded bg-border mb-0.5" />
+              <div className="h-2.5 w-10 rounded bg-border" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (!isNT) {
     return (
-      <p className="text-sm py-4" style={{ color: "#c1c1b8" }}>
-        No Greek interlinear available for this verse
-      </p>
+      <div style={cardStyle}>
+        <p className="text-sm" style={{ color: "#c1c1b8" }}>
+          No Greek interlinear available for this verse
+        </p>
+      </div>
     );
   }
 
@@ -247,30 +256,86 @@ function InterlinearBlocks({
     return null;
   }
 
+  const tooltipStyle = {
+    backgroundColor: "#1b1b19",
+    border: "1px solid #b49238",
+    borderRadius: 6,
+    padding: "8px 12px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+  };
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {tokens.map((token, i) => {
-        const isSelected = selectedStrongs === token.strongs;
-        return (
-          <button
-            key={i}
-            onClick={() => onSelect(isSelected ? null : token.strongs)}
-            className="flex flex-col items-center rounded-lg border px-3 py-2 transition-colors min-w-[64px] cursor-pointer"
-            style={{
-              borderColor: isSelected ? "#b49238" : "#3c3c38",
-              backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624",
-            }}
-            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "#262624"; }}
-          >
-            <span className="font-serif text-lg text-foreground">{token.greek}</span>
-            <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
-              {token.english}
-            </span>
-            <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
-          </button>
-        );
-      })}
+    <div style={cardStyle}>
+      <div className="flex flex-wrap gap-3">
+        {tokens.map((token, i) => {
+          const isSelected = selectedStrongs === token.strongs;
+          const isHovered = hoveredIndex === i && !isSelected;
+
+          return (
+            <div key={i} className="relative flex flex-col items-center">
+              {/* Hover tooltip — above the word */}
+              {isHovered && (
+                <div
+                  className="absolute z-10 flex flex-col items-center whitespace-nowrap"
+                  style={{
+                    ...tooltipStyle,
+                    bottom: "calc(100% + 6px)",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                  }}
+                >
+                  <span className="font-serif text-lg text-foreground">{token.greek}</span>
+                  <span className="text-xs font-medium mt-0.5" style={{ color: "#d4b96a" }}>
+                    {token.english}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+                </div>
+              )}
+
+              {/* Word unit */}
+              <button
+                onClick={() => onSelect(isSelected ? null : token.strongs)}
+                onMouseEnter={() => setHoveredIndex(i)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                className="flex flex-col items-center cursor-pointer py-1 px-1 transition-all"
+                style={{
+                  borderBottom: isSelected
+                    ? "2px solid #b49238"
+                    : isHovered
+                      ? "1px solid #b49238"
+                      : "2px solid transparent",
+                }}
+              >
+                <span className="font-serif text-lg text-foreground">{token.greek}</span>
+                <span className="text-xs mt-0.5" style={{ color: "#c1c1b8" }}>
+                  {token.english}
+                </span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+              </button>
+
+              {/* Selected detail block — below the word, in flow */}
+              {isSelected && (
+                <div
+                  className="mt-1 flex flex-col items-center"
+                  style={{
+                    ...tooltipStyle,
+                    position: "relative",
+                  }}
+                >
+                  <span className="font-serif text-lg text-foreground">{token.greek}</span>
+                  <span className="text-xs font-medium mt-0.5" style={{ color: "#d4b96a" }}>
+                    {token.english}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+                  {token.morph && (
+                    <span className="text-[10px] text-muted-foreground mt-0.5">{token.morph}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
