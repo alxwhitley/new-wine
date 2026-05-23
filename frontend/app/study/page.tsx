@@ -1484,21 +1484,6 @@ export default function StudyPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [currentVerseId, stepVerse]);
 
-  // Build definition from the interlinear token data
-  const selectedToken = selectedStrongs
-    ? tokens.find((t) => t.strongs === selectedStrongs) ?? null
-    : null;
-  const definition: WordDefinition | null = selectedToken
-    ? {
-        strongs: selectedToken.strongs,
-        word: selectedToken.greek,
-        transliteration: selectedToken.transliteration,
-        gloss: selectedToken.english,
-        meaning: "",
-        corpusQuotes: [],
-      }
-    : null;
-
   // Definition for word study mode — no placeholder data available
   const wordStudyDefinition: WordDefinition | null = null;
 
@@ -1570,6 +1555,21 @@ export default function StudyPage() {
         setCorpusLoading(false);
       });
   }, [selectedStrongs, verseRef, tokens]);
+
+  // Build definition from interlinear token data + corpus results
+  const selectedToken = selectedStrongs
+    ? tokens.find((t) => t.strongs === selectedStrongs) ?? null
+    : null;
+  const definition: WordDefinition | null = selectedToken
+    ? {
+        strongs: selectedToken.strongs,
+        word: selectedToken.greek,
+        transliteration: selectedToken.transliteration,
+        gloss: selectedToken.english,
+        meaning: corpusResults.length > 0 ? corpusResults[0].content : "",
+        corpusQuotes: [],
+      }
+    : null;
 
   const handleSelectWord = useCallback(
     (strongs: string | null) => {
@@ -1696,7 +1696,7 @@ export default function StudyPage() {
                     hasPrev={!!prevVerseId}
                     hasNext={!!nextVerseId}
                     selectedStrongs={selectedStrongs}
-                    onDeselect={() => setSelectedStrongs(null)}
+                    onDeselect={() => { setSelectedStrongs(null); setActiveCommentary(null); }}
                   />
 
                   <div className="mt-4" style={{ minHeight: 96 }}>
