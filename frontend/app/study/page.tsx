@@ -221,7 +221,7 @@ function InterlinearBlocks({
     backgroundColor: "#262624",
     border: "1px solid #3c3c38",
     borderRadius: 8,
-    padding: 16,
+    padding: 12,
   };
 
   if (loading) {
@@ -256,14 +256,14 @@ function InterlinearBlocks({
 
   return (
     <div style={cardStyle}>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2">
         {tokens.map((token, i) => {
           const isSelected = selectedStrongs === token.strongs;
           return (
             <button
               key={i}
               onClick={() => onSelect(isSelected ? null : token.strongs)}
-              className="flex flex-col items-center rounded-lg px-3 py-2 transition-colors min-w-[64px] cursor-pointer"
+              className="flex flex-col items-center rounded px-2 py-1 transition-colors min-w-[48px] cursor-pointer"
               style={{
                 borderColor: isSelected ? "#b49238" : "transparent",
                 border: isSelected ? "1px solid #b49238" : "1px solid transparent",
@@ -272,11 +272,11 @@ function InterlinearBlocks({
               onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent"; }}
             >
-              <span className="font-serif text-lg text-foreground">{token.greek}</span>
-              <span className="text-xs font-medium mt-1" style={{ color: "#d4b96a" }}>
+              <span className="font-serif text-base text-foreground">{token.greek}</span>
+              <span className="text-[11px] font-medium mt-0.5" style={{ color: "#d4b96a" }}>
                 {token.english}
               </span>
-              <span className="text-[10px] text-muted-foreground mt-0.5">{token.strongs}</span>
+              <span className="text-[9px] text-muted-foreground mt-0.5">{token.strongs}</span>
             </button>
           );
         })}
