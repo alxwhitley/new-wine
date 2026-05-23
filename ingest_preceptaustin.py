@@ -114,11 +114,21 @@ def ingest_file(filepath, index_lookup):
 
     title = "Word Study: {} ({}, {})".format(english_word, transliteration, strongs_number)
 
-    # Check if document already exists
-    result = supabase.table("documents").select("id").eq("title", title).limit(1).execute()
-    if result.data:
-        print("  SKIP {}: already ingested".format(strongs_number))
-        return False
+    # Check if excerpt already exists for this word study
+    doc_result = supabase.table("documents").select("id").eq("title", title).limit(1).execute()
+    if doc_result.data:
+        doc_id_existing = doc_result.data[0]["id"]
+        excerpt_result = (
+            supabase.table("excerpts")
+            .select("id")
+            .eq("document_id", doc_id_existing)
+            .eq("excerpt_type", "word_study_article")
+            .limit(1)
+            .execute()
+        )
+        if excerpt_result.data:
+            print("  SKIP {}: excerpt already exists".format(strongs_number))
+            return False
 
     content = filepath.read_text(encoding="utf-8").strip()
     if not content:
@@ -131,20 +141,24 @@ def ingest_file(filepath, index_lookup):
         print("  SKIP {}: no chunks produced".format(strongs_number))
         return False
 
-    # Create document via Supabase client
-    doc_id = str(uuid.uuid4())
-    supabase.table("documents").insert({
-        "id": doc_id,
-        "title": title,
-        "author": "Precept Austin",
-        "source_name": "Precept Austin",
-        "source_type": "background",
-        "source_kind": "word_study",
-        "citation_mode": "silent_context",
-        "is_copyrighted": True,
-        "topic_tags": [],
-        "bible_references": [],
-    }).execute()
+    # Reuse existing document or create new one
+    if doc_result.data:
+        doc_id = doc_result.data[0]["id"]
+        print("  Reusing existing document {}".format(doc_id[:12]))
+    else:
+        doc_id = str(uuid.uuid4())
+        supabase.table("documents").insert({
+            "id": doc_id,
+            "title": title,
+            "author": "Precept Austin",
+            "source_name": "Precept Austin",
+            "source_type": "background",
+            "source_kind": "word_study",
+            "citation_mode": "silent_context",
+            "is_copyrighted": True,
+            "topic_tags": [],
+            "bible_references": [],
+        }).execute()
 
     # Embed all chunks
     all_embeddings = []  # type: List[List[float]]
