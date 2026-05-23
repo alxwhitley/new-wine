@@ -1073,6 +1073,8 @@ function VerseDisplay({
   onStepNext,
   hasPrev,
   hasNext,
+  selectedStrongs,
+  onDeselect,
 }: {
   verse: VerseData | null;
   error: string | null;
@@ -1080,25 +1082,34 @@ function VerseDisplay({
   onStepNext: () => void;
   hasPrev: boolean;
   hasNext: boolean;
+  selectedStrongs: string | null;
+  onDeselect: () => void;
 }) {
   if (error) {
     return <p className="text-sm mt-4" style={{ color: "#993c1d" }}>{error}</p>;
   }
   if (!verse) return null;
   return (
-    <div className="mt-4 rounded-lg border border-border bg-card relative" style={{ minHeight: 120 }}>
+    <div
+      className="mt-4 rounded-lg border border-border bg-card relative"
+      style={{ minHeight: 120, cursor: selectedStrongs ? "pointer" : "default" }}
+      onClick={() => { if (selectedStrongs) onDeselect(); }}
+    >
       <div className="p-4 pb-10">
         <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
           {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
         </p>
         <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
+        {selectedStrongs && (
+          <p style={{ fontSize: '11px', color: '#c1c1b8', marginTop: '8px' }}>Tap verse to return to commentary</p>
+        )}
       </div>
       <div
         className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-3 py-1.5"
         style={{ borderTop: "1px solid #3c3c38", backgroundColor: "#262624", borderRadius: "0 0 0.5rem 0.5rem" }}
       >
         <button
-          onClick={onStepPrev}
+          onClick={(e) => { e.stopPropagation(); onStepPrev(); }}
           disabled={!hasPrev}
           className="text-sm font-medium"
           style={{ color: "#c1c1b8", opacity: hasPrev ? 1 : 0.5 }}
@@ -1109,7 +1120,7 @@ function VerseDisplay({
           {verse.book} {verse.chapter}:{verse.verse}
         </p>
         <button
-          onClick={onStepNext}
+          onClick={(e) => { e.stopPropagation(); onStepNext(); }}
           disabled={!hasNext}
           className="text-sm font-medium"
           style={{ color: "#c1c1b8", opacity: hasNext ? 1 : 0.5 }}
@@ -1684,6 +1695,8 @@ export default function StudyPage() {
                     onStepNext={() => stepVerse("next")}
                     hasPrev={!!prevVerseId}
                     hasNext={!!nextVerseId}
+                    selectedStrongs={selectedStrongs}
+                    onDeselect={() => setSelectedStrongs(null)}
                   />
 
                   <div className="mt-4" style={{ minHeight: 96 }}>
@@ -1744,6 +1757,8 @@ export default function StudyPage() {
                   onStepNext={() => stepVerse("next")}
                   hasPrev={!!prevVerseId}
                   hasNext={!!nextVerseId}
+                  selectedStrongs={selectedStrongs}
+                  onDeselect={() => setSelectedStrongs(null)}
                 />
 
                 <div className="mt-4" style={{ minHeight: 96 }}>
