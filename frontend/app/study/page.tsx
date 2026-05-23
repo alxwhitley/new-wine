@@ -229,7 +229,7 @@ function InterlinearBlocks({
       <div style={cardStyle}>
         <div className="flex flex-wrap gap-3">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <div key={i} className="flex flex-col items-center animate-pulse" style={{ minWidth: 48 }}>
+            <div key={i} className="flex flex-col items-center animate-pulse">
               <div className="h-5 w-10 rounded bg-border mb-1" />
               <div className="h-3 w-8 rounded bg-border mb-0.5" />
               <div className="h-2.5 w-10 rounded bg-border" />
@@ -263,20 +263,20 @@ function InterlinearBlocks({
             <button
               key={i}
               onClick={() => onSelect(isSelected ? null : token.strongs)}
-              className="flex flex-col items-center rounded px-2 py-1 transition-colors min-w-[48px] cursor-pointer"
+              className="flex flex-col items-center rounded transition-colors cursor-pointer"
               style={{
-                borderColor: isSelected ? "#b49238" : "transparent",
+                padding: "6px 8px",
                 border: isSelected ? "1px solid #b49238" : "1px solid transparent",
                 backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent",
               }}
               onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent"; }}
             >
-              <span className="font-serif text-base text-foreground">{token.greek}</span>
-              <span className="text-[11px] font-medium mt-0.5" style={{ color: "#d4b96a" }}>
+              <span className="font-serif text-sm leading-tight text-foreground">{token.greek}</span>
+              <span className="text-xs font-medium leading-tight" style={{ color: "#d4b96a" }}>
                 {token.english}
               </span>
-              <span className="text-[9px] text-muted-foreground mt-0.5">{token.strongs}</span>
+              <span className="text-xs text-muted-foreground leading-tight">{token.strongs}</span>
             </button>
           );
         })}
