@@ -1599,7 +1599,7 @@ export default function StudyPage() {
     if (dotIdx >= 0) {
       lexDef = afterColon.slice(0, dotIdx + 1).trim();
       const rest = afterColon.slice(dotIdx + 1).trim();
-      lexUsage = rest.length > 300 ? rest.slice(0, 300).trimEnd() + "…" : rest;
+      lexUsage = rest.length > 200 ? rest.slice(0, 200).trimEnd() + "…" : rest;
     } else {
       lexDef = afterColon;
     }
