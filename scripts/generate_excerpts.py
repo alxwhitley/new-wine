@@ -3,8 +3,10 @@ Batch generate edited word study articles from Precept Austin raw chunks.
 
 Usage:
     cd /Users/alexwhitley/Desktop/rhemata
-    python3 scripts/generate_excerpts.py          # full batch
-    python3 scripts/generate_excerpts.py --test    # 5 docs, print only, no DB writes
+    python3 scripts/generate_excerpts.py                        # full batch (sonnet)
+    python3 scripts/generate_excerpts.py --test                 # 5 docs, print only, no DB writes
+    python3 scripts/generate_excerpts.py --test-quality --model haiku  # 3 docs with haiku for quality review
+    python3 scripts/generate_excerpts.py --model haiku          # full batch with haiku
 """
 
 import argparse
@@ -28,8 +30,10 @@ ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 from supabase import create_client
 import anthropic
 
-MODEL_ID = "claude-sonnet-4-20250514"
-MODEL_LABEL = "claude-sonnet-4-5"
+MODELS = {
+    "sonnet": {"id": "claude-sonnet-4-5", "label": "claude-sonnet-4-5"},
+    "haiku": {"id": "claude-haiku-4-5-20251001", "label": "claude-haiku-4-5"},
+}
 EXCERPT_TYPE = "word_study_article"
 
 SYSTEM_PROMPT = """You are a scholarly editor preparing word study articles for a theological research library. Your job is to take raw extracted text from Precept Austin word studies and edit them into clean, readable articles.
@@ -59,15 +63,15 @@ def parse_title(title):
     return title, ""
 
 
-def generate_article(client, word, strongs, concatenated):
-    # type: (anthropic.Anthropic, str, str, str) -> str
+def generate_article(client, word, strongs, concatenated, model_id):
+    # type: (anthropic.Anthropic, str, str, str, str) -> str
     user_message = (
         f'The following is raw extracted text from a Precept Austin word study on '
         f'"{word}" ({strongs}). Edit it into a clean article following your instructions.\n\n'
         f'SOURCE TEXT:\n{concatenated}'
     )
     response = client.messages.create(
-        model=MODEL_ID,
+        model=model_id,
         max_tokens=8000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
@@ -91,8 +95,18 @@ def setup_logging():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", action="store_true", help="Run on 5 docs, print output, no DB writes")
+    parser.add_argument("--test-quality", action="store_true", help="Run 3 docs, print full output for quality review, no DB writes")
+    parser.add_argument("--model", choices=["sonnet", "haiku"], default="sonnet", help="Model to use (default: sonnet)")
     parser.add_argument("--time-limit", type=int, default=None, help="Stop after this many minutes (graceful)")
     args = parser.parse_args()
+
+    if args.test_quality:
+        args.test = True
+
+    model_cfg = MODELS[args.model]
+    model_id = model_cfg["id"]
+    model_label = model_cfg["label"]
+    print(f"Using model: {model_id}")
 
     logger = setup_logging()
     db = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -120,7 +134,10 @@ def main():
     total_docs = len(all_docs)
     print(f"Found {total_docs} word_study documents")
 
-    if args.test:
+    if args.test_quality:
+        all_docs = all_docs[:3]
+        print(f"QUALITY TEST: processing {len(all_docs)} documents with {model_id} (no DB writes)\n")
+    elif args.test:
         all_docs = all_docs[:5]
         print(f"TEST MODE: processing {len(all_docs)} documents (no DB writes)\n")
 
@@ -190,7 +207,7 @@ def main():
             word, strongs = parse_title(title)
 
             # Generate
-            article = generate_article(ai, word, strongs, concatenated)
+            article = generate_article(ai, word, strongs, concatenated, model_id)
             elapsed = time.time() - t0
 
             if args.test:
@@ -204,7 +221,7 @@ def main():
                 db.table("excerpts").insert({
                     "document_id": doc_id,
                     "content": article,
-                    "model": MODEL_LABEL,
+                    "model": model_label,
                     "excerpt_type": EXCERPT_TYPE,
                 }).execute()
                 print(f"[{i}/{len(all_docs)}] OK {title} — {elapsed:.1f}s")

@@ -39,13 +39,24 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 logger = logging.getLogger(__name__)
 
 _app_dir = Path(__file__).resolve().parent.parent
-system_prompt = (_app_dir / "system_prompt.txt").read_text()
-guardrails = (_app_dir / "theological_guardrails.txt").read_text()
-ANSWER_SYSTEM_PROMPT = system_prompt + "\n\n" + guardrails + (
+_system_prompt_text = (_app_dir / "system_prompt.txt").read_text()
+_guardrails_text = (_app_dir / "theological_guardrails.txt").read_text() + (
     "\n\nRepresent the views of the source documents faithfully and accurately, "
     "even when those views reflect traditional or complementarian theology. "
     "Do not editorialize or add modern qualifications unless they appear in the source material."
 )
+ANSWER_SYSTEM_BLOCKS = [
+    {
+        "type": "text",
+        "text": _system_prompt_text,
+        "cache_control": {"type": "ephemeral"},
+    },
+    {
+        "type": "text",
+        "text": _guardrails_text,
+        "cache_control": {"type": "ephemeral"},
+    },
+]
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
 RRF_K = 60  # Reciprocal Rank Fusion constant
@@ -432,7 +443,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             stream = client.messages.create(
                 model="claude-sonnet-4-5",
                 max_tokens=1500,
-                system=ANSWER_SYSTEM_PROMPT,
+                system=ANSWER_SYSTEM_BLOCKS,
                 messages=history,
                 stream=True,
             )
