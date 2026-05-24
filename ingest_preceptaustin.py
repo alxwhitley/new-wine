@@ -48,6 +48,16 @@ if not SUPABASE_DB_URL:
     print("  SUPABASE_DB_URL=***REMOVED***")
     sys.exit(1)
 
+from urllib.parse import urlparse, unquote
+_parsed_db = urlparse(SUPABASE_DB_URL)
+DB_PARAMS = {
+    "host": _parsed_db.hostname,
+    "port": _parsed_db.port or 5432,
+    "user": unquote(_parsed_db.username or ""),
+    "password": unquote(_parsed_db.password or ""),
+    "dbname": _parsed_db.path.lstrip("/"),
+}
+
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -81,7 +91,7 @@ def insert_chunks_psycopg2(rows):
     """Insert all chunks for a document via psycopg2 direct connection.
     Each row is (id, document_id, content, embedding, chunk_index).
     Returns number of rows inserted."""
-    conn = psycopg2.connect(SUPABASE_DB_URL)
+    conn = psycopg2.connect(**DB_PARAMS)
     try:
         with conn.cursor() as cur:
             execute_values(

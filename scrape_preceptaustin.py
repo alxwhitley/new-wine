@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """
-Rhemata Precept Austin Greek Word Study Scraper
+Rhemata Precept Austin Word Study Scraper
 
-Step 1A: Parse the index page at preceptaustin.org/greek_word_studies
+Supports Greek and Hebrew word studies via --language flag.
+Step 1A: Parse the index page
 Step 1B: Fetch and extract individual word study content
 Step 1C: QA report
+
+Usage:
+  python3 scrape_preceptaustin.py --language greek --test   # Greek, first 10
+  python3 scrape_preceptaustin.py --language hebrew --test  # Hebrew, first 10
+  python3 scrape_preceptaustin.py --language hebrew --fetch # Hebrew, full run
 """
 
 import gc
@@ -24,16 +30,44 @@ from bs4 import BeautifulSoup
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-SOURCES_DIR = PROJECT_ROOT / "sources" / "precept_austin"
-RAW_DIR = SOURCES_DIR / "raw"
-CACHE_DIR = SOURCES_DIR / "page_cache"
-INDEX_FILE = SOURCES_DIR / "index.json"
-QA_FILE = SOURCES_DIR / "qa_report.json"
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
-INDEX_URL = "https://www.preceptaustin.org/greek_word_studies"
 SLEEP_MIN = 2
 SLEEP_MAX = 5
+
+# Language-specific config — set by set_language() before use
+SOURCES_DIR = None  # type: Optional[Path]
+RAW_DIR = None  # type: Optional[Path]
+CACHE_DIR = None  # type: Optional[Path]
+INDEX_FILE = None  # type: Optional[Path]
+QA_FILE = None  # type: Optional[Path]
+INDEX_URL = None  # type: Optional[str]
+LANGUAGE = None  # type: Optional[str]
+
+LANG_CONFIG = {
+    "greek": {
+        "subdir": "precept_austin",
+        "index_url": "https://www.preceptaustin.org/greek_word_studies",
+    },
+    "hebrew": {
+        "subdir": "precept_austin_hebrew",
+        "index_url": "https://www.preceptaustin.org/hebrew_word_studies",
+    },
+}
+
+
+def set_language(lang):
+    # type: (str) -> None
+    """Configure global paths and URL for the given language."""
+    global SOURCES_DIR, RAW_DIR, CACHE_DIR, INDEX_FILE, QA_FILE, INDEX_URL, LANGUAGE
+    cfg = LANG_CONFIG[lang]
+    SOURCES_DIR = PROJECT_ROOT / "sources" / cfg["subdir"]
+    RAW_DIR = SOURCES_DIR / "raw"
+    CACHE_DIR = SOURCES_DIR / "page_cache"
+    INDEX_FILE = SOURCES_DIR / "index.json"
+    QA_FILE = SOURCES_DIR / "qa_report.json"
+    INDEX_URL = cfg["index_url"]
+    LANGUAGE = lang
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -112,7 +146,7 @@ def parse_index():
 
         strongs_num = strongs_match.group(1)
         href = studylight_link.get("href", "")
-        if "hebrew" in href.lower() or "/h/" in href.lower():
+        if "hebrew" in href.lower() or "/heb/" in href.lower() or LANGUAGE == "hebrew":
             strongs_number = "H" + strongs_num.zfill(4)
         else:
             strongs_number = "G" + strongs_num.zfill(4)
@@ -490,9 +524,21 @@ def run_step_1c(results):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    args = set(sys.argv[1:])
+    args = sys.argv[1:]
+    args_set = set(args)
 
-    if "--fetch" in args or "--test" in args:
+    # Parse --language flag
+    lang = "greek"
+    for i, a in enumerate(args):
+        if a == "--language" and i + 1 < len(args):
+            lang = args[i + 1].lower()
+    if lang not in LANG_CONFIG:
+        print("ERROR: --language must be one of: {}".format(", ".join(LANG_CONFIG.keys())))
+        sys.exit(1)
+    set_language(lang)
+    print("Language: {} | Index URL: {}".format(LANGUAGE, INDEX_URL))
+
+    if "--fetch" in args_set or "--test" in args_set:
         # Load or build index
         if INDEX_FILE.exists():
             with open(INDEX_FILE) as f:
@@ -502,7 +548,7 @@ if __name__ == "__main__":
             entries = run_step_1a()
 
         # --test: limit to first 10 entries
-        if "--test" in args:
+        if "--test" in args_set:
             entries = entries[:10]
             print("TEST MODE: limited to first {} entries".format(len(entries)))
 

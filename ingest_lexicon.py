@@ -269,10 +269,20 @@ def insert_chunk_batch(rows: List[dict]) -> bool:
     """Insert a small batch of chunks via psycopg2 with ON CONFLICT DO NOTHING."""
     import psycopg2
     from psycopg2.extras import execute_values
+    from urllib.parse import urlparse, unquote
     db_url = os.environ.get("SUPABASE_DB_URL")
     if not db_url:
         print("    ERROR: SUPABASE_DB_URL not set")
         return False
+
+    parsed = urlparse(db_url)
+    db_params = {
+        "host": parsed.hostname,
+        "port": parsed.port or 5432,
+        "user": unquote(parsed.username or ""),
+        "password": unquote(parsed.password or ""),
+        "dbname": parsed.path.lstrip("/"),
+    }
 
     values = []
     for r in rows:
@@ -281,7 +291,7 @@ def insert_chunk_batch(rows: List[dict]) -> bool:
 
     for attempt in range(MAX_RETRIES):
         try:
-            conn = psycopg2.connect(db_url)
+            conn = psycopg2.connect(**db_params)
             with conn.cursor() as cur:
                 execute_values(
                     cur,
