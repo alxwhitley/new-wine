@@ -41,17 +41,21 @@ RAW_DIR = None  # type: Optional[Path]
 CACHE_DIR = None  # type: Optional[Path]
 INDEX_FILE = None  # type: Optional[Path]
 QA_FILE = None  # type: Optional[Path]
-INDEX_URL = None  # type: Optional[str]
+INDEX_URLS = None  # type: Optional[List[str]]
 LANGUAGE = None  # type: Optional[str]
 
 LANG_CONFIG = {
     "greek": {
         "subdir": "precept_austin",
-        "index_url": "https://www.preceptaustin.org/greek_word_studies",
+        "index_urls": ["https://www.preceptaustin.org/greek_word_studies"],
     },
     "hebrew": {
         "subdir": "precept_austin_hebrew",
-        "index_url": "https://www.preceptaustin.org/hebrew_word_studies",
+        "index_urls": [
+            "https://www.preceptaustin.org/hebrew_word_studies",
+            "https://www.preceptaustin.org/hebrew_definitions",
+            "https://www.preceptaustin.org/hebrew_definitions_2",
+        ],
     },
 }
 
@@ -59,14 +63,14 @@ LANG_CONFIG = {
 def set_language(lang):
     # type: (str) -> None
     """Configure global paths and URL for the given language."""
-    global SOURCES_DIR, RAW_DIR, CACHE_DIR, INDEX_FILE, QA_FILE, INDEX_URL, LANGUAGE
+    global SOURCES_DIR, RAW_DIR, CACHE_DIR, INDEX_FILE, QA_FILE, INDEX_URLS, LANGUAGE
     cfg = LANG_CONFIG[lang]
     SOURCES_DIR = PROJECT_ROOT / "sources" / cfg["subdir"]
     RAW_DIR = SOURCES_DIR / "raw"
     CACHE_DIR = SOURCES_DIR / "page_cache"
     INDEX_FILE = SOURCES_DIR / "index.json"
     QA_FILE = SOURCES_DIR / "qa_report.json"
-    INDEX_URL = cfg["index_url"]
+    INDEX_URLS = cfg["index_urls"]
     LANGUAGE = lang
 
 
@@ -98,60 +102,81 @@ def load_or_fetch_page(page_url):
 
 # ── Step 1A: Parse the index page ────────────────────────────────────────────
 
-def parse_index():
-    # type: () -> List[Dict[str, str]]
-    """Fetch and parse the Greek word studies index page.
+def parse_index(index_url):
+    # type: (str) -> List[Dict[str, str]]
+    """Fetch and parse a single word studies index page.
 
     Each entry in the HTML follows this pattern inside a <p>:
-      <b>English Word</b> (studylight_link) preceptaustin_link
+      <b>English Word</b> (optional synonyms) (studylight_link) <a href="/path#anchor">transliteration</a>
     """
-    print("Fetching index page...")
-    resp = requests.get(INDEX_URL, headers=HEADERS, timeout=30)
+    print("Fetching index page: {}".format(index_url))
+    resp = requests.get(index_url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
     entries = []  # type: List[Dict[str, str]]
+    skip_reasons = {"no_bold_text": 0, "no_pa_link": 0, "no_strongs": 0}
+    total_bold_p = 0
 
     for p in soup.find_all("p"):
         bold = p.find("b")
         if not bold:
             continue
+        total_bold_p += 1
 
+        english_word = bold.get_text(strip=True)
+        if not english_word:
+            skip_reasons["no_bold_text"] += 1
+            continue
+
+        # Find preceptaustin link (required)
         links = p.find_all("a")
-        studylight_link = None
         pa_link = None
+        studylight_link = None
 
         for a in links:
             href = a.get("href", "")
             if "studylight" in href and studylight_link is None:
                 studylight_link = a
-            elif "preceptaustin" in href or href.startswith("/"):
-                if pa_link is None:
-                    pa_link = a
+            elif ("preceptaustin" in href or href.startswith("/")) and pa_link is None:
+                pa_link = a
 
-        if studylight_link is None or pa_link is None:
+        if pa_link is None:
+            skip_reasons["no_pa_link"] += 1
             continue
 
-        english_word = bold.get_text(strip=True)
-        if not english_word:
+        # Extract Strong's number: prefer studylight link text, fall back to parenthesized number
+        strongs_num = None
+        if studylight_link is not None:
+            strongs_text = studylight_link.get_text(strip=True)
+            m = re.search(r'(\d+)', strongs_text)
+            if m:
+                strongs_num = m.group(1)
+
+        if strongs_num is None:
+            # Fallback: scan raw <p> text for standalone number in parentheses
+            p_text = p.get_text()
+            m = re.search(r'\((\d{2,5})\)', p_text)
+            if m:
+                strongs_num = m.group(1)
+
+        if strongs_num is None:
+            skip_reasons["no_strongs"] += 1
             continue
 
-        strongs_text = studylight_link.get_text(strip=True)
-        strongs_match = re.search(r'(\d+)', strongs_text)
-        if not strongs_match:
-            href = studylight_link.get("href", "")
-            strongs_match = re.search(r'(\d+)', href)
-        if not strongs_match:
-            continue
-
-        strongs_num = strongs_match.group(1)
-        href = studylight_link.get("href", "")
-        if "hebrew" in href.lower() or "/heb/" in href.lower() or LANGUAGE == "hebrew":
-            strongs_number = "H" + strongs_num.zfill(4)
+        # Determine prefix from studylight href or language setting
+        if studylight_link is not None:
+            sl_href = studylight_link.get("href", "").lower()
+            is_hebrew = "hebrew" in sl_href or "/heb/" in sl_href or LANGUAGE == "hebrew"
         else:
-            strongs_number = "G" + strongs_num.zfill(4)
+            is_hebrew = LANGUAGE == "hebrew"
+        strongs_number = ("H" if is_hebrew else "G") + strongs_num.zfill(4)
 
+        # Transliteration: prefer PA link text, fall back to english word
         transliteration = pa_link.get_text(strip=True)
+        if not transliteration:
+            transliteration = english_word
+
         pa_href = pa_link.get("href", "")
 
         if pa_href.startswith("/"):
@@ -174,20 +199,33 @@ def parse_index():
             "anchor": anchor,
         })
 
+    # Summary
+    total_skipped = sum(skip_reasons.values())
+    print("\nParse summary:")
+    print("  <p> tags with <b>: {}".format(total_bold_p))
+    print("  Entries captured: {}".format(len(entries)))
+    print("  Skipped: {} total".format(total_skipped))
+    for reason, count in sorted(skip_reasons.items()):
+        if count > 0:
+            print("    {}: {}".format(reason, count))
+
     return entries
 
 
 def run_step_1a():
     # type: () -> List[Dict[str, str]]
-    """Parse the index and save to index.json."""
+    """Parse all index pages and save combined index.json."""
     SOURCES_DIR.mkdir(parents=True, exist_ok=True)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-    entries = parse_index()
+    all_entries = []  # type: List[Dict[str, str]]
+    for url in INDEX_URLS:
+        page_entries = parse_index(url)
+        all_entries.extend(page_entries)
 
     seen = set()  # type: set
     unique_entries = []  # type: List[Dict[str, str]]
-    for entry in entries:
+    for entry in all_entries:
         key = entry["strongs_number"]
         if key not in seen:
             seen.add(key)
@@ -197,7 +235,7 @@ def run_step_1a():
         json.dump(unique_entries, f, indent=2)
 
     print("\nIndex saved to {}".format(INDEX_FILE))
-    print("Total entries found: {}".format(len(entries)))
+    print("Total entries found (across {} pages): {}".format(len(INDEX_URLS), len(all_entries)))
     print("Unique entries (by Strong's number): {}".format(len(unique_entries)))
 
     print("\nSample entries:")
@@ -287,83 +325,18 @@ def passes_quality_filter(content):
     return None
 
 
-def extract_word_study(soup, anchor):
-    # type: (BeautifulSoup, str) -> Optional[str]
-    """Extract word study content starting from the given anchor point.
+def _is_yellow_span(tag):
+    # type: (object) -> bool
+    """Check if a tag is a yellow-highlighted span (word study heading marker)."""
+    if not hasattr(tag, 'name') or tag.name != "span":
+        return False
+    style = (tag.get("style") or "").lower().replace(" ", "")
+    return "background-color:#ffff00" in style
 
-    DOM structure: the anchor is an empty <a id="..." name="..."> inside a <p>.
-    The word study content flows in sibling <p> and <blockquote> tags after that
-    parent <p>. It ends when we hit a <p> containing another named <a> anchor
-    (the next word study) or a <h2>/<h3> heading.
-    """
-    if not anchor:
-        return None
 
-    anchor_clean = anchor.lstrip("#")
-
-    target = find_anchor(soup, anchor)
-    if not target:
-        return None
-
-    # Get the parent <p> that contains this anchor
-    parent_p = target.parent
-    if parent_p is None or parent_p.name != "p":
-        parent_p = target.find_parent("p")
-    if parent_p is None:
-        parent_p = target.parent
-    if parent_p is None:
-        return None
-
-    # Collect text: start with the parent <p> itself, then walk its siblings
-    content_parts = []  # type: List[str]
-    max_chars = 80000
-
-    text = parent_p.get_text(separator=" ", strip=True)
-    if text:
-        content_parts.append(text)
-
-    total = len(text) if text else 0
-    current = parent_p.next_sibling
-
-    while current is not None and total < max_chars:
-        # Skip NavigableString nodes (whitespace between tags)
-        if not hasattr(current, 'name') or current.name is None:
-            current = current.next_sibling
-            continue
-
-        # Stop at headings
-        if current.name in ("h2", "h3"):
-            break
-
-        # Stop at a <p> that contains a named anchor (next word study entry)
-        if current.name == "p":
-            child_anchor = current.find("a", attrs={"id": True}) or current.find("a", attrs={"name": True})
-            if child_anchor:
-                child_id = child_anchor.get("id") or child_anchor.get("name") or ""
-                if child_id and child_id != anchor_clean:
-                    break
-
-        # Collect text from block-level elements
-        collect = False
-        if current.name in ("p", "blockquote", "ul", "ol", "li", "table"):
-            collect = True
-        elif current.name == "div" and is_leaf_div(current):
-            collect = True
-
-        if collect:
-            text = current.get_text(separator=" ", strip=True)
-            if text:
-                content_parts.append(text)
-                total += len(text)
-
-        current = current.next_sibling
-
-    if not content_parts:
-        return None
-
-    raw_text = "\n\n".join(content_parts)
-
-    # Clean up
+def _clean_extracted_text(raw_text):
+    # type: (str) -> str
+    """Clean up extracted word study text: strip junk lines, collapse whitespace."""
     lines = raw_text.split("\n")
     cleaned_lines = []  # type: List[str]
     for line in lines:
@@ -382,18 +355,88 @@ def extract_word_study(soup, anchor):
     return result
 
 
-def run_step_1b(entries):
-    # type: (List[Dict[str, str]]) -> Dict
+def extract_word_study(soup, anchor):
+    # type: (BeautifulSoup, str) -> Optional[str]
+    """Extract word study content starting from the given anchor point.
+
+    Walks forward through the DOM from the anchor using find_all_next().
+    Collects text from block-level elements. Stops at the second yellow
+    highlight span (the first is the current word's heading, the second
+    marks the next word study).
+    """
+    block_tags = {"p", "blockquote", "ul", "ol", "li", "table", "div"}
+    max_chars = 80000
+
+    # Find starting element
+    if anchor:
+        target = find_anchor(soup, anchor)
+        if not target:
+            return None
+        start = target
+    else:
+        # No anchor — start from main content area
+        content_div = (
+            soup.find("div", class_="field-item")
+            or soup.find("article")
+            or soup.find("div", id="content")
+        )
+        if not content_div:
+            return None
+        start = content_div
+
+    # Walk forward through all elements after the anchor
+    content_parts = []  # type: List[str]
+    total = 0
+    yellow_count = 0
+
+    for el in start.find_all_next():
+        if total >= max_chars:
+            break
+
+        # Check for yellow span stop marker (only count non-empty ones)
+        if _is_yellow_span(el) and el.get_text(strip=True):
+            yellow_count += 1
+            if yellow_count >= 2:
+                break
+            continue
+
+        # Skip non-block elements (they'll be captured via parent get_text)
+        if not hasattr(el, 'name') or el.name is None:
+            continue
+        if el.name not in block_tags:
+            continue
+
+        # Skip divs that contain other block elements (avoid double-counting)
+        if el.name == "div" and not is_leaf_div(el):
+            continue
+
+        text = el.get_text(separator=" ", strip=True)
+        if text:
+            content_parts.append(text)
+            total += len(text)
+
+    if not content_parts:
+        return None
+
+    raw_text = "\n\n".join(content_parts)
+    return _clean_extracted_text(raw_text)
+
+
+def run_step_1b(entries, resume=False):
+    # type: (List[Dict[str, str]], bool) -> Dict
     """Fetch pages and extract word study content for each entry."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Clean start: delete all existing .txt files in raw/
-    existing = list(RAW_DIR.glob("*.txt"))
-    if existing:
-        print("Cleaning {} existing files from raw/...".format(len(existing)))
-        for f in existing:
-            f.unlink()
+    if resume:
+        print("RESUME MODE: skipping existing files")
+    else:
+        # Clean start: delete all existing .txt files in raw/
+        existing = list(RAW_DIR.glob("*.txt"))
+        if existing:
+            print("Cleaning {} existing files from raw/...".format(len(existing)))
+            for f in existing:
+                f.unlink()
 
     # Group entries by page_url, preserving insertion order
     page_groups = {}  # type: Dict[str, List[Dict[str, str]]]
@@ -413,6 +456,20 @@ def run_step_1b(entries):
     pages_failed = 0
 
     for page_idx, (page_url, page_entries) in enumerate(page_groups.items()):
+        # Resume: skip entire page if all entries already have files
+        if resume:
+            all_exist = True
+            for entry in page_entries:
+                safe_t = re.sub(r'[^a-zA-Z0-9_]', '', entry["transliteration"].replace(" ", "_"))
+                if not (RAW_DIR / "{}_{}.txt".format(entry["strongs_number"], safe_t)).exists():
+                    all_exist = False
+                    break
+            if all_exist:
+                for entry in page_entries:
+                    results["attempted"] += 1
+                    results["success"] += 1
+                continue
+
         # Fetch or load from cache
         soup = None  # type: Optional[BeautifulSoup]
         from_cache = False
@@ -442,6 +499,15 @@ def run_step_1b(entries):
         # Extract content for each entry on this page
         for entry in page_entries:
             results["attempted"] += 1
+
+            # Resume: skip if file already exists
+            if resume:
+                safe_t = re.sub(r'[^a-zA-Z0-9_]', '', entry["transliteration"].replace(" ", "_"))
+                existing_file = RAW_DIR / "{}_{}.txt".format(entry["strongs_number"], safe_t)
+                if existing_file.exists():
+                    results["success"] += 1
+                    continue
+
             anchor = entry["anchor"]
 
             content = extract_word_study(soup, anchor)
@@ -536,7 +602,7 @@ if __name__ == "__main__":
         print("ERROR: --language must be one of: {}".format(", ".join(LANG_CONFIG.keys())))
         sys.exit(1)
     set_language(lang)
-    print("Language: {} | Index URL: {}".format(LANGUAGE, INDEX_URL))
+    print("Language: {} | Index pages: {}".format(LANGUAGE, len(INDEX_URLS)))
 
     if "--fetch" in args_set or "--test" in args_set:
         # Load or build index
@@ -552,7 +618,8 @@ if __name__ == "__main__":
             entries = entries[:10]
             print("TEST MODE: limited to first {} entries".format(len(entries)))
 
-        results = run_step_1b(entries)
+        resume = "--resume" in args_set
+        results = run_step_1b(entries, resume=resume)
         run_step_1c(results)
     else:
         # Default: Step 1A only

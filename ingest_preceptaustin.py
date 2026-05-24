@@ -29,7 +29,18 @@ from app.services.chunker import chunk_text, token_len
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-SOURCES_DIR = PROJECT_ROOT / "sources" / "precept_austin"
+# Language flag: --language hebrew|greek (default: greek)
+_lang = "greek"
+for _i, _a in enumerate(sys.argv[1:], 1):
+    if _a == "--language" and _i < len(sys.argv) - 1:
+        _lang = sys.argv[_i + 1].lower()
+
+LANG_SUBDIRS = {"greek": "precept_austin", "hebrew": "precept_austin_hebrew"}
+if _lang not in LANG_SUBDIRS:
+    print("ERROR: --language must be 'greek' or 'hebrew'")
+    sys.exit(1)
+
+SOURCES_DIR = PROJECT_ROOT / "sources" / LANG_SUBDIRS[_lang]
 RAW_DIR = SOURCES_DIR / "raw"
 INDEX_FILE = SOURCES_DIR / "index.json"
 
@@ -201,15 +212,16 @@ def ingest_file(filepath, index_lookup):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print("Rhemata Precept Austin Word Study Ingestion")
+    print("Rhemata Precept Austin Word Study Ingestion ({})".format(_lang))
     print("=" * 60)
+    print("Source dir: {}".format(SOURCES_DIR))
 
     index_lookup = load_index()
     print("Loaded {} entries from index.json".format(len(index_lookup)))
 
     txt_files = sorted(RAW_DIR.glob("*.txt"))
     if not txt_files:
-        print("No .txt files found in sources/precept_austin/raw/")
+        print("No .txt files found in {}".format(RAW_DIR))
         return
 
     print("Found {} word study files to ingest\n".format(len(txt_files)))
