@@ -195,6 +195,7 @@ repo/
 - **Sparse citation rule** — system prompt enforces max 2-3 inline citations per response. Only cite when source of claim materially matters. Single citation sufficient when answer draws primarily from one source.
 - **Cohere reranking** — After RRF fusion, top 10 chunks sent to Cohere rerank-v3.5 with original query; top 5 by relevance score returned. Falls back to RRF top 10 if `COHERE_API_KEY` not set or call fails.
 - **Column break handling** — Pass 1 prompt instructs Gemini to transcribe multi-article pages column by column with `=== COLUMN BREAK ===` markers. Pass 2 prompt tells Groq to follow article content across column breaks, ignoring other articles' content.
+- **psycopg2 connection fix** — Supabase pooler usernames contain a dot (`postgres.{ref}`) which `psycopg2.connect(uri)` misparses, truncating to `postgres`. All ingestion scripts (`ingest_lexicon.py`, `ingest_preceptaustin.py`) now parse `SUPABASE_DB_URL` with `urlparse` and pass explicit keyword args (`host`, `port`, `user`, `password`, `dbname`).
 
 ---
 
@@ -335,6 +336,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run). Writes no_captions stubs for videos without captions or with < 400 words. |
 | `scripts/whisper_transcribe.py` | Whisper medium transcription + Groq cleaning. Batch mode processes `no_captions/` stubs; single-URL mode via CLI args. |
 | `scripts/clean_transcripts.py` | Clean raw transcripts via Groq Llama 3.3 70B, move to cleaned/ |
+| `scripts/generate_excerpts.py` | Batch-generate edited word study articles from Precept Austin raw chunks. Concatenates all chunks per document, sends to Anthropic Claude for editing into clean articles, writes to `excerpts` table (`excerpt_type = 'word_study_article'`). Flags: `--test`, `--test-quality`, `--model sonnet|haiku`, `--time-limit`. |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content in Supabase (run 2026-04-17). |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
@@ -355,13 +357,15 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 
 ---
 
-## Corpus
-- 50 documents ingested
-- 25 non-magazine documents (sermons, papers, book, other) — all tagged
-- 21 YouTube transcripts ingested (sermon_transcript)
-- 4 copyrighted magazine articles (New Wine Magazine, issue 03-1973) — all tagged
-- 35 chunks across magazine articles
-- **All 38 backfilled docs have `bible_references` populated** (2026-04-10). 35/38 had refs (2 to 138 each); 3 with no refs (session notes, zoom outlines, marketplace calling)
+## Corpus (as of 2026-05-23)
+- **2,617 documents** total, **124,346 chunks**
+- By source_kind: 1,779 word_study, 557 sermon_transcript, 186 commentary, 58 unknown, 33 magazine_article, 4 lexicon
+- By source_type: 1,783 background, 557 sermon, 186 commentary, 49 book, 33 magazine_article, 5 paper, 4 other
+- Copyrighted: 1,862 | Non-copyrighted: 755
+- **Lexicons:** TBESG 11,034 chunks (complete), TBESH 10,258 chunks (complete), TFLSJ 15,767 chunks across 2 docs (complete)
+- **Verses:** 31,098 rows (WEB, 66-book Protestant canon, complete)
+- **Excerpts:** 1,713 of 1,779 word_study docs have generated articles (96%, 66 remaining)
+- **All 38 original backfilled docs have `bible_references` populated** (2026-04-10)
 
 ---
 
@@ -447,7 +451,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **content_summary not auto-populated** on new article inserts (trigger only updates fts_weighted, not content_summary)
 - **Tagging retry logic** sometimes needs improvement for complex articles
 - **Guest query limit** — `increment_guest_query()` SQL function needs migration file
-- **RLS policies needed** on `conversations` and `messages` tables
+- ~~**RLS policies needed** on `conversations` and `messages` tables~~ — **DONE:** RLS enabled on both
 - **INCLUDE_COPYRIGHTED not confirmed on Railway** — check dashboard
 - **poppler no longer required** — pdf2image replaced by PyMuPDF (fitz) in extract_magazine.py
 - **Bible ref extraction occasionally produces malformed JSON** from Groq on edge-case batches (~1 in 38 docs in backfill run). Helper handles gracefully by dropping that segment and continuing; other segments in the same doc still succeed.
@@ -457,16 +461,17 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **30 malformed JSON chunks fixed** (2026-04-17) — `fix_article_json.py` migration ran successfully; content_summary refreshed on all 30 affected documents.
 - **Shell aliases expanded** — 10 `rh-*` aliases in `~/.zshrc` covering all pipeline scripts.
 - **Proposed but unapplied system prompt changes** (2026-04-29 session): example response section, retrieval formatting (bullets→headings+prose), softer Holy Spirit guardrails revision, Niagara Falls metaphor ban, "Go Deeper" follow-up questions, NIV translation preference. All shown as diffs but not confirmed by user.
-- **Migration 016 not yet run** — `016_create_verses.sql` (verses table) needs to be applied in Supabase SQL Editor before running `ingest_bible.py`
-- **`ingest_bible.py` not yet run** — depends on migration 016
+- ~~**Migration 016**~~ — **DONE:** verses table created, 31,098 rows ingested via `ingest_bible.py`
 - **`scrape_preceptaustin.py` hardened version not yet re-run** — page cache from first run will speed up re-run; first run had 2.6% success rate before DOM fix
 - **`ingest_preceptaustin.py` not yet run** — depends on successful scrape completion
-- **TBESG re-ingestion incomplete** — 5555 of 11034 chunks ingested in brief mode (gloss + bold sub-meanings only). SUPABASE_DB_URL has stale password — update from Supabase dashboard before resuming. Script will auto-resume from chunk 5555.
+- ~~**TBESG re-ingestion**~~ — **DONE:** 11,034 chunks ingested in brief mode (gloss + bold sub-meanings)
 - **Debug logging in study.py lexicon endpoint** — verbose print statements added for TBESG debugging. Remove after confirming lexicon endpoint works correctly with re-ingested TBESG data.
 - **Study Mode interlinear data is placeholder only** — John 1:1 tokens and 3 definitions are hardcoded. Verse lookup, saved words, and corpus panel are live. Needs real interlinear data source and lexicon wiring.
-- **Migration 017 (saved_words)** — `migrations/017_create_saved_words.sql` needs to be applied in Supabase SQL Editor if not already run.
+- ~~**Migration 017 (saved_words)**~~ — **DONE:** saved_words table exists with RLS enabled
 - **10 YouTube transcripts ingested (2026-05-22)** — side effect of running skip tracking test against `youtube/ingested/`. These had different MD5 hashes than stored (likely re-cleaned). 1 duplicate ("Your Calling Is Holy" by Derek Prince) was found and the older copy deleted.
 - **`mode-toggle.tsx` is orphaned** — `frontend/components/rhemata/mode-toggle.tsx` exists but is no longer imported anywhere. Can be deleted.
+- **Word study excerpt generation 96% complete** — 1,713 of 1,779 word_study documents have excerpts generated (`excerpts` table, `excerpt_type = 'word_study_article'`). 66 remaining. Script: `scripts/generate_excerpts.py`.
+- ~~**SUPABASE_DB_URL psycopg2 connection refused**~~ — **FIXED:** dotted username was being truncated by psycopg2 URI parsing. All scripts now use `urlparse` + explicit keyword args.
 
 ---
 

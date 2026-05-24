@@ -44,6 +44,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   ├── chat.py        # /chat endpoint — retrieval + LLM
 │   │   │   ├── search.py      # /search + /search/documents endpoints
 │   │   │   ├── document.py    # /document/{id} + /document/{id}/article
+│   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon
 │   │   │   └── ingest.py      # /ingest endpoint
 │   │   ├── services/
 │   │   │   ├── embeddings.py
@@ -113,17 +114,19 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 - **Backend:** Python 3.9 / FastAPI — deploys to Railway
 - **Database:** Supabase (PostgreSQL + pgvector)
 - **Embeddings:** OpenAI `text-embedding-3-small` (1536 dims)
-- **Chat / Query Expansion / Metadata / Tagging / Transcript Cleaning LLM:** Groq Llama 3.3 70B (`llama-3.3-70b-versatile`)
+- **Answer Generation LLM:** Anthropic Claude Sonnet 4.5 (`claude-sonnet-4-5`) via `anthropic` SDK
+- **Query Expansion / Metadata / Tagging / Transcript Cleaning LLM:** Groq Llama 3.3 70B (`llama-3.3-70b-versatile`)
+- **Reranking:** Cohere rerank-v3.5 (`cohere` SDK) — narrows top 10 RRF → top 5
 - **Vision / OCR (magazine extraction):** Gemini 2.5 Flash (`gemini-2.5-flash`) via `google-genai` SDK
 - **Markdown rendering:** `react-markdown` + `@tailwindcss/typography`
-- **Removed:** Anthropic Claude fully removed (April 2026), GPT-4o Vision (replaced by Gemini 2.5 Flash)
+- **Removed:** GPT-4o Vision (replaced by Gemini 2.5 Flash)
 
 ---
 
 ## Database
 - **Supabase** with pgvector enabled
-- Tables: `documents`, `chunks`, `guest_sessions`, `conversations`, `messages`
-- `documents.source_type` — `'sermon'` | `'background'` | `'magazine_article'`
+- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`
+- `documents.source_type` — `'sermon'` | `'background'` | `'magazine_article'` | `'commentary'` | `'book'` | `'paper'` | `'other'`
 - `documents.source_kind` — taxonomy field (e.g. `'magazine_article'`)
 - `documents.citation_mode` — `'citable'` | `'silent_context'`
 - `documents.is_copyrighted` — boolean, derived from folder path during ingest
@@ -152,9 +155,12 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 ## Environment Variables (in backend/app/.env)
 - `GROQ_API_KEY`
 - `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY` — Claude Sonnet 4.5 for answer generation
+- `COHERE_API_KEY` — Cohere rerank-v3.5 for retrieval reranking
 - `GOOGLE_API_KEY` — Gemini 2.5 Flash for magazine extraction
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
+- `SUPABASE_DB_URL` — direct PostgreSQL connection for psycopg2 (bypasses PostgREST timeouts)
 - `SUPABASE_JWT_JWKS_URL`
 - `INCLUDE_COPYRIGHTED` — `true`/`false` (default `true` in chat.py, `false` in search.py)
 - `ALLOWED_ORIGINS`
@@ -172,6 +178,9 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
 | `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run) |
 | `scripts/clean_transcripts.py` | Clean raw transcripts via Groq Llama 3.3 70B, move to cleaned/ |
+| `scripts/generate_excerpts.py` | Batch-generate word study articles from Precept Austin chunks via Anthropic Claude |
+| `scripts/whisper_transcribe.py` | Whisper medium transcription + Groq cleaning (batch or single-URL) |
+| `scripts/youtube_pipeline.sh` | Full YouTube pipeline: scrape → clean → whisper → ingest |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
