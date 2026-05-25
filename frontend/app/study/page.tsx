@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Search, Menu, Bookmark, Flag } from "lucide-react";
+import { Search, Menu, Bookmark, Flag, ChevronDown, ChevronUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/rhemata/sidebar";
@@ -1198,6 +1198,11 @@ function VerseDisplay({
   );
 }
 
+interface ScriptureVerse {
+  reference: string;
+  text: string;
+}
+
 function WordStudyPanel({
   doc,
   definition,
@@ -1211,6 +1216,28 @@ function WordStudyPanel({
   onToggleSave: () => void;
   isLoggedIn: boolean;
 }) {
+  const [versesOpen, setVersesOpen] = useState(false);
+  const [verses, setVerses] = useState<ScriptureVerse[] | null>(null);
+  const [versesLoading, setVersesLoading] = useState(false);
+  const fetchedRef = useRef<string | null>(null);
+
+  const handleToggleVerses = () => {
+    const opening = !versesOpen;
+    setVersesOpen(opening);
+    if (opening && fetchedRef.current !== doc.strongs_number) {
+      setVersesLoading(true);
+      setVerses(null);
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/verses?strongs=${encodeURIComponent(doc.strongs_number)}`)
+        .then((res) => (res.ok ? res.json() : { verses: [] }))
+        .then((data) => {
+          setVerses(data.verses ?? []);
+          fetchedRef.current = doc.strongs_number;
+        })
+        .catch(() => setVerses([]))
+        .finally(() => setVersesLoading(false));
+    }
+  };
+
   return (
     <div className="mt-8 relative">
       <button
@@ -1249,6 +1276,40 @@ function WordStudyPanel({
           <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
         </>
       )}
+
+      {/* Scripture References reveal */}
+      <div className="mt-6" style={{ borderTop: "1px solid #3c3c38" }}>
+        <button
+          onClick={handleToggleVerses}
+          className="flex items-center gap-1.5 w-full py-2 text-xs font-medium uppercase tracking-wide"
+          style={{ color: "#c1c1b8" }}
+        >
+          {versesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          Scripture References
+        </button>
+        {versesOpen && (
+          <div className="pb-2">
+            {versesLoading && (
+              <p className="text-xs text-muted-foreground py-2">Loading...</p>
+            )}
+            {!versesLoading && verses && verses.length === 0 && (
+              <p className="text-xs text-muted-foreground py-2">No scripture references found for this word.</p>
+            )}
+            {!versesLoading && verses && verses.length > 0 && (
+              <div className="space-y-3">
+                {verses.map((v) => (
+                  <div key={v.reference}>
+                    <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#d4b96a" }}>
+                      {v.reference}
+                    </p>
+                    <p className="text-sm text-foreground leading-relaxed mt-0.5">{v.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

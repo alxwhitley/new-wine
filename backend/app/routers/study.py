@@ -387,6 +387,115 @@ async def get_excerpt(
     return {"content": "\n\n".join(c["content"] for c in chunks)}
 
 
+@router.get("/verses")
+async def get_verses_for_strongs(
+    strongs: str = Query(..., description="Strong's number, e.g. 'G3056' or 'H1234'"),
+):
+    """Return up to 10 scripture verses associated with a Strong's number.
+
+    Strategy: find the word_study document for this Strong's number,
+    extract Bible references from its excerpt or chunk content,
+    then look up verse texts from the verses table.
+    """
+    db = get_supabase()
+
+    # Find word_study document matching this Strong's number
+    doc_result = (
+        db.table("documents")
+        .select("id")
+        .eq("source_kind", "word_study")
+        .ilike("title", f"%{strongs}%")
+        .limit(1)
+        .execute()
+    )
+    if not doc_result.data:
+        return {"verses": []}
+
+    doc_id = doc_result.data[0]["id"]
+
+    # Get content: try excerpt first, fall back to chunks
+    content = ""
+    try:
+        excerpt_result = (
+            db.table("excerpts")
+            .select("content")
+            .eq("document_id", doc_id)
+            .eq("excerpt_type", "word_study_article")
+            .limit(1)
+            .execute()
+        )
+        if excerpt_result.data:
+            content = excerpt_result.data[0]["content"]
+    except Exception:
+        pass
+
+    if not content:
+        chunk_result = (
+            db.table("chunks")
+            .select("content")
+            .eq("document_id", doc_id)
+            .order("chunk_index")
+            .limit(10)
+            .execute()
+        )
+        content = "\n\n".join(c["content"] for c in (chunk_result.data or []))
+
+    if not content:
+        return {"verses": []}
+
+    # Extract Bible references from content using regex
+    ref_pattern = re.compile(
+        r'(?:Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth'
+        r'|1 Samuel|2 Samuel|1 Kings|2 Kings|1 Chronicles|2 Chronicles'
+        r'|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes'
+        r'|Song of Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel'
+        r'|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk'
+        r'|Zephaniah|Haggai|Zechariah|Malachi'
+        r'|Matthew|Mark|Luke|John|Acts|Romans'
+        r'|1 Corinthians|2 Corinthians|Galatians|Ephesians|Philippians'
+        r'|Colossians|1 Thessalonians|2 Thessalonians'
+        r'|1 Timothy|2 Timothy|Titus|Philemon|Hebrews|James'
+        r'|1 Peter|2 Peter|1 John|2 John|3 John|Jude|Revelation)'
+        r'\s+\d+:\d+'
+    )
+    raw_refs = ref_pattern.findall(content)
+
+    # Deduplicate while preserving order
+    seen = set()  # type: set
+    unique_refs = []  # type: List[str]
+    for ref in raw_refs:
+        if ref not in seen:
+            seen.add(ref)
+            unique_refs.append(ref)
+        if len(unique_refs) >= 15:
+            break
+
+    # Look up verse texts
+    verses = []  # type: List[dict]
+    for ref in unique_refs:
+        parsed = parse_ref(ref)
+        if not parsed:
+            continue
+        abbrev, chapter, verse_num = parsed
+        verse_id = f"{abbrev}.{chapter}.{verse_num}"
+        result = (
+            db.table("verses")
+            .select("text")
+            .eq("verse_id", verse_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            verses.append({
+                "reference": ref,
+                "text": result.data[0]["text"],
+            })
+        if len(verses) >= 10:
+            break
+
+    return {"verses": verses}
+
+
 @router.get("/commentary")
 async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),
