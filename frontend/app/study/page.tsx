@@ -634,9 +634,7 @@ function CorpusPanel({
         {wordStudyLoading ? (
           <SkeletonCards />
         ) : wordStudyContent ? (
-          <div className="prose prose-invert prose-sm max-w-none">
-            <ReactMarkdown>{wordStudyContent}</ReactMarkdown>
-          </div>
+          <TruncatedExcerpt content={wordStudyContent} />
         ) : (
           <div className="py-12 text-center">
             <p className="text-sm" style={{ color: "#c1c1b8" }}>
@@ -796,9 +794,7 @@ function CorpusPanel({
                   <div className="h-3 rounded bg-border w-4/6" />
                 </div>
               ) : excerptContent ? (
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown>{excerptContent}</ReactMarkdown>
-                </div>
+                <TruncatedExcerpt content={excerptContent} />
               ) : (
                 <p className="text-sm" style={{ color: "#888780" }}>
                   No study notes available
@@ -1195,6 +1191,41 @@ function VerseDisplay({
         <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
       </div>
     </div>
+  );
+}
+
+function TruncatedExcerpt({ content, wordLimit = 300 }: { content: string; wordLimit?: number }) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Reset to collapsed when content changes (new word selected)
+  useEffect(() => {
+    setExpanded(false);
+  }, [content]);
+
+  const words = content.split(/\s+/);
+  const needsTruncation = words.length > wordLimit;
+  const displayContent = !expanded && needsTruncation
+    ? words.slice(0, wordLimit).join(" ") + "..."
+    : content;
+
+  return (
+    <>
+      <div className="prose prose-invert prose-sm max-w-none">
+        <ReactMarkdown>{displayContent}</ReactMarkdown>
+      </div>
+      {needsTruncation && (
+        <div style={{ borderTop: "1px solid #3c3c38" }}>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1.5 w-full py-2 text-xs font-medium uppercase tracking-wide"
+            style={{ color: "#c1c1b8" }}
+          >
+            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {expanded ? "Show Less" : "Read More"}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
