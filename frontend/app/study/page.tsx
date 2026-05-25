@@ -1249,10 +1249,6 @@ function WordStudyPanel({
           <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
         </>
       )}
-
-      <p className="text-sm mt-8" style={{ color: "#c1c1b8" }}>
-        Enter a verse reference above to see this word in context
-      </p>
     </div>
   );
 }
@@ -1543,7 +1539,7 @@ export default function StudyPage() {
     const isPlainWord = trimmed.length >= 2 && !/\d/.test(trimmed);
     const hasBookMatch = matchBooks(verseRef).length > 0;
 
-    if (!isPlainWord || hasBookMatch) {
+    if (!isPlainWord || hasBookMatch || wordStudyMode) {
       setWordSearchResults([]);
       setWordSearchOpen(false);
       return;
