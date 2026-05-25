@@ -36,7 +36,7 @@ repo/
 │   │   │   ├── chat.py       # /chat endpoint — retrieval + LLM
 │   │   │   ├── search.py     # /search + /search/documents endpoints
 │   │   │   ├── document.py   # /document/{id} + /document/{id}/article
-│   │   │   ├── study.py      # /study/verse + /study/corpus endpoints
+│   │   │   ├── study.py      # /study/verse + /study/corpus + /study/lexicon + /study/excerpt endpoints
 │   │   │   └── ingest.py     # /ingest endpoint
 │   │   ├── services/
 │   │   ├── db/
@@ -195,7 +195,7 @@ repo/
 - **Sparse citation rule** — system prompt enforces max 2-3 inline citations per response. Only cite when source of claim materially matters. Single citation sufficient when answer draws primarily from one source.
 - **Cohere reranking** — After RRF fusion, top 10 chunks sent to Cohere rerank-v3.5 with original query; top 5 by relevance score returned. Falls back to RRF top 10 if `COHERE_API_KEY` not set or call fails.
 - **Column break handling** — Pass 1 prompt instructs Gemini to transcribe multi-article pages column by column with `=== COLUMN BREAK ===` markers. Pass 2 prompt tells Groq to follow article content across column breaks, ignoring other articles' content.
-- **psycopg2 connection fix** — Supabase pooler usernames contain a dot (`postgres.{ref}`) which `psycopg2.connect(uri)` misparses, truncating to `postgres`. All ingestion scripts (`ingest_lexicon.py`, `ingest_preceptaustin.py`) now parse `SUPABASE_DB_URL` with `urlparse` and pass explicit keyword args (`host`, `port`, `user`, `password`, `dbname`).
+- **psycopg2 connection fix** — Supabase pooler usernames contain a dot (`postgres.{ref}`) which `psycopg2.connect(uri)` misparses, truncating to `postgres`. All ingestion scripts (`ingest_lexicon.py`, `ingest_preceptaustin.py`, `ingest.py`, `ingest_commentaries.py`) now parse `SUPABASE_DB_URL` with `urlparse` and pass explicit keyword args (`host`, `port`, `user`, `password`, `dbname`).
 
 ---
 
@@ -327,7 +327,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 |---|---|
 | `scripts/extract_magazine.py` | 3-pass Gemini/Groq extraction pipeline (Vision → Segmentation → QA). Supports `--max-issues N` and `--time-limit`. Continuation resolver (BFS, depth 5) handles "continued on page N" markers. PDFs archived into `02_extracted/{issue_stem}/` after extraction. Empty Gemini batches log warning + substitute `""` (non-fatal). |
 | `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase. Auto-populates `bible_references`. Archives PDFs to `05_archived/` on success. |
-| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. Skip reason tracking: `ingest_file()` returns `(status, reason)` tuples; `main()` prints grouped summary table of all skipped/failed files with reasons at end of run. |
+| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. Skip reason tracking: `ingest_file()` returns `(status, reason)` tuples; `main()` prints grouped summary table of all skipped/failed files with reasons at end of run. Uses psycopg2 direct query for `already_ingested()` (same `DB_PARAMS` pattern as other scripts). |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq Llama 3.3 70B). `extract_bible_references(content) -> List[str]`. Segments at ~12k chars, normalizes against 66-book canonical set + alias map, dedupes. Non-fatal (returns `[]`). |
 | `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force` (re-process docs that already have refs). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
@@ -337,6 +337,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/whisper_transcribe.py` | Whisper medium transcription + Groq cleaning. Batch mode processes `no_captions/` stubs; single-URL mode via CLI args. |
 | `scripts/clean_transcripts.py` | Clean raw transcripts via Groq Llama 3.3 70B, move to cleaned/ |
 | `scripts/generate_excerpts.py` | Batch-generate edited word study articles from Precept Austin raw chunks. Concatenates all chunks per document, sends to Anthropic Claude for editing into clean articles, writes to `excerpts` table (`excerpt_type = 'word_study_article'`). Flags: `--test`, `--test-quality`, `--model sonnet|haiku`, `--time-limit`. |
+| `scripts/ingest_commentaries.py` | Ingests HistoricalChristianFaith commentaries from SQLite DB. Groups by father_name, one document per father, chunks with tiktoken, embeds with OpenAI, inserts via psycopg2. Single-transaction pattern (`connect_with_retry()` + `ingest_father()`). Theological tagging (Reformed, Cessationist, Charismatic-Friendly, Desert Fathers, Patristic). Flags: `--dry-run`, `--father "Name"`, `--filter-charismatic`. |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content in Supabase (run 2026-04-17). |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
@@ -349,6 +350,8 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `ingest_preceptaustin.py` | Ingests Precept Austin word studies into Supabase. Chunks via psycopg2 `execute_values` with `::vector` cast. Documents via Supabase client. Skip logic checks `excerpts` table for existing `word_study_article` excerpt (not just document existence). Reuses existing doc_id when document exists but has no excerpt. Uses `backend/app/services/chunker.py` (550 tokens, 80 overlap). |
 | `ingest_lexicon.py` | Ingests STEPBible lexicon files (TBESG, TBESH, TFLSJ). One chunk per lexical entry. tiktoken truncation at 8000 tokens for embedding. Resume-safe (tracks existing chunk counts). CLI flags: `--lexicon TBESG\|TBESH\|TFLSJ`, `--delete` (removes existing data first), `--sample N`. Brief mode for TBESG: stores only gloss + bolded sub-meanings (no full Abbott-Smith HTML). Chunk inserts via psycopg2 `execute_values` with `ON CONFLICT DO NOTHING`. |
 | `ingest_bible.py` | Parses WEB VPL file, maps 66 canonical books (VPL→SBL abbreviations), inserts into `verses` table via psycopg2. Batch size 1000, `ON CONFLICT DO NOTHING`. `--test` limits to 100 verses. Skips deuterocanonical books. |
+
+Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 **Data sources:**
 - `sources/precept_austin/` — word study `.txt` files + `index.json` + `page_cache/` (gitignored)
@@ -427,17 +430,23 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 
 ## Study Mode (frontend)
 
-- **Route:** `/study` — Study Mode page with interlinear word blocks, definitions, corpus quotes
-- **Layout:** Shared sidebar (w-64) with Saved Words list | Study column (380px fixed) | Corpus column (flex:1)
+- **Route:** `/study` — Study Mode page with tab-driven layout
+- **Layout:** Shared sidebar (w-64) with Saved Words list | Left panel (380px fixed: search, verse card, chapter view) | Right panel (flex:1: tab content)
 - **Sidebar:** Shared `sidebar.tsx` across Chat and Study. Uses `usePathname()` for active route. Chat shows Recents; Study shows Saved Words. Nav items: Chat (MessageSquare), Discover (Compass), Study (BookOpen). Gold "New Chat" CTA (`#b49238`). Hover standard: `onMouseEnter` bg `#262624`, `onMouseLeave` transparent.
 - **Saved words:** `saved_words` table in Supabase (migration 017). RLS policy scoped to `auth.uid()`. Toggle save/unsave from definition panel bookmark icon. Sidebar shows English gloss + Strong's number, transliteration below.
 - **Verse lookup:** Direct Supabase query from frontend (`verses` table, keyed by `verse_id`). Client-side `parseRef()` with full 66-book `BOOK_MAP` + `ABBREV_TO_NAME`.
-- **Corpus panel ("From the Library"):** Backend `GET /study/corpus?verse=...&transliteration=...` endpoint. Embeds query via OpenAI, runs `match_chunks` RPC (match_count=20, include_copyrighted=true), filters to `citation_mode='citable'` + `source_kind IN ('sermon_transcript', 'magazine_article')`, dedupes by document, returns top 5. Frontend shows skeleton loader, empty state, or real results.
+- **Left panel:** Search bar, verse card, "View Chapter" button, chapter view. No interlinear or definition content.
+- **Chapter view:** Flowing text with inline `<sup>` verse numbers. Verses queried via `.like("verse_id", "JHN.1.%")` pattern. Active verse highlighted with `#2f2f2c` background. Clicking a verse in chapter view loads it as the active verse.
+- **Right panel tabs:** `CorpusTab` type: `"commentaries" | "word_study" | "jewish"`. Tab state lifted to parent `StudyPage` for cross-panel coordination.
+  - **Commentary tab:** Corpus results from `GET /study/corpus` (commentaries, sermons, magazine articles).
+  - **Word Study tab:** Interlinear word blocks → definition panel → Precept Austin excerpt → "From the Library" corpus results. Interlinear fetch gated by `corpusTab === "word_study"` (not fetched on every verse change). Auto-selects first interlinear word when tokens load.
+  - **Jewish Perspective tab:** Inline generate flow (no modal). Empty state with "Generate Jewish Perspective" button → disclaimer text → "Confirm & Generate" button → spinner → cached result. `jpCacheChecked` state tracks whether cache has been checked.
+- **Excerpt panel:** `GET /study/excerpt?strongs=G####` endpoint returns Precept Austin word study article for selected Strong's number. Tries `excerpts` table first, falls back to concatenated chunks.
+- **Corpus panel ("From the Library"):** Backend `GET /study/corpus?verse=...&transliteration=...` endpoint. Embeds query via OpenAI, runs `match_chunks` RPC (match_count=20, include_copyrighted=true), filters to `citation_mode='citable'` + `source_kind IN ('sermon_transcript', 'magazine_article', 'commentary', 'word_study')`, dedupes by document, returns top 5. Frontend shows skeleton loader, empty state, or real results.
 - **Definition panel:** Fetches lexicon data from `GET /study/lexicon?strongs=G####` endpoint. Displays gloss inline with transliteration/Strong's number, plus parsed definition and usage from TBESG chunks.
-- **Backend router:** `backend/app/routers/study.py` — `GET /study/verse` (parses ref, queries verses table), `GET /study/corpus` (semantic search), and `GET /study/lexicon` (TBESG lexicon lookup by Strong's number — filters by `documents.title ILIKE '%TBESG%'` then chunks by content prefix match). Registered in `main.py` with `prefix="/study"`.
-- **Interlinear blocks:** Inline styles for spacing/sizing (not Tailwind — classes weren't taking effect). Hover color `#2f2f2c` (since resting bg is `#262624`). No bookmark icons on word blocks.
-- **Verse card click-to-deselect:** When a word is selected, clicking the verse text card deselects and returns to commentary view. Hint text "Tap verse to return to commentary" shown when word selected. Arrow buttons use `stopPropagation` to avoid triggering deselect.
-- **Current state:** Placeholder interlinear data (John 1:1 with 12 Greek tokens, 3 definitions). Verse lookup, saved words, and corpus panel are live.
+- **Backend router:** `backend/app/routers/study.py` — `GET /study/verse` (parses ref, queries verses table), `GET /study/corpus` (semantic search), `GET /study/lexicon` (TBESG lexicon lookup), `GET /study/excerpt` (word study excerpt by Strong's number), `GET /study/interlinear` (interlinear words by verse_id), `GET /study/commentary` (commentary semantic search), `GET /study/wordsearch` + `GET /study/wordstudy/{document_id}` (word study search and detail). Registered in `main.py` with `prefix="/study"`.
+- **Interlinear blocks:** Inline styles for spacing/sizing (not Tailwind — classes weren't taking effect). Hover color `#2f2f2c` (since resting bg is `#262624`). No bookmark icons on word blocks. Now rendered in Word Study tab of right panel (not left panel).
+- **Interlinear data:** Live from `interlinear_words` table (142,096 rows). Backend `GET /study/interlinear?verse_id=JHN.1.1` returns word data ordered by word_position.
 
 ---
 
@@ -466,11 +475,14 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **`ingest_preceptaustin.py` not yet run** — depends on successful scrape completion
 - ~~**TBESG re-ingestion**~~ — **DONE:** 11,034 chunks ingested in brief mode (gloss + bold sub-meanings)
 - **Debug logging in study.py lexicon endpoint** — verbose print statements added for TBESG debugging. Remove after confirming lexicon endpoint works correctly with re-ingested TBESG data.
-- **Study Mode interlinear data is placeholder only** — John 1:1 tokens and 3 definitions are hardcoded. Verse lookup, saved words, and corpus panel are live. Needs real interlinear data source and lexicon wiring.
+- ~~**Study Mode interlinear data is placeholder only**~~ — **DONE:** Live from `interlinear_words` table (142,096 rows), fetched via `GET /study/interlinear` endpoint.
 - ~~**Migration 017 (saved_words)**~~ — **DONE:** saved_words table exists with RLS enabled
 - **10 YouTube transcripts ingested (2026-05-22)** — side effect of running skip tracking test against `youtube/ingested/`. These had different MD5 hashes than stored (likely re-cleaned). 1 duplicate ("Your Calling Is Holy" by Derek Prince) was found and the older copy deleted.
 - **`mode-toggle.tsx` is orphaned** — `frontend/components/rhemata/mode-toggle.tsx` exists but is no longer imported anywhere. Can be deleted.
 - **Word study excerpt generation 96% complete** — 1,713 of 1,779 word_study documents have excerpts generated (`excerpts` table, `excerpt_type = 'word_study_article'`). 66 remaining. Script: `scripts/generate_excerpts.py`.
+- **Commentary ingestion not yet run** — `scripts/ingest_commentaries.py` rewritten and pushed, needs to be executed (325 fathers, 82,567 rows from SQLite DB at `/tmp/commentaries-db/data.out`).
+- **Hebrew word study pipeline ready** — `scrape_preceptaustin.py --language hebrew --fetch` and `ingest_preceptaustin.py --language hebrew` ready to run.
+- **Interlinear deployment verification needed** — confirm `GET /study/interlinear` works on live Railway (tested locally only).
 - ~~**SUPABASE_DB_URL psycopg2 connection refused**~~ — **FIXED:** dotted username was being truncated by psycopg2 URI parsing. All scripts now use `urlparse` + explicit keyword args.
 
 ---
