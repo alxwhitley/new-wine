@@ -24,6 +24,7 @@ from urllib.parse import urlparse, unquote
 
 import openai
 import psycopg2
+from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -38,7 +39,6 @@ SQLITE_PATH = Path("/tmp/commentaries-db/data.out")
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536
 EMBED_BATCH_SIZE = 100
-CHUNK_INSERT_SLEEP = 0.5
 
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -97,6 +97,22 @@ def assign_tags(father_name, ts):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def connect_with_retry(max_retries=3, retry_delay=2):
+    # type: (int, int) -> psycopg2.extensions.connection
+    """Connect to psycopg2 with retry on failure."""
+    for attempt in range(max_retries):
+        try:
+            return psycopg2.connect(**DB_PARAMS)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print("    Connection failed (attempt {}/{}), retrying in {}s: {}".format(
+                    attempt + 1, max_retries, retry_delay, e
+                ))
+                time.sleep(retry_delay)
+            else:
+                raise
+
+
 def embed_batch(texts):
     # type: (List[str]) -> List[List[float]]
     """Embed a batch of texts using OpenAI."""
@@ -108,42 +124,34 @@ def embed_batch(texts):
     return [item.embedding for item in response.data]
 
 
-def check_existing_doc(title):
-    # type: (str) -> Optional[str]
-    """Check if document exists and has chunks. Returns:
-    - None if document doesn't exist (proceed with ingestion)
-    - "skip" if document exists with chunks (skip)
-    - None after deleting empty document (proceed with ingestion)
+def ingest_father(doc, chunk_rows):
+    # type: (Dict, List[Tuple]) -> str
+    """Check existence, insert document + all chunks in a single transaction.
+
+    Returns:
+    - "skip" if document already exists with chunks
+    - "ok" if ingestion succeeded
+    - "error" if something went wrong
     """
-    conn = psycopg2.connect(**DB_PARAMS)
+    conn = connect_with_retry()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT id FROM documents WHERE title = %s LIMIT 1", (title,))
-            row = cur.fetchone()
-            if row is None:
-                return None  # doesn't exist, proceed
+            # Check if document already exists
+            cur.execute("SELECT id FROM documents WHERE title = %s LIMIT 1", (doc["title"],))
+            existing = cur.fetchone()
 
-            doc_id = row[0]
-            cur.execute("SELECT count(*) FROM chunks WHERE document_id = %s", (doc_id,))
-            chunk_count = cur.fetchone()[0]
+            if existing:
+                doc_id = existing[0]
+                cur.execute("SELECT count(*) FROM chunks WHERE document_id = %s", (doc_id,))
+                chunk_count = cur.fetchone()[0]
 
-            if chunk_count > 0:
-                return "skip"
+                if chunk_count > 0:
+                    return "skip"
 
-            # Document exists but has 0 chunks — delete and re-ingest
-            cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
-            conn.commit()
-            return None  # proceed with ingestion
-    finally:
-        conn.close()
+                # Document exists but 0 chunks — delete and re-ingest
+                cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
 
-
-def insert_document(doc):
-    # type: (Dict) -> None
-    """Insert a document row via psycopg2."""
-    conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        with conn.cursor() as cur:
+            # Insert document
             cur.execute(
                 """INSERT INTO documents (id, title, author, source_name, source_type, source_kind,
                    is_copyrighted, citation_mode, topic_tags, bible_references, year)
@@ -154,27 +162,21 @@ def insert_document(doc):
                     doc["citation_mode"], doc["topic_tags"], [], doc.get("year"),
                 ),
             )
-        conn.commit()
-    finally:
-        conn.close()
 
-
-def insert_single_chunk(row):
-    # type: (Tuple) -> bool
-    """Insert a single chunk via psycopg2. Opens and closes connection per insert."""
-    conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) "
-                "VALUES (%s, %s, %s, %s::vector, %s)",
-                row,
+            # Insert all chunks in one call
+            execute_values(
+                cur,
+                "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) VALUES %s",
+                chunk_rows,
+                template="(%s, %s, %s, %s::vector, %s)",
             )
+
         conn.commit()
-        return True
+        return "ok"
     except Exception as e:
-        print("    CHUNK INSERT ERROR: {}".format(e))
-        return False
+        conn.rollback()
+        print("    INGEST ERROR: {}".format(e))
+        return "error"
     finally:
         conn.close()
 
@@ -262,17 +264,11 @@ def main():
     # Ingest each father
     success = 0
     skipped = 0
+    errors = 0
     total_chunks = 0
 
     for idx, (father_name, min_ts, row_count, tags) in enumerate(filtered):
         title = father_name
-
-        # Skip if exists with chunks
-        status = check_existing_doc(title)
-        if status == "skip":
-            print("  SKIP '{}': document with chunks already exists".format(father_name))
-            skipped += 1
-            continue
 
         # Fetch all rows for this father
         sqlite_cur.execute(
@@ -303,9 +299,16 @@ def main():
             skipped += 1
             continue
 
-        # Create document
+        # Embed in batches
+        all_embeddings = []  # type: List[List[float]]
+        for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
+            batch_end = min(batch_start + EMBED_BATCH_SIZE, len(chunks))
+            batch = chunks[batch_start:batch_end]
+            all_embeddings.extend(embed_batch(batch))
+
+        # Build document and chunk rows
         doc_id = str(uuid.uuid4())
-        insert_document({
+        doc = {
             "id": doc_id,
             "title": title,
             "author": father_name,
@@ -316,14 +319,7 @@ def main():
             "citation_mode": "citable",
             "topic_tags": tags,
             "year": min_ts,
-        })
-
-        # Embed and insert chunks in batches
-        all_embeddings = []  # type: List[List[float]]
-        for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
-            batch_end = min(batch_start + EMBED_BATCH_SIZE, len(chunks))
-            batch = chunks[batch_start:batch_end]
-            all_embeddings.extend(embed_batch(batch))
+        }
 
         chunk_rows = []  # type: List[Tuple]
         for chunk_index, (text, embedding) in enumerate(zip(chunks, all_embeddings)):
@@ -336,23 +332,26 @@ def main():
                 chunk_index,
             ))
 
-        # Insert one chunk at a time with sleep between
-        inserted = 0
-        for chunk_row in chunk_rows:
-            if insert_single_chunk(chunk_row):
-                inserted += 1
-            time.sleep(CHUNK_INSERT_SLEEP)
+        # Single-transaction insert: check + document + all chunks
+        result = ingest_father(doc, chunk_rows)
 
-        total_chunks += inserted
-        success += 1
-        print("  OK '{}': {} rows -> {} chunks inserted [{}]".format(
-            father_name, row_count, inserted, ", ".join(tags) or "no tags"
-        ))
+        if result == "skip":
+            print("  SKIP '{}': document with chunks already exists".format(father_name))
+            skipped += 1
+        elif result == "ok":
+            total_chunks += len(chunk_rows)
+            success += 1
+            print("  OK '{}': {} rows -> {} chunks inserted [{}]".format(
+                father_name, row_count, len(chunk_rows), ", ".join(tags) or "no tags"
+            ))
+        else:
+            errors += 1
+            print("  FAIL '{}': insert error".format(father_name))
 
         # Progress
         if (idx + 1) % 10 == 0:
-            print("\n  Progress: {}/{} processed ({} ingested, {} skipped, {} chunks total)\n".format(
-                idx + 1, len(filtered), success, skipped, total_chunks
+            print("\n  Progress: {}/{} processed ({} ingested, {} skipped, {} errors, {} chunks total)\n".format(
+                idx + 1, len(filtered), success, skipped, errors, total_chunks
             ))
 
     sqlite_conn.close()
@@ -362,6 +361,7 @@ def main():
     print("  Total fathers: {}".format(len(filtered)))
     print("  Ingested: {}".format(success))
     print("  Skipped: {}".format(skipped))
+    print("  Errors: {}".format(errors))
     print("  Total chunks: {}".format(total_chunks))
     print("=" * 60)
 
