@@ -782,25 +782,6 @@ function CorpusPanel({
               isLoggedIn={isLoggedIn}
             />
 
-            {/* Precept Austin excerpt */}
-            <div className="mt-6">
-              <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
-                Study Notes
-              </p>
-              {excerptLoading ? (
-                <div className="space-y-2 animate-pulse">
-                  <div className="h-3 rounded bg-border w-full" />
-                  <div className="h-3 rounded bg-border w-5/6" />
-                  <div className="h-3 rounded bg-border w-4/6" />
-                </div>
-              ) : excerptContent ? (
-                <TruncatedExcerpt content={excerptContent} />
-              ) : (
-                <p className="text-sm" style={{ color: "#888780" }}>
-                  No study notes available
-                </p>
-              )}
-            </div>
           </div>
         )}
 
