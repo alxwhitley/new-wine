@@ -511,13 +511,16 @@ function CorpusPanel({
   const [jpLoading, setJpLoading] = useState(false);
   const [jpError, setJpError] = useState(false);
   const [jpDisclaimer, setJpDisclaimer] = useState(false);
+  const [jpCacheChecked, setJpCacheChecked] = useState(false);
   const [jpCheckedRef, setJpCheckedRef] = useState<string | null>(null);
 
   // Reset JP state when verse changes
   useEffect(() => {
     setJpContent(null);
     setJpError(false);
+    setJpCacheChecked(false);
     setJpCheckedRef(null);
+    setJpDisclaimer(false);
     setCorpusTab("commentaries");
   }, [verseRef]);
 
@@ -527,6 +530,8 @@ function CorpusPanel({
 
     // If already loaded for this verse, show it
     if (jpContent && jpCheckedRef === verseRef) return;
+    // If we already checked cache for this verse, don't re-check
+    if (jpCacheChecked && jpCheckedRef === verseRef) return;
 
     // Check cache
     try {
@@ -538,18 +543,19 @@ function CorpusPanel({
       if (data.cached && data.content) {
         setJpContent(data.content);
         setJpCheckedRef(verseRef);
+        setJpCacheChecked(true);
         return;
       }
     } catch {
-      // fall through to disclaimer
+      // fall through to empty state
     }
 
-    // Not cached — show disclaimer
-    setJpDisclaimer(true);
-  }, [corpusTab, jpContent, jpCheckedRef, verseRef]);
+    // Not cached — mark checked so we show the generate button
+    setJpCheckedRef(verseRef);
+    setJpCacheChecked(true);
+  }, [corpusTab, jpContent, jpCacheChecked, jpCheckedRef, verseRef]);
 
   const handleJpGenerate = useCallback(async () => {
-    setJpDisclaimer(false);
     setJpLoading(true);
     setJpError(false);
 
@@ -761,22 +767,12 @@ function CorpusPanel({
         <>
           {tabBar}
           {jpLoading ? (
-            <div className="space-y-3">
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border p-4 animate-pulse"
-                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
-                >
-                  <div className="h-2.5 rounded bg-border w-1/3 mb-3" />
-                  <div className="h-3 rounded bg-border w-full mb-2" />
-                  <div className="h-3 rounded bg-border w-5/6 mb-2" />
-                  <div className="h-3 rounded bg-border w-4/6" />
-                </div>
-              ))}
-              <p className="text-center text-sm mt-4" style={{ color: "#c1c1b8" }}>
-                Researching Messianic Jewish sources...
-              </p>
+            <div className="py-12 flex flex-col items-center gap-3">
+              <svg className="animate-spin h-6 w-6" style={{ color: "#b49238" }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <p className="text-sm" style={{ color: "#c1c1b8" }}>Generating...</p>
             </div>
           ) : jpError ? (
             <div className="py-12 text-center">
@@ -784,11 +780,11 @@ function CorpusPanel({
                 Unable to generate. Please try again.
               </p>
               <button
-                onClick={() => setCorpusTab("commentaries")}
+                onClick={() => { setJpError(false); setJpDisclaimer(false); }}
                 className="text-sm mt-3 cursor-pointer hover:underline"
                 style={{ color: "#d4b96a" }}
               >
-                View Commentaries
+                Try Again
               </button>
             </div>
           ) : jpContent ? (
@@ -837,50 +833,35 @@ function CorpusPanel({
               )}
             </div>
           ) : (
-            <div className="py-12 text-center">
-              <p className="text-sm" style={{ color: "#c1c1b8" }}>
-                Select the Jewish Perspective tab to generate a summary.
-              </p>
-            </div>
-          )}
-          {jpDisclaimer && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center"
-              style={{ backgroundColor: "rgba(27, 27, 25, 0.8)" }}
-              onClick={(e) => { if (e.target === e.currentTarget) { setJpDisclaimer(false); setCorpusTab("commentaries"); } }}
-            >
-              <div
-                className="w-full max-w-[420px] mx-4 rounded-lg border p-6"
-                style={{ backgroundColor: "#262624", borderColor: "#3c3c38" }}
-              >
-                <h3 className="font-serif text-lg" style={{ color: "#d4b96a" }}>
-                  Jewish Perspective
-                </h3>
-                <p className="text-sm mt-3 leading-relaxed" style={{ color: "#c1c1b8" }}>
-                  Generating this summary searches live Messianic Jewish scholarship
-                  sources in real time. This feature is in early access.
-                </p>
-                <p className="text-sm mt-3 leading-relaxed" style={{ color: "#c1c1b8" }}>
-                  Once generated, this summary is saved permanently and free for
-                  everyone who studies this verse after you.
-                </p>
-                <div className="flex justify-end gap-3 mt-6">
-                  <button
-                    onClick={() => { setJpDisclaimer(false); setCorpusTab("commentaries"); }}
-                    className="px-4 py-2 text-sm rounded-lg cursor-pointer"
-                    style={{ color: "#c1c1b8" }}
-                  >
-                    Cancel
-                  </button>
+            <div className="py-12 flex flex-col items-center gap-4">
+              {jpDisclaimer ? (
+                <>
+                  <p className="text-sm leading-relaxed text-center max-w-sm" style={{ color: "#c1c1b8" }}>
+                    This searches live Messianic Jewish scholarship sources and may include
+                    non-Christian perspectives. Results are saved for future visitors.
+                  </p>
                   <button
                     onClick={handleJpGenerate}
-                    className="px-4 py-2 text-sm font-medium rounded-lg cursor-pointer text-white"
+                    className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
                     style={{ backgroundColor: "#b49238" }}
                   >
-                    Generate
+                    Confirm & Generate
                   </button>
-                </div>
-              </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm" style={{ color: "#c1c1b8" }}>
+                    No Jewish perspective generated for this verse yet.
+                  </p>
+                  <button
+                    onClick={() => setJpDisclaimer(true)}
+                    className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: "#b49238" }}
+                  >
+                    Generate Jewish Perspective
+                  </button>
+                </>
+              )}
             </div>
           )}
           {flagModalEl}
