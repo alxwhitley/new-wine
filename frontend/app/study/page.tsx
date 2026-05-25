@@ -444,6 +444,15 @@ function CorpusPanel({
   accessToken,
   corpusTab,
   onTabChange,
+  tokens,
+  tokensLoading,
+  onSelectWord,
+  isNT,
+  isSaved,
+  onToggleSave,
+  isLoggedIn,
+  excerptContent,
+  excerptLoading,
 }: {
   definition: WordDefinition | null;
   selectedStrongs: string | null;
@@ -463,6 +472,15 @@ function CorpusPanel({
   accessToken: string | null;
   corpusTab: CorpusTab;
   onTabChange: (tab: CorpusTab) => void;
+  tokens: WordToken[];
+  tokensLoading: boolean;
+  onSelectWord: (strongs: string | null) => void;
+  isNT: boolean;
+  isSaved: boolean;
+  onToggleSave: () => void;
+  isLoggedIn: boolean;
+  excerptContent: string | null;
+  excerptLoading: boolean;
 }) {
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [flagModal, setFlagModal] = useState<{
@@ -745,13 +763,53 @@ function CorpusPanel({
     return (
       <>
         {tabBar}
-        {!selectedStrongs ? (
-          <div className="py-12 text-center">
-            <p className="text-sm" style={{ color: "#c1c1b8" }}>
-              Select a word from the interlinear to see library results.
-            </p>
+        {/* Interlinear block */}
+        <div className="mb-5">
+          <InterlinearBlocks
+            tokens={tokens}
+            selectedStrongs={selectedStrongs}
+            onSelect={onSelectWord}
+            loading={tokensLoading}
+            isNT={isNT}
+          />
+        </div>
+
+        {/* Definition + Excerpt for selected word */}
+        {selectedStrongs && definition && (
+          <div className="mb-6">
+            <DefinitionPanel
+              definition={definition}
+              isSaved={isSaved}
+              onToggleSave={onToggleSave}
+              isLoggedIn={isLoggedIn}
+            />
+
+            {/* Precept Austin excerpt */}
+            <div className="mt-6">
+              <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
+                Study Notes
+              </p>
+              {excerptLoading ? (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-3 rounded bg-border w-full" />
+                  <div className="h-3 rounded bg-border w-5/6" />
+                  <div className="h-3 rounded bg-border w-4/6" />
+                </div>
+              ) : excerptContent ? (
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown>{excerptContent}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: "#888780" }}>
+                  No study notes available
+                </p>
+              )}
+            </div>
           </div>
-        ) : (
+        )}
+
+        {/* From the Library corpus results */}
+        {selectedStrongs ? (
           <>
             <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
               From the library
@@ -787,6 +845,12 @@ function CorpusPanel({
               </div>
             )}
           </>
+        ) : (
+          <div className="py-8 text-center">
+            <p className="text-sm" style={{ color: "#c1c1b8" }}>
+              Select a word from the interlinear to see its definition and library results.
+            </p>
+          </div>
         )}
         {flagModalEl}
       </>
@@ -1764,6 +1828,15 @@ export default function StudyPage() {
     accessToken,
     corpusTab,
     onTabChange: handleTabChange,
+    tokens,
+    tokensLoading,
+    onSelectWord: handleSelectWord,
+    isNT: !!verseData?.verse_id && NT_BOOKS.has(verseData.verse_id.split(".")[0]),
+    isSaved: selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false,
+    onToggleSave: handleToggleSaveSelected,
+    isLoggedIn: !!user,
+    excerptContent,
+    excerptLoading,
   };
 
   const verseSearchProps = {
@@ -1814,7 +1887,7 @@ export default function StudyPage() {
 
         {/* Desktop: two-column layout */}
         <div className="hidden md:flex flex-1 min-h-0">
-          {/* Left Column: Search + Verse + (Word Study interlinear/excerpt) + Chapter */}
+          {/* Left Column: Search + Verse + View Chapter */}
           <div
             className="w-[380px] shrink-0 flex flex-col overflow-y-auto"
             style={{ borderRight: "0.5px solid #3c3c38" }}
@@ -1843,57 +1916,6 @@ export default function StudyPage() {
                     onDeselect={() => { setSelectedStrongs(null); setActiveCommentary(null); }}
                   />
 
-                  {/* Interlinear + Definition + Excerpt — only when Word Study tab is active */}
-                  {corpusTab === "word_study" && verseData && (
-                    <div className="sticky top-0 z-10 mt-4" style={{ backgroundColor: "#1b1b19" }}>
-                      <InterlinearBlocks
-                        tokens={tokens}
-                        selectedStrongs={selectedStrongs}
-                        onSelect={handleSelectWord}
-                        loading={tokensLoading}
-                        isNT={NT_BOOKS.has(verseData.verse_id.split(".")[0])}
-                      />
-
-                      {selectedStrongs && (
-                        <div className="mt-4">
-                          <DefinitionPanel
-                            definition={definition}
-                            isSaved={savedStrongsSet.has(selectedStrongs)}
-                            onToggleSave={handleToggleSaveSelected}
-                            isLoggedIn={!!user}
-                          />
-                        </div>
-                      )}
-
-                      {/* Precept Austin excerpt */}
-                      {selectedStrongs && (
-                        <div className="mt-6">
-                          <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
-                            Study Notes
-                          </p>
-                          {excerptLoading ? (
-                            <div className="space-y-2 animate-pulse">
-                              <div className="h-3 rounded bg-border w-full" />
-                              <div className="h-3 rounded bg-border w-5/6" />
-                              <div className="h-3 rounded bg-border w-4/6" />
-                            </div>
-                          ) : excerptContent ? (
-                            <div
-                              className="prose prose-invert prose-sm max-w-none overflow-y-auto"
-                              style={{ maxHeight: 300 }}
-                            >
-                              <ReactMarkdown>{excerptContent}</ReactMarkdown>
-                            </div>
-                          ) : (
-                            <p className="text-sm" style={{ color: "#888780" }}>
-                              No study notes available
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* View Chapter button + chapter view */}
                   {verseData && (
                     <div className="mt-4">
@@ -1908,34 +1930,39 @@ export default function StudyPage() {
                       </button>
 
                       {chapterOpen && (
-                        <div className="mt-3 space-y-1">
+                        <div
+                          className="mt-3 rounded-lg border border-border p-4"
+                          style={{ backgroundColor: "#262624" }}
+                        >
                           {chapterLoading ? (
                             <div className="space-y-2 animate-pulse">
                               {[0, 1, 2, 3, 4].map((i) => (
-                                <div key={i} className="h-10 rounded bg-border" />
+                                <div key={i} className="h-4 rounded bg-border" />
                               ))}
                             </div>
                           ) : (
-                            chapterVerses.map((v) => {
-                              const isActive = v.verse_id === verseData.verse_id;
-                              return (
-                                <div
-                                  key={v.verse_id}
-                                  onClick={() => handleChapterVerseClick(v)}
-                                  className="rounded-lg border border-border p-3 cursor-pointer transition-colors"
-                                  style={{
-                                    backgroundColor: isActive ? "#2f2f2c" : "transparent",
-                                  }}
-                                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
-                                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
-                                >
-                                  <span className="text-xs font-medium" style={{ color: "#c1c1b8" }}>
-                                    {v.chapter}:{v.verse}
+                            <p className="text-sm text-foreground leading-relaxed">
+                              {chapterVerses.map((v) => {
+                                const isActive = v.verse_id === verseData.verse_id;
+                                return (
+                                  <span
+                                    key={v.verse_id}
+                                    onClick={() => handleChapterVerseClick(v)}
+                                    className="cursor-pointer rounded-sm transition-colors"
+                                    style={{
+                                      backgroundColor: isActive ? "#2f2f2c" : "transparent",
+                                      padding: "1px 2px",
+                                      margin: "0 -2px",
+                                    }}
+                                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
+                                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
+                                  >
+                                    <sup style={{ fontSize: 9, color: "#888780", marginRight: 2 }}>{v.verse}</sup>
+                                    {v.text}{" "}
                                   </span>
-                                  <span className="text-sm text-foreground ml-2">{v.text}</span>
-                                </div>
-                              );
-                            })
+                                );
+                              })}
+                            </p>
                           )}
                         </div>
                       )}
@@ -1946,7 +1973,7 @@ export default function StudyPage() {
             </div>
           </div>
 
-          {/* Right Column: Corpus Quotes */}
+          {/* Right Column: Tabs + Content */}
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 pt-6 pb-16">
               <CorpusPanel {...corpusPanelProps} />
@@ -1984,51 +2011,6 @@ export default function StudyPage() {
                   selectedStrongs={selectedStrongs}
                   onDeselect={() => setSelectedStrongs(null)}
                 />
-
-                {/* Interlinear on mobile — only when Word Study tab */}
-                {corpusTab === "word_study" && verseData && (
-                  <div className="mt-4">
-                    <InterlinearBlocks
-                      tokens={tokens}
-                      selectedStrongs={selectedStrongs}
-                      onSelect={handleSelectWord}
-                      loading={tokensLoading}
-                      isNT={NT_BOOKS.has(verseData.verse_id.split(".")[0])}
-                    />
-                    {selectedStrongs && (
-                      <div className="mt-4">
-                        <DefinitionPanel
-                          definition={definition}
-                          isSaved={savedStrongsSet.has(selectedStrongs)}
-                          onToggleSave={handleToggleSaveSelected}
-                          isLoggedIn={!!user}
-                        />
-                      </div>
-                    )}
-                    {selectedStrongs && (
-                      <div className="mt-6">
-                        <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
-                          Study Notes
-                        </p>
-                        {excerptLoading ? (
-                          <div className="space-y-2 animate-pulse">
-                            <div className="h-3 rounded bg-border w-full" />
-                            <div className="h-3 rounded bg-border w-5/6" />
-                            <div className="h-3 rounded bg-border w-4/6" />
-                          </div>
-                        ) : excerptContent ? (
-                          <div className="prose prose-invert prose-sm max-w-none">
-                            <ReactMarkdown>{excerptContent}</ReactMarkdown>
-                          </div>
-                        ) : (
-                          <p className="text-sm" style={{ color: "#888780" }}>
-                            No study notes available
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {verseData && (
                   <div className="mt-8">
