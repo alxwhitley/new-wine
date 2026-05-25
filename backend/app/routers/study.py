@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-CORPUS_SOURCE_KINDS = {"sermon_transcript", "magazine_article", "word_study"}
+CORPUS_SOURCE_KINDS = {"sermon_transcript", "magazine_article", "word_study", "commentary"}
 
 
 def parse_ref(ref: str):
