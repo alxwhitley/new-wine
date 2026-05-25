@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { User } from "@supabase/supabase-js";
-import { LogOut, Shield } from "lucide-react";
+import { Database, LogOut, Shield } from "lucide-react";
 
 interface AuthButtonProps {
   user: User | null;
@@ -48,6 +48,16 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
               >
                 <Shield size={14} strokeWidth={1.8} />
                 Admin
+              </a>
+            )}
+            {user.email === "alxwhitley@gmail.com" && (
+              <a
+                href="/rhemata-corpus-admin"
+                onClick={() => setMenuOpen(false)}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+              >
+                <Database size={14} strokeWidth={1.8} />
+                Corpus
               </a>
             )}
             <button
