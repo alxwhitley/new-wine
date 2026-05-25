@@ -1166,20 +1166,11 @@ function VerseDisplay({
   if (!verse) return null;
   return (
     <div
-      className="mt-4 rounded-lg border border-border bg-card relative"
-      style={{ minHeight: 120, cursor: selectedStrongs ? "pointer" : "default" }}
+      className="mt-4 rounded-lg border border-border bg-card"
+      style={{ cursor: selectedStrongs ? "pointer" : "default" }}
       onClick={() => { if (selectedStrongs) onDeselect(); }}
     >
-      <div className="p-4 pb-10">
-        <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
-          {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
-        </p>
-        <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
-      </div>
-      <div
-        className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-3 py-1.5"
-        style={{ borderTop: "1px solid #3c3c38", backgroundColor: "#262624", borderRadius: "0 0 0.5rem 0.5rem" }}
-      >
+      <div className="flex items-center justify-center gap-3 py-2 px-4" style={{ borderBottom: "1px solid #3c3c38" }}>
         <button
           onClick={(e) => { e.stopPropagation(); onStepPrev(); }}
           disabled={!hasPrev}
@@ -1189,7 +1180,7 @@ function VerseDisplay({
           &larr;
         </button>
         <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-          {verse.book} {verse.chapter}:{verse.verse}
+          {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
         </p>
         <button
           onClick={(e) => { e.stopPropagation(); onStepNext(); }}
@@ -1199,6 +1190,9 @@ function VerseDisplay({
         >
           &rarr;
         </button>
+      </div>
+      <div className="p-4">
+        <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
       </div>
     </div>
   );
@@ -1640,8 +1634,49 @@ export default function StudyPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [currentVerseId, stepVerse]);
 
-  // Definition for word study mode — no placeholder data available
-  const wordStudyDefinition: WordDefinition | null = null;
+  // Lexicon fetch for word study mode (triggered by word search selection)
+  const [wordStudyLexicon, setWordStudyLexicon] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!wordStudyDoc) {
+      setWordStudyLexicon(null);
+      return;
+    }
+    const params = new URLSearchParams({ strongs: wordStudyDoc.strongs_number });
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setWordStudyLexicon(data?.content ?? null))
+      .catch(() => setWordStudyLexicon(null));
+  }, [wordStudyDoc]);
+
+  const wordStudyDefinition: WordDefinition | null = wordStudyDoc
+    ? (() => {
+        let gloss = "";
+        let meaning = "";
+        if (wordStudyLexicon) {
+          const colonIdx = wordStudyLexicon.indexOf(":");
+          const afterColon =
+            colonIdx >= 0 ? wordStudyLexicon.slice(colonIdx + 1).trim() : wordStudyLexicon;
+          const dotIdx = afterColon.indexOf(".");
+          if (dotIdx >= 0) {
+            gloss = afterColon.slice(0, dotIdx).trim();
+            const rest = afterColon.slice(dotIdx + 1).trim();
+            meaning = rest.length > 200 ? rest.slice(0, 200).trimEnd() + "\u2026" : rest;
+          } else {
+            gloss = afterColon;
+          }
+        }
+        return {
+          strongs: wordStudyDoc.strongs_number,
+          word: wordStudyDoc.word || wordStudyDoc.transliteration,
+          transliteration: wordStudyDoc.transliteration,
+          gloss,
+          lexiconDefinition: "",
+          meaning,
+          corpusQuotes: [],
+        };
+      })()
+    : null;
 
   // Commentary results (State 1: verse loaded, no word selected)
   const [commentaryResults, setCommentaryResults] = useState<CommentaryResult[]>([]);
