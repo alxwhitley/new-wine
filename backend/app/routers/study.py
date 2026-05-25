@@ -336,6 +336,57 @@ async def get_word_study(document_id: str):
     return {"content": content, "source": "chunks"}
 
 
+@router.get("/excerpt")
+async def get_excerpt(
+    strongs: str = Query(..., description="Strong's number, e.g. 'G3056'"),
+):
+    """Return the Precept Austin word study excerpt for a Strong's number."""
+    db = get_supabase()
+
+    # Find word_study document matching this Strong's number
+    doc_result = (
+        db.table("documents")
+        .select("id")
+        .eq("source_kind", "word_study")
+        .ilike("title", f"%{strongs}%")
+        .limit(1)
+        .execute()
+    )
+    if not doc_result.data:
+        return {"content": None}
+
+    doc_id = doc_result.data[0]["id"]
+
+    # Try excerpts table first
+    try:
+        excerpt_result = (
+            db.table("excerpts")
+            .select("content")
+            .eq("document_id", doc_id)
+            .eq("excerpt_type", "word_study_article")
+            .limit(1)
+            .execute()
+        )
+        if excerpt_result.data:
+            return {"content": excerpt_result.data[0]["content"]}
+    except Exception:
+        pass
+
+    # Fall back to concatenated chunks
+    chunk_result = (
+        db.table("chunks")
+        .select("content")
+        .eq("document_id", doc_id)
+        .order("chunk_index")
+        .execute()
+    )
+    chunks = chunk_result.data or []
+    if not chunks:
+        return {"content": None}
+
+    return {"content": "\n\n".join(c["content"] for c in chunks)}
+
+
 @router.get("/commentary")
 async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),

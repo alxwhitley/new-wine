@@ -185,7 +185,7 @@ interface JewishPerspectiveContent {
   sources: string[];
 }
 
-type CorpusTab = "commentaries" | "jewish";
+type CorpusTab = "commentaries" | "word_study" | "jewish";
 
 interface WordDefinition {
   strongs: string;
@@ -442,6 +442,8 @@ function CorpusPanel({
   onCommentaryBack,
   verseRef,
   accessToken,
+  corpusTab,
+  onTabChange,
 }: {
   definition: WordDefinition | null;
   selectedStrongs: string | null;
@@ -459,6 +461,8 @@ function CorpusPanel({
   onCommentaryBack: () => void;
   verseRef: string;
   accessToken: string | null;
+  corpusTab: CorpusTab;
+  onTabChange: (tab: CorpusTab) => void;
 }) {
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [flagModal, setFlagModal] = useState<{
@@ -506,7 +510,6 @@ function CorpusPanel({
   ) : null;
 
   // Jewish Perspective state
-  const [corpusTab, setCorpusTab] = useState<CorpusTab>("commentaries");
   const [jpContent, setJpContent] = useState<JewishPerspectiveContent | null>(null);
   const [jpLoading, setJpLoading] = useState(false);
   const [jpError, setJpError] = useState(false);
@@ -521,12 +524,11 @@ function CorpusPanel({
     setJpCacheChecked(false);
     setJpCheckedRef(null);
     setJpDisclaimer(false);
-    setCorpusTab("commentaries");
   }, [verseRef]);
 
   const handleJpTabClick = useCallback(async () => {
     if (corpusTab === "jewish") return;
-    setCorpusTab("jewish");
+    onTabChange("jewish");
 
     // If already loaded for this verse, show it
     if (jpContent && jpCheckedRef === verseRef) return;
@@ -553,7 +555,7 @@ function CorpusPanel({
     // Not cached — mark checked so we show the generate button
     setJpCheckedRef(verseRef);
     setJpCacheChecked(true);
-  }, [corpusTab, jpContent, jpCacheChecked, jpCheckedRef, verseRef]);
+  }, [corpusTab, jpContent, jpCacheChecked, jpCheckedRef, verseRef, onTabChange]);
 
   const handleJpGenerate = useCallback(async () => {
     setJpLoading(true);
@@ -581,7 +583,7 @@ function CorpusPanel({
     }
   }, [verseRef, accessToken]);
 
-  // Word study mode: show full excerpt/article
+  // Word study mode (from search dropdown): show full excerpt/article
   if (wordStudyMode && wordStudyDoc) {
     return (
       <>
@@ -629,292 +631,269 @@ function CorpusPanel({
     );
   }
 
-  // State 2: word selected — show word study corpus results
-  // Enters when a word is selected from the interlinear grid (selectedStrongs is set)
-  if (selectedStrongs) {
+  // Reader view: show full commentary content
+  if (hasVerse && activeCommentary) {
+    return (
+      <>
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={onCommentaryBack}
+            className="text-sm cursor-pointer hover:underline"
+            style={{ color: "#c1c1b8" }}
+          >
+            &larr; Back
+          </button>
+          {!flaggedIds.has(activeCommentary.document_id) && (
+            <button
+              onClick={() => setFlagModal({
+                sourceType: "commentary",
+                documentId: activeCommentary.document_id,
+                heading: "Flag Commentary",
+                sourceName: activeCommentary.title,
+                author: activeCommentary.author,
+              })}
+              className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer"
+              style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
+              title="Flag this content"
+            >
+              <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
+            </button>
+          )}
+        </div>
+        <p className="text-xs mb-6" style={{ color: "#c1c1b8" }}>
+          {activeCommentary.title} &middot; {activeCommentary.author}
+        </p>
+        <div className="mx-auto" style={{ maxWidth: 680 }}>
+          {activeCommentary.content
+            .split(/\n\n+/)
+            .flatMap((block) =>
+              block.split(/(?<=\.)\s+(?=[A-Z])/)
+            )
+            .filter((p) => p.trim())
+            .map((para, i) => (
+              <p
+                key={i}
+                className="text-foreground mb-4"
+                style={{ fontSize: 15, lineHeight: 1.7 }}
+              >
+                {para.trim()}
+              </p>
+            ))}
+        </div>
+        {flagModalEl}
+      </>
+    );
+  }
+
+  const tabBar = (
+    <div className="flex gap-6 mb-5" style={{ borderBottom: "1px solid #3c3c38" }}>
+      <button
+        onClick={() => onTabChange("commentaries")}
+        className="pb-2 text-sm font-medium cursor-pointer transition-colors"
+        style={{
+          color: corpusTab === "commentaries" ? "#e6e6e6" : "#c1c1b8",
+          borderBottom: corpusTab === "commentaries" ? "2px solid #b49238" : "2px solid transparent",
+          marginBottom: "-1px",
+        }}
+      >
+        Commentary
+      </button>
+      <button
+        onClick={() => onTabChange("word_study")}
+        className="pb-2 text-sm font-medium cursor-pointer transition-colors"
+        style={{
+          color: corpusTab === "word_study" ? "#e6e6e6" : "#c1c1b8",
+          borderBottom: corpusTab === "word_study" ? "2px solid #b49238" : "2px solid transparent",
+          marginBottom: "-1px",
+        }}
+      >
+        Word Study
+      </button>
+      <button
+        onClick={handleJpTabClick}
+        className="pb-2 text-sm font-medium cursor-pointer transition-colors"
+        style={{
+          color: corpusTab === "jewish" ? "#e6e6e6" : "#c1c1b8",
+          borderBottom: corpusTab === "jewish" ? "2px solid #b49238" : "2px solid transparent",
+          marginBottom: "-1px",
+        }}
+      >
+        Jewish Perspective
+      </button>
+    </div>
+  );
+
+  if (!hasVerse) {
+    return (
+      <>
+        <div className="flex items-center justify-center h-full">
+          <p className="text-muted-foreground text-sm">Search a verse to see commentary from the library</p>
+        </div>
+        {flagModalEl}
+      </>
+    );
+  }
+
+  // Word Study tab content
+  if (corpusTab === "word_study") {
     const label = definition
       ? `${definition.word} (${definition.transliteration})`
-      : corpusResults.length > 0
+      : selectedStrongs && corpusResults.length > 0
         ? corpusResults[0].title
         : null;
 
     return (
       <>
-        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-          From the library
-        </p>
-        {label && (
-          <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-            {label}
-          </p>
-        )}
-        {corpusLoading ? (
-          <SkeletonCards />
-        ) : corpusResults.length === 0 ? (
+        {tabBar}
+        {!selectedStrongs ? (
           <div className="py-12 text-center">
             <p className="text-sm" style={{ color: "#c1c1b8" }}>
-              No library entries for this word yet — more teaching content coming soon.
+              Select a word from the interlinear to see library results.
             </p>
           </div>
-        ) : corpusResults.some((r) => r.is_excerpt) ? (
-          <div className="prose prose-invert prose-sm max-w-none">
-            <ReactMarkdown>{corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}</ReactMarkdown>
-          </div>
         ) : (
-          <div className="space-y-4">
-            {corpusResults.map((r, i) => (
-              <div key={i} className="rounded-lg border border-border bg-card p-4">
-                <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
-                <div className="mt-3">
-                  <p className="text-xs font-medium text-foreground">{r.author}</p>
-                  <p className="text-xs text-muted-foreground">{r.title}</p>
-                </div>
+          <>
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+              From the library
+            </p>
+            {label && (
+              <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+                {label}
+              </p>
+            )}
+            {corpusLoading ? (
+              <SkeletonCards />
+            ) : corpusResults.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-sm" style={{ color: "#c1c1b8" }}>
+                  No library entries for this word yet — more teaching content coming soon.
+                </p>
               </div>
-            ))}
-          </div>
+            ) : corpusResults.some((r) => r.is_excerpt) ? (
+              <div className="prose prose-invert prose-sm max-w-none">
+                <ReactMarkdown>{corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}</ReactMarkdown>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {corpusResults.map((r, i) => (
+                  <div key={i} className="rounded-lg border border-border bg-card p-4">
+                    <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-foreground">{r.author}</p>
+                      <p className="text-xs text-muted-foreground">{r.title}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
         {flagModalEl}
       </>
     );
   }
 
-  // State 1: verse loaded, no word selected — show commentary
-  if (hasVerse) {
-    // Reader view: show full commentary content
-    if (activeCommentary) {
-      return (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={onCommentaryBack}
-              className="text-sm cursor-pointer hover:underline"
-              style={{ color: "#c1c1b8" }}
-            >
-              &larr; Back
-            </button>
-            {!flaggedIds.has(activeCommentary.document_id) && (
-              <button
-                onClick={() => setFlagModal({
-                  sourceType: "commentary",
-                  documentId: activeCommentary.document_id,
-                  heading: "Flag Commentary",
-                  sourceName: activeCommentary.title,
-                  author: activeCommentary.author,
-                })}
-                className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer"
-                style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
-                title="Flag this content"
-              >
-                <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
-              </button>
-            )}
-          </div>
-          <p className="text-xs mb-6" style={{ color: "#c1c1b8" }}>
-            {activeCommentary.title} &middot; {activeCommentary.author}
-          </p>
-          <div className="mx-auto" style={{ maxWidth: 680 }}>
-            {activeCommentary.content
-              .split(/\n\n+/)
-              .flatMap((block) =>
-                block.split(/(?<=\.)\s+(?=[A-Z])/)
-              )
-              .filter((p) => p.trim())
-              .map((para, i) => (
-                <p
-                  key={i}
-                  className="text-foreground mb-4"
-                  style={{ fontSize: 15, lineHeight: 1.7 }}
-                >
-                  {para.trim()}
-                </p>
-              ))}
-          </div>
-          {flagModalEl}
-        </>
-      );
-    }
-
-    const tabBar = (
-      <div className="flex gap-6 mb-5" style={{ borderBottom: "1px solid #3c3c38" }}>
-        <button
-          onClick={() => setCorpusTab("commentaries")}
-          className="pb-2 text-sm font-medium cursor-pointer transition-colors"
-          style={{
-            color: corpusTab === "commentaries" ? "#e6e6e6" : "#c1c1b8",
-            borderBottom: corpusTab === "commentaries" ? "2px solid #b49238" : "2px solid transparent",
-            marginBottom: "-1px",
-          }}
-        >
-          Commentaries
-        </button>
-        <button
-          onClick={handleJpTabClick}
-          className="pb-2 text-sm font-medium cursor-pointer transition-colors"
-          style={{
-            color: corpusTab === "jewish" ? "#e6e6e6" : "#c1c1b8",
-            borderBottom: corpusTab === "jewish" ? "2px solid #b49238" : "2px solid transparent",
-            marginBottom: "-1px",
-          }}
-        >
-          Jewish Perspective
-        </button>
-      </div>
-    );
-
-    // Jewish Perspective tab content
-    if (corpusTab === "jewish") {
-      return (
-        <>
-          {tabBar}
-          {jpLoading ? (
-            <div className="py-12 flex flex-col items-center gap-3">
-              <svg className="animate-spin h-6 w-6" style={{ color: "#b49238" }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <p className="text-sm" style={{ color: "#c1c1b8" }}>Generating...</p>
-            </div>
-          ) : jpError ? (
-            <div className="py-12 text-center">
-              <p className="text-sm" style={{ color: "#c1c1b8" }}>
-                Unable to generate. Please try again.
-              </p>
-              <button
-                onClick={() => { setJpError(false); setJpDisclaimer(false); }}
-                className="text-sm mt-3 cursor-pointer hover:underline"
-                style={{ color: "#d4b96a" }}
-              >
-                Try Again
-              </button>
-            </div>
-          ) : jpContent ? (
-            <div className="space-y-3">
-              {([
-                { key: "hebrew_root", label: "Hebrew & Aramaic Root" },
-                { key: "targumic_usage", label: "Targumic Usage" },
-                { key: "rabbinic_context", label: "Rabbinic & Second Temple Context" },
-                { key: "messianic_fulfillment", label: "Messianic Fulfillment" },
-              ] as const).map((section) => (
-                <div
-                  key={section.key}
-                  className="rounded-lg border p-4"
-                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
-                >
-                  <p
-                    className="font-medium uppercase tracking-wide mb-2"
-                    style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
-                  >
-                    {section.label}
-                  </p>
-                  <p style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
-                    {jpContent[section.key]}
-                  </p>
-                </div>
-              ))}
-              {jpContent.sources && jpContent.sources.length > 0 && (
-                <div
-                  className="rounded-lg border p-4"
-                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
-                >
-                  <p
-                    className="font-medium uppercase tracking-wide mb-2"
-                    style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
-                  >
-                    Sources Consulted
-                  </p>
-                  <ul className="list-disc list-inside space-y-1">
-                    {jpContent.sources.map((src, i) => (
-                      <li key={i} style={{ color: "#e6e6e6", fontSize: 13, lineHeight: 1.6 }}>
-                        {src}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="py-12 flex flex-col items-center gap-4">
-              {jpDisclaimer ? (
-                <>
-                  <p className="text-sm leading-relaxed text-center max-w-sm" style={{ color: "#c1c1b8" }}>
-                    This searches live Messianic Jewish scholarship sources and may include
-                    non-Christian perspectives. Results are saved for future visitors.
-                  </p>
-                  <button
-                    onClick={handleJpGenerate}
-                    className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: "#b49238" }}
-                  >
-                    Confirm & Generate
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm" style={{ color: "#c1c1b8" }}>
-                    No Jewish perspective generated for this verse yet.
-                  </p>
-                  <button
-                    onClick={() => setJpDisclaimer(true)}
-                    className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: "#b49238" }}
-                  >
-                    Generate Jewish Perspective
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {flagModalEl}
-        </>
-      );
-    }
-
-    // Commentaries tab (default)
+  // Jewish Perspective tab content
+  if (corpusTab === "jewish") {
     return (
       <>
         {tabBar}
-        {commentaryLoading ? (
-          <SkeletonCards />
-        ) : commentaryResults.length === 0 ? (
+        {jpLoading ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <svg className="animate-spin h-6 w-6" style={{ color: "#b49238" }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-sm" style={{ color: "#c1c1b8" }}>Generating...</p>
+          </div>
+        ) : jpError ? (
           <div className="py-12 text-center">
             <p className="text-sm" style={{ color: "#c1c1b8" }}>
-              No commentary found for this verse.
+              Unable to generate. Please try again.
             </p>
+            <button
+              onClick={() => { setJpError(false); setJpDisclaimer(false); }}
+              className="text-sm mt-3 cursor-pointer hover:underline"
+              style={{ color: "#d4b96a" }}
+            >
+              Try Again
+            </button>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {commentaryResults.map((r, i) => (
+        ) : jpContent ? (
+          <div className="space-y-3">
+            {([
+              { key: "hebrew_root", label: "Hebrew & Aramaic Root" },
+              { key: "targumic_usage", label: "Targumic Usage" },
+              { key: "rabbinic_context", label: "Rabbinic & Second Temple Context" },
+              { key: "messianic_fulfillment", label: "Messianic Fulfillment" },
+            ] as const).map((section) => (
               <div
-                key={i}
-                className="rounded-lg border border-border bg-card p-4 cursor-pointer transition-colors relative group"
-                onClick={() => onCommentaryClick(r)}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#4a4a44"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; }}
+                key={section.key}
+                className="rounded-lg border p-4"
+                style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
               >
-                {!flaggedIds.has(r.document_id) && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFlagModal({
-                        sourceType: "commentary",
-                        documentId: r.document_id,
-                        heading: "Flag Commentary",
-                        sourceName: r.title,
-                        author: r.author,
-                      });
-                    }}
-                    className="absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                    style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
-                    title="Flag this content"
-                  >
-                    <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
-                  </button>
-                )}
-                <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{r.author}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
-                <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
+                <p
+                  className="font-medium uppercase tracking-wide mb-2"
+                  style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
+                >
+                  {section.label}
+                </p>
+                <p style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
+                  {jpContent[section.key]}
+                </p>
               </div>
             ))}
+            {jpContent.sources && jpContent.sources.length > 0 && (
+              <div
+                className="rounded-lg border p-4"
+                style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+              >
+                <p
+                  className="font-medium uppercase tracking-wide mb-2"
+                  style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
+                >
+                  Sources Consulted
+                </p>
+                <ul className="list-disc list-inside space-y-1">
+                  {jpContent.sources.map((src, i) => (
+                    <li key={i} style={{ color: "#e6e6e6", fontSize: 13, lineHeight: 1.6 }}>
+                      {src}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="py-12 flex flex-col items-center gap-4">
+            {jpDisclaimer ? (
+              <>
+                <p className="text-sm leading-relaxed text-center max-w-sm" style={{ color: "#c1c1b8" }}>
+                  This searches live Messianic Jewish scholarship sources and may include
+                  non-Christian perspectives. Results are saved for future visitors.
+                </p>
+                <button
+                  onClick={handleJpGenerate}
+                  className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: "#b49238" }}
+                >
+                  Confirm & Generate
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm" style={{ color: "#c1c1b8" }}>
+                  No Jewish perspective generated for this verse yet.
+                </p>
+                <button
+                  onClick={() => setJpDisclaimer(true)}
+                  className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: "#b49238" }}
+                >
+                  Generate Jewish Perspective
+                </button>
+              </>
+            )}
           </div>
         )}
         {flagModalEl}
@@ -922,12 +901,54 @@ function CorpusPanel({
     );
   }
 
-  // No verse loaded yet
+  // Commentaries tab (default)
   return (
     <>
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground text-sm">Search a verse to see commentary from the library</p>
-      </div>
+      {tabBar}
+      {commentaryLoading ? (
+        <SkeletonCards />
+      ) : commentaryResults.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-sm" style={{ color: "#c1c1b8" }}>
+            No commentary found for this verse.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {commentaryResults.map((r, i) => (
+            <div
+              key={i}
+              className="rounded-lg border border-border bg-card p-4 cursor-pointer transition-colors relative group"
+              onClick={() => onCommentaryClick(r)}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#4a4a44"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; }}
+            >
+              {!flaggedIds.has(r.document_id) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFlagModal({
+                      sourceType: "commentary",
+                      documentId: r.document_id,
+                      heading: "Flag Commentary",
+                      sourceName: r.title,
+                      author: r.author,
+                    });
+                  }}
+                  className="absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
+                  title="Flag this content"
+                >
+                  <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
+                </button>
+              )}
+              <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{r.author}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
+              <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
+            </div>
+          ))}
+        </div>
+      )}
       {flagModalEl}
     </>
   );
@@ -1090,9 +1111,6 @@ function VerseDisplay({
           {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
         </p>
         <p className="text-sm text-foreground leading-relaxed">{verse.text}</p>
-        {selectedStrongs && (
-          <p style={{ fontSize: '11px', color: '#c1c1b8', marginTop: '8px' }}>Tap verse to return to commentary</p>
-        )}
       </div>
       <div
         className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-3 py-1.5"
@@ -1194,6 +1212,18 @@ export default function StudyPage() {
 
   const [tokens, setTokens] = useState<WordToken[]>([]);
   const [tokensLoading, setTokensLoading] = useState(false);
+
+  // Tab state (lifted up so left panel can react)
+  const [corpusTab, setCorpusTab] = useState<CorpusTab>("commentaries");
+
+  // Chapter view state
+  const [chapterOpen, setChapterOpen] = useState(false);
+  const [chapterVerses, setChapterVerses] = useState<VerseData[]>([]);
+  const [chapterLoading, setChapterLoading] = useState(false);
+
+  // Excerpt state (Precept Austin word study excerpt for selected word)
+  const [excerptContent, setExcerptContent] = useState<string | null>(null);
+  const [excerptLoading, setExcerptLoading] = useState(false);
 
   // Word search state
   const [wordSearchResults, setWordSearchResults] = useState<WordSearchResult[]>([]);
@@ -1320,6 +1350,8 @@ export default function StudyPage() {
     setWordStudyDoc(null);
     setWordStudyContent(null);
     setWordSearchOpen(false);
+    setChapterOpen(false);
+    setCorpusTab("commentaries");
 
     const parsed = parseRef(ref);
     if (!parsed) {
@@ -1341,8 +1373,10 @@ export default function StudyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch interlinear tokens when verse changes
+  // Fetch interlinear tokens only when Word Study tab is active
   useEffect(() => {
+    if (corpusTab !== "word_study") return;
+
     setSelectedStrongs(null);
     setTokens([]);
 
@@ -1359,15 +1393,18 @@ export default function StudyPage() {
         return res.json();
       })
       .then((data: Array<{ greek_word: string; transliteration: string; strongs_number: string; english_gloss: string; morphology: string; word_position: number }>) => {
-        setTokens(
-          data.map((w) => ({
-            greek: w.greek_word,
-            transliteration: w.transliteration || "",
-            english: w.english_gloss || "",
-            strongs: w.strongs_number || "",
-            morph: w.morphology || "",
-          }))
-        );
+        const mapped = data.map((w) => ({
+          greek: w.greek_word,
+          transliteration: w.transliteration || "",
+          english: w.english_gloss || "",
+          strongs: w.strongs_number || "",
+          morph: w.morphology || "",
+        }));
+        setTokens(mapped);
+        // Auto-select first word
+        if (mapped.length > 0 && mapped[0].strongs) {
+          setSelectedStrongs(mapped[0].strongs);
+        }
       })
       .catch(() => {
         setTokens([]);
@@ -1375,7 +1412,72 @@ export default function StudyPage() {
       .finally(() => {
         setTokensLoading(false);
       });
-  }, [verseData?.verse_id]);
+  }, [verseData?.verse_id, corpusTab]);
+
+  // Clear interlinear when leaving Word Study tab
+  useEffect(() => {
+    if (corpusTab !== "word_study") {
+      setTokens([]);
+      setSelectedStrongs(null);
+      setExcerptContent(null);
+    }
+  }, [corpusTab]);
+
+  // Fetch chapter verses when chapter view is opened
+  useEffect(() => {
+    if (!chapterOpen || !verseData) {
+      setChapterVerses([]);
+      return;
+    }
+
+    const { verse_id } = verseData;
+    const parts = verse_id.split(".");
+    const book = parts[0];
+    const chapter = parseInt(parts[1], 10);
+
+    setChapterLoading(true);
+    const prefix = `${book}.${chapter}.`;
+    supabase
+      .from("verses")
+      .select("*")
+      .like("verse_id", `${prefix}%`)
+      .order("verse_id")
+      .then(({ data }) => {
+        if (data) {
+          setChapterVerses(
+            data.map((v: { verse_id: string; text: string; translation?: string }) => {
+              const vParts = v.verse_id.split(".");
+              return {
+                verse_id: v.verse_id,
+                book: ABBREV_TO_NAME[book] ?? book,
+                chapter: parseInt(vParts[1], 10),
+                verse: parseInt(vParts[2], 10),
+                text: v.text ?? "",
+                translation: v.translation ?? "WEB",
+              };
+            })
+          );
+        }
+        setChapterLoading(false);
+      });
+  }, [chapterOpen, verseData]);
+
+  // Fetch Precept Austin excerpt when selected word changes
+  useEffect(() => {
+    if (!selectedStrongs || corpusTab !== "word_study") {
+      setExcerptContent(null);
+      return;
+    }
+
+    setExcerptLoading(true);
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/excerpt?strongs=${encodeURIComponent(selectedStrongs)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        setExcerptContent(data?.content ?? null);
+      })
+      .catch(() => setExcerptContent(null))
+      .finally(() => setExcerptLoading(false));
+  }, [selectedStrongs, corpusTab]);
 
   // Debounced word search (suppressed when book autocomplete is active)
   useEffect(() => {
@@ -1630,6 +1732,19 @@ export default function StudyPage() {
     [],
   );
 
+  // Handle tab change — also navigate chapter view verse to active verse
+  const handleTabChange = useCallback((tab: CorpusTab) => {
+    setCorpusTab(tab);
+    setActiveCommentary(null);
+  }, []);
+
+  // Handle chapter verse click
+  const handleChapterVerseClick = useCallback((v: VerseData) => {
+    const bookName = v.book;
+    setVerseRef(`${bookName} ${v.chapter}:${v.verse}`);
+    fetchVerseById(v.verse_id);
+  }, [fetchVerseById]);
+
   const corpusPanelProps = {
     definition,
     selectedStrongs,
@@ -1647,6 +1762,8 @@ export default function StudyPage() {
     onCommentaryBack: () => setActiveCommentary(null),
     verseRef,
     accessToken,
+    corpusTab,
+    onTabChange: handleTabChange,
   };
 
   const verseSearchProps = {
@@ -1697,7 +1814,7 @@ export default function StudyPage() {
 
         {/* Desktop: two-column layout */}
         <div className="hidden md:flex flex-1 min-h-0">
-          {/* Left Column: Search + Interlinear + Definition */}
+          {/* Left Column: Search + Verse + (Word Study interlinear/excerpt) + Chapter */}
           <div
             className="w-[380px] shrink-0 flex flex-col overflow-y-auto"
             style={{ borderRight: "0.5px solid #3c3c38" }}
@@ -1726,24 +1843,104 @@ export default function StudyPage() {
                     onDeselect={() => { setSelectedStrongs(null); setActiveCommentary(null); }}
                   />
 
-                  <div className="mt-4" style={{ minHeight: 96 }}>
-                    <InterlinearBlocks
-                      tokens={tokens}
-                      selectedStrongs={selectedStrongs}
-                      onSelect={handleSelectWord}
-                      loading={tokensLoading}
-                      isNT={!!verseData?.verse_id && NT_BOOKS.has(verseData.verse_id.split(".")[0])}
-                    />
-                  </div>
+                  {/* Interlinear + Definition + Excerpt — only when Word Study tab is active */}
+                  {corpusTab === "word_study" && verseData && (
+                    <div className="sticky top-0 z-10 mt-4" style={{ backgroundColor: "#1b1b19" }}>
+                      <InterlinearBlocks
+                        tokens={tokens}
+                        selectedStrongs={selectedStrongs}
+                        onSelect={handleSelectWord}
+                        loading={tokensLoading}
+                        isNT={NT_BOOKS.has(verseData.verse_id.split(".")[0])}
+                      />
 
-                  <div className="mt-8">
-                    <DefinitionPanel
-                      definition={definition}
-                      isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
-                      onToggleSave={handleToggleSaveSelected}
-                      isLoggedIn={!!user}
-                    />
-                  </div>
+                      {selectedStrongs && (
+                        <div className="mt-4">
+                          <DefinitionPanel
+                            definition={definition}
+                            isSaved={savedStrongsSet.has(selectedStrongs)}
+                            onToggleSave={handleToggleSaveSelected}
+                            isLoggedIn={!!user}
+                          />
+                        </div>
+                      )}
+
+                      {/* Precept Austin excerpt */}
+                      {selectedStrongs && (
+                        <div className="mt-6">
+                          <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
+                            Study Notes
+                          </p>
+                          {excerptLoading ? (
+                            <div className="space-y-2 animate-pulse">
+                              <div className="h-3 rounded bg-border w-full" />
+                              <div className="h-3 rounded bg-border w-5/6" />
+                              <div className="h-3 rounded bg-border w-4/6" />
+                            </div>
+                          ) : excerptContent ? (
+                            <div
+                              className="prose prose-invert prose-sm max-w-none overflow-y-auto"
+                              style={{ maxHeight: 300 }}
+                            >
+                              <ReactMarkdown>{excerptContent}</ReactMarkdown>
+                            </div>
+                          ) : (
+                            <p className="text-sm" style={{ color: "#888780" }}>
+                              No study notes available
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* View Chapter button + chapter view */}
+                  {verseData && (
+                    <div className="mt-4">
+                      <button
+                        onClick={() => setChapterOpen((prev) => !prev)}
+                        className="text-xs font-medium cursor-pointer transition-colors"
+                        style={{ color: "#c1c1b8" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "#e6e6e6"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "#c1c1b8"; }}
+                      >
+                        {chapterOpen ? "Hide Chapter" : "View Chapter"}
+                      </button>
+
+                      {chapterOpen && (
+                        <div className="mt-3 space-y-1">
+                          {chapterLoading ? (
+                            <div className="space-y-2 animate-pulse">
+                              {[0, 1, 2, 3, 4].map((i) => (
+                                <div key={i} className="h-10 rounded bg-border" />
+                              ))}
+                            </div>
+                          ) : (
+                            chapterVerses.map((v) => {
+                              const isActive = v.verse_id === verseData.verse_id;
+                              return (
+                                <div
+                                  key={v.verse_id}
+                                  onClick={() => handleChapterVerseClick(v)}
+                                  className="rounded-lg border border-border p-3 cursor-pointer transition-colors"
+                                  style={{
+                                    backgroundColor: isActive ? "#2f2f2c" : "transparent",
+                                  }}
+                                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
+                                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
+                                >
+                                  <span className="text-xs font-medium" style={{ color: "#c1c1b8" }}>
+                                    {v.chapter}:{v.verse}
+                                  </span>
+                                  <span className="text-sm text-foreground ml-2">{v.text}</span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1788,25 +1985,52 @@ export default function StudyPage() {
                   onDeselect={() => setSelectedStrongs(null)}
                 />
 
-                <div className="mt-4" style={{ minHeight: 96 }}>
-                  <InterlinearBlocks
-                    tokens={tokens}
-                    selectedStrongs={selectedStrongs}
-                    onSelect={handleSelectWord}
-                    loading={tokensLoading}
-                    isNT={!!verseData?.verse_id && NT_BOOKS.has(verseData.verse_id.split(".")[0])}
-                  />
-                </div>
+                {/* Interlinear on mobile — only when Word Study tab */}
+                {corpusTab === "word_study" && verseData && (
+                  <div className="mt-4">
+                    <InterlinearBlocks
+                      tokens={tokens}
+                      selectedStrongs={selectedStrongs}
+                      onSelect={handleSelectWord}
+                      loading={tokensLoading}
+                      isNT={NT_BOOKS.has(verseData.verse_id.split(".")[0])}
+                    />
+                    {selectedStrongs && (
+                      <div className="mt-4">
+                        <DefinitionPanel
+                          definition={definition}
+                          isSaved={savedStrongsSet.has(selectedStrongs)}
+                          onToggleSave={handleToggleSaveSelected}
+                          isLoggedIn={!!user}
+                        />
+                      </div>
+                    )}
+                    {selectedStrongs && (
+                      <div className="mt-6">
+                        <p className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: "#c1c1b8" }}>
+                          Study Notes
+                        </p>
+                        {excerptLoading ? (
+                          <div className="space-y-2 animate-pulse">
+                            <div className="h-3 rounded bg-border w-full" />
+                            <div className="h-3 rounded bg-border w-5/6" />
+                            <div className="h-3 rounded bg-border w-4/6" />
+                          </div>
+                        ) : excerptContent ? (
+                          <div className="prose prose-invert prose-sm max-w-none">
+                            <ReactMarkdown>{excerptContent}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="text-sm" style={{ color: "#888780" }}>
+                            No study notes available
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                <div className="mt-8">
-                  <DefinitionPanel
-                    definition={definition}
-                    isSaved={selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false}
-                    onToggleSave={handleToggleSaveSelected}
-                    isLoggedIn={!!user}
-                  />
-                </div>
-                {(definition || verseData) && (
+                {verseData && (
                   <div className="mt-8">
                     <CorpusPanel {...corpusPanelProps} />
                   </div>
