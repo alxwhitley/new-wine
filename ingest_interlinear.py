@@ -141,7 +141,7 @@ def parse_tagnt_file(filepath, book_filter=None, chapter_filter=None):
         words.append({
             "verse_id": verse_id,
             "word_position": position,
-            "greek_word": greek_word,
+            "original_word": greek_word,
             "transliteration": transliteration,
             "strongs_number": strongs,
             "english_gloss": english_gloss,
@@ -208,7 +208,7 @@ def main():
     # Batch insert
     insert_sql = """
         INSERT INTO interlinear_words
-            (verse_id, word_position, greek_word, transliteration, strongs_number, english_gloss, morphology)
+            (verse_id, word_position, original_word, transliteration, strongs_number, english_gloss, morphology, language)
         VALUES %s
         ON CONFLICT (verse_id, word_position) DO NOTHING
     """
@@ -222,11 +222,12 @@ def main():
             (
                 w["verse_id"],
                 w["word_position"],
-                w["greek_word"],
+                w["original_word"],
                 w["transliteration"],
                 w["strongs_number"],
                 w["english_gloss"],
                 w["morphology"],
+                "greek",
             )
             for w in batch
         ]

@@ -197,13 +197,21 @@ interface WordDefinition {
   corpusQuotes: CorpusQuote[];
 }
 
-// NT book SBL codes for checking if a verse has Greek interlinear data
+// SBL book codes for Bible books with interlinear data
 const NT_BOOKS = new Set([
   "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO",
   "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI",
   "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN",
   "3JN", "JUD", "REV",
 ]);
+const OT_BOOKS = new Set([
+  "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT",
+  "1SA", "2SA", "1KI", "2KI", "1CH", "2CH", "EZR", "NEH",
+  "EST", "JOB", "PSA", "PRO", "ECC", "SNG", "ISA", "JER",
+  "LAM", "EZK", "DAN", "HOS", "JOL", "AMO", "OBA", "JON",
+  "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL",
+]);
+const INTERLINEAR_BOOKS = new Set([...NT_BOOKS, ...OT_BOOKS]);
 
 function InterlinearBlocks({
   tokens,
@@ -245,7 +253,7 @@ function InterlinearBlocks({
     return (
       <div style={cardStyle}>
         <p className="text-sm" style={{ color: "#c1c1b8" }}>
-          No Greek interlinear available for this verse
+          No interlinear data available for this verse
         </p>
       </div>
     );
@@ -1511,7 +1519,7 @@ export default function StudyPage() {
     if (!verseId) return;
 
     const book = verseId.split(".")[0];
-    if (!NT_BOOKS.has(book)) return;
+    if (!INTERLINEAR_BOOKS.has(book)) return;
 
     setTokensLoading(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/interlinear?verse_id=${encodeURIComponent(verseId)}`)
@@ -1519,9 +1527,9 @@ export default function StudyPage() {
         if (!res.ok) throw new Error("interlinear fetch failed");
         return res.json();
       })
-      .then((data: Array<{ greek_word: string; transliteration: string; strongs_number: string; english_gloss: string; morphology: string; word_position: number }>) => {
+      .then((data: Array<{ original_word: string; transliteration: string; strongs_number: string; english_gloss: string; morphology: string; word_position: number }>) => {
         const mapped = data.map((w) => ({
-          greek: w.greek_word,
+          greek: w.original_word,
           transliteration: w.transliteration || "",
           english: w.english_gloss || "",
           strongs: w.strongs_number || "",
@@ -1935,7 +1943,7 @@ export default function StudyPage() {
     tokens,
     tokensLoading,
     onSelectWord: handleSelectWord,
-    isNT: !!verseData?.verse_id && NT_BOOKS.has(verseData.verse_id.split(".")[0]),
+    isNT: !!verseData?.verse_id && INTERLINEAR_BOOKS.has(verseData.verse_id.split(".")[0]),
     isSaved: selectedStrongs ? savedStrongsSet.has(selectedStrongs) : false,
     onToggleSave: handleToggleSaveSelected,
     isLoggedIn: !!user,

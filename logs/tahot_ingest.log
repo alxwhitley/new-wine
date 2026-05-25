@@ -1,0 +1,82 @@
+Checking TAHOT files...
+  Cached: TAHOT_Gen-Deu.txt
+  Cached: TAHOT_Jos-Est.txt
+  Cached: TAHOT_Job-Sng.txt
+  Cached: TAHOT_Isa-Mal.txt
+
+Existing Hebrew interlinear rows: 20614 (1 books)
+Parsing: TAHOT_Gen-Deu.txt
+  79990 words parsed
+Parsing: TAHOT_Jos-Est.txt
+  107259 words parsed
+Parsing: TAHOT_Job-Sng.txt
+  39090 words parsed
+Parsing: TAHOT_Isa-Mal.txt
+  79313 words parsed
+  SKIP GEN: already has 20614 rows
+
+Total to insert: 285038 words across 21728 verses
+  Inserted: 5000 / 285038 (2.2s)
+  Inserted: 10000 / 285038 (4.2s)
+  Inserted: 15000 / 285038 (6.4s)
+  Inserted: 20000 / 285038 (8.7s)
+  Inserted: 25000 / 285038 (11.0s)
+  Inserted: 30000 / 285038 (13.3s)
+  Inserted: 35000 / 285038 (15.5s)
+  Inserted: 40000 / 285038 (17.8s)
+  Inserted: 45000 / 285038 (20.2s)
+  Inserted: 50000 / 285038 (22.4s)
+  Inserted: 55000 / 285038 (24.7s)
+  Inserted: 60000 / 285038 (27.0s)
+  Inserted: 65000 / 285038 (29.4s)
+  Inserted: 70000 / 285038 (31.6s)
+  Inserted: 75000 / 285038 (33.8s)
+  Inserted: 80000 / 285038 (35.9s)
+  Inserted: 85000 / 285038 (38.2s)
+  Inserted: 90000 / 285038 (40.4s)
+  Inserted: 95000 / 285038 (42.6s)
+  Inserted: 100000 / 285038 (44.9s)
+  Inserted: 105000 / 285038 (47.1s)
+  Inserted: 110000 / 285038 (49.2s)
+  Inserted: 115000 / 285038 (51.3s)
+  Inserted: 120000 / 285038 (53.4s)
+  Inserted: 125000 / 285038 (55.5s)
+  Inserted: 130000 / 285038 (57.6s)
+  Inserted: 135000 / 285038 (59.7s)
+  Inserted: 140000 / 285038 (61.9s)
+  Inserted: 145000 / 285038 (64.0s)
+  Inserted: 150000 / 285038 (66.1s)
+  Inserted: 155000 / 285038 (68.3s)
+  Inserted: 160000 / 285038 (70.4s)
+  Inserted: 165000 / 285038 (72.5s)
+  Inserted: 170000 / 285038 (74.6s)
+  Inserted: 175000 / 285038 (76.8s)
+  Inserted: 180000 / 285038 (78.9s)
+  Inserted: 185000 / 285038 (81.1s)
+  Inserted: 190000 / 285038 (83.3s)
+  Inserted: 195000 / 285038 (85.6s)
+  Inserted: 200000 / 285038 (87.7s)
+  Inserted: 205000 / 285038 (89.8s)
+  Inserted: 210000 / 285038 (92.1s)
+  Inserted: 215000 / 285038 (94.1s)
+  Inserted: 220000 / 285038 (97.0s)
+  Inserted: 225000 / 285038 (99.2s)
+  Inserted: 230000 / 285038 (101.4s)
+  Inserted: 235000 / 285038 (103.5s)
+  Inserted: 240000 / 285038 (105.6s)
+  Inserted: 245000 / 285038 (107.7s)
+  Inserted: 250000 / 285038 (109.8s)
+  Inserted: 255000 / 285038 (112.7s)
+  Inserted: 260000 / 285038 (114.9s)
+  Inserted: 265000 / 285038 (116.9s)
+  Inserted: 270000 / 285038 (119.0s)
+  Inserted: 275000 / 285038 (121.1s)
+  Inserted: 280000 / 285038 (124.3s)
+  Inserted: 285000 / 285038 (128.0s)
+  Inserted: 285038 / 285038 (128.1s)
+
+============================================================
+DONE in 128.1s
+  Total words inserted: 285038
+  Total verses covered: 21728
+============================================================

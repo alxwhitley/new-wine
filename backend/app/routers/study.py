@@ -98,13 +98,26 @@ async def get_lexicon_entry(strongs: str = Query(..., description="Strong's numb
     return {"content": None}
 
 
+OT_BOOKS = {
+    "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT",
+    "1SA", "2SA", "1KI", "2KI", "1CH", "2CH", "EZR", "NEH",
+    "EST", "JOB", "PSA", "PRO", "ECC", "SNG", "ISA", "JER",
+    "LAM", "EZK", "DAN", "HOS", "JOL", "AMO", "OBA", "JON",
+    "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL",
+}
+
+
 @router.get("/interlinear")
 async def get_interlinear(verse_id: str = Query(..., description="SBL verse ID, e.g. 'JHN.1.1'")):
+    book = verse_id.split(".")[0] if "." in verse_id else ""
+    language = "hebrew" if book in OT_BOOKS else "greek"
+
     db = get_supabase()
     result = (
         db.table("interlinear_words")
-        .select("greek_word, transliteration, strongs_number, english_gloss, morphology, word_position")
+        .select("original_word, transliteration, strongs_number, english_gloss, morphology, word_position")
         .eq("verse_id", verse_id)
+        .eq("language", language)
         .order("word_position")
         .execute()
     )

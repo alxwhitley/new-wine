@@ -14,6 +14,7 @@ Usage:
 """
 
 import os
+import re
 import sys
 import sqlite3
 import time
@@ -31,7 +32,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / "backend" / "app" / ".env")
 
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
+print("Importing chunker...")
 from app.services.chunker import chunk_text
+print("Chunker imported.")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +61,9 @@ DB_PARAMS = {
     "dbname": _parsed_db.path.lstrip("/"),
 }
 
+print("Initializing OpenAI client...")
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+print("OpenAI client ready.")
 
 # ── Theological Tagging ───────────────────────────────────────────────────────
 
@@ -113,15 +118,27 @@ def connect_with_retry(max_retries=3, retry_delay=2):
                 raise
 
 
-def embed_batch(texts):
-    # type: (List[str]) -> List[List[float]]
-    """Embed a batch of texts using OpenAI."""
-    response = openai_client.embeddings.create(
-        input=texts,
-        model=EMBEDDING_MODEL,
-        dimensions=EMBEDDING_DIM,
-    )
-    return [item.embedding for item in response.data]
+def embed_batch(texts, max_retries=5):
+    # type: (List[str], int) -> List[List[float]]
+    """Embed a batch of texts using OpenAI, with retry on rate limit."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = openai_client.embeddings.create(
+                input=texts,
+                model=EMBEDDING_MODEL,
+                dimensions=EMBEDDING_DIM,
+            )
+            return [item.embedding for item in response.data]
+        except openai.RateLimitError as e:
+            if attempt == max_retries:
+                raise
+            msg = str(e)
+            match = re.search(r"Please try again in (\d+(?:\.\d+)?)s", msg)
+            wait = float(match.group(1)) + 0.5 if match else 5.0
+            print("    Rate limited — waiting {}s before retry (attempt {}/{})".format(
+                wait, attempt, max_retries
+            ))
+            time.sleep(wait)
 
 
 def ingest_father(doc, chunk_rows):
@@ -133,7 +150,9 @@ def ingest_father(doc, chunk_rows):
     - "ok" if ingestion succeeded
     - "error" if something went wrong
     """
+    print("    Connecting to Supabase...")
     conn = connect_with_retry()
+    print("    Connected.")
     try:
         with conn.cursor() as cur:
             # Check if document already exists
@@ -200,6 +219,8 @@ def format_row(row):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    print("Starting...")
+
     # Parse CLI flags
     args = sys.argv[1:]
     dry_run = "--dry-run" in args
