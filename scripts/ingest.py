@@ -17,6 +17,7 @@ from typing import Dict, List, Tuple
 
 from groq import Groq
 import openai
+import psycopg2
 from supabase import create_client
 import subprocess
 import pdfplumber
@@ -60,6 +61,21 @@ SUPABASE_KEY      = os.environ["SUPABASE_SERVICE_KEY"]
 
 EMBEDDING_MODEL  = "text-embedding-3-small"
 EMBEDDING_DIM    = 1536
+
+SUPABASE_DB_URL  = os.environ.get("SUPABASE_DB_URL")
+if not SUPABASE_DB_URL:
+    print("ERROR: SUPABASE_DB_URL is not set in backend/app/.env")
+    sys.exit(1)
+
+from urllib.parse import urlparse, unquote
+_parsed_db = urlparse(SUPABASE_DB_URL)
+DB_PARAMS = {
+    "host": _parsed_db.hostname,
+    "port": _parsed_db.port or 5432,
+    "user": unquote(_parsed_db.username or ""),
+    "password": unquote(_parsed_db.password or ""),
+    "dbname": _parsed_db.path.lstrip("/"),
+}
 
 # ── Clients ───────────────────────────────────────────────────────────────────
 
@@ -198,12 +214,13 @@ def embed_text(text: str) -> List[float]:
 
 def already_ingested(source_hash: str) -> bool:
     """Return True if this source_hash already exists in chunks."""
-    result = supabase.table("chunks") \
-        .select("id") \
-        .eq("source_hash", source_hash) \
-        .limit(1) \
-        .execute()
-    return len(result.data) > 0
+    conn = psycopg2.connect(**DB_PARAMS)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM chunks WHERE source_hash = %s LIMIT 1", (source_hash,))
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
 
 
 def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None, bible_refs=None) -> str:
