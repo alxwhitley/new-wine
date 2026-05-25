@@ -4,125 +4,26 @@ INFO: ============================================================
 INFO: Commentary: Matthew Henry's Commentary
 INFO: ============================================================
 INFO: SKIP (exists): Matthew Henry's Commentary - Genesis
-INFO: Fetching: Matthew Henry's Commentary - Exodus (40 chapters)
-INFO:   136 verse entries collected
-INFO:   Tags: Covenant Relationships, Faith and Perseverance, God's Comfort
-INFO:   Embedded 50/136 chunks
-INFO:   Embedded 100/136 chunks
-INFO:   Done: Matthew Henry's Commentary - Exodus (136 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Leviticus (27 chapters)
-INFO:   88 verse entries collected
-INFO:   Tags: Biblical Authority, Honoring Biblical Authority, The Lordship of Christ
-INFO:   Embedded 50/88 chunks
-INFO:   Done: Matthew Henry's Commentary - Leviticus (88 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Numbers (36 chapters)
-INFO:   93 verse entries collected
-INFO:   Tags: Biblical Authority, Covenant Relationships, God's Comfort
-INFO:   Embedded 50/93 chunks
-INFO:   Done: Matthew Henry's Commentary - Numbers (93 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Deuteronomy (34 chapters)
-INFO:   101 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership, Honoring Biblical Authority
-INFO:   Embedded 50/101 chunks
-INFO:   Embedded 100/101 chunks
-INFO:   Done: Matthew Henry's Commentary - Deuteronomy (101 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Joshua (24 chapters)
-INFO:   69 verse entries collected
-INFO:   Tags: Accountability in Leadership, Biblical Leadership, Submission to God
-INFO:   Embedded 50/69 chunks
-INFO:   Done: Matthew Henry's Commentary - Joshua (69 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Judges (21 chapters)
-INFO:   72 verse entries collected
-INFO:   Tags: Accountability in Leadership, Led by the Spirit
-INFO:   Embedded 50/72 chunks
-INFO:   Done: Matthew Henry's Commentary - Judges (72 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Ruth (4 chapters)
-INFO:   12 verse entries collected
-INFO:   Tags: Biblical Authority, Covenant Relationships, God's Comfort, Stewardship and Finances
-INFO:   Done: Matthew Henry's Commentary - Ruth (12 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 Samuel (31 chapters)
-INFO:   103 verse entries collected
-INFO:   Tags: Biblical Authority, Family Life, Accountability in Christ
-INFO:   Embedded 50/103 chunks
-INFO:   Embedded 100/103 chunks
-INFO:   Done: Matthew Henry's Commentary - 1 Samuel (103 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 Samuel (24 chapters)
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/2SA/23.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry 2SA ch 23
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/2SA/24.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry 2SA ch 24
-INFO:   72 verse entries collected
-INFO:   Tags: Authority of the Believer, Accountability in Leadership
-INFO:   Embedded 50/72 chunks
-INFO:   Done: Matthew Henry's Commentary - 2 Samuel (72 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 Kings (22 chapters)
-INFO:   73 verse entries collected
-WARNING: Tagging failed: Extra data: line 3 column 1 (char 244)
-INFO:   Embedded 50/73 chunks
-INFO:   Done: Matthew Henry's Commentary - 1 Kings (73 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 Kings (25 chapters)
-INFO:   82 verse entries collected
-INFO:   Tags: Accountability in Christ, Biblical Authority, Authority of the Believer, Resisting the Enemy
-INFO:   Embedded 50/82 chunks
-INFO:   Done: Matthew Henry's Commentary - 2 Kings (82 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 Chronicles (29 chapters)
-INFO:   66 verse entries collected
-INFO:   Tags: Accountability in Christ, Biblical Authority, Covenant Relationships, The New Covenant
-INFO:   Embedded 50/66 chunks
-INFO:   Done: Matthew Henry's Commentary - 1 Chronicles (66 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 Chronicles (36 chapters)
-INFO:   83 verse entries collected
-INFO:   Tags: Authority of the Believer, Biblical Leadership, God's Comfort, Spiritual Maturity
-INFO:   Embedded 50/83 chunks
-INFO:   Done: Matthew Henry's Commentary - 2 Chronicles (83 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Ezra (10 chapters)
-INFO:   26 verse entries collected
-INFO:   Tags: Covenant Relationships, Restoration of All Things, God's Comfort
-INFO:   Done: Matthew Henry's Commentary - Ezra (26 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Nehemiah (13 chapters)
-INFO:   32 verse entries collected
-INFO:   Tags: Accountability in Christ, Biblical Leadership, Character of Christ, God's Comfort
-INFO:   Done: Matthew Henry's Commentary - Nehemiah (32 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Esther (10 chapters)
-INFO:   21 verse entries collected
-INFO:   Tags: Kingdom of God, Authority of the Believer, The Lordship of Christ
-INFO:   Done: Matthew Henry's Commentary - Esther (21 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Job (42 chapters)
-INFO:   134 verse entries collected
-WARNING: Tagging failed: Expecting ',' delimiter: line 1 column 97 (char 96)
-INFO:   Embedded 50/134 chunks
-INFO:   Embedded 100/134 chunks
-INFO:   Done: Matthew Henry's Commentary - Job (134 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Psalms (150 chapters)
-INFO:   443 verse entries collected
-INFO:   Tags: Character of Christ, Freedom from Anxiety, Victory in Christ, Holiness and Sanctification
-INFO:   Embedded 50/443 chunks
-INFO:   Embedded 100/443 chunks
-INFO:   Embedded 150/443 chunks
-INFO:   Embedded 200/443 chunks
-INFO:   Embedded 250/443 chunks
-INFO:   Embedded 300/443 chunks
-INFO:   Embedded 350/443 chunks
-INFO:   Embedded 400/443 chunks
-INFO:   Done: Matthew Henry's Commentary - Psalms (443 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Proverbs (31 chapters)
-INFO:   519 verse entries collected
-INFO:   Tags: Biblical Authority, Discerning of Spirits, Equipping the Saints
-INFO:   Embedded 50/519 chunks
-INFO:   Embedded 100/519 chunks
-INFO:   Embedded 150/519 chunks
-INFO:   Embedded 200/519 chunks
-INFO:   Embedded 250/519 chunks
-INFO:   Embedded 300/519 chunks
-INFO:   Embedded 350/519 chunks
-INFO:   Embedded 400/519 chunks
-INFO:   Embedded 450/519 chunks
-INFO:   Embedded 500/519 chunks
-INFO:   Done: Matthew Henry's Commentary - Proverbs (519 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Ecclesiastes (12 chapters)
-INFO:   42 verse entries collected
-WARNING: Tagging failed: Extra data: line 3 column 1 (char 123)
-INFO:   Done: Matthew Henry's Commentary - Ecclesiastes (42 chunks)
+INFO: SKIP (exists): Matthew Henry's Commentary - Exodus
+INFO: SKIP (exists): Matthew Henry's Commentary - Leviticus
+INFO: SKIP (exists): Matthew Henry's Commentary - Numbers
+INFO: SKIP (exists): Matthew Henry's Commentary - Deuteronomy
+INFO: SKIP (exists): Matthew Henry's Commentary - Joshua
+INFO: SKIP (exists): Matthew Henry's Commentary - Judges
+INFO: SKIP (exists): Matthew Henry's Commentary - Ruth
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 Samuel
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 Samuel
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 Kings
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 Kings
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 Chronicles
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 Chronicles
+INFO: SKIP (exists): Matthew Henry's Commentary - Ezra
+INFO: SKIP (exists): Matthew Henry's Commentary - Nehemiah
+INFO: SKIP (exists): Matthew Henry's Commentary - Esther
+INFO: SKIP (exists): Matthew Henry's Commentary - Job
+INFO: SKIP (exists): Matthew Henry's Commentary - Psalms
+INFO: SKIP (exists): Matthew Henry's Commentary - Proverbs
+INFO: SKIP (exists): Matthew Henry's Commentary - Ecclesiastes
 INFO: Fetching: Matthew Henry's Commentary - Song of Solomon (8 chapters)
 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/1.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for matthew-henry SNG ch 1
@@ -141,263 +42,57 @@ WARNING:   No data for matthew-henry SNG ch 7
 WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/SNG/8.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for matthew-henry SNG ch 8
 WARNING:   No verse data found for Matthew Henry's Commentary - Song of Solomon
-INFO: Fetching: Matthew Henry's Commentary - Isaiah (66 chapters)
-INFO:   192 verse entries collected
-INFO:   Tags: Biblical Authority, Hearing God's Voice, Prophetic Ministry
-INFO:   Embedded 50/192 chunks
-INFO:   Embedded 100/192 chunks
-INFO:   Embedded 150/192 chunks
-INFO:   Done: Matthew Henry's Commentary - Isaiah (192 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Jeremiah (52 chapters)
-INFO:   148 verse entries collected
-INFO:   Tags: Biblical Authority, Prophetic Ministry, The Lordship of Christ
-INFO:   Embedded 50/148 chunks
-INFO:   Embedded 100/148 chunks
-INFO:   Done: Matthew Henry's Commentary - Jeremiah (148 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Lamentations (5 chapters)
-INFO:   14 verse entries collected
-INFO:   Tags: Biblical Authority, God's Comfort, Restoration of Soul
-INFO:   Done: Matthew Henry's Commentary - Lamentations (14 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Ezekiel (48 chapters)
-INFO:   131 verse entries collected
-INFO:   Tags: Encounters with God, Heaven and Eternity, Prophetic Ministry, The Lordship of Christ
-INFO:   Embedded 50/131 chunks
-INFO:   Embedded 100/131 chunks
-INFO:   Done: Matthew Henry's Commentary - Ezekiel (131 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Daniel (12 chapters)
-INFO:   40 verse entries collected
-INFO:   Tags: Biblical Authority, Kingdom of God, Restoration of All Things
-INFO:   Done: Matthew Henry's Commentary - Daniel (40 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Hosea (14 chapters)
-INFO:   33 verse entries collected
-INFO:   Tags: Biblical Authority, Prophetic Ministry, Authority of the Believer
-INFO:   Done: Matthew Henry's Commentary - Hosea (33 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Joel (3 chapters)
-INFO:   10 verse entries collected
-WARNING: Tagging failed: Expecting value: line 1 column 29 (char 28)
-INFO:   Done: Matthew Henry's Commentary - Joel (10 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Amos (9 chapters)
-INFO:   21 verse entries collected
-INFO:   Tags: Biblical Authority, Prophetic Ministry, Hearing God's Voice
-INFO:   Done: Matthew Henry's Commentary - Amos (21 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Obadiah (1 chapters)
-INFO:   2 verse entries collected
-INFO:   Tags: Accountability in Christ, Authority of the Believer, Resisting the Enemy, Victory in Christ
-INFO:   Done: Matthew Henry's Commentary - Obadiah (2 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Jonah (4 chapters)
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/JON/2.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry JON ch 2
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/JON/3.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry JON ch 3
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/JON/4.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry JON ch 4
-INFO:   3 verse entries collected
-INFO:   Tags: Prophetic Ministry, Prophetic Direction, Authority of the Believer
-INFO:   Done: Matthew Henry's Commentary - Jonah (3 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Micah (7 chapters)
-INFO:   17 verse entries collected
-INFO:   Tags: Biblical Authority, Hearing God's Voice, Prophetic Ministry
-INFO:   Done: Matthew Henry's Commentary - Micah (17 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Nahum (3 chapters)
-INFO:   7 verse entries collected
-INFO:   Done: Matthew Henry's Commentary - Nahum (7 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Habakkuk (3 chapters)
-INFO:   8 verse entries collected
-WARNING: Tagging failed: Expecting ',' delimiter: line 1 column 110 (char 109)
-INFO:   Done: Matthew Henry's Commentary - Habakkuk (8 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Zephaniah (3 chapters)
-INFO:   10 verse entries collected
-WARNING: Tagging failed: Expecting value: line 1 column 70 (char 69)
-INFO:   Done: Matthew Henry's Commentary - Zephaniah (10 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Haggai (2 chapters)
-INFO:   5 verse entries collected
-INFO:   Tags: Biblical Authority, Prophetic Ministry
-INFO:   Done: Matthew Henry's Commentary - Haggai (5 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Zechariah (14 chapters)
-INFO:   34 verse entries collected
-INFO:   Tags: Biblical Authority, Honoring Biblical Authority, Prophetic Ministry
-INFO:   Done: Matthew Henry's Commentary - Zechariah (34 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Malachi (4 chapters)
-INFO:   9 verse entries collected
-INFO:   Tags: Biblical Authority, God's Comfort, Grace and Mercy, Honoring Biblical Authority
-INFO:   Done: Matthew Henry's Commentary - Malachi (9 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Matthew (28 chapters)
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/19.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 19
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/20.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 20
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/21.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 21
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/22.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 22
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/23.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 23
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/24.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 24
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/25.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 25
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/26.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 26
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/27.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 27
-WARNING: Failed to fetch https://bible.helloao.org/api/c/matthew-henry/MAT/28.json: Expecting value: line 1 column 1 (char 0)
-WARNING:   No data for matthew-henry MAT ch 28
-INFO:   80 verse entries collected
-INFO:   Tags: Biblical Authority, The Lordship of Christ, Covenant Relationships
-INFO:   Embedded 50/80 chunks
-INFO:   Done: Matthew Henry's Commentary - Matthew (80 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Mark (16 chapters)
-INFO:   69 verse entries collected
-INFO:   Tags: Biblical Authority, The New Covenant, Word and Spirit
-INFO:   Embedded 50/69 chunks
-INFO:   Done: Matthew Henry's Commentary - Mark (69 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Luke (24 chapters)
-INFO:   109 verse entries collected
-INFO:   Tags: Biblical Authority, Authority of the Believer, Word and Spirit
-INFO:   Embedded 50/109 chunks
-INFO:   Embedded 100/109 chunks
-INFO:   Done: Matthew Henry's Commentary - Luke (109 chunks)
+INFO: SKIP (exists): Matthew Henry's Commentary - Isaiah
+INFO: SKIP (exists): Matthew Henry's Commentary - Jeremiah
+INFO: SKIP (exists): Matthew Henry's Commentary - Lamentations
+INFO: SKIP (exists): Matthew Henry's Commentary - Ezekiel
+INFO: SKIP (exists): Matthew Henry's Commentary - Daniel
+INFO: SKIP (exists): Matthew Henry's Commentary - Hosea
+INFO: SKIP (exists): Matthew Henry's Commentary - Joel
+INFO: SKIP (exists): Matthew Henry's Commentary - Amos
+INFO: SKIP (exists): Matthew Henry's Commentary - Obadiah
+INFO: SKIP (exists): Matthew Henry's Commentary - Jonah
+INFO: SKIP (exists): Matthew Henry's Commentary - Micah
+INFO: SKIP (exists): Matthew Henry's Commentary - Nahum
+INFO: SKIP (exists): Matthew Henry's Commentary - Habakkuk
+INFO: SKIP (exists): Matthew Henry's Commentary - Zephaniah
+INFO: SKIP (exists): Matthew Henry's Commentary - Haggai
+INFO: SKIP (exists): Matthew Henry's Commentary - Zechariah
+INFO: SKIP (exists): Matthew Henry's Commentary - Malachi
+INFO: SKIP (exists): Matthew Henry's Commentary - Matthew
+INFO: SKIP (exists): Matthew Henry's Commentary - Mark
+INFO: SKIP (exists): Matthew Henry's Commentary - Luke
 INFO: SKIP (exists): Matthew Henry's Commentary - John
-INFO: Fetching: Matthew Henry's Commentary - Acts (28 chapters)
-INFO:   109 verse entries collected
-INFO:   Tags: Authority of the Believer, Biblical Authority, Led by the Spirit
-INFO:   Embedded 50/109 chunks
-INFO:   Embedded 100/109 chunks
-INFO:   Done: Matthew Henry's Commentary - Acts (109 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Romans (16 chapters)
-INFO:   49 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, The Lordship of Christ, Authority of the Believer
-INFO:   Done: Matthew Henry's Commentary - Romans (49 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 Corinthians (16 chapters)
-INFO:   67 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, The Lordship of Christ, Grace and Mercy
-INFO:   Embedded 50/67 chunks
-INFO:   Done: Matthew Henry's Commentary - 1 Corinthians (67 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 Corinthians (13 chapters)
-INFO:   38 verse entries collected
-INFO:   Tags: Biblical Authority, The Lordship of Christ, Grace and Mercy
-INFO:   Done: Matthew Henry's Commentary - 2 Corinthians (38 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Galatians (6 chapters)
-INFO:   18 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, Authority of the Believer, Accountability in Leadership
-INFO:   Done: Matthew Henry's Commentary - Galatians (18 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Ephesians (6 chapters)
-INFO:   18 verse entries collected
-INFO:   Tags: Biblical Authority, Grace and Mercy, The Lordship of Christ, The New Covenant
-INFO:   Done: Matthew Henry's Commentary - Ephesians (18 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Philippians (4 chapters)
-INFO:   19 verse entries collected
-INFO:   Tags: Biblical Leadership, Biblical Authority, Authority of the Believer, Spiritual Maturity
-INFO:   Done: Matthew Henry's Commentary - Philippians (19 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Colossians (4 chapters)
-INFO:   17 verse entries collected
-INFO:   Tags: Apostolic Oversight, Faith and Perseverance, Spiritual Maturity
-INFO:   Done: Matthew Henry's Commentary - Colossians (17 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 Thessalonians (5 chapters)
-INFO:   18 verse entries collected
-INFO:   Tags: Biblical Authority, Grace and Mercy, The Lordship of Christ
-INFO:   Done: Matthew Henry's Commentary - 1 Thessalonians (18 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 Thessalonians (3 chapters)
-INFO:   10 verse entries collected
-INFO:   Tags: Faith and Perseverance, Fruit of the Spirit
-INFO:   Done: Matthew Henry's Commentary - 2 Thessalonians (10 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 Timothy (6 chapters)
-INFO:   17 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, Biblical Leadership
-INFO:   Done: Matthew Henry's Commentary - 1 Timothy (17 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 Timothy (4 chapters)
-INFO:   13 verse entries collected
-INFO:   Tags: Biblical Authority, Discipleship and Mentoring
-INFO:   Done: Matthew Henry's Commentary - 2 Timothy (13 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Titus (3 chapters)
-INFO:   8 verse entries collected
-INFO:   Tags: Biblical Authority, Faith and Perseverance, Knowing God's Will
-INFO:   Done: Matthew Henry's Commentary - Titus (8 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Philemon (1 chapters)
-INFO:   2 verse entries collected
-INFO:   Tags: Biblical Leadership, Christian Parenting, The Christian Home, Accountability in Christ
-INFO:   Done: Matthew Henry's Commentary - Philemon (2 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Hebrews (13 chapters)
-INFO:   33 verse entries collected
-INFO:   Tags: Biblical Authority, The New Covenant, Honoring Biblical Authority
-ERROR: Failed to ingest matthew-henry Hebrews: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
-Traceback (most recent call last):
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
-    total_skipped = 0
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
-    return False
-  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
-    raise APIError(dict(json_obj))
-postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
-INFO: Fetching: Matthew Henry's Commentary - James (5 chapters)
-INFO:   13 verse entries collected
-INFO:   Tags: Accountability in Christ, Authority of the Believer, Servant Leadership, The Lordship of Christ
-INFO:   Done: Matthew Henry's Commentary - James (13 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 Peter (5 chapters)
-INFO:   22 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, Spiritual Maturity
-INFO:   Done: Matthew Henry's Commentary - 1 Peter (22 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 Peter (3 chapters)
-INFO:   14 verse entries collected
-INFO:   Tags: Biblical Authority, Faith and Perseverance, The New Covenant
-INFO:   Done: Matthew Henry's Commentary - 2 Peter (14 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 1 John (5 chapters)
-INFO:   26 verse entries collected
-WARNING: Tagging failed: Extra data: line 3 column 1 (char 141)
-INFO:   Done: Matthew Henry's Commentary - 1 John (26 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 2 John (1 chapters)
-INFO:   5 verse entries collected
-INFO:   Tags: Authority of the Believer, Christian Parenting, Family Life, Spiritual Maturity
-INFO:   Done: Matthew Henry's Commentary - 2 John (5 chunks)
-INFO: Fetching: Matthew Henry's Commentary - 3 John (1 chapters)
-INFO:   4 verse entries collected
-INFO:   Tags: Accountability in Leadership, Biblical Leadership, Elders and Deacons, Spiritual Maturity
-INFO:   Done: Matthew Henry's Commentary - 3 John (4 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Jude (1 chapters)
-INFO:   4 verse entries collected
-INFO:   Tags: Accountability in Leadership, Biblical Leadership, Servant Leadership, The Lordship of Christ
-INFO:   Done: Matthew Henry's Commentary - Jude (4 chunks)
-INFO: Fetching: Matthew Henry's Commentary - Revelation (22 chapters)
-INFO:   56 verse entries collected
-INFO:   Tags: Biblical Authority, The New Covenant, Prophetic Direction
-INFO:   Embedded 50/56 chunks
-INFO:   Done: Matthew Henry's Commentary - Revelation (56 chunks)
+INFO: SKIP (exists): Matthew Henry's Commentary - Acts
+INFO: SKIP (exists): Matthew Henry's Commentary - Romans
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 Corinthians
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 Corinthians
+INFO: SKIP (exists): Matthew Henry's Commentary - Galatians
+INFO: SKIP (exists): Matthew Henry's Commentary - Ephesians
+INFO: SKIP (exists): Matthew Henry's Commentary - Philippians
+INFO: SKIP (exists): Matthew Henry's Commentary - Colossians
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 Thessalonians
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 Thessalonians
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 Timothy
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 Timothy
+INFO: SKIP (exists): Matthew Henry's Commentary - Titus
+INFO: SKIP (exists): Matthew Henry's Commentary - Philemon
+INFO: SKIP (exists): Matthew Henry's Commentary - Hebrews
+INFO: SKIP (exists): Matthew Henry's Commentary - James
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 Peter
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 Peter
+INFO: SKIP (exists): Matthew Henry's Commentary - 1 John
+INFO: SKIP (exists): Matthew Henry's Commentary - 2 John
+INFO: SKIP (exists): Matthew Henry's Commentary - 3 John
+INFO: SKIP (exists): Matthew Henry's Commentary - Jude
+INFO: SKIP (exists): Matthew Henry's Commentary - Revelation
 INFO: ============================================================
 INFO: Commentary: Adam Clarke's Commentary
 INFO: ============================================================
 INFO: SKIP (exists): Adam Clarke's Commentary - Genesis
-INFO: Fetching: Adam Clarke's Commentary - Exodus (40 chapters)
-INFO:   705 verse entries collected
-INFO:   Tags: Covenant Relationships, God's Comfort, Victory in Christ
-INFO:   Embedded 50/705 chunks
-INFO:   Embedded 100/705 chunks
-INFO:   Embedded 150/705 chunks
-INFO:   Embedded 200/705 chunks
-INFO:   Embedded 250/705 chunks
-INFO:   Embedded 300/705 chunks
-INFO:   Embedded 350/705 chunks
-INFO:   Embedded 400/705 chunks
-INFO:   Embedded 450/705 chunks
-INFO:   Embedded 500/705 chunks
-INFO:   Embedded 550/705 chunks
-INFO:   Embedded 600/705 chunks
-INFO:   Embedded 650/705 chunks
-INFO:   Embedded 700/705 chunks
-INFO:   Done: Adam Clarke's Commentary - Exodus (705 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Leviticus (27 chapters)
-INFO:   326 verse entries collected
-INFO:   Tags: Biblical Authority, Honoring Biblical Authority, The Lordship of Christ
-INFO:   Embedded 50/326 chunks
-INFO:   Embedded 100/326 chunks
-INFO:   Embedded 150/326 chunks
-INFO:   Embedded 200/326 chunks
-INFO:   Embedded 250/326 chunks
-INFO:   Embedded 300/326 chunks
-INFO:   Done: Adam Clarke's Commentary - Leviticus (326 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Numbers (36 chapters)
-INFO:   15 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership, Accountability in Leadership
-INFO:   Done: Adam Clarke's Commentary - Numbers (15 chunks)
+INFO: SKIP (exists): Adam Clarke's Commentary - Exodus
+INFO: SKIP (exists): Adam Clarke's Commentary - Leviticus
+INFO: SKIP (exists): Adam Clarke's Commentary - Numbers
 INFO: Fetching: Adam Clarke's Commentary - Deuteronomy (34 chapters)
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/1.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke DEU ch 1
@@ -468,18 +163,7 @@ WARNING:   No data for adam-clarke DEU ch 33
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/DEU/34.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke DEU ch 34
 WARNING:   No verse data found for Adam Clarke's Commentary - Deuteronomy
-INFO: Fetching: Adam Clarke's Commentary - Joshua (24 chapters)
-INFO:   405 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership, Covenant Relationships, The New Covenant
-INFO:   Embedded 50/405 chunks
-INFO:   Embedded 100/405 chunks
-INFO:   Embedded 150/405 chunks
-INFO:   Embedded 200/405 chunks
-INFO:   Embedded 250/405 chunks
-INFO:   Embedded 300/405 chunks
-INFO:   Embedded 350/405 chunks
-INFO:   Embedded 400/405 chunks
-INFO:   Done: Adam Clarke's Commentary - Joshua (405 chunks)
+INFO: SKIP (exists): Adam Clarke's Commentary - Joshua
 INFO: Fetching: Adam Clarke's Commentary - Judges (21 chapters)
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/1.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke JDG ch 1
@@ -524,105 +208,17 @@ WARNING:   No data for adam-clarke JDG ch 20
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JDG/21.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke JDG ch 21
 WARNING:   No verse data found for Adam Clarke's Commentary - Judges
-INFO: Fetching: Adam Clarke's Commentary - Ruth (4 chapters)
-INFO:   62 verse entries collected
-INFO:   Tags: Biblical Authority, Covenant Relationships, Submission to God
-INFO:   Embedded 50/62 chunks
-INFO:   Done: Adam Clarke's Commentary - Ruth (62 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 1 Samuel (31 chapters)
-INFO:   535 verse entries collected
-INFO:   Tags: Biblical Marriage, Family Life, Covenant Relationships
-INFO:   Embedded 50/535 chunks
-ERROR: Failed to ingest adam-clarke 1 Samuel: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
-Traceback (most recent call last):
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
-    total_skipped = 0
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
-    return False
-  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
-    raise APIError(dict(json_obj))
-postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
-INFO: Fetching: Adam Clarke's Commentary - 2 Samuel (24 chapters)
-INFO:   338 verse entries collected
-INFO:   Tags: Character of Christ, Accountability in Leadership, Biblical Leadership
-INFO:   Embedded 50/338 chunks
-INFO:   Embedded 100/338 chunks
-INFO:   Embedded 150/338 chunks
-INFO:   Embedded 200/338 chunks
-INFO:   Embedded 250/338 chunks
-INFO:   Embedded 300/338 chunks
-INFO:   Done: Adam Clarke's Commentary - 2 Samuel (338 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 1 Kings (22 chapters)
-INFO:   423 verse entries collected
-INFO:   Tags: Biblical Leadership, Accountability in Leadership, Biblical Authority
-INFO:   Embedded 50/423 chunks
-INFO:   Embedded 100/423 chunks
-INFO:   Embedded 150/423 chunks
-INFO:   Embedded 200/423 chunks
-INFO:   Embedded 250/423 chunks
-INFO:   Embedded 300/423 chunks
-INFO:   Embedded 350/423 chunks
-INFO:   Embedded 400/423 chunks
-INFO:   Done: Adam Clarke's Commentary - 1 Kings (423 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 2 Kings (25 chapters)
-INFO:   440 verse entries collected
-INFO:   Tags: Accountability in Leadership, Biblical Authority, Prophetic Ministry
-ERROR: Failed to ingest adam-clarke 2 Kings: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
-Traceback (most recent call last):
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
-    total_skipped = 0
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
-    return False
-  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
-    raise APIError(dict(json_obj))
-postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
-INFO: Fetching: Adam Clarke's Commentary - 1 Chronicles (29 chapters)
-INFO:   299 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership, Family Life
-INFO:   Embedded 50/299 chunks
-INFO:   Embedded 100/299 chunks
-INFO:   Embedded 150/299 chunks
-INFO:   Embedded 200/299 chunks
-INFO:   Embedded 250/299 chunks
-INFO:   Done: Adam Clarke's Commentary - 1 Chronicles (299 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 2 Chronicles (36 chapters)
-INFO:   374 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership, The Lordship of Christ
-INFO:   Embedded 50/374 chunks
-INFO:   Embedded 100/374 chunks
-INFO:   Embedded 150/374 chunks
-INFO:   Embedded 200/374 chunks
-INFO:   Embedded 250/374 chunks
-INFO:   Embedded 300/374 chunks
-INFO:   Embedded 350/374 chunks
-INFO:   Done: Adam Clarke's Commentary - 2 Chronicles (374 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Ezra (10 chapters)
-INFO:   115 verse entries collected
-INFO:   Tags: Biblical Authority, The Lordship of Christ, Restoration of All Things
-INFO:   Embedded 50/115 chunks
-INFO:   Embedded 100/115 chunks
-INFO:   Done: Adam Clarke's Commentary - Ezra (115 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Nehemiah (13 chapters)
-INFO:   191 verse entries collected
-INFO:   Tags: Biblical Authority, Faith and Perseverance, Praying for the Sick, Intercessory Prayer
-INFO:   Embedded 50/191 chunks
-INFO:   Embedded 100/191 chunks
-INFO:   Embedded 150/191 chunks
-INFO:   Done: Adam Clarke's Commentary - Nehemiah (191 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Esther (10 chapters)
-INFO:   105 verse entries collected
-INFO:   Embedded 50/105 chunks
-INFO:   Embedded 100/105 chunks
-INFO:   Done: Adam Clarke's Commentary - Esther (105 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Job (42 chapters)
-INFO:   271 verse entries collected
-INFO:   Tags: Accountability in Christ, Authority of the Believer, Character of Christ, Holiness and Sanctification
-INFO:   Embedded 50/271 chunks
-INFO:   Embedded 100/271 chunks
-INFO:   Embedded 150/271 chunks
-INFO:   Embedded 200/271 chunks
-INFO:   Embedded 250/271 chunks
-INFO:   Done: Adam Clarke's Commentary - Job (271 chunks)
+INFO: SKIP (exists): Adam Clarke's Commentary - Ruth
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 Samuel
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 Samuel
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 Kings
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 Kings
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 Chronicles
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 Chronicles
+INFO: SKIP (exists): Adam Clarke's Commentary - Ezra
+INFO: SKIP (exists): Adam Clarke's Commentary - Nehemiah
+INFO: SKIP (exists): Adam Clarke's Commentary - Esther
+INFO: SKIP (exists): Adam Clarke's Commentary - Job
 INFO: Fetching: Adam Clarke's Commentary - Psalms (150 chapters)
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/PSA/1.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke PSA ch 1
@@ -1017,13 +613,7 @@ WARNING:   No data for adam-clarke ECC ch 12
 WARNING:   No verse data found for Adam Clarke's Commentary - Ecclesiastes
 INFO: Fetching: Adam Clarke's Commentary - Song of Solomon (8 chapters)
 WARNING:   No verse data found for Adam Clarke's Commentary - Song of Solomon
-INFO: Fetching: Adam Clarke's Commentary - Isaiah (66 chapters)
-INFO:   171 verse entries collected
-INFO:   Tags: Authority of the Believer, God's Comfort, Spiritual Covering
-INFO:   Embedded 50/171 chunks
-INFO:   Embedded 100/171 chunks
-INFO:   Embedded 150/171 chunks
-INFO:   Done: Adam Clarke's Commentary - Isaiah (171 chunks)
+INFO: SKIP (exists): Adam Clarke's Commentary - Isaiah
 INFO: Fetching: Adam Clarke's Commentary - Jeremiah (52 chapters)
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/1.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke JER ch 1
@@ -1130,46 +720,10 @@ WARNING:   No data for adam-clarke JER ch 51
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JER/52.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke JER ch 52
 WARNING:   No verse data found for Adam Clarke's Commentary - Jeremiah
-INFO: Fetching: Adam Clarke's Commentary - Lamentations (5 chapters)
-INFO:   108 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership
-INFO:   Embedded 50/108 chunks
-INFO:   Embedded 100/108 chunks
-INFO:   Done: Adam Clarke's Commentary - Lamentations (108 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Ezekiel (48 chapters)
-INFO:   710 verse entries collected
-INFO:   Tags: Encounters with God, Prophetic Direction
-INFO:   Embedded 50/710 chunks
-INFO:   Embedded 100/710 chunks
-INFO:   Embedded 150/710 chunks
-INFO:   Embedded 200/710 chunks
-INFO:   Embedded 250/710 chunks
-INFO:   Embedded 300/710 chunks
-INFO:   Embedded 350/710 chunks
-INFO:   Embedded 400/710 chunks
-INFO:   Embedded 450/710 chunks
-INFO:   Embedded 500/710 chunks
-INFO:   Embedded 550/710 chunks
-INFO:   Embedded 600/710 chunks
-INFO:   Embedded 650/710 chunks
-INFO:   Embedded 700/710 chunks
-INFO:   Done: Adam Clarke's Commentary - Ezekiel (710 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Daniel (12 chapters)
-INFO:   258 verse entries collected
-INFO:   Tags: Biblical Authority, Accountability in Leadership, Kingdom of God
-INFO:   Embedded 50/258 chunks
-INFO:   Embedded 100/258 chunks
-INFO:   Embedded 150/258 chunks
-INFO:   Embedded 200/258 chunks
-INFO:   Embedded 250/258 chunks
-INFO:   Done: Adam Clarke's Commentary - Daniel (258 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Hosea (14 chapters)
-INFO:   151 verse entries collected
-INFO:   Tags: Accountability in Christ, Biblical Authority, God's Comfort, Holiness and Sanctification
-INFO:   Embedded 50/151 chunks
-INFO:   Embedded 100/151 chunks
-INFO:   Embedded 150/151 chunks
-INFO:   Done: Adam Clarke's Commentary - Hosea (151 chunks)
+INFO: SKIP (exists): Adam Clarke's Commentary - Lamentations
+INFO: SKIP (exists): Adam Clarke's Commentary - Ezekiel
+INFO: SKIP (exists): Adam Clarke's Commentary - Daniel
+INFO: SKIP (exists): Adam Clarke's Commentary - Hosea
 INFO: Fetching: Adam Clarke's Commentary - Joel (3 chapters)
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JOL/1.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke JOL ch 1
@@ -1178,50 +732,15 @@ WARNING:   No data for adam-clarke JOL ch 2
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/JOL/3.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke JOL ch 3
 WARNING:   No verse data found for Adam Clarke's Commentary - Joel
-INFO: Fetching: Adam Clarke's Commentary - Amos (9 chapters)
-INFO:   133 verse entries collected
-INFO:   Tags: Biblical Authority, Prophetic Ministry, Word of Knowledge
-INFO:   Embedded 50/133 chunks
-INFO:   Embedded 100/133 chunks
-INFO:   Done: Adam Clarke's Commentary - Amos (133 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Obadiah (1 chapters)
-INFO:   19 verse entries collected
-INFO:   Tags: Biblical Authority, God's Comfort
-INFO:   Done: Adam Clarke's Commentary - Obadiah (19 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Jonah (4 chapters)
-INFO:   45 verse entries collected
-INFO:   Tags: Prophetic Direction, Prophetic Ministry, The Will to Heal
-INFO:   Done: Adam Clarke's Commentary - Jonah (45 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Micah (7 chapters)
-INFO:   96 verse entries collected
-INFO:   Tags: Hearing God's Voice, Prophetic Ministry, Accountability in Christ, Biblical Authority
-INFO:   Embedded 50/96 chunks
-INFO:   Done: Adam Clarke's Commentary - Micah (96 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Nahum (3 chapters)
-INFO:   42 verse entries collected
-INFO:   Tags: God's Comfort, The Lordship of Christ
-INFO:   Done: Adam Clarke's Commentary - Nahum (42 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Habakkuk (3 chapters)
-INFO:   54 verse entries collected
-INFO:   Tags: Biblical Authority, Prophetic Ministry
-INFO:   Embedded 50/54 chunks
-INFO:   Done: Adam Clarke's Commentary - Habakkuk (54 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Zephaniah (3 chapters)
-INFO:   51 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership, Accountability in Leadership
-INFO:   Embedded 50/51 chunks
-INFO:   Done: Adam Clarke's Commentary - Zephaniah (51 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Haggai (2 chapters)
-INFO:   25 verse entries collected
-INFO:   Tags: Biblical Authority, Biblical Leadership
-INFO:   Done: Adam Clarke's Commentary - Haggai (25 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Zechariah (14 chapters)
-INFO:   179 verse entries collected
-INFO:   Tags: Biblical Authority, Prophetic Ministry, Victory in Christ, Restoration of All Things
-INFO:   Embedded 50/179 chunks
-INFO:   Embedded 100/179 chunks
-INFO:   Embedded 150/179 chunks
-INFO:   Done: Adam Clarke's Commentary - Zechariah (179 chunks)
+INFO: SKIP (exists): Adam Clarke's Commentary - Amos
+INFO: SKIP (exists): Adam Clarke's Commentary - Obadiah
+INFO: SKIP (exists): Adam Clarke's Commentary - Jonah
+INFO: SKIP (exists): Adam Clarke's Commentary - Micah
+INFO: SKIP (exists): Adam Clarke's Commentary - Nahum
+INFO: SKIP (exists): Adam Clarke's Commentary - Habakkuk
+INFO: SKIP (exists): Adam Clarke's Commentary - Zephaniah
+INFO: SKIP (exists): Adam Clarke's Commentary - Haggai
+INFO: SKIP (exists): Adam Clarke's Commentary - Zechariah
 INFO: Fetching: Adam Clarke's Commentary - Malachi (4 chapters)
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAL/1.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke MAL ch 1
@@ -1290,130 +809,101 @@ WARNING:   No data for adam-clarke MAT ch 27
 WARNING: Failed to fetch https://bible.helloao.org/api/c/adam-clarke/MAT/28.json: Expecting value: line 1 column 1 (char 0)
 WARNING:   No data for adam-clarke MAT ch 28
 WARNING:   No verse data found for Adam Clarke's Commentary - Matthew
-INFO: Fetching: Adam Clarke's Commentary - Mark (16 chapters)
-INFO:   336 verse entries collected
-INFO:   Tags: Biblical Authority, Baptism in the Spirit, The New Covenant, Divine Appointments
-INFO:   Embedded 50/336 chunks
-INFO:   Embedded 100/336 chunks
-INFO:   Embedded 150/336 chunks
-INFO:   Embedded 200/336 chunks
-INFO:   Embedded 250/336 chunks
-INFO:   Embedded 300/336 chunks
-INFO:   Done: Adam Clarke's Commentary - Mark (336 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Luke (24 chapters)
-INFO:   747 verse entries collected
-INFO:   Tags: Biblical Authority, Authority of the Believer
-INFO:   Embedded 50/747 chunks
-INFO:   Embedded 100/747 chunks
-INFO:   Embedded 150/747 chunks
-ERROR: Failed to ingest adam-clarke Luke: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
-Traceback (most recent call last):
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 458, in main
-    total_skipped = 0
-  File "/Users/alexwhitley/Desktop/rhemata/scripts/ingest_helloao.py", line 388, in ingest_book
-    return False
-  File "/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/postgrest/_sync/request_builder.py", line 53, in execute
-    raise APIError(dict(json_obj))
-postgrest.exceptions.APIError: {'message': 'canceling statement due to statement timeout', 'code': '57014', 'hint': None, 'details': None}
+INFO: SKIP (exists): Adam Clarke's Commentary - Mark
+INFO: SKIP (exists): Adam Clarke's Commentary - Luke
 INFO: SKIP (exists): Adam Clarke's Commentary - John
-INFO: Fetching: Adam Clarke's Commentary - Acts (28 chapters)
-INFO:   884 verse entries collected
-INFO:   Tags: Authority of the Believer, Divine Appointments, Filling of the Spirit, Led by the Spirit
-INFO:   Embedded 50/884 chunks
-INFO:   Embedded 100/884 chunks
-INFO:   Embedded 150/884 chunks
-INFO:   Embedded 200/884 chunks
-INFO:   Embedded 250/884 chunks
-INFO:   Embedded 300/884 chunks
-INFO:   Embedded 350/884 chunks
-INFO:   Embedded 400/884 chunks
-INFO:   Embedded 450/884 chunks
-INFO:   Embedded 500/884 chunks
-INFO:   Embedded 550/884 chunks
-INFO:   Embedded 600/884 chunks
-INFO:   Embedded 650/884 chunks
-INFO:   Embedded 700/884 chunks
-INFO:   Embedded 750/884 chunks
-INFO:   Embedded 800/884 chunks
-INFO:   Embedded 850/884 chunks
-INFO:   Done: Adam Clarke's Commentary - Acts (884 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Romans (16 chapters)
-INFO:   419 verse entries collected
-INFO:   Tags: Authority of the Believer, Biblical Authority, Servant Leadership, The Lordship of Christ
-INFO:   Embedded 50/419 chunks
-INFO:   Embedded 100/419 chunks
-INFO:   Embedded 150/419 chunks
-INFO:   Embedded 200/419 chunks
-INFO:   Embedded 250/419 chunks
-INFO:   Embedded 300/419 chunks
-INFO:   Embedded 350/419 chunks
-INFO:   Embedded 400/419 chunks
-INFO:   Done: Adam Clarke's Commentary - Romans (419 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 1 Corinthians (16 chapters)
-INFO:   416 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, Authority of the Believer
-INFO:   Embedded 50/416 chunks
-INFO:   Embedded 100/416 chunks
-INFO:   Embedded 150/416 chunks
-INFO:   Embedded 200/416 chunks
-INFO:   Embedded 250/416 chunks
-INFO:   Embedded 300/416 chunks
-INFO:   Embedded 350/416 chunks
-INFO:   Embedded 400/416 chunks
-INFO:   Done: Adam Clarke's Commentary - 1 Corinthians (416 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 2 Corinthians (13 chapters)
-INFO:   253 verse entries collected
-INFO:   Tags: Authority of the Believer, God's Comfort, Grace and Mercy, Spiritual Maturity
-INFO:   Embedded 50/253 chunks
-INFO:   Embedded 100/253 chunks
-INFO:   Embedded 150/253 chunks
-INFO:   Embedded 200/253 chunks
-INFO:   Embedded 250/253 chunks
-INFO:   Done: Adam Clarke's Commentary - 2 Corinthians (253 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Galatians (6 chapters)
-INFO:   147 verse entries collected
-INFO:   Tags: Biblical Authority, The Lordship of Christ, Biblical Leadership, Freedom from Anxiety
-INFO:   Embedded 50/147 chunks
-INFO:   Embedded 100/147 chunks
-INFO:   Done: Adam Clarke's Commentary - Galatians (147 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Ephesians (6 chapters)
-INFO:   153 verse entries collected
-INFO:   Tags: Biblical Authority, Holiness and Sanctification, Grace and Mercy
-INFO:   Embedded 50/153 chunks
-INFO:   Embedded 100/153 chunks
-INFO:   Embedded 150/153 chunks
-INFO:   Done: Adam Clarke's Commentary - Ephesians (153 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Philippians (4 chapters)
-INFO:   103 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Leadership, Equipping the Saints, Spiritual Maturity
-INFO:   Embedded 50/103 chunks
-INFO:   Embedded 100/103 chunks
-INFO:   Done: Adam Clarke's Commentary - Philippians (103 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Colossians (4 chapters)
-INFO:   91 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, The Lordship of Christ, Grace and Mercy
-INFO:   Embedded 50/91 chunks
-INFO:   Done: Adam Clarke's Commentary - Colossians (91 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 1 Thessalonians (5 chapters)
-INFO:   86 verse entries collected
-INFO:   Tags: Faith and Perseverance, Love and Sacrifice, Biblical Authority
-INFO:   Embedded 50/86 chunks
-INFO:   Done: Adam Clarke's Commentary - 1 Thessalonians (86 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 2 Thessalonians (3 chapters)
-INFO:   45 verse entries collected
-INFO:   Tags: End Times Prophecy, God's Comfort, Victory in Christ, The Lordship of Christ
-INFO:   Done: Adam Clarke's Commentary - 2 Thessalonians (45 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 1 Timothy (6 chapters)
-INFO:   112 verse entries collected
-INFO:   Tags: Apostolic Oversight, Biblical Authority, Spiritual Maturity, The New Covenant
-INFO:   Embedded 50/112 chunks
-INFO:   Embedded 100/112 chunks
-INFO:   Done: Adam Clarke's Commentary - 1 Timothy (112 chunks)
-INFO: Fetching: Adam Clarke's Commentary - 2 Timothy (4 chapters)
-INFO:   83 verse entries collected
-INFO:   Tags: Authority of the Believer, Discipleship and Mentoring, Faith and Perseverance, Spiritual Maturity
-INFO:   Embedded 50/83 chunks
-INFO:   Done: Adam Clarke's Commentary - 2 Timothy (83 chunks)
-INFO: Fetching: Adam Clarke's Commentary - Titus (3 chapters)
-INFO:   46 verse entries collected
-INFO:   Tags: Biblical Authority, The New Covenant, Divine Appointments
+INFO: SKIP (exists): Adam Clarke's Commentary - Acts
+INFO: SKIP (exists): Adam Clarke's Commentary - Romans
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 Corinthians
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 Corinthians
+INFO: SKIP (exists): Adam Clarke's Commentary - Galatians
+INFO: SKIP (exists): Adam Clarke's Commentary - Ephesians
+INFO: SKIP (exists): Adam Clarke's Commentary - Philippians
+INFO: SKIP (exists): Adam Clarke's Commentary - Colossians
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 Thessalonians
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 Thessalonians
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 Timothy
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 Timothy
+INFO: SKIP (exists): Adam Clarke's Commentary - Titus
+INFO: SKIP (exists): Adam Clarke's Commentary - Philemon
+INFO: SKIP (exists): Adam Clarke's Commentary - Hebrews
+INFO: SKIP (exists): Adam Clarke's Commentary - James
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 Peter
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 Peter
+INFO: SKIP (exists): Adam Clarke's Commentary - 1 John
+INFO: SKIP (exists): Adam Clarke's Commentary - 2 John
+INFO: SKIP (exists): Adam Clarke's Commentary - 3 John
+INFO: SKIP (exists): Adam Clarke's Commentary - Jude
+INFO: SKIP (exists): Adam Clarke's Commentary - Revelation
+INFO: ============================================================
+INFO: Commentary: Jamieson-Fausset-Brown Commentary
+INFO: ============================================================
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Genesis
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Exodus
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Leviticus
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Numbers
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Deuteronomy
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Joshua
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Judges
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Ruth
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 Samuel
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 Samuel
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 Kings
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 Kings
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 Chronicles
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 Chronicles
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Ezra
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Nehemiah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Esther
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Job
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Psalms
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Proverbs
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Ecclesiastes
+INFO: Fetching: Jamieson-Fausset-Brown Commentary - Song of Solomon (8 chapters)
+WARNING:   No verse data found for Jamieson-Fausset-Brown Commentary - Song of Solomon
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Isaiah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Jeremiah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Lamentations
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Ezekiel
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Daniel
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Hosea
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Joel
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Amos
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Obadiah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Jonah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Micah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Nahum
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Habakkuk
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Zephaniah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Haggai
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Zechariah
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Malachi
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Matthew
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Mark
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Luke
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - John
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Acts
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Romans
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 Corinthians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 Corinthians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Galatians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Ephesians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Philippians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Colossians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 Thessalonians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 Thessalonians
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 Timothy
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 Timothy
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Titus
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Philemon
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Hebrews
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - James
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 Peter
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 Peter
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 1 John
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 2 John
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - 3 John
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Jude
+INFO: SKIP (exists): Jamieson-Fausset-Brown Commentary - Revelation
+INFO: ============================================================
+INFO: Done. 0 ingested, 198 skipped (1.7 min)

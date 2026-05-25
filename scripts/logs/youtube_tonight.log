@@ -1,0 +1,95 @@
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+/Users/alexwhitley/Library/Python/3.9/lib/python/site-packages/whisper/transcribe.py:126: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+Loading Whisper model 'base'...
+Whisper:  base model loaded
+yt-dlp:   /Users/alexwhitley/Library/Python/3.9/bin/yt-dlp
+Cookies:  /Users/alexwhitley/Desktop/rhemata/scripts/youtube_cookies.txt ✓
+Output:   /Users/alexwhitley/Desktop/rhemata/sources/youtube/raw
+Tracker:  /Users/alexwhitley/Desktop/rhemata/sources/youtube/youtube_tracker.xlsx
+
+1 active channel(s) | 105 already scraped | max transcripts: 10
+
+════════════════════════════════════════════════════════════════
+  John Bevere TV (@johnbeveretv)
+  390 video(s) in playlist
+
+  → The End Times Timeline Nobody Taught You [0/10 saved]
+     SKIP — already in Supabase: The End Times Timeline Nobody Taught You
+  → I Didn’t Want to Talk About This… [0/10 saved]
+     SKIP — already in Supabase: I Didn’t Want to Talk About This…
+  → You’re Being Set Up... [0/10 saved]
+     SKIP — already in Supabase: You’re Being Set Up...
+  → You’ll Wish Someone Told You This Sooner... [0/10 saved]
+     SKIP — already in Supabase: You’ll Wish Someone Told You This Sooner...
+  ⏭  Is God Promoting You? (or are you promoting yourself?) — title filtered
+  ⏭  Promotion Comes When You Do THIS — title filtered
+  → Pursue Jesus as Much as He Pursues You [0/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  John Bevere_johnbeveretv_pursue_jesus_as_much_as_he_pursues_you.txt (1,036 words)
+  → How to Maintain a Clear Conscience [1/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  John Bevere_johnbeveretv_how_to_maintain_a_clear_conscience.txt (733 words)
+  → Obey God to Completion [2/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  John Bevere_johnbeveretv_obey_god_to_completion.txt (614 words)
+  → Obey Even If It’s Painful [3/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  John Bevere_johnbeveretv_obey_even_if_its_painful.txt (779 words)
+  → The Power of Your Yes [4/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  John Bevere_johnbeveretv_the_power_of_your_yes.txt (564 words)
+  → The Paradox of Faith: Fear and Obedience to God [5/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  NA_johnbeveretv_the_paradox_of_faith_fear_and_obedience_to_god.txt (678 words)
+  → Is God's Will Really Your First Priority? [6/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  NA_johnbeveretv_is_gods_will_really_your_first_priority.txt (534 words)
+  → The Ultimate Test: Can You Obey Regardless of Circumstances? [7/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  NA_johnbeveretv_the_ultimate_test_can_you_obey_regardless_of_circumstances.txt (689 words)
+  → Desire and Power: A Journey to Intimacy with God [8/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  NA_johnbeveretv_desire_and_power_a_journey_to_intimacy_with_god.txt (541 words)
+  → The Secret to Elevating Your Thoughts, Intentions, and Actions [9/10 saved]
+     Downloading audio...
+     Transcribing with Whisper...
+     ✓  NA_johnbeveretv_the_secret_to_elevating_your_thoughts_intentions_and_actions.txt (704 words)
+
+  Reached 10 transcripts — stopping.
+
+════════════════════════════════════════════════════════════════
+Done.
+  ✓ New transcripts   : 10
+  ⏭  Skipped          : 107
+  ⏭  Already in DB    : 4
+  ✗ Errors            : 0
+  Output: /Users/alexwhitley/Desktop/rhemata/sources/youtube/raw
