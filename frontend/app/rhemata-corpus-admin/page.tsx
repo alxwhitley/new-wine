@@ -51,24 +51,46 @@ export default function CorpusAdminPage() {
     const newCounts: CountData = {};
 
     // Fetch document-based cards: group by source_kind with counts and max created_at
-    const { data: docGroups } = await supabase
-      .from("documents")
-      .select("source_kind, created_at");
+    // Use .range() to avoid PostgREST 1000-row default limit
+    const allDocs: Array<{ source_kind: string; source_type: string; created_at: string }> = [];
+    let offset = 0;
+    const batchSize = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from("documents")
+        .select("source_kind, source_type, created_at")
+        .range(offset, offset + batchSize - 1);
+      if (!data || data.length === 0) break;
+      allDocs.push(...(data as Array<{ source_kind: string; source_type: string; created_at: string }>));
+      if (data.length < batchSize) break;
+      offset += batchSize;
+    }
+    const docGroups = allDocs;
 
-    // Build per-source_kind aggregates
+    // Build per-source_kind and per-source_type aggregates
     const kindAgg: Record<string, { count: number; maxDate: string | null }> =
       {};
-    if (docGroups) {
-      for (const row of docGroups) {
-        const sk = row.source_kind as string;
-        if (!kindAgg[sk]) kindAgg[sk] = { count: 0, maxDate: null };
-        kindAgg[sk].count++;
-        if (
-          row.created_at &&
-          (!kindAgg[sk].maxDate || row.created_at > kindAgg[sk].maxDate!)
-        ) {
-          kindAgg[sk].maxDate = row.created_at as string;
-        }
+    const typeAgg: Record<string, { count: number; maxDate: string | null }> =
+      {};
+    for (const row of docGroups) {
+      const sk = row.source_kind;
+      if (!kindAgg[sk]) kindAgg[sk] = { count: 0, maxDate: null };
+      kindAgg[sk].count++;
+      if (
+        row.created_at &&
+        (!kindAgg[sk].maxDate || row.created_at > kindAgg[sk].maxDate!)
+      ) {
+        kindAgg[sk].maxDate = row.created_at;
+      }
+
+      const st = row.source_type;
+      if (!typeAgg[st]) typeAgg[st] = { count: 0, maxDate: null };
+      typeAgg[st].count++;
+      if (
+        row.created_at &&
+        (!typeAgg[st].maxDate || row.created_at > typeAgg[st].maxDate!)
+      ) {
+        typeAgg[st].maxDate = row.created_at;
       }
     }
 
@@ -100,12 +122,46 @@ export default function CorpusAdminPage() {
             };
           })()
         );
+      } else if (card.countChunks && card.extraFilter) {
+        // Lexicon cards: count chunks for matching documents
+        filterPromises.push(
+          (async () => {
+            // First find document IDs matching the filter
+            let docQuery = supabase
+              .from("documents")
+              .select("id");
+            if (card.sourceKind) {
+              docQuery = docQuery.eq("source_kind", card.sourceKind);
+            }
+            const parsed = parseFilter(card.extraFilter!);
+            for (const cond of parsed.and) {
+              docQuery = docQuery.ilike(cond.col, cond.val);
+            }
+            if (parsed.or.length > 0) {
+              docQuery = docQuery.or(
+                parsed.or.map((c) => `${c.col}.ilike.${c.val}`).join(",")
+              );
+            }
+            const { data: docs } = await docQuery;
+            if (docs && docs.length > 0) {
+              const docIds = docs.map((d) => d.id as string);
+              const { count } = await supabase
+                .from("chunks")
+                .select("*", { count: "exact", head: true })
+                .in("document_id", docIds);
+              newCounts[card.id] = {
+                count: count ?? 0,
+                lastIngested: null,
+              };
+            } else {
+              newCounts[card.id] = { count: 0, lastIngested: null };
+            }
+          })()
+        );
       } else if (card.extraFilter) {
         // Cards with extra filters need individual queries
         filterPromises.push(
           (async () => {
-            // Use RPC or direct query with textSearch isn't available,
-            // so we fetch matching docs and count client-side
             let query = supabase
               .from("documents")
               .select("created_at", { count: "exact" });
@@ -140,6 +196,13 @@ export default function CorpusAdminPage() {
             };
           })()
         );
+      } else if (card.sourceType) {
+        // Query by source_type instead of source_kind (e.g. books)
+        const agg = typeAgg[card.sourceType];
+        newCounts[card.id] = {
+          count: agg?.count ?? 0,
+          lastIngested: agg?.maxDate ?? null,
+        };
       } else if (card.sourceKind) {
         // Simple source_kind match — use pre-aggregated data
         const agg = kindAgg[card.sourceKind];
@@ -154,16 +217,20 @@ export default function CorpusAdminPage() {
     setCounts(newCounts);
 
     // Global stats
-    const [chunksRes, versesRes, interlinearRes] = await Promise.all([
-      supabase.from("chunks").select("*", { count: "exact", head: true }),
-      supabase.from("verses").select("*", { count: "exact", head: true }),
-      supabase
-        .from("interlinear_words")
-        .select("*", { count: "exact", head: true }),
-    ]);
+    const [docsCountRes, chunksRes, versesRes, interlinearRes] =
+      await Promise.all([
+        supabase
+          .from("documents")
+          .select("*", { count: "exact", head: true }),
+        supabase.from("chunks").select("*", { count: "exact", head: true }),
+        supabase.from("verses").select("*", { count: "exact", head: true }),
+        supabase
+          .from("interlinear_words")
+          .select("*", { count: "exact", head: true }),
+      ]);
 
     setGlobalStats({
-      totalDocuments: docGroups?.length ?? 0,
+      totalDocuments: docsCountRes.count ?? 0,
       totalChunks: chunksRes.count ?? 0,
       totalVerses: versesRes.count ?? 0,
       totalInterlinearWords: interlinearRes.count ?? 0,
@@ -186,10 +253,11 @@ export default function CorpusAdminPage() {
         { event: "INSERT", schema: "public", table: "documents" },
         (payload) => {
           const sourceKind = payload.new.source_kind as string;
+          const sourceType = payload.new.source_type as string;
 
           // Find which card(s) this insert belongs to and pulse them
           for (const card of CARDS) {
-            if (card.sourceKind === sourceKind) {
+            if (card.sourceKind === sourceKind || card.sourceType === sourceType) {
               triggerPulse(card.id);
             }
           }

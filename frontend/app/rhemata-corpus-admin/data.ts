@@ -113,7 +113,7 @@ export const CARDS: CorpusCard[] = [
     status: "Partial",
     sourceKind: "word_study",
     description:
-      "Scrape \u2192 Ingest \u2192 Generate Excerpts. 1,779 docs ingested. 66 excerpts remaining.",
+      "Scrape \u2192 Ingest \u2192 Generate Excerpts. Greek word studies from Precept Austin.",
     steps: [
       { label: "Scrape" },
       { label: "Ingest" },
@@ -163,7 +163,8 @@ export const CARDS: CorpusCard[] = [
     group: "Pipelines",
     status: "Not Started",
     sourceKind: "word_study",
-    extraFilter: "title ILIKE '%hebrew%'",
+    // TODO: confirm filter once Hebrew ingestion runs — may need source_name or tag-based filter
+    extraFilter: "source_name ILIKE '%hebrew%' OR title ILIKE '%hebrew%'",
     description:
       "Scrape Precept Austin Hebrew pages \u2192 Ingest \u2192 Generate Excerpts.",
     steps: [
@@ -209,7 +210,7 @@ export const CARDS: CorpusCard[] = [
     sourceKind: "sermon_transcript",
     extraFilter:
       "author ILIKE '%derek prince%' OR source_name ILIKE '%derek prince%'",
-    description: "493 sermons scraped from derekprince.com and ingested.",
+    description: "Scraped from derekprince.com and ingested via ingest.py.",
     commands: [
       {
         label: "Scrape",
@@ -238,7 +239,7 @@ export const CARDS: CorpusCard[] = [
     sourceKind: "commentary",
     extraFilter: "author ILIKE '%matthew henry%'",
     description:
-      "Full Matthew Henry commentary \u2014 66 books ingested via HelloAO Bible API.",
+      "Matthew Henry commentary ingested via HelloAO Bible API.",
     commands: [
       {
         label: "Ingest All Night",
@@ -265,7 +266,7 @@ export const CARDS: CorpusCard[] = [
     sourceKind: "commentary",
     extraFilter: "author ILIKE '%adam clarke%'",
     description:
-      "Full Adam Clarke commentary \u2014 66 books ingested via HelloAO Bible API.",
+      "Adam Clarke commentary ingested via HelloAO Bible API.",
     commands: [
       {
         label: "Ingest All Night",
@@ -292,7 +293,7 @@ export const CARDS: CorpusCard[] = [
     sourceKind: "commentary",
     extraFilter: "author ILIKE '%jamieson%'",
     description:
-      "Full JFB commentary \u2014 66 books ingested via HelloAO Bible API.",
+      "Jamieson-Fausset-Brown commentary ingested via HelloAO Bible API.",
     commands: [
       {
         label: "Ingest All Night",
@@ -315,12 +316,12 @@ export const CARDS: CorpusCard[] = [
     id: "historicalchristianfaith",
     name: "HistoricalChristianFaith Commentaries",
     group: "Commentaries",
-    status: "Not Started",
+    status: "Partial",
     sourceKind: "commentary",
     extraFilter:
       "source_name ILIKE '%historicalchristianfaith%' OR source_name ILIKE '%historical christian%'",
     description:
-      "325 church fathers. SQLite DB at /tmp/commentaries-db/data.out. Not yet run.",
+      "325 church fathers in source DB. 19 partially ingested. Re-run ingest_commentaries.py to continue.",
     commands: [
       {
         label: "Ingest All Night",
@@ -356,9 +357,9 @@ export const CARDS: CorpusCard[] = [
     name: "Public Domain Books (CCEL + Archive.org)",
     group: "Public Domain Books",
     status: "Complete",
-    sourceKind: "book",
+    sourceType: "book",
     description:
-      "56 titles across 27 authors downloaded and ingested via ingest.py.",
+      "49 titles across 27 authors downloaded and ingested via ingest.py.",
     bookList: [
       {
         author: "Andrew Murray",
@@ -503,7 +504,9 @@ export const CARDS: CorpusCard[] = [
     status: "Complete",
     sourceKind: "lexicon",
     extraFilter: "source_name ILIKE '%TBESG%' OR title ILIKE '%TBESG%'",
-    description: "Abbott-Smith Greek NT lexicon. 11,034 chunks.",
+    countChunks: true,
+    countLabel: "chunks",
+    description: "Abbott-Smith Greek NT lexicon.",
     commands: [
       {
         label: "Ingest",
@@ -529,7 +532,9 @@ export const CARDS: CorpusCard[] = [
     status: "Complete",
     sourceKind: "lexicon",
     extraFilter: "source_name ILIKE '%TBESH%' OR title ILIKE '%TBESH%'",
-    description: "STEPBible Hebrew OT lexicon. 10,258 chunks.",
+    countChunks: true,
+    countLabel: "chunks",
+    description: "STEPBible Hebrew OT lexicon.",
     commands: [
       {
         label: "Ingest",
@@ -555,7 +560,9 @@ export const CARDS: CorpusCard[] = [
     status: "Complete",
     sourceKind: "lexicon",
     extraFilter: "source_name ILIKE '%TFLSJ%' OR title ILIKE '%TFLSJ%'",
-    description: "Liddell-Scott-Jones Greek lexicon. 15,767 chunks.",
+    countChunks: true,
+    countLabel: "chunks",
+    description: "Liddell-Scott-Jones Greek lexicon.",
     commands: [
       {
         label: "Ingest",
@@ -627,8 +634,8 @@ export const CARDS: CorpusCard[] = [
     specialTable: "excerpts",
     specialWhere: "excerpt_type=eq.word_study_article",
     description:
-      "AI-generated word study articles from Precept Austin chunks. 1,713/1,779 complete.",
-    progressTarget: 1779,
+      "AI-generated word study articles from Precept Austin chunks. Nearly complete.",
+    progressTarget: 2175,
     commands: [
       {
         label: "All Night",

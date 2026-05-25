@@ -104,7 +104,7 @@ export default function CardModal({ card, count, onClose }: CardModalProps) {
             className="text-2xl font-bold mb-2"
             style={{ color: COLORS.citationGold }}
           >
-            {count.toLocaleString()} {card.specialTable ? "rows" : "documents"}
+            {count.toLocaleString()} {card.countLabel ?? (card.specialTable ? "rows" : "documents")}
           </p>
         )}
         <p className="text-sm mb-5" style={{ color: COLORS.textSecondary }}>
