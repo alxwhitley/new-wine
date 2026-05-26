@@ -561,6 +561,9 @@ function CorpusPanel({
   corpusLoading,
   commentaryResults,
   commentaryLoading,
+  commentaryLoadingMore,
+  commentaryHasMore,
+  onLoadMoreCommentary,
   hasVerse,
   wordStudyMode,
   wordStudyDoc,
@@ -589,6 +592,9 @@ function CorpusPanel({
   corpusLoading: boolean;
   commentaryResults: CommentaryResult[];
   commentaryLoading: boolean;
+  commentaryLoadingMore: boolean;
+  commentaryHasMore: boolean;
+  onLoadMoreCommentary: () => void;
   hasVerse: boolean;
   wordStudyMode: boolean;
   wordStudyDoc: WordSearchResult | null;
@@ -1130,6 +1136,24 @@ function CorpusPanel({
               <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
             </div>
           ))}
+          {commentaryHasMore ? (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={onLoadMoreCommentary}
+                disabled={commentaryLoadingMore}
+                className="rounded px-4 py-2 text-sm cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ border: "1px solid #3c3c38", color: "#c1c1b8", backgroundColor: "transparent" }}
+                onMouseEnter={(e) => { if (!commentaryLoadingMore) { e.currentTarget.style.borderColor = "#b49238"; e.currentTarget.style.color = "#b49238"; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
+              >
+                {commentaryLoadingMore ? "Loading..." : "Load more"}
+              </button>
+            </div>
+          ) : commentaryResults.length > 3 ? (
+            <p className="text-center text-sm pt-2" style={{ color: "#c1c1b8" }}>
+              That&apos;s all the results
+            </p>
+          ) : null}
         </div>
       )}
       {flagModalEl}
@@ -1892,32 +1916,57 @@ export default function StudyPage() {
   // Commentary results (State 1: verse loaded, no word selected)
   const [commentaryResults, setCommentaryResults] = useState<CommentaryResult[]>([]);
   const [commentaryLoading, setCommentaryLoading] = useState(false);
+  const [commentaryLoadingMore, setCommentaryLoadingMore] = useState(false);
+  const [commentaryOffset, setCommentaryOffset] = useState(0);
+  const [commentaryHasMore, setCommentaryHasMore] = useState(false);
   const [activeCommentary, setActiveCommentary] = useState<CommentaryResult | null>(null);
 
-  useEffect(() => {
-    if (!verseData?.text) {
-      setCommentaryResults([]);
-      setActiveCommentary(null);
-      return;
+  const fetchCommentary = useCallback((verseText: string, offset: number) => {
+    const isLoadMore = offset > 0;
+    if (isLoadMore) {
+      setCommentaryLoadingMore(true);
+    } else {
+      setCommentaryLoading(true);
     }
-
-    setCommentaryLoading(true);
-    const params = new URLSearchParams({ verse_text: verseData.text });
+    const params = new URLSearchParams({ verse_text: verseText, offset: String(offset) });
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/commentary?${params}`)
       .then((res) => {
         if (!res.ok) throw new Error("commentary fetch failed");
         return res.json();
       })
       .then((data) => {
-        setCommentaryResults(data.results ?? []);
+        const newResults = data.results ?? [];
+        if (isLoadMore) {
+          setCommentaryResults((prev) => [...prev, ...newResults]);
+        } else {
+          setCommentaryResults(newResults);
+        }
+        setCommentaryHasMore(data.has_more ?? false);
+        setCommentaryOffset(offset);
       })
       .catch(() => {
-        setCommentaryResults([]);
+        if (!isLoadMore) setCommentaryResults([]);
+        setCommentaryHasMore(false);
       })
       .finally(() => {
-        setCommentaryLoading(false);
+        if (isLoadMore) {
+          setCommentaryLoadingMore(false);
+        } else {
+          setCommentaryLoading(false);
+        }
       });
-  }, [verseData?.text]);
+  }, []);
+
+  useEffect(() => {
+    if (!verseData?.text) {
+      setCommentaryResults([]);
+      setActiveCommentary(null);
+      setCommentaryOffset(0);
+      setCommentaryHasMore(false);
+      return;
+    }
+    fetchCommentary(verseData.text, 0);
+  }, [verseData?.text, fetchCommentary]);
 
   // Corpus results (State 2: word selected)
   const [corpusResults, setCorpusResults] = useState<CorpusResult[]>([]);
@@ -2062,6 +2111,11 @@ export default function StudyPage() {
     corpusLoading,
     commentaryResults,
     commentaryLoading,
+    commentaryLoadingMore,
+    commentaryHasMore,
+    onLoadMoreCommentary: () => {
+      if (verseData?.text) fetchCommentary(verseData.text, commentaryOffset + 3);
+    },
     hasVerse: !!verseData,
     wordStudyMode,
     wordStudyDoc,

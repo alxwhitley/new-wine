@@ -509,9 +509,18 @@ async def get_verses_for_strongs(
     return {"verses": verses}
 
 
+COMMENTARY_AUTHOR_BOOST = {
+    "matthew henry": 0.15,
+    "jamieson, fausset & brown": 0.08,
+    "adam clarke": 0.03,
+}
+COMMENTARY_DEFAULT_PENALTY = -0.10
+
+
 @router.get("/commentary")
 async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     filters = get_disabled_filters()
 
@@ -526,7 +535,7 @@ async def get_commentary(
     try:
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
-            "match_count": 20,
+            "match_count": 30,
             "include_copyrighted": filters["include_copyrighted"],
         }).execute()
     except Exception:
@@ -548,15 +557,24 @@ async def get_commentary(
         seen_docs.add(doc_id)
         content = chunk.get("content", "")
         excerpt = content[:200].rsplit(" ", 1)[0] + "..." if len(content) > 200 else content
+        similarity = chunk.get("similarity", 0.0)
+        author = chunk.get("author", "")
+        boost = COMMENTARY_AUTHOR_BOOST.get(author.lower(), COMMENTARY_DEFAULT_PENALTY)
         results.append({
             "document_id": doc_id,
             "title": chunk.get("title", ""),
-            "author": chunk.get("author", ""),
+            "author": author,
             "source_kind": chunk.get("source_kind", ""),
             "excerpt": excerpt,
             "content": content,
+            "_score": similarity + boost,
         })
-        if len(results) >= 5:
-            break
 
-    return {"results": results}
+    results.sort(key=lambda r: r["_score"], reverse=True)
+    for r in results:
+        del r["_score"]
+
+    page = results[offset:offset + 3]
+    has_more = len(results) > offset + 3
+
+    return {"results": page, "has_more": has_more, "total": len(results)}
