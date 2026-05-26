@@ -201,6 +201,39 @@ export const CARDS: CorpusCard[] = [
     ],
   },
 
+  {
+    id: "individual-videos",
+    name: "Individual Videos",
+    group: "Pipelines",
+    status: "Ongoing",
+    sourceKind: "sermon_transcript",
+    extraFilter: "source_name ILIKE '%Individual Videos%'",
+    description:
+      "One-off YouTube videos from various speakers. yt-dlp captions \u2192 Whisper fallback \u2192 Groq clean \u2192 ingest.",
+    steps: [
+      { label: "Captions / Whisper" },
+      { label: "Clean" },
+      { label: "Ingest" },
+    ],
+    commands: [
+      {
+        label: "Run Pipeline",
+        command:
+          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/scrape_individual_videos.py",
+      },
+      {
+        label: "Run All Night",
+        command:
+          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/scrape_individual_videos.py > logs/individual_videos.log 2>&1 &",
+      },
+      {
+        label: "Monitor",
+        command:
+          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/individual_videos.log",
+      },
+    ],
+  },
+
   // ── Sermons & Transcripts ──
   {
     id: "derek-prince",
