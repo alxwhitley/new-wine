@@ -316,12 +316,12 @@ export const CARDS: CorpusCard[] = [
     id: "historicalchristianfaith",
     name: "HistoricalChristianFaith Commentaries",
     group: "Commentaries",
-    status: "Partial",
+    status: "Complete",
     sourceKind: "commentary",
     extraFilter:
       "source_name ILIKE '%historicalchristianfaith%' OR source_name ILIKE '%historical christian%'",
     description:
-      "325 church fathers in source DB. 19 partially ingested. Re-run ingest_commentaries.py to continue.",
+      "325 church fathers ingested. 51,118 chunks.",
     commands: [
       {
         label: "Ingest All Night",
@@ -603,11 +603,12 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "interlinear-tagnt",
-    name: "Interlinear \u2014 TAGNT",
+    name: "Interlinear \u2014 TAGNT (Greek NT)",
     group: "Lexicons & Reference",
     status: "Complete",
     specialTable: "interlinear_words",
-    description: "Greek NT interlinear word data. 142,096 rows.",
+    specialWhere: "language=eq.greek",
+    description: "Greek NT interlinear word data from STEPBible TAGNT. Full NT coverage.",
     commands: [
       {
         label: "Ingest",
@@ -623,6 +624,37 @@ export const CARDS: CorpusCard[] = [
         label: "Single Book",
         command:
           "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_interlinear.py --book JHN",
+      },
+    ],
+  },
+  {
+    id: "interlinear-tahot",
+    name: "Interlinear \u2014 TAHOT (Hebrew OT)",
+    group: "Lexicons & Reference",
+    status: "Complete",
+    specialTable: "interlinear_words",
+    specialWhere: "language=eq.hebrew",
+    description: "Hebrew OT interlinear word data from STEPBible TAHOT. Full OT coverage.",
+    commands: [
+      {
+        label: "Ingest",
+        command:
+          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_tahot.py",
+      },
+      {
+        label: "Test",
+        command:
+          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_tahot.py --test",
+      },
+      {
+        label: "Single Book",
+        command:
+          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_tahot.py --book GEN",
+      },
+      {
+        label: "Monitor",
+        command:
+          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/tahot_ingest.log",
       },
     ],
   },
