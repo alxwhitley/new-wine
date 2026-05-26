@@ -47,3 +47,10 @@ export interface CorpusCount {
   count: number;
   lastIngested: string | null;
 }
+
+export interface FutureTarget {
+  id: string;
+  name: string;
+  description: string;
+  urls: string[];
+}

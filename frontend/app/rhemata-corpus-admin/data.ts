@@ -1,4 +1,4 @@
-import { CorpusCard } from "./types";
+import { CorpusCard, FutureTarget } from "./types";
 
 export const GROUPS = [
   "Pipelines",
@@ -754,6 +754,58 @@ export const CARDS: CorpusCard[] = [
         command:
           "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts.py",
       },
+    ],
+  },
+];
+
+export const FUTURE_TARGETS: FutureTarget[] = [
+  {
+    id: "andrew-murray-extra",
+    name: "Andrew Murray \u2014 Additional Titles",
+    description:
+      "More Andrew Murray works beyond the 4 already ingested. Available on olddeadguys.com and Internet Archive.",
+    urls: [
+      "https://www.olddeadguys.com/andrew-murray",
+      "https://archive.org/search?query=andrew+murray&mediatype=texts",
+    ],
+  },
+  {
+    id: "azusa-apostolic-faith",
+    name: "Azusa Street \u2014 Apostolic Faith Magazine",
+    description:
+      "13 issues of the original Apostolic Faith newsletter from the Azusa Street Revival (1906-1908). Primary source documents of the Pentecostal movement.",
+    urls: ["https://place.asburyseminary.edu/apostolicfaith/"],
+  },
+  {
+    id: "pentecostal-archives",
+    name: "Consortium of Pentecostal Archives",
+    description:
+      "Digital archives from Pentecostal and charismatic institutions. Explore for freely downloadable primary source documents.",
+    urls: ["https://www.pentecostalarchives.org"],
+  },
+  {
+    id: "frank-bartleman",
+    name: "Frank Bartleman \u2014 Azusa Street Writings",
+    description:
+      "Frank Bartleman\u2019s firsthand accounts of the Azusa Street Revival. Multiple titles available on Internet Archive.",
+    urls: [
+      "https://archive.org/search?query=frank+bartleman&mediatype=texts",
+    ],
+  },
+  {
+    id: "stepbible-tipnr",
+    name: "STEPBible \u2014 TIPNR (Proper Names)",
+    description:
+      "Every proper noun in the Bible with exhaustive references, family relationships, geolocation, and descriptions. CC BY 4.0.",
+    urls: ["https://github.com/STEPBible/STEPBible-Data"],
+  },
+  {
+    id: "stepbible-tahot-ref",
+    name: "STEPBible \u2014 TAHOT (Hebrew OT) Additional Books",
+    description:
+      "Already ingested full OT. This card is for reference if re-ingestion or updates are needed.",
+    urls: [
+      "https://github.com/STEPBible/STEPBible-Data/tree/master/Translators%20Amalgamated%20OT%2BNT",
     ],
   },
 ];

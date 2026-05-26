@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { CARDS, GROUPS } from "./data";
+import { CARDS, GROUPS, FUTURE_TARGETS } from "./data";
 import type { CorpusCard } from "./types";
 import CorpusCardComponent from "./CorpusCard";
 import CardModal from "./CardModal";
@@ -377,6 +377,25 @@ export default function CorpusAdminPage() {
             </div>
           );
         })}
+
+        {/* Future Corpus Targets */}
+        <div className="mb-8">
+          <h2
+            className="text-sm font-serif font-medium mb-3"
+            style={{
+              color: COLORS.textSecondary,
+              borderBottom: "1px dashed #3c3c38",
+              paddingBottom: 6,
+            }}
+          >
+            Future Corpus Targets <span style={{ fontWeight: 400 }}>(planned)</span>
+          </h2>
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {FUTURE_TARGETS.map((target) => (
+              <FutureTargetCard key={target.id} target={target} />
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Modal */}
@@ -403,6 +422,67 @@ function StatPill({ label, value }: { label: string; value: number }) {
       <span className="text-xs" style={{ color: "#c1c1b8" }}>
         {label}
       </span>
+    </div>
+  );
+}
+
+function FutureTargetCard({ target }: { target: { id: string; name: string; description: string; urls: string[] } }) {
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+  const handleCopy = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedUrl(url);
+    setTimeout(() => setCopiedUrl(null), 2000);
+  };
+
+  return (
+    <div
+      className="rounded-lg p-4"
+      style={{
+        backgroundColor: "rgba(38, 38, 36, 0.6)",
+        border: "1px dashed #3c3c38",
+      }}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <h3 className="font-serif font-medium text-base" style={{ color: "#e6e6e6" }}>
+          {target.name}
+        </h3>
+        <span
+          className="px-2 py-0.5 rounded-full text-xs font-medium"
+          style={{ backgroundColor: "rgba(156,163,175,0.15)", color: "#9ca3af" }}
+        >
+          Not Ingested
+        </span>
+      </div>
+      <p className="text-xs mb-3" style={{ color: "#c1c1b8" }}>
+        {target.description}
+      </p>
+      <div className="space-y-1.5">
+        {target.urls.map((url) => (
+          <div
+            key={url}
+            className="flex items-start gap-2 rounded p-2"
+            style={{ backgroundColor: "#1b1b19", border: "1px solid #3c3c38" }}
+          >
+            <code
+              className="text-xs break-all flex-1 font-mono leading-relaxed"
+              style={{ color: "#d4b96a" }}
+            >
+              {url}
+            </code>
+            <button
+              onClick={() => handleCopy(url)}
+              className="shrink-0 px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer"
+              style={{
+                backgroundColor: copiedUrl === url ? "rgba(34,197,94,0.2)" : "rgba(180,146,56,0.15)",
+                color: copiedUrl === url ? "#22c55e" : "#d4b96a",
+              }}
+            >
+              {copiedUrl === url ? "Copied!" : "Copy"}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Optional
+from typing import Dict, List, Optional
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -32,12 +32,13 @@ Output ONLY raw valid JSON with no preamble, no markdown backticks, and no expla
   "hebrew_root": "prose text with citations",
   "targumic_usage": "prose text with citations",
   "rabbinic_context": "prose text with citations",
-  "messianic_fulfillment": "prose text with citations",
-  "sources": ["Author Name — Article Title — URL", ...]
+  "messianic_fulfillment": "prose text with citations"
 }
 
 If a section has no source material write: "No source material found for this verse under this category."
 """
+
+SECTION_KEYS = ["hebrew_root", "targumic_usage", "rabbinic_context", "messianic_fulfillment"]
 
 
 def _parse_ref(ref):
@@ -98,6 +99,83 @@ def _require_user(request: Request) -> str:
     return user_id
 
 
+def _extract_grounding(response, raw_text, content):
+    # type: (object, str, dict) -> tuple
+    """Extract grounding sources and per-section citation indices from Gemini response.
+
+    Returns (sources, section_citations) where:
+    - sources: list of {index, title, url} dicts
+    - section_citations: dict mapping section keys to lists of source indices
+    """
+    sources = []  # type: List[Dict]
+    section_citations = {}  # type: Dict[str, List[int]]
+
+    try:
+        candidate = response.candidates[0]
+        gm = getattr(candidate, "grounding_metadata", None)
+        if not gm:
+            return sources, section_citations
+
+        # Extract source list from grounding_chunks
+        chunks = getattr(gm, "grounding_chunks", None) or []
+        for i, chunk in enumerate(chunks):
+            web = getattr(chunk, "web", None)
+            sources.append({
+                "index": i,
+                "title": getattr(web, "title", "") if web else "",
+                "url": getattr(web, "uri", "") if web else "",
+            })
+
+        # Map each section's character range in the raw JSON text
+        section_ranges = {}  # type: Dict[str, tuple]
+        for key in SECTION_KEYS:
+            val = content.get(key, "")
+            if not val:
+                continue
+            pos = raw_text.find(val)
+            if pos >= 0:
+                section_ranges[key] = (pos, pos + len(val))
+
+        # Map grounding_supports to sections
+        supports = getattr(gm, "grounding_supports", None) or []
+        section_indices = {k: set() for k in SECTION_KEYS}  # type: Dict[str, set]
+
+        for sup in supports:
+            seg = getattr(sup, "segment", None)
+            if not seg:
+                continue
+            start = getattr(seg, "start_index", 0) or 0
+            chunk_indices = getattr(sup, "grounding_chunk_indices", []) or []
+
+            for key, (sec_start, sec_end) in section_ranges.items():
+                if sec_start <= start < sec_end:
+                    section_indices[key].update(chunk_indices)
+                    break
+
+        section_citations = {
+            k: sorted(v) for k, v in section_indices.items() if v
+        }
+
+    except Exception:
+        logger.exception("Failed to extract grounding metadata")
+
+    return sources, section_citations
+
+
+def _migrate_old_content(content):
+    # type: (dict) -> dict
+    """Migrate old cached content format (sources as plain strings) to new format."""
+    sources = content.get("sources", [])
+    if sources and isinstance(sources[0], str):
+        content["sources"] = [
+            {"index": i, "title": s, "url": ""}
+            for i, s in enumerate(sources)
+        ]
+    if "section_citations" not in content:
+        content["section_citations"] = {}
+    return content
+
+
 @router.get("/{verse_reference}")
 async def get_jewish_perspective(verse_reference: str):
     ref = unquote(verse_reference)
@@ -112,7 +190,9 @@ async def get_jewish_perspective(verse_reference: str):
     )
 
     if result.data:
-        return {"cached": True, "content": result.data[0]["content"]}
+        # sources and section_citations are cached permanently with the content — never regenerated
+        content = _migrate_old_content(result.data[0]["content"])
+        return {"cached": True, "content": content}
 
     return {"cached": False, "content": None}
 
@@ -182,7 +262,13 @@ async def generate_jewish_perspective(
             logger.error("Failed to parse Gemini JSON for %s: %s", ref, raw_text[:500])
             raise HTTPException(status_code=500, detail="Failed to parse generated content")
 
-    # Save to cache
+    # Extract grounding citations from Gemini response
+    sources, section_citations = _extract_grounding(response, raw_text, content)
+    # sources and section_citations are cached permanently with the content — never regenerated
+    content["sources"] = sources
+    content["section_citations"] = section_citations
+
+    # Save to cache (includes sources and section_citations in JSONB)
     try:
         db.table("jewish_perspectives").insert({
             "verse_reference": ref,
