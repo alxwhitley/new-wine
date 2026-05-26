@@ -31,6 +31,7 @@ DONE_DIR        = NO_CAPTIONS_DIR / "done"
 WHISPER_MODEL = "medium"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 CHUNK_WORDS = 6000
+YTDLP_PYTHON = "/opt/homebrew/bin/python3.12"
 
 CLEANING_PROMPT = (
     "You are cleaning a YouTube sermon transcript for a theological research "
@@ -52,7 +53,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
     """Download best audio as mp3 via yt-dlp. Returns the path to the mp3."""
     out_template = str(out_dir / "audio.%(ext)s")
     cmd = [
-        sys.executable, "-m", "yt_dlp",
+        YTDLP_PYTHON, "-m", "yt_dlp",
         "-x", "--audio-format", "mp3",
         "-o", out_template,
         url,
@@ -171,6 +172,56 @@ def process_video(url: str, title: str, speaker: str, channel: str) -> Path:
     return out_path
 
 
+def fetch_video_meta(url: str) -> dict:
+    """Fetch title, uploader (channel) from yt-dlp metadata. Returns dict."""
+    cmd = [
+        YTDLP_PYTHON, "-m", "yt_dlp",
+        "--skip-download", "--print", "%(title)s\n%(uploader)s",
+        url,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    lines = result.stdout.strip().splitlines()
+    title = lines[0] if len(lines) > 0 else "Unknown"
+    channel = lines[1] if len(lines) > 1 else "Unknown"
+    return {"title": title, "channel": channel}
+
+
+def run_url_file(url_file: Path, speaker: str = "", limit: int = 0) -> None:
+    """Process URLs from a file, one per line. Fetches metadata via yt-dlp.
+    If speaker is empty, uses the channel name from yt-dlp metadata."""
+    urls = [
+        line.strip() for line in url_file.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not urls:
+        print("No URLs found in {}".format(url_file))
+        return
+
+    if limit > 0:
+        urls = urls[:limit]
+
+    print("Processing {} URL(s) from {}\n".format(len(urls), url_file.name))
+
+    processed = failed = 0
+    for i, url in enumerate(urls, 1):
+        print("\n{}".format("=" * 60))
+        print("[{}/{}] {}".format(i, len(urls), url))
+        print("=" * 60)
+        try:
+            meta = fetch_video_meta(url)
+            title = meta["title"]
+            channel = meta["channel"]
+            vid_speaker = speaker if speaker else channel
+            process_video(url, title, vid_speaker, channel)
+            processed += 1
+        except Exception as e:
+            print("  FAILED: {}".format(e))
+            failed += 1
+
+    print("\n{}".format("=" * 60))
+    print("Done. {} processed, {} failed.".format(processed, failed))
+
+
 def run_batch() -> None:
     """Process every stub in sources/youtube/no_captions/. Move processed
     stubs to done/ on success; leave failures in place."""
@@ -215,9 +266,12 @@ def run_batch() -> None:
 def main():
     parser = argparse.ArgumentParser(description="Whisper transcribe + Groq clean")
     parser.add_argument("--url", help="YouTube or audio URL (single-video mode)")
+    parser.add_argument("--url-file", help="File with one URL per line (batch mode)")
     parser.add_argument("--title", help="Title of the sermon")
-    parser.add_argument("--speaker", help="Speaker name")
+    parser.add_argument("--speaker", help="Speaker name (required for --url mode; optional override for --url-file)")
     parser.add_argument("--channel", help="Channel name")
+    parser.add_argument("--limit", type=int, default=0,
+                        help="Process only first N URLs (--url-file mode)")
     parser.add_argument("--copyrighted", action="store_true",
                         help="(No-op — output always goes to sources/youtube/cleaned/, "
                              "which ingest.py treats as copyrighted by path)")
@@ -226,6 +280,11 @@ def main():
     if not os.environ.get("GROQ_API_KEY"):
         print("✗ GROQ_API_KEY not set in backend/app/.env")
         sys.exit(1)
+
+    # URL file mode
+    if args.url_file:
+        run_url_file(Path(args.url_file), speaker=args.speaker or "", limit=args.limit)
+        return
 
     # Batch mode — no single-video args supplied
     if not any([args.url, args.title, args.speaker, args.channel]):

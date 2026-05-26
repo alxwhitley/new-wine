@@ -1131,6 +1131,9 @@ function CorpusPanel({
                   <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
                 </button>
               )}
+              {r.source_kind === "sermon_transcript" && (
+                <span className="text-xs rounded px-2 py-0.5 inline-block mb-1" style={{ color: "#c1c1b8", border: "1px solid #3c3c38" }}>Sermon</span>
+              )}
               <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{r.author}</p>
               <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
               <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
@@ -1921,7 +1924,7 @@ export default function StudyPage() {
   const [commentaryHasMore, setCommentaryHasMore] = useState(false);
   const [activeCommentary, setActiveCommentary] = useState<CommentaryResult | null>(null);
 
-  const fetchCommentary = useCallback((verseText: string, offset: number) => {
+  const fetchCommentary = useCallback((verseText: string, offset: number, verseId?: string) => {
     const isLoadMore = offset > 0;
     if (isLoadMore) {
       setCommentaryLoadingMore(true);
@@ -1929,6 +1932,7 @@ export default function StudyPage() {
       setCommentaryLoading(true);
     }
     const params = new URLSearchParams({ verse_text: verseText, offset: String(offset) });
+    if (verseId) params.set("verse_id", verseId);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/commentary?${params}`)
       .then((res) => {
         if (!res.ok) throw new Error("commentary fetch failed");
@@ -1965,8 +1969,8 @@ export default function StudyPage() {
       setCommentaryHasMore(false);
       return;
     }
-    fetchCommentary(verseData.text, 0);
-  }, [verseData?.text, fetchCommentary]);
+    fetchCommentary(verseData.text, 0, verseData.verse_id);
+  }, [verseData?.text, verseData?.verse_id, fetchCommentary]);
 
   // Corpus results (State 2: word selected)
   const [corpusResults, setCorpusResults] = useState<CorpusResult[]>([]);
@@ -2114,7 +2118,7 @@ export default function StudyPage() {
     commentaryLoadingMore,
     commentaryHasMore,
     onLoadMoreCommentary: () => {
-      if (verseData?.text) fetchCommentary(verseData.text, commentaryOffset + 3);
+      if (verseData?.text) fetchCommentary(verseData.text, commentaryOffset + 3, verseData.verse_id);
     },
     hasVerse: !!verseData,
     wordStudyMode,

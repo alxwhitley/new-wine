@@ -517,10 +517,40 @@ COMMENTARY_AUTHOR_BOOST = {
 COMMENTARY_DEFAULT_PENALTY = -0.10
 
 
+def _verse_id_to_ref(verse_id):
+    # type: (str) -> Optional[str]
+    """Convert verse_id like 'JHN.3.16' to canonical ref like 'John 3:16'."""
+    parts = verse_id.split(".")
+    if len(parts) != 3:
+        return None
+    book_code, chapter, verse = parts
+    book_name = ABBREV_TO_NAME.get(book_code)
+    if not book_name:
+        return None
+    return "{} {}:{}".format(book_name, chapter, verse)
+
+
+def _fetch_neighbor_content(db, document_id, chunk_index):
+    # type: (object, str, int) -> str
+    """Fetch chunk_index-1, chunk_index, chunk_index+1 content, concatenated."""
+    indices = [chunk_index - 1, chunk_index, chunk_index + 1]
+    result = (
+        db.table("chunks")
+        .select("chunk_index, content")
+        .eq("document_id", document_id)
+        .in_("chunk_index", indices)
+        .order("chunk_index")
+        .execute()
+    )
+    parts = [row["content"] for row in (result.data or [])]
+    return "\n\n".join(parts)
+
+
 @router.get("/commentary")
 async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
+    verse_id: Optional[str] = Query(None, description="Verse ID like JHN.3.16 — enables sermon results"),
 ):
     filters = get_disabled_filters()
 
@@ -532,6 +562,7 @@ async def get_commentary(
 
     db = get_supabase()
 
+    # --- Commentary results (existing path) ---
     try:
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
@@ -569,6 +600,49 @@ async def get_commentary(
             "content": content,
             "_score": similarity + boost,
         })
+
+    # --- Sermon results (new path, requires verse_id) ---
+    if verse_id:
+        verse_ref = _verse_id_to_ref(verse_id)
+        if verse_ref:
+            try:
+                sermon_result = db.rpc("match_sermon_chunks_by_ref", {
+                    "query_embedding": embedding,
+                    "verse_ref": verse_ref,
+                    "match_count": 10,
+                }).execute()
+
+                sermon_chunks = sermon_result.data or []
+
+                # Dedupe by document — keep best chunk per doc
+                seen_sermon_docs = set()
+                top_sermons = []
+                for sc in sermon_chunks:
+                    sdoc = sc.get("document_id")
+                    if sdoc in seen_sermon_docs or sdoc in seen_docs:
+                        continue
+                    seen_sermon_docs.add(sdoc)
+                    top_sermons.append(sc)
+                    if len(top_sermons) >= 2:
+                        break
+
+                # Neighbor chunk expansion + build results
+                for sc in top_sermons:
+                    display_content = _fetch_neighbor_content(
+                        db, sc["document_id"], sc["chunk_index"]
+                    )
+                    excerpt = display_content[:200].rsplit(" ", 1)[0] + "..." if len(display_content) > 200 else display_content
+                    results.append({
+                        "document_id": sc["document_id"],
+                        "title": sc.get("title", ""),
+                        "author": sc.get("author", ""),
+                        "source_kind": "sermon_transcript",
+                        "excerpt": excerpt,
+                        "content": display_content,
+                        "_score": 0.75,
+                    })
+            except Exception:
+                logger.exception("Sermon chunk query failed for verse_id=%s", verse_id)
 
     results.sort(key=lambda r: r["_score"], reverse=True)
     for r in results:
