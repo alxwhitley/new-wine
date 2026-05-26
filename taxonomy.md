@@ -1,61 +1,243 @@
----
 # Rhemata Topic Taxonomy
+# 202 unique tags across 15 categories
+# Last updated: May 2026
 
 ## 1. Holy Spirit & Spiritual Gifts
-Baptism in the Spirit, Speaking in Tongues, Prophetic Ministry,
-Word of Knowledge, Word of Wisdom, Discerning of Spirits,
-Miracles and Signs, The Nine Gifts, Stirring Up Gifts,
-Moving in the Spirit, Fruit of the Spirit, Fresh Anointing,
-Filling of the Spirit, Power for Service
+Baptism in the Holy Spirit
+Speaking in Tongues
+Private Prayer Language
+Gifts of the Spirit
+Prophecy
+Word of Knowledge
+Word of Wisdom
+Discerning of Spirits
+Gifts of Healing
+Working of Miracles
+Gift of Faith
+Interpretation of Tongues
+Cessationism vs Continuationism
+Anointing
+Signs and Wonders
+Manifestations of the Spirit
+Prophetic Dreams and Visions
+Laying on of Hands
+Spirit-Filled Life
+Activating Spiritual Gifts
+Yielding to the Holy Spirit
+Fruit of the Spirit
+Charismatic Theology
 
-## 2. Charismatic Experience
-Hearing God's Voice, Dreams and Visions, Interpreting Your Dreams,
-Encounters with God, Divine Appointments, Supernatural Peace,
-Manifestations of God, Intimacy with Jesus, Atmosphere of Worship,
-Spiritual Sight, Knowing God's Heart, Personal Revelation,
-Walking in the Spirit, Led by the Spirit
+## 2. Spiritual Warfare & Deliverance
+Deliverance Ministry
+Spiritual Warfare
+Strongholds in the Mind
+Binding and Loosing
+Territorial Spirits
+Principalities and Powers
+Weapons of Our Warfare
+Armor of God
+Generational Curses
+Breaking Bloodline Curses
+Jezebel Spirit
 
-## 3. Prayer & Spiritual Warfare
-Intercessory Prayer, Authority of the Believer,
-Tearing Down Strongholds, Resisting the Enemy, Victory in Christ,
-Deliverance from Bondage, Casting Out Demons, Spiritual Weapons,
-Breaking Negative Patterns, Binding and Loosing, Armor of God,
-Warfare in Prayer, Fasting and Prayer, Protecting Your Mind
+## 3. Prayer, Intercession & the Prophetic
+Intercessory Prayer
+Prophetic Intercession
+Fasting and Prayer
+Discerning Times and Seasons
+Hearing God's Voice
+Power of Prayer
+Waiting on God
+Seeking God
+Personal Prophecy
+Testing Prophecy
+Pitfalls of the Prophetic
+Dreams and Visions
+God's Will and Guidance
 
-## 4. Healing & Wholeness
-Divine Healing, Praying for the Sick, Inner Healing,
-Emotional Wholeness, Healing of Memories, Health and Vitality,
-Overcoming Fear, Freedom from Anxiety, Restoration of Soul,
-Physical Miracles, The Will to Heal, Faith for Healing,
-God's Comfort, Wholeness in Christ
+## 4. Inner Healing & Identity
+Inner Healing
+Overcoming Rejection
+Overcoming the Orphan Spirit
+Spirit of Adoption
+Spiritual Sonship
+Identity in Christ
+Renewing the Mind
+Overcoming Offense
+Healing Severe Trauma
+Finding Purpose in Pain
+Emotional Healing
+Mental Health and Faith
+Freedom in Christ
+Brokenness
+Abiding in Christ
+Suffering as Sanctification
+Dying to Self
 
-## 5. Christian Leadership
-Biblical Leadership, Fivefold Ministry, Apostolic Oversight,
-Prophetic Direction, Pastoral Care, Delegated Authority,
-Spiritual Covering, Accountability in Leadership,
-Covenant Relationships, Mentoring Relationships,
-Leading with Integrity, Servant Leadership, Team Ministry,
-Equipping the Saints, Elders and Deacons
+## 5. Presence, Worship & Encounter
+Deep Intimacy with God
+Spiritual Hunger
+Encounter with God
+Intimacy with God
+Knowing God
+God's Presence
+Revival
+Worship
+Fear of the Lord
 
-## 6. Christian Growth & Discipleship
-Spiritual Maturity, Walking with God, Discipleship and Mentoring,
-Accountability in Christ, Knowing God's Will, Character of Christ,
-Honoring Biblical Authority, Submission to God,
-Faith and Perseverance, Stewardship and Finances,
-Spiritual Disciplines, Dying to Self, Holiness and Sanctification,
-Body Ministry
+## 6. Fivefold Ministry
+Fivefold Ministry
+Equipping the Saints
+Recognizing Your Ministry Gift
+Apostolic Ministry
+Apostolic Authority
+Pioneering Ministry
+Office of the Prophet
+Evangelism
+Gift of the Evangelist
+Power Evangelism
+Great Commission
+Pastoral Ministry
+Pastoral Care
+Spiritual Fathers and Mothers
+Teaching Ministry
+Accountability in Ministry
+Character in Leadership
+Women in Ministry
 
-## 7. Kingdom & Theology
-Kingdom of God, Word and Spirit, Biblical Authority,
-The New Covenant, The Lordship of Christ, Grace and Mercy,
-Salvation and Repentance, End Times Prophecy, The Rapture,
-Second Coming, The Trinity, Blood of Jesus, Heaven and Eternity,
-Restoration of All Things
+## 7. Kingdom, Theology & Mission
+Kingdom of God
+Gospel
+Salvation
+Repentance
+Grace
+Atonement
+Resurrection
+New Creation
+Second Coming
+End Times
+Eschatology
+Israel and the Church
+Israel in Bible Prophecy
+Word of God
+New Covenant
+Redemption
+Justification
+The Cross
+Holiness
+Sanctification
 
-## 8. Family & Relationships
-Biblical Marriage, Christian Parenting, Family Life,
-Relationship Restoration, Communication in Marriage,
-Raising Godly Children, Singleness and Purity,
-Friendship in Christ, Honoring Your Parents, Forgiving Others,
-Love and Sacrifice, Conflict Resolution, The Christian Home
----
+## 8. Leadership & Church Culture
+Culture of Honor
+Spiritual Covering
+Accountability and Mentorship
+Servant Leadership
+Leadership Development
+Preserving Revival
+Building the Church
+Vision and Mission
+Spiritual Authority
+Unity in the Church
+Integrity in Leadership
+Moral Failure and Restoration
+Healthy Church Culture
+Church Governance and Structure
+
+## 9. Faith, Finances & Provision
+Faith
+Biblical Stewardship
+Generous Living
+Tithing and Generosity
+Divine Favor
+Trusting God in Hardship
+Contentment
+Faithfulness in Lack
+Seasons of Wilderness
+Financial Wisdom
+Dependence on God
+Perseverance
+
+## 10. Purpose, Calling & Destiny
+Purpose and Calling
+Discovering Your Destiny
+Releasing Your Potential
+Workplace as Ministry
+
+## 11. Christian Growth & Discipleship
+Discipleship
+Spiritual Growth
+Spiritual Maturity
+Character Formation
+Humility
+Lordship of Christ
+Walking in the Spirit
+Overcoming Sin
+Overcoming Temptation
+Spiritual Disciplines
+Dying to Self
+
+## 12. Family, Purity & Relationships
+Marriage
+Parenting
+Fatherhood
+Motherhood
+Raising Godly Children
+Generational Blessing
+Family Prayer
+Forgiveness and Reconciliation
+Purity and Sexuality
+Dating and Relationships
+Singleness
+Community and Fellowship
+Friendship
+Sexual Integrity
+Submission in Marriage
+
+## 13. Divine Healing & Wholeness
+Divine Healing
+Physical Healing
+Healing Ministry
+Healing Evangelism
+Faith for Healing
+Healing in the Atonement
+Miracles
+Healing Testimony
+When Healing Doesn't Come
+Suffering and Sovereignty
+Theology of Healing
+Unanswered Prayer
+Trusting God Through Illness
+
+## 14. Biblical Studies & Theology
+Biblical Hermeneutics
+Interpreting Scripture
+How to Study the Bible
+Biblical Typology and Symbolism
+Tabernacle of Moses
+Feasts of Israel
+Temple and Priesthood
+Foundations of Christian Doctrine
+Water Baptism
+Doctrine of the Church
+Scripture and Authority
+Law and Grace
+
+## 15. Church History & Revival
+Church History
+History of Revival
+Azusa Street Revival
+Welsh Revival
+First Great Awakening
+Second Great Awakening
+Pentecostal History
+Charismatic Renewal
+Conditions for Revival
+John Wesley and Methodism
+Charles Finney
+Evan Roberts
+William Seymour
+Smith Wigglesworth
+Kathryn Kuhlman
+Desert Fathers
+Early Church
+Church Fathers

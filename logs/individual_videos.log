@@ -1,0 +1,6 @@
+yt-dlp:   /Users/alexwhitley/Library/Python/3.9/bin/yt-dlp
+Cookies:  /Users/alexwhitley/Desktop/rhemata/scripts/youtube_cookies.txt OK
+Output:   /Users/alexwhitley/Desktop/rhemata/sources/youtube/cleaned
+Tracker:  /Users/alexwhitley/Desktop/rhemata/sources/youtube/individual_videos.xlsx
+
+No pending videos found in spreadsheet.

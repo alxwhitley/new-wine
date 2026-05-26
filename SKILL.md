@@ -50,7 +50,8 @@ repo/
 │   │   ├── raw/               # Freshly scraped transcripts
 │   │   ├── cleaned/           # Groq-cleaned, ready for ingest
 │   │   ├── ingested/          # Already in Supabase
-│   │   └── youtube_tracker.xlsx
+│   │   ├── youtube_tracker.xlsx
+│   │   └── individual_videos.xlsx  # Individual video ingestion tracker
 │   ├── magazine/              # New Wine Magazine pipeline
 │   │   ├── 01_to_extract/     # Drop PDFs here (~198 issues)
 │   │   ├── 02_extracted/      # Per-issue .md articles + raw_text.txt
@@ -76,7 +77,7 @@ repo/
 ├── ingest_lexicon.py      # STEPBible lexicon ingestion (TBESG, TBESH, TFLSJ)
 ├── ingest_bible.py        # WEB Bible VPL ingestion into verses table (psycopg2)
 ├── migrations/            # SQL migrations (run in Supabase SQL Editor)
-├── taxonomy.md            # 100-tag topic taxonomy (8 categories)
+├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
 ```
@@ -274,21 +275,31 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 
 ## Topic Tagging
 
-- `taxonomy.md` in project root contains 100-tag taxonomy across 8 categories:
-  1. Holy Spirit & Spiritual Gifts (14 tags)
-  2. Charismatic Experience (14 tags)
-  3. Prayer & Spiritual Warfare (14 tags)
-  4. Healing & Wholeness (14 tags)
-  5. Christian Leadership (15 tags)
-  6. Christian Growth & Discipleship (14 tags)
-  7. Kingdom & Theology (14 tags)
-  8. Family & Relationships (13 tags)
+- `taxonomy.md` in project root contains 257 unique tags across 15 categories:
+  1. Holy Spirit & Spiritual Gifts (27 tags)
+  2. Spiritual Warfare & Deliverance (13 tags)
+  3. Prayer, Intercession & the Prophetic (18 tags)
+  4. Inner Healing & Identity (20 tags)
+  5. Presence, Worship & Encounter (10 tags)
+  6. Fivefold Ministry (26 tags)
+  7. Kingdom, Theology & Mission (23 tags)
+  8. Leadership & Church Culture (17 tags)
+  9. Faith, Finances & Provision (19 tags)
+  10. Purpose, Calling & Destiny (6 tags)
+  11. Christian Growth & Discipleship (19 tags)
+  12. Family, Purity & Relationships (16 tags)
+  13. Divine Healing & Wholeness (15 tags)
+  14. Biblical Studies & Theology (14 tags)
+  15. Church History & Revival (20 tags)
+- Some tags intentionally appear in multiple categories (e.g. "Fruit of the Spirit" in 1 and 11, "Dying to Self" in 4 and 11)
+- `scripts/taxonomy.py` contains the hardcoded `VALID_TAGS` set — must be kept in sync with `taxonomy.md`
 - Tags assigned during Pass 2 extraction (5-8 per article)
 - Strict rules: only assign if article directly teaches on topic for at least one paragraph
 - Validated against `VALID_TAGS` set in both `extract_magazine.py` and `tag_existing_articles.py`
 - Invalid/invented tags automatically removed
 - `tag_existing_articles.py` for backfilling existing magazine articles (retries if < 3 valid tags)
-- `tag_sermons_transcripts.py` for backfilling non-magazine documents (3-6 tags, retries if < 2 valid)
+- `tag_sermons_transcripts.py` for backfilling non-magazine documents via Groq (3-6 tags, retries if < 2 valid)
+- `retag_sermons.py` for retagging sermon_transcript documents via Anthropic claude-haiku-4-5 with first 3 chunks as context. Flags: `--limit N`, `--author`, `--suggest-tags`, `--dry-run`, `--force`. `--suggest-tags` writes taxonomy gap suggestions to `sources/tag_suggestions.jsonl`.
 
 ---
 
@@ -336,6 +347,9 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/scrape_youtube.py` | YouTube transcript scraper (yt-dlp, Supabase dedupe, max 10 per run). Writes no_captions stubs for videos without captions or with < 400 words. |
 | `scripts/whisper_transcribe.py` | Whisper medium transcription + Groq cleaning. Batch mode processes `no_captions/` stubs; single-URL mode via CLI args. |
 | `scripts/clean_transcripts.py` | Clean raw transcripts via Groq Llama 3.3 70B, move to cleaned/ |
+| `scripts/scrape_individual_videos.py` | Individual YouTube video ingestion. Reads from `sources/youtube/individual_videos.xlsx`, tries yt-dlp captions → Whisper fallback → Groq clean → writes to `cleaned/` → runs `ingest.py`. Resume-safe via xlsx Status column (Pending → Whisper → Cleaning → Scraped → Ingested). Shell alias: `rh-individual`. |
+| `scripts/scrape_channel_titles.py` | Dumps all video titles from YouTube channels into `sources/channel_titles.csv`. Uses yt-dlp `--flat-playlist --print title`. Flags: `--channel "Name"` for single channel. |
+| `scripts/retag_sermons.py` | Retags sermon_transcript documents using Anthropic claude-haiku-4-5 with first 3 chunks as context. Validates against taxonomy.md. Flags: `--limit N`, `--author`, `--suggest-tags`, `--dry-run`, `--force`. `--suggest-tags` runs second Haiku call for taxonomy gap analysis → `sources/tag_suggestions.jsonl`. |
 | `scripts/generate_excerpts.py` | Batch-generate edited word study articles from Precept Austin raw chunks. Concatenates all chunks per document, sends to Anthropic Claude for editing into clean articles, writes to `excerpts` table (`excerpt_type = 'word_study_article'`). Flags: `--test`, `--test-quality`, `--model sonnet|haiku`, `--time-limit`. |
 | `scripts/ingest_commentaries.py` | Ingests HistoricalChristianFaith commentaries from SQLite DB. Groups by father_name, one document per father, chunks with tiktoken, embeds with OpenAI, inserts via psycopg2. Single-transaction pattern (`connect_with_retry()` + `ingest_father()`). Theological tagging (Reformed, Cessationist, Charismatic-Friendly, Desert Fathers, Patristic). Flags: `--dry-run`, `--father "Name"`, `--filter-charismatic`. |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content in Supabase (run 2026-04-17). |
@@ -468,7 +482,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Anthropic + Cohere rerank deployed** (2026-04-17) — answer gen switched to Claude Sonnet 4.5, Cohere rerank-v3.5 added. Pushed to main.
 - **Article reader date display** — issue date (month/year) added to frontend but not yet visually confirmed in browser. `console.log` left in `handleCardClick` for debugging — remove after confirming.
 - **30 malformed JSON chunks fixed** (2026-04-17) — `fix_article_json.py` migration ran successfully; content_summary refreshed on all 30 affected documents.
-- **Shell aliases expanded** — 10 `rh-*` aliases in `~/.zshrc` covering all pipeline scripts.
+- **Shell aliases expanded** — 11 `rh-*` aliases in `~/.zshrc` covering all pipeline scripts (includes `rh-individual` for individual video ingestion).
 - **Proposed but unapplied system prompt changes** (2026-04-29 session): example response section, retrieval formatting (bullets→headings+prose), softer Holy Spirit guardrails revision, Niagara Falls metaphor ban, "Go Deeper" follow-up questions, NIV translation preference. All shown as diffs but not confirmed by user.
 - ~~**Migration 016**~~ — **DONE:** verses table created, 31,098 rows ingested via `ingest_bible.py`
 - **`scrape_preceptaustin.py` hardened version not yet re-run** — page cache from first run will speed up re-run; first run had 2.6% success rate before DOM fix
@@ -482,6 +496,12 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Word study excerpt generation 96% complete** — 1,713 of 1,779 word_study documents have excerpts generated (`excerpts` table, `excerpt_type = 'word_study_article'`). 66 remaining. Script: `scripts/generate_excerpts.py`.
 - **Commentary ingestion not yet run** — `scripts/ingest_commentaries.py` rewritten and pushed, needs to be executed (325 fathers, 82,567 rows from SQLite DB at `/tmp/commentaries-db/data.out`).
 - **Hebrew word study pipeline ready** — `scrape_preceptaustin.py --language hebrew --fetch` and `ingest_preceptaustin.py --language hebrew` ready to run.
+- **Taxonomy expanded to 257 tags** (May 2026) — old 100-tag/8-category taxonomy replaced with 257-tag/15-category version. `taxonomy.md` and `scripts/taxonomy.py` updated. Existing documents still have old tags — need full retag via `retag_sermons.py --force`.
+- **Full sermon retag not yet run** — `scripts/retag_sermons.py` tested with `--limit 3 --dry-run --suggest-tags --force` (3/3 success). Full run (`--force`) needed to retag all ~557 sermon_transcript documents against new taxonomy.
+- **Individual video ingestion not yet run** — `scripts/scrape_individual_videos.py` built and tested (syntax only). 10 videos pre-populated in xlsx (2 Michael Brown, 8 Jack Deere). Run with `rh-individual`.
+- **Uncommitted changes from May 2026 session** — taxonomy.md, taxonomy.py, retag_sermons.py, scrape_channel_titles.py, channel_titles.csv, tag_suggestions.jsonl. Need commit + push.
+- **3 YouTube channels not found** — Dr. Michael Brown (`@AskDrBrown`), Jack Deere (`@JackDeere`), Myles Munroe (`@MylesMonroeTV`) handles don't resolve on YouTube. Need correct handles or removal from channel_titles scraper.
+- **Individual Videos dashboard card** — added to corpus admin Pipelines group, filters on `source_name ILIKE '%Individual Videos%'`.
 - **Interlinear deployment verification needed** — confirm `GET /study/interlinear` works on live Railway (tested locally only).
 - ~~**SUPABASE_DB_URL psycopg2 connection refused**~~ — **FIXED:** dotted username was being truncated by psycopg2 URI parsing. All scripts now use `urlparse` + explicit keyword args.
 
