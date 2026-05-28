@@ -169,6 +169,81 @@ def _extract_grounding(response, raw_text, content):
     return sources, section_citations
 
 
+def _repair_truncated_json(raw):
+    # type: (str) -> Optional[dict]
+    """Attempt to repair truncated JSON by finding the last complete key-value pair."""
+    # Strip markdown code fences if present
+    m = re.search(r'```(?:json)?\s*(.*)', raw, re.DOTALL)
+    if m:
+        raw = m.group(1).rstrip('`').strip()
+
+    # Must start with {
+    if not raw.lstrip().startswith("{"):
+        return None
+
+    # Find the last complete quoted-string value ending with ," or "} or "\n
+    # Pattern: find last occurrence of a complete "key": "value" pair
+    last_good = None
+    for match in re.finditer(r'"(hebrew_root|targumic_usage|rabbinic_context|messianic_fulfillment)"\s*:\s*"', raw):
+        key_start = match.start()
+        val_start = match.end()
+        # Walk forward to find the closing unescaped quote
+        i = val_start
+        while i < len(raw):
+            if raw[i] == '\\':
+                i += 2  # skip escaped character
+                continue
+            if raw[i] == '"':
+                # Found closing quote — this key-value pair is complete
+                last_good = i + 1
+                break
+            i += 1
+
+    if not last_good:
+        return None
+
+    # Truncate after the last complete value and close the object
+    truncated = raw[:last_good].rstrip().rstrip(",")
+    if not truncated.endswith("}"):
+        truncated += "\n}"
+
+    try:
+        return json.loads(truncated)
+    except json.JSONDecodeError:
+        return None
+
+
+def _parse_gemini_json(raw_text, ref):
+    # type: (str, str) -> dict
+    """Parse Gemini JSON response with markdown extraction and truncation recovery."""
+    # Try direct parse
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting from markdown code block
+    m = re.search(r'```(?:json)?\s*(.*?)```', raw_text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Truncation recovery
+    repaired = _repair_truncated_json(raw_text)
+    if repaired:
+        missing = [k for k in SECTION_KEYS if k not in repaired]
+        if missing:
+            for k in missing:
+                repaired[k] = "Content was truncated during generation. Please regenerate."
+        logger.warning("Truncation recovery used for %s — repaired %d of %d sections", ref, len(SECTION_KEYS) - len(missing), len(SECTION_KEYS))
+        return repaired
+
+    logger.error("Failed to parse Gemini JSON for %s: %s", ref, raw_text[:500])
+    raise HTTPException(status_code=500, detail="Failed to parse generated content")
+
+
 def _migrate_old_content(content):
     # type: (dict) -> dict
     """Migrate old cached content format (sources as plain strings) to new format."""
@@ -245,6 +320,7 @@ async def generate_jewish_perspective(
             contents=user_message,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
+                max_output_tokens=4096,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
             ),
         )
@@ -253,28 +329,8 @@ async def generate_jewish_perspective(
         logger.exception("Gemini call failed for %s", ref)
         raise HTTPException(status_code=500, detail="Failed to generate Jewish perspective")
 
-    # DEBUG: log raw Gemini response to diagnose paragraph break format
-    logger.info("[JP-DEBUG] raw_text repr for %s: %s", ref, repr(raw_text[:2000]))
-
-    # Parse JSON from response
-    try:
-        content = json.loads(raw_text)
-    except json.JSONDecodeError:
-        # Try extracting JSON from markdown code block
-        m = re.search(r'```(?:json)?\s*(.*?)```', raw_text, re.DOTALL)
-        if m:
-            try:
-                content = json.loads(m.group(1))
-            except json.JSONDecodeError:
-                logger.error("Failed to parse Gemini JSON for %s: %s", ref, raw_text[:500])
-                raise HTTPException(status_code=500, detail="Failed to parse generated content")
-        else:
-            logger.error("Failed to parse Gemini JSON for %s: %s", ref, raw_text[:500])
-            raise HTTPException(status_code=500, detail="Failed to parse generated content")
-
-    # DEBUG: log parsed section values to see if \n\n survived json.loads
-    for _dk in SECTION_KEYS:
-        logger.info("[JP-DEBUG] parsed %s repr: %s", _dk, repr(content.get(_dk, "")[:500]))
+    # Parse JSON from response, with truncation recovery
+    content = _parse_gemini_json(raw_text, ref)
 
     # Extract grounding citations from Gemini response
     sources, section_citations = _extract_grounding(response, raw_text, content)
