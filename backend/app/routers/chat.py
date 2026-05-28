@@ -4,10 +4,14 @@ import json
 import logging
 import os
 import re
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import anthropic
+import cohere
 from groq import Groq
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -63,6 +67,8 @@ RRF_K = 60  # Reciprocal Rank Fusion constant
 
 router = APIRouter()
 
+# ── Module-level client singletons (Change 4) ──────────────────────────
+
 _ai = None
 
 
@@ -71,6 +77,28 @@ def _get_ai():
     if _ai is None:
         _ai = Groq(api_key=os.environ["GROQ_API_KEY"])
     return _ai
+
+
+_cohere_client = None
+
+
+def _get_cohere():
+    # type: () -> Optional[cohere.ClientV2]
+    global _cohere_client
+    if _cohere_client is None and COHERE_API_KEY:
+        _cohere_client = cohere.ClientV2(api_key=COHERE_API_KEY)
+    return _cohere_client
+
+
+_anthropic_client = None
+
+
+def _get_anthropic():
+    # type: () -> anthropic.Anthropic
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    return _anthropic_client
 
 
 def expand_query(question: str) -> List[str]:
@@ -111,30 +139,47 @@ def expand_query(question: str) -> List[str]:
 INCLUDE_COPYRIGHTED_ENV = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
 
 
-def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True):
-    # type: (str, object, int, int, bool) -> dict
-    """Run vector + FTS search for a single query, return {chunk_id: (rrf_score, chunk)}."""
-    embedding = embed_text(query)
+def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True, precomputed_embedding=None):
+    # type: (str, object, int, int, bool, Optional[List[float]]) -> Tuple[dict, List[float]]
+    """Run vector + FTS search for a single query.
 
-    try:
-        vector_result = db.rpc("match_chunks", {
-            "query_embedding": embedding,
-            "match_count": vector_k,
-            "include_copyrighted": include_copyrighted,
-        }).execute()
-    except Exception:
-        logger.exception("Vector search RPC failed for query: %s", query[:100])
-        raise
+    Returns ({chunk_id: (rrf_score, chunk)}, embedding_used).
+    Accepts an optional precomputed_embedding to avoid redundant embed calls (Change 2).
+    Fires embed_text and FTS in parallel since FTS doesn't need the embedding (Change 5).
+    """
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        # Fire FTS immediately — no dependency on embedding
+        fts_future = ex.submit(
+            lambda: db.rpc("search_chunks_fts", {
+                "query_text": query,
+                "match_count": fts_k,
+                "include_copyrighted": include_copyrighted,
+            }).execute()
+        )
 
-    try:
-        fts_result = db.rpc("search_chunks_fts", {
-            "query_text": query,
-            "match_count": fts_k,
-            "include_copyrighted": include_copyrighted,
-        }).execute()
-    except Exception:
-        logger.exception("FTS search RPC failed for query: %s", query[:100])
-        raise
+        # Get embedding: use precomputed or compute (runs concurrently with FTS)
+        if precomputed_embedding is not None:
+            embedding = precomputed_embedding
+        else:
+            embedding = embed_text(query)
+
+        # Vector search needs the embedding — fires after embed completes
+        try:
+            vector_result = db.rpc("match_chunks", {
+                "query_embedding": embedding,
+                "match_count": vector_k,
+                "include_copyrighted": include_copyrighted,
+            }).execute()
+        except Exception:
+            logger.exception("Vector search RPC failed for query: %s", query[:100])
+            raise
+
+        # Collect FTS result
+        try:
+            fts_result = fts_future.result()
+        except Exception:
+            logger.exception("FTS search RPC failed for query: %s", query[:100])
+            raise
 
     scores: Dict[str, Tuple[float, dict]] = {}
 
@@ -154,7 +199,7 @@ def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True
         else:
             scores[cid] = (score, chunk)
 
-    return scores
+    return scores, embedding
 
 
 def _is_citable(chunk: dict) -> bool:
@@ -242,41 +287,40 @@ class ChatRequest(BaseModel):
 
 
 def _save_conversation(
-    db, user_id: str, conversation_id: Optional[str], question: str, answer: str,
-) -> tuple:
-    """Save the exchange to Supabase. Returns (conversation_id, assistant_message_id)."""
-    is_new = conversation_id is None
-    if is_new:
-        conversation_id = str(uuid.uuid4())
-        title = " ".join(question.split()[:6])
-        logger.info("Creating new conversation %s for user %s: %r", conversation_id, user_id, title)
-        result = db.table("conversations").insert({
-            "id": conversation_id,
-            "user_id": user_id,
-            "title": title,
-        }).execute()
-        logger.info("Conversation insert result: %d row(s)", len(result.data) if result.data else 0)
-    else:
-        logger.info("Appending to existing conversation %s for user %s", conversation_id, user_id)
+    db, user_id: str, conversation_id: str, is_new: bool,
+    question: str, answer: str, message_id: str,
+) -> None:
+    """Save the exchange to Supabase. Accepts pre-generated IDs for background use."""
+    try:
+        if is_new:
+            title = " ".join(question.split()[:6])
+            logger.info("Creating new conversation %s for user %s: %r", conversation_id, user_id, title)
+            result = db.table("conversations").insert({
+                "id": conversation_id,
+                "user_id": user_id,
+                "title": title,
+            }).execute()
+            logger.info("Conversation insert result: %d row(s)", len(result.data) if result.data else 0)
+        else:
+            logger.info("Appending to existing conversation %s for user %s", conversation_id, user_id)
 
-    assistant_message_id = str(uuid.uuid4())
-    result = db.table("messages").insert([
-        {
-            "id": str(uuid.uuid4()),
-            "conversation_id": conversation_id,
-            "role": "user",
-            "content": question,
-        },
-        {
-            "id": assistant_message_id,
-            "conversation_id": conversation_id,
-            "role": "assistant",
-            "content": answer,
-        },
-    ]).execute()
-    logger.info("Messages insert result: %d row(s) for conversation %s", len(result.data) if result.data else 0, conversation_id)
-
-    return conversation_id, assistant_message_id
+        result = db.table("messages").insert([
+            {
+                "id": str(uuid.uuid4()),
+                "conversation_id": conversation_id,
+                "role": "user",
+                "content": question,
+            },
+            {
+                "id": message_id,
+                "conversation_id": conversation_id,
+                "role": "assistant",
+                "content": answer,
+            },
+        ]).execute()
+        logger.info("Messages insert result: %d row(s) for conversation %s", len(result.data) if result.data else 0, conversation_id)
+    except Exception:
+        logger.exception("Failed to save conversation %s for user %s", conversation_id, user_id)
 
 
 def _sse(data: str) -> str:
@@ -325,17 +369,26 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         variants = expand_query(request.question)
         variant_weights = [1.0, 0.8, 0.6]
 
-        # Step 2: Run hybrid search for each variant with weighted RRF SUM
+        # Step 2: Run hybrid search for each variant in parallel (Change 1)
         all_scores: Dict[str, Tuple[float, dict]] = {}
-        for i, variant in enumerate(variants):
-            weight = variant_weights[i] if i < len(variant_weights) else 0.5
-            variant_scores = hybrid_search_rrf(variant, db, include_copyrighted=include_copyrighted)
-            for cid, (score, chunk) in variant_scores.items():
-                weighted = score * weight
-                if cid in all_scores:
-                    all_scores[cid] = (all_scores[cid][0] + weighted, all_scores[cid][1])
-                else:
-                    all_scores[cid] = (weighted, chunk)
+        first_embedding = None  # type: Optional[List[float]]
+
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            futures = [
+                ex.submit(hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
+                for variant in variants
+            ]
+            for i, future in enumerate(futures):
+                weight = variant_weights[i] if i < len(variant_weights) else 0.5
+                variant_scores, embedding = future.result()
+                if i == 0:
+                    first_embedding = embedding
+                for cid, (score, chunk) in variant_scores.items():
+                    weighted = score * weight
+                    if cid in all_scores:
+                        all_scores[cid] = (all_scores[cid][0] + weighted, all_scores[cid][1])
+                    else:
+                        all_scores[cid] = (weighted, chunk)
 
         # Step 2.5: Filter out disabled source_kinds and source_names
         all_scores = {
@@ -344,18 +397,11 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             if not is_chunk_disabled(chunk, filters)
         }
 
-        # Step 2.75: Apply document boost_factor to RRF scores
-        try:
-            doc_ids = list({chunk.get("document_id", "") for _, (_, chunk) in all_scores.items() if chunk.get("document_id")})
-            if doc_ids:
-                boost_result = db.table("documents").select("id, boost_factor").in_("id", doc_ids).execute()
-                boost_map = {row["id"]: row.get("boost_factor") or 1.0 for row in (boost_result.data or [])}
-                all_scores = {
-                    cid: (score * boost_map.get(chunk.get("document_id", ""), 1.0), chunk)
-                    for cid, (score, chunk) in all_scores.items()
-                }
-        except Exception:
-            logger.exception("Boost factor fetch failed, continuing with unboosted scores")
+        # Step 2.75: Apply boost_factor from RPC results — no extra query (Change 3)
+        all_scores = {
+            cid: (score * (chunk.get("boost_factor") or 1.0), chunk)
+            for cid, (score, chunk) in all_scores.items()
+        }
 
         # Step 3: Document-level collapse — max 2 chunks per document
         ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
@@ -379,11 +425,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         top_chunks = author_capped[:10]
         chunks = [chunk for _, (_, chunk) in top_chunks]
 
-        # Step 3.5: Cohere rerank — narrow top 10 → top 5 by relevance
-        if COHERE_API_KEY and len(chunks) > 0:
+        # Step 3.5: Cohere rerank — narrow top 10 → top 5 by relevance (Change 4: singleton)
+        co = _get_cohere()
+        if co and len(chunks) > 0:
             try:
-                import cohere
-                co = cohere.ClientV2(api_key=COHERE_API_KEY)
                 docs = [c.get("content", "") for c in chunks]
                 rerank_result = co.rerank(
                     model="rerank-v3.5",
@@ -407,10 +452,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             expanded.append(n)
         chunks = expanded
 
-        # Step 5: Conditional lexicon retrieval for word-study queries
+        # Step 5: Conditional lexicon retrieval — reuse cached embedding (Change 2)
         if is_word_study_query(request.question):
             try:
-                lex_embedding = embed_text(request.question)
+                lex_embedding = first_embedding if first_embedding else embed_text(request.question)
                 lex_result = db.rpc("match_lexicon_chunks", {
                     "query_embedding": lex_embedding,
                     "match_count": 5,
@@ -475,15 +520,14 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             "content": f"Sources:\n{context}\n\nQuestion: {request.question}",
         })
 
-        # Stream from Anthropic Claude, extracting only <answer> content
+        # Stream from Anthropic Claude, extracting only <answer> content (Change 4: singleton)
         raw_full = []
         answer_parts = []
         in_answer = False
         buffer = ""
 
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            client = _get_anthropic()
             stream = client.messages.create(
                 model="claude-sonnet-4-5",
                 max_tokens=1500,
@@ -559,18 +603,20 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
         answer = "".join(answer_parts).strip()
 
-        # Save conversation if authenticated
-        conversation_id = None
-        message_id = None
+        # Pre-generate IDs and fire background save (Change 6)
+        conversation_id = request.conversation_id or str(uuid.uuid4())
+        message_id = str(uuid.uuid4())
+        is_new = request.conversation_id is None
         if user_id:
-            try:
-                conversation_id, message_id = _save_conversation(
-                    db, user_id, request.conversation_id, request.question, answer,
-                )
-                logger.info("Conversation saved successfully: %s", conversation_id)
-            except Exception:
-                logger.exception("Failed to save conversation for user %s", user_id)
+            threading.Thread(
+                target=_save_conversation,
+                args=(db, user_id, conversation_id, is_new, request.question, answer, message_id),
+                daemon=True,
+            ).start()
+            logger.info("Conversation save dispatched in background: %s", conversation_id)
         else:
+            conversation_id = None
+            message_id = None
             logger.debug("Skipping conversation save — no authenticated user")
 
         # Send metadata and close
