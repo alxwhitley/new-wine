@@ -1020,19 +1020,28 @@ function CorpusPanel({
                   >
                     {section.label}
                   </p>
-                  <p style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
-                    {jpContent[section.key]}
-                    {citations.map((idx) => (
-                      <CitationBubble
-                        key={idx}
-                        index={idx}
-                        onClick={() => {
-                          setJpSelectedSource(idx);
-                          setJpDrawerOpen(true);
-                        }}
-                      />
+                  <div style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
+                    {jpContent[section.key].split(/\n\n+/).map((para, pi, arr) => (
+                      <p key={pi} style={{ marginBottom: pi < arr.length - 1 ? 10 : 0 }}>
+                        {para.split(/\n/).map((line, li, lineArr) => (
+                          <span key={li}>
+                            {line}
+                            {li < lineArr.length - 1 && <br />}
+                          </span>
+                        ))}
+                        {pi === arr.length - 1 && citations.map((idx) => (
+                          <CitationBubble
+                            key={idx}
+                            index={idx}
+                            onClick={() => {
+                              setJpSelectedSource(idx);
+                              setJpDrawerOpen(true);
+                            }}
+                          />
+                        ))}
+                      </p>
                     ))}
-                  </p>
+                  </div>
                 </div>
               );
             })}

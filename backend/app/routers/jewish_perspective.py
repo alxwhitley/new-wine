@@ -27,12 +27,19 @@ Do not add devotional application or charismatic interpretation.
 Cite every claim by author or organization name.
 Do not fabricate citations.
 
+Formatting rules for each section value:
+- Write short paragraphs of 2-3 sentences maximum.
+- Never write a block of prose longer than 3 sentences without a paragraph break (\\n\\n in the JSON string).
+- Where a section contains multiple distinct points, break them into separate paragraphs rather than combining into one block.
+- Use clear, specific subpoints where the content naturally divides (e.g. a specific Targum reference, a specific psalm, a specific rabbinic concept) — each gets its own paragraph.
+- Do not pad paragraphs. Say the thing and move on.
+
 Output ONLY raw valid JSON with no preamble, no markdown backticks, and no explanation. Use this exact structure:
 {
-  "hebrew_root": "prose text with citations",
-  "targumic_usage": "prose text with citations",
-  "rabbinic_context": "prose text with citations",
-  "messianic_fulfillment": "prose text with citations"
+  "hebrew_root": "paragraph one\\n\\nparagraph two",
+  "targumic_usage": "paragraph one\\n\\nparagraph two",
+  "rabbinic_context": "paragraph one\\n\\nparagraph two",
+  "messianic_fulfillment": "paragraph one\\n\\nparagraph two"
 }
 
 If a section has no source material write: "No source material found for this verse under this category."
