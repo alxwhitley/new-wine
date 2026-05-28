@@ -33,7 +33,7 @@ from bible_refs import extract_bible_references
 # ── Config ────────────────────────────────────────────────────────────────────
 
 DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/sources")
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md"}
 MAX_TAG_CHARS = 4000
 
 from taxonomy import VALID_TAGS, TAXONOMY_LIST
@@ -240,7 +240,7 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
         "id":          doc_id,
         "title":       metadata.get("title"),
         "author":      metadata.get("author"),
-        "year":        metadata.get("year"),
+        "year":        metadata.get("year") if isinstance(metadata.get("year"), int) else None,
         "issue":       metadata.get("issue"),
         "source_name": metadata.get("source_name"),
         "source_type": st,
@@ -379,7 +379,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     # 1. Extract text
     ext = file_path.suffix.lower()
     txt_headers: Dict[str, str] = {}
-    if ext == ".txt":
+    if ext in (".txt", ".md"):
         print(f"Extracting text ({ext})...")
         pages, txt_headers = extract_txt(file_path)
         if txt_headers:
@@ -485,14 +485,29 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
 
 def main():
-    dry_run = "--dry-run" in sys.argv
+    import argparse
+    parser = argparse.ArgumentParser(description="Rhemata document ingestion")
+    parser.add_argument("--dry-run", action="store_true", help="Preview without writing to Supabase")
+    parser.add_argument("--source-dir", type=str, default=None,
+                        help="Ingest files from this directory instead of the default scan dirs")
+    parser.add_argument("--open", action="store_true",
+                        help="Force is_copyrighted=False for all files (use with --source-dir)")
+    args = parser.parse_args()
+    dry_run = args.dry_run
 
-    # Scan sources/documents/, sources/youtube/cleaned/, and sources/web/derek_prince/raw/
-    scan_dirs = [
-        DOCS_FOLDER / "documents",
-        DOCS_FOLDER / "youtube" / "cleaned",
-        DOCS_FOLDER / "web" / "derek_prince" / "raw",
-    ]
+    if args.source_dir:
+        source_dir = Path(args.source_dir)
+        if not source_dir.is_dir():
+            print(f"ERROR: {source_dir} is not a directory")
+            sys.exit(1)
+        scan_dirs = [source_dir]
+    else:
+        # Default: scan sources/documents/, sources/youtube/cleaned/, sources/web/derek_prince/raw/
+        scan_dirs = [
+            DOCS_FOLDER / "documents",
+            DOCS_FOLDER / "youtube" / "cleaned",
+            DOCS_FOLDER / "web" / "derek_prince" / "raw",
+        ]
 
     files: List[Path] = []
     for folder in scan_dirs:
@@ -511,6 +526,8 @@ def main():
         print(f"Found {len(files)} file(s) to process")
 
     def _is_copyrighted(path: Path) -> bool:
+        if args.open:
+            return False
         s = str(path)
         if "sources/youtube/" in s or "sources/magazine/" in s:
             return True

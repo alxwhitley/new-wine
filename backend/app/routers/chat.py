@@ -344,6 +344,19 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             if not is_chunk_disabled(chunk, filters)
         }
 
+        # Step 2.75: Apply document boost_factor to RRF scores
+        try:
+            doc_ids = list({chunk.get("document_id", "") for _, (_, chunk) in all_scores.items() if chunk.get("document_id")})
+            if doc_ids:
+                boost_result = db.table("documents").select("id, boost_factor").in_("id", doc_ids).execute()
+                boost_map = {row["id"]: row.get("boost_factor") or 1.0 for row in (boost_result.data or [])}
+                all_scores = {
+                    cid: (score * boost_map.get(chunk.get("document_id", ""), 1.0), chunk)
+                    for cid, (score, chunk) in all_scores.items()
+                }
+        except Exception:
+            logger.exception("Boost factor fetch failed, continuing with unboosted scores")
+
         # Step 3: Document-level collapse — max 2 chunks per document
         ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
         doc_counts: Dict[str, int] = {}
