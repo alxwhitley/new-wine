@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 import anthropic
 import cohere
+import httpx
 from groq import Groq
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -86,7 +87,10 @@ def _get_cohere():
     # type: () -> Optional[cohere.ClientV2]
     global _cohere_client
     if _cohere_client is None and COHERE_API_KEY:
-        _cohere_client = cohere.ClientV2(api_key=COHERE_API_KEY)
+        _cohere_client = cohere.ClientV2(
+            api_key=COHERE_API_KEY,
+            httpx_client=httpx.Client(http2=False),
+        )
     return _cohere_client
 
 
