@@ -575,12 +575,19 @@ async def get_commentary(
 
     seen_docs = set()
     results = []
+    # Study mode commentary: only apply source_kind filters, not source_name filters.
+    # source_name toggles are for chat retrieval — commentaries should always show in study.
+    study_filters = {
+        "source_kinds": filters["source_kinds"],
+        "source_names": [],
+        "include_copyrighted": filters["include_copyrighted"],
+    }
     for chunk in (result.data or []):
         if chunk.get("citation_mode") != "citable":
             continue
         if chunk.get("source_kind") != "commentary":
             continue
-        if is_chunk_disabled(chunk, filters):
+        if is_chunk_disabled(chunk, study_filters):
             continue
         doc_id = chunk.get("document_id")
         if doc_id in seen_docs:
