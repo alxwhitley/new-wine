@@ -573,54 +573,26 @@ async def get_commentary(
     seen_docs = set()  # type: set
     results = []
 
-    # --- Step 1+2: Direct bible_references lookup ---
+    # --- Step 1+2: Book-level pre-filter via bible_references ---
+    book_doc_ids = set()  # type: set
     if verse_id:
-        verse_ref = _verse_id_to_ref(verse_id)
-        if verse_ref:
+        book_code = verse_id.split(".")[0] if "." in verse_id else ""
+        book_name = ABBREV_TO_NAME.get(book_code)
+        if book_name:
             try:
                 ref_docs = (
                     db.table("documents")
-                    .select("id, title, author, source_kind, citation_mode")
+                    .select("id")
                     .eq("source_kind", "commentary")
                     .eq("citation_mode", "citable")
-                    .contains("bible_references", [verse_ref])
-                    .limit(10)
+                    .contains("bible_references", [book_name])
                     .execute()
                 )
-                for doc in (ref_docs.data or []):
-                    if is_chunk_disabled(doc, study_filters):
-                        continue
-                    doc_id = doc["id"]
-                    # Fetch lead chunk (chunk_index = 0)
-                    lead = (
-                        db.table("chunks")
-                        .select("content")
-                        .eq("document_id", doc_id)
-                        .eq("chunk_index", 0)
-                        .limit(1)
-                        .execute()
-                    )
-                    if not lead.data:
-                        continue
-                    content = lead.data[0].get("content", "")
-                    excerpt = content[:200].rsplit(" ", 1)[0] + "..." if len(content) > 200 else content
-                    author = doc.get("author", "")
-                    boost = COMMENTARY_AUTHOR_BOOST.get(author.lower(), COMMENTARY_DEFAULT_PENALTY)
-                    score = max(0.95 + boost, 0.85)
-                    seen_docs.add(doc_id)
-                    results.append({
-                        "document_id": doc_id,
-                        "title": doc.get("title", ""),
-                        "author": author,
-                        "source_kind": doc.get("source_kind", ""),
-                        "excerpt": excerpt,
-                        "content": content,
-                        "_score": score,
-                    })
+                book_doc_ids = {doc["id"] for doc in (ref_docs.data or [])}
             except Exception:
-                logger.exception("bible_references lookup failed for %s", verse_ref)
+                logger.exception("bible_references book lookup failed for %s", book_name)
 
-    # --- Step 3: Vector search (existing path) ---
+    # --- Step 3: Vector search, filtered to book docs when available ---
     try:
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
@@ -635,6 +607,8 @@ async def get_commentary(
         if chunk.get("citation_mode") != "citable":
             continue
         if chunk.get("source_kind") != "commentary":
+            continue
+        if book_doc_ids and chunk.get("document_id") not in book_doc_ids:
             continue
         if is_chunk_disabled(chunk, study_filters):
             continue
