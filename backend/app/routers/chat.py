@@ -362,14 +362,18 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
     try:
 
         # Step 0: Get source filter settings
+        logger.info("[CHAT DEBUG] Step 0: source filters")
         filters = get_disabled_filters()
         include_copyrighted = filters["include_copyrighted"] and INCLUDE_COPYRIGHTED_ENV
 
         # Step 1: Expand query into variants
+        logger.info("[CHAT DEBUG] Step 1: query expansion")
         variants = expand_query(request.question)
         variant_weights = [1.0, 0.8, 0.6]
+        logger.info("[CHAT DEBUG] Step 1 done: %d variants", len(variants))
 
         # Step 2: Run hybrid search for each variant in parallel (Change 1)
+        logger.info("[CHAT DEBUG] Step 2: hybrid search")
         all_scores: Dict[str, Tuple[float, dict]] = {}
         first_embedding = None  # type: Optional[List[float]]
 
@@ -390,6 +394,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                     else:
                         all_scores[cid] = (weighted, chunk)
 
+        logger.info("[CHAT DEBUG] Step 2 done: %d unique chunks", len(all_scores))
+
         # Step 2.5: Filter out disabled source_kinds and source_names
         all_scores = {
             cid: (score, chunk)
@@ -402,6 +408,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             cid: (score * (chunk.get("boost_factor") or 1.0), chunk)
             for cid, (score, chunk) in all_scores.items()
         }
+
+        logger.info("[CHAT DEBUG] Step 2.75 done: %d chunks after boost", len(all_scores))
 
         # Step 3: Document-level collapse — max 2 chunks per document
         ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
@@ -425,7 +433,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         top_chunks = author_capped[:10]
         chunks = [chunk for _, (_, chunk) in top_chunks]
 
+        logger.info("[CHAT DEBUG] Step 3a done: %d chunks after caps", len(chunks))
+
         # Step 3.5: Cohere rerank — narrow top 10 → top 5 by relevance (Change 4: singleton)
+        logger.info("[CHAT DEBUG] Step 3.5: Cohere rerank")
         co = _get_cohere()
         if co and len(chunks) > 0:
             try:
@@ -442,6 +453,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 logger.exception("Cohere rerank failed, using RRF top 10")
 
         # Step 4: Neighbor chunk expansion — batch fetch ±1 chunk_index, cap at 12 total
+        logger.info("[CHAT DEBUG] Step 4: neighbor expansion")
         seen_ids = {c["id"] for c in chunks}
         neighbors = fetch_neighbor_chunks_batch(chunks, seen_ids, db)
         expanded = list(chunks)
@@ -451,6 +463,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             seen_ids.add(n["id"])
             expanded.append(n)
         chunks = expanded
+
+        logger.info("[CHAT DEBUG] Step 4 done: %d total chunks", len(chunks))
 
         # Step 5: Conditional lexicon retrieval — reuse cached embedding (Change 2)
         if is_word_study_query(request.question):
@@ -468,6 +482,7 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             except Exception:
                 logger.exception("Lexicon retrieval failed, continuing without")
 
+        logger.info("[CHAT DEBUG] Step 6: building citations from %d chunks", len(chunks))
         citations = [
             {
                 "chunk_id": c["id"],
@@ -482,9 +497,9 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("Unhandled error in /chat endpoint (pre-stream)")
-        raise HTTPException(status_code=500, detail="An internal error occurred")
+    except Exception as exc:
+        logger.exception("Unhandled error in /chat endpoint (pre-stream): %s", exc)
+        raise HTTPException(status_code=500, detail="An internal error occurred: %s" % str(exc)[:200])
 
     def generate():
         # Low-material fallback
