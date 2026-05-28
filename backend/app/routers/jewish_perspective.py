@@ -16,36 +16,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 SYSTEM_PROMPT = """You are a Messianic Jewish biblical scholar assistant. Research and synthesize \
-a substantive summary of how the key words and themes in this verse are understood \
-from a Messianic Jewish perspective. Research only from these approved domains:
-sefaria.org, thelineoffire.org, oneforisrael.org, bibleproject.com, \
-messianicstudies.com, umjc.org, jewsforjesus.org, ffoz.org
+cultural and historical context for this Bible verse from a Messianic Jewish perspective.
 
-Do not use training data. Search the web and pull directly from these domains only.
-If a source has no relevant content for this verse, skip it.
+Only use sources from this approved domain list:
+ffoz.org, jewsforjesus.org, oneforisrael.org, umjc.org, messianicstudies.com, \
+engediresourcecenter.com, ourrabbijesus.com, ray-vander-laan.com, followtherabbi.com, \
+sefaria.org, bibleproject.com, biblicalarchaeology.org, bible.org
+
+Do not use any sources outside this list. If no relevant content is found on these domains \
+for a section, write: "No source material found for this verse under this category."
+
 Do not add devotional application or charismatic interpretation.
 Cite every claim by author or organization name.
 Do not fabricate citations.
 
-Formatting rules for each section value:
-- Write short paragraphs of 2-3 sentences maximum.
-- Never write a block of prose longer than 3 sentences without a paragraph break (\\n\\n in the JSON string).
-- Where a section contains multiple distinct points, break them into separate paragraphs rather than combining into one block.
-- Use clear, specific subpoints where the content naturally divides (e.g. a specific Targum reference, a specific psalm, a specific rabbinic concept) — each gets its own paragraph.
-- Do not pad paragraphs. Say the thing and move on.
-
-Output ONLY raw valid JSON with no preamble, no markdown backticks, and no explanation. Use this exact structure:
+Output as JSON only with this exact structure — no preamble, no markdown fences:
 {
-  "hebrew_root": "paragraph one\\n\\nparagraph two",
-  "targumic_usage": "paragraph one\\n\\nparagraph two",
-  "rabbinic_context": "paragraph one\\n\\nparagraph two",
-  "messianic_fulfillment": "paragraph one\\n\\nparagraph two"
+  "jewish_background": "prose text with citations",
+  "messianic_perspective": "prose text with citations",
+  "cultural_context": "prose text with citations",
+  "sources": ["Author Name — Article Title — URL", ...]
 }
-
-If a section has no source material write: "No source material found for this verse under this category."
 """
 
-SECTION_KEYS = ["hebrew_root", "targumic_usage", "rabbinic_context", "messianic_fulfillment"]
+SECTION_KEYS = ["jewish_background", "messianic_perspective", "cultural_context"]
 
 
 def _parse_ref(ref):
@@ -106,69 +100,6 @@ def _require_user(request: Request) -> str:
     return user_id
 
 
-def _extract_grounding(response, raw_text, content):
-    # type: (object, str, dict) -> tuple
-    """Extract grounding sources and per-section citation indices from Gemini response.
-
-    Returns (sources, section_citations) where:
-    - sources: list of {index, title, url} dicts
-    - section_citations: dict mapping section keys to lists of source indices
-    """
-    sources = []  # type: List[Dict]
-    section_citations = {}  # type: Dict[str, List[int]]
-
-    try:
-        candidate = response.candidates[0]
-        gm = getattr(candidate, "grounding_metadata", None)
-        if not gm:
-            return sources, section_citations
-
-        # Extract source list from grounding_chunks
-        chunks = getattr(gm, "grounding_chunks", None) or []
-        for i, chunk in enumerate(chunks):
-            web = getattr(chunk, "web", None)
-            sources.append({
-                "index": i,
-                "title": getattr(web, "title", "") if web else "",
-                "url": getattr(web, "uri", "") if web else "",
-            })
-
-        # Map each section's character range in the raw JSON text
-        section_ranges = {}  # type: Dict[str, tuple]
-        for key in SECTION_KEYS:
-            val = content.get(key, "")
-            if not val:
-                continue
-            pos = raw_text.find(val)
-            if pos >= 0:
-                section_ranges[key] = (pos, pos + len(val))
-
-        # Map grounding_supports to sections
-        supports = getattr(gm, "grounding_supports", None) or []
-        section_indices = {k: set() for k in SECTION_KEYS}  # type: Dict[str, set]
-
-        for sup in supports:
-            seg = getattr(sup, "segment", None)
-            if not seg:
-                continue
-            start = getattr(seg, "start_index", 0) or 0
-            chunk_indices = getattr(sup, "grounding_chunk_indices", []) or []
-
-            for key, (sec_start, sec_end) in section_ranges.items():
-                if sec_start <= start < sec_end:
-                    section_indices[key].update(chunk_indices)
-                    break
-
-        section_citations = {
-            k: sorted(v) for k, v in section_indices.items() if v
-        }
-
-    except Exception:
-        logger.exception("Failed to extract grounding metadata")
-
-    return sources, section_citations
-
-
 def _repair_truncated_json(raw):
     # type: (str) -> Optional[dict]
     """Attempt to repair truncated JSON by finding the last complete key-value pair."""
@@ -184,7 +115,7 @@ def _repair_truncated_json(raw):
     # Find the last complete quoted-string value ending with ," or "} or "\n
     # Pattern: find last occurrence of a complete "key": "value" pair
     last_good = None
-    for match in re.finditer(r'"(hebrew_root|targumic_usage|rabbinic_context|messianic_fulfillment)"\s*:\s*"', raw):
+    for match in re.finditer(r'"(jewish_background|messianic_perspective|cultural_context|sources)"\s*:\s*"', raw):
         key_start = match.start()
         val_start = match.end()
         # Walk forward to find the closing unescaped quote
@@ -246,15 +177,9 @@ def _parse_gemini_json(raw_text, ref):
 
 def _migrate_old_content(content):
     # type: (dict) -> dict
-    """Migrate old cached content format (sources as plain strings) to new format."""
-    sources = content.get("sources", [])
-    if sources and isinstance(sources[0], str):
-        content["sources"] = [
-            {"index": i, "title": s, "url": ""}
-            for i, s in enumerate(sources)
-        ]
-    if "section_citations" not in content:
-        content["section_citations"] = {}
+    """Ensure cached content has expected shape regardless of format version."""
+    if "sources" not in content:
+        content["sources"] = []
     return content
 
 
@@ -332,13 +257,11 @@ async def generate_jewish_perspective(
     # Parse JSON from response, with truncation recovery
     content = _parse_gemini_json(raw_text, ref)
 
-    # Extract grounding citations from Gemini response
-    sources, section_citations = _extract_grounding(response, raw_text, content)
-    # sources and section_citations are cached permanently with the content — never regenerated
-    content["sources"] = sources
-    content["section_citations"] = section_citations
+    # Ensure sources key exists (Gemini should include it in the JSON)
+    if "sources" not in content or not isinstance(content.get("sources"), list):
+        content["sources"] = []
 
-    # Save to cache (includes sources and section_citations in JSONB)
+    # Save to cache
     try:
         db.table("jewish_perspectives").insert({
             "verse_reference": ref,

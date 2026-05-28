@@ -177,133 +177,11 @@ interface CommentaryResult {
   content: string;
 }
 
-interface JpSource {
-  index: number;
-  title: string;
-  url: string;
-}
-
 interface JewishPerspectiveContent {
-  hebrew_root: string;
-  targumic_usage: string;
-  rabbinic_context: string;
-  messianic_fulfillment: string;
-  sources: JpSource[];
-  section_citations: Record<string, number[]>;
-}
-
-function CitationBubble({ index, onClick }: { index: number; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center justify-center rounded-full cursor-pointer transition-opacity hover:opacity-80"
-      style={{
-        width: 20,
-        height: 20,
-        fontSize: 10,
-        fontWeight: 600,
-        color: "#d4b96a",
-        backgroundColor: "rgba(212, 185, 106, 0.15)",
-        border: "1px solid rgba(212, 185, 106, 0.3)",
-        marginLeft: 3,
-        verticalAlign: "super",
-        lineHeight: 1,
-      }}
-    >
-      {index + 1}
-    </button>
-  );
-}
-
-function SourceDrawer({
-  sources,
-  selectedIndex,
-  onClose,
-}: {
-  sources: JpSource[];
-  selectedIndex: number | null;
-  onClose: () => void;
-}) {
-  return (
-    <>
-      <div
-        className="fixed inset-0 z-40"
-        style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
-        onClick={onClose}
-      />
-      <div
-        className="fixed right-0 top-0 bottom-0 z-50 overflow-y-auto"
-        style={{
-          width: 320,
-          backgroundColor: "#1f1e1d",
-          borderLeft: "1px solid #3c3c38",
-          padding: 20,
-        }}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <p
-            className="font-medium uppercase tracking-wide"
-            style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
-          >
-            Sources ({sources.length})
-          </p>
-          <button
-            onClick={onClose}
-            className="rounded-full flex items-center justify-center transition-opacity hover:opacity-80 cursor-pointer"
-            style={{ width: 28, height: 28, backgroundColor: "#3c3c38", color: "#e6e6e6", fontSize: 14 }}
-          >
-            ×
-          </button>
-        </div>
-        <div className="space-y-2">
-          {sources.map((src) => (
-            <div
-              key={src.index}
-              className="rounded-lg p-3"
-              style={{
-                backgroundColor: "#262624",
-                border: "1px solid #3c3c38",
-                borderLeft: selectedIndex === src.index ? "3px solid #b49238" : "1px solid #3c3c38",
-              }}
-            >
-              <div className="flex items-start gap-2">
-                <span
-                  className="inline-flex items-center justify-center rounded-full shrink-0"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#d4b96a",
-                    backgroundColor: "rgba(212, 185, 106, 0.15)",
-                    marginTop: 1,
-                  }}
-                >
-                  {src.index + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: "#e6e6e6" }}>
-                    {src.title}
-                  </p>
-                  {src.url && (
-                    <a
-                      href={src.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs hover:underline truncate block"
-                      style={{ color: "#d4b96a" }}
-                    >
-                      Open source →
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
+  jewish_background: string;
+  messianic_perspective: string;
+  cultural_context: string;
+  sources: string[];
 }
 
 type CorpusTab = "commentaries" | "word_study" | "jewish";
@@ -669,9 +547,6 @@ function CorpusPanel({
   const [jpDisclaimer, setJpDisclaimer] = useState(false);
   const [jpCacheChecked, setJpCacheChecked] = useState(false);
   const [jpCheckedRef, setJpCheckedRef] = useState<string | null>(null);
-  const [jpDrawerOpen, setJpDrawerOpen] = useState(false);
-  const [jpSelectedSource, setJpSelectedSource] = useState<number | null>(null);
-
   // Reset JP state when verse changes
   useEffect(() => {
     setJpContent(null);
@@ -679,8 +554,6 @@ function CorpusPanel({
     setJpCacheChecked(false);
     setJpCheckedRef(null);
     setJpDisclaimer(false);
-    setJpDrawerOpen(false);
-    setJpSelectedSource(null);
   }, [verseRef]);
 
   const checkJpCache = useCallback(async () => {
@@ -691,6 +564,7 @@ function CorpusPanel({
 
     setJpCacheChecked(false);
     setJpDisclaimer(false);
+    setJpContent(null);
 
     // Check cache
     try {
@@ -1015,64 +889,52 @@ function CorpusPanel({
         ) : jpContent ? (
           <div className="space-y-3">
             {([
-              { key: "hebrew_root", label: "Hebrew & Aramaic Root" },
-              { key: "targumic_usage", label: "Targumic Usage" },
-              { key: "rabbinic_context", label: "Rabbinic & Second Temple Context" },
-              { key: "messianic_fulfillment", label: "Messianic Fulfillment" },
-            ] as const).map((section) => {
-              const citations = jpContent.section_citations?.[section.key] || [];
-              return (
-                <div
-                  key={section.key}
-                  className="rounded-lg border p-4"
-                  style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
-                >
-                  <p
-                    className="font-medium uppercase tracking-wide mb-2"
-                    style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
-                  >
-                    {section.label}
-                  </p>
-                  <div style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
-                    {jpContent[section.key].split(/\n\n+/).map((para, pi, arr) => (
-                      <p key={pi} style={{ marginBottom: pi < arr.length - 1 ? 10 : 0 }}>
-                        {para.split(/\n/).map((line, li, lineArr) => (
-                          <span key={li}>
-                            {line}
-                            {li < lineArr.length - 1 && <br />}
-                          </span>
-                        ))}
-                        {pi === arr.length - 1 && citations.map((idx) => (
-                          <CitationBubble
-                            key={idx}
-                            index={idx}
-                            onClick={() => {
-                              setJpSelectedSource(idx);
-                              setJpDrawerOpen(true);
-                            }}
-                          />
-                        ))}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {jpContent.sources && jpContent.sources.length > 0 && (
-              <button
-                onClick={() => { setJpSelectedSource(null); setJpDrawerOpen(true); }}
-                className="text-xs cursor-pointer hover:underline"
-                style={{ color: "#d4b96a" }}
+              { key: "jewish_background", label: "Jewish Background" },
+              { key: "messianic_perspective", label: "Messianic Perspective" },
+              { key: "cultural_context", label: "Cultural Context" },
+            ] as const).map((section) => (
+              <div
+                key={section.key}
+                className="rounded-lg border p-4"
+                style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
               >
-                View all {jpContent.sources.length} sources
-              </button>
-            )}
-            {jpDrawerOpen && jpContent.sources && jpContent.sources.length > 0 && (
-              <SourceDrawer
-                sources={jpContent.sources}
-                selectedIndex={jpSelectedSource}
-                onClose={() => { setJpDrawerOpen(false); setJpSelectedSource(null); }}
-              />
+                <p
+                  className="font-medium uppercase tracking-wide mb-2"
+                  style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
+                >
+                  {section.label}
+                </p>
+                <div style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
+                  {(jpContent[section.key] || "").split(/\n\n+/).map((para, pi, arr) => (
+                    <p key={pi} style={{ marginBottom: pi < arr.length - 1 ? 10 : 0 }}>
+                      {para.split(/\n/).map((line, li, lineArr) => (
+                        <span key={li}>
+                          {line}
+                          {li < lineArr.length - 1 && <br />}
+                        </span>
+                      ))}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {jpContent.sources && jpContent.sources.length > 0 && (
+              <div
+                className="rounded-lg border p-4"
+                style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+              >
+                <p
+                  className="font-medium uppercase tracking-wide mb-2"
+                  style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
+                >
+                  Sources
+                </p>
+                <ul style={{ color: "#e6e6e6", fontSize: 13, lineHeight: 1.7 }}>
+                  {jpContent.sources.map((src, i) => (
+                    <li key={i} style={{ marginBottom: 4 }}>{src}</li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         ) : !jpCacheChecked ? (
