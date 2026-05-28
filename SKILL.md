@@ -446,15 +446,15 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 - **Route:** `/study` — Study Mode page with tab-driven layout
 - **Layout:** Shared sidebar (w-64) with Saved Words list | Left panel (380px fixed: search, verse card, chapter view) | Right panel (flex:1: tab content)
-- **Sidebar:** Shared `sidebar.tsx` across Chat and Study. Uses `usePathname()` for active route. Chat shows Recents; Study shows Saved Words. Nav items: Chat (MessageSquare), Discover (Compass), Study (BookOpen). Gold "New Chat" CTA (`#b49238`). Hover standard: `onMouseEnter` bg `#262624`, `onMouseLeave` transparent.
+- **Sidebar:** Shared `sidebar.tsx` across Chat and Study. Uses `usePathname()` for active route. Chat shows Recents; Study shows Saved Words. Nav items: Chat (MessageSquare), Discover (Compass), Study (BookOpen). Active nav text `#e6e6e6`, inactive `#c1c1b8`. Gold "New Chat" CTA (`#b49238`). Hover standard: `onMouseEnter` bg `#262624`, `onMouseLeave` transparent.
 - **Saved words:** `saved_words` table in Supabase (migration 017). RLS policy scoped to `auth.uid()`. Toggle save/unsave from definition panel bookmark icon. Sidebar shows English gloss + Strong's number, transliteration below.
 - **Verse lookup:** Direct Supabase query from frontend (`verses` table, keyed by `verse_id`). Client-side `parseRef()` with full 66-book `BOOK_MAP` + `ABBREV_TO_NAME`.
 - **Left panel:** Search bar, verse card, "View Chapter" button, chapter view. No interlinear or definition content.
 - **Chapter view:** Flowing text with inline `<sup>` verse numbers. Verses queried via `.like("verse_id", "JHN.1.%")` pattern. Active verse highlighted with `#2f2f2c` background. Clicking a verse in chapter view loads it as the active verse.
 - **Right panel tabs:** `CorpusTab` type: `"commentaries" | "word_study" | "jewish"`. Tab state lifted to parent `StudyPage` for cross-panel coordination.
-  - **Commentary tab:** Corpus results from `GET /study/corpus` (commentaries, sermons, magazine articles).
+  - **Commentary tab:** `GET /study/commentary` with book-level pre-filter + vector search. Pre-filter uses `match_commentary_by_book` RPC (migration 028) to scope results to the current book via `bible_references && ARRAY[book_name]`. Falls back to unfiltered vector search if no book matches. Author boosts: Matthew Henry +0.15, JFB +0.08, Adam Clarke +0.03, others −0.10. Sermon results via `match_sermon_chunks_by_ref` RPC (max 2, ±1 neighbor expansion). Paginated at 3 per page. Study mode uses `study_filters` that ignores `source_name` toggles (chat-only).
   - **Word Study tab:** Interlinear word blocks → definition panel → Precept Austin excerpt → "From the Library" corpus results. Interlinear fetch gated by `corpusTab === "word_study"` (not fetched on every verse change). Auto-selects first interlinear word when tokens load.
-  - **Jewish Perspective tab:** Inline generate flow (no modal). Empty state with "Generate Jewish Perspective" button → disclaimer text → "Confirm & Generate" button → spinner → cached result. `jpCacheChecked` state tracks whether cache has been checked.
+  - **Jewish Perspective tab:** Inline generate flow (no modal/disclaimer). Single "Generate Jewish Perspective" button → spinner → cached result. `jpCacheChecked` state tracks whether cache has been checked. Auto-checks cache on verse change. 3 sections: Jewish Background, Messianic Perspective, Cultural Context + sources list. Generated via Gemini 2.5 Flash with Google Search grounding. Env var: `GOOGLE_API_KEY` (not `GEMINI_API_KEY`).
 - **Excerpt panel:** `GET /study/excerpt?strongs=G####` endpoint returns Precept Austin word study article for selected Strong's number. Tries `excerpts` table first, falls back to concatenated chunks.
 - **Corpus panel ("From the Library"):** Backend `GET /study/corpus?verse=...&transliteration=...` endpoint. Embeds query via OpenAI, runs `match_chunks` RPC (match_count=20, include_copyrighted=true), filters to `citation_mode='citable'` + `source_kind IN ('sermon_transcript', 'magazine_article', 'commentary', 'word_study')`, dedupes by document, returns top 5. Frontend shows skeleton loader, empty state, or real results.
 - **Definition panel:** Fetches lexicon data from `GET /study/lexicon?strongs=G####` endpoint. Displays gloss inline with transliteration/Strong's number, plus parsed definition and usage from TBESG chunks.
@@ -504,6 +504,10 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Individual Videos dashboard card** — added to corpus admin Pipelines group, filters on `source_name ILIKE '%Individual Videos%'`.
 - **Interlinear deployment verification needed** — confirm `GET /study/interlinear` works on live Railway (tested locally only).
 - ~~**SUPABASE_DB_URL psycopg2 connection refused**~~ — **FIXED:** dotted username was being truncated by psycopg2 URI parsing. All scripts now use `urlparse` + explicit keyword args.
+- **Migration 028 pending** — `match_commentary_by_book` RPC must be run in Supabase SQL Editor before commentary book-level pre-filter works. Without it, the RPC call will fail and fall back to unfiltered vector search.
+- **Commentary bible_references incomplete** — only 186/493 commentary docs have `bible_references` populated (the original 186). The 307 HistoricalChristianFaith commentaries ingested via `ingest_commentaries.py` have empty refs. Need backfill to populate book-level refs on those docs.
+- ~~**Jewish Perspective GEMINI_API_KEY env var mismatch**~~ — **FIXED:** changed to `GOOGLE_API_KEY` in `jewish_perspective.py`.
+- ~~**Commentary not showing in study mode for disabled authors**~~ — **FIXED:** `study_filters` in commentary endpoint ignores `source_name` toggles (chat-only).
 
 ---
 
