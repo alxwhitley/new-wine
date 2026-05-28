@@ -562,7 +562,65 @@ async def get_commentary(
 
     db = get_supabase()
 
-    # --- Commentary results (existing path) ---
+    # Study mode commentary: only apply source_kind filters, not source_name filters.
+    # source_name toggles are for chat retrieval — commentaries should always show in study.
+    study_filters = {
+        "source_kinds": filters["source_kinds"],
+        "source_names": [],
+        "include_copyrighted": filters["include_copyrighted"],
+    }
+
+    seen_docs = set()  # type: set
+    results = []
+
+    # --- Step 1+2: Direct bible_references lookup ---
+    if verse_id:
+        verse_ref = _verse_id_to_ref(verse_id)
+        if verse_ref:
+            try:
+                ref_docs = (
+                    db.table("documents")
+                    .select("id, title, author, source_kind, citation_mode")
+                    .eq("source_kind", "commentary")
+                    .eq("citation_mode", "citable")
+                    .contains("bible_references", [verse_ref])
+                    .limit(10)
+                    .execute()
+                )
+                for doc in (ref_docs.data or []):
+                    if is_chunk_disabled(doc, study_filters):
+                        continue
+                    doc_id = doc["id"]
+                    # Fetch lead chunk (chunk_index = 0)
+                    lead = (
+                        db.table("chunks")
+                        .select("content")
+                        .eq("document_id", doc_id)
+                        .eq("chunk_index", 0)
+                        .limit(1)
+                        .execute()
+                    )
+                    if not lead.data:
+                        continue
+                    content = lead.data[0].get("content", "")
+                    excerpt = content[:200].rsplit(" ", 1)[0] + "..." if len(content) > 200 else content
+                    author = doc.get("author", "")
+                    boost = COMMENTARY_AUTHOR_BOOST.get(author.lower(), COMMENTARY_DEFAULT_PENALTY)
+                    score = max(0.95 + boost, 0.85)
+                    seen_docs.add(doc_id)
+                    results.append({
+                        "document_id": doc_id,
+                        "title": doc.get("title", ""),
+                        "author": author,
+                        "source_kind": doc.get("source_kind", ""),
+                        "excerpt": excerpt,
+                        "content": content,
+                        "_score": score,
+                    })
+            except Exception:
+                logger.exception("bible_references lookup failed for %s", verse_ref)
+
+    # --- Step 3: Vector search (existing path) ---
     try:
         result = db.rpc("match_chunks", {
             "query_embedding": embedding,
@@ -573,15 +631,6 @@ async def get_commentary(
         logger.exception("match_chunks RPC failed for commentary query")
         raise HTTPException(status_code=500, detail="Search service error")
 
-    seen_docs = set()
-    results = []
-    # Study mode commentary: only apply source_kind filters, not source_name filters.
-    # source_name toggles are for chat retrieval — commentaries should always show in study.
-    study_filters = {
-        "source_kinds": filters["source_kinds"],
-        "source_names": [],
-        "include_copyrighted": filters["include_copyrighted"],
-    }
     for chunk in (result.data or []):
         if chunk.get("citation_mode") != "citable":
             continue
