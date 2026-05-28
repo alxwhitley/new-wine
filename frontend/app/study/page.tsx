@@ -544,7 +544,6 @@ function CorpusPanel({
   const [jpContent, setJpContent] = useState<JewishPerspectiveContent | null>(null);
   const [jpLoading, setJpLoading] = useState(false);
   const [jpError, setJpError] = useState(false);
-  const [jpDisclaimer, setJpDisclaimer] = useState(false);
   const [jpCacheChecked, setJpCacheChecked] = useState(false);
   const [jpCheckedRef, setJpCheckedRef] = useState<string | null>(null);
   // Reset JP state when verse changes
@@ -553,7 +552,6 @@ function CorpusPanel({
     setJpError(false);
     setJpCacheChecked(false);
     setJpCheckedRef(null);
-    setJpDisclaimer(false);
   }, [verseRef]);
 
   const checkJpCache = useCallback(async () => {
@@ -563,7 +561,6 @@ function CorpusPanel({
     if (jpCacheChecked && jpCheckedRef === verseRef) return;
 
     setJpCacheChecked(false);
-    setJpDisclaimer(false);
     setJpContent(null);
 
     // Check cache
@@ -879,7 +876,7 @@ function CorpusPanel({
               Unable to generate. Please try again.
             </p>
             <button
-              onClick={() => { setJpError(false); setJpDisclaimer(false); }}
+              onClick={() => { setJpError(false); }}
               className="text-sm mt-3 cursor-pointer hover:underline"
               style={{ color: "#d4b96a" }}
             >
@@ -947,35 +944,16 @@ function CorpusPanel({
           </div>
         ) : (
           <div className="py-12 flex flex-col items-center gap-4">
-            {jpDisclaimer ? (
-              <>
-                <p className="text-sm leading-relaxed text-center max-w-sm" style={{ color: "#c1c1b8" }}>
-                  This searches live Messianic Jewish scholarship sources — Jews who believe
-                  Jesus is the Messiah. Once generated, this result is permanently saved and
-                  available to every Rhemata user who studies this verse.
-                </p>
-                <button
-                  onClick={handleJpGenerate}
-                  className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: "#b49238" }}
-                >
-                  Confirm & Generate
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm" style={{ color: "#c1c1b8" }}>
-                  No Jewish perspective generated for this verse yet.
-                </p>
-                <button
-                  onClick={() => setJpDisclaimer(true)}
-                  className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: "#b49238" }}
-                >
-                  Generate Jewish Perspective
-                </button>
-              </>
-            )}
+            <p className="text-sm" style={{ color: "#c1c1b8" }}>
+              No Jewish perspective generated for this verse yet.
+            </p>
+            <button
+              onClick={handleJpGenerate}
+              className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#b49238" }}
+            >
+              Generate Jewish Perspective
+            </button>
           </div>
         )}
         {flagModalEl}
