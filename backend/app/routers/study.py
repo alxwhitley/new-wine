@@ -578,6 +578,7 @@ async def get_commentary(
     if verse_id:
         book_code = verse_id.split(".")[0] if "." in verse_id else ""
         book_name = ABBREV_TO_NAME.get(book_code)
+        print(f"[COMMENTARY DEBUG] verse_id={verse_id}, book_name={book_name}")
         if book_name:
             try:
                 ref_docs = (
@@ -589,6 +590,7 @@ async def get_commentary(
                     .execute()
                 )
                 book_doc_ids = {doc["id"] for doc in (ref_docs.data or [])}
+                print(f"[COMMENTARY DEBUG] book_doc_ids count={len(book_doc_ids)}, ids={list(book_doc_ids)[:5]}")
             except Exception:
                 logger.exception("bible_references book lookup failed for %s", book_name)
 
@@ -602,6 +604,8 @@ async def get_commentary(
     except Exception:
         logger.exception("match_chunks RPC failed for commentary query")
         raise HTTPException(status_code=500, detail="Search service error")
+
+    print(f"[COMMENTARY DEBUG] match_chunks returned {len(result.data or [])} chunks")
 
     for chunk in (result.data or []):
         if chunk.get("citation_mode") != "citable":
@@ -630,6 +634,8 @@ async def get_commentary(
             "content": content,
             "_score": similarity + boost,
         })
+
+    print(f"[COMMENTARY DEBUG] after filter {len(results)} commentary results remain")
 
     # --- Sermon results (new path, requires verse_id) ---
     if verse_id:
