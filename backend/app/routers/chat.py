@@ -143,6 +143,9 @@ def expand_query(question: str) -> List[str]:
 INCLUDE_COPYRIGHTED_ENV = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
 
 
+FTS_QUERY_MAX_LEN = 300  # Truncate FTS queries to avoid Cloudflare 400s
+
+
 def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True, precomputed_embedding=None):
     # type: (str, object, int, int, bool, Optional[List[float]]) -> Tuple[dict, List[float]]
     """Run vector + FTS search for a single query.
@@ -150,12 +153,15 @@ def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True
     Returns ({chunk_id: (rrf_score, chunk)}, embedding_used).
     Accepts an optional precomputed_embedding to avoid redundant embed calls (Change 2).
     Fires embed_text and FTS in parallel since FTS doesn't need the embedding (Change 5).
+    FTS and vector failures are non-fatal — each falls back to empty results.
     """
+    fts_query = query[:FTS_QUERY_MAX_LEN]
+
     with ThreadPoolExecutor(max_workers=2) as ex:
         # Fire FTS immediately — no dependency on embedding
         fts_future = ex.submit(
             lambda: db.rpc("search_chunks_fts", {
-                "query_text": query,
+                "query_text": fts_query,
                 "match_count": fts_k,
                 "include_copyrighted": include_copyrighted,
             }).execute()
@@ -168,26 +174,28 @@ def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True
             embedding = embed_text(query)
 
         # Vector search needs the embedding — fires after embed completes
+        vector_data = []  # type: list
         try:
             vector_result = db.rpc("match_chunks", {
                 "query_embedding": embedding,
                 "match_count": vector_k,
                 "include_copyrighted": include_copyrighted,
             }).execute()
+            vector_data = vector_result.data or []
         except Exception:
-            logger.exception("Vector search RPC failed for query: %s", query[:100])
-            raise
+            logger.exception("Vector search failed, continuing with FTS only: %s", query[:100])
 
         # Collect FTS result
+        fts_data = []  # type: list
         try:
             fts_result = fts_future.result()
+            fts_data = fts_result.data or []
         except Exception:
-            logger.exception("FTS search RPC failed for query: %s", query[:100])
-            raise
+            logger.exception("FTS search failed, continuing with vector only: %s", query[:100])
 
     scores: Dict[str, Tuple[float, dict]] = {}
 
-    for rank, chunk in enumerate(vector_result.data):
+    for rank, chunk in enumerate(vector_data):
         cid = chunk["id"]
         score = 1 / (RRF_K + rank)
         if cid not in scores or score > scores[cid][0]:
@@ -195,7 +203,7 @@ def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True
         else:
             scores[cid] = (scores[cid][0] + score, scores[cid][1])
 
-    for rank, chunk in enumerate(fts_result.data):
+    for rank, chunk in enumerate(fts_data):
         cid = chunk["id"]
         score = 1 / (RRF_K + rank)
         if cid in scores:
