@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
 import re
 import logging
 from typing import Optional, List
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -582,26 +580,10 @@ async def get_commentary(
         book_name = ABBREV_TO_NAME.get(book_code)
         if book_name:
             try:
-                import psycopg2
-                parsed_db = urlparse(os.environ["SUPABASE_DB_URL"])
-                conn = psycopg2.connect(
-                    host=parsed_db.hostname,
-                    port=parsed_db.port,
-                    user=parsed_db.username,
-                    password=parsed_db.password,
-                    dbname=parsed_db.path.lstrip("/"),
-                )
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT id FROM documents WHERE source_kind = 'commentary' AND citation_mode = 'citable' AND bible_references && %s",
-                    ([book_name],),
-                )
-                rows = cur.fetchall()
-                cur.close()
-                conn.close()
-                book_doc_ids = {str(r[0]) for r in rows}
-            except Exception:
-                logger.exception("bible_references book lookup failed for %s", book_name)
+                ref_result = db.rpc("match_commentary_by_book", {"book_name": book_name}).execute()
+                book_doc_ids = {str(row["id"]) for row in (ref_result.data or [])}
+            except Exception as e:
+                logger.error("bible_references book lookup failed for %s: %s", book_name, e)
 
     # --- Step 3: Vector search, filtered to book docs when available ---
     try:
