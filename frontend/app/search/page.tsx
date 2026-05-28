@@ -151,7 +151,7 @@ export default function SearchPage() {
   ) : (
     // Search view
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-4 md:px-6 pt-12 pb-16">
+      <div className="mx-auto max-w-5xl px-4 md:px-6 pt-12 pb-16">
         {/* Search heading */}
         <h2 className="font-serif text-2xl md:text-3xl font-semibold text-foreground text-center mb-8">
           Search the Library
@@ -198,7 +198,7 @@ export default function SearchPage() {
 
         {/* Search Results */}
         {!searching && !articleLoading && hasSearched && count !== null && (
-          <div className="mt-8 space-y-3">
+          <div className="mt-8">
             {results.length === 0 ? (
               <p className="text-center text-muted-foreground mt-12">
                 No results found
@@ -208,47 +208,57 @@ export default function SearchPage() {
                 <p className="text-xs text-muted-foreground mb-4">
                   {count} result{count !== 1 ? "s" : ""}
                 </p>
-                {results.map((doc) => (
-                  <button
-                    key={doc.id}
-                    onClick={() => handleCardClick(doc.id)}
-                    className="group w-full text-left rounded-lg border border-border bg-card p-4 transition-colors hover:border-gold/40"
-                    style={{ borderLeftWidth: "3px" }}
-                  >
-                    <h3 className="font-serif text-foreground group-hover:text-citation transition-colors leading-snug">
-                      {doc.title}
-                    </h3>
-                    {doc.author && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {doc.author}
-                      </p>
-                    )}
-                    {doc.highlighted_snippet && (
-                      <p
-                        className="text-sm text-muted-foreground mt-2 line-clamp-2 [&_mark]:bg-transparent [&_mark]:text-[#d4b96a] [&_mark]:font-semibold"
-                        dangerouslySetInnerHTML={{
-                          __html: doc.highlighted_snippet.replace(
-                            /<(?!\/?mark\b)[^>]*>/gi,
-                            ""
-                          ),
-                        }}
-                      />
-                    )}
-                    {doc.topic_tags && doc.topic_tags.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {results.map((doc) => (
+                    <button
+                      key={doc.id}
+                      onClick={() => handleCardClick(doc.id)}
+                      className="group flex flex-col text-left rounded-lg border border-border p-4 transition-colors hover:border-gold/40"
+                      style={{ backgroundColor: "#2a2a27" }}
+                    >
+                      <h3 className="font-serif text-lg text-foreground group-hover:text-citation transition-colors leading-snug">
+                        {doc.title}
+                      </h3>
+                      {doc.author && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {doc.author}
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {doc.topic_tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
-                            style={{ backgroundColor: "rgba(212, 185, 106, 0.12)", color: "#d4b96a" }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
+                        <span
+                          className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
+                          style={{ backgroundColor: "#3c3c38", color: "#c1c1b8" }}
+                        >
+                          Magazine Article{doc.year ? ` | ${doc.year}` : ""}
+                        </span>
                       </div>
-                    )}
-                  </button>
-                ))}
+                      {doc.highlighted_snippet && (
+                        <p
+                          className="text-sm text-muted-foreground mt-2 line-clamp-2 [&_mark]:bg-transparent [&_mark]:text-[#d4b96a] [&_mark]:font-semibold"
+                          dangerouslySetInnerHTML={{
+                            __html: doc.highlighted_snippet.replace(
+                              /<(?!\/?mark\b)[^>]*>/gi,
+                              ""
+                            ),
+                          }}
+                        />
+                      )}
+                      {doc.topic_tags && doc.topic_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {doc.topic_tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
+                              style={{ backgroundColor: "rgba(212, 185, 106, 0.12)", color: "#d4b96a" }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </>
             )}
           </div>
@@ -256,7 +266,7 @@ export default function SearchPage() {
 
         {/* Browse listing (before any search) */}
         {!searching && !articleLoading && !hasSearched && (
-          <div className="mt-8 space-y-3">
+          <div className="mt-8">
             {browseLoading ? (
               <div className="flex justify-center mt-12">
                 <Loader2 className="h-6 w-6 text-gold animate-spin" />
@@ -270,36 +280,46 @@ export default function SearchPage() {
                 <p className="text-xs text-muted-foreground mb-4">
                   {browseResults.length} article{browseResults.length !== 1 ? "s" : ""}
                 </p>
-                {browseResults.map((doc) => (
-                  <button
-                    key={doc.id}
-                    onClick={() => handleCardClick(doc.id)}
-                    className="group w-full text-left rounded-lg border border-border bg-card p-4 transition-colors hover:border-gold/40"
-                    style={{ borderLeftWidth: "3px" }}
-                  >
-                    <h3 className="font-serif text-foreground group-hover:text-citation transition-colors leading-snug">
-                      {doc.title}
-                    </h3>
-                    {doc.author && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {doc.author}
-                      </p>
-                    )}
-                    {doc.topic_tags && doc.topic_tags.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {browseResults.map((doc) => (
+                    <button
+                      key={doc.id}
+                      onClick={() => handleCardClick(doc.id)}
+                      className="group flex flex-col text-left rounded-lg border border-border p-4 transition-colors hover:border-gold/40"
+                      style={{ backgroundColor: "#2a2a27" }}
+                    >
+                      <h3 className="font-serif text-lg text-foreground group-hover:text-citation transition-colors leading-snug">
+                        {doc.title}
+                      </h3>
+                      {doc.author && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {doc.author}
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {doc.topic_tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
-                            style={{ backgroundColor: "rgba(212, 185, 106, 0.12)", color: "#d4b96a" }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
+                        <span
+                          className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
+                          style={{ backgroundColor: "#3c3c38", color: "#c1c1b8" }}
+                        >
+                          Magazine Article{doc.year ? ` | ${doc.year}` : ""}
+                        </span>
                       </div>
-                    )}
-                  </button>
-                ))}
+                      {doc.topic_tags && doc.topic_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {doc.topic_tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
+                              style={{ backgroundColor: "rgba(212, 185, 106, 0.12)", color: "#d4b96a" }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </>
             )}
           </div>

@@ -126,7 +126,7 @@ export function Sidebar({
           className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
           style={{
             backgroundColor: isChat ? "#262624" : "transparent",
-            color: "#888780",
+            color: isChat ? "#ffffff" : "#c1c1b8",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isChat ? "#262624" : "transparent"; }}
@@ -140,7 +140,7 @@ export function Sidebar({
           className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
           style={{
             backgroundColor: isDiscover ? "#262624" : "transparent",
-            color: "#888780",
+            color: isDiscover ? "#ffffff" : "#c1c1b8",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isDiscover ? "#262624" : "transparent"; }}
@@ -154,7 +154,7 @@ export function Sidebar({
           className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
           style={{
             backgroundColor: isStudy ? "#262624" : "transparent",
-            color: "#888780",
+            color: isStudy ? "#ffffff" : "#c1c1b8",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isStudy ? "#262624" : "transparent"; }}
