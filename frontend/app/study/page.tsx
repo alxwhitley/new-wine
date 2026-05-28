@@ -683,14 +683,14 @@ function CorpusPanel({
     setJpSelectedSource(null);
   }, [verseRef]);
 
-  const handleJpTabClick = useCallback(async () => {
-    if (corpusTab === "jewish") return;
-    onTabChange("jewish");
-
-    // If already loaded for this verse, show it
+  const checkJpCache = useCallback(async () => {
+    // If already loaded for this verse, skip
     if (jpContent && jpCheckedRef === verseRef) return;
     // If we already checked cache for this verse, don't re-check
     if (jpCacheChecked && jpCheckedRef === verseRef) return;
+
+    setJpCacheChecked(false);
+    setJpDisclaimer(false);
 
     // Check cache
     try {
@@ -712,7 +712,20 @@ function CorpusPanel({
     // Not cached — mark checked so we show the generate button
     setJpCheckedRef(verseRef);
     setJpCacheChecked(true);
-  }, [corpusTab, jpContent, jpCacheChecked, jpCheckedRef, verseRef, onTabChange]);
+  }, [jpContent, jpCacheChecked, jpCheckedRef, verseRef]);
+
+  const handleJpTabClick = useCallback(async () => {
+    if (corpusTab === "jewish") return;
+    onTabChange("jewish");
+    await checkJpCache();
+  }, [corpusTab, onTabChange, checkJpCache]);
+
+  // Fix 2: Auto-check cache when verse changes while already on Jewish tab
+  useEffect(() => {
+    if (corpusTab === "jewish" && !jpContent && !jpLoading) {
+      checkJpCache();
+    }
+  }, [corpusTab, verseRef, jpContent, jpLoading, checkJpCache]);
 
   const handleJpGenerate = useCallback(async () => {
     setJpLoading(true);
@@ -1062,13 +1075,22 @@ function CorpusPanel({
               />
             )}
           </div>
+        ) : !jpCacheChecked ? (
+          <div className="py-12 flex flex-col items-center gap-3">
+            <svg className="animate-spin h-5 w-5" style={{ color: "#b49238" }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-sm" style={{ color: "#c1c1b8" }}>Checking cache...</p>
+          </div>
         ) : (
           <div className="py-12 flex flex-col items-center gap-4">
             {jpDisclaimer ? (
               <>
                 <p className="text-sm leading-relaxed text-center max-w-sm" style={{ color: "#c1c1b8" }}>
-                  This searches live Messianic Jewish scholarship sources and may include
-                  non-Christian perspectives. Results are saved for future visitors.
+                  This searches live Messianic Jewish scholarship sources — Jews who believe
+                  Jesus is the Messiah. Once generated, this result is permanently saved and
+                  available to every Rhemata user who studies this verse.
                 </p>
                 <button
                   onClick={handleJpGenerate}
