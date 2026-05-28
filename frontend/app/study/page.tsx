@@ -1001,6 +1001,8 @@ function CorpusPanel({
           </div>
         ) : jpContent ? (
           <div className="space-y-3">
+            {/* DEBUG: log raw section content to diagnose paragraph breaks */}
+            {(() => { console.log("[JP-DEBUG] hebrew_root raw:", JSON.stringify(jpContent.hebrew_root)); return null; })()}
             {([
               { key: "hebrew_root", label: "Hebrew & Aramaic Root" },
               { key: "targumic_usage", label: "Targumic Usage" },

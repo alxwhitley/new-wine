@@ -253,6 +253,9 @@ async def generate_jewish_perspective(
         logger.exception("Gemini call failed for %s", ref)
         raise HTTPException(status_code=500, detail="Failed to generate Jewish perspective")
 
+    # DEBUG: log raw Gemini response to diagnose paragraph break format
+    logger.info("[JP-DEBUG] raw_text repr for %s: %s", ref, repr(raw_text[:2000]))
+
     # Parse JSON from response
     try:
         content = json.loads(raw_text)
@@ -268,6 +271,10 @@ async def generate_jewish_perspective(
         else:
             logger.error("Failed to parse Gemini JSON for %s: %s", ref, raw_text[:500])
             raise HTTPException(status_code=500, detail="Failed to parse generated content")
+
+    # DEBUG: log parsed section values to see if \n\n survived json.loads
+    for _dk in SECTION_KEYS:
+        logger.info("[JP-DEBUG] parsed %s repr: %s", _dk, repr(content.get(_dk, "")[:500]))
 
     # Extract grounding citations from Gemini response
     sources, section_citations = _extract_grounding(response, raw_text, content)
