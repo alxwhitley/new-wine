@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import re
 import logging
 from typing import Optional, List
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -578,19 +580,26 @@ async def get_commentary(
     if verse_id:
         book_code = verse_id.split(".")[0] if "." in verse_id else ""
         book_name = ABBREV_TO_NAME.get(book_code)
-        print(f"[COMMENTARY DEBUG] verse_id={verse_id}, book_name={book_name}")
         if book_name:
             try:
-                ref_docs = (
-                    db.table("documents")
-                    .select("id")
-                    .eq("source_kind", "commentary")
-                    .eq("citation_mode", "citable")
-                    .contains("bible_references", [book_name])
-                    .execute()
+                import psycopg2
+                parsed_db = urlparse(os.environ["SUPABASE_DB_URL"])
+                conn = psycopg2.connect(
+                    host=parsed_db.hostname,
+                    port=parsed_db.port,
+                    user=parsed_db.username,
+                    password=parsed_db.password,
+                    dbname=parsed_db.path.lstrip("/"),
                 )
-                book_doc_ids = {doc["id"] for doc in (ref_docs.data or [])}
-                print(f"[COMMENTARY DEBUG] book_doc_ids count={len(book_doc_ids)}, ids={list(book_doc_ids)[:5]}")
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT id FROM documents WHERE source_kind = 'commentary' AND citation_mode = 'citable' AND bible_references && %s",
+                    ([book_name],),
+                )
+                rows = cur.fetchall()
+                cur.close()
+                conn.close()
+                book_doc_ids = {str(r[0]) for r in rows}
             except Exception:
                 logger.exception("bible_references book lookup failed for %s", book_name)
 
@@ -604,8 +613,6 @@ async def get_commentary(
     except Exception:
         logger.exception("match_chunks RPC failed for commentary query")
         raise HTTPException(status_code=500, detail="Search service error")
-
-    print(f"[COMMENTARY DEBUG] match_chunks returned {len(result.data or [])} chunks")
 
     for chunk in (result.data or []):
         if chunk.get("citation_mode") != "citable":
@@ -634,8 +641,6 @@ async def get_commentary(
             "content": content,
             "_score": similarity + boost,
         })
-
-    print(f"[COMMENTARY DEBUG] after filter {len(results)} commentary results remain")
 
     # --- Sermon results (new path, requires verse_id) ---
     if verse_id:
