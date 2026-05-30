@@ -605,8 +605,6 @@ async def get_commentary(
         raise HTTPException(status_code=500, detail="Search service error")
 
     for chunk in (result.data or []):
-        if chunk.get("citation_mode") != "citable":
-            continue
         if chunk.get("source_kind") != "commentary":
             continue
         if is_chunk_disabled(chunk, study_filters):
