@@ -83,7 +83,7 @@ repo/
 ```
 
 - All imports use `from app.x import y` (absolute, not relative)
-- `requirements.txt` pinned to exact versions, includes `tiktoken`
+- `requirements.txt` pinned to exact versions, includes `tiktoken`, `httpcore>=1.0.7`
 - Railway start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
 ---
@@ -194,7 +194,8 @@ repo/
 - **Chat streaming** — Anthropic Claude Sonnet 4.5 `max_tokens=1500`. `<answer>` tag extraction server-side with 9-char buffer safety for split tags. If stream ends mid-answer, remaining buffer is flushed to client instead of silently dropped. Uses `client.messages.create(stream=True)` (not context manager form, which is incompatible with generator `yield`). Frontend: no timeouts or AbortController; stream completion via `[DONE]` sentinel or reader exhaustion; error handling for 429 (guest/daily limits).
 - **Batched neighbor chunk expansion** — `fetch_neighbor_chunks_batch()` collects all (document_id, chunk_index±1) pairs from top chunks, builds `.or_()` compound filter with `and()` conditions, batches at 30 pairs per query. Replaces sequential per-chunk lookups (was 10 calls for 5 chunks, now 1-2 calls total).
 - **Sparse citation rule** — system prompt enforces max 2-3 inline citations per response. Only cite when source of claim materially matters. Single citation sufficient when answer draws primarily from one source.
-- **Cohere reranking** — After RRF fusion, top 10 chunks sent to Cohere rerank-v3.5 with original query; top 5 by relevance score returned. Falls back to RRF top 10 if `COHERE_API_KEY` not set or call fails.
+- **Cohere reranking** — After RRF fusion, top 10 chunks sent to Cohere rerank-v3.5 with original query; top 5 by relevance score returned. Falls back to RRF top 10 if `COHERE_API_KEY` not set or call fails. Cohere client forced to HTTP/1.1 (`httpx.Client(http2=False)`) to avoid HTTP/2 trailer framing errors.
+- **Resilient hybrid search** — FTS and vector search failures in `hybrid_search_rrf()` are non-fatal; each falls back to empty results so the other leg can still return chunks. FTS query truncated to 300 chars (`FTS_QUERY_MAX_LEN`) to prevent Cloudflare 400 errors from oversized Supabase PostgREST requests.
 - **Column break handling** — Pass 1 prompt instructs Gemini to transcribe multi-article pages column by column with `=== COLUMN BREAK ===` markers. Pass 2 prompt tells Groq to follow article content across column breaks, ignoring other articles' content.
 - **psycopg2 connection fix** — Supabase pooler usernames contain a dot (`postgres.{ref}`) which `psycopg2.connect(uri)` misparses, truncating to `postgres`. All ingestion scripts (`ingest_lexicon.py`, `ingest_preceptaustin.py`, `ingest.py`, `ingest_commentaries.py`) now parse `SUPABASE_DB_URL` with `urlparse` and pass explicit keyword args (`host`, `port`, `user`, `password`, `dbname`).
 
@@ -340,7 +341,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase. Auto-populates `bible_references`. Archives PDFs to `05_archived/` on success. |
 | `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. Skip reason tracking: `ingest_file()` returns `(status, reason)` tuples; `main()` prints grouped summary table of all skipped/failed files with reasons at end of run. Uses psycopg2 direct query for `already_ingested()` (same `DB_PARAMS` pattern as other scripts). |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq Llama 3.3 70B). `extract_bible_references(content) -> List[str]`. Segments at ~12k chars, normalizes against 66-book canonical set + alias map, dedupes. Non-fatal (returns `[]`). |
-| `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force` (re-process docs that already have refs). |
+| `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force`, `--limit N`, `--source-kind KIND`. Uses psycopg2 for reads (avoids PostgREST timeouts). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
 | `scripts/youtube_pipeline.sh` | Full YouTube pipeline convenience script: scrape → clean → whisper → ingest. Shell alias: `rh-youtube`. |
@@ -382,7 +383,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Lexicons:** TBESG 11,034 chunks (complete), TBESH 10,258 chunks (complete), TFLSJ 15,767 chunks across 2 docs (complete)
 - **Verses:** 31,098 rows (WEB, 66-book Protestant canon, complete)
 - **Excerpts:** 1,713 of 1,779 word_study docs have generated articles (96%, 66 remaining)
-- **All 38 original backfilled docs have `bible_references` populated** (2026-04-10)
+- **All commentary docs backfilled with `bible_references`** (2026-05-30) — 307 HistoricalChristianFaith commentaries processed across 3 runs (connection timeouts required re-runs). 400 got refs, 93 had no refs found.
 
 ---
 
@@ -452,7 +453,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Left panel:** Search bar, verse card, "View Chapter" button, chapter view. No interlinear or definition content.
 - **Chapter view:** Flowing text with inline `<sup>` verse numbers. Verses queried via `.like("verse_id", "JHN.1.%")` pattern. Active verse highlighted with `#2f2f2c` background. Clicking a verse in chapter view loads it as the active verse.
 - **Right panel tabs:** `CorpusTab` type: `"commentaries" | "word_study" | "jewish"`. Tab state lifted to parent `StudyPage` for cross-panel coordination.
-  - **Commentary tab:** `GET /study/commentary` with book-level pre-filter + vector search. Pre-filter uses `match_commentary_by_book` RPC (migration 028) to scope results to the current book via `bible_references && ARRAY[book_name]`. Falls back to unfiltered vector search if no book matches. Author boosts: Matthew Henry +0.15, JFB +0.08, Adam Clarke +0.03, others −0.10. Sermon results via `match_sermon_chunks_by_ref` RPC (max 2, ±1 neighbor expansion). Paginated at 3 per page. Study mode uses `study_filters` that ignores `source_name` toggles (chat-only).
+  - **Commentary tab:** `GET /study/commentary` with book-level pre-filter + scoped vector search. Pre-filter uses `match_commentary_by_book` RPC (migration 028) to get doc IDs for the current book via `bible_references && ARRAY[book_name]`. When doc IDs found, calls `match_commentary_chunks` RPC (migration 029) with `document_ids uuid[]` parameter for scoped vector search. Falls back to unfiltered `match_chunks` if no book matches. No `citation_mode` filter — commentary docs use `silent_context` for chat but are always shown in study mode. Author boosts: Matthew Henry +0.15, JFB +0.08, Adam Clarke +0.03, others −0.10. Sermon results via `match_sermon_chunks_by_ref` RPC (max 2, ±1 neighbor expansion). Paginated at 3 per page. Study mode uses `study_filters` that ignores `source_name` toggles (chat-only).
   - **Word Study tab:** Interlinear word blocks → definition panel → Precept Austin excerpt → "From the Library" corpus results. Interlinear fetch gated by `corpusTab === "word_study"` (not fetched on every verse change). Auto-selects first interlinear word when tokens load.
   - **Jewish Perspective tab:** Inline generate flow (no modal/disclaimer). Single "Generate Jewish Perspective" button → spinner → cached result. `jpCacheChecked` state tracks whether cache has been checked. Auto-checks cache on verse change. 3 sections: Jewish Background, Messianic Perspective, Cultural Context + sources list. Generated via Gemini 2.5 Flash with Google Search grounding. Env var: `GOOGLE_API_KEY` (not `GEMINI_API_KEY`).
 - **Excerpt panel:** `GET /study/excerpt?strongs=G####` endpoint returns Precept Austin word study article for selected Strong's number. Tries `excerpts` table first, falls back to concatenated chunks.
@@ -504,9 +505,12 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Individual Videos dashboard card** — added to corpus admin Pipelines group, filters on `source_name ILIKE '%Individual Videos%'`.
 - **Interlinear deployment verification needed** — confirm `GET /study/interlinear` works on live Railway (tested locally only).
 - ~~**SUPABASE_DB_URL psycopg2 connection refused**~~ — **FIXED:** dotted username was being truncated by psycopg2 URI parsing. All scripts now use `urlparse` + explicit keyword args.
-- **Migration 028 pending** — `match_commentary_by_book` RPC must be run in Supabase SQL Editor before commentary book-level pre-filter works. Without it, the RPC call will fail and fall back to unfiltered vector search.
-- **Commentary bible_references incomplete** — only 186/493 commentary docs have `bible_references` populated (the original 186). The 307 HistoricalChristianFaith commentaries ingested via `ingest_commentaries.py` have empty refs. Need backfill to populate book-level refs on those docs.
+- ~~**Migration 028 pending**~~ — **DONE:** `match_commentary_by_book` RPC applied.
+- ~~**Commentary bible_references incomplete**~~ — **DONE:** All 307 HistoricalChristianFaith commentaries backfilled (2026-05-30). 400 got refs, 93 had no refs.
 - ~~**Jewish Perspective GEMINI_API_KEY env var mismatch**~~ — **FIXED:** changed to `GOOGLE_API_KEY` in `jewish_perspective.py`.
+- ~~**Chat endpoint 500 error (HTTP/2 framing)**~~ — **FIXED:** "Trailers must have END_STREAM set" error from httpcore. Pinned `httpcore>=1.0.7` and forced Cohere client to HTTP/1.1.
+- **Migration 029 pending** — `match_commentary_chunks` RPC must be run in Supabase SQL Editor before scoped commentary vector search works. Without it, the commentary endpoint will 500 when book doc IDs are found.
+- **Commentary `bible_references` mismatch** — `match_commentary_by_book` uses `&&` (array overlap) checking for bare book name `"John"`, but backfill stored references as `"John 3:16"`, `"John 1:1"` etc. The RPC only matches docs that happen to have the bare book name in their array. Needs either SQL function change to `LIKE 'John%'` or backfill to also include bare book names.
 - ~~**Commentary not showing in study mode for disabled authors**~~ — **FIXED:** `study_filters` in commentary endpoint ignores `source_name` toggles (chat-only).
 
 ---
