@@ -593,6 +593,7 @@ async def get_commentary(
                 "match_count": 30,
                 "document_ids": list(book_doc_ids),
             }).execute()
+            logger.info("[commentary] book_doc_ids: %d, chunks returned: %d", len(book_doc_ids), len(result.data or []))
         else:
             result = db.rpc("match_chunks", {
                 "query_embedding": embedding,
