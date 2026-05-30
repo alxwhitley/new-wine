@@ -68,7 +68,7 @@ export interface ChatMessagePayload {
 
 export interface StreamCallbacks {
   onToken: (token: string) => void;
-  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null }) => void;
+  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number> }) => void;
   onError: (error: string) => void;
 }
 
@@ -80,6 +80,7 @@ export async function streamChatMessage(
     conversationId?: string | null;
     messages?: ChatMessagePayload[];
     anonId?: string | null;
+    topicsEstablished?: Record<string, number>;
   },
 ): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -96,6 +97,9 @@ export async function streamChatMessage(
   }
   if (options?.anonId) {
     body.anon_id = options.anonId;
+  }
+  if (options?.topicsEstablished && Object.keys(options.topicsEstablished).length > 0) {
+    body.topics_established = options.topicsEstablished;
   }
 
   const res = await fetch(`${API_URL}/chat`, {

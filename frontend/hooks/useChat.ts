@@ -28,6 +28,7 @@ export function useChat(
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  const topicsEstablishedRef = useRef<Record<string, number>>({});
 
   const sendMessage = useCallback(
     async (question: string) => {
@@ -68,6 +69,9 @@ export function useChat(
                 conversationIdRef.current = meta.conversation_id;
                 setConversationId(meta.conversation_id);
               }
+              if (meta.topics_established) {
+                topicsEstablishedRef.current = meta.topics_established;
+              }
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -90,6 +94,7 @@ export function useChat(
             conversationId: conversationIdRef.current,
             messages: history.map((m) => ({ role: m.role, content: m.content })),
             anonId: getAnonId(),
+            topicsEstablished: topicsEstablishedRef.current,
           },
         );
 
@@ -118,6 +123,7 @@ export function useChat(
     setMessages([]);
     conversationIdRef.current = null;
     setConversationId(null);
+    topicsEstablishedRef.current = {};
   }, []);
 
   const loadConversation = useCallback((id: string, msgs: Message[]) => {

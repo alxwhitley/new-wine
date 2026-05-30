@@ -233,6 +233,9 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
     elif st == "background":
         source_kind = "background_note"
         citation_mode = "silent_context"
+    elif st == "position_paper":
+        source_kind = "position_paper"
+        citation_mode = "silent_context"
     else:
         source_kind = "unknown"
         citation_mode = "silent_context"

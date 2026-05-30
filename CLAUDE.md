@@ -31,7 +31,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging
 │   ├── tag_existing_articles.py   # Backfill topic_tags on existing articles via Groq
 │   └── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
-├── taxonomy.md                # 100-tag topic taxonomy (8 categories)
+├── taxonomy.md                # 257-tag topic taxonomy (15 categories)
 ├── migrations/                # SQL migrations (run in Supabase SQL Editor)
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
@@ -44,7 +44,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   ├── chat.py        # /chat endpoint — retrieval + LLM
 │   │   │   ├── search.py      # /search + /search/documents endpoints
 │   │   │   ├── document.py    # /document/{id} + /document/{id}/article
-│   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon
+│   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon + /study/excerpt + /study/interlinear + /study/commentary + /study/wordsearch + /study/wordstudy
 │   │   │   └── ingest.py      # /ingest endpoint
 │   │   ├── services/
 │   │   │   ├── embeddings.py
@@ -53,7 +53,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   └── extractor.py
 │   │   ├── db/
 │   │   │   └── supabase.py
-│   │   └── system_prompt.txt
+│   │   ├── system_prompt.txt
+│   │   └── theological_guardrails.txt
 │   ├── requirements.txt       # Pinned via pip freeze
 │   ├── railway.toml
 │   └── nixpacks.toml          # Locks Python 3.9
@@ -125,12 +126,13 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 
 ## Database
 - **Supabase** with pgvector enabled
-- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`
+- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`
 - `documents.source_type` — `'sermon'` | `'background'` | `'magazine_article'` | `'commentary'` | `'book'` | `'paper'` | `'other'`
 - `documents.source_kind` — taxonomy field (e.g. `'magazine_article'`)
 - `documents.citation_mode` — `'citable'` | `'silent_context'`
 - `documents.is_copyrighted` — boolean, derived from folder path during ingest
 - `documents.topic_tags` — text[] assigned from taxonomy
+- `documents.bible_references` — text[], canonical refs like `"Romans 8:28"`, GIN indexed
 - `documents.fts_weighted` — tsvector on title, author, source_name, topic_tags
 - Vector similarity via `match_chunks` SQL function (HNSW index, `hnsw.ef_search=200`)
 - Hybrid retrieval: query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) → top 10
@@ -147,7 +149,7 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 - k=10 retrieval post-RRF
 - Single-column PDFs only — no multi-column OCR needed yet
 - Bible Study articles excluded from extraction pipeline
-- Topic tagging: 100-tag taxonomy, validated against VALID_TAGS set, retry if < 3 valid
+- Topic tagging: 257-tag taxonomy (15 categories), validated against VALID_TAGS set in scripts/taxonomy.py, retry if < 3 valid
 - is_copyrighted derived from folder path: `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false
 
 ---
@@ -181,8 +183,23 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 | `scripts/generate_excerpts.py` | Batch-generate word study articles from Precept Austin chunks via Anthropic Claude |
 | `scripts/whisper_transcribe.py` | Whisper medium transcription + Groq cleaning (batch or single-URL) |
 | `scripts/youtube_pipeline.sh` | Full YouTube pipeline: scrape → clean → whisper → ingest |
+| `scripts/retag_sermons.py` | Retag sermon_transcript docs via Claude Haiku against new taxonomy |
+| `scripts/ingest_commentaries.py` | Ingest HistoricalChristianFaith commentaries from SQLite DB |
+| `scripts/scrape_individual_videos.py` | Individual YouTube video ingestion from xlsx tracker |
+| `scripts/scrape_channel_titles.py` | Dump all video titles from YouTube channels to CSV |
+| `scripts/bible_refs.py` | Shared Bible reference extractor (Groq) — used by ingest.py and ingest_magazine.py |
+| `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content (run 2026-04-17) |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
+
+### Root-Level Ingestion Scripts
+
+| Script | Purpose |
+|---|---|
+| `scrape_preceptaustin.py` | Scrape Precept Austin Greek/Hebrew word studies |
+| `ingest_preceptaustin.py` | Ingest Precept Austin word studies into Supabase |
+| `ingest_lexicon.py` | Ingest STEPBible lexicon files (TBESG, TBESH, TFLSJ) |
+| `ingest_bible.py` | Ingest WEB Bible into verses table |
 
 ---
 

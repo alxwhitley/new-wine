@@ -68,6 +68,41 @@ RRF_K = 60  # Reciprocal Rank Fusion constant
 
 router = APIRouter()
 
+# ── Background topics cache ──────────────────────────────────────────
+_background_topics: list = []
+
+
+_background_topics_loaded = False
+
+
+def _ensure_background_topics():
+    """Lazy-load background_topics table into module-level cache on first use."""
+    global _background_topics, _background_topics_loaded
+    if _background_topics_loaded:
+        return
+    _background_topics_loaded = True
+    try:
+        db = get_supabase()
+        result = db.table("background_topics").select("topic_key, document_id, aliases, title").execute()
+        _background_topics = result.data or []
+        logger.info("Loaded %d background topics", len(_background_topics))
+    except Exception:
+        logger.exception("Failed to load background_topics — topic injection disabled")
+        _background_topics = []
+
+
+def match_background_topics(question: str) -> List[str]:
+    """Return topic_keys whose aliases appear in the question (max 2)."""
+    _ensure_background_topics()
+    q = question.lower()
+    matches = []  # type: List[Tuple[int, str]]
+    for topic in _background_topics:
+        hit_count = sum(1 for alias in (topic.get("aliases") or []) if alias in q)
+        if hit_count > 0:
+            matches.append((hit_count, topic["topic_key"]))
+    matches.sort(key=lambda x: x[0], reverse=True)
+    return [key for _, key in matches[:2]]
+
 # ── Module-level client singletons (Change 4) ──────────────────────────
 
 _ai = None
@@ -286,6 +321,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     messages: List[ChatMessage] = []
     anon_id: Optional[str] = None
+    topics_established: Optional[Dict[str, int]] = {}
 
     @field_validator("question")
     @classmethod
@@ -376,6 +412,38 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         # Step 0: Get source filter settings
         filters = get_disabled_filters()
         include_copyrighted = filters["include_copyrighted"] and INCLUDE_COPYRIGHTED_ENV
+
+        # Step 0.5: Background topic injection
+        _ensure_background_topics()
+        current_turn = len(request.messages)
+        matched_topics = match_background_topics(request.question)
+        topics_to_inject = []  # type: List[str]
+        for topic_key in matched_topics:
+            injection_turn = (request.topics_established or {}).get(topic_key, -99)
+            if current_turn - injection_turn > 6:
+                topics_to_inject.append(topic_key)
+
+        topic_context_parts = []  # type: List[str]
+        updated_topics = dict(request.topics_established or {})
+        if topics_to_inject:
+            topic_lookup = {t["topic_key"]: t for t in _background_topics}
+            for topic_key in topics_to_inject:
+                topic = topic_lookup.get(topic_key)
+                if not topic:
+                    continue
+                try:
+                    chunk_result = db.table("chunks").select("content").eq(
+                        "document_id", topic["document_id"]
+                    ).order("chunk_index").execute()
+                    if chunk_result.data:
+                        full_text = "\n\n".join(c["content"] for c in chunk_result.data)
+                        topic_context_parts.append(
+                            "[Position Paper: %s]\n%s" % (topic["title"], full_text)
+                        )
+                        updated_topics[topic_key] = current_turn
+                        logger.info("Injected background topic: %s (%d chunks)", topic_key, len(chunk_result.data))
+                except Exception:
+                    logger.exception("Failed to fetch chunks for topic %s", topic_key)
 
         # Step 1: Expand query into variants
         variants = expand_query(request.question)
@@ -515,6 +583,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             for i, c in enumerate(regular)
         )
 
+        if topic_context_parts:
+            topic_block = "\n\n---\n\n".join(topic_context_parts)
+            context = topic_block + "\n\n---\n\n" + context
+
         if lexicon:
             lex_context = "\n\n---\n\n".join(
                 f"[Lexicon] {c['content']}"
@@ -633,7 +705,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             logger.debug("Skipping conversation save — no authenticated user")
 
         # Send metadata and close
-        yield _sse(json.dumps({"citations": citations, "conversation_id": conversation_id, "message_id": message_id}))
+        meta = {"citations": citations, "conversation_id": conversation_id, "message_id": message_id}
+        if updated_topics:
+            meta["topics_established"] = updated_topics
+        yield _sse(json.dumps(meta))
         yield _sse("[DONE]")
 
     return StreamingResponse(generate(), media_type="text/event-stream")
