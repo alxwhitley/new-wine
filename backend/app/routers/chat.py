@@ -524,7 +524,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
         # Build conversation history for Anthropic Claude
         history = []
-        for msg in request.messages:
+        recent_messages = request.messages[-6:] if len(request.messages) > 6 else request.messages
+        for msg in recent_messages:
             if msg.role in ("user", "assistant"):
                 history.append({"role": msg.role, "content": msg.content})
         history.append({
