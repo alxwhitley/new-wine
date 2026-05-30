@@ -587,11 +587,18 @@ async def get_commentary(
 
     # --- Step 3: Vector search, filtered to book docs when available ---
     try:
-        result = db.rpc("match_chunks", {
-            "query_embedding": embedding,
-            "match_count": 30,
-            "include_copyrighted": filters["include_copyrighted"],
-        }).execute()
+        if book_doc_ids:
+            result = db.rpc("match_commentary_chunks", {
+                "query_embedding": embedding,
+                "match_count": 30,
+                "document_ids": list(book_doc_ids),
+            }).execute()
+        else:
+            result = db.rpc("match_chunks", {
+                "query_embedding": embedding,
+                "match_count": 30,
+                "include_copyrighted": filters["include_copyrighted"],
+            }).execute()
     except Exception:
         logger.exception("match_chunks RPC failed for commentary query")
         raise HTTPException(status_code=500, detail="Search service error")
@@ -600,8 +607,6 @@ async def get_commentary(
         if chunk.get("citation_mode") != "citable":
             continue
         if chunk.get("source_kind") != "commentary":
-            continue
-        if book_doc_ids and chunk.get("document_id") not in book_doc_ids:
             continue
         if is_chunk_disabled(chunk, study_filters):
             continue
