@@ -1488,7 +1488,6 @@ export default function StudyPage() {
         return;
       }
 
-      console.log('[verseData] setting:', data?.verse_id, data?.text?.substring(0, 30));
       setVerseData({
         verse_id: data.verse_id,
         book: ABBREV_TO_NAME[abbrev] ?? abbrev,
@@ -1811,10 +1810,7 @@ export default function StudyPage() {
         return res.json();
       })
       .then((data) => {
-        console.log('[commentary] raw response:', JSON.stringify(data));
-        console.log('[commentary] results count:', data?.results?.length);
         const newResults = data.results ?? [];
-        console.log('[commentary] setting results:', newResults?.length);
         if (isLoadMore) {
           setCommentaryResults((prev) => [...prev, ...newResults]);
         } else {
@@ -1837,7 +1833,6 @@ export default function StudyPage() {
   }, []);
 
   useEffect(() => {
-    console.log('[commentary effect] fired, verseData:', verseData?.verse_id, verseData?.text?.substring(0, 30));
     if (!verseData?.text) {
       setCommentaryResults([]);
       setActiveCommentary(null);
