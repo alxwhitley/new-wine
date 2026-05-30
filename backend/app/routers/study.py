@@ -604,6 +604,9 @@ async def get_commentary(
         logger.exception("match_chunks RPC failed for commentary query")
         raise HTTPException(status_code=500, detail="Search service error")
 
+    # Commentary docs use citation_mode='silent_context' for chat (to prevent
+    # inline citations) but are always shown in Study Mode.
+    # Do not add a citation_mode filter here.
     for chunk in (result.data or []):
         if chunk.get("source_kind") != "commentary":
             continue

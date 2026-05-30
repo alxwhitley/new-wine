@@ -42,6 +42,7 @@ BEGIN
   FROM chunks c
   JOIN documents d ON d.id = c.document_id
   WHERE c.document_id = ANY(document_ids)
+    AND d.source_kind = 'commentary'
   ORDER BY c.embedding <=> query_embedding
   LIMIT match_count;
 END;
