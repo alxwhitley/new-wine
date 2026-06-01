@@ -616,7 +616,7 @@ async def get_commentary(
         if doc_id in seen_docs:
             continue
         seen_docs.add(doc_id)
-        content = chunk.get("content", "")
+        content = _fetch_neighbor_content(db, doc_id, chunk.get("chunk_index", 0))
         excerpt = content[:200].rsplit(" ", 1)[0] + "..." if len(content) > 200 else content
         similarity = chunk.get("similarity", 0.0)
         author = chunk.get("author", "")
