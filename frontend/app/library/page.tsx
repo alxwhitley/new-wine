@@ -26,16 +26,6 @@ const SEARCH_SUGGESTIONS = [
   "Renewing the Mind",
 ];
 
-const TOPIC_GROUPS = [
-  { label: "Spirit & Gifts", tags: ["Baptism in the Holy Spirit", "Speaking in Tongues", "Gifts of the Spirit", "Prophecy", "Healing Ministry", "Signs and Wonders", "Anointing"] },
-  { label: "Prayer & Intercession", tags: ["Intercessory Prayer", "Hearing God's Voice", "Fasting and Prayer", "Prophetic Intercession", "Waiting on God"] },
-  { label: "Spiritual Warfare", tags: ["Spiritual Warfare", "Deliverance Ministry", "Strongholds in the Mind", "Armor of God", "Generational Curses"] },
-  { label: "Inner Healing & Identity", tags: ["Inner Healing", "Identity in Christ", "Overcoming Rejection", "Renewing the Mind", "Freedom in Christ", "Emotional Healing"] },
-  { label: "Worship & Encounter", tags: ["Revival", "Worship", "God's Presence", "Intimacy with God", "Fear of the Lord", "Spiritual Hunger"] },
-  { label: "Kingdom & Theology", tags: ["Kingdom of God", "Salvation", "Grace", "Atonement", "Holiness", "The Cross", "New Covenant"] },
-  { label: "Leadership & Ministry", tags: ["Fivefold Ministry", "Apostolic Ministry", "Pastoral Care", "Evangelism", "Women in Ministry", "Character in Leadership"] },
-  { label: "Church History & Revival", tags: ["Azusa Street Revival", "Pentecostal History", "Charismatic Renewal", "Early Church", "Smith Wigglesworth", "Kathryn Kuhlman"] },
-];
 
 const AUTHORS = [
   { name: "Derek Prince", years: "1915\u20132003", bio: "Cambridge-educated philosopher turned Bible teacher, Prince founded Derek Prince Ministries after a wartime conversion and became one of the most widely translated charismatic teachers of the 20th century, known especially for his work on deliverance, healing, and the Holy Spirit." },
@@ -171,11 +161,6 @@ export default function LibraryPage() {
     setQuery(text);
     setShowSuggestions(false);
     doSearch(text, activeTab);
-  }, [activeTab, doSearch]);
-
-  const handleTopicClick = useCallback((tag: string) => {
-    setQuery(tag);
-    doSearch(tag, activeTab);
   }, [activeTab, doSearch]);
 
   const handleCardClick = useCallback(async (id: string) => {
@@ -441,48 +426,6 @@ export default function LibraryPage() {
             {/* ── Articles tab ── */}
             {activeTab === "articles" && (
               <>
-                {/* Topic tags grid */}
-                {!hasSearched && (
-                  <div className="mb-8">
-                    <h3
-                      className="text-xs font-medium uppercase tracking-wider mb-4"
-                      style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif", letterSpacing: "0.08em" }}
-                    >
-                      Browse by Topic
-                    </h3>
-                    <div className="space-y-4">
-                      {TOPIC_GROUPS.map((group) => (
-                        <div key={group.label}>
-                          <p
-                            className="text-[11px] font-medium uppercase tracking-wider mb-1.5"
-                            style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif", letterSpacing: "0.06em" }}
-                          >
-                            {group.label}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {group.tags.map((tag) => (
-                              <button
-                                key={tag}
-                                onClick={() => handleTopicClick(tag)}
-                                className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer"
-                                style={{
-                                  color: "#d4b96a",
-                                  backgroundColor: "rgba(212, 185, 106, 0.12)",
-                                  border: "1px solid rgba(212, 185, 106, 0.25)",
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.22)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.12)"; }}
-                              >
-                                {tag}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Author cards */}
                 {!hasSearched && (
                   <div className="mb-8">
