@@ -69,7 +69,7 @@ export function Sidebar({
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const isChat = pathname === "/" || pathname.startsWith("/chat");
-  const isDiscover = pathname === "/search";
+  const isDiscover = pathname === "/library";
   const isStudy = pathname.startsWith("/study");
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export function Sidebar({
           Chat
         </Link>
         <Link
-          href="/search"
+          href="/library"
           onClick={onClose}
           className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
           style={{
@@ -146,7 +146,7 @@ export function Sidebar({
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isDiscover ? "#262624" : "transparent"; }}
         >
           <Compass className="h-4 w-4" />
-          Discover
+          Library
         </Link>
         <Link
           href="/study"

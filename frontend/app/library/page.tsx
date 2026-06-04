@@ -152,10 +152,130 @@ export default function SearchPage() {
     // Search view
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-5xl px-4 md:px-6 pt-12 pb-16">
-        {/* Search heading */}
+        {/* Page heading */}
         <h2 className="font-serif text-2xl md:text-3xl font-semibold text-foreground text-center mb-8">
-          Search the Library
+          Library
         </h2>
+
+        {/* Browse by Topic */}
+        <div className="mb-8">
+          <h3
+            className="text-xs font-medium uppercase tracking-wider mb-4"
+            style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif", letterSpacing: "0.08em" }}
+          >
+            Browse by Topic
+          </h3>
+          <div className="space-y-4">
+            {[
+              { label: "Spirit & Gifts", tags: ["Baptism in the Holy Spirit", "Speaking in Tongues", "Gifts of the Spirit", "Prophecy", "Healing Ministry", "Signs and Wonders", "Anointing"] },
+              { label: "Prayer & Intercession", tags: ["Intercessory Prayer", "Hearing God's Voice", "Fasting and Prayer", "Prophetic Intercession", "Waiting on God"] },
+              { label: "Spiritual Warfare", tags: ["Spiritual Warfare", "Deliverance Ministry", "Strongholds in the Mind", "Armor of God", "Generational Curses"] },
+              { label: "Inner Healing & Identity", tags: ["Inner Healing", "Identity in Christ", "Overcoming Rejection", "Renewing the Mind", "Freedom in Christ", "Emotional Healing"] },
+              { label: "Worship & Encounter", tags: ["Revival", "Worship", "God's Presence", "Intimacy with God", "Fear of the Lord", "Spiritual Hunger"] },
+              { label: "Kingdom & Theology", tags: ["Kingdom of God", "Salvation", "Grace", "Atonement", "Holiness", "The Cross", "New Covenant"] },
+              { label: "Leadership & Ministry", tags: ["Fivefold Ministry", "Apostolic Ministry", "Pastoral Care", "Evangelism", "Women in Ministry", "Character in Leadership"] },
+              { label: "Church History & Revival", tags: ["Azusa Street Revival", "Pentecostal History", "Charismatic Renewal", "Early Church", "Smith Wigglesworth", "Kathryn Kuhlman"] },
+            ].map((group) => (
+              <div key={group.label}>
+                <p
+                  className="text-[11px] font-medium uppercase tracking-wider mb-1.5"
+                  style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif", letterSpacing: "0.06em" }}
+                >
+                  {group.label}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.tags.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => {
+                        setQuery(tag);
+                        setSearching(true);
+                        setError(null);
+                        setArticle(null);
+                        setHasSearched(true);
+                        searchDocumentsFts({
+                          q: tag,
+                          source_kind: "magazine_article",
+                          include_copyrighted: true,
+                        })
+                          .then((res) => {
+                            setResults(res.results);
+                            setCount(res.count);
+                          })
+                          .catch(() => {
+                            setError("Search failed. Please try again.");
+                          })
+                          .finally(() => {
+                            setSearching(false);
+                          });
+                      }}
+                      className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer"
+                      style={{
+                        color: "#d4b96a",
+                        backgroundColor: "rgba(212, 185, 106, 0.12)",
+                        border: "1px solid rgba(212, 185, 106, 0.25)",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.22)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.12)"; }}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Browse by Author */}
+        <div className="mb-8">
+          <h3
+            className="text-xs font-medium uppercase tracking-wider mb-4"
+            style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif", letterSpacing: "0.08em" }}
+          >
+            Browse by Author
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { name: "Derek Prince", years: "1915\u20132003", bio: "Cambridge-educated philosopher turned Bible teacher, Prince founded Derek Prince Ministries after a wartime conversion and became one of the most widely translated charismatic teachers of the 20th century, known especially for his work on deliverance, healing, and the Holy Spirit." },
+              { name: "Bob Mumford", years: "b. 1930", bio: "Bible teacher and co-founder of New Wine Magazine, Mumford is known for his Kingdom of God teaching and his role in the charismatic renewal, still living and ministering through Lifechangers." },
+              { name: "Ern Baxter", years: "1914\u20131993", bio: "Canadian Pentecostal preacher regarded as one of the greatest orators of the 20th century, Baxter served as Bible teacher for William Branham\u2019s crusades and delivered his landmark \u201cThy Kingdom Come\u201d message to 5,000 leaders in Kansas City." },
+              { name: "Charles Simpson", years: "1937\u20132024", bio: "Baptist-turned-charismatic pastor from Mobile, Alabama who co-founded New Wine Magazine in 1969 and became a key leader in the charismatic renewal, known for his pastoral teaching on covenant community and spiritual authority." },
+              { name: "Don Basham", years: "1926\u20131989", bio: "Bible teacher and author who pioneered deliverance ministry in the charismatic movement, Basham served as editor of New Wine Magazine from 1975\u20131981 and was known for his accessible writing on the Holy Spirit and spiritual warfare." },
+              { name: "John Bevere", years: "b. 1959", bio: "Co-founder of Messenger International and bestselling author of The Bait of Satan and The Awe of God, Bevere is known globally for his bold teachings on the fear of the Lord, spiritual authority, and uncompromising discipleship." },
+              { name: "Michael Brown", years: "b. 1955", bio: "Scholar, apologist, and radio host with a PhD from NYU, Brown is a leading charismatic voice on the Jewish roots of Christianity, revival, and cultural apologetics, and has authored over 40 books." },
+              { name: "Jack Deere", years: "b. 1948", bio: "Former Dallas Seminary professor of Old Testament who became a charismatic theologian after encountering the gifts through John Wimber; best known for Surprised by the Power of the Spirit, a landmark defense of continuationism." },
+              { name: "Oswald J. Smith", years: "1889\u20131986", bio: "Canadian pastor, hymn writer, and missions statesman who founded The People\u2019s Church in Toronto; preached 12,000 sermons in 80 countries and was described by Billy Graham as \u201cthe greatest missionary statesman of our time.\u201d" },
+            ].map((author) => (
+              <div
+                key={author.name}
+                className="rounded-lg p-5 transition-colors"
+                style={{
+                  backgroundColor: "#262624",
+                  border: "1px solid #3c3c38",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
+              >
+                <h4 className="font-serif text-lg font-semibold text-foreground leading-snug">
+                  {author.name}
+                </h4>
+                <p
+                  className="text-xs mt-0.5"
+                  style={{ color: "#888780" }}
+                >
+                  {author.years}
+                </p>
+                <p
+                  className="text-sm mt-2 leading-relaxed"
+                  style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif" }}
+                >
+                  {author.bio}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Search bar */}
         <div className="flex gap-2">
