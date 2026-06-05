@@ -182,6 +182,7 @@ export interface DocumentSearchResult {
   year: number | null;
   topic_tags: string[];
   source_kind: string | null;
+  source_name: string | null;
   highlighted_snippet: string | null;
   rank: number;
 }

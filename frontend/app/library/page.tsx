@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
-import { Search, ArrowLeft, Loader2, Menu } from "lucide-react";
+import { Search, ArrowLeft, Loader2, Menu, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
@@ -211,16 +211,27 @@ export default function LibraryPage() {
   }
   const totalCount = unified.length;
 
+  // Split docs into articles vs sermons for grouped view
+  const articles = docResults.filter((d) => d.source_kind !== "sermon_transcript");
+  const sermons = docResults.filter((d) => d.source_kind === "sermon_transcript");
+
   // Render a doc card
-  const renderDocCard = (doc: DocumentSearchResult) => (
+  const renderDocCard = (doc: DocumentSearchResult) => {
+    const isNewWine = doc.source_kind !== "sermon_transcript" && (doc.source_name || "").toLowerCase().includes("new wine");
+    return (
     <button
       key={doc.id}
       onClick={() => handleCardClick(doc.id, doc.source_kind)}
       className="flex flex-col text-left cursor-pointer"
-      style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
+      style={{ position: "relative", backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
     >
+      {isNewWine && (
+        <span style={{ position: "absolute", top: "12px", right: "12px", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888880", backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid #3c3c38", borderRadius: "20px", padding: "3px 8px" }}>
+          New Wine
+        </span>
+      )}
       {doc.author && (
         <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
           {doc.author}
@@ -248,6 +259,7 @@ export default function LibraryPage() {
       )}
     </button>
   );
+  };
 
   // Render a book card
   const renderBookCard = (book: Book) => (
@@ -455,13 +467,16 @@ export default function LibraryPage() {
                 <button
                   onClick={() => setAuthorPanelOpen(!authorPanelOpen)}
                   className="min-h-[36px] text-sm cursor-pointer flex items-center"
-                  style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 12px" }}
+                  style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 12px", gap: "6px" }}
                 >
                   {selectedAuthors.length === 0
                     ? "All Authors"
                     : selectedAuthors.length === 1
                       ? selectedAuthors[0]
                       : `${selectedAuthors.length} Authors Selected`}
+                  <ChevronDown
+                    style={{ width: "14px", height: "14px", color: "#888880", transition: "transform 0.2s ease", transform: authorPanelOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+                  />
                 </button>
 
                 {authorPanelOpen && (
@@ -502,16 +517,21 @@ export default function LibraryPage() {
               </div>
 
               {/* Era dropdown */}
-              <select
-                value={eraFilter}
-                onChange={(e) => setEraFilter(e.target.value)}
-                className="min-h-[36px] text-sm cursor-pointer focus:outline-none appearance-none"
-                style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 12px" }}
-              >
-                <option value="">All Eras</option>
-                <option value="classic">Classic</option>
-                <option value="contemporary">Contemporary</option>
-              </select>
+              <div className="relative flex items-center">
+                <select
+                  value={eraFilter}
+                  onChange={(e) => setEraFilter(e.target.value)}
+                  className="min-h-[36px] text-sm cursor-pointer focus:outline-none appearance-none"
+                  style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 30px 8px 12px" }}
+                >
+                  <option value="">All Eras</option>
+                  <option value="classic">Classic</option>
+                  <option value="contemporary">Contemporary</option>
+                </select>
+                <ChevronDown
+                  style={{ position: "absolute", right: "10px", width: "14px", height: "14px", color: "#888880", pointerEvents: "none" }}
+                />
+              </div>
 
               {/* Explore Authors link */}
               <Link
@@ -556,6 +576,45 @@ export default function LibraryPage() {
               <div className="mt-2">
                 {totalCount === 0 ? (
                   <p className="text-center text-muted-foreground mt-12">No results found</p>
+                ) : contentFilter === "all" ? (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
+                    <div className="flex flex-col" style={{ gap: "32px" }}>
+                      {articles.length > 0 && (
+                        <div>
+                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Articles</span>
+                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                            {articles.map((doc) => renderDocCard(doc))}
+                          </div>
+                        </div>
+                      )}
+                      {sermons.length > 0 && (
+                        <div>
+                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Sermons</span>
+                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                            {sermons.map((doc) => renderDocCard(doc))}
+                          </div>
+                        </div>
+                      )}
+                      {bookResults.length > 0 && (
+                        <div>
+                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Books</span>
+                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                            {bookResults.map((book) => renderBookCard(book))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 ) : (
                   <>
                     <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
