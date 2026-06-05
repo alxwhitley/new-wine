@@ -45,11 +45,6 @@ function sourceKindForTab(tab: Tab): string | null {
   return null;
 }
 
-function sourceBadge(tab: Tab, year?: number | null): string {
-  if (tab === "sermons") return `Sermon${year ? ` | ${year}` : ""}`;
-  return `Magazine Article${year ? ` | ${year}` : ""}`;
-}
-
 export default function LibraryPage() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
@@ -231,22 +226,21 @@ export default function LibraryPage() {
     <button
       key={doc.id}
       onClick={() => handleCardClick(doc.id)}
-      className="group flex flex-col text-left rounded-lg border border-border p-4 transition-colors hover:border-gold/40"
-      style={{ backgroundColor: "#2a2a27" }}
+      className="group flex flex-col text-left rounded-xl p-5 min-h-[140px] transition-colors cursor-pointer"
+      style={{ backgroundColor: "#262624", border: "1px solid #3c3c38" }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.1)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
     >
-      <h3 className="font-serif text-lg text-foreground group-hover:text-citation transition-colors leading-snug">
+      <h3 className="font-serif text-xl font-semibold leading-snug" style={{ color: "#e6e6e6" }}>
         {doc.title}
       </h3>
-      {doc.author && (
-        <p className="text-xs text-muted-foreground mt-1">{doc.author}</p>
-      )}
-      <div className="flex flex-wrap gap-1.5 mt-2">
-        <span
-          className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
-          style={{ backgroundColor: "#3c3c38", color: "#c1c1b8" }}
-        >
-          {sourceBadge(tab, doc.year)}
-        </span>
+      <div className="flex items-baseline gap-2 mt-1.5">
+        {doc.author && (
+          <p className="text-sm" style={{ color: "#d4b96a" }}>{doc.author}</p>
+        )}
+        {doc.year && (
+          <p className="text-xs ml-auto" style={{ color: "#c1c1b8" }}>{doc.year}</p>
+        )}
       </div>
       {doc.highlighted_snippet && (
         <p
@@ -257,12 +251,12 @@ export default function LibraryPage() {
         />
       )}
       {doc.topic_tags && doc.topic_tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {doc.topic_tags.map((tag) => (
+        <div className="flex flex-wrap gap-1.5 mt-auto pt-3">
+          {doc.topic_tags.slice(0, 2).map((tag) => (
             <span
               key={tag}
-              className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium"
-              style={{ backgroundColor: "rgba(212, 185, 106, 0.12)", color: "#d4b96a" }}
+              className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+              style={{ backgroundColor: "rgba(212, 185, 106, 0.08)", border: "1px solid rgba(212, 185, 106, 0.3)", color: "#d4b96a" }}
             >
               {tag}
             </span>
@@ -528,14 +522,14 @@ export default function LibraryPage() {
                 {AUTHORS.map((author) => (
                   <div
                     key={author.name}
-                    className="rounded-lg p-5 transition-colors"
+                    className="rounded-xl p-5 transition-colors"
                     style={{ backgroundColor: "#262624", border: "1px solid #3c3c38" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.1)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
                   >
-                    <h4 className="font-serif text-lg font-semibold text-foreground leading-snug">{author.name}</h4>
-                    <p className="text-xs mt-0.5" style={{ color: "#888780" }}>{author.years}</p>
-                    <p className="text-sm mt-2 leading-relaxed" style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif" }}>{author.bio}</p>
+                    <h4 className="font-serif text-lg font-semibold leading-snug" style={{ color: "#e6e6e6" }}>{author.name}</h4>
+                    <p className="text-sm mt-1" style={{ color: "#c1c1b8" }}>{author.years}</p>
+                    <p className="text-sm mt-2 leading-relaxed line-clamp-4" style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif" }}>{author.bio}</p>
                   </div>
                 ))}
               </div>
@@ -601,19 +595,19 @@ export default function LibraryPage() {
                           {bookResults.map((book) => (
                             <div
                               key={book.id}
-                              className="rounded-lg p-5 transition-colors"
+                              className="rounded-xl p-5 transition-colors"
                               style={{ backgroundColor: "#262624", border: "1px solid #3c3c38" }}
-                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.1)"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
                             >
-                              <h4 className="font-serif text-lg font-semibold text-foreground leading-snug">
+                              <h4 className="font-serif text-lg font-semibold leading-snug" style={{ color: "#e6e6e6" }}>
                                 {book.title}
                               </h4>
-                              <p className="text-xs mt-1 font-medium" style={{ color: "#d4b96a" }}>
+                              <p className="text-sm mt-1" style={{ color: "#d4b96a" }}>
                                 {book.author}
                               </p>
                               {book.description && (
-                                <p className="text-sm mt-2 leading-relaxed" style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif" }}>
+                                <p className="text-sm mt-2 leading-relaxed line-clamp-3" style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif" }}>
                                   {book.description}
                                 </p>
                               )}
