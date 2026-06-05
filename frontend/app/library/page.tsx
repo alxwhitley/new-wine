@@ -483,33 +483,6 @@ export default function LibraryPage() {
             {/* ── Articles tab ── */}
             {activeTab === "articles" && (
               <>
-                {/* Author cards */}
-                {!hasSearched && (
-                  <div className="mb-8">
-                    <h3
-                      className="text-xs font-medium uppercase tracking-wider mb-4"
-                      style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif", letterSpacing: "0.08em" }}
-                    >
-                      Browse by Author
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {AUTHORS.map((author) => (
-                        <div
-                          key={author.name}
-                          className="rounded-lg p-5 transition-colors"
-                          style={{ backgroundColor: "#262624", border: "1px solid #3c3c38" }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
-                        >
-                          <h4 className="font-serif text-lg font-semibold text-foreground leading-snug">{author.name}</h4>
-                          <p className="text-xs mt-0.5" style={{ color: "#888780" }}>{author.years}</p>
-                          <p className="text-sm mt-2 leading-relaxed" style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif" }}>{author.bio}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Search results */}
                 {searching && (
                   <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
