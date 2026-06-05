@@ -226,10 +226,10 @@ export default function LibraryPage() {
     <button
       key={doc.id}
       onClick={() => handleCardClick(doc.id)}
-      className="flex flex-col text-left transition-colors cursor-pointer"
-      style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px" }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
+      className="flex flex-col text-left cursor-pointer"
+      style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
+      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
     >
       {doc.author && (
         <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -515,10 +515,10 @@ export default function LibraryPage() {
                 {AUTHORS.map((author) => (
                   <div
                     key={author.name}
-                    className="flex flex-col transition-colors"
-                    style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
+                    className="flex flex-col"
+                    style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
                   >
                     <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45 }}>{author.name}</h4>
                     <p style={{ fontSize: "11px", color: "#888880", marginTop: "4px" }}>{author.years}</p>
@@ -589,10 +589,10 @@ export default function LibraryPage() {
                           {bookResults.map((book) => (
                             <div
                               key={book.id}
-                              className="flex flex-col transition-colors"
-                              style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px" }}
-                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
+                              className="flex flex-col"
+                              style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
                             >
                               <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                                 {book.author}
