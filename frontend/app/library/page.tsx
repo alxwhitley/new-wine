@@ -309,8 +309,25 @@ export default function LibraryPage() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to results
               </button>
-              <h1 className="font-serif text-2xl font-semibold text-foreground leading-tight">{article.title}</h1>
-              {article.author && <p className="text-sm text-muted-foreground mt-2">{article.author}</p>}
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h1 className="font-serif text-2xl font-semibold text-foreground leading-tight">{article.title}</h1>
+                  {article.author && <p className="text-sm text-muted-foreground mt-2">{article.author}</p>}
+                </div>
+                {article.source_kind === "sermon_transcript" && article.url && (
+                  <a
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 rounded px-3 py-1 text-sm transition-colors"
+                    style={{ border: "1px solid #3c3c38", color: "#c1c1b8" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)"; e.currentTarget.style.color = "#e6e6e6"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
+                  >
+                    Visit Original Source
+                  </a>
+                )}
+              </div>
               {article.issue && (
                 <p className="text-xs mt-1" style={{ color: "#c1c1b8" }}>
                   {(() => {
