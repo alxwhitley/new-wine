@@ -71,9 +71,13 @@ async def search_documents(
     try:
         db = get_supabase()
 
+        # For multi-author, pass first author to RPC and post-filter the rest
+        authors = [a.strip() for a in author.split(",") if a.strip()] if author else []
+        rpc_author = authors[0] if len(authors) == 1 else None
+
         result = db.rpc("search_documents", {
             "query_text": q,
-            "author_filter": author,
+            "author_filter": rpc_author,
             "source_kind_filter": source_kind,
             "include_copyrighted": include_copyrighted,
         }).execute()
@@ -91,6 +95,11 @@ async def search_documents(
             # Apply era filter (RPC doesn't support it natively)
             if era and doc_extra.get("era") != era:
                 continue
+            # Apply multi-author filter (post-filter when >1 author)
+            if len(authors) > 1:
+                row_author = (row.get("author") or "").lower()
+                if not any(a.lower() in row_author for a in authors):
+                    continue
             snippet = row.get("highlighted_snippet")
             if snippet:
                 snippet = _strip_metadata_header(snippet)
@@ -137,7 +146,12 @@ async def browse_documents(
         if era:
             query = query.eq("era", era)
         if author:
-            query = query.ilike("author", f"%{author}%")
+            authors = [a.strip() for a in author.split(",") if a.strip()]
+            if len(authors) == 1:
+                query = query.ilike("author", f"%{authors[0]}%")
+            elif authors:
+                or_clauses = ",".join(f"author.ilike.%{a}%" for a in authors)
+                query = query.or_(or_clauses)
 
         result = query.execute()
 

@@ -28,7 +28,12 @@ async def list_books(
         if era:
             query = query.eq("era", era)
         if author:
-            query = query.ilike("author", f"%{author}%")
+            authors = [a.strip() for a in author.split(",") if a.strip()]
+            if len(authors) == 1:
+                query = query.ilike("author", f"%{authors[0]}%")
+            elif authors:
+                or_clauses = ",".join(f"author.ilike.%{a}%" for a in authors)
+                query = query.or_(or_clauses)
 
         result = query.execute()
 

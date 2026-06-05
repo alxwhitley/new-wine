@@ -27,10 +27,17 @@ const SEARCH_SUGGESTIONS = [
   "Renewing the Mind",
 ];
 
-// Known authors for the dropdown
-const KNOWN_AUTHORS = [
-  "Derek Prince", "Bob Mumford", "Ern Baxter", "Charles Simpson",
-  "Don Basham", "John Bevere", "Michael Brown", "Jack Deere", "Oswald J. Smith",
+// Author data for the filter panel
+const AUTHOR_DATA = [
+  { name: "Derek Prince", years: "1915–2003", specialty: "Specialised in deliverance, spiritual warfare, and foundational Spirit-filled living." },
+  { name: "Bob Mumford", years: "b. 1930", specialty: "Specialised in Kingdom of God theology and the Father heart of God." },
+  { name: "Ern Baxter", years: "1914–1993", specialty: "Specialised in Kingdom proclamation, worship, and Spirit-empowered preaching." },
+  { name: "Charles Simpson", years: "1937–2024", specialty: "Specialised in covenant community, pastoral care, and charismatic church life." },
+  { name: "Don Basham", years: "1926–1989", specialty: "Specialised in Holy Spirit baptism, deliverance ministry, and spiritual authority." },
+  { name: "John Bevere", years: "b. 1959", specialty: "Specialised in the fear of the Lord, spiritual authority, and uncompromising discipleship." },
+  { name: "Michael Brown", years: "b. 1955", specialty: "Specialised in revival, Jewish roots of Christianity, and cultural apologetics." },
+  { name: "Jack Deere", years: "b. 1948", specialty: "Specialised in the continuation of spiritual gifts, prophecy, and hearing God\u2019s voice." },
+  { name: "Oswald J. Smith", years: "1889–1986", specialty: "Specialised in evangelism, world missions, and the Spirit-empowered church." },
 ];
 
 type UnifiedResult =
@@ -52,9 +59,10 @@ export default function LibraryPage() {
   const [query, setQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchBarRef = useRef<HTMLDivElement>(null);
-  const [authorFilter, setAuthorFilter] = useState("");
-  const [classicActive, setClassicActive] = useState(false);
-  const [contemporaryActive, setContempActive] = useState(false);
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
+  const [authorPanelOpen, setAuthorPanelOpen] = useState(false);
+  const authorPanelRef = useRef<HTMLDivElement>(null);
+  const [eraFilter, setEraFilter] = useState("");
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
 
   // Results
@@ -68,9 +76,10 @@ export default function LibraryPage() {
   const [articleLoading, setArticleLoading] = useState(false);
 
   // Compute effective era
-  const effectiveEra = (classicActive && !contemporaryActive) ? "classic"
-    : (!classicActive && contemporaryActive) ? "contemporary"
-    : undefined; // both on or both off = no filter
+  const effectiveEra = eraFilter || undefined;
+
+  // Compute comma-separated author string for API
+  const authorParam = selectedAuthors.length > 0 ? selectedAuthors.join(",") : undefined;
 
   // Fetch data on filter change
   const fetchData = useCallback(async (q?: string) => {
@@ -99,7 +108,7 @@ export default function LibraryPage() {
               source_kind: sourceKind,
               include_copyrighted: true,
               era: effectiveEra,
-              author: authorFilter || undefined,
+              author: authorParam,
             }).then((res) => { newDocs = res.results; })
           );
         } else {
@@ -108,7 +117,7 @@ export default function LibraryPage() {
               source_kind: sourceKind,
               include_copyrighted: true,
               era: effectiveEra,
-              author: authorFilter || undefined,
+              author: authorParam,
             }).then((res) => { newDocs = res.results; })
           );
         }
@@ -119,7 +128,7 @@ export default function LibraryPage() {
           fetchBooks({
             q: q?.trim() || undefined,
             era: effectiveEra,
-            author: authorFilter || undefined,
+            author: authorParam,
           }).then((res) => { newBooks = res.results; })
         );
       }
@@ -132,18 +141,21 @@ export default function LibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [contentFilter, effectiveEra, authorFilter]);
+  }, [contentFilter, effectiveEra, authorParam]);
 
   // Initial load + refetch on filter changes
   useEffect(() => {
     fetchData(query);
-  }, [contentFilter, effectiveEra, authorFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [contentFilter, effectiveEra, authorParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dismiss suggestions on click outside
+  // Dismiss suggestions / author panel on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (searchBarRef.current && !searchBarRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
+      }
+      if (authorPanelRef.current && !authorPanelRef.current.contains(e.target as Node)) {
+        setAuthorPanelOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -438,42 +450,68 @@ export default function LibraryPage() {
 
             {/* Filter row */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              {/* Author dropdown */}
-              <select
-                value={authorFilter}
-                onChange={(e) => setAuthorFilter(e.target.value)}
-                className="min-h-[36px] rounded-lg px-3 text-sm bg-transparent cursor-pointer focus:outline-none"
-                style={{ border: "1px solid #3c3c38", color: authorFilter ? "#e6e6e0" : "#c1c1b8" }}
-              >
-                <option value="">All Authors</option>
-                {KNOWN_AUTHORS.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
+              {/* Author filter trigger + panel */}
+              <div className="relative" ref={authorPanelRef}>
+                <button
+                  onClick={() => setAuthorPanelOpen(!authorPanelOpen)}
+                  className="min-h-[36px] text-sm cursor-pointer flex items-center"
+                  style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 12px" }}
+                >
+                  {selectedAuthors.length === 0
+                    ? "All Authors"
+                    : selectedAuthors.length === 1
+                      ? selectedAuthors[0]
+                      : `${selectedAuthors.length} Authors Selected`}
+                </button>
 
-              {/* Era toggles */}
-              <button
-                onClick={() => setClassicActive(!classicActive)}
-                className="min-h-[36px] rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
-                style={{
-                  backgroundColor: classicActive ? "#2e2d2b" : "transparent",
-                  border: classicActive ? "1px solid #b49238" : "1px solid #3c3c38",
-                  color: classicActive ? "#e6e6e0" : "#c1c1b8",
-                }}
+                {authorPanelOpen && (
+                  <div
+                    className="absolute left-0 top-full mt-2 z-30 flex flex-col"
+                    style={{ width: "320px", height: "360px", backgroundColor: "#1f1e1d", border: "1px solid #3c3c38", borderRadius: "12px", padding: "12px" }}
+                  >
+                    <div className="flex-1 overflow-y-auto flex flex-col gap-2">
+                      {AUTHOR_DATA.map((author) => {
+                        const isSelected = selectedAuthors.includes(author.name);
+                        return (
+                          <button
+                            key={author.name}
+                            onClick={() => {
+                              setSelectedAuthors((prev) =>
+                                isSelected ? prev.filter((a) => a !== author.name) : [...prev, author.name]
+                              );
+                            }}
+                            className="text-left cursor-pointer transition-colors"
+                            style={{
+                              backgroundColor: isSelected ? "#2a2926" : "#262624",
+                              border: isSelected ? "1px solid #b49238" : "1px solid #3c3c38",
+                              borderRadius: "8px",
+                              padding: "10px 14px",
+                            }}
+                            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
+                            onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#262624"; }}
+                          >
+                            <p className="font-serif" style={{ fontSize: "14px", color: "#e6e6e0" }}>{author.name}</p>
+                            <p style={{ fontSize: "11px", color: "#888880", marginTop: "2px" }}>{author.years}</p>
+                            <p style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", marginTop: "4px", lineHeight: 1.5 }}>{author.specialty}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Era dropdown */}
+              <select
+                value={eraFilter}
+                onChange={(e) => setEraFilter(e.target.value)}
+                className="min-h-[36px] text-sm cursor-pointer focus:outline-none appearance-none"
+                style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 12px" }}
               >
-                Classic
-              </button>
-              <button
-                onClick={() => setContempActive(!contemporaryActive)}
-                className="min-h-[36px] rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
-                style={{
-                  backgroundColor: contemporaryActive ? "#2e2d2b" : "transparent",
-                  border: contemporaryActive ? "1px solid #b49238" : "1px solid #3c3c38",
-                  color: contemporaryActive ? "#e6e6e0" : "#c1c1b8",
-                }}
-              >
-                Contemporary
-              </button>
+                <option value="">All Eras</option>
+                <option value="classic">Classic</option>
+                <option value="contemporary">Contemporary</option>
+              </select>
 
               {/* Explore Authors link */}
               <Link
