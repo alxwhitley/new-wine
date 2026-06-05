@@ -228,11 +228,38 @@ export interface ArticleResponse {
   year: number | null;
   source_name: string | null;
   url: string | null;
+  source_kind: string | null;
   content: string;
 }
 
-export async function getArticle(id: string): Promise<ArticleResponse> {
-  const res = await fetch(`${API_URL}/document/${id}/article`);
+export async function getArticle(id: string, version?: string): Promise<ArticleResponse> {
+  const sp = new URLSearchParams();
+  if (version) sp.set("version", version);
+  const qs = sp.toString();
+  const res = await fetch(`${API_URL}/document/${id}/article${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error("Article fetch failed");
+  return res.json();
+}
+
+// Books
+export interface Book {
+  id: string;
+  title: string;
+  author: string;
+  description: string | null;
+  topic_tags: string[];
+  created_at: string;
+}
+
+export interface BooksResponse {
+  results: Book[];
+  count: number;
+}
+
+export async function fetchBooks(q?: string): Promise<BooksResponse> {
+  const sp = new URLSearchParams();
+  if (q) sp.set("q", q);
+  const res = await fetch(`${API_URL}/library/books?${sp.toString()}`);
+  if (!res.ok) throw new Error("Books fetch failed");
   return res.json();
 }

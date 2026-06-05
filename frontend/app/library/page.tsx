@@ -8,8 +8,8 @@ import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
-import { searchDocumentsFts, browseDocuments, getArticle } from "@/lib/api";
-import type { DocumentSearchResult, ArticleResponse } from "@/lib/api";
+import { searchDocumentsFts, browseDocuments, getArticle, fetchBooks } from "@/lib/api";
+import type { DocumentSearchResult, ArticleResponse, Book } from "@/lib/api";
 
 type Tab = "articles" | "authors" | "sermons" | "books";
 
@@ -82,6 +82,11 @@ export default function LibraryPage() {
   const [sermonBrowseLoading, setSermonBrowseLoading] = useState(true);
   const [sermonBrowseLoaded, setSermonBrowseLoaded] = useState(false);
 
+  // Browse state — books
+  const [bookResults, setBookResults] = useState<Book[]>([]);
+  const [bookLoading, setBookLoading] = useState(false);
+  const [bookLoaded, setBookLoaded] = useState(false);
+
   // Article reader state
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [articleLoading, setArticleLoading] = useState(false);
@@ -108,6 +113,20 @@ export default function LibraryPage() {
     }
   }, [activeTab, sermonBrowseLoaded]);
 
+  // Load books when tab first activated
+  useEffect(() => {
+    if (activeTab === "books" && !bookLoaded) {
+      setBookLoading(true);
+      fetchBooks()
+        .then((res) => setBookResults(res.results))
+        .catch(() => {})
+        .finally(() => {
+          setBookLoading(false);
+          setBookLoaded(true);
+        });
+    }
+  }, [activeTab, bookLoaded]);
+
   // Dismiss suggestions on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -129,23 +148,38 @@ export default function LibraryPage() {
     setError(null);
     setArticle(null);
     setShowSuggestions(false);
-  }, []);
+    // Reload full book list when switching to books after a search
+    if (tab === "books" && bookLoaded) {
+      setBookLoading(true);
+      fetchBooks()
+        .then((res) => setBookResults(res.results))
+        .catch(() => {})
+        .finally(() => setBookLoading(false));
+    }
+  }, [bookLoaded]);
 
   const doSearch = useCallback(async (q: string, tab: Tab) => {
-    const kind = sourceKindForTab(tab);
-    if (!kind || !q.trim()) return;
+    if (!q.trim()) return;
     setSearching(true);
     setError(null);
     setArticle(null);
     setHasSearched(true);
     try {
-      const res = await searchDocumentsFts({
-        q: q.trim(),
-        source_kind: kind,
-        include_copyrighted: true,
-      });
-      setResults(res.results);
-      setCount(res.count);
+      if (tab === "books") {
+        const res = await fetchBooks(q.trim());
+        setBookResults(res.results);
+        setCount(res.count);
+      } else {
+        const kind = sourceKindForTab(tab);
+        if (!kind) return;
+        const res = await searchDocumentsFts({
+          q: q.trim(),
+          source_kind: kind,
+          include_copyrighted: true,
+        });
+        setResults(res.results);
+        setCount(res.count);
+      }
     } catch {
       setError("Search failed. Please try again.");
     } finally {
@@ -167,14 +201,15 @@ export default function LibraryPage() {
     setArticleLoading(true);
     setError(null);
     try {
-      const data = await getArticle(id);
+      const version = activeTab === "sermons" ? "rewritten" : "original";
+      const data = await getArticle(id, version);
       setArticle(data);
     } catch {
       setError("Failed to load article.");
     } finally {
       setArticleLoading(false);
     }
-  }, []);
+  }, [activeTab]);
 
   const handleBackToResults = useCallback(() => {
     setArticle(null);
@@ -287,6 +322,11 @@ export default function LibraryPage() {
                 </p>
               )}
               <div className="border-t border-border my-6" />
+              {article.source_kind === "sermon_transcript" && (
+                <p className="text-sm italic mb-6" style={{ color: "#c1c1b8" }}>
+                  These are structured notes drawn from the sermon, not a word-for-word transcript.
+                </p>
+              )}
               <div className="prose prose-invert max-w-none">
                 <ReactMarkdown>
                   {article.content.replace(/^#\s+[^\n]*\n?/, "").replace(/^\*by\s+[^\n]*\n?/, "").trimStart()}
@@ -305,7 +345,7 @@ export default function LibraryPage() {
   // Determine browse data for current tab
   const currentBrowse = activeTab === "articles" ? articleBrowse : activeTab === "sermons" ? sermonBrowse : [];
   const currentBrowseLoading = activeTab === "articles" ? articleBrowseLoading : activeTab === "sermons" ? sermonBrowseLoading : false;
-  const showSearch = activeTab !== "authors" && activeTab !== "books";
+  const showSearch = activeTab !== "authors";
 
   return (
     <div className="flex h-screen bg-background">
@@ -552,9 +592,49 @@ export default function LibraryPage() {
 
             {/* ── Books tab ── */}
             {activeTab === "books" && (
-              <div className="flex justify-center mt-16">
-                <p className="text-sm" style={{ color: "#c1c1b8" }}>Books coming soon.</p>
-              </div>
+              <>
+                {(searching || bookLoading) && (
+                  <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
+                )}
+                {!searching && !bookLoading && (
+                  <div className="mt-4">
+                    {(hasSearched ? bookResults : bookResults).length === 0 ? (
+                      <p className="text-center text-muted-foreground mt-12">
+                        {hasSearched ? "No books found." : (bookLoaded ? "No books found." : "")}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground mb-4">
+                          {bookResults.length} book{bookResults.length !== 1 ? "s" : ""}
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {bookResults.map((book) => (
+                            <div
+                              key={book.id}
+                              className="rounded-lg p-5 transition-colors"
+                              style={{ backgroundColor: "#262624", border: "1px solid #3c3c38" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
+                            >
+                              <h4 className="font-serif text-lg font-semibold text-foreground leading-snug">
+                                {book.title}
+                              </h4>
+                              <p className="text-xs mt-1 font-medium" style={{ color: "#d4b96a" }}>
+                                {book.author}
+                              </p>
+                              {book.description && (
+                                <p className="text-sm mt-2 leading-relaxed" style={{ color: "#c1c1b8", fontFamily: "Inter, sans-serif" }}>
+                                  {book.description}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -13,7 +13,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   ├── raw/               # Freshly scraped transcripts
 │   │   ├── cleaned/           # Groq-cleaned, ready for ingest
 │   │   ├── ingested/          # Already in Supabase
-│   │   └── youtube_tracker.xlsx
+│   │   ├── youtube_tracker.xlsx
+│   │   └── individual_videos.xlsx  # Individual video ingestion tracker
 │   ├── magazine/              # New Wine Magazine pipeline
 │   │   ├── 01_to_extract/     # Drop PDFs here (~198 issues)
 │   │   ├── 02_extracted/      # Per-issue .md articles + raw_text.txt
@@ -188,6 +189,7 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 | `scripts/scrape_individual_videos.py` | Individual YouTube video ingestion from xlsx tracker |
 | `scripts/scrape_channel_titles.py` | Dump all video titles from YouTube channels to CSV |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq) — used by ingest.py and ingest_magazine.py |
+| `scripts/backfill_phrase_refs.py` | Backfill bible_references via phrase matching (no LLM). Flags: `--source-kind`, `--author`, `--limit`, `--dry-run`, `--force`, `--chunks` |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content (run 2026-04-17) |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)

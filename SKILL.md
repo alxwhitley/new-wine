@@ -375,10 +375,10 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 ---
 
-## Corpus (as of 2026-05-23)
-- **2,617 documents** total, **124,346 chunks**
-- By source_kind: 1,779 word_study, 557 sermon_transcript, 186 commentary, 58 unknown, 33 magazine_article, 4 lexicon
-- By source_type: 1,783 background, 557 sermon, 186 commentary, 49 book, 33 magazine_article, 5 paper, 4 other
+## Corpus (as of 2026-06-03)
+- **~2,628 documents** total, **~124,346 chunks**
+- By source_kind: 1,779 word_study, ~568 sermon_transcript (includes 11 Daniel Kolenda), 186 commentary, 58 unknown, 33 magazine_article, 4 lexicon
+- By source_type: 1,783 background, ~568 sermon, 186 commentary, 49 book, 33 magazine_article, 5 paper, 4 other
 - Copyrighted: 1,862 | Non-copyrighted: 755
 - **Lexicons:** TBESG 11,034 chunks (complete), TBESH 10,258 chunks (complete), TFLSJ 15,767 chunks across 2 docs (complete)
 - **Verses:** 31,098 rows (WEB, 66-book Protestant canon, complete)
@@ -453,7 +453,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Left panel:** Search bar, verse card, "View Chapter" button, chapter view. No interlinear or definition content.
 - **Chapter view:** Flowing text with inline `<sup>` verse numbers. Verses queried via `.like("verse_id", "JHN.1.%")` pattern. Active verse highlighted with `#2f2f2c` background. Clicking a verse in chapter view loads it as the active verse.
 - **Right panel tabs:** `CorpusTab` type: `"commentaries" | "word_study" | "jewish"`. Tab state lifted to parent `StudyPage` for cross-panel coordination.
-  - **Commentary tab:** `GET /study/commentary` with book-level pre-filter + scoped vector search. Pre-filter uses `match_commentary_by_book` RPC (migration 028) to get doc IDs for the current book via `bible_references && ARRAY[book_name]`. When doc IDs found, calls `match_commentary_chunks` RPC (migration 029) with `document_ids uuid[]` parameter for scoped vector search. Falls back to unfiltered `match_chunks` if no book matches. No `citation_mode` filter — commentary docs use `silent_context` for chat but are always shown in study mode. Author boosts: Matthew Henry +0.15, JFB +0.08, Adam Clarke +0.03, others −0.10. Sermon results via `match_sermon_chunks_by_ref` RPC (max 2, ±1 neighbor expansion). Paginated at 3 per page. Study mode uses `study_filters` that ignores `source_name` toggles (chat-only).
+  - **Commentary tab:** `GET /study/commentary` with book-level pre-filter + scoped vector search. Pre-filter uses `match_commentary_by_book` RPC (migration 028) to get doc IDs for the current book via `bible_references && ARRAY[book_name]`. When doc IDs found, calls `match_commentary_chunks` RPC (migration 029) with `document_ids uuid[]` parameter for scoped vector search. Falls back to unfiltered `match_chunks` if no book matches. No `citation_mode` filter — commentary docs use `silent_context` for chat but are always shown in study mode. Author boosts: Matthew Henry +0.15, JFB +0.08, Adam Clarke +0.03, others −0.10. **Both commentary and sermon results use `_fetch_neighbor_content()` (±1 chunk expansion)** for richer context. Sermon results via `match_sermon_chunks_by_ref` RPC (max 2). Paginated at 3 per page. Study mode uses `study_filters` that ignores `source_name` toggles (chat-only).
   - **Word Study tab:** Interlinear word blocks → definition panel → Precept Austin excerpt → "From the Library" corpus results. Interlinear fetch gated by `corpusTab === "word_study"` (not fetched on every verse change). Auto-selects first interlinear word when tokens load.
   - **Jewish Perspective tab:** Inline generate flow (no modal/disclaimer). Single "Generate Jewish Perspective" button → spinner → cached result. `jpCacheChecked` state tracks whether cache has been checked. Auto-checks cache on verse change. 3 sections: Jewish Background, Messianic Perspective, Cultural Context + sources list. Generated via Gemini 2.5 Flash with Google Search grounding. Env var: `GOOGLE_API_KEY` (not `GEMINI_API_KEY`).
 - **Excerpt panel:** `GET /study/excerpt?strongs=G####` endpoint returns Precept Austin word study article for selected Strong's number. Tries `excerpts` table first, falls back to concatenated chunks.
@@ -499,7 +499,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Hebrew word study pipeline ready** — `scrape_preceptaustin.py --language hebrew --fetch` and `ingest_preceptaustin.py --language hebrew` ready to run.
 - **Taxonomy expanded to 257 tags** (May 2026) — old 100-tag/8-category taxonomy replaced with 257-tag/15-category version. `taxonomy.md` and `scripts/taxonomy.py` updated. Existing documents still have old tags — need full retag via `retag_sermons.py --force`.
 - **Full sermon retag not yet run** — `scripts/retag_sermons.py` tested with `--limit 3 --dry-run --suggest-tags --force` (3/3 success). Full run (`--force`) needed to retag all ~557 sermon_transcript documents against new taxonomy.
-- **Individual video ingestion not yet run** — `scripts/scrape_individual_videos.py` built and tested (syntax only). 10 videos pre-populated in xlsx (2 Michael Brown, 8 Jack Deere). Run with `rh-individual`.
+- ~~**Individual video ingestion not yet run**~~ — **DONE:** 10 original videos ingested + 11 Daniel Kolenda Cessationism series added. 2 Kolenda videos ingested (1 & 2), 9 failed ("No captions and Whisper failed") — reset to Pending for retry. Likely yt-dlp cookie/bot detection issue.
 - **Uncommitted changes from May 2026 session** — taxonomy.md, taxonomy.py, retag_sermons.py, scrape_channel_titles.py, channel_titles.csv, tag_suggestions.jsonl. Need commit + push.
 - **3 YouTube channels not found** — Dr. Michael Brown (`@AskDrBrown`), Jack Deere (`@JackDeere`), Myles Munroe (`@MylesMonroeTV`) handles don't resolve on YouTube. Need correct handles or removal from channel_titles scraper.
 - **Individual Videos dashboard card** — added to corpus admin Pipelines group, filters on `source_name ILIKE '%Individual Videos%'`.
@@ -512,6 +512,11 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Migration 029 pending** — `match_commentary_chunks` RPC must be run in Supabase SQL Editor before scoped commentary vector search works. Without it, the commentary endpoint will 500 when book doc IDs are found.
 - **Commentary `bible_references` mismatch** — `match_commentary_by_book` uses `&&` (array overlap) checking for bare book name `"John"`, but backfill stored references as `"John 3:16"`, `"John 1:1"` etc. The RPC only matches docs that happen to have the bare book name in their array. Needs either SQL function change to `LIKE 'John%'` or backfill to also include bare book names.
 - ~~**Commentary not showing in study mode for disabled authors**~~ — **FIXED:** `study_filters` in commentary endpoint ignores `source_name` toggles (chat-only).
+- ~~**Commentary chunks returned single chunk content in study mode**~~ — **FIXED (2026-06-03):** `/study/commentary` now uses `_fetch_neighbor_content()` (±1 chunk) for commentary results, matching existing sermon expansion. Deployed to Railway.
+- **Commentary chunk bible_references 4.3% coverage** — `backfill_phrase_refs.py` phrase matching only populated 3,731 of 86,501 commentary chunks. Remaining 82,770 need LLM-based extraction (similar to `backfill_chunks` for sermons).
+- **Sermon chunk bible_references backfill complete** — 582 docs, 4,881 chunks, 11,557 refs, 0 failures (see `logs/backfill_chunks.log`).
+- **9 Kolenda Cessationism videos pending retry** — videos 3–11 failed with "No captions and Whisper failed". Reset to Pending in `individual_videos.xlsx`. Likely need fresh `scripts/youtube_cookies.txt` or different yt-dlp player client args.
+- **Daniel Kolenda not in youtube_tracker.xlsx** — only in `individual_videos.xlsx` (not a channel scrape).
 
 ---
 

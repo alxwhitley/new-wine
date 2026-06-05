@@ -1,7 +1,8 @@
 import logging
 import re
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.db.supabase import get_supabase
 
@@ -41,13 +42,16 @@ async def get_document(document_id: str):
 
 
 @router.get("/{document_id}/article")
-async def get_article(document_id: str):
+async def get_article(
+    document_id: str,
+    version: Optional[str] = Query("rewritten", description="Content version: 'rewritten' or 'original'"),
+):
     try:
         db = get_supabase()
 
         doc_result = (
             db.table("documents")
-            .select("id, title, author, issue, year, source_name, url")
+            .select("id, title, author, issue, year, source_name, url, source_kind")
             .eq("id", document_id)
             .execute()
         )
@@ -58,25 +62,32 @@ async def get_article(document_id: str):
 
         chunks_result = (
             db.table("chunks")
-            .select("chunk_index, content")
+            .select("chunk_index, content, rewritten_content")
             .eq("document_id", document_id)
             .order("chunk_index")
             .execute()
         )
 
+        use_rewritten = version == "rewritten"
+
         # Reassemble full text: strip per-chunk metadata header, then trim overlap
         parts = []
         for chunk in chunks_result.data:
-            content = chunk.get("content", "")
-            # Strip metadata header from each chunk: [New Wine | ...]
-            if content.startswith("["):
-                bracket_end = content.find("]")
-                if bracket_end != -1:
-                    content = content[bracket_end + 1:].lstrip()
-            if chunk["chunk_index"] == 0:
-                parts.append(content)
+            # Pick rewritten_content if requested and available, else fall back
+            if use_rewritten and chunk.get("rewritten_content"):
+                # Rewritten content is already clean — no metadata header or overlap
+                parts.append(chunk["rewritten_content"])
             else:
-                parts.append(content[CHUNK_OVERLAP:] if len(content) > CHUNK_OVERLAP else content)
+                content = chunk.get("content", "")
+                # Strip metadata header from each chunk: [New Wine | ...]
+                if content.startswith("["):
+                    bracket_end = content.find("]")
+                    if bracket_end != -1:
+                        content = content[bracket_end + 1:].lstrip()
+                if chunk["chunk_index"] == 0:
+                    parts.append(content)
+                else:
+                    parts.append(content[CHUNK_OVERLAP:] if len(content) > CHUNK_OVERLAP else content)
 
         full_text = "\n".join(parts)
 
@@ -96,6 +107,7 @@ async def get_article(document_id: str):
             "year": doc.get("year"),
             "source_name": doc.get("source_name"),
             "url": doc.get("url"),
+            "source_kind": doc.get("source_kind"),
             "content": full_text,
         }
     except HTTPException:
