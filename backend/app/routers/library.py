@@ -13,16 +13,22 @@ router = APIRouter()
 @router.get("/books")
 async def list_books(
     q: Optional[str] = Query(None, description="Search title, author, or description"),
+    era: Optional[str] = Query(None, description="Filter by era: 'classic' or 'contemporary'"),
+    author: Optional[str] = Query(None, description="Filter by author name"),
 ):
-    """Return all books, optionally filtered by a text query."""
+    """Return all books, optionally filtered by a text query, era, or author."""
     try:
         db = get_supabase()
         query = (
             db.table("books")
-            .select("id, title, author, description, topic_tags, created_at")
+            .select("id, title, author, description, topic_tags, created_at, era")
             .order("author")
             .order("title")
         )
+        if era:
+            query = query.eq("era", era)
+        if author:
+            query = query.ilike("author", f"%{author}%")
 
         result = query.execute()
 

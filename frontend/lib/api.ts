@@ -181,6 +181,7 @@ export interface DocumentSearchResult {
   issue: string | null;
   year: number | null;
   topic_tags: string[];
+  source_kind: string | null;
   highlighted_snippet: string | null;
   rank: number;
 }
@@ -195,12 +196,14 @@ export async function searchDocumentsFts(params: {
   author?: string;
   source_kind?: string;
   include_copyrighted?: boolean;
+  era?: string;
 }): Promise<DocumentSearchResponse> {
   const sp = new URLSearchParams();
   if (params.q) sp.set("q", params.q);
   if (params.author) sp.set("author", params.author);
   if (params.source_kind) sp.set("source_kind", params.source_kind);
   if (params.include_copyrighted !== undefined) sp.set("include_copyrighted", String(params.include_copyrighted));
+  if (params.era) sp.set("era", params.era);
   const res = await fetch(`${API_URL}/search/documents?${sp.toString()}`);
   if (!res.ok) throw new Error("Document search failed");
   return res.json();
@@ -210,10 +213,14 @@ export async function searchDocumentsFts(params: {
 export async function browseDocuments(params?: {
   source_kind?: string;
   include_copyrighted?: boolean;
+  era?: string;
+  author?: string;
 }): Promise<DocumentSearchResponse> {
   const sp = new URLSearchParams();
   if (params?.source_kind) sp.set("source_kind", params.source_kind);
   if (params?.include_copyrighted !== undefined) sp.set("include_copyrighted", String(params.include_copyrighted));
+  if (params?.era) sp.set("era", params.era);
+  if (params?.author) sp.set("author", params.author);
   const res = await fetch(`${API_URL}/search/documents/browse?${sp.toString()}`);
   if (!res.ok) throw new Error("Browse request failed");
   return res.json();
@@ -256,9 +263,15 @@ export interface BooksResponse {
   count: number;
 }
 
-export async function fetchBooks(q?: string): Promise<BooksResponse> {
+export async function fetchBooks(params?: {
+  q?: string;
+  era?: string;
+  author?: string;
+}): Promise<BooksResponse> {
   const sp = new URLSearchParams();
-  if (q) sp.set("q", q);
+  if (params?.q) sp.set("q", params.q);
+  if (params?.era) sp.set("era", params.era);
+  if (params?.author) sp.set("author", params.author);
   const res = await fetch(`${API_URL}/library/books?${sp.toString()}`);
   if (!res.ok) throw new Error("Books fetch failed");
   return res.json();

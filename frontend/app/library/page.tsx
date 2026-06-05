@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
+import Link from "next/link";
 import { Search, ArrowLeft, Loader2, Menu } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
@@ -11,39 +12,30 @@ import LoginModal from "@/components/auth/LoginModal";
 import { searchDocumentsFts, browseDocuments, getArticle, fetchBooks } from "@/lib/api";
 import type { DocumentSearchResult, ArticleResponse, Book } from "@/lib/api";
 
-type Tab = "articles" | "authors" | "sermons" | "books";
+type ContentFilter = "all" | "articles" | "sermons" | "books";
 
-const TABS: { key: Tab; label: string }[] = [
+const CONTENT_FILTERS: { key: ContentFilter; label: string }[] = [
+  { key: "all", label: "All" },
   { key: "articles", label: "Articles" },
-  { key: "authors", label: "Authors" },
   { key: "sermons", label: "Sermons" },
   { key: "books", label: "Books" },
 ];
 
 const SEARCH_SUGGESTIONS = [
-  "Hearing God's Voice",
+  "Hearing God\u2019s Voice",
   "Identity in Christ",
   "Renewing the Mind",
 ];
 
-
-const AUTHORS = [
-  { name: "Derek Prince", years: "1915\u20132003", bio: "Cambridge-educated philosopher turned Bible teacher, Prince founded Derek Prince Ministries after a wartime conversion and became one of the most widely translated charismatic teachers of the 20th century, known especially for his work on deliverance, healing, and the Holy Spirit." },
-  { name: "Bob Mumford", years: "b. 1930", bio: "Bible teacher and co-founder of New Wine Magazine, Mumford is known for his Kingdom of God teaching and his role in the charismatic renewal, still living and ministering through Lifechangers." },
-  { name: "Ern Baxter", years: "1914\u20131993", bio: "Canadian Pentecostal preacher regarded as one of the greatest orators of the 20th century, Baxter served as Bible teacher for William Branham\u2019s crusades and delivered his landmark \u201cThy Kingdom Come\u201d message to 5,000 leaders in Kansas City." },
-  { name: "Charles Simpson", years: "1937\u20132024", bio: "Baptist-turned-charismatic pastor from Mobile, Alabama who co-founded New Wine Magazine in 1969 and became a key leader in the charismatic renewal, known for his pastoral teaching on covenant community and spiritual authority." },
-  { name: "Don Basham", years: "1926\u20131989", bio: "Bible teacher and author who pioneered deliverance ministry in the charismatic movement, Basham served as editor of New Wine Magazine from 1975\u20131981 and was known for his accessible writing on the Holy Spirit and spiritual warfare." },
-  { name: "John Bevere", years: "b. 1959", bio: "Co-founder of Messenger International and bestselling author of The Bait of Satan and The Awe of God, Bevere is known globally for his bold teachings on the fear of the Lord, spiritual authority, and uncompromising discipleship." },
-  { name: "Michael Brown", years: "b. 1955", bio: "Scholar, apologist, and radio host with a PhD from NYU, Brown is a leading charismatic voice on the Jewish roots of Christianity, revival, and cultural apologetics, and has authored over 40 books." },
-  { name: "Jack Deere", years: "b. 1948", bio: "Former Dallas Seminary professor of Old Testament who became a charismatic theologian after encountering the gifts through John Wimber; best known for Surprised by the Power of the Spirit, a landmark defense of continuationism." },
-  { name: "Oswald J. Smith", years: "1889\u20131986", bio: "Canadian pastor, hymn writer, and missions statesman who founded The People\u2019s Church in Toronto; preached 12,000 sermons in 80 countries and was described by Billy Graham as \u201cthe greatest missionary statesman of our time.\u201d" },
+// Known authors for the dropdown
+const KNOWN_AUTHORS = [
+  "Derek Prince", "Bob Mumford", "Ern Baxter", "Charles Simpson",
+  "Don Basham", "John Bevere", "Michael Brown", "Jack Deere", "Oswald J. Smith",
 ];
 
-function sourceKindForTab(tab: Tab): string | null {
-  if (tab === "articles") return "magazine_article";
-  if (tab === "sermons") return "sermon_transcript";
-  return null;
-}
+type UnifiedResult =
+  | { type: "doc"; data: DocumentSearchResult }
+  | { type: "book"; data: Book };
 
 export default function LibraryPage() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
@@ -56,71 +48,96 @@ export default function LibraryPage() {
     loadMessages,
   } = useConversations(user?.id);
 
-  const [activeTab, setActiveTab] = useState<Tab>("articles");
-
-  // Search state
+  // Search + filter state
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DocumentSearchResult[]>([]);
-  const [count, setCount] = useState<number | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const [authorFilter, setAuthorFilter] = useState("");
+  const [classicActive, setClassicActive] = useState(false);
+  const [contemporaryActive, setContempActive] = useState(false);
+  const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
 
-  // Browse state — articles
-  const [articleBrowse, setArticleBrowse] = useState<DocumentSearchResult[]>([]);
-  const [articleBrowseLoading, setArticleBrowseLoading] = useState(true);
-
-  // Browse state — sermons
-  const [sermonBrowse, setSermonBrowse] = useState<DocumentSearchResult[]>([]);
-  const [sermonBrowseLoading, setSermonBrowseLoading] = useState(true);
-  const [sermonBrowseLoaded, setSermonBrowseLoaded] = useState(false);
-
-  // Browse state — books
+  // Results
+  const [docResults, setDocResults] = useState<DocumentSearchResult[]>([]);
   const [bookResults, setBookResults] = useState<Book[]>([]);
-  const [bookLoading, setBookLoading] = useState(false);
-  const [bookLoaded, setBookLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Article reader state
+  // Article reader
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [articleLoading, setArticleLoading] = useState(false);
 
-  // Load articles on mount
-  useEffect(() => {
-    browseDocuments({ source_kind: "magazine_article", include_copyrighted: true })
-      .then((res) => setArticleBrowse(res.results))
-      .catch(() => {})
-      .finally(() => setArticleBrowseLoading(false));
-  }, []);
+  // Compute effective era
+  const effectiveEra = (classicActive && !contemporaryActive) ? "classic"
+    : (!classicActive && contemporaryActive) ? "contemporary"
+    : undefined; // both on or both off = no filter
 
-  // Load sermons when tab first activated
-  useEffect(() => {
-    if (activeTab === "sermons" && !sermonBrowseLoaded) {
-      setSermonBrowseLoading(true);
-      browseDocuments({ source_kind: "sermon_transcript", include_copyrighted: true })
-        .then((res) => setSermonBrowse(res.results))
-        .catch(() => {})
-        .finally(() => {
-          setSermonBrowseLoading(false);
-          setSermonBrowseLoaded(true);
-        });
-    }
-  }, [activeTab, sermonBrowseLoaded]);
+  // Fetch data on filter change
+  const fetchData = useCallback(async (q?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const includeArticles = contentFilter === "all" || contentFilter === "articles";
+      const includeSermons = contentFilter === "all" || contentFilter === "sermons";
+      const includeBooks = contentFilter === "all" || contentFilter === "books";
 
-  // Load books when tab first activated
-  useEffect(() => {
-    if (activeTab === "books" && !bookLoaded) {
-      setBookLoading(true);
-      fetchBooks()
-        .then((res) => setBookResults(res.results))
-        .catch(() => {})
-        .finally(() => {
-          setBookLoading(false);
-          setBookLoaded(true);
-        });
+      const promises: Promise<void>[] = [];
+      let newDocs: DocumentSearchResult[] = [];
+      let newBooks: Book[] = [];
+
+      if (includeArticles || includeSermons) {
+        // Determine source_kind filter
+        let sourceKind: string | undefined;
+        if (includeArticles && !includeSermons) sourceKind = "magazine_article";
+        else if (includeSermons && !includeArticles) sourceKind = "sermon_transcript";
+        else sourceKind = undefined; // both — no filter
+
+        if (q && q.trim()) {
+          promises.push(
+            searchDocumentsFts({
+              q: q.trim(),
+              source_kind: sourceKind,
+              include_copyrighted: true,
+              era: effectiveEra,
+              author: authorFilter || undefined,
+            }).then((res) => { newDocs = res.results; })
+          );
+        } else {
+          promises.push(
+            browseDocuments({
+              source_kind: sourceKind,
+              include_copyrighted: true,
+              era: effectiveEra,
+              author: authorFilter || undefined,
+            }).then((res) => { newDocs = res.results; })
+          );
+        }
+      }
+
+      if (includeBooks) {
+        promises.push(
+          fetchBooks({
+            q: q?.trim() || undefined,
+            era: effectiveEra,
+            author: authorFilter || undefined,
+          }).then((res) => { newBooks = res.results; })
+        );
+      }
+
+      await Promise.all(promises);
+      setDocResults(newDocs);
+      setBookResults(newBooks);
+    } catch {
+      setError("Failed to load results.");
+    } finally {
+      setLoading(false);
     }
-  }, [activeTab, bookLoaded]);
+  }, [contentFilter, effectiveEra, authorFilter]);
+
+  // Initial load + refetch on filter changes
+  useEffect(() => {
+    fetchData(query);
+  }, [contentFilter, effectiveEra, authorFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dismiss suggestions on click outside
   useEffect(() => {
@@ -133,70 +150,32 @@ export default function LibraryPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Reset search state on tab change
-  const handleTabChange = useCallback((tab: Tab) => {
-    setActiveTab(tab);
-    setQuery("");
-    setResults([]);
-    setCount(null);
-    setHasSearched(false);
-    setError(null);
-    setArticle(null);
-    setShowSuggestions(false);
-    // Reload full book list when switching to books after a search
-    if (tab === "books" && bookLoaded) {
-      setBookLoading(true);
-      fetchBooks()
-        .then((res) => setBookResults(res.results))
-        .catch(() => {})
-        .finally(() => setBookLoading(false));
-    }
-  }, [bookLoaded]);
-
-  const doSearch = useCallback(async (q: string, tab: Tab) => {
-    if (!q.trim()) return;
-    setSearching(true);
-    setError(null);
-    setArticle(null);
-    setHasSearched(true);
-    try {
-      if (tab === "books") {
-        const res = await fetchBooks(q.trim());
-        setBookResults(res.results);
-        setCount(res.count);
-      } else {
-        const kind = sourceKindForTab(tab);
-        if (!kind) return;
-        const res = await searchDocumentsFts({
-          q: q.trim(),
-          source_kind: kind,
-          include_copyrighted: true,
-        });
-        setResults(res.results);
-        setCount(res.count);
-      }
-    } catch {
-      setError("Search failed. Please try again.");
-    } finally {
-      setSearching(false);
-    }
-  }, []);
-
   const handleSearch = useCallback(() => {
-    doSearch(query, activeTab);
-  }, [query, activeTab, doSearch]);
+    setShowSuggestions(false);
+    fetchData(query);
+  }, [query, fetchData]);
 
   const handleSuggestionClick = useCallback((text: string) => {
     setQuery(text);
     setShowSuggestions(false);
-    doSearch(text, activeTab);
-  }, [activeTab, doSearch]);
+    fetchData(text);
+  }, [fetchData]);
 
-  const handleCardClick = useCallback(async (id: string) => {
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSearch();
+      }
+    },
+    [handleSearch],
+  );
+
+  const handleCardClick = useCallback(async (id: string, sourceKind?: string | null) => {
     setArticleLoading(true);
     setError(null);
     try {
-      const version = activeTab === "sermons" ? "rewritten" : "original";
+      const version = sourceKind === "sermon_transcript" ? "rewritten" : "original";
       const data = await getArticle(id, version);
       setArticle(data);
     } catch {
@@ -204,28 +183,27 @@ export default function LibraryPage() {
     } finally {
       setArticleLoading(false);
     }
-  }, [activeTab]);
+  }, []);
 
   const handleBackToResults = useCallback(() => {
     setArticle(null);
   }, []);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        setShowSuggestions(false);
-        handleSearch();
-      }
-    },
-    [handleSearch],
-  );
+  // Build unified results
+  const unified: UnifiedResult[] = [];
+  for (const doc of docResults) {
+    unified.push({ type: "doc", data: doc });
+  }
+  for (const book of bookResults) {
+    unified.push({ type: "book", data: book });
+  }
+  const totalCount = unified.length;
 
-  // Shared card renderer
-  const renderDocCard = (doc: DocumentSearchResult, tab: Tab) => (
+  // Render a doc card
+  const renderDocCard = (doc: DocumentSearchResult) => (
     <button
       key={doc.id}
-      onClick={() => handleCardClick(doc.id)}
+      onClick={() => handleCardClick(doc.id, doc.source_kind)}
       className="flex flex-col text-left cursor-pointer"
       style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
@@ -257,6 +235,30 @@ export default function LibraryPage() {
         <p className="mt-auto" style={{ fontSize: "11px", color: "#555550", paddingTop: "10px" }}>{doc.year}</p>
       )}
     </button>
+  );
+
+  // Render a book card
+  const renderBookCard = (book: Book) => (
+    <div
+      key={book.id}
+      className="flex flex-col"
+      style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
+      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+    >
+      <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+        {book.author}
+      </p>
+      <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
+        {book.title}
+      </h4>
+      <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
+      {book.description && (
+        <p className="line-clamp-2" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>
+          {book.description}
+        </p>
+      )}
+    </div>
   );
 
   // Article reader view
@@ -346,11 +348,6 @@ export default function LibraryPage() {
     );
   }
 
-  // Determine browse data for current tab
-  const currentBrowse = activeTab === "articles" ? articleBrowse : activeTab === "sermons" ? sermonBrowse : [];
-  const currentBrowseLoading = activeTab === "articles" ? articleBrowseLoading : activeTab === "sermons" ? sermonBrowseLoading : false;
-  const showSearch = activeTab !== "authors";
-
   return (
     <div className="flex h-screen bg-background">
       <Sidebar
@@ -387,233 +384,153 @@ export default function LibraryPage() {
               Library
             </h2>
 
-            {/* Tabs */}
-            <div className="flex justify-center gap-6 mb-8 border-b border-border">
-              {TABS.map((tab) => (
+            {/* Search bar */}
+            <div className="relative mb-4" ref={searchBarRef}>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onFocus={() => setShowSuggestions(true)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Search articles, authors, topics..."
+                  className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
+                />
                 <button
-                  key={tab.key}
-                  onClick={() => handleTabChange(tab.key)}
-                  className="relative pb-3 text-sm font-medium transition-colors cursor-pointer"
-                  style={{ color: activeTab === tab.key ? "#e6e6e6" : "#c1c1b8" }}
-                  onMouseEnter={(e) => { if (activeTab !== tab.key) e.currentTarget.style.color = "#e6e6e6"; }}
-                  onMouseLeave={(e) => { if (activeTab !== tab.key) e.currentTarget.style.color = "#c1c1b8"; }}
+                  onClick={handleSearch}
+                  disabled={loading}
+                  className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
                 >
-                  {tab.label}
-                  {activeTab === tab.key && (
-                    <span
-                      className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
-                      style={{ backgroundColor: "#b49238" }}
-                    />
-                  )}
+                  <Search className="h-4 w-4" />
+                  <span className="hidden sm:inline">Search</span>
+                </button>
+              </div>
+
+              {showSuggestions && (
+                <div
+                  className="absolute left-0 right-0 top-full mt-1 rounded-lg border border-border p-3 z-20"
+                  style={{ backgroundColor: "#2a2a27" }}
+                >
+                  <p className="text-[11px] uppercase tracking-wider mb-2" style={{ color: "#888780", fontFamily: "Inter, sans-serif" }}>
+                    Suggested topics
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SEARCH_SUGGESTIONS.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => handleSuggestionClick(s)}
+                        className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer"
+                        style={{
+                          color: "#d4b96a",
+                          backgroundColor: "rgba(212, 185, 106, 0.12)",
+                          border: "1px solid rgba(212, 185, 106, 0.25)",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.22)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.12)"; }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Filter row */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              {/* Author dropdown */}
+              <select
+                value={authorFilter}
+                onChange={(e) => setAuthorFilter(e.target.value)}
+                className="min-h-[36px] rounded-lg px-3 text-sm bg-transparent cursor-pointer focus:outline-none"
+                style={{ border: "1px solid #3c3c38", color: authorFilter ? "#e6e6e0" : "#c1c1b8" }}
+              >
+                <option value="">All Authors</option>
+                {KNOWN_AUTHORS.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+
+              {/* Era toggles */}
+              <button
+                onClick={() => setClassicActive(!classicActive)}
+                className="min-h-[36px] rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
+                style={{
+                  backgroundColor: classicActive ? "#2e2d2b" : "transparent",
+                  border: classicActive ? "1px solid #b49238" : "1px solid #3c3c38",
+                  color: classicActive ? "#e6e6e0" : "#c1c1b8",
+                }}
+              >
+                Classic
+              </button>
+              <button
+                onClick={() => setContempActive(!contemporaryActive)}
+                className="min-h-[36px] rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
+                style={{
+                  backgroundColor: contemporaryActive ? "#2e2d2b" : "transparent",
+                  border: contemporaryActive ? "1px solid #b49238" : "1px solid #3c3c38",
+                  color: contemporaryActive ? "#e6e6e0" : "#c1c1b8",
+                }}
+              >
+                Contemporary
+              </button>
+
+              {/* Explore Authors link */}
+              <Link
+                href="/library/authors"
+                className="ml-auto min-h-[36px] rounded-lg px-3 flex items-center text-sm transition-colors"
+                style={{ border: "1px solid #3c3c38", color: "#c1c1b8" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)"; e.currentTarget.style.color = "#e6e6e0"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
+              >
+                Explore Authors
+              </Link>
+            </div>
+
+            {/* Content type pills */}
+            <div className="flex gap-2 mb-6">
+              {CONTENT_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setContentFilter(f.key)}
+                  className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer"
+                  style={{
+                    backgroundColor: contentFilter === f.key ? "rgba(212, 185, 106, 0.12)" : "transparent",
+                    border: contentFilter === f.key ? "1px solid rgba(212, 185, 106, 0.3)" : "1px solid #3c3c38",
+                    color: contentFilter === f.key ? "#d4b96a" : "#c1c1b8",
+                  }}
+                >
+                  {f.label}
                 </button>
               ))}
             </div>
 
-            {/* Search bar — hidden on Authors and Books tabs */}
-            {showSearch && (
-              <div className="relative mb-8" ref={searchBarRef}>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => setShowSuggestions(true)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Search articles, authors, topics..."
-                    className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
-                  />
-                  <button
-                    onClick={() => { setShowSuggestions(false); handleSearch(); }}
-                    disabled={searching || !query.trim()}
-                    className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
-                  >
-                    <Search className="h-4 w-4" />
-                    <span className="hidden sm:inline">Search</span>
-                  </button>
-                </div>
-
-                {/* Suggestions dropdown */}
-                {showSuggestions && (
-                  <div
-                    className="absolute left-0 right-0 top-full mt-1 rounded-lg border border-border p-3 z-20"
-                    style={{ backgroundColor: "#2a2a27" }}
-                  >
-                    <p className="text-[11px] uppercase tracking-wider mb-2" style={{ color: "#888780", fontFamily: "Inter, sans-serif" }}>
-                      Suggested topics
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {SEARCH_SUGGESTIONS.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => handleSuggestionClick(s)}
-                          className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer"
-                          style={{
-                            color: "#d4b96a",
-                            backgroundColor: "rgba(212, 185, 106, 0.12)",
-                            border: "1px solid rgba(212, 185, 106, 0.25)",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.22)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.12)"; }}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Error */}
             {error && <p className="text-sm text-red-400 mt-4 text-center">{error}</p>}
 
-            {/* ── Articles tab ── */}
-            {activeTab === "articles" && (
-              <>
-                {/* Search results */}
-                {searching && (
-                  <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
-                )}
-                {!searching && hasSearched && count !== null && (
-                  <div className="mt-4">
-                    {results.length === 0 ? (
-                      <p className="text-center text-muted-foreground mt-12">No results found</p>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground mb-4">{count} result{count !== 1 ? "s" : ""}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-                          {results.map((doc) => renderDocCard(doc, "articles"))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Browse listing */}
-                {!searching && !hasSearched && (
-                  <div className="mt-4">
-                    {articleBrowseLoading ? (
-                      <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
-                    ) : articleBrowse.length === 0 ? (
-                      <p className="text-center text-muted-foreground mt-12">No articles yet</p>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground mb-4">{articleBrowse.length} article{articleBrowse.length !== 1 ? "s" : ""}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-                          {articleBrowse.map((doc) => renderDocCard(doc, "articles"))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </>
+            {/* Loading */}
+            {loading && (
+              <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
             )}
 
-            {/* ── Authors tab ── */}
-            {activeTab === "authors" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-                {AUTHORS.map((author) => (
-                  <div
-                    key={author.name}
-                    className="flex flex-col"
-                    style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-                  >
-                    <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45 }}>{author.name}</h4>
-                    <p style={{ fontSize: "11px", color: "#888880", marginTop: "4px" }}>{author.years}</p>
-                    <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
-                    <p className="line-clamp-4" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>{author.bio}</p>
-                  </div>
-                ))}
+            {/* Results */}
+            {!loading && (
+              <div className="mt-2">
+                {totalCount === 0 ? (
+                  <p className="text-center text-muted-foreground mt-12">No results found</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                      {unified.map((item) =>
+                        item.type === "doc"
+                          ? renderDocCard(item.data)
+                          : renderBookCard(item.data)
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
-            )}
-
-            {/* ── Sermons tab ── */}
-            {activeTab === "sermons" && (
-              <>
-                {searching && (
-                  <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
-                )}
-                {!searching && hasSearched && count !== null && (
-                  <div className="mt-4">
-                    {results.length === 0 ? (
-                      <p className="text-center text-muted-foreground mt-12">No results found</p>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground mb-4">{count} result{count !== 1 ? "s" : ""}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-                          {results.map((doc) => renderDocCard(doc, "sermons"))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-                {!searching && !hasSearched && (
-                  <div className="mt-4">
-                    {sermonBrowseLoading ? (
-                      <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
-                    ) : sermonBrowse.length === 0 ? (
-                      <p className="text-center text-muted-foreground mt-12">No sermons yet</p>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground mb-4">{sermonBrowse.length} sermon{sermonBrowse.length !== 1 ? "s" : ""}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-                          {sermonBrowse.map((doc) => renderDocCard(doc, "sermons"))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* ── Books tab ── */}
-            {activeTab === "books" && (
-              <>
-                {(searching || bookLoading) && (
-                  <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
-                )}
-                {!searching && !bookLoading && (
-                  <div className="mt-4">
-                    {(hasSearched ? bookResults : bookResults).length === 0 ? (
-                      <p className="text-center text-muted-foreground mt-12">
-                        {hasSearched ? "No books found." : (bookLoaded ? "No books found." : "")}
-                      </p>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground mb-4">
-                          {bookResults.length} book{bookResults.length !== 1 ? "s" : ""}
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-                          {bookResults.map((book) => (
-                            <div
-                              key={book.id}
-                              className="flex flex-col"
-                              style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
-                              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-                            >
-                              <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                                {book.author}
-                              </p>
-                              <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
-                                {book.title}
-                              </h4>
-                              <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
-                              {book.description && (
-                                <p className="line-clamp-3" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>
-                                  {book.description}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </>
             )}
           </div>
         </div>

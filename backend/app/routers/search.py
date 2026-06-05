@@ -66,6 +66,7 @@ async def search_documents(
     author: Optional[str] = Query(None, description="Author name filter"),
     source_kind: Optional[str] = Query("magazine_article", description="Filter by source_kind — excludes sermon_transcript by default"),
     include_copyrighted: bool = Query(True, description="Include copyrighted content"),
+    era: Optional[str] = Query(None, description="Filter by era: 'classic' or 'contemporary'"),
 ):
     try:
         db = get_supabase()
@@ -77,15 +78,19 @@ async def search_documents(
             "include_copyrighted": include_copyrighted,
         }).execute()
 
-        # Fetch topic_tags for returned documents
+        # Fetch topic_tags + era for returned documents
         doc_ids = [row["id"] for row in result.data]
-        tags_map = {}
+        extra_map = {}
         if doc_ids:
-            tags_result = db.table("documents").select("id, topic_tags").in_("id", doc_ids).execute()
-            tags_map = {r["id"]: r.get("topic_tags") or [] for r in tags_result.data}
+            extra_result = db.table("documents").select("id, topic_tags, era").in_("id", doc_ids).execute()
+            extra_map = {r["id"]: r for r in extra_result.data}
 
         results = []
         for row in result.data:
+            doc_extra = extra_map.get(row["id"], {})
+            # Apply era filter (RPC doesn't support it natively)
+            if era and doc_extra.get("era") != era:
+                continue
             snippet = row.get("highlighted_snippet")
             if snippet:
                 snippet = _strip_metadata_header(snippet)
@@ -95,7 +100,7 @@ async def search_documents(
                 "author": _clean_author(row.get("author")),
                 "issue": row.get("issue"),
                 "year": row.get("year"),
-                "topic_tags": tags_map.get(row["id"], []),
+                "topic_tags": doc_extra.get("topic_tags") or [],
                 "highlighted_snippet": snippet,
                 "rank": row.get("rank"),
             })
@@ -113,13 +118,15 @@ async def search_documents(
 async def browse_documents(
     source_kind: Optional[str] = Query("magazine_article", description="Filter by source_kind"),
     include_copyrighted: bool = Query(True, description="Include copyrighted content"),
+    era: Optional[str] = Query(None, description="Filter by era: 'classic' or 'contemporary'"),
+    author: Optional[str] = Query(None, description="Author name filter"),
 ):
     """List all documents of a given source_kind, ordered by year/issue descending."""
     try:
         db = get_supabase()
         query = (
             db.table("documents")
-            .select("id, title, author, issue, year, topic_tags")
+            .select("id, title, author, issue, year, topic_tags, source_kind")
             .order("year", desc=True)
             .order("issue", desc=True)
         )
@@ -127,6 +134,10 @@ async def browse_documents(
             query = query.eq("source_kind", source_kind)
         if not include_copyrighted:
             query = query.eq("is_copyrighted", False)
+        if era:
+            query = query.eq("era", era)
+        if author:
+            query = query.ilike("author", f"%{author}%")
 
         result = query.execute()
 
@@ -139,6 +150,7 @@ async def browse_documents(
                     "issue": row.get("issue"),
                     "year": row.get("year"),
                     "topic_tags": row.get("topic_tags") or [],
+                    "source_kind": row.get("source_kind"),
                     "highlighted_snippet": None,
                     "rank": 0,
                 }
