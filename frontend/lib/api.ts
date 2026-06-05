@@ -183,6 +183,7 @@ export interface DocumentSearchResult {
   topic_tags: string[];
   source_kind: string | null;
   source_name: string | null;
+  content_summary: string | null;
   highlighted_snippet: string | null;
   rank: number;
 }
@@ -246,6 +247,41 @@ export async function getArticle(id: string, version?: string): Promise<ArticleR
   const qs = sp.toString();
   const res = await fetch(`${API_URL}/document/${id}/article${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error("Article fetch failed");
+  return res.json();
+}
+
+// Admin
+export async function deleteDocument(id: string, token: string): Promise<void> {
+  const res = await fetch(`${API_URL}/admin/document/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Delete failed");
+}
+
+export interface AdminDocumentEdit {
+  title: string;
+  author: string;
+  source_kind: string | null;
+  url: string | null;
+  content: string;
+}
+
+export async function getDocumentForEdit(id: string, token: string): Promise<AdminDocumentEdit> {
+  const res = await fetch(`${API_URL}/admin/document/${id}/edit`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to load document for editing");
+  return res.json();
+}
+
+export async function updateDocument(id: string, body: { title: string; author: string; content: string }, token: string): Promise<{ success: boolean; chunk_count: number }> {
+  const res = await fetch(`${API_URL}/admin/document/${id}/edit`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("Save failed");
   return res.json();
 }
 

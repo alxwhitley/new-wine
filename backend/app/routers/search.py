@@ -86,7 +86,7 @@ async def search_documents(
         doc_ids = [row["id"] for row in result.data]
         extra_map = {}
         if doc_ids:
-            extra_result = db.table("documents").select("id, topic_tags, era, source_name, source_kind").in_("id", doc_ids).execute()
+            extra_result = db.table("documents").select("id, topic_tags, era, source_name, source_kind, content_summary").in_("id", doc_ids).execute()
             extra_map = {r["id"]: r for r in extra_result.data}
 
         results = []
@@ -112,6 +112,7 @@ async def search_documents(
                 "topic_tags": doc_extra.get("topic_tags") or [],
                 "source_kind": doc_extra.get("source_kind"),
                 "source_name": doc_extra.get("source_name"),
+                "content_summary": doc_extra.get("content_summary"),
                 "highlighted_snippet": snippet,
                 "rank": row.get("rank"),
             })
@@ -137,7 +138,7 @@ async def browse_documents(
         db = get_supabase()
         query = (
             db.table("documents")
-            .select("id, title, author, issue, year, topic_tags, source_kind, source_name")
+            .select("id, title, author, issue, year, topic_tags, source_kind, source_name, content_summary")
             .order("year", desc=True)
             .order("issue", desc=True)
         )
@@ -168,6 +169,7 @@ async def browse_documents(
                     "topic_tags": row.get("topic_tags") or [],
                     "source_kind": row.get("source_kind"),
                     "source_name": row.get("source_name"),
+                    "content_summary": row.get("content_summary"),
                     "highlighted_snippet": None,
                     "rank": 0,
                 }

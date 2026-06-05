@@ -3,13 +3,13 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
-import { Search, ArrowLeft, Loader2, Menu, ChevronDown } from "lucide-react";
+import { Search, ArrowLeft, Loader2, Menu, ChevronDown, Trash2, Pencil } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
-import { searchDocumentsFts, browseDocuments, getArticle, fetchBooks } from "@/lib/api";
+import { searchDocumentsFts, browseDocuments, getArticle, fetchBooks, deleteDocument } from "@/lib/api";
 import type { DocumentSearchResult, ArticleResponse, Book } from "@/lib/api";
 
 type ContentFilter = "all" | "articles" | "sermons" | "books";
@@ -74,6 +74,11 @@ export default function LibraryPage() {
   // Article reader
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [articleLoading, setArticleLoading] = useState(false);
+
+  // Admin delete
+  const isAdmin = user?.id === "1ea99425-08ec-40f2-9ed3-588b88122a82";
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Compute effective era
   const effectiveEra = eraFilter || undefined;
@@ -201,6 +206,18 @@ export default function LibraryPage() {
     setArticle(null);
   }, []);
 
+  const handleDelete = useCallback(async (id: string) => {
+    if (!accessToken) return;
+    setDeleteError(null);
+    try {
+      await deleteDocument(id, accessToken);
+      setDocResults((prev) => prev.filter((d) => d.id !== id));
+      setConfirmingDeleteId(null);
+    } catch {
+      setDeleteError(id);
+    }
+  }, [accessToken]);
+
   // Build unified results
   const unified: UnifiedResult[] = [];
   for (const doc of docResults) {
@@ -241,7 +258,11 @@ export default function LibraryPage() {
         {doc.title}
       </h3>
       <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
-      {doc.topic_tags && doc.topic_tags.length > 0 && (
+      {isNewWine && doc.content_summary ? (
+        <p className="line-clamp-2" style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", lineHeight: 1.5 }}>
+          {doc.content_summary.length > 120 ? doc.content_summary.slice(0, 120) + "…" : doc.content_summary}
+        </p>
+      ) : doc.topic_tags && doc.topic_tags.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {doc.topic_tags.slice(0, 2).map((tag) => (
             <span
@@ -253,9 +274,58 @@ export default function LibraryPage() {
             </span>
           ))}
         </div>
-      )}
+      ) : null}
       {doc.year && (
         <p className="mt-auto" style={{ fontSize: "11px", color: "#555550", paddingTop: "10px" }}>{doc.year}</p>
+      )}
+      {isAdmin && (
+        confirmingDeleteId === doc.id ? (
+          <span
+            style={{ position: "absolute", bottom: "12px", right: "12px", display: "flex", gap: "8px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {deleteError === doc.id && <span style={{ fontSize: "11px", color: "#e24b4a" }}>Error</span>}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+              style={{ fontSize: "11px", color: "#e24b4a", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+            >
+              Delete
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(null); setDeleteError(null); }}
+              style={{ fontSize: "11px", color: "#888880", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <span
+            style={{ position: "absolute", bottom: "12px", right: "12px", display: "flex", gap: "8px", alignItems: "center" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <a
+              href={`/admin/edit/${doc.id}`}
+              onClick={(e) => { e.stopPropagation(); }}
+              style={{ cursor: "pointer", display: "flex" }}
+            >
+              <Pencil
+                style={{ width: "14px", height: "14px", color: "#555550", transition: "color 0.15s ease" }}
+                onMouseEnter={(e) => { (e.currentTarget as SVGElement).style.color = "#c1c1b8"; }}
+                onMouseLeave={(e) => { (e.currentTarget as SVGElement).style.color = "#555550"; }}
+              />
+            </a>
+            <span
+              style={{ cursor: "pointer", display: "flex" }}
+              onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(doc.id); }}
+            >
+              <Trash2
+                style={{ width: "14px", height: "14px", color: "#555550", transition: "color 0.15s ease" }}
+                onMouseEnter={(e) => { (e.currentTarget as SVGElement).style.color = "#c1c1b8"; }}
+                onMouseLeave={(e) => { (e.currentTarget as SVGElement).style.color = "#555550"; }}
+              />
+            </span>
+          </span>
+        )
       )}
     </button>
   );
