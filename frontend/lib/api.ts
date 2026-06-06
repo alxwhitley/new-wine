@@ -183,7 +183,7 @@ export interface DocumentSearchResult {
   topic_tags: string[];
   source_kind: string | null;
   source_name: string | null;
-  content_summary: string | null;
+  description: string | null;
   highlighted_snippet: string | null;
   rank: number;
 }

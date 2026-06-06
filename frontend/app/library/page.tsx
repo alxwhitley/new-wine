@@ -246,7 +246,7 @@ export default function LibraryPage() {
     >
       {isNewWine && (
         <span style={{ position: "absolute", top: "12px", right: "12px", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888880", backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid #3c3c38", borderRadius: "20px", padding: "3px 8px" }}>
-          New Wine
+          New Wine Magazine
         </span>
       )}
       {doc.author && (
@@ -258,9 +258,9 @@ export default function LibraryPage() {
         {doc.title}
       </h3>
       <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
-      {isNewWine && doc.content_summary ? (
+      {isNewWine && doc.description ? (
         <p className="line-clamp-2" style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", lineHeight: 1.5 }}>
-          {doc.content_summary.length > 120 ? doc.content_summary.slice(0, 120) + "…" : doc.content_summary}
+          {doc.description.length > 150 ? doc.description.slice(0, 150) + "\u2026" : doc.description}
         </p>
       ) : doc.topic_tags && doc.topic_tags.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">

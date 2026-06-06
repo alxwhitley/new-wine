@@ -49,6 +49,60 @@ def _strip_metadata_header(text: Optional[str]) -> Optional[str]:
     return text
 
 
+def _fetch_descriptions(db, doc_ids: list) -> dict:
+    """Fetch clean descriptions from first chunks for a list of document IDs."""
+    if not doc_ids:
+        return {}
+    first_chunks = (
+        db.table("chunks")
+        .select("document_id, content, chunk_index")
+        .in_("document_id", doc_ids)
+        .eq("chunk_index", 0)
+        .execute()
+    )
+    desc_map = {}
+    for c in first_chunks.data:
+        desc = _extract_description(c.get("content"))
+        if desc:
+            desc_map[c["document_id"]] = desc
+    return desc_map
+
+
+def _extract_description(chunk_content: Optional[str], max_len: int = 150) -> Optional[str]:
+    """Extract a clean opening sentence from chunk content, stripping metadata headers."""
+    if not chunk_content:
+        return None
+    lines = chunk_content.strip().split("\n")
+    clean_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Skip metadata: lines starting with [, lines with | (metadata separators),
+        # all-caps lines (titles), markdown headings, frontmatter-like patterns
+        if stripped.startswith("[") or stripped.startswith("#"):
+            continue
+        if "|" in stripped and len(stripped.split("|")) >= 3:
+            continue
+        if stripped == stripped.upper() and len(stripped) > 3:
+            continue
+        if stripped.startswith("---"):
+            continue
+        if ":" in stripped and len(stripped) < 60 and stripped.index(":") < 20:
+            continue
+        clean_lines.append(stripped)
+    text = " ".join(clean_lines)
+    if not text:
+        return None
+    if len(text) > max_len:
+        # Try to break at sentence boundary
+        dot = text.rfind(". ", 0, max_len)
+        if dot > 60:
+            return text[:dot + 1]
+        return text[:max_len] + "\u2026"
+    return text
+
+
 def _clean_author(author: Optional[str]) -> Optional[str]:
     """Truncate author at opening parenthesis."""
     if not author:
@@ -89,6 +143,13 @@ async def search_documents(
             extra_result = db.table("documents").select("id, topic_tags, era, source_name, source_kind, content_summary").in_("id", doc_ids).execute()
             extra_map = {r["id"]: r for r in extra_result.data}
 
+        # Identify New Wine docs for description fetching
+        nw_ids = [
+            did for did in doc_ids
+            if "new wine" in (extra_map.get(did, {}).get("source_name") or "").lower()
+        ]
+        desc_map = _fetch_descriptions(db, nw_ids)
+
         results = []
         for row in result.data:
             doc_extra = extra_map.get(row["id"], {})
@@ -112,7 +173,7 @@ async def search_documents(
                 "topic_tags": doc_extra.get("topic_tags") or [],
                 "source_kind": doc_extra.get("source_kind"),
                 "source_name": doc_extra.get("source_name"),
-                "content_summary": doc_extra.get("content_summary"),
+                "description": desc_map.get(row["id"]),
                 "highlighted_snippet": snippet,
                 "rank": row.get("rank"),
             })
@@ -158,6 +219,13 @@ async def browse_documents(
 
         result = query.execute()
 
+        # Fetch descriptions for New Wine docs
+        nw_ids = [
+            row["id"] for row in result.data
+            if "new wine" in (row.get("source_name") or "").lower()
+        ]
+        desc_map = _fetch_descriptions(db, nw_ids)
+
         return {
             "results": [
                 {
@@ -169,7 +237,7 @@ async def browse_documents(
                     "topic_tags": row.get("topic_tags") or [],
                     "source_kind": row.get("source_kind"),
                     "source_name": row.get("source_name"),
-                    "content_summary": row.get("content_summary"),
+                    "description": desc_map.get(row["id"]),
                     "highlighted_snippet": None,
                     "rank": 0,
                 }
