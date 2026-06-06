@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
+import Image from "next/image";
 import { Search, ArrowLeft, Loader2, Menu, ChevronDown, Trash2, Pencil } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
@@ -26,6 +27,20 @@ const SEARCH_SUGGESTIONS = [
   "Identity in Christ",
   "Renewing the Mind",
 ];
+
+const AUTHOR_IMAGES: Record<string, string> = {
+  "Ern Baxter": "/images/authors/ern-baxter.webp",
+  "Oswald J. Smith": "/images/authors/oswald-smith.jpeg",
+  "John Bevere": "/images/authors/john-bevere.webp",
+  "Michael Brown": "/images/authors/michael-brown.jpeg",
+  "Jack Deere": "/images/authors/jack-deere.jpeg",
+};
+
+const CLASSIC_AUTHORS = new Set(["Derek Prince", "Bob Mumford", "Ern Baxter", "Charles Simpson", "Don Basham", "Oswald J. Smith"]);
+
+function getInitials(name: string) {
+  return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
 
 // Author data for the filter panel
 const AUTHOR_DATA = [
@@ -557,6 +572,8 @@ export default function LibraryPage() {
                     <div className="flex-1 overflow-y-auto flex flex-col gap-2">
                       {AUTHOR_DATA.map((author) => {
                         const isSelected = selectedAuthors.includes(author.name);
+                        const imgSrc = AUTHOR_IMAGES[author.name];
+                        const isClassic = CLASSIC_AUTHORS.has(author.name);
                         return (
                           <button
                             key={author.name}
@@ -565,19 +582,39 @@ export default function LibraryPage() {
                                 isSelected ? prev.filter((a) => a !== author.name) : [...prev, author.name]
                               );
                             }}
-                            className="text-left cursor-pointer transition-colors"
+                            className="text-left cursor-pointer transition-colors flex flex-row items-center"
                             style={{
                               backgroundColor: isSelected ? "#2a2926" : "#262624",
                               border: isSelected ? "1px solid #b49238" : "1px solid #3c3c38",
                               borderRadius: "8px",
                               padding: "10px 14px",
+                              gap: "12px",
                             }}
                             onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
                             onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#262624"; }}
                           >
-                            <p className="font-serif" style={{ fontSize: "14px", color: "#e6e6e0" }}>{author.name}</p>
-                            <p style={{ fontSize: "11px", color: "#888880", marginTop: "2px" }}>{author.years}</p>
-                            <p style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", marginTop: "4px", lineHeight: 1.5 }}>{author.specialty}</p>
+                            {imgSrc ? (
+                              <Image
+                                src={imgSrc}
+                                alt={author.name}
+                                width={40}
+                                height={40}
+                                className="rounded-full object-cover flex-shrink-0"
+                                style={{ width: "40px", height: "40px", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)", filter: isClassic ? "grayscale(100%)" : "none" }}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }}
+                              />
+                            ) : null}
+                            <div
+                              className={imgSrc ? "hidden" : ""}
+                              style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#2a2926", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
+                            >
+                              <span style={{ fontSize: "14px", fontWeight: 600, color: "#888880" }}>{getInitials(author.name)}</span>
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <p className="font-serif" style={{ fontSize: "14px", color: "#e6e6e0" }}>{author.name}</p>
+                              <p style={{ fontSize: "11px", color: "#888880", marginTop: "2px" }}>{author.years}</p>
+                              <p style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", marginTop: "4px", lineHeight: 1.5 }}>{author.specialty}</p>
+                            </div>
                           </button>
                         );
                       })}

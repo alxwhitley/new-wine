@@ -3,11 +3,26 @@
 import { useState } from "react";
 import { ArrowLeft, Menu } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
+
+const AUTHOR_IMAGES: Record<string, string> = {
+  "Ern Baxter": "/images/authors/ern-baxter.webp",
+  "Oswald J. Smith": "/images/authors/oswald-smith.jpeg",
+  "John Bevere": "/images/authors/john-bevere.webp",
+  "Michael Brown": "/images/authors/michael-brown.jpeg",
+  "Jack Deere": "/images/authors/jack-deere.jpeg",
+};
+
+const CLASSIC_AUTHORS = new Set(["Derek Prince", "Bob Mumford", "Ern Baxter", "Charles Simpson", "Don Basham", "Oswald J. Smith"]);
+
+function getInitials(name: string) {
+  return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
 
 const AUTHORS = [
   { name: "Derek Prince", years: "1915\u20132003", bio: "Cambridge-educated philosopher turned Bible teacher, Prince founded Derek Prince Ministries after a wartime conversion and became one of the most widely translated charismatic teachers of the 20th century, known especially for his work on deliverance, healing, and the Holy Spirit." },
@@ -71,20 +86,43 @@ export default function AuthorsPage() {
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-              {AUTHORS.map((author) => (
-                <div
-                  key={author.name}
-                  className="flex flex-col"
-                  style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-                >
-                  <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45 }}>{author.name}</h4>
-                  <p style={{ fontSize: "11px", color: "#888880", marginTop: "4px" }}>{author.years}</p>
-                  <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
-                  <p className="line-clamp-4" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>{author.bio}</p>
-                </div>
-              ))}
+              {AUTHORS.map((author) => {
+                const imgSrc = AUTHOR_IMAGES[author.name];
+                const isClassic = CLASSIC_AUTHORS.has(author.name);
+                return (
+                  <div
+                    key={author.name}
+                    className="flex flex-row"
+                    style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", gap: "14px", transition: "background 0.2s ease" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+                  >
+                    {imgSrc ? (
+                      <Image
+                        src={imgSrc}
+                        alt={author.name}
+                        width={64}
+                        height={64}
+                        className="rounded-full object-cover flex-shrink-0"
+                        style={{ width: "64px", height: "64px", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)", filter: isClassic ? "grayscale(100%)" : "none" }}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }}
+                      />
+                    ) : null}
+                    <div
+                      className={imgSrc ? "hidden" : ""}
+                      style={{ width: "64px", height: "64px", borderRadius: "50%", backgroundColor: "#2a2926", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
+                    >
+                      <span style={{ fontSize: "18px", fontWeight: 600, color: "#888880" }}>{getInitials(author.name)}</span>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45 }}>{author.name}</h4>
+                      <p style={{ fontSize: "11px", color: "#888880", marginTop: "4px" }}>{author.years}</p>
+                      <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
+                      <p className="line-clamp-4" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>{author.bio}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
