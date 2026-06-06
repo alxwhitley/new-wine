@@ -442,10 +442,10 @@ export default function LibraryPage() {
             <a
               href={`/library/book/${book.document_id}`}
               onClick={(e) => e.stopPropagation()}
-              className="mt-auto self-start text-xs transition-colors"
-              style={{ border: "1px solid #3c3c38", color: "#c1c1b8", borderRadius: "6px", padding: "4px 10px", marginTop: "10px", display: "inline-block" }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
+              className="text-xs text-center transition-colors"
+              style={{ border: "1px solid #3c3c38", color: "#c1c1b8", borderRadius: "6px", padding: "6px 10px", marginTop: "12px", display: "block", width: "100%" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; e.currentTarget.style.color = "#e6e6e0"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
             >
               Read Excerpts
             </a>
