@@ -438,6 +438,18 @@ export default function LibraryPage() {
               {book.description}
             </p>
           )}
+          {book.document_id && (
+            <a
+              href={`/library/book/${book.document_id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-auto self-start text-xs transition-colors"
+              style={{ border: "1px solid #3c3c38", color: "#c1c1b8", borderRadius: "6px", padding: "4px 10px", marginTop: "10px", display: "inline-block" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; }}
+            >
+              Read Excerpts
+            </a>
+          )}
         </div>
       </div>
     );
@@ -760,17 +772,6 @@ export default function LibraryPage() {
                   <>
                     <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
                     <div className="flex flex-col" style={{ gap: "32px" }}>
-                      {articles.length > 0 && (
-                        <div>
-                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
-                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Articles</span>
-                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
-                            {articles.map((doc) => renderDocCard(doc))}
-                          </div>
-                        </div>
-                      )}
                       {sermons.length > 0 && (
                         <div>
                           <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
@@ -779,6 +780,17 @@ export default function LibraryPage() {
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
                             {sermons.map((doc) => renderDocCard(doc))}
+                          </div>
+                        </div>
+                      )}
+                      {articles.length > 0 && (
+                        <div>
+                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Articles</span>
+                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                            {articles.map((doc) => renderDocCard(doc))}
                           </div>
                         </div>
                       )}

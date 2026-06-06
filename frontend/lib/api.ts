@@ -293,6 +293,7 @@ export interface Book {
   description: string | null;
   topic_tags: string[];
   created_at: string;
+  document_id: string | null;
 }
 
 export interface BooksResponse {
@@ -311,5 +312,23 @@ export async function fetchBooks(params?: {
   if (params?.author) sp.set("author", params.author);
   const res = await fetch(`${API_URL}/library/books?${sp.toString()}`);
   if (!res.ok) throw new Error("Books fetch failed");
+  return res.json();
+}
+
+// Book excerpt reader
+export interface BookExcerptChunk {
+  id: string;
+  chunk_index: number;
+  content: string;
+}
+
+export interface BookExcerptResponse {
+  document: { id: string; title: string; author: string; era: string | null };
+  chunks: BookExcerptChunk[];
+}
+
+export async function getBookExcerpts(docId: string): Promise<BookExcerptResponse> {
+  const res = await fetch(`${API_URL}/library/book/${docId}`);
+  if (!res.ok) throw new Error("Book fetch failed");
   return res.json();
 }

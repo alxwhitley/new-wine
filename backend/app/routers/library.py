@@ -10,6 +10,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/book/{doc_id}")
+async def get_book_excerpts(doc_id: str):
+    """Return book document metadata and all chunks for the excerpt reader."""
+    try:
+        db = get_supabase()
+
+        doc = db.table("documents").select("id, title, author, era").eq("id", doc_id).limit(1).execute()
+        if not doc.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        chunks = (
+            db.table("chunks")
+            .select("id, chunk_index, content")
+            .eq("document_id", doc_id)
+            .order("chunk_index")
+            .execute()
+        )
+
+        return {
+            "document": doc.data[0],
+            "chunks": chunks.data,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unhandled error in /library/book/{id} endpoint")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
 @router.get("/books")
 async def list_books(
     q: Optional[str] = Query(None, description="Search title, author, or description"),
@@ -21,7 +50,7 @@ async def list_books(
         db = get_supabase()
         query = (
             db.table("books")
-            .select("id, title, author, description, topic_tags, created_at, era")
+            .select("id, title, author, description, topic_tags, created_at, era, document_id")
             .order("author")
             .order("title")
         )

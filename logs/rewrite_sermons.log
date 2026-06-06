@@ -1,498 +1,173 @@
-2026-06-04 16:44:23,840 INFO Found 748 sermon transcripts to rewrite
-2026-06-04 16:44:23,923 INFO Document 4be47c83-76bb-47ee-82e2-693e323bb342 (The Rapture Terrified Me Too Until I Read This): 25 chunks, ~5640 tokens
-2026-06-04 16:45:14,940 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:45:14,977 INFO Rewritten into 9 chunks
-2026-06-04 16:45:20,820 INFO Document 19a66268-89c4-4471-88c9-d9fc1bf97201 (The Rapture, The Antichrist, The Mark of the Beast): 48 chunks, ~9805 tokens
-2026-06-04 16:46:55,903 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:46:55,915 INFO Rewritten into 19 chunks
-2026-06-04 16:47:01,107 INFO Document 4e1b472e-1f74-4814-a33b-d71bff329802 (These End Times Timelines Are All Lining Up at Once): 31 chunks, ~6919 tokens
-2026-06-04 16:47:59,794 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:47:59,809 INFO Rewritten into 11 chunks
-2026-06-04 16:48:05,907 INFO Document 54447d34-bb73-48f4-bb1e-886d69c4dd1b (You'll Wish Someone Told You This Sooner): 36 chunks, ~9257 tokens
-2026-06-04 16:49:02,118 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:49:02,131 INFO Rewritten into 10 chunks
-2026-06-04 16:49:08,622 INFO Document 0f76102a-4f27-4515-b574-d94c39b1c3f4 (You're Being Set Up): 34 chunks, ~7140 tokens
-2026-06-04 16:49:42,292 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:49:42,302 INFO Rewritten into 6 chunks
-2026-06-04 16:49:48,701 INFO Document 1bdde7db-3a3e-42fa-8558-a66f82423252 (Nine Functions of Prophetic Words): 6 chunks, ~1522 tokens
-2026-06-04 16:50:01,511 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:50:01,522 INFO Rewritten into 3 chunks
-2026-06-04 16:50:02,394 INFO Document 69da3f77-4b30-49b3-9f7c-1c087cbd500d (Receiving and Ministering Prophetic Words): 8 chunks, ~1796 tokens
-2026-06-04 16:50:16,254 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:50:16,262 INFO Rewritten into 4 chunks
-2026-06-04 16:50:18,266 INFO Document 10b0e323-a348-4b16-9f72-be19e2f8e49d (Prophetic Equipping with Pastor Paul Kidd & Tom Bedford): 10 chunks, ~2131 tokens
-2026-06-04 16:50:40,444 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:50:40,452 INFO Rewritten into 4 chunks
-2026-06-04 16:50:42,157 INFO Document e2c25797-4e70-460e-accd-1f61acdc5816 (Deliverance And Demonology): 17 chunks, ~4767 tokens
-2026-06-04 16:51:34,728 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:51:34,773 INFO Rewritten into 11 chunks
-2026-06-04 16:51:37,915 INFO Document dcb52370-5c40-4767-ace7-bdd95f13024f (Baptism into the Person of the Holy Spirit): 10 chunks, ~2711 tokens
-2026-06-04 16:51:57,899 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:51:57,906 INFO Rewritten into 7 chunks
-2026-06-04 16:51:59,631 INFO Document 2a0668eb-5875-4f2e-9bbf-e5d44a0badf7 (Processing Your Prophecy): 11 chunks, ~2521 tokens
-2026-06-04 16:52:22,829 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:52:22,837 INFO Rewritten into 5 chunks
-2026-06-04 16:52:24,170 INFO Document 35a54d25-cb08-4901-b1fa-c1309d902421 (A Prophetic Warning from Jesus to the End Time Churches): 19 chunks, ~9617 tokens
-2026-06-04 16:53:17,610 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:53:17,625 INFO Rewritten into 11 chunks
-2026-06-04 16:53:19,869 INFO Document 316cfa0b-2b52-42c6-a17b-e9377761c6ce (Jesus' Most Misunderstood Parable): 21 chunks, ~9784 tokens
-2026-06-04 16:54:01,773 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:54:01,785 INFO Rewritten into 8 chunks
-2026-06-04 16:54:03,278 INFO Document 8ec473af-2355-4c51-affc-128cfb1ab543 (Jesus Threatened to Shut This Church Down – Here’s What Went Wrong): 21 chunks, ~9795 tokens
-2026-06-04 16:54:59,920 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:54:59,934 INFO Rewritten into 10 chunks
-2026-06-04 16:55:03,734 INFO Document ecc5d931-6942-4eda-81df-db046681dc5c (Most People NEVER Fulfill Their Calling – I'll Show You How): 16 chunks, ~7628 tokens
-2026-06-04 16:55:37,282 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:55:37,292 INFO Rewritten into 8 chunks
-2026-06-04 16:55:38,637 INFO Document fa8cfaaa-9837-4931-9957-8051bbb08326 (Redefining Ministry—Answering God’s Call in the Marketplace): 6 chunks, ~2997 tokens
-2026-06-04 16:55:59,314 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:55:59,320 INFO Rewritten into 4 chunks
-2026-06-04 16:55:59,833 INFO Document 091c4d11-0b1c-4b4a-9237-50d2d11f05e7 (The Ancient Wedding That Explains the End Times): 19 chunks, ~9621 tokens
-2026-06-04 16:56:51,660 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:56:51,673 INFO Rewritten into 10 chunks
-2026-06-04 16:56:54,422 INFO Document b4c49756-4329-457d-82e4-620d8d7ac31d (The Most Faithful Church in Revelation): 6 chunks, ~2681 tokens
-2026-06-04 16:57:14,232 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:57:14,239 INFO Rewritten into 4 chunks
-2026-06-04 16:57:15,233 INFO Document bb41c7c8-79f6-4eb2-9f84-db6dc0f4cb7a (This is Blocking Your Connection with God): 20 chunks, ~9458 tokens
-2026-06-04 16:57:55,637 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:57:55,647 INFO Rewritten into 7 chunks
-2026-06-04 16:57:57,577 INFO Document 705b5bad-dd3a-4b84-b8f3-534061557fae (Your Spiritual Gifts Are Dormant (Here’s How to Activate Them)): 14 chunks, ~5469 tokens
-2026-06-04 16:58:23,304 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:58:23,309 INFO Rewritten into 5 chunks
-2026-06-04 16:58:24,537 INFO Document 3f1dc6a6-348b-4c8b-9e03-a8277d5fcaad (I Avoided Preaching This for 40 YEARS...): 19 chunks, ~9225 tokens
-2026-06-04 16:59:03,214 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:59:03,228 INFO Rewritten into 7 chunks
-2026-06-04 16:59:05,327 INFO Document b0617ccc-e9b8-499b-b4f7-e6e1d0075863 (If You Can’t Hear God’s Voice, This is For You): 20 chunks, ~9321 tokens
-2026-06-04 16:59:50,309 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 16:59:50,320 INFO Rewritten into 10 chunks
-2026-06-04 16:59:52,647 INFO Document 8aa09aca-c837-4708-9755-420dde5a63dd (The Antichrist, Nephilim & the State of the Church w/ Rick Renner): 17 chunks, ~8403 tokens
-2026-06-04 17:00:37,026 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:00:37,034 INFO Rewritten into 8 chunks
-2026-06-04 17:00:39,111 INFO Document 2bac29ae-0f68-4f59-8f43-73c8b8f6dfb2 (The Bible Warns Us About the TIMING of Jesus’ Return): 17 chunks, ~9116 tokens
-2026-06-04 17:01:08,480 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:01:08,490 INFO Rewritten into 6 chunks
-2026-06-04 17:01:10,510 INFO Document 3f086e56-cded-4c69-a40e-99af2fd2f7b1 (The Biggest Revival in History is About to Happen): 17 chunks, ~8835 tokens
-2026-06-04 17:02:04,215 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:02:04,226 INFO Rewritten into 10 chunks
-2026-06-04 17:02:05,995 INFO Document a11f9860-1368-46f5-b005-358e61d7cc43 (The Final Events Leading Up to The New Heavens and Earth): 20 chunks, ~9287 tokens
-2026-06-04 17:03:16,544 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:03:16,557 INFO Rewritten into 13 chunks
-2026-06-04 17:03:18,669 INFO Document ec366a24-5a85-498f-8b38-5cabb28751b2 (The Man Who Will Fool The Entire World Is Alive Today.): 19 chunks, ~9190 tokens
-2026-06-04 17:04:41,479 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:04:41,495 INFO Rewritten into 17 chunks
-2026-06-04 17:04:44,087 INFO Document 105836ab-0adc-483e-840a-841389fefb1e (The Rapture Won't Happen How You Think): 21 chunks, ~9030 tokens
-2026-06-04 17:05:35,638 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:05:35,656 INFO Rewritten into 12 chunks
-2026-06-04 17:05:37,493 INFO Document 42647513-a3eb-4f4b-97e1-aecea895d369 (There will be 3 Types of Christians On the day of Jesus' Return): 17 chunks, ~9135 tokens
-2026-06-04 17:06:08,242 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:06:08,251 INFO Rewritten into 6 chunks
-2026-06-04 17:06:10,760 INFO Document a63032ca-054b-40b7-9982-5caaae42bd87 (You Need To Prepare For Jesus’ Return): 19 chunks, ~9231 tokens
-2026-06-04 17:06:52,413 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:06:52,423 INFO Rewritten into 8 chunks
-2026-06-04 17:06:53,993 INFO Document 80f6d3c1-d23a-446f-a154-fab79901726a (7 Reasons Why You're Still A Baby Christian): 4 chunks, ~1932 tokens
-2026-06-04 17:07:09,296 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:07:09,304 INFO Rewritten into 4 chunks
-2026-06-04 17:07:10,149 INFO Document c62721ee-4cff-4511-a354-014e9656ee3f (How to Spot a False Teacher in 2024): 18 chunks, ~7617 tokens
-2026-06-04 17:07:51,408 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:07:51,414 INFO Rewritten into 8 chunks
-2026-06-04 17:07:53,343 INFO Document b32ecc70-d387-4afd-b6fd-f327b9ff6453 (How Your Life CHANGES Future Generations): 13 chunks, ~5830 tokens
-2026-06-04 17:08:25,561 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:08:25,572 INFO Rewritten into 6 chunks
-2026-06-04 17:08:27,565 INFO Document a2869474-a9ac-4413-9656-8ef336f3cc08 (Jesus’ Most Important End Times Warning): 15 chunks, ~7052 tokens
-2026-06-04 17:08:49,890 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:08:49,897 INFO Rewritten into 4 chunks
-2026-06-04 17:08:51,212 INFO Document c42cc010-9848-4e91-8e4b-155067bbe767 (Judgment Is Coming For Those Who Distort Scripture): 16 chunks, ~6999 tokens
-2026-06-04 17:09:34,524 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:09:34,534 INFO Rewritten into 8 chunks
-2026-06-04 17:09:36,661 INFO Document b30e261b-8d47-4fa5-9da2-c3125f68393c (Near Death Experiences Prove This.): 19 chunks, ~8887 tokens
-2026-06-04 17:10:14,371 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:10:14,382 INFO Rewritten into 7 chunks
-2026-06-04 17:10:16,605 INFO Document 3d937a41-aaa6-4a88-86bd-bd284e8579fc (Rewards in Heaven Aren’t All the Same.): 20 chunks, ~8918 tokens
-2026-06-04 17:11:02,688 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:11:02,697 INFO Rewritten into 8 chunks
-2026-06-04 17:11:06,050 INFO Document 9450ac8a-1c76-4ac0-a195-f09b033e6872 (Satan Is Using Certain Preachers to Brainwash You): 23 chunks, ~9955 tokens
-2026-06-04 17:11:37,937 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:11:37,945 INFO Rewritten into 5 chunks
-2026-06-04 17:11:40,463 INFO Document 7a206193-716f-47c9-afcf-3e5744b77957 (The Benefits of A Digital Fast (No One Regrets Doing This)): 19 chunks, ~8207 tokens
-2026-06-04 17:12:12,233 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:12:12,242 INFO Rewritten into 6 chunks
-2026-06-04 17:12:13,543 INFO Document 21454bbe-399d-4911-ae6d-d41a4bc961b6 (The Real Reason Christians Are So Disliked): 9 chunks, ~4594 tokens
-2026-06-04 17:12:44,637 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:12:44,648 INFO Rewritten into 5 chunks
-2026-06-04 17:12:45,835 INFO Document 34aba81c-5958-458e-8ed4-292449365f2b (The Scariest Question You Can Ask): 19 chunks, ~8290 tokens
-2026-06-04 17:13:29,032 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:13:29,043 INFO Rewritten into 9 chunks
-2026-06-04 17:13:31,138 INFO Document 2530366f-2ec4-4b8d-8479-267e193b462f (The Secret to Breaking Sin's Grip on Your Life): 17 chunks, ~8407 tokens
-2026-06-04 17:14:17,920 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:14:17,931 INFO Rewritten into 10 chunks
-2026-06-04 17:14:21,107 INFO Document f84cda87-58ab-4324-828d-d4849193d369 (What Christians Don’t Understand About the 2024 Election): 5 chunks, ~2335 tokens
-2026-06-04 17:14:39,893 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:14:39,901 INFO Rewritten into 3 chunks
-2026-06-04 17:14:40,618 INFO Document c920ef7c-aecd-43d1-b208-a1749d69fd1e (You've Been Lied to About Hell.): 17 chunks, ~8304 tokens
-2026-06-04 17:15:23,310 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:15:23,319 INFO Rewritten into 9 chunks
-2026-06-04 17:15:26,287 INFO Document 96b0ca4e-60e9-4f97-a870-348eb90a1e43 (How Conflict Began The Pre-Adamic Period): 23 chunks, ~11225 tokens
-2026-06-04 17:16:18,265 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:16:18,279 INFO Rewritten into 10 chunks
-2026-06-04 17:16:25,816 INFO Document cef1e039-5928-4c6d-a639-0ff77fd56949 (The Rebellion Of Lucifer): 24 chunks, ~11073 tokens
-2026-06-04 17:17:42,356 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:17:42,383 INFO Rewritten into 14 chunks
-2026-06-04 17:17:46,717 INFO Document 8c76a762-f25b-4c55-bd45-5b69a4d269b6 (Results Produced by Lucifer's Rebellion): 24 chunks, ~11871 tokens
-2026-06-04 17:18:51,488 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:18:51,501 INFO Rewritten into 13 chunks
-2026-06-04 17:18:54,154 INFO Document ac282ba4-7958-4ab4-8608-a391bdc7562a (The Adamic Race - Five Unique Features): 27 chunks, ~12059 tokens
-2026-06-04 17:20:15,420 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:20:15,443 INFO Rewritten into 15 chunks
-2026-06-04 17:20:19,917 INFO Document c84dd258-c6a4-4eb5-b83c-8e3396259a0f (Adam’s Fall and Its Results): 22 chunks, ~10581 tokens
-2026-06-04 17:21:47,739 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:21:47,758 INFO Rewritten into 16 chunks
-2026-06-04 17:21:51,167 INFO Document 19c214f6-aa46-4961-9015-b8b269258683 (Results of Adam’s Fall): 25 chunks, ~12047 tokens
-2026-06-04 17:23:02,877 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:23:02,894 INFO Rewritten into 14 chunks
-2026-06-04 17:23:06,539 INFO Document 9487b2c5-0d65-444f-a1b2-83990e0c8e89 (Jesus The Last Adam): 23 chunks, ~11446 tokens
-2026-06-04 17:24:02,484 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:24:02,497 INFO Rewritten into 12 chunks
-2026-06-04 17:24:06,565 INFO Document 35131c29-ee0a-4212-86fe-69fa40b80104 (The Exchange Made At The Cross): 24 chunks, ~11099 tokens
-2026-06-04 17:24:42,471 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:24:42,478 INFO Rewritten into 8 chunks
-2026-06-04 17:24:46,355 INFO Document d18aaafe-a558-4bde-a304-b11ded0ba13a (Jesus Tasted Death In All Its Phases): 21 chunks, ~10031 tokens
-2026-06-04 17:25:59,404 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:25:59,411 INFO Rewritten into 15 chunks
-2026-06-04 17:26:03,432 INFO Document 12f0fc96-3f3d-4261-ae21-657187efc81b (The Cross Canceled Satan’s Claims): 28 chunks, ~12855 tokens
-2026-06-04 17:27:32,083 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:27:32,102 INFO Rewritten into 16 chunks
-2026-06-04 17:27:35,112 INFO Document dc89e3cf-bfbb-4aa9-8678-fff351fd4d58 (Jesus The Second Man): 22 chunks, ~10683 tokens
-2026-06-04 17:28:43,264 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:28:43,321 INFO Rewritten into 12 chunks
-2026-06-04 17:28:47,364 INFO Document c291170e-3453-494c-b739-f63db98ae245 (God’s Purpose For The New Race): 21 chunks, ~10174 tokens
-2026-06-04 17:30:07,499 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:30:07,530 INFO Rewritten into 17 chunks
-2026-06-04 17:30:10,829 INFO Document 1e9f9429-ba86-45a8-9b15-20904de6e071 (Five Ways Christ Undoes Satan’s Work): 22 chunks, ~10711 tokens
-2026-06-04 17:31:23,448 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:31:23,472 INFO Rewritten into 13 chunks
-2026-06-04 17:31:26,376 INFO Document 2fdc72e3-c511-4ca9-b9c4-065ccac07c1d (God’s Program For The Close Of The Age (Part 1)): 27 chunks, ~12310 tokens
-2026-06-04 17:32:31,095 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:32:31,123 INFO Rewritten into 12 chunks
-2026-06-04 17:32:36,220 INFO Document 46d966d8-2110-45c4-a25a-c312479b30d1 (God’s Program For The Close Of The Age (Part 2)): 26 chunks, ~11928 tokens
-2026-06-04 17:34:09,059 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:34:09,109 INFO Rewritten into 16 chunks
-2026-06-04 17:34:12,526 INFO Document 0dd212bf-ae7a-4df6-8fa8-2bbe892851f2 (Satan’s Program For The Close Of The Age): 23 chunks, ~10572 tokens
-2026-06-04 17:35:06,932 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:35:06,953 INFO Rewritten into 11 chunks
-2026-06-04 17:35:10,746 INFO Document 78a63504-c916-4647-b183-a5288221be1d (Restraining And Casting Down Satan): 25 chunks, ~11606 tokens
-2026-06-04 17:36:08,603 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:36:08,636 INFO Rewritten into 10 chunks
-2026-06-04 17:36:12,895 INFO Document 276524f6-b923-47da-9dc8-c6981fa17e3f (Spiritual Weapons - The Blood, the Word, Our Testimony): 25 chunks, ~11578 tokens
-2026-06-04 17:37:52,054 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:37:52,076 INFO Rewritten into 19 chunks
-2026-06-04 17:37:55,034 INFO Document 91823951-172d-4f0a-9609-a4763fc2287d (God’s Word: The Spirit’s Sword): 25 chunks, ~11153 tokens
-2026-06-04 17:39:41,192 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:39:41,280 INFO Rewritten into 20 chunks
-2026-06-04 17:39:45,815 INFO Document b55b4fac-c854-4279-975e-a819bbf1bca1 (The Gospel Of The Kingdom For All Nations): 23 chunks, ~10810 tokens
-2026-06-04 17:40:51,247 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:40:51,270 INFO Rewritten into 12 chunks
-2026-06-04 17:40:53,596 INFO Document 4caca095-7f6a-4f8d-b775-1634f60fe20e (The Power Of Personal Testimony): 25 chunks, ~11438 tokens
-2026-06-04 17:41:35,742 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:41:35,764 INFO Rewritten into 8 chunks
-2026-06-04 17:41:39,654 INFO Document 51fff1e0-1776-4edb-9e70-75f3d3891c1f (Triumphant Praise): 25 chunks, ~11483 tokens
-2026-06-04 17:42:31,231 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:42:31,251 INFO Rewritten into 9 chunks
-2026-06-04 17:42:35,007 INFO Document 3e82ad16-9d4b-4032-879b-2efac35716b1 (The Real Enemy): 24 chunks, ~11259 tokens
-2026-06-04 17:43:16,465 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:43:16,509 INFO Rewritten into 9 chunks
-2026-06-04 17:43:18,942 INFO Document f016d6e9-3fd3-49da-8e9e-9055c98538a5 (Defensive Armor): 46 chunks, ~21297 tokens
-2026-06-04 17:44:29,558 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:44:29,598 INFO Rewritten into 12 chunks
-2026-06-04 17:44:33,789 INFO Document b28cf71c-c2d6-4d16-9ffb-6ee444c7f505 (Weapons Of Attack): 29 chunks, ~13303 tokens
-2026-06-04 17:45:30,608 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:45:30,629 INFO Rewritten into 12 chunks
-2026-06-04 17:45:33,828 INFO Document e9968e7f-5f93-4a50-bdf4-24ccf6c1898f (Aggressive Prayer): 27 chunks, ~12000 tokens
-2026-06-04 17:47:01,620 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:47:01,640 INFO Rewritten into 15 chunks
-2026-06-04 17:47:05,067 INFO Document 2a995cdf-8613-44af-8e8e-9dd6b969ae6b (Preparation For Praise): 20 chunks, ~9263 tokens
-2026-06-04 17:48:42,859 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:48:42,886 INFO Rewritten into 17 chunks
-2026-06-04 17:48:45,309 INFO Document 8e30eff4-2859-4101-961e-aa5bf95becf9 (Triune Man At Creation): 19 chunks, ~9326 tokens
-2026-06-04 17:49:47,978 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:49:48,024 INFO Rewritten into 13 chunks
-2026-06-04 17:49:51,436 INFO Document 6828d0ae-6f73-418c-a293-dafa55b4a5f2 (Man's Spirit - Before and After Regeneration): 19 chunks, ~8855 tokens
-2026-06-04 17:50:56,107 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:50:56,128 INFO Rewritten into 13 chunks
-2026-06-04 17:50:59,158 INFO Document 486d149b-1678-4496-8a8d-93c01eb88ec9 (The Nature Of The Regenerated Spirit): 23 chunks, ~11155 tokens
-2026-06-04 17:52:32,176 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:52:32,203 INFO Rewritten into 17 chunks
-2026-06-04 17:52:35,327 INFO Document c1f6f82b-457f-4a1a-bbdd-a84fdfee6578 (Relationship between Believer's Spirit and Soul): 52 chunks, ~25923 tokens
-2026-06-04 17:53:15,857 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:53:15,867 INFO Rewritten into 8 chunks
-2026-06-04 17:53:19,545 INFO Document 75ebcb4a-68e2-40d4-94ee-767f02679035 (The Tabernacle: A Pattern Of Spirit, Soul And Body): 24 chunks, ~10927 tokens
-2026-06-04 17:54:16,194 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:54:16,220 INFO Rewritten into 11 chunks
-2026-06-04 17:54:19,263 INFO Document 36846e80-b1c9-4327-b71a-d4b5d56e6d2b (God’s Provision For The Believer’s Body): 18 chunks, ~8492 tokens
-2026-06-04 17:55:42,073 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:55:42,085 INFO Rewritten into 14 chunks
-2026-06-04 17:55:44,066 INFO Document 720880be-270e-4f12-8776-c2b2b2bab96f (Only Two Ways To Righteousness): 23 chunks, ~11168 tokens
-2026-06-04 17:57:09,694 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:57:09,730 INFO Rewritten into 17 chunks
-2026-06-04 17:57:12,456 INFO Document 7931506a-9b11-4942-aa45-74b1b9464e8e (Why The Law?): 26 chunks, ~12036 tokens
-2026-06-04 17:58:45,576 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:58:45,594 INFO Rewritten into 18 chunks
-2026-06-04 17:58:47,914 INFO Document cc36a437-5507-4002-bc74-8740a047b21e (The Righteousness God Requires): 58 chunks, ~26565 tokens
-2026-06-04 17:59:41,227 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 17:59:41,241 INFO Rewritten into 11 chunks
-2026-06-04 17:59:47,119 INFO Document 8aeaef2f-f94c-4403-a588-fe084a563cf8 (How Grace Operates): 24 chunks, ~11635 tokens
-2026-06-04 18:01:08,730 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:01:08,742 INFO Rewritten into 18 chunks
-2026-06-04 18:01:11,176 INFO Document 4a3d27bb-3b0c-43c1-a07a-3031140f91ee (Introduction): 31 chunks, ~14969 tokens
-2026-06-04 18:02:31,561 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:02:31,577 INFO Rewritten into 16 chunks
-2026-06-04 18:02:35,091 INFO Document d1545142-47a4-4ac9-9aca-548eb64659ec (Analysis of Hebrews: Chapter 1): 26 chunks, ~13137 tokens
-2026-06-04 18:03:47,616 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:03:47,651 INFO Rewritten into 13 chunks
-2026-06-04 18:03:51,315 INFO Document 5c0048b2-3af7-4e6b-b6fb-d4c2c0c56e96 (Analysis of Hebrews: Chapter 2): 24 chunks, ~11371 tokens
-2026-06-04 18:04:28,854 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:04:28,864 INFO Rewritten into 9 chunks
-2026-06-04 18:04:32,833 INFO Document 8943cde5-245d-4e61-ace1-8428b4b59bc7 (Old Testament Picture of High Priest): 26 chunks, ~12412 tokens
-2026-06-04 18:06:06,364 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:06:06,450 INFO Rewritten into 17 chunks
-2026-06-04 18:06:09,811 INFO Document 6e9b1a81-542f-4205-8835-7842be6e14bc (Analysis of Hebrews: Chapter 3): 24 chunks, ~11864 tokens
-2026-06-04 18:07:32,474 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:07:32,494 INFO Rewritten into 16 chunks
-2026-06-04 18:07:35,536 INFO Document d23b81af-c9fc-4597-b784-185fa507fd82 (Analysis of Hebrews: Chapter 4): 52 chunks, ~25753 tokens
-2026-06-04 18:08:35,266 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:08:35,279 INFO Rewritten into 10 chunks
-2026-06-04 18:08:39,281 INFO Document 66857430-d245-47fb-8e75-3a2804b03128 (Analysis of Hebrews: Chapter 5): 27 chunks, ~12932 tokens
-2026-06-04 18:10:31,730 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:10:31,771 INFO Rewritten into 21 chunks
-2026-06-04 18:10:35,193 INFO Document 79b63de8-b9cb-4de9-8b35-de619b27b88d (Analysis of Hebrews: Chapter 6): 30 chunks, ~13755 tokens
-2026-06-04 18:11:58,850 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:11:58,866 INFO Rewritten into 13 chunks
-2026-06-04 18:12:03,233 INFO Document 09ebaa7b-cbac-42fe-b137-a48283bd3b78 (Analysis of Hebrews: Chapter 6 & 7): 28 chunks, ~13494 tokens
-2026-06-04 18:12:58,805 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:12:58,820 INFO Rewritten into 11 chunks
-2026-06-04 18:13:02,787 INFO Document 2a8e6b12-e910-4805-bc3d-daea55272d3a (Analysis of Hebrews: Chapter 7 Cont): 28 chunks, ~13871 tokens
-2026-06-04 18:13:48,567 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:13:48,589 INFO Rewritten into 9 chunks
-2026-06-04 18:13:51,270 INFO Document 06ebecfd-fe60-4e48-b4ce-f07469b7b2d2 (Analysis of Hebrews: Chapter 8): 26 chunks, ~12643 tokens
-2026-06-04 18:14:54,160 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:14:54,194 INFO Rewritten into 11 chunks
-2026-06-04 18:14:56,891 INFO Document 44cb0d26-98dc-4ccf-9b7a-a84d004af12b (Analysis of Hebrews: Chapter 8 Cont): 24 chunks, ~11496 tokens
-2026-06-04 18:16:12,367 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:16:12,383 INFO Rewritten into 14 chunks
-2026-06-04 18:16:15,276 INFO Document 33153e85-fa8e-4982-a1fd-375d94bc2baa (Analysis of Hebrews: Chapter 9): 24 chunks, ~11485 tokens
-2026-06-04 18:17:20,638 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:17:20,693 INFO Rewritten into 13 chunks
-2026-06-04 18:17:23,156 INFO Document e9d48c82-74c2-4bfa-911a-bf6f3cf8a147 (Analysis of Hebrews: Chapter 9 Cont): 27 chunks, ~12577 tokens
-2026-06-04 18:17:56,611 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:17:56,621 INFO Rewritten into 7 chunks
-2026-06-04 18:17:59,362 INFO Document 1a010ed3-9219-42da-8dba-85610719ec51 (Analysis of Hebrews: Chapter 9 & 10): 23 chunks, ~11040 tokens
-2026-06-04 18:19:34,818 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:19:34,834 INFO Rewritten into 19 chunks
-2026-06-04 18:19:36,837 INFO Document 21ce962d-0ffa-44b2-be47-7b1a9fa360a7 (Analysis of Hebrews: Chapter 10 Cont): 27 chunks, ~13073 tokens
-2026-06-04 18:20:25,004 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:20:25,027 INFO Rewritten into 9 chunks
-2026-06-04 18:20:27,977 INFO Document 1f960172-77b5-4216-8d1a-13fe2617b1d3 (Analysis of Hebrews: Chapter 10 & 11): 25 chunks, ~11803 tokens
-2026-06-04 18:21:18,933 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:21:18,961 INFO Rewritten into 9 chunks
-2026-06-04 18:21:21,707 INFO Document 5896fcca-c0ad-49df-9d71-88d5961e49f3 (Analysis of Hebrews: Chapter 11 Cont): 26 chunks, ~12248 tokens
-2026-06-04 18:22:39,613 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:22:39,627 INFO Rewritten into 14 chunks
-2026-06-04 18:22:42,887 INFO Document 52ec8c0e-0781-4aa7-9263-8dcffc3b8d61 (Analysis of Hebrews: Chapter 11): 25 chunks, ~12131 tokens
-2026-06-04 18:23:35,087 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:23:35,102 INFO Rewritten into 12 chunks
-2026-06-04 18:23:40,602 INFO Document 1e261c75-f5cb-4151-abe2-a4d85a25ee68 (Analysis of Hebrews: Chapter 11 & 12): 27 chunks, ~13220 tokens
-2026-06-04 18:25:30,048 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:25:30,101 INFO Rewritten into 19 chunks
-2026-06-04 18:25:34,132 INFO Document 11489b10-0e1b-46fa-8768-ec29b6f15793 (Analysis of Hebrews: Chapter 12 Cont): 24 chunks, ~11922 tokens
-2026-06-04 18:26:17,212 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:26:17,279 INFO Rewritten into 8 chunks
-2026-06-04 18:26:20,238 INFO Document a5199d5a-1cf8-435d-be7a-d5042c255ba4 (Analysis of Hebrews: Chapter 12 & 13): 26 chunks, ~12688 tokens
-2026-06-04 18:27:20,346 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:27:20,392 INFO Rewritten into 12 chunks
-2026-06-04 18:27:25,872 INFO Document 3a152f03-13bc-402e-a730-4c3d2624cb03 (Analysis of Hebrews: Chapter 13 Cont): 30 chunks, ~14709 tokens
-2026-06-04 18:28:25,156 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:28:25,167 INFO Rewritten into 11 chunks
-2026-06-04 18:28:29,830 INFO Document 8f4aaa48-2de5-43c6-ab0c-e0ebb34220ec (Entrance Into God’s Kingdom): 28 chunks, ~12485 tokens
-2026-06-04 18:29:56,431 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:29:56,452 INFO Rewritten into 17 chunks
-2026-06-04 18:29:59,090 INFO Document 0cc44abb-382b-4ab3-b5e2-d93daa527282 (Healing And Health): 22 chunks, ~10643 tokens
-2026-06-04 18:30:50,991 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:30:51,002 INFO Rewritten into 12 chunks
-2026-06-04 18:30:52,658 INFO Document b33498f9-dd32-41e6-a21b-4293772a5880 (How Spiritual Gifts Operate): 14 chunks, ~6789 tokens
-2026-06-04 18:31:51,010 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:31:51,021 INFO Rewritten into 11 chunks
-2026-06-04 18:31:52,948 INFO Document 3e23b0ef-9c8f-4419-a8c6-54ce07a0f165 (Testimonies of Miraculous Healings): 31 chunks, ~14186 tokens
-2026-06-04 18:33:26,478 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:33:26,547 INFO Rewritten into 16 chunks
-2026-06-04 18:33:28,329 INFO Document d006fd19-d572-4d6f-a3ff-0d78201bb324 (Repentance): 20 chunks, ~9574 tokens
-2026-06-04 18:34:57,652 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:34:57,669 INFO Rewritten into 17 chunks
-2026-06-04 18:35:00,168 INFO Document 63b90347-91df-4f91-9641-8eb7f990c38d (The New Birth): 21 chunks, ~10171 tokens
-2026-06-04 18:35:58,264 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:35:58,283 INFO Rewritten into 13 chunks
-2026-06-04 18:36:02,258 INFO Document f088d449-6eee-465d-8ffe-76fcfc22c802 (Water Baptism): 21 chunks, ~9801 tokens
-2026-06-04 18:36:59,568 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:36:59,600 INFO Rewritten into 11 chunks
-2026-06-04 18:37:01,818 INFO Document 804b0adf-dfdd-408d-83b1-125d0a90bc25 (Healing The Bitter Pool): 18 chunks, ~8442 tokens
-2026-06-04 18:38:13,284 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:38:13,298 INFO Rewritten into 14 chunks
-2026-06-04 18:38:15,665 INFO Document 49685b52-b3b6-4865-b86a-be64d27ce163 (Explanation Of Greek Word Charisma): 22 chunks, ~11034 tokens
-2026-06-04 18:39:10,437 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:39:10,446 INFO Rewritten into 11 chunks
-2026-06-04 18:39:13,451 INFO Document b4c6ed78-6cbc-426e-b819-278a421bc825 (Charisma - Genus and Species): 28 chunks, ~13091 tokens
-2026-06-04 18:40:28,976 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:40:28,990 INFO Rewritten into 16 chunks
-2026-06-04 18:40:31,568 INFO Document 07712a0a-9236-4638-8fdf-d7d290c5cc50 (Gifts of Revelation and A Word of Wisdom): 23 chunks, ~10991 tokens
-2026-06-04 18:41:20,793 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:41:20,806 INFO Rewritten into 10 chunks
-2026-06-04 18:41:24,385 INFO Document 9ea0b6a1-9f7a-4f8d-82c9-45c74dd3c6f9 (A Word of Knowledge and Discerning of Spirits): 24 chunks, ~11253 tokens
-2026-06-04 18:42:48,908 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:42:48,921 INFO Rewritten into 15 chunks
-2026-06-04 18:42:52,708 INFO Document 5f2f21d4-1f86-4d3f-b00a-380a8fd1a592 (Gifts of Power - Faith): 21 chunks, ~10320 tokens
-2026-06-04 18:43:53,056 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:43:53,091 INFO Rewritten into 11 chunks
-2026-06-04 18:43:56,834 INFO Document 1bcf1648-5f00-464e-b5c6-d3b0445341cb (Gifts of Healings and Workings of Miracles): 22 chunks, ~10944 tokens
-2026-06-04 18:45:56,524 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:45:56,541 INFO Rewritten into 20 chunks
-2026-06-04 18:45:58,460 INFO Document e642ae26-74c0-4a6c-a99d-ee770af13cf7 (Vocal Gifts - An Unknown Tongue): 48 chunks, ~23557 tokens
-2026-06-04 18:46:50,463 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:46:50,473 INFO Rewritten into 11 chunks
-2026-06-04 18:46:53,576 INFO Document d1c82e02-f773-482e-b8ef-d144c94545ad (An Unknown Tongue - Occasional, Continual): 54 chunks, ~24679 tokens
-2026-06-04 18:48:25,681 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:48:25,697 INFO Rewritten into 17 chunks
-2026-06-04 18:48:29,357 INFO Document 70de06ef-f4fb-47ed-97e2-aa120a6f1632 (Kinds Of Tongues And Interpretation Of Tongues): 28 chunks, ~12817 tokens
-2026-06-04 18:49:46,019 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:49:46,027 INFO Rewritten into 14 chunks
-2026-06-04 18:49:48,238 INFO Document 258cdbe5-9d79-4e2c-8ceb-b99b3215a949 (The Gift Of Prophecy): 26 chunks, ~12167 tokens
-2026-06-04 18:50:59,314 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:50:59,326 INFO Rewritten into 15 chunks
-2026-06-04 18:51:01,974 INFO Document 713fdc61-ecc0-496a-8dcb-83c0c6ebf9eb (How To Judge Prophecy): 26 chunks, ~12410 tokens
-2026-06-04 18:51:50,815 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:51:50,833 INFO Rewritten into 9 chunks
-2026-06-04 18:51:53,628 INFO Document 58fc3b4f-a6f2-4c2a-8afc-794f5c8dae0d (How To Exercise Spiritual Gifts): 24 chunks, ~11739 tokens
-2026-06-04 18:52:53,969 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:52:53,978 INFO Rewritten into 11 chunks
-2026-06-04 18:52:55,766 INFO Document f0a3640c-51d6-41dc-b6a6-da03c3d652be (Immersed In The Spirit): 38 chunks, ~18197 tokens
-2026-06-04 18:54:00,114 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:54:00,128 INFO Rewritten into 12 chunks
-2026-06-04 18:54:03,758 INFO Document 69924e85-285a-4a5c-a070-01a0f55f7155 (Holy Spirit: Before and After Pentecost): 36 chunks, ~17376 tokens
-2026-06-04 18:55:44,444 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:55:44,460 INFO Rewritten into 20 chunks
-2026-06-04 18:55:48,543 INFO Document b0cbe982-637b-4891-a834-f079e6d631b6 (The Holy Spirit and the Bride): 21 chunks, ~9552 tokens
-2026-06-04 18:56:49,187 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:56:49,198 INFO Rewritten into 12 chunks
-2026-06-04 18:56:51,751 INFO Document 3a34d63f-688d-4c72-99a3-9bb2506b31f9 (The Holy Spirit Is A Person): 27 chunks, ~12676 tokens
-2026-06-04 18:57:57,486 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:57:57,499 INFO Rewritten into 14 chunks
-2026-06-04 18:58:01,153 INFO Document 844f5e35-98c3-4dcf-9664-b0bb512a858d (How To Receive The Holy Spirit): 31 chunks, ~14918 tokens
-2026-06-04 18:59:32,828 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 18:59:32,840 INFO Rewritten into 17 chunks
-2026-06-04 18:59:35,330 INFO Document f986577a-7587-44fa-aedd-9d9fffb43d4c (How To Exercise Vocal Gifts): 54 chunks, ~26323 tokens
-2026-06-04 19:00:41,723 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:00:41,733 INFO Rewritten into 12 chunks
-2026-06-04 19:00:44,496 INFO Document 4c842edb-275e-4bfa-be06-ab9fc2e275d1 (Seven Basic Conditions For Answered Prayer): 25 chunks, ~11415 tokens
-2026-06-04 19:01:39,457 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:01:39,469 INFO Rewritten into 11 chunks
-2026-06-04 19:01:43,065 INFO Document 1d563b08-a53a-4a66-a3c8-41589d7292a4 (Intervening By Prayer In National Affairs): 27 chunks, ~11819 tokens
-2026-06-04 19:02:32,077 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:02:32,088 INFO Rewritten into 9 chunks
-2026-06-04 19:02:35,533 INFO Document ddf1fe17-9c9e-4bd0-8c37-d1f10f941b3a (Spiritual Weapons For Spiritual Warfare): 48 chunks, ~21565 tokens
-2026-06-04 19:03:13,952 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:03:13,960 INFO Rewritten into 7 chunks
-2026-06-04 19:03:18,578 INFO Document 4b4ef162-37e9-4e46-8fbf-0ab8127a4662 (God’s Atomic Weapon - The Blood of Jesus): 23 chunks, ~10773 tokens
-2026-06-04 19:04:16,093 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:04:16,106 INFO Rewritten into 11 chunks
-2026-06-04 19:04:18,625 INFO Document c33f8304-06b7-41ff-9774-f435a26aef54 (Epilogue: The Glorious Church): 27 chunks, ~11935 tokens
-2026-06-04 19:05:24,653 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:05:24,669 INFO Rewritten into 12 chunks
-2026-06-04 19:05:28,950 INFO Document 024319ce-99bf-4c39-8a24-9fdc7e6a19a4 (God Demands Holiness in His People): 21 chunks, ~10113 tokens
-2026-06-04 19:06:38,865 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:06:38,886 INFO Rewritten into 15 chunks
-2026-06-04 19:06:42,584 INFO Document 270e34d5-1215-4997-befa-0bd5db43ed6b (God’s Provision for Holiness): 23 chunks, ~10496 tokens
-2026-06-04 19:07:20,825 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:07:20,831 INFO Rewritten into 8 chunks
-2026-06-04 19:07:24,473 INFO Document b844ee97-0ddb-4aed-b2a2-98d7b8920197 (How God’s Provision Works in Our Lives): 23 chunks, ~10553 tokens
-2026-06-04 19:08:22,067 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:08:22,077 INFO Rewritten into 12 chunks
-2026-06-04 19:08:25,414 INFO Document 666dd888-65c5-4082-98c1-1fd42081b2dc (How You May Sanctify Yourself): 19 chunks, ~8721 tokens
-2026-06-04 19:09:42,448 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:09:42,460 INFO Rewritten into 15 chunks
-2026-06-04 19:09:45,966 INFO Document f140e43e-6c4f-4cdf-960f-f52c3acd8678 (Christian Principles Of Finance): 29 chunks, ~13384 tokens
-2026-06-04 19:11:23,834 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:11:23,871 INFO Rewritten into 18 chunks
-2026-06-04 19:11:27,127 INFO Document 6d186652-ddf2-4445-845c-751c29652458 (The Helmet Of Hope): 20 chunks, ~9626 tokens
-2026-06-04 19:12:50,008 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:12:50,018 INFO Rewritten into 16 chunks
-2026-06-04 19:12:52,516 INFO Document a9ab027e-eb09-4aca-9394-41c4b10a9d97 (Decision, Not Emotion): 31 chunks, ~14126 tokens
-2026-06-04 19:14:04,912 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:14:04,925 INFO Rewritten into 14 chunks
-2026-06-04 19:14:08,929 INFO Document 132e286b-7348-453c-a8bb-e4e51f12b9c5 (The Importance Of Decision): 31 chunks, ~13742 tokens
-2026-06-04 19:15:25,220 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:15:25,236 INFO Rewritten into 16 chunks
-2026-06-04 19:15:28,656 INFO Document a6b70b91-d65a-47c1-aa61-1dca8739e24c (Use And Abuse Of The Tongue): 31 chunks, ~14161 tokens
-2026-06-04 19:16:17,538 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:16:17,550 INFO Rewritten into 10 chunks
-2026-06-04 19:16:22,032 INFO Document b96f987c-6fbb-4887-b6fd-3d1dadf8f8d4 (Let Us Go On To Perfection): 18 chunks, ~8506 tokens
-2026-06-04 19:17:01,739 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:17:01,759 INFO Rewritten into 8 chunks
-2026-06-04 19:17:03,923 INFO Document f1a6c15e-a733-4e41-8237-7df839c8e575 (The Symbolism Of The Tabernacle): 30 chunks, ~14771 tokens
-2026-06-04 19:17:36,400 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:17:36,409 INFO Rewritten into 7 chunks
-2026-06-04 19:17:39,203 INFO Document 83ea0ed0-953c-4523-9074-31720661517e (The Outer Court): 14 chunks, ~6528 tokens
-2026-06-04 19:18:14,016 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:18:14,024 INFO Rewritten into 7 chunks
-2026-06-04 19:18:15,639 INFO Document c0c3aa3c-395d-4953-8995-4be7c08e5225 (The Holy Place): 20 chunks, ~9787 tokens
-2026-06-04 19:20:15,544 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:20:15,561 INFO Rewritten into 19 chunks
-2026-06-04 19:20:17,853 INFO Document 5b97f9c2-8384-4325-ac04-1e29516a4ed1 (The Holy Of Holies): 18 chunks, ~8613 tokens
-2026-06-04 19:21:54,936 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:21:54,951 INFO Rewritten into 19 chunks
-2026-06-04 19:21:57,456 INFO Document 27e8ae51-32df-48c7-999e-381a279bc3ec (The Mercy Seat): 18 chunks, ~8261 tokens
-2026-06-04 19:23:40,019 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:23:40,035 INFO Rewritten into 18 chunks
-2026-06-04 19:23:42,306 INFO Document 01f60a88-3583-468b-ac53-36ac422b51cc (Four Great Blessings Of The New Covenant): 18 chunks, ~8478 tokens
-2026-06-04 19:25:07,202 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:25:07,217 INFO Rewritten into 16 chunks
-2026-06-04 19:25:09,182 INFO Document 15f8c601-ba87-4258-9ae1-ef38ad125de3 (Four Chief Requirements Of The True Worshiper): 18 chunks, ~9090 tokens
-2026-06-04 19:26:10,055 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:26:10,068 INFO Rewritten into 11 chunks
-2026-06-04 19:26:11,926 INFO Document 8217897f-2d34-48d5-93aa-c86de11c49d6 (Busybodies And Overseers): 23 chunks, ~10843 tokens
-2026-06-04 19:26:45,410 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:26:45,419 INFO Rewritten into 7 chunks
-2026-06-04 19:26:48,253 INFO Document 8bc013f6-6b7c-4f35-a1de-122a14fc3faa (The Pilgrims Laid The Foundation): 19 chunks, ~8665 tokens
-2026-06-04 19:27:43,903 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:27:43,915 INFO Rewritten into 10 chunks
-2026-06-04 19:27:47,034 INFO Document abab9ec3-288d-4116-aac2-2908cfdb9d89 (Intercession): 18 chunks, ~8375 tokens
-2026-06-04 19:28:51,205 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:28:51,219 INFO Rewritten into 13 chunks
-2026-06-04 19:28:55,450 INFO Document 279a167b-e3bb-4308-8cf8-95254e808b61 (How To Overcome Rejection And Betrayal): 26 chunks, ~12290 tokens
-2026-06-04 19:30:43,028 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:30:43,051 INFO Rewritten into 19 chunks
-2026-06-04 19:30:46,769 INFO Document ec1aedfc-9ced-4f17-b8f0-7b236ed74433 (From Rejection To Acceptance): 52 chunks, ~23721 tokens
-2026-06-04 19:31:24,388 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:31:24,395 INFO Rewritten into 7 chunks
-2026-06-04 19:31:27,874 INFO Document 5efa7d84-9af1-480a-ba93-ac30b954eb48 (The Grace Of Yielding): 29 chunks, ~13427 tokens
-2026-06-04 19:33:24,662 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:33:24,680 INFO Rewritten into 22 chunks
-2026-06-04 19:33:29,234 INFO Document 5ed3f959-7e78-43fa-83ed-072c1f4dc578 (We Are A Kingdom Of Priests): 29 chunks, ~14350 tokens
-2026-06-04 19:35:17,074 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:35:17,104 INFO Rewritten into 22 chunks
-2026-06-04 19:35:23,703 INFO Document 57a1e419-7ce5-452c-b466-a8e45c56a2f5 (Christ Rules Now As King And Priest): 30 chunks, ~14714 tokens
-2026-06-04 19:36:58,239 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:36:58,271 INFO Rewritten into 18 chunks
-2026-06-04 19:37:03,948 INFO Document 5b407c56-5b9c-4b64-a334-80ed06c29c50 (Good Government Through Prayer): 25 chunks, ~12488 tokens
-2026-06-04 19:38:56,058 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:38:56,118 INFO Rewritten into 22 chunks
-2026-06-04 19:38:59,855 INFO Document c8298ea5-7237-4aeb-af5a-87e500220fd7 (United Fasting For Restoration): 31 chunks, ~14526 tokens
-2026-06-04 19:40:55,937 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:40:55,963 INFO Rewritten into 19 chunks
-2026-06-04 19:40:59,571 INFO Document 232d8077-82fc-479a-a852-117e9a466664 (Crisis Calls For Fasting): 17 chunks, ~8447 tokens
-2026-06-04 19:42:24,231 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:42:24,303 INFO Rewritten into 16 chunks
-2026-06-04 19:42:25,970 INFO Document bec2bf42-bfd8-422b-b0ff-4e64f295e159 (How To Fast Successfully): 29 chunks, ~13202 tokens
-2026-06-04 19:43:57,358 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:43:57,374 INFO Rewritten into 16 chunks
-2026-06-04 19:43:59,436 INFO Document 9d172fd2-0544-46af-827d-adcaae672265 (Endurance): 18 chunks, ~8320 tokens
-2026-06-04 19:45:22,190 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-2026-06-04 19:45:22,208 INFO Rewritten into 15 chunks
-2026-06-04 19:45:25,130 INFO Time limit reached (181.0 min). Stopping.
-2026-06-04 19:45:25,135 INFO Done. 165 success, 0 failed in 181.0 min
+2026-06-06 09:07:57,035 INFO Found 583 sermon transcripts to rewrite
+2026-06-06 09:07:57,113 INFO Document 240db671-7230-40a2-9075-50d08cbb27b8 (Seven Steps To Christian Love): 24 chunks, ~10812 tokens
+2026-06-06 09:08:43,806 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:08:43,861 INFO Rewritten into 9 chunks
+2026-06-06 09:09:05,167 INFO Document 82bad3f9-22f4-4f3f-b39a-8a0bffda489e (The Eternal Unchanging Word): 13 chunks, ~6166 tokens
+2026-06-06 09:10:09,344 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:10:09,402 INFO Rewritten into 12 chunks
+2026-06-06 09:10:15,540 INFO Document 54f21573-8c1f-426e-8578-2d3af6992163 (To Get the Most Out of Life - Set Your Affections Above): 23 chunks, ~10829 tokens
+2026-06-06 09:11:25,432 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:11:25,450 INFO Rewritten into 13 chunks
+2026-06-06 09:11:35,077 INFO Document 8cb092c4-caf5-42d1-8362-3cdc0788595f (How To Become A New Creation): 23 chunks, ~10956 tokens
+2026-06-06 09:13:14,273 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:13:14,325 INFO Rewritten into 19 chunks
+2026-06-06 09:13:19,984 INFO Document edb0e8fb-7ebc-4a9b-8e27-a3942c51cf0a (Spiritual Blindness - Cause and Cure): 46 chunks, ~21197 tokens
+2026-06-06 09:14:15,484 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:14:15,511 INFO Rewritten into 11 chunks
+2026-06-06 09:14:22,535 INFO Document 2ddab2a9-648f-40be-8b94-cb75e7caccbc (Thankfulness): 19 chunks, ~9148 tokens
+2026-06-06 09:15:10,734 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:15:10,755 INFO Rewritten into 10 chunks
+2026-06-06 09:15:15,230 INFO Document 651811fa-12a4-4d87-8235-21667bd299b4 (The Promises): 25 chunks, ~11791 tokens
+2026-06-06 09:15:54,476 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:15:54,498 INFO Rewritten into 9 chunks
+2026-06-06 09:15:58,645 INFO Document 54f14046-8ba6-45be-a9b7-90c4ca0c9836 (The Conditions): 27 chunks, ~13501 tokens
+2026-06-06 09:17:12,224 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:17:12,250 INFO Rewritten into 14 chunks
+2026-06-06 09:17:15,412 INFO Document 6f05bdec-5c63-48ac-911a-88732f97742c (The Purposes): 21 chunks, ~9956 tokens
+2026-06-06 09:18:45,360 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:18:45,405 INFO Rewritten into 17 chunks
+2026-06-06 09:18:49,374 INFO Document 5490237b-1866-4da3-bfd6-06cbb298d76b (Progressive Commitment): 21 chunks, ~9893 tokens
+2026-06-06 09:19:18,833 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:19:18,841 INFO Rewritten into 6 chunks
+2026-06-06 09:19:21,115 INFO Document 769bea7e-85da-4f27-9b9d-7b058ed0bed7 (The Right to Judge): 19 chunks, ~9174 tokens
+2026-06-06 09:19:55,985 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:19:56,000 INFO Rewritten into 6 chunks
+2026-06-06 09:19:58,243 INFO Document 3fe57a11-b280-4348-9141-5d0ab5326d3c (Judge Righteous Judgment): 24 chunks, ~11504 tokens
+2026-06-06 09:21:06,027 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:21:06,052 INFO Rewritten into 13 chunks
+2026-06-06 09:21:08,843 INFO Document 15801ed4-de52-496f-8ec1-01758fb779e3 (A Prudent Wife Is from the Lord): 28 chunks, ~13115 tokens
+2026-06-06 09:22:30,266 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:22:30,287 INFO Rewritten into 14 chunks
+2026-06-06 09:22:32,563 INFO Document 651f319a-f541-4b72-9cd0-fe5372e4c699 (How to Find the Right Mate): 20 chunks, ~9281 tokens
+2026-06-06 09:23:24,722 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:23:24,773 INFO Rewritten into 9 chunks
+2026-06-06 09:23:26,775 INFO Document 9fbf3dd8-2480-4712-a4cc-e918ea1d084c (Praise): 21 chunks, ~9845 tokens
+2026-06-06 09:24:03,392 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:24:03,408 INFO Rewritten into 8 chunks
+2026-06-06 09:24:05,894 INFO Document 2d344a93-6241-44b9-abf4-3dd108d3b908 (Times And Seasons): 17 chunks, ~8092 tokens
+2026-06-06 09:25:24,416 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:25:24,439 INFO Rewritten into 15 chunks
+2026-06-06 09:25:26,979 INFO Document 25376fac-b619-4183-a28c-0119b296c3bb (Up Is Down): 21 chunks, ~9492 tokens
+2026-06-06 09:26:41,806 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:26:41,838 INFO Rewritten into 16 chunks
+2026-06-06 09:26:45,981 INFO Document 5dc0cfa9-2b1e-4b77-94c9-19987b0df2fa (Down Is Up): 23 chunks, ~11087 tokens
+2026-06-06 09:28:19,809 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:28:19,829 INFO Rewritten into 17 chunks
+2026-06-06 09:28:23,275 INFO Document 29099a28-1352-4a2f-91c9-5bdfce1a36eb (Release To God’s Ultimate): 21 chunks, ~9148 tokens
+2026-06-06 09:29:14,825 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:29:14,875 INFO Rewritten into 10 chunks
+2026-06-06 09:29:17,325 INFO Document 4aaaf5af-7072-412e-893d-3bdf82203d2c (Communion In Its Fullness): 23 chunks, ~11011 tokens
+2026-06-06 09:30:45,553 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:30:45,581 INFO Rewritten into 17 chunks
+2026-06-06 09:30:48,809 INFO Document 843643e2-4b31-425f-ac40-ec70d3b7dec8 (The Fatherhood Of God): 24 chunks, ~11102 tokens
+2026-06-06 09:31:46,197 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:31:46,225 INFO Rewritten into 11 chunks
+2026-06-06 09:31:50,086 INFO Document e27e88b8-1f49-4cd7-a8fd-592b17a77594 (Human Fatherhood - Natural): 62 chunks, ~28015 tokens
+2026-06-06 09:32:50,746 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:32:50,760 INFO Rewritten into 11 chunks
+2026-06-06 09:32:55,233 INFO Document fe0d6947-95d0-47ba-a406-152af74ba4ad (Human Fatherhood - Spiritual): 44 chunks, ~20531 tokens
+2026-06-06 09:34:12,957 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:34:12,981 INFO Rewritten into 14 chunks
+2026-06-06 09:34:16,390 INFO Document 02fb621c-6727-48ba-b877-c9805ed35381 (A Call To Corporate Fasting): 24 chunks, ~11163 tokens
+2026-06-06 09:35:32,510 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:35:32,542 INFO Rewritten into 15 chunks
+2026-06-06 09:35:35,311 INFO Document 3c34ef01-b132-46f0-9b04-b296491daba9 (The Secret Council Of The Godhead): 25 chunks, ~12128 tokens
+2026-06-06 09:36:34,560 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:36:34,585 INFO Rewritten into 11 chunks
+2026-06-06 09:36:37,150 INFO Document c4a94c4b-b6ac-436c-ab9d-6adad6f7688a (Motivation for Living To Do God’s Will): 20 chunks, ~9176 tokens
+2026-06-06 09:38:08,268 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:38:08,302 INFO Rewritten into 16 chunks
+2026-06-06 09:38:11,900 INFO Document e4ecfb3f-f8b3-428f-8d51-23dbade39a71 (Three Keys to Successful Leadership): 64 chunks, ~28209 tokens
+2026-06-06 09:39:24,515 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:39:24,545 INFO Rewritten into 12 chunks
+2026-06-06 09:39:30,782 INFO Document eefe154a-c8fb-4873-b474-d09e9aba72f5 (Four More Keys): 56 chunks, ~25585 tokens
+2026-06-06 09:40:29,231 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:40:29,251 INFO Rewritten into 9 chunks
+2026-06-06 09:40:34,412 INFO Document 756a8237-a8c0-4a69-94fe-aef6d5d83591 (Limitless Resources For Total Outreach): 31 chunks, ~14492 tokens
+2026-06-06 09:42:07,946 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:42:07,971 INFO Rewritten into 17 chunks
+2026-06-06 09:42:10,817 INFO Document cf68e3fd-7019-4092-b67b-da47c1029da6 (Who Are The Israel Of God?): 60 chunks, ~27897 tokens
+2026-06-06 09:42:53,644 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:42:53,662 INFO Rewritten into 10 chunks
+2026-06-06 09:42:58,262 INFO Document 3f973c9a-d855-484e-818a-fd848442fca8 (Jews, Gentiles And The Church): 30 chunks, ~14032 tokens
+2026-06-06 09:44:10,697 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:44:10,722 INFO Rewritten into 14 chunks
+2026-06-06 09:44:15,571 INFO Document 67af766c-dc71-47e0-a61e-3989032bc718 (The Prophetic Word Made More Sure): 31 chunks, ~14901 tokens
+2026-06-06 09:45:51,712 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:45:51,739 INFO Rewritten into 20 chunks
+2026-06-06 09:45:56,025 INFO Document 7e2042b9-b3d1-44de-8102-40daa049bed2 (Presbyteries and Apostolic Teams - Part 1): 19 chunks, ~9001 tokens
+2026-06-06 09:47:06,531 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:47:06,556 INFO Rewritten into 14 chunks
+2026-06-06 09:47:08,205 INFO Document e67ded3b-5dc4-4e82-abdf-6de1532567f0 (Presbyteries and Apostolic Teams - Part 2): 20 chunks, ~9592 tokens
+2026-06-06 09:49:01,600 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:49:01,623 INFO Rewritten into 18 chunks
+2026-06-06 09:49:03,622 INFO Document 73657a20-1cd1-4830-b65e-b448e1d9fdd4 (The Chief Shepherd and His Undershepherds - Part 1): 19 chunks, ~8651 tokens
+2026-06-06 09:50:08,553 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:50:08,581 INFO Rewritten into 15 chunks
+2026-06-06 09:50:11,141 INFO Document 452f9fdb-9869-43f4-9f13-df518f6f6149 (The Chief Shepherd and His Undershepherds - Part 2): 18 chunks, ~8205 tokens
+2026-06-06 09:51:03,833 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:51:03,864 INFO Rewritten into 11 chunks
+2026-06-06 09:51:05,361 INFO Document 9f65007a-0239-4def-a714-f8aff6117cc2 (Christ’s Last Order): 23 chunks, ~11163 tokens
+2026-06-06 09:53:04,491 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:53:04,519 INFO Rewritten into 23 chunks
+2026-06-06 09:53:06,659 INFO Document 765d67b8-f208-4869-892e-5c63737fa40d (Worship And Rest): 13 chunks, ~6384 tokens
+2026-06-06 09:53:49,487 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:53:49,509 INFO Rewritten into 8 chunks
+2026-06-06 09:53:51,126 INFO Document a612ea9e-158c-4f7c-b39e-c37302302047 (Preparing For Messiah’s Coming): 25 chunks, ~12166 tokens
+2026-06-06 09:54:48,633 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:54:48,653 INFO Rewritten into 11 chunks
+2026-06-06 09:54:51,428 INFO Document 92c7f116-c50e-4fa6-8832-628bf75c67db (The Source Of Strength): 21 chunks, ~9595 tokens
+2026-06-06 09:56:02,264 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:56:02,279 INFO Rewritten into 12 chunks
+2026-06-06 09:56:04,312 INFO Document 233459fa-4a07-4f11-8460-c2427cbd83ff (Knowing God): 24 chunks, ~11633 tokens
+2026-06-06 09:57:30,848 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:57:30,872 INFO Rewritten into 15 chunks
+2026-06-06 09:57:33,555 INFO Document 05f93c2a-a444-4a5a-b97d-b4494ced6ae2 (The Ministry Of A Priest): 24 chunks, ~10866 tokens
+2026-06-06 09:58:52,456 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 09:58:52,485 INFO Rewritten into 15 chunks
+2026-06-06 09:58:56,177 INFO Document 10a376af-9e39-434f-bf15-110c80daafc4 (A Kingdom of Priests): 26 chunks, ~11834 tokens
+2026-06-06 10:00:01,918 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:00:01,942 INFO Rewritten into 13 chunks
+2026-06-06 10:00:05,409 INFO Document 70f6378e-c1e0-41a7-89af-0d63ca2cb46d (The Prayer Orchestra): 20 chunks, ~9625 tokens
+2026-06-06 10:00:56,128 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:00:56,155 INFO Rewritten into 12 chunks
+2026-06-06 10:00:58,571 INFO Document 570564e0-4f43-4e29-bfb1-31149c4ab808 (God Wrote Your Scenario): 30 chunks, ~14192 tokens
+2026-06-06 10:02:40,671 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:02:40,694 INFO Rewritten into 17 chunks
+2026-06-06 10:02:43,428 INFO Document 72865115-f0a5-442a-a69f-5e5396e3bd7f (Healing: The Message And Method Of Jesus): 23 chunks, ~10995 tokens
+2026-06-06 10:04:11,542 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:04:11,566 INFO Rewritten into 17 chunks
+2026-06-06 10:04:13,665 INFO Document b4e829d3-2f21-42d1-b114-2cc6e97e986f (Opposition Of Witchcraft): 31 chunks, ~14716 tokens
+2026-06-06 10:06:04,722 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:06:04,761 INFO Rewritten into 22 chunks
+2026-06-06 10:06:07,765 INFO Document af000cf4-ead0-469d-b20e-8e010911a0ff (Continually Led By The Spirit): 31 chunks, ~14748 tokens
+2026-06-06 10:07:55,218 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:07:55,258 INFO Rewritten into 20 chunks
+2026-06-06 10:07:59,065 INFO Document 91ee9a6b-9f99-436f-ad54-5712145b1f30 (Corporate Calling Of The Church): 23 chunks, ~10854 tokens
+2026-06-06 10:09:51,606 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:09:51,636 INFO Rewritten into 24 chunks
+2026-06-06 10:09:53,523 INFO Document db3e15fc-9249-486b-92bd-ed8a99e14bb7 (The Only Basis For Full Salvation): 66 chunks, ~31247 tokens
+2026-06-06 10:10:41,752 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:10:41,772 INFO Rewritten into 10 chunks
+2026-06-06 10:10:48,213 INFO Document 1ab9ca67-253f-4424-b6a1-dbfa5cad61e7 (The Only Basis For Righteousness): 23 chunks, ~10552 tokens
+2026-06-06 10:12:00,424 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:12:00,452 INFO Rewritten into 15 chunks
+2026-06-06 10:12:02,485 INFO Document c0227dc5-5136-4b59-947d-0ec5fe717eb2 (The Flesh Under Judgment): 22 chunks, ~10654 tokens
+2026-06-06 10:13:50,529 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:13:50,559 INFO Rewritten into 21 chunks
+2026-06-06 10:13:52,634 INFO Document c8e0ecc2-1609-468e-a41d-b91d6c586c94 (The Life-Giver): 25 chunks, ~11265 tokens
+2026-06-06 10:15:15,807 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:15:15,826 INFO Rewritten into 16 chunks
+2026-06-06 10:15:19,457 INFO Document eda0e23b-28d3-4ad6-b600-47d087b9c525 (Delivered From This Present Evil Age): 26 chunks, ~12378 tokens
+2026-06-06 10:17:10,180 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:17:10,197 INFO Rewritten into 21 chunks
+2026-06-06 10:17:13,737 INFO Document 6780bc4b-4f7e-4b05-aeaf-db86ae9f0ae5 (The World That Satan Rules): 26 chunks, ~12462 tokens
+2026-06-06 10:18:18,918 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:18:18,945 INFO Rewritten into 12 chunks
+2026-06-06 10:18:20,950 INFO Document 2a7d2e82-c8ac-4fd5-a290-a61c18b9b3c2 (The Line Of Separation): 25 chunks, ~11463 tokens
+2026-06-06 10:19:58,656 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:19:58,708 INFO Rewritten into 18 chunks
+2026-06-06 10:20:01,460 INFO Document 5be5d0e4-f10f-4465-9e83-a1fd7e0adcf4 (The Righteous Requirement Of The Law): 19 chunks, ~8757 tokens
+2026-06-06 10:20:29,371 INFO HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-06-06 10:20:29,390 INFO Rewritten into 6 chunks
+2026-06-06 10:20:31,581 INFO Document 5e7b15aa-bbc1-4715-a5ec-4c8a593a519e (Overcoming the Barriers to Healing): 30 chunks, ~14161 tokens
