@@ -29,11 +29,15 @@ const SEARCH_SUGGESTIONS = [
 ];
 
 const AUTHOR_IMAGES: Record<string, string> = {
-  "Ern Baxter": "/images/authors/ern-baxter.webp",
-  "Oswald J. Smith": "/images/authors/oswald-smith.jpeg",
-  "John Bevere": "/images/authors/john-bevere.webp",
-  "Michael Brown": "/images/authors/michael-brown.jpeg",
-  "Jack Deere": "/images/authors/jack-deere.jpeg",
+  "Derek Prince": "/images/authors/derek-prince.jpg",
+  "Bob Mumford": "/images/authors/bob-mumford.jpg",
+  "Ern Baxter": "/images/authors/ern-baxter.jpg",
+  "Charles Simpson": "/images/authors/charles-simpson.jpg",
+  "Don Basham": "/images/authors/don-basham.jpg",
+  "Oswald J. Smith": "/images/authors/oswald-smith.jpg",
+  "John Bevere": "/images/authors/john-bevere.jpg",
+  "Michael Brown": "/images/authors/michael-brown.jpg",
+  "Jack Deere": "/images/authors/jack-deere.jpg",
 };
 
 const CLASSIC_AUTHORS = new Set(["Derek Prince", "Bob Mumford", "Ern Baxter", "Charles Simpson", "Don Basham", "Oswald J. Smith"]);
@@ -112,6 +116,8 @@ export default function LibraryPage() {
     deleteConversation,
     loadMessages,
   } = useConversations(user?.id);
+
+  const [failedAuthorImages, setFailedAuthorImages] = useState<Set<string>>(new Set());
 
   // Search + filter state
   const [query, setQuery] = useState("");
@@ -660,7 +666,7 @@ export default function LibraryPage() {
                             onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
                             onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#262624"; }}
                           >
-                            {imgSrc ? (
+                            {imgSrc && !failedAuthorImages.has(author.name) ? (
                               <Image
                                 src={imgSrc}
                                 alt={author.name}
@@ -668,15 +674,15 @@ export default function LibraryPage() {
                                 height={40}
                                 className="rounded-full object-cover flex-shrink-0"
                                 style={{ width: "40px", height: "40px", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)", filter: isClassic ? "grayscale(100%)" : "none" }}
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }}
+                                onError={() => setFailedAuthorImages((prev) => new Set(prev).add(author.name))}
                               />
-                            ) : null}
-                            <div
-                              className={imgSrc ? "hidden" : ""}
-                              style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#2a2926", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
-                            >
-                              <span style={{ fontSize: "14px", fontWeight: 600, color: "#888880" }}>{getInitials(author.name)}</span>
-                            </div>
+                            ) : (
+                              <div
+                                style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#2a2926", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
+                              >
+                                <span style={{ fontSize: "14px", fontWeight: 600, color: "#888880" }}>{getInitials(author.name)}</span>
+                              </div>
+                            )}
                             <div className="flex flex-col min-w-0">
                               <p className="font-serif" style={{ fontSize: "14px", color: "#e6e6e0" }}>{author.name}</p>
                               <p style={{ fontSize: "11px", color: "#888880", marginTop: "2px" }}>{author.years}</p>
@@ -782,7 +788,7 @@ export default function LibraryPage() {
                             <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Books</span>
                             <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "14px" }}>
                             {bookResults.map((book) => renderBookCard(book))}
                           </div>
                         </div>
@@ -792,7 +798,7 @@ export default function LibraryPage() {
                 ) : (
                   <>
                     <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                    <div className={contentFilter === "books" ? "grid grid-cols-1 sm:grid-cols-2" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"} style={{ gap: "14px" }}>
                       {unified.map((item) =>
                         item.type === "doc"
                           ? renderDocCard(item.data)
