@@ -42,6 +42,49 @@ function getInitials(name: string) {
   return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
+const BOOK_COVERS: Record<string, string> = {
+  "Blessing or Curse: You Can Choose": "/images/books/blessing-or-curse.jpg",
+  "They Shall Expel Demons": "/images/books/they-shall-expel-demons.jpg",
+  "Shaping History Through Prayer and Fasting": "/images/books/shaping-history-prayer-fasting.jpg",
+  "Spiritual Warfare": "/images/books/spiritual-warfare.jpg",
+  "Foundational Truths for Christian Living": "/images/books/foundational-truths.jpg",
+  "God's Medicine Bottle": "/images/books/gods-medicine-bottle.jpg",
+  "Holy Spirit in You": "/images/books/holy-spirit-in-you.jpg",
+  "Agape Road": "/images/books/agape-road.jpg",
+  "Take Another Look at Guidance": "/images/books/take-another-look-at-guidance.jpg",
+  "The Purpose of Temptation": "/images/books/purpose-of-temptation.jpg",
+  "The King and You": "/images/books/the-king-and-you.jpg",
+  "Fifteen Steps Out": "/images/books/fifteen-steps-out.jpg",
+  "Thy Kingdom Come": "/images/books/thy-kingdom-come.jpg",
+  "The Challenge to Care": "/images/books/the-challenge-to-care.jpg",
+  "Courageous Living": "/images/books/courageous-living.jpg",
+  "Straight Answers to 21 Honest Questions About Prayer": "/images/books/straight-answers-prayer.jpg",
+  "Face Up with a Miracle": "/images/books/face-up-with-a-miracle.jpg",
+  "Deliver Us from Evil": "/images/books/deliver-us-from-evil.jpg",
+  "A Handbook on Holy Spirit Baptism": "/images/books/handbook-holy-spirit-baptism.jpg",
+  "True and False Prophets": "/images/books/true-and-false-prophets.jpg",
+  "The Bait of Satan": "/images/books/bait-of-satan.jpg",
+  "Under Cover": "/images/books/under-cover.jpg",
+  "Driven by Eternity": "/images/books/driven-by-eternity.jpg",
+  "Good or God?": "/images/books/good-or-god.jpg",
+  "The Awe of God": "/images/books/awe-of-god.jpg",
+  "Killing Kryptonite": "/images/books/killing-kryptonite.jpg",
+  "Our Hands Are Stained with Blood": "/images/books/our-hands-are-stained.jpg",
+  "Answering Jewish Objections to Jesus": "/images/books/answering-jewish-objections.jpg",
+  "Whatever Happened to the Power of God?": "/images/books/whatever-happened-power-of-god.jpg",
+  "Authentic Fire": "/images/books/authentic-fire.jpg",
+  "Hyper-Grace": "/images/books/hyper-grace.jpg",
+  "Revolution in the Church": "/images/books/revolution-in-the-church.jpg",
+  "Surprised by the Power of the Spirit": "/images/books/surprised-by-power-of-spirit.jpg",
+  "Surprised by the Voice of God": "/images/books/surprised-by-voice-of-god.jpg",
+  "Even in Our Darkness": "/images/books/even-in-our-darkness.jpg",
+  "Why I Am Still Surprised by the Power of the Spirit": "/images/books/still-surprised-by-spirit.jpg",
+  "The Passion for Souls": "/images/books/passion-for-souls.jpg",
+  "The Man God Uses": "/images/books/the-man-god-uses.jpg",
+  "The Enduement of Power": "/images/books/enduement-of-power.jpg",
+  "The Revival We Need": "/images/books/the-revival-we-need.jpg",
+};
+
 // Author data for the filter panel
 const AUTHOR_DATA = [
   { name: "Derek Prince", years: "1915–2003", specialty: "Specialised in deliverance, spiritual warfare, and foundational Spirit-filled living." },
@@ -347,28 +390,52 @@ export default function LibraryPage() {
   };
 
   // Render a book card
-  const renderBookCard = (book: Book) => (
-    <div
-      key={book.id}
-      className="flex flex-col"
-      style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
-      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-    >
-      <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-        {book.author}
-      </p>
-      <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
-        {book.title}
-      </h4>
-      <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
-      {book.description && (
-        <p className="line-clamp-2" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>
-          {book.description}
-        </p>
-      )}
-    </div>
-  );
+  const renderBookCard = (book: Book) => {
+    const coverSrc = BOOK_COVERS[book.title];
+    return (
+      <div
+        key={book.id}
+        className="flex flex-row"
+        style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", gap: "14px", transition: "background 0.2s ease" }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+      >
+        {coverSrc ? (
+          <Image
+            src={coverSrc}
+            alt={book.title}
+            width={56}
+            height={80}
+            className="object-cover flex-shrink-0"
+            style={{ width: "56px", height: "80px", borderRadius: "4px", boxShadow: "0 2px 8px rgba(0,0,0,0.4)" }}
+            onError={(e) => {
+              const img = e.currentTarget as HTMLImageElement;
+              img.style.display = "none";
+              img.nextElementSibling?.classList.remove("hidden");
+            }}
+          />
+        ) : null}
+        <div
+          className={coverSrc ? "hidden" : ""}
+          style={{ width: "56px", height: "80px", borderRadius: "4px", backgroundColor: "#2a2926", flexShrink: 0 }}
+        />
+        <div className="flex flex-col min-w-0">
+          <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            {book.author}
+          </p>
+          <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
+            {book.title}
+          </h4>
+          <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
+          {book.description && (
+            <p className="line-clamp-2" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>
+              {book.description}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // Article reader view
   if (article) {
