@@ -140,8 +140,17 @@ def _get_anthropic():
     return _anthropic_client
 
 
-def expand_query(question: str) -> List[str]:
-    """Ask Llama to rewrite the query into 3 search variants."""
+def expand_query(question: str) -> Tuple[List[str], Optional[str]]:
+    """Ask Llama to rewrite the query into search variants plus FTS keywords.
+
+    Returns (variants, keywords) where:
+      - variants = [original_question, paraphrase1, paraphrase2] (original is always index 0)
+      - keywords = a space-separated string of distinctive theological terms for FTS routing,
+        or None when no keyword routing applies.
+
+    On parse failure, falls back to current behavior: up to 3 paraphrases and keywords=None
+    (no keyword routing — callers should run FTS on the full variant).
+    """
     try:
         response = _get_ai().chat.completions.create(
             model=GROQ_MODEL,
@@ -149,30 +158,54 @@ def expand_query(question: str) -> List[str]:
             messages=[{
                 "role": "user",
                 "content": (
-                    "Rewrite the following theological question into 3 distinct search queries "
-                    "that capture the same intent using different phrasings, vocabulary, or angles. "
-                    "Return ONLY a JSON array of 3 strings. No explanation.\n\n"
+                    "Rewrite the following theological question to improve search retrieval. "
+                    "Return ONLY a JSON object with these two fields, no explanation:\n"
+                    '  "paraphrases": an array of 2 distinct rephrasings that capture the same '
+                    "intent using different phrasings, vocabulary, or angles.\n"
+                    '  "keywords": a string of the 3-6 most distinctive theological terms from '
+                    "the query, separated by spaces — key terms only, not a sentence "
+                    '(e.g. "baptism Holy Spirit tongues gifts").\n\n'
                     f"Question: {question}"
                 ),
             }],
         )
     except Exception:
         logger.exception("Query expansion call failed, falling back to original query")
-        return [question]
+        return [question], None
 
     raw = (response.choices[0].message.content or "").strip()
+
+    # Parse loosely, tolerating markdown fences or surrounding prose.
+    parsed = None  # type: object
     try:
-        variants = json.loads(raw)
-        if isinstance(variants, list) and len(variants) >= 1:
-            return variants[:3]
+        parsed = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())[:3]
-            except json.JSONDecodeError:
-                pass
-    return [question]
+        for pattern in (r"\{.*\}", r"\[.*\]"):
+            match = re.search(pattern, raw, re.DOTALL)
+            if match:
+                try:
+                    parsed = json.loads(match.group())
+                    break
+                except json.JSONDecodeError:
+                    continue
+
+    # Preferred: structured object with paraphrases + keywords.
+    if isinstance(parsed, dict):
+        paraphrases = parsed.get("paraphrases")
+        keywords = parsed.get("keywords")
+        if isinstance(paraphrases, list):
+            valid = [p for p in paraphrases if isinstance(p, str) and p.strip()][:2]
+            if valid:
+                kw = keywords.strip() if isinstance(keywords, str) and keywords.strip() else None
+                return [question] + valid, kw
+
+    # Fallback: plain list of paraphrases (old format) — no keyword routing.
+    if isinstance(parsed, list):
+        valid = [p for p in parsed if isinstance(p, str) and p.strip()][:3]
+        if valid:
+            return valid, None
+
+    return [question], None
 
 
 INCLUDE_COPYRIGHTED_ENV = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() == "true"
@@ -181,52 +214,57 @@ INCLUDE_COPYRIGHTED_ENV = os.environ.get("INCLUDE_COPYRIGHTED", "true").lower() 
 FTS_QUERY_MAX_LEN = 300  # Truncate FTS queries to avoid Cloudflare 400s
 
 
-def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True, precomputed_embedding=None):
-    # type: (str, object, int, int, bool, Optional[List[float]]) -> Tuple[dict, List[float]]
-    """Run vector + FTS search for a single query.
+def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True, precomputed_embedding=None, fts_text=None, run_vector=True, run_fts=True):
+    # type: (str, object, int, int, bool, Optional[List[float]], Optional[str], bool, bool) -> Tuple[dict, List[float]]
+    """Run vector and/or FTS search and fuse the results with RRF.
 
     Returns ({chunk_id: (rrf_score, chunk)}, embedding_used).
     Accepts an optional precomputed_embedding to avoid redundant embed calls (Change 2).
     Fires embed_text and FTS in parallel since FTS doesn't need the embedding (Change 5).
     FTS and vector failures are non-fatal — each falls back to empty results.
+
+    When fts_text is provided, FTS runs on it (distinctive keywords) instead of `query`.
+    run_vector / run_fts toggle each leg, so the same function serves both vector-only
+    variant searches and a single FTS-only keyword search.
     """
-    fts_query = query[:FTS_QUERY_MAX_LEN]
+    fts_query = (fts_text if fts_text else query)[:FTS_QUERY_MAX_LEN]
+    embedding = precomputed_embedding
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         # Fire FTS immediately — no dependency on embedding
-        fts_future = ex.submit(
-            lambda: db.rpc("search_chunks_fts", {
-                "query_text": fts_query,
-                "match_count": fts_k,
-                "include_copyrighted": include_copyrighted,
-            }).execute()
-        )
+        fts_future = None
+        if run_fts:
+            fts_future = ex.submit(
+                lambda: db.rpc("search_chunks_fts", {
+                    "query_text": fts_query,
+                    "match_count": fts_k,
+                    "include_copyrighted": include_copyrighted,
+                }).execute()
+            )
 
-        # Get embedding: use precomputed or compute (runs concurrently with FTS)
-        if precomputed_embedding is not None:
-            embedding = precomputed_embedding
-        else:
-            embedding = embed_text(query)
-
-        # Vector search needs the embedding — fires after embed completes
+        # Vector leg needs an embedding — runs concurrently with FTS
         vector_data = []  # type: list
-        try:
-            vector_result = db.rpc("match_chunks", {
-                "query_embedding": embedding,
-                "match_count": vector_k,
-                "include_copyrighted": include_copyrighted,
-            }).execute()
-            vector_data = vector_result.data or []
-        except Exception:
-            logger.exception("Vector search failed, continuing with FTS only: %s", query[:100])
+        if run_vector:
+            if embedding is None:
+                embedding = embed_text(query)
+            try:
+                vector_result = db.rpc("match_chunks", {
+                    "query_embedding": embedding,
+                    "match_count": vector_k,
+                    "include_copyrighted": include_copyrighted,
+                }).execute()
+                vector_data = vector_result.data or []
+            except Exception:
+                logger.exception("Vector search failed, continuing with FTS only: %s", query[:100])
 
         # Collect FTS result
         fts_data = []  # type: list
-        try:
-            fts_result = fts_future.result()
-            fts_data = fts_result.data or []
-        except Exception:
-            logger.exception("FTS search failed, continuing with vector only: %s", query[:100])
+        if fts_future is not None:
+            try:
+                fts_result = fts_future.result()
+                fts_data = fts_result.data or []
+            except Exception:
+                logger.exception("FTS search failed, continuing with vector only: %s", query[:100])
 
     scores: Dict[str, Tuple[float, dict]] = {}
 
@@ -445,30 +483,57 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 except Exception:
                     logger.exception("Failed to fetch chunks for topic %s", topic_key)
 
-        # Step 1: Expand query into variants
-        variants = expand_query(request.question)
-        variant_weights = [1.0, 0.8, 0.6]
+        # Step 1: Expand query into variants ([original, paraphrase1, paraphrase2]) + FTS keywords
+        variants, keywords = expand_query(request.question)
+        variant_weights = [1.0, 0.7, 0.7]
+        FTS_WEIGHT = 1.0
 
-        # Step 2: Run hybrid search for each variant in parallel (Change 1)
+        # Step 2: Fuse retrieval (Change 1). When we have distinctive keywords, run vector
+        # search per variant plus a SINGLE keyword FTS pass — this avoids running (and
+        # over-weighting) an identical FTS query for every variant. Without keywords, fall
+        # back to full hybrid (vector + FTS on the full variant) per variant.
         all_scores: Dict[str, Tuple[float, dict]] = {}
         first_embedding = None  # type: Optional[List[float]]
 
-        with ThreadPoolExecutor(max_workers=3) as ex:
-            futures = [
-                ex.submit(hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
-                for variant in variants
-            ]
-            for i, future in enumerate(futures):
-                weight = variant_weights[i] if i < len(variant_weights) else 0.5
-                variant_scores, embedding = future.result()
-                if i == 0:
-                    first_embedding = embedding
-                for cid, (score, chunk) in variant_scores.items():
-                    weighted = score * weight
-                    if cid in all_scores:
-                        all_scores[cid] = (all_scores[cid][0] + weighted, all_scores[cid][1])
-                    else:
-                        all_scores[cid] = (weighted, chunk)
+        def _merge(scores, weight):
+            # type: (Dict[str, Tuple[float, dict]], float) -> None
+            for cid, (score, chunk) in scores.items():
+                weighted = score * weight
+                if cid in all_scores:
+                    all_scores[cid] = (all_scores[cid][0] + weighted, all_scores[cid][1])
+                else:
+                    all_scores[cid] = (weighted, chunk)
+
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            if keywords:
+                # Vector-only per variant + one keyword FTS pass, all fired in parallel.
+                variant_futures = [
+                    ex.submit(hybrid_search_rrf, variant, db,
+                              include_copyrighted=include_copyrighted, run_fts=False)
+                    for variant in variants
+                ]
+                fts_future = ex.submit(hybrid_search_rrf, keywords, db,
+                                       include_copyrighted=include_copyrighted, run_vector=False)
+                for i, future in enumerate(variant_futures):
+                    weight = variant_weights[i] if i < len(variant_weights) else 0.5
+                    variant_scores, embedding = future.result()
+                    if i == 0:
+                        first_embedding = embedding
+                    _merge(variant_scores, weight)
+                fts_scores, _ = fts_future.result()
+                _merge(fts_scores, FTS_WEIGHT)
+            else:
+                # Fallback: no keyword routing — full hybrid per variant (current behavior).
+                futures = [
+                    ex.submit(hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
+                    for variant in variants
+                ]
+                for i, future in enumerate(futures):
+                    weight = variant_weights[i] if i < len(variant_weights) else 0.5
+                    variant_scores, embedding = future.result()
+                    if i == 0:
+                        first_embedding = embedding
+                    _merge(variant_scores, weight)
 
         # Step 2.5: Filter out disabled source_kinds and source_names
         all_scores = {
