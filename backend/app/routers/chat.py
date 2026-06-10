@@ -643,10 +643,20 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         regular = [c for c in chunks if not c.get("_lexicon")]
         lexicon = [c for c in chunks if c.get("_lexicon")]
 
-        context = "\n\n---\n\n".join(
-            f"[Source {i+1}] (source_kind={c.get('source_kind') or c.get('source_type', 'unknown')}, citation_mode={c.get('citation_mode', 'citable')}) \"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}, chunk {c.get('chunk_index', i)}\n{c['content']}"
-            for i, c in enumerate(regular)
-        )
+        # Number only citable chunks contiguously ([Source 1], [Source 2], ...) so they
+        # align with the citations array; silent_context chunks are labeled [Background].
+        context_parts = []  # type: List[str]
+        source_num = 0
+        for i, c in enumerate(regular):
+            if _is_citable(c):
+                source_num += 1
+                label = "[Source %d]" % source_num
+            else:
+                label = "[Background]"
+            context_parts.append(
+                f"{label} (source_kind={c.get('source_kind') or c.get('source_type', 'unknown')}, citation_mode={c.get('citation_mode', 'citable')}) \"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}, chunk {c.get('chunk_index', i)}\n{c['content']}"
+            )
+        context = "\n\n---\n\n".join(context_parts)
 
         if topic_context_parts:
             topic_block = "\n\n---\n\n".join(topic_context_parts)

@@ -105,6 +105,8 @@ Each retrieved chunk is tagged with source_kind and citation_mode:
 
 source_kind values: magazine_article, sermon_transcript, theology_paper, youtube_transcript, background_note
 
+Each chunk is prefixed with a bracket label: citable chunks are numbered [Source 1], [Source 2], etc., while silent_context chunks are labeled [Background]. [Background] material informs your reasoning but must NEVER be cited by number, named, or referenced in your answer — only [Source N] chunks may be attributed.
+
 Citation rules (based on citation_mode):
 - citation_mode=citable — Attribute using "According to [Author]..." or "As [Title] teaches...". These are the only sources you may name.
 - citation_mode=silent_context — Use to inform reasoning, but NEVER cite, name, or reference in your answer.
