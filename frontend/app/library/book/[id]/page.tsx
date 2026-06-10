@@ -16,7 +16,6 @@ function cleanChunkContent(raw: string): string {
       clean.push("");
       continue;
     }
-    // Skip metadata headers
     if (trimmed.startsWith("[")) continue;
     if (trimmed.startsWith("#")) continue;
     if (trimmed.startsWith("---")) continue;
@@ -41,11 +40,13 @@ export default function BookExcerptPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Clean and filter chunks
-  const excerpts = data
-    ? data.chunks
-        .map((c) => ({ ...c, cleaned: cleanChunkContent(c.content) }))
-        .filter((c) => c.cleaned.length >= 100)
+  // Use quotes if available, otherwise fall back to cleaned chunks
+  const excerpts: { id: string; text: string }[] = data
+    ? data.quotes && data.quotes.length > 0
+      ? data.quotes.map((q) => ({ id: q.id, text: q.quote_text }))
+      : (data.chunks || [])
+          .map((c) => ({ id: c.id, text: cleanChunkContent(c.content) }))
+          .filter((c) => c.text.length >= 100)
     : [];
 
   const doc = data?.document;
@@ -117,16 +118,16 @@ export default function BookExcerptPage() {
           {excerpts.length === 0 ? (
             <p className="text-center" style={{ color: "#888880", marginTop: "40px" }}>No excerpts available</p>
           ) : (
-            excerpts.map((chunk, idx) => (
+            excerpts.map((item, idx) => (
               <div
-                key={chunk.id}
+                key={item.id}
                 style={{
                   padding: "32px 0",
                   borderBottom: idx < excerpts.length - 1 ? "1px solid #2a2926" : "none",
                 }}
               >
                 <p style={{ color: "#c1c1b8", fontSize: "16px", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
-                  {chunk.cleaned}
+                  {item.text}
                 </p>
               </div>
             ))

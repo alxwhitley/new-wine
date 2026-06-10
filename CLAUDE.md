@@ -45,8 +45,9 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   ├── chat.py        # /chat endpoint — retrieval + LLM
 │   │   │   ├── search.py      # /search + /search/documents endpoints
 │   │   │   ├── document.py    # /document/{id} + /document/{id}/article
+│   │   │   ├── library.py     # /library/books + /library/book/{id} endpoints
 │   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon + /study/excerpt + /study/interlinear + /study/commentary + /study/wordsearch + /study/wordstudy
-│   │   │   └── ingest.py      # /ingest endpoint
+│   │   │   └── ingest.py      # /ingest endpoint (admin-only as of 2026-06-10)
 │   │   ├── services/
 │   │   │   ├── embeddings.py
 │   │   │   ├── chunker.py
@@ -127,7 +128,7 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 
 ## Database
 - **Supabase** with pgvector enabled
-- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`
+- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`, `book_quotes`
 - `documents.source_type` — `'sermon'` | `'background'` | `'magazine_article'` | `'commentary'` | `'book'` | `'paper'` | `'other'`
 - `documents.source_kind` — taxonomy field (e.g. `'magazine_article'`)
 - `documents.citation_mode` — `'citable'` | `'silent_context'`
@@ -191,6 +192,7 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq) — used by ingest.py and ingest_magazine.py |
 | `scripts/backfill_phrase_refs.py` | Backfill bible_references via phrase matching (no LLM). Flags: `--source-kind`, `--author`, `--limit`, `--dry-run`, `--force`, `--chunks` |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content (run 2026-04-17) |
+| `scripts/extract_book_quotes.py` | Extract quotable passages from Murray books via Claude Haiku 4.5. Flags: `--dry-run`, `--limit`, `--title` |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 

@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 import { CARDS, GROUPS, FUTURE_TARGETS } from "./data";
 import type { CorpusCard } from "./types";
 import CorpusCardComponent from "./CorpusCard";
 import CardModal from "./CardModal";
+
+const ADMIN_USER_ID = "1ea99425-08ec-40f2-9ed3-588b88122a82";
 
 const COLORS = {
   bg: "#1f1e1d",
@@ -32,6 +36,8 @@ interface GlobalStats {
 }
 
 export default function CorpusAdminPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [counts, setCounts] = useState<CountData>({});
   const [globalStats, setGlobalStats] = useState<GlobalStats>({
     totalDocuments: 0,
@@ -239,6 +245,14 @@ export default function CorpusAdminPage() {
     setLastUpdated(new Date());
   }, []);
 
+  // Auth guard
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || user.id !== ADMIN_USER_ID) {
+      router.replace("/");
+    }
+  }, [user, authLoading, router]);
+
   // Initial fetch
   useEffect(() => {
     fetchAllCounts();
@@ -293,6 +307,11 @@ export default function CorpusAdminPage() {
 
     pulseTimers.current.set(cardId, timer);
   };
+
+  // Don't render until auth check completes
+  if (authLoading || !user || user.id !== ADMIN_USER_ID) {
+    return null;
+  }
 
   return (
     <div

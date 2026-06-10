@@ -169,6 +169,11 @@ repo/
 - `id` (uuid), `conversation_id` (FK → conversations)
 - `role` (text: 'user' | 'assistant'), `content` (text), `created_at`
 
+**`book_quotes` table** — extracted quotable passages from books (migration 034)
+- `id` (uuid), `document_id` (FK → documents, cascade delete)
+- `quote_text` (text), `quote_index` (int), `created_at` (timestamptz)
+- Index on `document_id`
+
 ---
 
 ## Key Decisions Already Made
@@ -354,6 +359,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/generate_excerpts.py` | Batch-generate edited word study articles from Precept Austin raw chunks. Concatenates all chunks per document, sends to Anthropic Claude for editing into clean articles, writes to `excerpts` table (`excerpt_type = 'word_study_article'`). Flags: `--test`, `--test-quality`, `--model sonnet|haiku`, `--time-limit`. |
 | `scripts/ingest_commentaries.py` | Ingests HistoricalChristianFaith commentaries from SQLite DB. Groups by father_name, one document per father, chunks with tiktoken, embeds with OpenAI, inserts via psycopg2. Single-transaction pattern (`connect_with_retry()` + `ingest_father()`). Theological tagging (Reformed, Cessationist, Charismatic-Friendly, Desert Fathers, Patristic). Flags: `--dry-run`, `--father "Name"`, `--filter-charismatic`. |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content in Supabase (run 2026-04-17). |
+| `scripts/extract_book_quotes.py` | Extract quotable passages from Andrew Murray books via Claude Haiku 4.5. 10 batches per book, 5 quotes per batch (~50 quotes/book). Validates length (100-600 chars), filters metadata/URLs. Flags: `--dry-run`, `--limit N`, `--title`. Resume-safe. Inserts into `book_quotes` table. |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
@@ -517,6 +523,23 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Sermon chunk bible_references backfill complete** — 582 docs, 4,881 chunks, 11,557 refs, 0 failures (see `logs/backfill_chunks.log`).
 - **9 Kolenda Cessationism videos pending retry** — videos 3–11 failed with "No captions and Whisper failed". Reset to Pending in `individual_videos.xlsx`. Likely need fresh `scripts/youtube_cookies.txt` or different yt-dlp player client args.
 - **Daniel Kolenda not in youtube_tracker.xlsx** — only in `individual_videos.xlsx` (not a channel scrape).
+- **Migration 033 pending** — `books.document_id` column. Must run in Supabase SQL Editor, then backfill with `UPDATE books b SET document_id = d.id FROM documents d WHERE lower(b.title) = lower(d.title) AND lower(b.author) = lower(d.author)`. "Read Excerpts" button on book cards won't render until this is done.
+- **Migration 034 pending** — `book_quotes` table. Must run in Supabase SQL Editor before `extract_book_quotes.py` can be executed.
+- **`extract_book_quotes.py` not yet run** — depends on migration 034. Will extract ~50 quotes per Murray book via Claude Haiku 4.5.
+- **Library book reader supports quotes + chunk fallback** — `GET /library/book/{id}` returns `quotes` array if `book_quotes` has data for the document, otherwise falls back to `chunks` array. Frontend handles both shapes.
+- **`/ingest` endpoint now admin-only (2026-06-10)** — was open to any authenticated user (corpus-pollution risk). Now uses `require_admin` (email check) from `auth.py`; dead `_require_user` helper removed. Deployed on next git push.
+- **JWT payload logging removed + log level INFO (2026-06-10)** — `auth.py` no longer logs full JWT payloads (was leaking emails/claims into Railway logs); `main.py` `basicConfig` changed DEBUG → INFO. Deployed on next git push.
+- **RLS disabled on `verses`, `excerpts`, `background_topics` (found 2026-06-10)** — anon key has full read/WRITE on these three tables. `background_topics` content is injected into chat prompts, so anon write = prompt-injection vector. Enable RLS with public-SELECT-only policies. (Verified live: `conversations`/`messages` have correct owner policies; `documents`/`chunks` are public-SELECT-only — those are fine.)
+- **`interlinear_words` INSERT policy is `WITH CHECK (true)`** (migration 023) — named "service role" but allows anon inserts. Change to `auth.role() = 'service_role'`.
+- **`match_sermon_chunks_by_ref` seq-scans all 193k chunks (2026-06-10 review)** — `verse_ref = ANY(c.bible_references)` cannot use the GIN index (0 scans ever, confirmed via EXPLAIN). Fix: change predicate to `c.bible_references @> ARRAY[verse_ref]`. Worst query in the system; hits every Study Mode commentary load with a verse_id.
+- **Chat FTS arm returns 0 matches for sentence queries (verified 2026-06-10)** — `websearch_to_tsquery` ANDs all terms; full-sentence questions and Groq paraphrase variants match nothing. Fix: have query expansion emit a keyword variant for the FTS arm. Related: original user question is never searched — `expand_query()` replaces it with 3 paraphrases.
+- **`search_documents` RPC ignores stored `chunks.fts`** — snippet subquery recomputes `to_tsvector('english', c.content)` per chunk (~1,100 parses per search at 55 chunks/doc × 20 results). Fix: use `c.fts` in both the filter and `ts_rank`.
+- **HNSW index built with default params** — m=16, ef_construction=64, float32; 1.47 GB at 193,775 chunks (→ ~3.8 GB at 500k, RAM risk). Plan: re-embed at 1024 dims (~$3) or halfvec index, rebuild with ef_construction=128. Full scaling roadmap in 2026-06-10 architecture review.
+- **24,429 chunks (12.6%) have `source_kind='unknown'`** — early-ingest books/papers backfilled as 'unknown' by migration 005. Invisible to source toggles; backfill before any source_kind-based retrieval work.
+- **`conversations.updated_at` never updated** — no trigger exists; sidebar orders by it, so appending to an old conversation doesn't bubble it up. Add trigger on `messages` INSERT + indexes `messages(conversation_id, created_at)`, `conversations(user_id, updated_at DESC)`.
+- **`articles` table is empty (0 rows)** — no backend references; six indexes. Drop it. Also droppable: `chunks.parent_chunk_id`/`chunk_type`/`page_number`/`source_hash` (unused), `idx_documents_year`, `idx_documents_source_year_issue`, duplicate `verses_verse_id_idx`.
+- **Security review follow-ups (2026-06-10, not yet done)** — verify API keys were rotated after the 2026-04-09 BFG history scrub; Python 3.9 is EOL (bump nixpacks to python312); PyPDF2 deprecated → pypdf; guest `anon_id` is client-generated and spoofable (limit bypassable; add per-IP rate limiting); no rate limits on unauthenticated embed-cost endpoints (`/search`, `/study/corpus`, `/study/commentary`); `/jewish-perspective` POST bypasses daily query limit; admin email hardcoded in `auth.py` + `admin/page.tsx`; `/rhemata-corpus-admin` page has no auth guard.
+- **Retrieval quality follow-ups (2026-06-10 review, not yet done)** — rerank pool too small (Cohere sees only RRF top-10; should rerank ~50 fused candidates then apply caps); content-type pollution (commentary 44.6% + lexicon 19.1%, both silent_context, compete for top-40 against 8% citable sermons — needs source_kind retrieval pools after denormalizing source_kind/citation_mode onto chunks); neighbor expansion should skip commentary/lexicon; `[Source N]` numbering includes silent_context chunks while frontend citations array is filtered (misalignment risk); low-material fallback counts neighbors/lexicon instead of citable chunks.
 
 ---
 

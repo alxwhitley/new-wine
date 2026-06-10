@@ -316,6 +316,12 @@ export async function fetchBooks(params?: {
 }
 
 // Book excerpt reader
+export interface BookQuote {
+  id: string;
+  quote_text: string;
+  quote_index: number;
+}
+
 export interface BookExcerptChunk {
   id: string;
   chunk_index: number;
@@ -324,7 +330,8 @@ export interface BookExcerptChunk {
 
 export interface BookExcerptResponse {
   document: { id: string; title: string; author: string; era: string | null };
-  chunks: BookExcerptChunk[];
+  quotes?: BookQuote[];
+  chunks?: BookExcerptChunk[];
 }
 
 export async function getBookExcerpts(docId: string): Promise<BookExcerptResponse> {

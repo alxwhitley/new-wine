@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/book/{doc_id}")
 async def get_book_excerpts(doc_id: str):
-    """Return book document metadata and all chunks for the excerpt reader."""
+    """Return book document metadata and quotes (or chunks as fallback) for the excerpt reader."""
     try:
         db = get_supabase()
 
@@ -20,6 +20,22 @@ async def get_book_excerpts(doc_id: str):
         if not doc.data:
             raise HTTPException(status_code=404, detail="Document not found")
 
+        # Prefer pre-extracted quotes; fall back to raw chunks
+        quotes = (
+            db.table("book_quotes")
+            .select("id, quote_text, quote_index")
+            .eq("document_id", doc_id)
+            .order("quote_index")
+            .execute()
+        )
+
+        if quotes.data:
+            return {
+                "document": doc.data[0],
+                "quotes": quotes.data,
+            }
+
+        # Fallback: return chunks
         chunks = (
             db.table("chunks")
             .select("id, chunk_index, content")

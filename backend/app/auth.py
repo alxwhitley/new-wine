@@ -29,7 +29,6 @@ def get_optional_user(request: Request) -> Optional[str]:
             algorithms=["ES256", "RS256"],
             options={"verify_aud": False},
         )
-        logger.info("[AUTH] Full JWT payload: %s", payload)
         user_id = payload.get("sub")
         logger.info("[AUTH] JWT decoded successfully, user_id=%s", user_id)
         return user_id

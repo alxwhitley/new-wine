@@ -43,14 +43,33 @@ export function useConversations(userId: string | undefined) {
 
   const deleteConversation = useCallback(async (id: string) => {
     console.log("[DELETE TRACE] 5. deleteConversation called in useConversations for:", id);
+    if (!userId) return;
     try {
+      // Verify the conversation belongs to this user before touching messages.
+      // The messages table has no user_id column, so we gate the message delete
+      // on confirmed conversation ownership rather than filtering messages directly.
+      const { data: owned, error: ownErr } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (ownErr) {
+        console.error("Failed to verify conversation ownership:", ownErr);
+        return;
+      }
+      if (!owned) {
+        console.error("Refusing to delete conversation not owned by user:", id);
+        return;
+      }
+
       const { error: msgErr } = await supabase.from("messages").delete().eq("conversation_id", id);
       if (msgErr) {
         console.error("Failed to delete messages:", msgErr);
         return;
       }
 
-      const { error: convErr } = await supabase.from("conversations").delete().eq("id", id);
+      const { error: convErr } = await supabase.from("conversations").delete().eq("id", id).eq("user_id", userId);
       if (convErr) {
         console.error("Failed to delete conversation:", convErr);
         return;
@@ -60,7 +79,7 @@ export function useConversations(userId: string | undefined) {
     } catch (err) {
       console.error("Unexpected error deleting conversation:", err);
     }
-  }, []);
+  }, [userId]);
 
   const loadMessages = useCallback(async (conversationId: string): Promise<Message[]> => {
     const { data } = await supabase

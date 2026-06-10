@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
-const ADMIN_EMAIL = "alxwhitley@gmail.com";
+const ADMIN_USER_ID = "1ea99425-08ec-40f2-9ed3-588b88122a82";
 
 interface SourceToggle {
   id: string;
@@ -88,7 +88,7 @@ export default function AdminPage() {
   // Auth guard
   useEffect(() => {
     if (authLoading) return;
-    if (!user || user.email !== ADMIN_EMAIL) {
+    if (!user || user.id !== ADMIN_USER_ID) {
       router.replace("/");
     }
   }, [user, authLoading, router]);
@@ -158,7 +158,7 @@ export default function AdminPage() {
   );
 
   // Don't render until auth check completes
-  if (authLoading || !user || user.email !== ADMIN_EMAIL) {
+  if (authLoading || !user || user.id !== ADMIN_USER_ID) {
     return null;
   }
 
