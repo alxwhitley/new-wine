@@ -80,11 +80,11 @@ def _ensure_background_topics():
     global _background_topics, _background_topics_loaded
     if _background_topics_loaded:
         return
-    _background_topics_loaded = True
     try:
         db = get_supabase()
         result = db.table("background_topics").select("topic_key, document_id, aliases, title").execute()
         _background_topics = result.data or []
+        _background_topics_loaded = True  # only mark loaded after success
         logger.info("Loaded %d background topics", len(_background_topics))
     except Exception:
         logger.exception("Failed to load background_topics — topic injection disabled")
@@ -455,16 +455,22 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         _ensure_background_topics()
         current_turn = len(request.messages)
         matched_topics = match_background_topics(request.question)
-        topics_to_inject = []  # type: List[str]
+        topics_to_inject = []   # type: List[str]  # full paper this turn
+        topics_to_condense = [] # type: List[str]  # first chunk only (within 6-turn window)
         for topic_key in matched_topics:
             injection_turn = (request.topics_established or {}).get(topic_key, -99)
             if current_turn - injection_turn > 6:
                 topics_to_inject.append(topic_key)
+            else:
+                # Fix 3: within suppression window — inject first chunk to keep guardrail active
+                topics_to_condense.append(topic_key)
 
         topic_context_parts = []  # type: List[str]
+        injected_doc_ids = set()  # type: set  # Fix 6: track for dedup against main pool
         updated_topics = dict(request.topics_established or {})
-        if topics_to_inject:
+        if topics_to_inject or topics_to_condense:
             topic_lookup = {t["topic_key"]: t for t in _background_topics}
+
             for topic_key in topics_to_inject:
                 topic = topic_lookup.get(topic_key)
                 if not topic:
@@ -475,13 +481,34 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                     ).order("chunk_index").execute()
                     if chunk_result.data:
                         full_text = "\n\n".join(c["content"] for c in chunk_result.data)
+                        # Fix 4: use [Background] label with citation_mode tag
                         topic_context_parts.append(
-                            "[Position Paper: %s]\n%s" % (topic["title"], full_text)
+                            "[Background] (citation_mode=silent_context) \"%s\"\n%s" % (topic["title"], full_text)
                         )
+                        injected_doc_ids.add(topic["document_id"])
                         updated_topics[topic_key] = current_turn
                         logger.info("Injected background topic: %s (%d chunks)", topic_key, len(chunk_result.data))
                 except Exception:
                     logger.exception("Failed to fetch chunks for topic %s", topic_key)
+
+            # Fix 3: condensed injection — first chunk only for recently established topics
+            for topic_key in topics_to_condense:
+                topic = topic_lookup.get(topic_key)
+                if not topic:
+                    continue
+                try:
+                    chunk_result = db.table("chunks").select("content").eq(
+                        "document_id", topic["document_id"]
+                    ).order("chunk_index").limit(1).execute()
+                    if chunk_result.data:
+                        first_chunk = chunk_result.data[0]["content"]
+                        topic_context_parts.append(
+                            "[Background] (citation_mode=silent_context) \"%s\"\n%s" % (topic["title"], first_chunk)
+                        )
+                        injected_doc_ids.add(topic["document_id"])
+                        logger.info("Condensed injection for established topic: %s", topic_key)
+                except Exception:
+                    logger.exception("Failed to fetch condensed chunk for topic %s", topic_key)
 
         # Step 1: Expand query into variants ([original, paraphrase1, paraphrase2]) + FTS keywords
         variants, keywords = expand_query(request.question)
@@ -541,6 +568,16 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             for cid, (score, chunk) in all_scores.items()
             if not is_chunk_disabled(chunk, filters)
         }
+
+        # Fix 6: Remove chunks from injected position papers — they're already in
+        # topic_context_parts, so including them in the main pool would duplicate content
+        # and waste context slots for citable sources.
+        if injected_doc_ids:
+            all_scores = {
+                cid: (score, chunk)
+                for cid, (score, chunk) in all_scores.items()
+                if chunk.get("document_id") not in injected_doc_ids
+            }
 
         # Step 2.75: Apply boost_factor from RPC results — no extra query (Change 3)
         all_scores = {
@@ -636,8 +673,9 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     def generate():
-        # Low-material fallback: trigger when fewer than 2 citable (pre-expansion) chunks
-        if citable_count < 2:
+        # Low-material fallback: skip entirely when a position paper was injected — the
+        # system has strong material even if citable chunk count is low.
+        if citable_count < 2 and not topic_context_parts:
             fallback = "I don't have strong material on that topic in my current library."
             yield _sse(json.dumps({"token": fallback}))
             yield _sse(json.dumps({"citations": [], "conversation_id": None}))
