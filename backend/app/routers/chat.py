@@ -586,6 +586,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             except Exception:
                 logger.exception("Cohere rerank failed, using RRF top 10")
 
+        # Count citable chunks from the reranked results, before neighbor expansion and
+        # lexicon/silent_context are mixed in — this is the true "do we have material?" signal.
+        citable_count = sum(1 for c in chunks if _is_citable(c))
+
         # Step 4: Neighbor chunk expansion — batch fetch ±1 chunk_index, cap at 12 total
         seen_ids = {c["id"] for c in chunks}
         neighbors = fetch_neighbor_chunks_batch(chunks, seen_ids, db)
@@ -632,8 +636,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     def generate():
-        # Low-material fallback
-        if len(chunks) < 3:
+        # Low-material fallback: trigger when fewer than 2 citable (pre-expansion) chunks
+        if citable_count < 2:
             fallback = "I don't have strong material on that topic in my current library."
             yield _sse(json.dumps({"token": fallback}))
             yield _sse(json.dumps({"citations": [], "conversation_id": None}))
