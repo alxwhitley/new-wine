@@ -112,6 +112,11 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 
 ---
 
+## Design System
+Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex. Admin pages (`app/admin/`, `app/rhemata-corpus-admin/`) still have old hex — deferred, internal only.
+
+---
+
 ## Tech Stack
 - **Frontend:** Next.js 16 (React 19), Tailwind CSS 4 — deploys to Vercel
 - **Backend:** Python 3.9 / FastAPI — deploys to Railway
@@ -153,6 +158,7 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 - Bible Study articles excluded from extraction pipeline
 - Topic tagging: 257-tag taxonomy (15 categories), validated against VALID_TAGS set in scripts/taxonomy.py, retry if < 3 valid
 - is_copyrighted derived from folder path: `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false
+- Brand reset complete (June 2026): Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 
 ---
 
