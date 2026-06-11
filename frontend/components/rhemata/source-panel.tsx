@@ -41,7 +41,7 @@ export function SourcePanel({ citation, citationIndex, isOpen, onClose }: Source
             )}
 
             {/* Title */}
-            <h2 className="font-serif text-lg font-semibold text-foreground mb-2 leading-tight">
+            <h2 className="font-sans text-lg font-semibold text-foreground mb-2 leading-tight">
               {citation.document_title || "Unknown Source"}
             </h2>
 

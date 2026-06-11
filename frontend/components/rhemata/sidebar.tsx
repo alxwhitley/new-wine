@@ -95,7 +95,7 @@ export function Sidebar({
     <>
       {/* Wordmark + close button (mobile) */}
       <div className="flex items-center justify-between pb-4">
-        <h1 className="font-serif text-2xl font-semibold text-foreground tracking-tight">
+        <h1 className="font-sans text-2xl font-semibold text-foreground tracking-tight">
           Rhemata
         </h1>
         <button

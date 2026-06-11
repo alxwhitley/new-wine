@@ -159,7 +159,7 @@ export default function Home() {
         {isEmpty ? (
           /* Empty state */
           <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6">
-            <h2 className="font-serif text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg">
+            <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg">
               {greeting}
             </h2>
 
@@ -172,7 +172,7 @@ export default function Home() {
                 <button
                   key={s}
                   onClick={() => handleSend(s)}
-                  className="w-full min-h-[44px] text-left rounded-3xl border border-border bg-card px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
+                  className="w-full min-h-[44px] text-left rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors"
                 >
                   {s}
                 </button>

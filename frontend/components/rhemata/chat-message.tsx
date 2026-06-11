@@ -97,7 +97,7 @@ function FeedbackModal({
       <div
         className="w-full max-w-md mx-4 rounded-lg border bg-popover border-border p-6"
       >
-        <h3 className="font-serif text-lg text-foreground">What went wrong?</h3>
+        <h3 className="font-sans text-lg text-foreground">What went wrong?</h3>
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           Your feedback helps improve Rhemata
         </p>
@@ -255,12 +255,12 @@ export function ChatMessage({
         <ReactMarkdown
           components={{
             h2: ({ children }) => (
-              <h2 className="font-serif text-[1.1rem] font-semibold text-foreground mt-4 mb-2">
+              <h2 className="font-sans text-[1.1rem] font-semibold text-foreground mt-4 mb-2">
                 {children}
               </h2>
             ),
             h3: ({ children }) => (
-              <h3 className="font-serif text-base font-semibold text-foreground mt-4 mb-2">
+              <h3 className="font-sans text-base font-semibold text-foreground mt-4 mb-2">
                 {children}
               </h3>
             ),
