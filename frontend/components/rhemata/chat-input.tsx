@@ -3,13 +3,15 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  streaming?: boolean;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
   const [input, setInput] = useState("");
 
   const handleSubmit = (e: FormEvent) => {
@@ -30,7 +32,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   return (
     <div className="shrink-0 bg-background px-4 md:px-6 pb-6">
       <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-        <div className="flex items-center gap-2 rounded-3xl border border-border bg-card px-4 py-3">
+        <div className={cn("flex items-center gap-2 rounded-3xl border border-border bg-card px-4 py-3 shine-border", streaming && "streaming")}>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -38,11 +40,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             placeholder="Enter your prompt..."
             disabled={disabled}
             rows={1}
-            className="min-w-0 flex-1 resize-none bg-transparent py-0 text-sm leading-normal text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
-            style={{
-              minHeight: "24px",
-              maxHeight: "200px",
-            }}
+            className="min-w-0 flex-1 resize-none bg-transparent py-0 text-sm leading-normal text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 min-h-6 max-h-[200px]"
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
               target.style.height = "auto";

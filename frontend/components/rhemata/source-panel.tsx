@@ -1,7 +1,10 @@
 "use client";
 
-import { X, BookOpen, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BookOpen, ExternalLink } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+} from "@/components/ui/sheet";
 import type { Citation } from "@/lib/api";
 
 interface SourcePanelProps {
@@ -12,79 +15,65 @@ interface SourcePanelProps {
 }
 
 export function SourcePanel({ citation, citationIndex, isOpen, onClose }: SourcePanelProps) {
-  if (!isOpen || !citation) return null;
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/20"
-        onClick={onClose}
-      />
-
-      {/* Panel */}
-      <aside className="fixed right-0 top-0 z-50 h-screen w-96 bg-card border-l border-border shadow-xl">
+    <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        side="right"
+        className="w-96 max-w-96 p-0 bg-popover"
+        showCloseButton={true}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <BookOpen className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase tracking-wider">Source</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close source panel</span>
-          </Button>
+        <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+          <BookOpen className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Source</span>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto" style={{ maxHeight: "calc(100vh - 65px)" }}>
-          {/* Citation badge */}
-          {citationIndex !== null && (
-            <div className="mb-4">
-              <span className="inline-flex items-center justify-center rounded px-2 py-1 text-xs font-medium bg-citation text-citation-foreground">
-                [{citationIndex}]
-              </span>
+        {citation && (
+          <div className="p-6 overflow-y-auto max-h-[calc(100vh-65px)]">
+            {/* Citation badge */}
+            {citationIndex !== null && (
+              <div className="mb-4">
+                <span className="inline-flex items-center justify-center rounded px-2 py-1 text-xs font-medium bg-secondary text-secondary-foreground">
+                  [{citationIndex}]
+                </span>
+              </div>
+            )}
+
+            {/* Title */}
+            <h2 className="font-serif text-lg font-semibold text-foreground mb-2 leading-tight">
+              {citation.document_title || "Unknown Source"}
+            </h2>
+
+            {/* Author */}
+            {citation.author && (
+              <p className="text-sm text-muted-foreground mb-6">
+                {citation.author}
+              </p>
+            )}
+
+            {/* Source link */}
+            {citation.url && (
+              <a
+                href={citation.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-6 inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline transition-colors"
+              >
+                View source
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
+
+            {/* Excerpt */}
+            <div className="rounded-lg bg-background p-4 border border-border">
+              <p className="text-sm text-foreground leading-relaxed italic">
+                &ldquo;{citation.content}&rdquo;
+              </p>
             </div>
-          )}
-
-          {/* Title */}
-          <h2 className="font-serif text-lg font-semibold text-foreground mb-2 leading-tight">
-            {citation.document_title || "Unknown Source"}
-          </h2>
-
-          {/* Author */}
-          {citation.author && (
-            <p className="text-sm text-muted-foreground mb-6">
-              {citation.author}
-            </p>
-          )}
-
-          {/* Source link */}
-          {citation.url && (
-            <a
-              href={citation.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mb-6 inline-flex items-center gap-1.5 text-sm text-gold hover:text-gold-hover transition-colors"
-            >
-              View source
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
-
-          {/* Excerpt */}
-          <div className="rounded-lg bg-background p-4 border border-border">
-            <p className="text-sm text-foreground leading-relaxed italic">
-              &ldquo;{citation.content}&rdquo;
-            </p>
           </div>
-        </div>
-      </aside>
-    </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -1,4 +1,3 @@
-// Hover standard: onMouseEnter bg #262624, onMouseLeave bg transparent, cursor pointer
 "use client";
 
 import { useState, useEffect } from "react";
@@ -7,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -107,29 +107,23 @@ export function Sidebar({
       </div>
 
       {/* New Chat CTA */}
-      <button
+      <Button
         onClick={handleNewChat}
-        className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors mb-4"
-        style={{ backgroundColor: "#b49238", color: "#1b1b19" }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#c9a544"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#b49238"; }}
+        className="w-full min-h-[44px] mb-4 gap-2"
       >
         <Plus className="h-4 w-4 shrink-0" />
         <span>New Chat</span>
-      </button>
+      </Button>
 
       {/* Nav Items */}
       <nav className="space-y-0.5 mb-4">
         <Link
           href="/"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
-          style={{
-            backgroundColor: isChat ? "#262624" : "transparent",
-            color: isChat ? "#ffffff" : "#c1c1b8",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isChat ? "#262624" : "transparent"; }}
+          className={cn(
+            "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            isChat && "bg-sidebar-accent text-sidebar-accent-foreground"
+          )}
         >
           <MessageSquare className="h-4 w-4" />
           Chat
@@ -137,13 +131,10 @@ export function Sidebar({
         <Link
           href="/library"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
-          style={{
-            backgroundColor: isDiscover ? "#262624" : "transparent",
-            color: isDiscover ? "#ffffff" : "#c1c1b8",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isDiscover ? "#262624" : "transparent"; }}
+          className={cn(
+            "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            isDiscover && "bg-sidebar-accent text-sidebar-accent-foreground"
+          )}
         >
           <Compass className="h-4 w-4" />
           Library
@@ -151,13 +142,10 @@ export function Sidebar({
         <Link
           href="/study"
           onClick={onClose}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer"
-          style={{
-            backgroundColor: isStudy ? "#262624" : "transparent",
-            color: isStudy ? "#ffffff" : "#c1c1b8",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isStudy ? "#262624" : "transparent"; }}
+          className={cn(
+            "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            isStudy && "bg-sidebar-accent text-sidebar-accent-foreground"
+          )}
         >
           <BookOpen className="h-4 w-4" />
           Study
@@ -169,7 +157,7 @@ export function Sidebar({
         {isChat && (
           isLoggedIn ? (
             <>
-              <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+              <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Recents
               </p>
               <div className="space-y-2">
@@ -197,12 +185,10 @@ export function Sidebar({
                       <>
                         <button
                           onClick={() => handleSelectConversation(conversation.id)}
-                          className="w-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-colors cursor-pointer"
-                          style={{
-                            backgroundColor: activeConversationId === conversation.id ? "#262624" : "transparent",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = activeConversationId === conversation.id ? "#262624" : "transparent"; }}
+                          className={cn(
+                            "w-full min-h-[44px] rounded-lg px-3 py-2 text-left transition-colors cursor-pointer hover:bg-sidebar-accent",
+                            activeConversationId === conversation.id && "bg-sidebar-accent"
+                          )}
                         >
                           <div className="min-w-0 flex-1">
                             <p
@@ -257,7 +243,7 @@ export function Sidebar({
 
         {isStudy && (
           <>
-            <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+            <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Saved Words
             </p>
             {savedWords.length === 0 ? (
@@ -272,18 +258,16 @@ export function Sidebar({
                     <button
                       key={word.id}
                       onClick={() => onSelectSavedWord?.(word.strongs_number)}
-                      className="w-full text-left rounded px-3 py-2 transition-colors cursor-pointer"
-                      style={{
-                        backgroundColor: isActive ? "#262624" : "transparent",
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isActive ? "#262624" : "transparent"; }}
+                      className={cn(
+                        "w-full text-left rounded px-3 py-2 transition-colors cursor-pointer hover:bg-sidebar-accent",
+                        isActive && "bg-sidebar-accent"
+                      )}
                     >
-                      <p className="text-sm" style={{ color: "#e6e6e6" }}>
+                      <p className="text-sm text-foreground">
                         {(word.english_gloss ?? "").split(",")[0].trim() || word.transliteration}
-                        <span style={{ color: "#888780" }}> &middot; {word.strongs_number}</span>
+                        <span className="text-muted-foreground"> &middot; {word.strongs_number}</span>
                       </p>
-                      <p className="text-xs" style={{ color: "#888780" }}>
+                      <p className="text-xs text-muted-foreground">
                         {word.transliteration}
                       </p>
                     </button>
@@ -311,10 +295,11 @@ export function Sidebar({
       )}
 
       {/* Footer */}
-      <div className="mt-auto pb-4 px-4">
-        <p className="text-xs text-muted-foreground text-center">
+      <div className="mt-auto pb-4 px-4 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
           Theological Research Assistant
         </p>
+        <ThemeToggle />
       </div>
     </>
   );

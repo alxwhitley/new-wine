@@ -164,7 +164,7 @@ export default function Home() {
             </h2>
 
             <div className="w-full max-w-3xl mt-8">
-              <ChatInput onSend={handleSend} disabled={chatLoading} />
+              <ChatInput onSend={handleSend} disabled={chatLoading} streaming={chatLoading} />
             </div>
 
             <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
@@ -228,7 +228,7 @@ export default function Home() {
                 {dailyLimitMessage}
               </div>
             )}
-            <ChatInput onSend={handleSend} disabled={chatLoading || !!dailyLimitMessage} />
+            <ChatInput onSend={handleSend} disabled={chatLoading || !!dailyLimitMessage} streaming={chatLoading} />
           </>
         )}
       </main>
