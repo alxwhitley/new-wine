@@ -10,6 +10,8 @@ import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { searchDocumentsFts, browseDocuments, getArticle, fetchBooks, deleteDocument } from "@/lib/api";
 import type { DocumentSearchResult, ArticleResponse, Book } from "@/lib/api";
 
@@ -309,9 +311,9 @@ export default function LibraryPage() {
       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
     >
       {isNewWine && (
-        <span style={{ position: "absolute", top: "12px", right: "12px", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#888880", backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid #3c3c38", borderRadius: "20px", padding: "3px 8px" }}>
+        <Badge variant="secondary" className="absolute top-3 right-3 text-[10px] uppercase tracking-wider">
           New Wine Magazine
-        </span>
+        </Badge>
       )}
       {doc.author && (
         <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -743,12 +745,12 @@ export default function LibraryPage() {
                 <button
                   key={f.key}
                   onClick={() => setContentFilter(f.key)}
-                  className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer"
-                  style={{
-                    backgroundColor: contentFilter === f.key ? "rgba(212, 185, 106, 0.12)" : "transparent",
-                    border: contentFilter === f.key ? "1px solid rgba(212, 185, 106, 0.3)" : "1px solid #3c3c38",
-                    color: contentFilter === f.key ? "#d4b96a" : "#c1c1b8",
-                  }}
+                  className={cn(
+                    "rounded-md px-3 py-1 text-xs font-medium transition-colors cursor-pointer",
+                    contentFilter === f.key
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border hover:bg-accent"
+                  )}
                 >
                   {f.label}
                 </button>

@@ -3,6 +3,11 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Search, Menu, Bookmark, Flag, ChevronDown, ChevronUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import type { SavedWord } from "@/components/rhemata/sidebar";
@@ -225,22 +230,15 @@ function InterlinearBlocks({
   loading: boolean;
   isNT: boolean;
 }) {
-  const cardStyle = {
-    backgroundColor: "#262624",
-    border: "1px solid #3c3c38",
-    borderRadius: 8,
-    padding: 12,
-  };
-
   if (loading) {
     return (
-      <div style={cardStyle}>
+      <div className="rounded-md border border-border p-3">
         <div className="flex flex-wrap gap-3">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <div key={i} className="flex flex-col items-center animate-pulse">
-              <div className="h-5 w-10 rounded bg-border mb-1" />
-              <div className="h-3 w-8 rounded bg-border mb-0.5" />
-              <div className="h-2.5 w-10 rounded bg-border" />
+            <div key={i} className="flex flex-col items-center gap-1">
+              <Skeleton className="h-5 w-10" />
+              <Skeleton className="h-3 w-8" />
+              <Skeleton className="h-2.5 w-10" />
             </div>
           ))}
         </div>
@@ -250,8 +248,8 @@ function InterlinearBlocks({
 
   if (!isNT) {
     return (
-      <div style={cardStyle}>
-        <p className="text-sm" style={{ color: "#c1c1b8" }}>
+      <div className="rounded-md border border-border p-3">
+        <p className="text-sm text-muted-foreground">
           No interlinear data available for this verse
         </p>
       </div>
@@ -263,30 +261,26 @@ function InterlinearBlocks({
   }
 
   return (
-    <div style={{ ...cardStyle, padding: 0 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px' }}>
+    <div className="rounded-md border border-border">
+      <div className="flex flex-wrap gap-2 p-3">
         {tokens.map((token, i) => {
           const isSelected = selectedStrongs === token.strongs;
           return (
             <button
               key={i}
               onClick={() => onSelect(isSelected ? null : token.strongs)}
-              className="rounded transition-colors"
-              style={{
-                padding: '4px 6px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                border: isSelected ? "1px solid #b49238" : "1px solid transparent",
-                backgroundColor: isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent",
-              }}
-              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(180, 146, 56, 0.1)" : "transparent"; }}
+              className={cn(
+                "rounded-md p-1.5 text-center cursor-pointer transition-colors border",
+                isSelected
+                  ? "border-primary bg-primary/10"
+                  : "border-transparent hover:bg-accent"
+              )}
             >
-              <span className="font-serif" style={{ fontSize: '14px', display: 'block', lineHeight: '1.2' }}>{token.greek}</span>
-              <span className="font-medium" style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', color: "#d4b96a" }}>
+              <span className="font-sans text-sm block leading-tight">{token.greek}</span>
+              <span className="font-medium text-[11px] block leading-tight text-primary">
                 {token.english}
               </span>
-              <span style={{ fontSize: '10px', display: 'block', lineHeight: '1.2', opacity: 0.6 }}>{token.strongs}</span>
+              <span className="text-[10px] block leading-tight text-muted-foreground font-mono">{token.strongs}</span>
             </button>
           );
         })}
@@ -318,27 +312,19 @@ function DefinitionPanel({
       <button
         onClick={onToggleSave}
         title={isLoggedIn ? (isSaved ? "Remove from saved" : "Save word") : "Sign in to save words"}
-        className="absolute top-6 right-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors"
-        style={{
-          backgroundColor: "#262624",
-          border: "1px solid #3c3c38",
-        }}
+        className="absolute top-6 right-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors bg-card border border-border"
       >
         <Bookmark
-          className="h-4 w-4"
-          style={{
-            color: isSaved ? "#b49238" : "#888780",
-            fill: isSaved ? "#b49238" : "none",
-          }}
+          className={cn("h-4 w-4", isSaved ? "text-primary fill-primary" : "text-muted-foreground fill-none")}
         />
       </button>
-      <p className="font-serif text-3xl text-foreground pr-10">{definition.word}</p>
+      <p className="font-sans text-3xl text-foreground pr-10">{definition.word}</p>
       <p className="text-sm text-muted-foreground mt-1">
         {definition.transliteration} &middot; {definition.strongs} &middot; {definition.gloss}
       </p>
       {definition.lexiconDefinition && (
         <>
-          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2 text-muted-foreground">
             Definition
           </p>
           <p className="text-sm text-foreground leading-relaxed">{definition.lexiconDefinition}</p>
@@ -346,7 +332,7 @@ function DefinitionPanel({
       )}
       {definition.meaning && (
         <>
-          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2 text-muted-foreground">
             Usage
           </p>
           <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
@@ -391,16 +377,12 @@ function FlagModal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(27, 27, 25, 0.8)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      <div
-        className="w-full max-w-md mx-4 rounded-lg border p-6"
-        style={{ backgroundColor: "#262624", borderColor: "#3c3c38" }}
-      >
-        <h3 className="font-serif text-lg text-foreground">{heading}</h3>
-        <p className="text-xs mt-1 mb-4" style={{ color: "#c1c1b8" }}>
+      <div className="w-full max-w-md mx-4 rounded-lg border border-border bg-popover p-6">
+        <h3 className="font-sans text-lg text-foreground">{heading}</h3>
+        <p className="text-xs mt-1 mb-4 text-muted-foreground">
           {sourceName} &middot; {author}
         </p>
         <textarea
@@ -408,24 +390,18 @@ function FlagModal({
           onChange={(e) => setComment(e.target.value)}
           placeholder="Describe the theological concern..."
           rows={4}
-          className="w-full rounded-lg border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold resize-none"
-          style={{ backgroundColor: "#1f1e1d", borderColor: "#3c3c38" }}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
         />
         <div className="flex justify-end gap-3 mt-4">
           <button
             onClick={() => onSubmit("")}
-            className="px-4 py-2 text-sm rounded-lg cursor-pointer"
-            style={{ color: "#c1c1b8" }}
+            className="px-4 py-2 text-sm rounded-lg cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
           >
             Skip
           </button>
-          <button
-            onClick={() => onSubmit(comment)}
-            className="px-4 py-2 text-sm font-medium rounded-lg cursor-pointer text-white"
-            style={{ backgroundColor: "#b49238" }}
-          >
+          <Button onClick={() => onSubmit(comment)} size="sm">
             Submit
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -630,10 +606,10 @@ function CorpusPanel({
       <>
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               From the library
             </p>
-            <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
+            <p className="font-sans text-lg mt-1 mb-6 text-primary">
               {wordStudyDoc.word || wordStudyDoc.transliteration} ({wordStudyDoc.transliteration})
             </p>
           </div>
@@ -646,11 +622,10 @@ function CorpusPanel({
                 sourceName: wordStudyDoc.title,
                 author: wordStudyDoc.author,
               })}
-              className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer shrink-0"
-              style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
+              className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer shrink-0 bg-background border border-border"
               title="Flag this content"
             >
-              <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
+              <Flag className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
         </div>
@@ -660,7 +635,7 @@ function CorpusPanel({
           <TruncatedExcerpt content={wordStudyContent} />
         ) : (
           <div className="py-12 text-center">
-            <p className="text-sm" style={{ color: "#c1c1b8" }}>
+            <p className="text-sm text-muted-foreground">
               No content available for this word study yet.
             </p>
           </div>
@@ -677,8 +652,7 @@ function CorpusPanel({
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={onCommentaryBack}
-            className="text-sm cursor-pointer hover:underline"
-            style={{ color: "#c1c1b8" }}
+            className="text-sm cursor-pointer hover:underline text-muted-foreground hover:text-foreground transition-colors"
           >
             &larr; Back
           </button>
@@ -691,18 +665,17 @@ function CorpusPanel({
                 sourceName: activeCommentary.title,
                 author: activeCommentary.author,
               })}
-              className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer"
-              style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
+              className="h-7 w-7 rounded-full flex items-center justify-center cursor-pointer bg-background border border-border"
               title="Flag this content"
             >
-              <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
+              <Flag className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
         </div>
-        <p className="text-xs mb-6" style={{ color: "#c1c1b8" }}>
+        <p className="text-xs mb-6 text-muted-foreground">
           {activeCommentary.title} &middot; {activeCommentary.author}
         </p>
-        <div className="mx-auto" style={{ maxWidth: 680 }}>
+        <div className="mx-auto max-w-[680px]">
           {activeCommentary.content
             .split(/\n\n+/)
             .flatMap((block) =>
@@ -712,8 +685,7 @@ function CorpusPanel({
             .map((para, i) => (
               <p
                 key={i}
-                className="text-foreground mb-4"
-                style={{ fontSize: 15, lineHeight: 1.7 }}
+                className="text-foreground mb-4 text-[15px] leading-[1.7]"
               >
                 {para.trim()}
               </p>
@@ -723,44 +695,6 @@ function CorpusPanel({
       </>
     );
   }
-
-  const tabBar = (
-    <div className="flex gap-6 mb-5" style={{ borderBottom: "1px solid #3c3c38" }}>
-      <button
-        onClick={() => onTabChange("commentaries")}
-        className="pb-2 text-sm font-medium cursor-pointer transition-colors"
-        style={{
-          color: corpusTab === "commentaries" ? "#e6e6e6" : "#c1c1b8",
-          borderBottom: corpusTab === "commentaries" ? "2px solid #b49238" : "2px solid transparent",
-          marginBottom: "-1px",
-        }}
-      >
-        Commentary
-      </button>
-      <button
-        onClick={() => onTabChange("word_study")}
-        className="pb-2 text-sm font-medium cursor-pointer transition-colors"
-        style={{
-          color: corpusTab === "word_study" ? "#e6e6e6" : "#c1c1b8",
-          borderBottom: corpusTab === "word_study" ? "2px solid #b49238" : "2px solid transparent",
-          marginBottom: "-1px",
-        }}
-      >
-        Word Study
-      </button>
-      <button
-        onClick={handleJpTabClick}
-        className="pb-2 text-sm font-medium cursor-pointer transition-colors"
-        style={{
-          color: corpusTab === "jewish" ? "#e6e6e6" : "#c1c1b8",
-          borderBottom: corpusTab === "jewish" ? "2px solid #b49238" : "2px solid transparent",
-          marginBottom: "-1px",
-        }}
-      >
-        Jewish Perspective
-      </button>
-    </div>
-  );
 
   if (!hasVerse) {
     return (
@@ -773,263 +707,244 @@ function CorpusPanel({
     );
   }
 
-  // Word Study tab content
-  if (corpusTab === "word_study") {
-    const label = definition
-      ? `${definition.word} (${definition.transliteration})`
-      : selectedStrongs && corpusResults.length > 0
-        ? corpusResults[0].title
-        : null;
+  const triggerClass = "flex-none h-auto rounded-none bg-transparent px-0 pb-2 mr-6 text-sm font-medium cursor-pointer transition-colors text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-primary -mb-px";
 
-    return (
-      <>
-        {tabBar}
-        {/* Interlinear block */}
-        <div className="mb-5">
-          <InterlinearBlocks
-            tokens={tokens}
-            selectedStrongs={selectedStrongs}
-            onSelect={onSelectWord}
-            loading={tokensLoading}
-            isNT={isNT}
-          />
-        </div>
-
-        {/* Definition + Excerpt for selected word */}
-        {selectedStrongs && definition && (
-          <div className="mb-6">
-            <DefinitionPanel
-              definition={definition}
-              isSaved={isSaved}
-              onToggleSave={onToggleSave}
-              isLoggedIn={isLoggedIn}
-            />
-
-          </div>
-        )}
-
-        {/* From the Library corpus results */}
-        {selectedStrongs ? (
-          <>
-            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
-              From the library
-            </p>
-            {label && (
-              <p className="font-serif text-lg mt-1 mb-6" style={{ color: "#d4b96a" }}>
-                {label}
-              </p>
-            )}
-            {corpusLoading ? (
-              <SkeletonCards />
-            ) : corpusResults.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-sm" style={{ color: "#c1c1b8" }}>
-                  No library entries for this word yet — more teaching content coming soon.
-                </p>
-              </div>
-            ) : corpusResults.some((r) => r.is_excerpt) ? (
-              <div className="prose prose-invert prose-sm max-w-none">
-                <ReactMarkdown>{corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}</ReactMarkdown>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {corpusResults.map((r, i) => (
-                  <div key={i} className="rounded-lg border border-border bg-card p-4">
-                    <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
-                    <div className="mt-3">
-                      <p className="text-xs font-medium text-foreground">{r.author}</p>
-                      <p className="text-xs text-muted-foreground">{r.title}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="py-8 text-center">
-            <p className="text-sm" style={{ color: "#c1c1b8" }}>
-              Select a word from the interlinear to see its definition and library results.
-            </p>
-          </div>
-        )}
-        {flagModalEl}
-      </>
-    );
-  }
-
-  // Jewish Perspective tab content
-  if (corpusTab === "jewish") {
-    return (
-      <>
-        {tabBar}
-        {jpLoading ? (
-          <div className="py-12 flex flex-col items-center gap-3">
-            <svg className="animate-spin h-6 w-6" style={{ color: "#b49238" }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <p className="text-sm" style={{ color: "#c1c1b8" }}>Generating...</p>
-          </div>
-        ) : jpError ? (
-          <div className="py-12 text-center">
-            <p className="text-sm" style={{ color: "#c1c1b8" }}>
-              Unable to generate. Please try again.
-            </p>
-            <button
-              onClick={() => { setJpError(false); }}
-              className="text-sm mt-3 cursor-pointer hover:underline"
-              style={{ color: "#d4b96a" }}
-            >
-              Try Again
-            </button>
-          </div>
-        ) : jpContent ? (
-          <div className="space-y-3">
-            {([
-              { key: "jewish_background", label: "Jewish Background" },
-              { key: "messianic_perspective", label: "Messianic Perspective" },
-              { key: "cultural_context", label: "Cultural Context" },
-            ] as const).map((section) => (
-              <div
-                key={section.key}
-                className="rounded-lg border p-4"
-                style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
-              >
-                <p
-                  className="font-medium uppercase tracking-wide mb-2"
-                  style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
-                >
-                  {section.label}
-                </p>
-                <div style={{ color: "#e6e6e6", fontSize: 14, lineHeight: 1.7 }}>
-                  {(jpContent[section.key] || "").split(/\n\n+/).map((para, pi, arr) => (
-                    <p key={pi} style={{ marginBottom: pi < arr.length - 1 ? 10 : 0 }}>
-                      {para.split(/\n/).map((line, li, lineArr) => (
-                        <span key={li}>
-                          {line}
-                          {li < lineArr.length - 1 && <br />}
-                        </span>
-                      ))}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {jpContent.sources && jpContent.sources.length > 0 && (
-              <div
-                className="rounded-lg border p-4"
-                style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
-              >
-                <p
-                  className="font-medium uppercase tracking-wide mb-2"
-                  style={{ color: "#c1c1b8", fontSize: 11, letterSpacing: "0.05em" }}
-                >
-                  Sources
-                </p>
-                <ul style={{ color: "#e6e6e6", fontSize: 13, lineHeight: 1.7 }}>
-                  {jpContent.sources.map((src, i) => (
-                    <li key={i} style={{ marginBottom: 4 }}>{src}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : !jpCacheChecked ? (
-          <div className="py-12 flex flex-col items-center gap-3">
-            <svg className="animate-spin h-5 w-5" style={{ color: "#b49238" }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <p className="text-sm" style={{ color: "#c1c1b8" }}>Checking cache...</p>
-          </div>
-        ) : (
-          <div className="py-12 flex flex-col items-center gap-4">
-            <p className="text-sm" style={{ color: "#c1c1b8" }}>
-              No Jewish perspective generated for this verse yet.
-            </p>
-            <button
-              onClick={handleJpGenerate}
-              className="px-5 py-2.5 text-sm font-medium rounded-lg cursor-pointer text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#b49238" }}
-            >
-              Generate Jewish Perspective
-            </button>
-          </div>
-        )}
-        {flagModalEl}
-      </>
-    );
-  }
-
-  // Commentaries tab (default)
   return (
     <>
-      {tabBar}
-      {commentaryLoading ? (
-        <SkeletonCards />
-      ) : commentaryResults.length === 0 ? (
-        <div className="py-12 text-center">
-          <p className="text-sm" style={{ color: "#c1c1b8" }}>
-            No commentary found for this verse.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {commentaryResults.map((r, i) => (
-            <div
-              key={i}
-              className="rounded-lg border border-border bg-card p-4 cursor-pointer transition-colors relative group"
-              onClick={() => onCommentaryClick(r)}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#4a4a44"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; }}
-            >
-              {!flaggedIds.has(r.document_id) && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFlagModal({
-                      sourceType: "commentary",
-                      documentId: r.document_id,
-                      heading: "Flag Commentary",
-                      sourceName: r.title,
-                      author: r.author,
-                    });
-                  }}
-                  className="absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                  style={{ backgroundColor: "#1f1e1d", border: "1px solid #3c3c38" }}
-                  title="Flag this content"
-                >
-                  <Flag className="h-3.5 w-3.5" style={{ color: "#888780" }} />
-                </button>
-              )}
-              {r.source_kind === "sermon_transcript" && (
-                <span className="text-xs rounded px-2 py-0.5 inline-block mb-1" style={{ color: "#c1c1b8", border: "1px solid #3c3c38" }}>Sermon</span>
-              )}
-              <p className="text-sm font-medium" style={{ color: "#d4b96a" }}>{r.author}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
-              <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
+      <Tabs
+        value={corpusTab}
+        onValueChange={(val) => {
+          if (val === "jewish") handleJpTabClick();
+          else onTabChange(val as CorpusTab);
+        }}
+      >
+        <TabsList className="w-full justify-start rounded-none bg-transparent p-0 border-b border-border mb-5 h-auto gap-0">
+          <TabsTrigger value="commentaries" className={triggerClass}>Commentary</TabsTrigger>
+          <TabsTrigger value="word_study" className={triggerClass}>Word Study</TabsTrigger>
+          <TabsTrigger value="jewish" className={triggerClass}>Jewish Perspective</TabsTrigger>
+        </TabsList>
+
+        {/* Word Study tab */}
+        <TabsContent value="word_study" className="mt-0">
+          {(() => {
+            const label = definition
+              ? `${definition.word} (${definition.transliteration})`
+              : selectedStrongs && corpusResults.length > 0
+                ? corpusResults[0].title
+                : null;
+            return (
+              <>
+                <div className="mb-5">
+                  <InterlinearBlocks
+                    tokens={tokens}
+                    selectedStrongs={selectedStrongs}
+                    onSelect={onSelectWord}
+                    loading={tokensLoading}
+                    isNT={isNT}
+                  />
+                </div>
+                {selectedStrongs && definition && (
+                  <div className="mb-6">
+                    <DefinitionPanel
+                      definition={definition}
+                      isSaved={isSaved}
+                      onToggleSave={onToggleSave}
+                      isLoggedIn={isLoggedIn}
+                    />
+                  </div>
+                )}
+                {selectedStrongs ? (
+                  <>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      From the library
+                    </p>
+                    {label && (
+                      <p className="font-sans text-lg mt-1 mb-6 text-primary">
+                        {label}
+                      </p>
+                    )}
+                    {corpusLoading ? (
+                      <SkeletonCards />
+                    ) : corpusResults.length === 0 ? (
+                      <div className="py-12 text-center">
+                        <p className="text-sm text-muted-foreground">
+                          No library entries for this word yet — more teaching content coming soon.
+                        </p>
+                      </div>
+                    ) : corpusResults.some((r) => r.is_excerpt) ? (
+                      <div className="prose prose-invert prose-sm max-w-none">
+                        <ReactMarkdown>{corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {corpusResults.map((r, i) => (
+                          <div key={i} className="rounded-lg border border-border bg-card p-4">
+                            <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+                            <div className="mt-3">
+                              <p className="text-xs font-medium text-foreground">{r.author}</p>
+                              <p className="text-xs text-muted-foreground">{r.title}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Select a word from the interlinear to see its definition and library results.
+                    </p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </TabsContent>
+
+        {/* Jewish Perspective tab */}
+        <TabsContent value="jewish" className="mt-0">
+          {jpLoading ? (
+            <div className="py-12 flex flex-col items-center gap-3">
+              <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <p className="text-sm text-muted-foreground">Generating...</p>
             </div>
-          ))}
-          {commentaryHasMore ? (
-            <div className="flex justify-center pt-2">
+          ) : jpError ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-muted-foreground">
+                Unable to generate. Please try again.
+              </p>
               <button
-                onClick={onLoadMoreCommentary}
-                disabled={commentaryLoadingMore}
-                className="rounded px-4 py-2 text-sm cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ border: "1px solid #3c3c38", color: "#c1c1b8", backgroundColor: "transparent" }}
-                onMouseEnter={(e) => { if (!commentaryLoadingMore) { e.currentTarget.style.borderColor = "#b49238"; e.currentTarget.style.color = "#b49238"; } }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
+                onClick={() => { setJpError(false); }}
+                className="text-sm mt-3 cursor-pointer hover:underline text-primary"
               >
-                {commentaryLoadingMore ? "Loading..." : "Load more"}
+                Try Again
               </button>
             </div>
-          ) : commentaryResults.length > 3 ? (
-            <p className="text-center text-sm pt-2" style={{ color: "#c1c1b8" }}>
-              That&apos;s all the results
-            </p>
-          ) : null}
-        </div>
-      )}
+          ) : jpContent ? (
+            <div className="space-y-3">
+              {([
+                { key: "jewish_background", label: "Jewish Background" },
+                { key: "messianic_perspective", label: "Messianic Perspective" },
+                { key: "cultural_context", label: "Cultural Context" },
+              ] as const).map((section) => (
+                <div key={section.key} className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-[11px] font-medium uppercase tracking-wider mb-2 text-muted-foreground">
+                    {section.label}
+                  </p>
+                  <div className="text-sm text-foreground leading-[1.7]">
+                    {(jpContent[section.key] || "").split(/\n\n+/).map((para, pi, arr) => (
+                      <p key={pi} className={pi < arr.length - 1 ? "mb-2.5" : ""}>
+                        {para.split(/\n/).map((line, li, lineArr) => (
+                          <span key={li}>
+                            {line}
+                            {li < lineArr.length - 1 && <br />}
+                          </span>
+                        ))}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {jpContent.sources && jpContent.sources.length > 0 && (
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-[11px] font-medium uppercase tracking-wider mb-2 text-muted-foreground">
+                    Sources
+                  </p>
+                  <ul className="text-sm text-foreground leading-[1.7]">
+                    {jpContent.sources.map((src, i) => (
+                      <li key={i} className="mb-1">{src}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : !jpCacheChecked ? (
+            <div className="py-12 flex flex-col items-center gap-3">
+              <svg className="animate-spin h-5 w-5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <p className="text-sm text-muted-foreground">Checking cache...</p>
+            </div>
+          ) : (
+            <div className="py-12 flex flex-col items-center gap-4">
+              <p className="text-sm text-muted-foreground">
+                No Jewish perspective generated for this verse yet.
+              </p>
+              <Button onClick={handleJpGenerate}>
+                Generate Jewish Perspective
+              </Button>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Commentaries tab (default) */}
+        <TabsContent value="commentaries" className="mt-0">
+          {commentaryLoading ? (
+            <SkeletonCards />
+          ) : commentaryResults.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-muted-foreground">
+                No commentary found for this verse.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {commentaryResults.map((r, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-border bg-card p-4 cursor-pointer hover:bg-accent transition-colors relative group"
+                  onClick={() => onCommentaryClick(r)}
+                >
+                  {!flaggedIds.has(r.document_id) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFlagModal({
+                          sourceType: "commentary",
+                          documentId: r.document_id,
+                          heading: "Flag Commentary",
+                          sourceName: r.title,
+                          author: r.author,
+                        });
+                      }}
+                      className="absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer bg-background border border-border"
+                      title="Flag this content"
+                    >
+                      <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  )}
+                  {r.source_kind === "sermon_transcript" && (
+                    <span className="text-xs rounded border border-border px-2 py-0.5 inline-block mb-1 text-muted-foreground">Sermon</span>
+                  )}
+                  <p className="text-sm font-medium text-primary">{r.author}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 mb-3">{r.title}</p>
+                  <p className="text-sm text-foreground leading-relaxed">{r.excerpt}</p>
+                </div>
+              ))}
+              {commentaryHasMore ? (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onLoadMoreCommentary}
+                    disabled={commentaryLoadingMore}
+                  >
+                    {commentaryLoadingMore ? "Loading..." : "Load more"}
+                  </Button>
+                </div>
+              ) : commentaryResults.length > 3 ? (
+                <p className="text-center text-sm pt-2 text-muted-foreground">
+                  That&apos;s all the results
+                </p>
+              ) : null}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
       {flagModalEl}
     </>
   );
@@ -1094,12 +1009,12 @@ function VerseSearch({
             if (e.key === "Enter") onSubmit();
           }}
           placeholder="Search verse or word (e.g. John 1:1 or faith)"
-          className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
+          className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
         />
         <button
           onClick={onSubmit}
           disabled={loading}
-          className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
+          className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           {loading ? (
             <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -1109,10 +1024,7 @@ function VerseSearch({
         </button>
       </div>
       {showBookDropdown && (
-        <div
-          className="absolute top-full left-0 right-12 mt-1 rounded-lg border shadow-lg z-50 overflow-hidden"
-          style={{ backgroundColor: "#262624", borderColor: "#3c3c38" }}
-        >
+        <div className="absolute top-full left-0 right-12 mt-1 rounded-lg border border-border bg-popover shadow-lg z-50 overflow-hidden">
           {bookMatches.map((name) => (
             <button
               key={name}
@@ -1120,10 +1032,7 @@ function VerseSearch({
                 onChange(name + " ");
                 inputRef.current?.focus();
               }}
-              className="w-full text-left px-4 py-3 text-sm cursor-pointer"
-              style={{ color: "#e6e6e6", borderBottom: "1px solid #3c3c38" }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+              className="w-full text-left px-4 py-3 text-sm cursor-pointer text-foreground hover:bg-accent transition-colors border-b border-border last:border-b-0"
             >
               {name}
             </button>
@@ -1131,24 +1040,19 @@ function VerseSearch({
         </div>
       )}
       {showWordDropdown && (
-        <div
-          className="absolute top-full left-0 right-12 mt-1 rounded-lg border border-border bg-card shadow-lg z-50 overflow-hidden"
-        >
+        <div className="absolute top-full left-0 right-12 mt-1 rounded-lg border border-border bg-popover shadow-lg z-50 overflow-hidden">
           {wordSearchResults.map((r) => (
             <button
               key={r.id}
               onClick={() => onWordStudySelect(r)}
-              className="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer"
-              style={{ borderBottom: "1px solid #3c3c38" }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+              className="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer hover:bg-accent border-b border-border last:border-b-0"
             >
               <span className="text-foreground font-medium">{r.word || r.transliteration}</span>
               <span className="text-muted-foreground">
                 {r.word && r.transliteration && r.word !== r.transliteration ? ` (${r.transliteration})` : ""}
               </span>
               {r.strongs_number && (
-                <span style={{ color: "#d4b96a" }}> &middot; {r.strongs_number}</span>
+                <span className="text-primary"> &middot; {r.strongs_number}</span>
               )}
             </button>
           ))}
@@ -1178,7 +1082,7 @@ function VerseDisplay({
   onDeselect: () => void;
 }) {
   if (error) {
-    return <p className="text-sm mt-4" style={{ color: "#993c1d" }}>{error}</p>;
+    return <p className="text-sm mt-4 text-destructive">{error}</p>;
   }
   if (!verse) return null;
   return (
@@ -1187,23 +1091,21 @@ function VerseDisplay({
       style={{ cursor: selectedStrongs ? "pointer" : "default" }}
       onClick={() => { if (selectedStrongs) onDeselect(); }}
     >
-      <div className="flex items-center justify-center gap-3 py-2 px-4" style={{ borderBottom: "1px solid #3c3c38" }}>
+      <div className="flex items-center justify-center gap-3 py-2 px-4 border-b border-border">
         <button
           onClick={(e) => { e.stopPropagation(); onStepPrev(); }}
           disabled={!hasPrev}
-          className="text-sm font-medium"
-          style={{ color: "#c1c1b8", opacity: hasPrev ? 1 : 0.5 }}
+          className="text-sm font-medium text-muted-foreground disabled:opacity-50"
         >
           &larr;
         </button>
-        <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#c1c1b8" }}>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {verse.book} {verse.chapter}:{verse.verse} ({verse.translation})
         </p>
         <button
           onClick={(e) => { e.stopPropagation(); onStepNext(); }}
           disabled={!hasNext}
-          className="text-sm font-medium"
-          style={{ color: "#c1c1b8", opacity: hasNext ? 1 : 0.5 }}
+          className="text-sm font-medium text-muted-foreground disabled:opacity-50"
         >
           &rarr;
         </button>
@@ -1235,11 +1137,10 @@ function TruncatedExcerpt({ content, wordLimit = 300 }: { content: string; wordL
         <ReactMarkdown>{displayContent}</ReactMarkdown>
       </div>
       {needsTruncation && (
-        <div style={{ borderTop: "1px solid #3c3c38" }}>
+        <div className="border-t border-border">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1.5 w-full py-2 text-xs font-medium uppercase tracking-wide"
-            style={{ color: "#c1c1b8" }}
+            className="flex items-center gap-1.5 w-full py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
           >
             {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             {expanded ? "Show Less" : "Read More"}
@@ -1295,21 +1196,13 @@ function WordStudyPanel({
       <button
         onClick={onToggleSave}
         title={isLoggedIn ? (isSaved ? "Remove from saved" : "Save word") : "Sign in to save words"}
-        className="absolute top-0 right-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors"
-        style={{
-          backgroundColor: "#262624",
-          border: "1px solid #3c3c38",
-        }}
+        className="absolute top-0 right-0 h-8 w-8 rounded-full flex items-center justify-center transition-colors bg-card border border-border"
       >
         <Bookmark
-          className="h-4 w-4"
-          style={{
-            color: isSaved ? "#b49238" : "#888780",
-            fill: isSaved ? "#b49238" : "none",
-          }}
+          className={cn("h-4 w-4", isSaved ? "text-primary fill-primary" : "text-muted-foreground fill-none")}
         />
       </button>
-      <p className="font-serif text-3xl text-foreground pr-10">
+      <p className="font-sans text-3xl text-foreground pr-10">
         {definition?.word || doc.word || doc.transliteration}
       </p>
       <p className="text-sm text-muted-foreground mt-1">
@@ -1318,11 +1211,11 @@ function WordStudyPanel({
 
       {definition && (
         <>
-          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2 text-muted-foreground">
             Definition
           </p>
           <p className="text-sm text-foreground leading-relaxed">{definition.gloss}</p>
-          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2" style={{ color: "#c1c1b8" }}>
+          <p className="text-xs font-medium uppercase tracking-wide mt-6 mb-2 text-muted-foreground">
             Usage
           </p>
           <p className="text-sm text-foreground leading-relaxed">{definition.meaning}</p>
@@ -1330,11 +1223,10 @@ function WordStudyPanel({
       )}
 
       {/* Scripture References reveal */}
-      <div className="mt-6" style={{ borderTop: "1px solid #3c3c38" }}>
+      <div className="mt-6 border-t border-border">
         <button
           onClick={handleToggleVerses}
-          className="flex items-center gap-1.5 w-full py-2 text-xs font-medium uppercase tracking-wide"
-          style={{ color: "#c1c1b8" }}
+          className="flex items-center gap-1.5 w-full py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
         >
           {versesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           Scripture References
@@ -1351,7 +1243,7 @@ function WordStudyPanel({
               <div className="space-y-3">
                 {verses.map((v) => (
                   <div key={v.reference}>
-                    <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "#d4b96a" }}>
+                    <p className="text-xs font-medium uppercase tracking-wide text-primary">
                       {v.reference}
                     </p>
                     <p className="text-sm text-foreground leading-relaxed mt-0.5">{v.text}</p>
@@ -2063,10 +1955,7 @@ export default function StudyPage() {
         {/* Desktop: two-column layout */}
         <div className="hidden md:flex flex-1 min-h-0">
           {/* Left Column: Search + Verse + View Chapter */}
-          <div
-            className="w-[380px] shrink-0 flex flex-col overflow-y-auto"
-            style={{ borderRight: "0.5px solid #3c3c38" }}
-          >
+          <div className="w-[380px] shrink-0 flex flex-col overflow-y-auto border-r border-border">
             <div className="px-4 pt-6 pb-16">
               <VerseSearch {...verseSearchProps} />
 
@@ -2096,23 +1985,17 @@ export default function StudyPage() {
                     <div className="mt-4">
                       <button
                         onClick={() => setChapterOpen((prev) => !prev)}
-                        className="text-xs font-medium cursor-pointer transition-colors"
-                        style={{ color: "#c1c1b8" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "#e6e6e6"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = "#c1c1b8"; }}
+                        className="text-xs font-medium cursor-pointer transition-colors text-muted-foreground hover:text-foreground"
                       >
                         {chapterOpen ? "Hide Chapter" : "View Chapter"}
                       </button>
 
                       {chapterOpen && (
-                        <div
-                          className="mt-3 rounded-lg border border-border p-4"
-                          style={{ backgroundColor: "#262624" }}
-                        >
+                        <div className="mt-3 rounded-lg border border-border bg-card p-4">
                           {chapterLoading ? (
-                            <div className="space-y-2 animate-pulse">
+                            <div className="space-y-2">
                               {[0, 1, 2, 3, 4].map((i) => (
-                                <div key={i} className="h-4 rounded bg-border" />
+                                <Skeleton key={i} className="h-4 w-full" />
                               ))}
                             </div>
                           ) : (
@@ -2123,16 +2006,12 @@ export default function StudyPage() {
                                   <span
                                     key={v.verse_id}
                                     onClick={() => handleChapterVerseClick(v)}
-                                    className="cursor-pointer rounded-sm transition-colors"
-                                    style={{
-                                      backgroundColor: isActive ? "#2f2f2c" : "transparent",
-                                      padding: "1px 2px",
-                                      margin: "0 -2px",
-                                    }}
-                                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "#2f2f2c"; }}
-                                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
+                                    className={cn(
+                                      "cursor-pointer rounded-sm transition-colors px-0.5 -mx-0.5",
+                                      isActive ? "bg-accent" : "hover:bg-accent"
+                                    )}
                                   >
-                                    <sup style={{ fontSize: 9, color: "#888780", marginRight: 2 }}>{v.verse}</sup>
+                                    <sup className="text-[9px] text-muted-foreground mr-0.5">{v.verse}</sup>
                                     {v.text}{" "}
                                   </span>
                                 );
