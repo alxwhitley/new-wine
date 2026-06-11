@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ThemeToggle } from "@/components/theme-toggle";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -295,11 +294,10 @@ export function Sidebar({
       )}
 
       {/* Footer */}
-      <div className="mt-auto pb-4 px-4 flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+      <div className="mt-auto pb-4 px-4">
+        <p className="text-xs text-muted-foreground text-center">
           Theological Research Assistant
         </p>
-        <ThemeToggle />
       </div>
     </>
   );
