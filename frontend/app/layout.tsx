@@ -1,17 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Lora } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
 import { Analytics } from "@vercel/analytics/next";
+import { Providers } from "@/components/providers";
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const lora = Lora({
-  subsets: ["latin"],
-  variable: "--font-lora",
-});
 
 export const metadata: Metadata = {
   title: "Rhemata — Theological Research Assistant",
@@ -21,8 +12,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#1f1e1d",
-  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -31,9 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.variable} ${lora.variable} font-sans antialiased`}>
-        {children}
+    <html lang="en" className={GeistSans.variable} suppressHydrationWarning>
+      <body className="font-sans antialiased">
+        <Providers>
+          {children}
+        </Providers>
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
