@@ -14,14 +14,7 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
   const [menuOpen, setMenuOpen] = useState(false);
 
   if (!user) {
-    return (
-      <button
-        onClick={onSignInClick}
-        className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-gold hover:text-foreground"
-      >
-        Sign in
-      </button>
-    );
+    return null;
   }
 
   return (

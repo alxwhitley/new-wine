@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface LoginModalProps {
   onClose: () => void;
@@ -37,117 +39,56 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "10px 14px",
-    borderRadius: "8px",
-    border: "1px solid var(--border)",
-    background: "var(--card)",
-    color: "var(--foreground)",
-    fontSize: "14px",
-    fontFamily: "var(--font-inter), Inter, sans-serif",
-    outline: "none",
-  };
-
   return (
     <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
       onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0, 0, 0, 0.6)",
-      }}
     >
       <div
+        className="relative w-full max-w-sm mx-4 rounded-lg border border-border bg-card shadow-lg p-6"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: "380px",
-          background: "var(--background)",
-          border: "1px solid var(--border)",
-          borderRadius: "14px",
-          padding: "32px",
-          position: "relative",
-        }}
       >
+        {/* Close button */}
         <button
           onClick={onClose}
-          style={{
-            position: "absolute",
-            top: "16px",
-            right: "16px",
-            color: "var(--muted-foreground)",
-            cursor: "pointer",
-            padding: "4px",
-            borderRadius: "6px",
-            transition: "color 150ms",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--foreground)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted-foreground)"; }}
+          className="absolute top-4 right-4 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
-          <X size={18} strokeWidth={1.8} />
+          <X className="h-4 w-4" />
         </button>
 
-        {reason && (
-          <div
-            style={{
-              padding: "10px 14px",
-              borderRadius: "8px",
-              background: "var(--card)",
-              borderLeft: "3px solid var(--gold)",
-              marginBottom: "20px",
-              fontSize: "13px",
-              lineHeight: "1.5",
-              color: "var(--foreground)",
-              fontFamily: "var(--font-inter), Inter, sans-serif",
-            }}
-          >
-            {reason}
-          </div>
-        )}
-
-        <h2
-          style={{
-            fontFamily: "var(--font-lora), Lora, serif",
-            fontSize: "20px",
-            fontWeight: 600,
-            color: "var(--foreground)",
-            marginBottom: "24px",
-          }}
-        >
+        {/* Title */}
+        <h2 className="font-sans text-xl font-semibold text-foreground mb-1">
           {mode === "signin" ? "Sign in to Rhemata" : "Create an account"}
         </h2>
 
+        {/* Subtitle / reason */}
+        <p className="text-sm text-muted-foreground mb-6">
+          {reason ?? (mode === "signin"
+            ? "Welcome back."
+            : "Create a free account to keep going.")}
+        </p>
+
         {signUpSuccess ? (
-          <div style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
-            <p style={{ fontSize: "14px", color: "var(--foreground)", marginBottom: "8px" }}>
+          <div>
+            <p className="text-sm text-foreground mb-3">
               Check your email for a confirmation link.
             </p>
             <button
               onClick={() => { setMode("signin"); setSignUpSuccess(false); setError(null); }}
-              style={{
-                fontSize: "13px",
-                color: "var(--gold)",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
+              className="text-sm text-primary hover:underline cursor-pointer"
             >
               Back to sign in
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <input
               type="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              style={inputStyle}
+              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
             />
             <input
               type="password"
@@ -156,58 +97,23 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              style={inputStyle}
+              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
             />
 
             {error && (
-              <p style={{ fontSize: "13px", color: "var(--destructive)", margin: 0 }}>{error}</p>
+              <p className="text-sm text-destructive">{error}</p>
             )}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              style={{
-                width: "100%",
-                padding: "10px",
-                borderRadius: "8px",
-                background: submitting ? "var(--gold-hover)" : "var(--gold)",
-                color: "var(--primary-foreground)",
-                fontSize: "14px",
-                fontWeight: 600,
-                fontFamily: "var(--font-inter), Inter, sans-serif",
-                cursor: submitting ? "default" : "pointer",
-                transition: "background 150ms",
-                border: "none",
-              }}
-              onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "var(--gold-hover)"; }}
-              onMouseLeave={(e) => { if (!submitting) e.currentTarget.style.background = "var(--gold)"; }}
-            >
-              {submitting
-                ? "..."
-                : mode === "signin"
-                  ? "Sign in"
-                  : "Create account"}
-            </button>
+            <Button type="submit" disabled={submitting} className="w-full mt-1">
+              {submitting ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+            </Button>
 
-            <p
-              style={{
-                fontSize: "13px",
-                color: "var(--muted-foreground)",
-                textAlign: "center",
-                fontFamily: "var(--font-inter), Inter, sans-serif",
-                margin: 0,
-              }}
-            >
+            <p className="text-sm text-muted-foreground text-center">
               {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
               <button
                 type="button"
                 onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); }}
-                style={{
-                  color: "var(--gold)",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontSize: "inherit",
-                }}
+                className="text-primary hover:underline cursor-pointer"
               >
                 {mode === "signin" ? "Sign up" : "Sign in"}
               </button>
