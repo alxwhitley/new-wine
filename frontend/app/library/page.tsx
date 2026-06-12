@@ -460,7 +460,7 @@ export default function LibraryPage() {
   // Article reader view
   if (article) {
     return (
-      <div className="flex h-screen bg-background">
+      <div className="flex h-dvh-safe overflow-hidden bg-sidebar">
         <Sidebar
           conversations={conversations}
           activeConversationId={null}
@@ -474,8 +474,9 @@ export default function LibraryPage() {
           onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
           onSignOut={signOut}
         />
-        <main className="md:ml-64 flex flex-1 flex-col min-w-0 h-screen">
-          <div className="flex h-14 shrink-0 items-center border-b border-border px-4 md:px-6 z-30">
+        <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2">
+          <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
+          <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
             <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
@@ -536,6 +537,7 @@ export default function LibraryPage() {
               </div>
             </div>
           </div>
+          </div>
         </main>
         {showLogin && (
           <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} />
@@ -545,7 +547,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh-safe overflow-hidden bg-sidebar">
       <Sidebar
         conversations={conversations}
         activeConversationId={null}
@@ -560,9 +562,10 @@ export default function LibraryPage() {
         onSignOut={signOut}
       />
 
-      <main className="md:ml-64 flex flex-1 flex-col min-w-0 h-screen">
+      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2">
+        <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
         {/* Top Bar */}
-        <div className="flex h-14 shrink-0 items-center border-b border-border px-4 md:px-6 z-30">
+        <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
           <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
             <Menu className="h-5 w-5" />
           </button>
@@ -824,6 +827,7 @@ export default function LibraryPage() {
               </div>
             )}
           </div>
+        </div>
         </div>
       </main>
 
