@@ -11,7 +11,6 @@ import { Sidebar } from "@/components/rhemata/sidebar";
 import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { searchDocumentsFts, browseDocuments, getArticle, fetchBooks, deleteDocument } from "@/lib/api";
 import type { DocumentSearchResult, ArticleResponse, Book } from "@/lib/api";
 
@@ -310,14 +309,16 @@ export default function LibraryPage() {
       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
     >
-      {isNewWine && (
-        <Badge variant="secondary" className="absolute top-3 right-3">New Wine Magazine</Badge>
-      )}
-      {doc.author && (
-        <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          {doc.author}
-        </p>
-      )}
+      <div className="flex items-center gap-2">
+        {doc.author && (
+          <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            {doc.author}
+          </p>
+        )}
+        {isNewWine && (
+          <span className="text-xs text-muted-foreground">New Wine Magazine</span>
+        )}
+      </div>
       <h3 className="font-sans" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
         {doc.title}
       </h3>
