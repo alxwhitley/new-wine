@@ -5,6 +5,7 @@ import { Search, Menu, Bookmark, Flag, ChevronDown, ChevronUp, X } from "lucide-
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/rhemata/sidebar";
@@ -283,10 +284,10 @@ function FlagModal({
 }
 
 const EXCERPT_COMPONENTS: React.ComponentProps<typeof ReactMarkdown>["components"] = {
-  h1: ({ children }) => <p className="text-sm font-medium text-foreground mb-2">{children}</p>,
-  h2: ({ children }) => <p className="text-sm font-medium text-foreground mb-2">{children}</p>,
-  h3: ({ children }) => <p className="text-sm font-medium text-foreground mb-2">{children}</p>,
-  h4: ({ children }) => <p className="text-sm font-medium text-foreground mb-1">{children}</p>,
+  h1: ({ children }) => <p className="text-sm font-semibold text-foreground tracking-tight mt-4 mb-1">{children}</p>,
+  h2: ({ children }) => <p className="text-sm font-semibold text-foreground tracking-tight mt-4 mb-1">{children}</p>,
+  h3: ({ children }) => <p className="text-sm font-semibold text-foreground tracking-tight mt-4 mb-1">{children}</p>,
+  h4: ({ children }) => <p className="text-sm font-medium text-foreground mt-3 mb-1">{children}</p>,
   p: ({ children }) => <p className="text-sm text-foreground leading-relaxed mb-3">{children}</p>,
   strong: ({ children }) => <strong className="font-medium text-foreground">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
@@ -623,58 +624,59 @@ function InlineWordPanel({
 
       {definition?.lexiconDefinition && (
         <>
-          <p className="text-xs font-medium uppercase tracking-wide mb-1 text-muted-foreground">Definition</p>
-          <p className="text-sm text-foreground leading-relaxed mb-4">{definition.lexiconDefinition}</p>
+          <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground mb-1.5">Definition</p>
+          <p className="text-base font-medium text-foreground leading-relaxed">{definition.lexiconDefinition}</p>
         </>
       )}
       {definition?.meaning && (
         <>
-          <p className="text-xs font-medium uppercase tracking-wide mb-1 text-muted-foreground">Usage</p>
-          <p className="text-sm text-foreground leading-relaxed mb-4">{definition.meaning}</p>
+          <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground pt-5 mb-1.5">Usage</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{definition.meaning}</p>
         </>
       )}
 
       {/* Precept Austin excerpt */}
       {excerptLoading ? (
-        <div className="border-t border-border pt-4 mt-4">
+        <>
+          <Separator className="my-4" />
           <Skeleton className="h-3 w-1/3 mb-3" />
           <Skeleton className="h-3 w-full mb-2" />
           <Skeleton className="h-3 w-5/6" />
-        </div>
+        </>
       ) : excerptContent ? (
-        <div className="border-t border-border pt-4 mt-4">
-          <p className="text-xs font-medium uppercase tracking-wide mb-3 text-muted-foreground">Word Study</p>
+        <>
+          <Separator className="my-4" />
+          <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground mb-3">Word Study</p>
           <TruncatedExcerpt content={excerptContent} />
-        </div>
+        </>
       ) : null}
 
       {/* From the Library */}
-      <div className="border-t border-border pt-4 mt-4">
-        <p className="text-xs font-medium uppercase tracking-wide mb-3 text-muted-foreground">From the Library</p>
-        {corpusLoading ? (
-          <SkeletonCards />
-        ) : corpusResults.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No library entries for this word yet.</p>
-        ) : corpusResults.some((r) => r.is_excerpt) ? (
-          <div className="text-sm text-foreground">
-            <ReactMarkdown components={EXCERPT_COMPONENTS}>
-              {corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {corpusResults.map((r, i) => (
-              <div key={i} className="rounded-lg border border-border bg-background p-3">
-                <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
-                <div className="mt-2">
-                  <p className="text-xs font-medium text-foreground">{r.author}</p>
-                  <p className="text-xs text-muted-foreground">{r.title}</p>
-                </div>
+      <Separator className="my-4" />
+      <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground mb-3">From the Library</p>
+      {corpusLoading ? (
+        <SkeletonCards />
+      ) : corpusResults.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No library entries for this word yet.</p>
+      ) : corpusResults.some((r) => r.is_excerpt) ? (
+        <div className="text-sm text-foreground">
+          <ReactMarkdown components={EXCERPT_COMPONENTS}>
+            {corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {corpusResults.map((r, i) => (
+            <div key={i} className="rounded-lg border border-border bg-background p-3">
+              <p className="text-sm text-foreground leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+              <div className="mt-2">
+                <p className="text-xs font-medium text-foreground">{r.author}</p>
+                <p className="text-xs text-muted-foreground">{r.title}</p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
