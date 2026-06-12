@@ -117,7 +117,7 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 ---
 
 ## Design System
-Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). Chat page, sidebar, library, and study pages are on design tokens. Admin pages (`app/admin/`, `app/rhemata-corpus-admin/`) and `components/center/DocumentCard.tsx` still carry old hex — Phase 4 migration was reverted by linter, re-migration pending.
+Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). Chat page, sidebar, library, study, and admin pages are on design tokens. `components/center/DocumentCard.tsx` and `app/admin/edit/[id]/page.tsx` editor panel still carry old hex — re-migration pending.
 
 ---
 
@@ -128,7 +128,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - **Embeddings:** OpenAI `text-embedding-3-small` (1536 dims)
 - **Answer Generation LLM:** Anthropic Claude Sonnet 4.5 (`claude-sonnet-4-5`) via `anthropic` SDK
 - **Query Expansion / Metadata / Tagging / Transcript Cleaning LLM:** Groq Llama 3.3 70B (`llama-3.3-70b-versatile`)
-- **Reranking:** Cohere rerank-v3.5 (`cohere` SDK) — narrows top 10 RRF → top 5
+- **Reranking:** Cohere rerank-v3.5 (`cohere` SDK) — narrows top 30 RRF → top 8
 - **Vision / OCR (magazine extraction):** Gemini 2.5 Flash (`gemini-2.5-flash`) via `google-genai` SDK
 - **Markdown rendering:** `react-markdown` + `@tailwindcss/typography`
 - **Removed:** GPT-4o Vision (replaced by Gemini 2.5 Flash)
@@ -146,7 +146,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - `documents.bible_references` — text[], canonical refs like `"Romans 8:28"`, GIN indexed
 - `documents.fts_weighted` — tsvector on title, author, source_name, topic_tags
 - Vector similarity via `match_chunks` SQL function (HNSW index, `hnsw.ef_search=200`)
-- Hybrid retrieval: query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) → top 10
+- Hybrid retrieval: query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) → top 30 (SOURCE_KIND_FUSION_WEIGHTS applied: commentary ×0.6, book ×0.8, lexicon ×0.5) → Cohere rerank top 30 → top 8
 - `search_documents` RPC: document-level FTS with highlighted snippets via ts_headline
 
 ---
@@ -157,7 +157,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Two-tier content: citable vs silent_context (controlled by `citation_mode`)
 - Magazine chunking: tiktoken cl100k_base, 550 tokens target, 80 overlap
 - Standalone ingest: recursive character text splitting, 1000 char chunks, 200 char overlap
-- k=10 retrieval post-RRF
+- k=30 retrieval pool post-RRF; Cohere reranks to top 8
 - Single-column PDFs only — no multi-column OCR needed yet
 - Bible Study articles excluded from extraction pipeline
 - Topic tagging: 257-tag taxonomy (15 categories), validated against VALID_TAGS set in scripts/taxonomy.py, retry if < 3 valid
@@ -168,6 +168,13 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Guest session migration complete (June 2026): `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
 - Pastors' Notes complete (June 2026): three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migration 038).
 - Admin consolidation (June 2026): all admin surfaces merged into single `/admin` page with sticky anchor-nav (Overview · Contributors · Corpus). Role-based auth via `GET /pastors-notes/me` (no more hardcoded ADMIN_USER_ID). `/admin/contributors` and `/rhemata-corpus-admin` redirect to `/admin`. `app/rhemata-corpus-admin/` deleted. Corpus components in `frontend/components/admin/`. `components/ui/switch.tsx` added (shadcn Switch using radix-ui). Precept Austin Greek card has `notFilter` to exclude Hebrew docs. HistoricalChristianFaith card description corrected.
+- SOURCE_KIND_FUSION_WEIGHTS (June 2026): applied at step 2.75 of RRF pipeline (before doc-collapse): commentary ×0.6, book ×0.8, lexicon ×0.5, all others ×1.0. Prevents commentary and lexicon from crowding out citable sermons in the top-30 rerank pool.
+- Commentary context cap (June 2026): after neighbor expansion, commentary chunks capped at 3 in final assembled context (`COMMENTARY_CONTEXT_CAP = 3`).
+- Neighbor expansion skips commentary/lexicon (June 2026): `_NEIGHBOR_SKIP_KINDS = frozenset({"commentary", "lexicon"})` — their neighbors are not fetched. They add no useful context and would further crowd out citable content.
+- FTS OR-fallback (June 2026): when `websearch_to_tsquery` returns 0 FTS results, `hybrid_search_rrf()` retries with OR-joined query of up to 3 longest meaningful tokens (min 6 chars, common theological/stopword terms excluded via `_FTS_BROAD_TERMS`). Prevents multi-term keyword queries from silently failing the FTS arm.
+- citable_count gate (June 2026): counted from post-Cohere, pre-neighbor-expansion top-8 window. Only sermon/citable chunks count. Controls graceful-degradation and fallback paths.
+- Low-material fallback rework (June 2026): hard short-circuit fires only for truly empty chunk sets. When `citable_count < 2` but silent_context chunks exist, proceeds to normal LLM call with retrieval note appended to context block. System prompt graceful-degradation rules handle the response.
+- System prompt rewrite (June 2026): conviction-first classification (settled convictions evaluated BEFORE retrieved sources; source diversity never reclassifies a conviction as debate); voice and attribution firewall (inflammatory language banned from Rhemata's own voice); graceful degradation (WHAT → synthesize from background; WHO/attribution → direct to Study Mode; truly uncovered → bare refusal); verbatim retrieval quotes permitted up to 50 words from citable sources only; `<research_analysis>` expanded to 5 checks (added demotion guard and voice firewall check).
 
 ---
 
