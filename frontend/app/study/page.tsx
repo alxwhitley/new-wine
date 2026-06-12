@@ -61,13 +61,6 @@ interface CommentaryResult {
   content: string;
 }
 
-interface JewishPerspectiveContent {
-  jewish_background: string;
-  messianic_perspective: string;
-  cultural_context: string;
-  sources: string[];
-}
-
 interface WordDefinition {
   strongs: string;
   word: string;
@@ -480,7 +473,6 @@ const ANCHORS = [
   { id: "section-words", label: "Words" },
   { id: "section-commentary", label: "Commentary" },
   { id: "section-pastors", label: "Pastors' Notes" },
-  { id: "section-jewish", label: "Jewish Perspective" },
 ] as const;
 
 function AnchorNav({
@@ -831,143 +823,6 @@ function PastorsNotesSection() {
       <div className="rounded-lg border border-border bg-card p-6 text-center">
         <p className="text-sm text-muted-foreground">Notes from vetted pastors will appear here.</p>
       </div>
-    </section>
-  );
-}
-
-// ── JewishPerspectiveSection ──────────────────────────────────────────────────
-
-function JewishPerspectiveSection({
-  verseRef, accessToken,
-}: {
-  verseRef: string; accessToken: string | null;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [jpContent, setJpContent] = useState<JewishPerspectiveContent | null>(null);
-  const [jpLoading, setJpLoading] = useState(false);
-  const [jpError, setJpError] = useState(false);
-  const [jpCacheChecked, setJpCacheChecked] = useState(false);
-
-  const checkJpCache = useCallback(async () => {
-    if (jpCacheChecked) return;
-    setJpCacheChecked(false);
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/jewish-perspective/${encodeURIComponent(verseRef)}`);
-      if (!res.ok) throw new Error("cache check failed");
-      const data = await res.json();
-      if (data.cached && data.content) {
-        setJpContent(data.content);
-      }
-    } catch { /* fall through */ }
-    setJpCacheChecked(true);
-  }, [jpCacheChecked, verseRef]);
-
-  const handleExpand = useCallback(() => {
-    const opening = !expanded;
-    setExpanded(opening);
-    if (opening && !jpCacheChecked && !jpContent) {
-      checkJpCache();
-    }
-  }, [expanded, jpCacheChecked, jpContent, checkJpCache]);
-
-  const handleGenerate = useCallback(async () => {
-    setJpLoading(true);
-    setJpError(false);
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/jewish-perspective/${encodeURIComponent(verseRef)}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-        }
-      );
-      if (!res.ok) throw new Error("generate failed");
-      const data = await res.json();
-      setJpContent(data.content);
-    } catch {
-      setJpError(true);
-    } finally {
-      setJpLoading(false);
-    }
-  }, [verseRef, accessToken]);
-
-  return (
-    <section id="section-jewish" className="pt-10 pb-4">
-      <button
-        onClick={handleExpand}
-        className="flex items-center gap-2 w-full text-left group"
-      >
-        <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">
-          Jewish Perspective
-        </h2>
-        {expanded
-          ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-          : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-      </button>
-
-      {expanded && (
-        <div className="mt-4">
-          {jpLoading ? (
-            <div className="py-12 flex flex-col items-center gap-3">
-              <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <p className="text-sm text-muted-foreground">Generating…</p>
-            </div>
-          ) : jpError ? (
-            <div className="py-12 text-center">
-              <p className="text-sm text-muted-foreground">Unable to generate. Please try again.</p>
-              <button onClick={() => setJpError(false)} className="text-sm mt-3 cursor-pointer hover:underline text-primary">Try Again</button>
-            </div>
-          ) : jpContent ? (
-            <div className="space-y-3">
-              {([
-                { key: "jewish_background", label: "Jewish Background" },
-                { key: "messianic_perspective", label: "Messianic Perspective" },
-                { key: "cultural_context", label: "Cultural Context" },
-              ] as const).map((section) => (
-                <div key={section.key} className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-[11px] font-medium uppercase tracking-wider mb-2 text-muted-foreground">{section.label}</p>
-                  <div className="text-sm text-foreground leading-[1.7]">
-                    {(jpContent[section.key] || "").split(/\n\n+/).map((para, pi, arr) => (
-                      <p key={pi} className={pi < arr.length - 1 ? "mb-2.5" : ""}>
-                        {para.split(/\n/).map((line, li, lineArr) => (
-                          <span key={li}>{line}{li < lineArr.length - 1 && <br />}</span>
-                        ))}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {jpContent.sources && jpContent.sources.length > 0 && (
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-[11px] font-medium uppercase tracking-wider mb-2 text-muted-foreground">Sources</p>
-                  <ul className="text-sm text-foreground leading-[1.7]">
-                    {jpContent.sources.map((src, i) => <li key={i} className="mb-1">{src}</li>)}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ) : !jpCacheChecked ? (
-            <div className="py-12 flex flex-col items-center gap-3">
-              <svg className="animate-spin h-5 w-5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <p className="text-sm text-muted-foreground">Checking cache…</p>
-            </div>
-          ) : (
-            <div className="py-12 flex flex-col items-center gap-4">
-              <p className="text-sm text-muted-foreground">No Jewish perspective generated for this verse yet.</p>
-              <Button onClick={handleGenerate}>Generate Jewish Perspective</Button>
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 }
@@ -1574,13 +1429,6 @@ export default function StudyPage() {
 
                   {/* 5. Pastors' Notes */}
                   <PastorsNotesSection />
-
-                  {/* 6. Jewish Perspective */}
-                  <JewishPerspectiveSection
-                    key={verseData?.verse_id ?? "no-verse-jp"}
-                    verseRef={verseRef}
-                    accessToken={accessToken}
-                  />
                 </>
               )}
             </div>
