@@ -10,7 +10,6 @@ import { ChatMessage } from "@/components/rhemata/chat-message";
 import { ChatInput } from "@/components/rhemata/chat-input";
 import { SourcePanel } from "@/components/rhemata/source-panel";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
-import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import type { Citation } from "@/lib/api";
 
@@ -149,13 +148,6 @@ export default function Home() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="flex-1" />
-            <div className="hidden md:flex">
-              <AuthButton
-                user={user}
-                onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
-                onSignOut={signOut}
-              />
-            </div>
           </div>
 
           {isEmpty ? (

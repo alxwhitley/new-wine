@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2 } from "lucide-react";
+import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2, ChevronsUpDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -249,9 +256,8 @@ export function Sidebar({
 
       {/* Conditional Content */}
       <div className="flex-1 overflow-y-auto -mx-2 px-2">
-        {isChat && (
-          isLoggedIn ? (
-            <>
+        {isChat && isLoggedIn && (
+          <>
               <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Recents
               </p>
@@ -318,22 +324,6 @@ export function Sidebar({
                 ))}
               </div>
             </>
-          ) : (
-            <div className="px-3 py-6 text-center">
-              <p className="text-xs text-muted-foreground mb-4">
-                Sign in to save conversations
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onSignInClick}
-                className="gap-2 min-h-[44px]"
-              >
-                <LogIn className="h-3.5 w-3.5" />
-                Sign in
-              </Button>
-            </div>
-          )
         )}
 
         {isStudy && (
@@ -374,42 +364,57 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Mobile-only: profile/email above footer (signed-in users only) */}
-      {user && (
-        <div className="md:hidden border-t border-sidebar-border pt-4 pb-2 px-1">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground truncate max-w-[160px]">{user.email}</p>
-            <button
-              onClick={onSignOut}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-2"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="mt-auto pb-4 px-4 flex flex-col items-center gap-2">
-        {isLoggedIn && userRole === "user" && (
-          <button
-            onClick={handleOpenContributor}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+      {/* Footer — profile menu or sign-in */}
+      <div className="mt-auto pt-2 pb-4">
+        {isLoggedIn ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent transition-colors text-left">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {displayName ?? user?.email ?? ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {user?.email ?? ""}
+                  </p>
+                </div>
+                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-56">
+              <DropdownMenuItem onSelect={handleOpenSettings}>
+                Profile
+              </DropdownMenuItem>
+              {userRole === "user" && (
+                <DropdownMenuItem onSelect={handleOpenContributor}>
+                  Become a contributor
+                </DropdownMenuItem>
+              )}
+              {userRole === "admin" && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin">Admin panel</Link>
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onSignOut}>
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onSignInClick}
+            className="w-full gap-2"
           >
-            Become a contributor
-          </button>
+            <LogIn className="h-4 w-4" />
+            Sign in
+          </Button>
         )}
-        {isLoggedIn && (userRole === "contributor" || userRole === "admin") && (
-          <button
-            onClick={handleOpenSettings}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Settings
-          </button>
-        )}
-        <p className="text-xs text-muted-foreground text-center">
-          Theological Research Assistant
-        </p>
       </div>
 
       {/* Contributor request sheet */}

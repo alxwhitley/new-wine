@@ -10,7 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import type { SavedWord } from "@/components/rhemata/sidebar";
-import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import { supabase } from "@/lib/supabase";
 import { getAdjacentVerseId } from "@/lib/verse-counts";
@@ -1267,9 +1266,6 @@ export default function StudyPage() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="flex-1" />
-            <div className="hidden md:flex">
-              <AuthButton user={user} onSignInClick={() => setShowLogin(true)} onSignOut={signOut} />
-            </div>
           </div>
 
           {/* ── Desktop: single-column scrollable ── */}

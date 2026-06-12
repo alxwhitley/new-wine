@@ -7,7 +7,6 @@ import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
-import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 
 const AUTHOR_IMAGES: Record<string, string> = {
@@ -72,9 +71,6 @@ export default function AuthorsPage() {
           </button>
           <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
           <div className="md:hidden min-w-[44px]" />
-          <div className="hidden md:flex ml-auto">
-            <AuthButton user={user} onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }} onSignOut={signOut} />
-          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
