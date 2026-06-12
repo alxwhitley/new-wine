@@ -19,7 +19,8 @@ Charismatic and Spirit-filled Christians who want to research theology from with
 
 ## Repo & Git
 - Git repo initialized and pushed to `alxwhitley/rhemata` on GitHub
-- `.gitignore` covers `.env`, `.env.local`, `__pycache__`, `.venv`, `node_modules`, `.next`, `.DS_Store`
+- `.gitignore` covers `.env`, `.env.local`, `__pycache__`, `.venv`, `node_modules`, `.next`, `.DS_Store`, `sources/`
+- `sources/` stripped from git history (2026-06-10) via BFG Repo Cleaner — 1,151 files removed across all 215 commits; `.git` reduced from 55 MB to 3.1 MB; force-pushed to origin main
 
 ---
 
@@ -397,7 +398,8 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - Centered chat input as primary interaction
 - Perplexity-style inline citations rendered as gold-highlighted tags
 - Clicking a citation opens a source panel with document title, author, and page content
-- Sidebar: Shared across all routes. "Rhemata" wordmark, gold "New Chat" CTA (`#b49238`), nav items (Chat/Discover/Study), conditional content (Recents on chat, Saved Words on study). Hover via `onMouseEnter`/`onMouseLeave` inline handlers (`#262624`).
+- Sidebar: Shared across all routes. "Rhemata" wordmark, gold "New Chat" CTA, nav items (Chat/Library/Study), conditional content (Recents on chat, Saved Words on study). No right border — sidebar blends with `bg-sidebar` outer canvas. Uses design tokens.
+- Chat page: Floating panel layout — outer shell `bg-sidebar`, main content in `bg-background rounded-xl` panel (8px inset on all sides). Scroll fade (`sticky top-0 h-8 gradient`) at top of message list. Top bar has no bottom border; panel edge provides separation.
 - Search page at `/search` with keyword search, browse-all default listing, result cards with topic tag pills, and full article reader
 - Auth flow: login modal triggered by AuthButton, sidebar sign-in link, or guest limit reached
 - Guest users get 6 free queries before prompted to sign up
@@ -406,9 +408,8 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 ## Brand
 - **Name:** Rhemata
-- **Fonts:** Lora (headings/logo), Inter (UI/body)
-- **Dark theme** — near-black backgrounds, warm neutrals
-- **Gold accents** — `#d4b96a` (citations/highlights/tag pills), `rgba(212, 185, 106, 0.12)` (tag pill backgrounds)
+- **Design system:** Lumen — shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme. `DESIGN.md` is the styling authority. No hardcoded hex in fully migrated files.
+- **Migration status:** Chat page (`app/page.tsx`), sidebar, library, and study pages fully on design tokens. Phase 4 (remaining files) attempted but linter reverted edits — `app/admin/`, `app/rhemata-corpus-admin/`, and `components/center/DocumentCard.tsx` still carry old hex. Re-migration pending.
 - **Voice:** Scholarly but accessible. Conviction, not performance. Serves the researcher, not the spectacle.
 
 ---
@@ -499,7 +500,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - ~~**Study Mode interlinear data is placeholder only**~~ — **DONE:** Live from `interlinear_words` table (142,096 rows), fetched via `GET /study/interlinear` endpoint.
 - ~~**Migration 017 (saved_words)**~~ — **DONE:** saved_words table exists with RLS enabled
 - **10 YouTube transcripts ingested (2026-05-22)** — side effect of running skip tracking test against `youtube/ingested/`. These had different MD5 hashes than stored (likely re-cleaned). 1 duplicate ("Your Calling Is Holy" by Derek Prince) was found and the older copy deleted.
-- **`mode-toggle.tsx` is orphaned** — `frontend/components/rhemata/mode-toggle.tsx` exists but is no longer imported anywhere. Can be deleted.
+- ~~**`mode-toggle.tsx` is orphaned**~~ — **DONE (2026-06-11):** Deleted. Was unused in all routes.
 - **Word study excerpt generation 96% complete** — 1,713 of 1,779 word_study documents have excerpts generated (`excerpts` table, `excerpt_type = 'word_study_article'`). 66 remaining. Script: `scripts/generate_excerpts.py`.
 - **Commentary ingestion not yet run** — `scripts/ingest_commentaries.py` rewritten and pushed, needs to be executed (325 fathers, 82,567 rows from SQLite DB at `/tmp/commentaries-db/data.out`).
 - **Hebrew word study pipeline ready** — `scrape_preceptaustin.py --language hebrew --fetch` and `ingest_preceptaustin.py --language hebrew` ready to run.
@@ -540,6 +541,8 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **`articles` table is empty (0 rows)** — no backend references; six indexes. Drop it. Also droppable: `chunks.parent_chunk_id`/`chunk_type`/`page_number`/`source_hash` (unused), `idx_documents_year`, `idx_documents_source_year_issue`, duplicate `verses_verse_id_idx`.
 - **Security review follow-ups (2026-06-10, not yet done)** — verify API keys were rotated after the 2026-04-09 BFG history scrub; Python 3.9 is EOL (bump nixpacks to python312); PyPDF2 deprecated → pypdf; guest `anon_id` is client-generated and spoofable (limit bypassable; add per-IP rate limiting); no rate limits on unauthenticated embed-cost endpoints (`/search`, `/study/corpus`, `/study/commentary`); `/jewish-perspective` POST bypasses daily query limit; admin email hardcoded in `auth.py` + `admin/page.tsx`; `/rhemata-corpus-admin` page has no auth guard.
 - **Retrieval quality follow-ups (2026-06-10 review, not yet done)** — rerank pool too small (Cohere sees only RRF top-10; should rerank ~50 fused candidates then apply caps); content-type pollution (commentary 44.6% + lexicon 19.1%, both silent_context, compete for top-40 against 8% citable sermons — needs source_kind retrieval pools after denormalizing source_kind/citation_mode onto chunks); neighbor expansion should skip commentary/lexicon; `[Source N]` numbering includes silent_context chunks while frontend citations array is filtered (misalignment risk); low-material fallback counts neighbors/lexicon instead of citable chunks.
+- **Phase 4 hex→token migration reverted by linter (2026-06-11)** — Phase 4 ran successfully (grep zero hits, build pass) in the prior session, but linter subsequently reverted all edits. Confirmed old hex still present in: `components/center/DocumentCard.tsx`, `app/rhemata-corpus-admin/CorpusCard.tsx`, `app/rhemata-corpus-admin/CardModal.tsx`, plus likely all other Phase 4 targets (`app/admin/page.tsx`, `app/admin/edit/[id]/page.tsx`, `app/rhemata-corpus-admin/page.tsx`, `app/library/page.tsx`, `app/library/authors/page.tsx`, `app/library/book/[id]/page.tsx`, `app/document/[id]/page.tsx`). Re-run needed; investigate linter config first.
+- ~~**Chat page floating panel layout**~~ — **DONE (2026-06-11):** `app/page.tsx` restructured — outer shell `bg-sidebar`, main panel `bg-background rounded-xl` (8px inset). Scroll fade added. Top bar border removed. `sidebar.tsx` desktop + mobile `border-r border-sidebar-border` removed. Committed `d982a13`.
 
 ---
 

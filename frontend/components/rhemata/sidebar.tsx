@@ -305,7 +305,7 @@ export function Sidebar({
   return (
     <>
       {/* Desktop sidebar — always visible */}
-      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar px-4 pt-6">
+      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar px-4 pt-6 border-r border-border">
         {sidebarContent}
       </aside>
 

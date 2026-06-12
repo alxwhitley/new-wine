@@ -113,7 +113,7 @@ cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts
 ---
 
 ## Design System
-Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex. Admin pages (`app/admin/`, `app/rhemata-corpus-admin/`) still have old hex — deferred, internal only.
+Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). Chat page, sidebar, library, and study pages are on design tokens. Admin pages (`app/admin/`, `app/rhemata-corpus-admin/`) and `components/center/DocumentCard.tsx` still carry old hex — Phase 4 migration was reverted by linter, re-migration pending.
 
 ---
 
