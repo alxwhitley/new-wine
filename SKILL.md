@@ -186,7 +186,11 @@ repo/
 - **Standalone ingest:** recursive character text splitting, 1000 char chunks, 200 char overlap
 - **Hybrid search with RRF** — query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) → document collapse → top 10
 - **CORS middleware** — `ALLOWED_ORIGINS` env var (comma-separated)
-- **Guest query limit** — 6 free queries via `guest_sessions` + `increment_guest_query` RPC
+- **Guest query limit** — 6 free queries via `guest_sessions` + `increment_guest_query` RPC (migration complete June 2026)
+- **Design system:** `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex. Admin pages still have old hex — deferred, internal only.
+- **Brand reset complete (June 2026):** Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
+- **Study Mode restructured (June 2026):** single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
+- **Guest session migration complete (June 2026):** `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
 - **JWT auth** via Supabase JWKS endpoint (`PyJWKClient`)
 - **Bible Study articles excluded** from extraction pipeline (reference materials, not theological teaching)
 - **Ingest auto-tagging** — ingest.py tags every new document post-chunk-insert via Groq Llama 3.3 70B; strict 3–6 tags, main themes only, non-fatal
@@ -481,7 +485,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **scrape_youtube.py dead Haiku code** — removed (2026-04-15)
 - **content_summary not auto-populated** on new article inserts (trigger only updates fts_weighted, not content_summary)
 - **Tagging retry logic** sometimes needs improvement for complex articles
-- **Guest query limit** — `increment_guest_query()` SQL function needs migration file
+- ~~**Guest query limit**~~ — **DONE (June 2026):** `guest_sessions` table and `increment_guest_query` RPC created in Supabase.
 - ~~**RLS policies needed** on `conversations` and `messages` tables~~ — **DONE:** RLS enabled on both
 - **INCLUDE_COPYRIGHTED not confirmed on Railway** — check dashboard
 - **poppler no longer required** — pdf2image replaced by PyMuPDF (fitz) in extract_magazine.py
