@@ -320,7 +320,7 @@ export default function LibraryPage() {
           {doc.author}
         </p>
       )}
-      <h3 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
+      <h3 className="font-sans" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
         {doc.title}
       </h3>
       <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
@@ -431,7 +431,7 @@ export default function LibraryPage() {
           <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             {book.author}
           </p>
-          <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
+          <h4 className="font-sans" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
             {book.title}
           </h4>
           <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
@@ -480,7 +480,7 @@ export default function LibraryPage() {
             <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="md:hidden flex-1 text-center font-serif text-lg font-semibold text-foreground">Rhemata</h1>
+            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
             <div className="md:hidden min-w-[44px]" />
             <div className="hidden md:flex ml-auto">
               <AuthButton user={user} onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }} onSignOut={signOut} />
@@ -497,7 +497,7 @@ export default function LibraryPage() {
               </button>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h1 className="font-serif text-2xl font-semibold text-foreground leading-tight">{article.title}</h1>
+                  <h1 className="font-sans text-2xl font-semibold text-foreground leading-tight">{article.title}</h1>
                   {article.author && <p className="text-sm text-muted-foreground mt-2">{article.author}</p>}
                 </div>
                 {article.source_kind === "sermon_transcript" && article.url && (
@@ -569,7 +569,7 @@ export default function LibraryPage() {
           <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="md:hidden flex-1 text-center font-serif text-lg font-semibold text-foreground">Rhemata</h1>
+          <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
           <div className="md:hidden min-w-[44px]" />
           <div className="hidden md:flex ml-auto">
             <AuthButton user={user} onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }} onSignOut={signOut} />
@@ -579,7 +579,7 @@ export default function LibraryPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-5xl px-4 md:px-6 pt-12 pb-16">
             {/* Page heading */}
-            <h2 className="font-serif text-2xl md:text-3xl font-semibold text-foreground text-center mb-6">
+            <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center mb-6">
               Library
             </h2>
 
@@ -701,7 +701,7 @@ export default function LibraryPage() {
                               </div>
                             )}
                             <div className="flex flex-col min-w-0">
-                              <p className="font-serif" style={{ fontSize: "14px", color: "#e6e6e0" }}>{author.name}</p>
+                              <p className="font-sans" style={{ fontSize: "14px", color: "#e6e6e0" }}>{author.name}</p>
                               <p style={{ fontSize: "11px", color: "#888880", marginTop: "2px" }}>{author.years}</p>
                               <p style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", marginTop: "4px", lineHeight: 1.5 }}>{author.specialty}</p>
                             </div>

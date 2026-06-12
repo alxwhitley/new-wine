@@ -75,7 +75,7 @@ export default function BookExcerptPage() {
         </Link>
         <div className="flex-1 text-center">
           {doc && (
-            <span className="font-serif text-lg" style={{ color: "#e6e6e0" }}>
+            <span className="font-sans text-lg" style={{ color: "#e6e6e0" }}>
               {doc.title}
             </span>
           )}
@@ -106,7 +106,7 @@ export default function BookExcerptPage() {
       {!loading && doc && (
         <div className="mx-auto" style={{ maxWidth: "720px", padding: "40px 24px" }}>
           {/* Hero heading */}
-          <h1 className="font-serif text-3xl font-semibold" style={{ color: "#e6e6e0", lineHeight: 1.3 }}>
+          <h1 className="font-sans text-3xl font-semibold" style={{ color: "#e6e6e0", lineHeight: 1.3 }}>
             {doc.title}
           </h1>
           <p className="mt-3" style={{ fontSize: "16px", color: "#d4b96a" }}>
