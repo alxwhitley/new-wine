@@ -306,6 +306,31 @@ export default function AdminPage() {
               </section>
             )}
 
+            {/* Contributors */}
+            <section className="mb-10">
+              <h2
+                className="text-xs font-medium uppercase tracking-wide mb-4"
+                style={{ color: "#c1c1b8" }}
+              >
+                Contributors
+              </h2>
+              <a
+                href="/admin/contributors"
+                className="flex items-center justify-between rounded-lg border p-4 transition-opacity hover:opacity-80"
+                style={{ borderColor: "#3c3c38", backgroundColor: "#262624" }}
+              >
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Manage Contributors
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "#c1c1b8" }}>
+                    Review applications, active contributors, and flagged notes
+                  </p>
+                </div>
+                <span style={{ color: "#c1c1b8" }}>→</span>
+              </a>
+            </section>
+
             {/* Feedback */}
             <section>
               <h2

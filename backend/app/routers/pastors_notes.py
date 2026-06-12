@@ -480,6 +480,59 @@ async def reject_request(
     return {"success": True}
 
 
+@router.get("/contributors")
+async def list_contributors(admin_id: str = Depends(require_admin_role)):
+    """Admin only — list all contributors with email and published card count."""
+    db = get_supabase()
+
+    roles_result = (
+        db.table("user_roles")
+        .select("user_id, display_name, created_at")
+        .eq("role", "contributor")
+        .execute()
+    )
+    contributors = roles_result.data or []
+
+    if not contributors:
+        return []
+
+    user_ids = [c["user_id"] for c in contributors]
+
+    try:
+        emails_result = db.rpc("get_user_emails", {"user_ids": user_ids}).execute()
+        email_map = {
+            row["id"]: row["email"]
+            for row in (emails_result.data or [])
+        }  # type: Dict[str, str]
+    except Exception:
+        logger.warning("Could not fetch contributor emails via RPC")
+        email_map = {}
+
+    # Count published cards per contributor in one query
+    cards_result = (
+        db.table("pastors_cards")
+        .select("user_id")
+        .in_("user_id", user_ids)
+        .eq("status", "published")
+        .execute()
+    )
+    card_counts = {}  # type: Dict[str, int]
+    for card in (cards_result.data or []):
+        uid = card["user_id"]
+        card_counts[uid] = card_counts.get(uid, 0) + 1
+
+    return [
+        {
+            "user_id": c["user_id"],
+            "display_name": c.get("display_name"),
+            "email": email_map.get(c["user_id"], ""),
+            "card_count": card_counts.get(c["user_id"], 0),
+            "created_at": c["created_at"],
+        }
+        for c in contributors
+    ]
+
+
 @router.get("/me")
 async def get_me(user_id: str = Depends(_get_current_user)):
     """Authenticated user — return own role and display_name."""
