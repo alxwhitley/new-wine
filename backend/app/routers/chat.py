@@ -43,6 +43,14 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 logger = logging.getLogger(__name__)
 
+# Fix 4: source-kind weights applied during RRF fusion (before final ranking)
+SOURCE_KIND_FUSION_WEIGHTS = {
+    "commentary": 0.6,
+    "book": 0.8,
+    "lexicon": 0.5,
+}
+COMMENTARY_CONTEXT_CAP = 3  # max commentary chunks in the final assembled context
+
 _app_dir = Path(__file__).resolve().parent.parent
 _system_prompt_text = (_app_dir / "system_prompt.txt").read_text()
 _guardrails_text = (_app_dir / "theological_guardrails.txt").read_text() + (
@@ -65,6 +73,42 @@ ANSWER_SYSTEM_BLOCKS = [
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
 RRF_K = 60  # Reciprocal Rank Fusion constant
+
+
+# Very-high-frequency theological terms that would match most chunks in this corpus
+# and cause FTS OR queries to time out. Excluded from OR-fallback token lists.
+_FTS_BROAD_TERMS = frozenset({
+    "spirit", "spirits", "holy", "god", "lord", "jesus", "christ",
+    "church", "christian", "faith", "bible", "scripture", "grace",
+    "prayer", "pray", "worship", "salvation", "believe", "truth",
+    "spiritual", "spiritual", "divine", "doctrine", "theology",
+    # query filler words
+    "what", "does", "corpus", "teach", "about", "give", "quotes",
+    "from", "the", "say", "says", "how", "when", "where", "who",
+    "does", "have", "will", "this", "that", "with", "your", "they",
+})
+
+
+def _or_keywords(text: str) -> Optional[str]:
+    """Convert a keyword string to a targeted websearch_to_tsquery OR query.
+
+    Rules:
+    - Skip if text already contains ' OR '
+    - Keep only tokens that are ≥ 6 chars and not in _FTS_BROAD_TERMS
+    - Use up to 3 most specific (longest) tokens to avoid over-broad OR queries
+    - Return None if no useful tokens remain
+
+    websearch_to_tsquery('english', 'word1 OR word2') evaluates as word1 | word2.
+    """
+    if " OR " in text:
+        return None
+    tokens = [re.sub(r"[^a-zA-Z0-9]", "", t) for t in text.split()]
+    tokens = [t for t in tokens if len(t) >= 6 and t.lower() not in _FTS_BROAD_TERMS]
+    if not tokens:
+        return None
+    # Prefer the most specific (longest) tokens
+    tokens = sorted(tokens, key=len, reverse=True)[:3]
+    return " OR ".join(tokens)
 
 router = APIRouter()
 
@@ -277,6 +321,23 @@ def hybrid_search_rrf(query, db, vector_k=40, fts_k=30, include_copyrighted=True
             except Exception:
                 logger.exception("FTS search failed, continuing with vector only: %s", query[:100])
 
+        # Fix 3: OR-fallback — when AND query returns 0, retry with OR-joined tokens.
+        # websearch_to_tsquery already supports "word1 OR word2" syntax natively.
+        if run_fts and not fts_data:
+            or_query = _or_keywords(fts_query)
+            if or_query:
+                try:
+                    or_result = db.rpc("search_chunks_fts", {
+                        "query_text": or_query[:FTS_QUERY_MAX_LEN],
+                        "match_count": fts_k,
+                        "include_copyrighted": include_copyrighted,
+                    }).execute()
+                    fts_data = or_result.data or []
+                    if fts_data:
+                        logger.info("FTS OR-fallback: %d hits for %r", len(fts_data), or_query[:80])
+                except Exception:
+                    logger.debug("FTS OR-fallback also failed: %s", fts_query[:100])
+
     scores: Dict[str, Tuple[float, dict]] = {}
 
     for rank, chunk in enumerate(vector_data):
@@ -307,12 +368,23 @@ def _is_citable(chunk: dict) -> bool:
     return chunk.get("source_type") == "sermon"
 
 
+_NEIGHBOR_SKIP_KINDS = frozenset({"commentary", "lexicon"})
+
+
 def fetch_neighbor_chunks_batch(chunks: List[dict], seen_ids: set, db) -> List[dict]:
-    """Fetch ±1 neighbor chunks for all given chunks in a single query."""
+    """Fetch ±1 neighbor chunks for all given chunks in a single query.
+
+    Fix 4: commentary and lexicon chunks are skipped — their neighbors don't add useful
+    context and would further crowd out citable content.
+    """
     # Collect all needed (document_id, chunk_index) pairs
     needed = set()  # type: set
     chunk_parents = {}  # type: Dict[str, dict]  # "doc_id:idx" -> parent chunk
     for c in chunks:
+        # Skip neighbor expansion for commentary and lexicon source_kinds
+        sk = c.get("source_kind") or c.get("source_type") or ""
+        if sk in _NEIGHBOR_SKIP_KINDS:
+            continue
         doc_id = c.get("document_id", "")
         idx = c.get("chunk_index", 0)
         for neighbor_idx in [idx - 1, idx + 1]:
@@ -590,9 +662,18 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 if chunk.get("document_id") not in injected_doc_ids
             }
 
-        # Step 2.75: Apply boost_factor from RPC results — no extra query (Change 3)
+        # Step 2.75: Apply boost_factor and source-kind fusion weights (Fix 4).
+        # source-kind weights de-prioritize commentary/book/lexicon so citable sermons
+        # and articles surface into the rerank pool more reliably.
         all_scores = {
-            cid: (score * (chunk.get("boost_factor") or 1.0), chunk)
+            cid: (
+                score
+                * (chunk.get("boost_factor") or 1.0)
+                * SOURCE_KIND_FUSION_WEIGHTS.get(
+                    chunk.get("source_kind") or chunk.get("source_type") or "", 1.0
+                ),
+                chunk,
+            )
             for cid, (score, chunk) in all_scores.items()
         }
 
@@ -615,10 +696,11 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             if author_counts[author] <= 3:
                 author_capped.append((cid, (score, chunk)))
 
-        top_chunks = author_capped[:10]
+        # Fix 1: widen rerank pool to 30, keep top 8 after Cohere.
+        top_chunks = author_capped[:30]
         chunks = [chunk for _, (_, chunk) in top_chunks]
 
-        # Step 3.5: Cohere rerank — narrow top 10 → top 5 by relevance (Change 4: singleton)
+        # Step 3.5: Cohere rerank — narrow top 30 → top 8 by relevance (Fix 1)
         co = _get_cohere()
         if co and len(chunks) > 0:
             try:
@@ -627,18 +709,20 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                     model="rerank-v3.5",
                     query=request.question,
                     documents=docs,
-                    top_n=5,
+                    top_n=8,
                 )
                 chunks = [chunks[r.index] for r in rerank_result.results]
                 logger.info("Cohere rerank: %d → %d chunks", len(docs), len(chunks))
             except Exception:
-                logger.exception("Cohere rerank failed, using RRF top 10")
+                logger.exception("Cohere rerank failed, using RRF top 8")
+                chunks = chunks[:8]  # Fix 1: fallback also takes 8, not 5
 
-        # Count citable chunks from the reranked results, before neighbor expansion and
-        # lexicon/silent_context are mixed in — this is the true "do we have material?" signal.
+        # Fix 2: count citable chunks across the full post-rerank set (top 8),
+        # before neighbor expansion — this is the true "do we have material?" signal.
         citable_count = sum(1 for c in chunks if _is_citable(c))
 
-        # Step 4: Neighbor chunk expansion — batch fetch ±1 chunk_index, cap at 12 total
+        # Step 4: Neighbor chunk expansion — batch fetch ±1 chunk_index, cap at 12 total.
+        # Fix 4: commentary/lexicon parents are skipped inside fetch_neighbor_chunks_batch.
         seen_ids = {c["id"] for c in chunks}
         neighbors = fetch_neighbor_chunks_batch(chunks, seen_ids, db)
         expanded = list(chunks)
@@ -647,7 +731,17 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 break
             seen_ids.add(n["id"])
             expanded.append(n)
-        chunks = expanded
+
+        # Fix 4: cap commentary chunks in the final assembled context.
+        commentary_seen = 0
+        capped_expanded = []
+        for c in expanded:
+            if (c.get("source_kind") or c.get("source_type") or "") == "commentary":
+                if commentary_seen >= COMMENTARY_CONTEXT_CAP:
+                    continue
+                commentary_seen += 1
+            capped_expanded.append(c)
+        chunks = capped_expanded
 
         # Step 5: Conditional lexicon retrieval — reuse cached embedding (Change 2)
         if is_word_study_query(request.question):
