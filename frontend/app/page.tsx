@@ -125,6 +125,7 @@ export default function Home() {
         activeConversationId={conversationId}
         isLoggedIn={!!user}
         user={user}
+        accessToken={accessToken}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={handleNewChat}

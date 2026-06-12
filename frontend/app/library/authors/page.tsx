@@ -41,7 +41,7 @@ const AUTHORS = [
 ];
 
 export default function AuthorsPage() {
-  const { user, signIn, signUp, signOut } = useAuth();
+  const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,6 +55,7 @@ export default function AuthorsPage() {
         activeConversationId={null}
         isLoggedIn={!!user}
         user={user}
+        accessToken={accessToken}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}

@@ -171,6 +171,21 @@ class RevokeBody(BaseModel):
     remove_cards: bool = False
 
 
+class MeUpdateBody(BaseModel):
+    display_name: str
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, v):
+        # type: (str) -> str
+        v = v.strip()
+        if not v:
+            raise ValueError("display_name must not be empty")
+        if len(v) > 100:
+            raise ValueError("display_name must be at most 100 characters")
+        return v
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/cards")
@@ -462,6 +477,52 @@ async def reject_request(
     }).eq("id", request_id).execute()
 
     logger.info("Contributor request rejected: %s by admin=%s", request_id, admin_id)
+    return {"success": True}
+
+
+@router.get("/me")
+async def get_me(user_id: str = Depends(_get_current_user)):
+    """Authenticated user — return own role and display_name."""
+    db = get_supabase()
+    result = (
+        db.table("user_roles")
+        .select("role, display_name")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if result.data:
+        return {
+            "role": result.data[0]["role"],
+            "display_name": result.data[0].get("display_name"),
+        }
+    return {"role": "user", "display_name": None}
+
+
+@router.patch("/me")
+async def update_me(
+    body: MeUpdateBody,
+    user_id: str = Depends(_get_current_user),
+):
+    """Authenticated user — upsert own display_name in user_roles."""
+    db = get_supabase()
+    existing = (
+        db.table("user_roles")
+        .select("role")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        db.table("user_roles").update({
+            "display_name": body.display_name,
+        }).eq("user_id", user_id).execute()
+    else:
+        db.table("user_roles").insert({
+            "user_id": user_id,
+            "role": "user",
+            "display_name": body.display_name,
+        }).execute()
     return {"success": True}
 
 

@@ -1254,6 +1254,7 @@ export default function StudyPage() {
       <Sidebar
         isLoggedIn={!!user}
         user={user}
+        accessToken={accessToken}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}

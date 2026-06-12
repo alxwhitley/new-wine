@@ -1,10 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen } from "lucide-react";
+import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
@@ -20,6 +30,7 @@ export interface SavedWord {
 interface SidebarProps {
   isLoggedIn: boolean;
   user: User | null;
+  accessToken?: string | null;
   isOpen: boolean;
   onClose: () => void;
   onNewChat: () => void;
@@ -51,6 +62,7 @@ function relativeTime(iso: string): string {
 export function Sidebar({
   isLoggedIn,
   user,
+  accessToken,
   isOpen,
   onClose,
   onNewChat,
@@ -71,6 +83,38 @@ export function Sidebar({
   const isDiscover = pathname === "/library";
   const isStudy = pathname.startsWith("/study");
 
+  // Role state
+  const [userRole, setUserRole] = useState<"user" | "contributor" | "admin" | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
+  // Contributor request sheet
+  const [contributorOpen, setContributorOpen] = useState(false);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestStatus, setRequestStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [requestError, setRequestError] = useState<string | null>(null);
+
+  // Settings sheet
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [settingsStatus, setSettingsStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    if (!isLoggedIn || !accessToken) {
+      setUserRole(null);
+      setDisplayName(null);
+      return;
+    }
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/pastors-notes/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setUserRole(data.role ?? "user");
+        setDisplayName(data.display_name ?? null);
+      })
+      .catch(() => {});
+  }, [isLoggedIn, accessToken]);
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -88,6 +132,73 @@ export function Sidebar({
   function handleNewChat() {
     onNewChat();
     onClose();
+  }
+
+  function handleOpenContributor() {
+    setRequestMessage("");
+    setRequestStatus("idle");
+    setRequestError(null);
+    setContributorOpen(true);
+  }
+
+  async function handleSubmitRequest() {
+    if (!accessToken) return;
+    setRequestStatus("loading");
+    setRequestError(null);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pastors-notes/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ message: requestMessage || null }),
+      });
+      if (res.status === 400) {
+        const data = await res.json();
+        setRequestError(data.detail ?? "You already have a pending application.");
+        setRequestStatus("error");
+      } else if (res.ok) {
+        setRequestStatus("success");
+      } else {
+        setRequestError("Something went wrong. Please try again.");
+        setRequestStatus("error");
+      }
+    } catch {
+      setRequestError("Something went wrong. Please try again.");
+      setRequestStatus("error");
+    }
+  }
+
+  function handleOpenSettings() {
+    setEditDisplayName(displayName ?? "");
+    setSettingsStatus("idle");
+    setSettingsOpen(true);
+  }
+
+  async function handleSaveDisplayName() {
+    if (!accessToken) return;
+    const trimmed = editDisplayName.trim();
+    if (!trimmed) return;
+    setSettingsStatus("loading");
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pastors-notes/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ display_name: trimmed }),
+      });
+      if (res.ok) {
+        setDisplayName(trimmed);
+        setSettingsStatus("saved");
+      } else {
+        setSettingsStatus("error");
+      }
+    } catch {
+      setSettingsStatus("error");
+    }
   }
 
   const sidebarContent = (
@@ -294,11 +405,133 @@ export function Sidebar({
       )}
 
       {/* Footer */}
-      <div className="mt-auto pb-4 px-4">
+      <div className="mt-auto pb-4 px-4 flex flex-col items-center gap-2">
+        {isLoggedIn && userRole === "user" && (
+          <button
+            onClick={handleOpenContributor}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Become a contributor
+          </button>
+        )}
+        {isLoggedIn && (userRole === "contributor" || userRole === "admin") && (
+          <button
+            onClick={handleOpenSettings}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Settings
+          </button>
+        )}
         <p className="text-xs text-muted-foreground text-center">
           Theological Research Assistant
         </p>
       </div>
+
+      {/* Contributor request sheet */}
+      <Sheet open={contributorOpen} onOpenChange={setContributorOpen}>
+        <SheetContent side="right" className="flex flex-col">
+          <SheetHeader>
+            <SheetTitle>Apply to contribute</SheetTitle>
+            <SheetDescription>
+              Contributors can write pastoral notes attached to Bible verses. We review each application before granting access.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 px-4">
+            {requestStatus === "success" ? (
+              <p className="text-sm text-muted-foreground">
+                Application submitted. We&apos;ll be in touch.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs text-muted-foreground">
+                    Message <span className="text-muted-foreground">(optional)</span>
+                  </p>
+                  <Textarea
+                    placeholder="Tell us a bit about yourself..."
+                    value={requestMessage}
+                    onChange={(e) => setRequestMessage(e.target.value)}
+                    className="resize-none"
+                    rows={4}
+                  />
+                </div>
+                {requestStatus === "error" && requestError && (
+                  <p className="text-xs text-destructive">{requestError}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {requestStatus !== "success" && (
+            <SheetFooter>
+              <Button
+                onClick={handleSubmitRequest}
+                disabled={requestStatus === "loading"}
+                className="w-full"
+              >
+                {requestStatus === "loading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Submit"
+                )}
+              </Button>
+            </SheetFooter>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Settings sheet */}
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className="flex flex-col">
+          <SheetHeader>
+            <SheetTitle>Your profile</SheetTitle>
+            <SheetDescription>
+              Update your contributor display name.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 px-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-muted-foreground">Display name</p>
+              <Input
+                value={editDisplayName}
+                onChange={(e) => {
+                  setEditDisplayName(e.target.value);
+                  setSettingsStatus("idle");
+                }}
+                placeholder="Your name"
+                maxLength={100}
+              />
+            </div>
+            {userRole && (
+              <p className="text-xs text-muted-foreground">
+                Role: <span className="capitalize">{userRole}</span>
+              </p>
+            )}
+            {settingsStatus === "saved" && (
+              <p className="text-xs text-muted-foreground">Saved.</p>
+            )}
+            {settingsStatus === "error" && (
+              <p className="text-xs text-destructive">Something went wrong. Please try again.</p>
+            )}
+          </div>
+
+          <SheetFooter>
+            <Button
+              onClick={handleSaveDisplayName}
+              disabled={settingsStatus === "loading" || !editDisplayName.trim()}
+              className="w-full"
+            >
+              {settingsStatus === "loading" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </>
   );
 

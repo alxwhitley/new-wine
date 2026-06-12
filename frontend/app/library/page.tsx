@@ -465,6 +465,7 @@ export default function LibraryPage() {
           activeConversationId={null}
           isLoggedIn={!!user}
           user={user}
+          accessToken={accessToken}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           onNewChat={() => { window.location.href = "/"; }}
@@ -552,6 +553,7 @@ export default function LibraryPage() {
         activeConversationId={null}
         isLoggedIn={!!user}
         user={user}
+        accessToken={accessToken}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}
