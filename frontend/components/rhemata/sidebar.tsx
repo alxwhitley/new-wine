@@ -305,7 +305,7 @@ export function Sidebar({
   return (
     <>
       {/* Desktop sidebar — always visible */}
-      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6">
+      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar px-4 pt-6">
         {sidebarContent}
       </aside>
 
@@ -320,7 +320,7 @@ export function Sidebar({
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar border-r border-sidebar-border px-4 pt-6 transition-transform duration-300 md:hidden",
+          "fixed left-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar px-4 pt-6 transition-transform duration-300 md:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
