@@ -490,31 +490,29 @@ function AnchorNav({
   scrollContainer: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
-    <div className="sticky top-0 z-20 bg-background border-b border-border -mx-4 md:-mx-6 px-4 md:px-6">
-      <nav className="flex overflow-x-auto">
-        {ANCHORS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => {
-              const el = document.getElementById(id);
-              const container = scrollContainer.current;
-              if (el && container) {
-                const top = el.offsetTop - 48;
-                container.scrollTo({ top, behavior: "smooth" });
-              }
-            }}
-            className={cn(
-              "py-3 px-1 mr-6 text-sm font-medium whitespace-nowrap border-b-2 transition-colors shrink-0",
-              activeSection === id
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-    </div>
+    <nav className="sticky top-0 z-20 bg-background flex gap-6 overflow-x-auto pt-4 pb-3">
+      {ANCHORS.map(({ id, label }) => (
+        <button
+          key={id}
+          onClick={() => {
+            const el = document.getElementById(id);
+            const container = scrollContainer.current;
+            if (el && container) {
+              const top = el.offsetTop - 48;
+              container.scrollTo({ top, behavior: "smooth" });
+            }
+          }}
+          className={cn(
+            "text-sm whitespace-nowrap shrink-0 transition-colors",
+            activeSection === id
+              ? "font-medium text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -726,7 +724,7 @@ function CommentarySection({
 
   return (
     <section id="section-commentary" className="pt-10">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">Commentary</h2>
+      <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-4">Commentary</h2>
 
       {activeCommentary ? (
         <div>
@@ -829,7 +827,7 @@ function CommentarySection({
 function PastorsNotesSection() {
   return (
     <section id="section-pastors" className="pt-10">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">Pastors&apos; Notes</h2>
+      <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-4">Pastors&apos; Notes</h2>
       <div className="rounded-lg border border-border bg-card p-6 text-center">
         <p className="text-sm text-muted-foreground">Notes from vetted pastors will appear here.</p>
       </div>
@@ -902,7 +900,7 @@ function JewishPerspectiveSection({
         onClick={handleExpand}
         className="flex items-center gap-2 w-full text-left group"
       >
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground group-hover:text-foreground transition-colors">
+        <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">
           Jewish Perspective
         </h2>
         {expanded
