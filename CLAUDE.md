@@ -34,6 +34,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   └── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
 ├── taxonomy.md                # 257-tag topic taxonomy (15 categories)
 ├── migrations/                # SQL migrations (run in Supabase SQL Editor)
+│   └── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
 ├── backend/
@@ -47,6 +48,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   ├── document.py    # /document/{id} + /document/{id}/article
 │   │   │   ├── library.py     # /library/books + /library/book/{id} endpoints
 │   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon + /study/excerpt + /study/interlinear + /study/commentary + /study/wordsearch + /study/wordstudy
+│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management (user/contributor/admin)
 │   │   │   └── ingest.py      # /ingest endpoint (admin-only as of 2026-06-10)
 │   │   ├── services/
 │   │   │   ├── embeddings.py
@@ -61,6 +63,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── railway.toml
 │   └── nixpacks.toml          # Locks Python 3.9
 └── frontend/                  # Next.js 16 frontend (Vercel)
+    ├── hooks/
+    │   └── useUserRole.ts     # Role + displayName hook; module-level cache keyed by access token
     ├── package.json
     └── ...
 ```
@@ -162,6 +166,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Brand reset complete (June 2026): Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 - Study Mode restructured (June 2026): single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
 - Guest session migration complete (June 2026): `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
+- Pastors' Notes complete (June 2026): three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, admin panel at /admin/contributors, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migration 038).
 
 ---
 

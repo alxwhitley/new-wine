@@ -29,6 +29,8 @@ Charismatic and Spirit-filled Christians who want to research theology from with
 ```
 repo/
 ├── frontend/          # Next.js 16 app (Vercel)
+│   └── hooks/
+│       └── useUserRole.ts  # Role + displayName hook; module-level cache keyed by access token
 ├── backend/
 │   ├── app/           # FastAPI Python package
 │   │   ├── main.py
@@ -38,6 +40,7 @@ repo/
 │   │   │   ├── search.py     # /search + /search/documents endpoints
 │   │   │   ├── document.py   # /document/{id} + /document/{id}/article
 │   │   │   ├── study.py      # /study/verse + /study/corpus + /study/lexicon + /study/excerpt endpoints
+│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management (user/contributor/admin)
 │   │   │   └── ingest.py     # /ingest endpoint
 │   │   ├── services/
 │   │   ├── db/
@@ -78,6 +81,7 @@ repo/
 ├── ingest_lexicon.py      # STEPBible lexicon ingestion (TBESG, TBESH, TFLSJ)
 ├── ingest_bible.py        # WEB Bible VPL ingestion into verses table (psycopg2)
 ├── migrations/            # SQL migrations (run in Supabase SQL Editor)
+│   └── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 ├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
@@ -191,6 +195,7 @@ repo/
 - **Brand reset complete (June 2026):** Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 - **Study Mode restructured (June 2026):** single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
 - **Guest session migration complete (June 2026):** `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
+- **Pastors' Notes complete (June 2026):** three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, admin panel at /admin/contributors, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migration 038).
 - **JWT auth** via Supabase JWKS endpoint (`PyJWKClient`)
 - **Bible Study articles excluded** from extraction pipeline (reference materials, not theological teaching)
 - **Ingest auto-tagging** — ingest.py tags every new document post-chunk-insert via Groq Llama 3.3 70B; strict 3–6 tags, main themes only, non-fatal
