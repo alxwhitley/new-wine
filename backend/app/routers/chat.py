@@ -70,22 +70,34 @@ router = APIRouter()
 
 # ── Background topics cache ──────────────────────────────────────────
 _background_topics: list = []
-
+_alias_to_topic_key: Dict[str, str] = {}  # flat alias → topic_key (first mapping wins)
 
 _background_topics_loaded = False
 
 
 def _ensure_background_topics():
     """Lazy-load background_topics table into module-level cache on first use."""
-    global _background_topics, _background_topics_loaded
+    global _background_topics, _background_topics_loaded, _alias_to_topic_key
     if _background_topics_loaded:
         return
     try:
         db = get_supabase()
         result = db.table("background_topics").select("topic_key, document_id, aliases, title").execute()
         _background_topics = result.data or []
+        # Build alias lookup dict — first mapping wins; log warning on collision
+        alias_map = {}  # type: Dict[str, str]
+        for topic in _background_topics:
+            for alias in (topic.get("aliases") or []):
+                if alias in alias_map:
+                    logger.warning(
+                        "Alias collision: %r already maps to %r — skipping duplicate for %r",
+                        alias, alias_map[alias], topic["topic_key"],
+                    )
+                else:
+                    alias_map[alias] = topic["topic_key"]
+        _alias_to_topic_key = alias_map
         _background_topics_loaded = True  # only mark loaded after success
-        logger.info("Loaded %d background topics", len(_background_topics))
+        logger.info("Loaded %d background topics, %d unique aliases", len(_background_topics), len(alias_map))
     except Exception:
         logger.exception("Failed to load background_topics — topic injection disabled")
         _background_topics = []
@@ -95,13 +107,12 @@ def match_background_topics(question: str) -> List[str]:
     """Return topic_keys whose aliases appear in the question (max 2)."""
     _ensure_background_topics()
     q = question.lower()
-    matches = []  # type: List[Tuple[int, str]]
-    for topic in _background_topics:
-        hit_count = sum(1 for alias in (topic.get("aliases") or []) if alias in q)
-        if hit_count > 0:
-            matches.append((hit_count, topic["topic_key"]))
-    matches.sort(key=lambda x: x[0], reverse=True)
-    return [key for _, key in matches[:2]]
+    hit_counts: Dict[str, int] = {}
+    for alias, topic_key in _alias_to_topic_key.items():
+        if alias in q:
+            hit_counts[topic_key] = hit_counts.get(topic_key, 0) + 1
+    ranked = sorted(hit_counts.items(), key=lambda x: x[1], reverse=True)
+    return [key for key, _ in ranked[:2]]
 
 # ── Module-level client singletons (Change 4) ──────────────────────────
 
