@@ -162,11 +162,12 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Bible Study articles excluded from extraction pipeline
 - Topic tagging: 257-tag taxonomy (15 categories), validated against VALID_TAGS set in scripts/taxonomy.py, retry if < 3 valid
 - is_copyrighted derived from folder path: `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false
-- Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex. Admin pages still have old hex — deferred, internal only.
+- Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex.
 - Brand reset complete (June 2026): Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 - Study Mode restructured (June 2026): single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
 - Guest session migration complete (June 2026): `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
-- Pastors' Notes complete (June 2026): three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, admin panel at /admin/contributors, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migration 038).
+- Pastors' Notes complete (June 2026): three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migration 038).
+- Admin consolidation (June 2026): all admin surfaces merged into single `/admin` page with sticky anchor-nav (Overview · Contributors · Corpus). Role-based auth via `GET /pastors-notes/me` (no more hardcoded ADMIN_USER_ID). `/admin/contributors` and `/rhemata-corpus-admin` redirect to `/admin`. `app/rhemata-corpus-admin/` deleted. Corpus components in `frontend/components/admin/`. `components/ui/switch.tsx` added (shadcn Switch using radix-ui). Precept Austin Greek card has `notFilter` to exclude Hebrew docs. HistoricalChristianFaith card description corrected.
 
 ---
 

@@ -1,4 +1,4 @@
-import { CorpusCard, FutureTarget } from "./types";
+import type { CorpusCard, FutureTarget } from "./corpus-types";
 
 export const GROUPS = [
   "Pipelines",
@@ -18,7 +18,7 @@ export const CARDS: CorpusCard[] = [
     status: "Ongoing",
     sourceKind: "magazine_article",
     description:
-      "3-pass extraction (Gemini \u2192 Groq \u2192 QA) then ingest. ~300 issues pending.",
+      "3-pass extraction (Gemini → Groq → QA) then ingest. ~300 issues pending.",
     steps: [
       { label: "Extract" },
       { label: "Manual Review" },
@@ -59,14 +59,14 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "youtube-bevere",
-    name: "YouTube \u2014 John Bevere TV",
+    name: "YouTube — John Bevere TV",
     group: "Pipelines",
     status: "Ongoing",
     sourceKind: "sermon_transcript",
     extraFilter:
       "url ILIKE '%youtube%' AND (author ILIKE '%bevere%' OR source_name ILIKE '%bevere%')",
     description:
-      "Scrape \u2192 Clean \u2192 Whisper \u2192 Ingest. Max 10 per run. Never complete.",
+      "Scrape → Clean → Whisper → Ingest. Max 10 per run. Never complete.",
     steps: [
       { label: "Scrape" },
       { label: "Clean" },
@@ -108,12 +108,16 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "precept-greek",
-    name: "Precept Austin \u2014 Greek Word Studies",
+    name: "Precept Austin — Greek Word Studies",
     group: "Pipelines",
     status: "Partial",
     sourceKind: "word_study",
+    notFilter: [
+      { col: "source_name", val: "%hebrew%" },
+      { col: "title", val: "%hebrew%" },
+    ],
     description:
-      "Scrape \u2192 Ingest \u2192 Generate Excerpts. Greek word studies from Precept Austin.",
+      "Scrape → Ingest → Generate Excerpts. Greek word studies from Precept Austin.",
     steps: [
       { label: "Scrape" },
       { label: "Ingest" },
@@ -163,10 +167,10 @@ export const CARDS: CorpusCard[] = [
     group: "Pipelines",
     status: "Not Started",
     sourceKind: "word_study",
-    // TODO: confirm filter once Hebrew ingestion runs — may need source_name or tag-based filter
+    // TODO: confirm filter once Hebrew ingestion runs
     extraFilter: "source_name ILIKE '%hebrew%' OR title ILIKE '%hebrew%'",
     description:
-      "Scrape Precept Austin Hebrew pages \u2192 Ingest \u2192 Generate Excerpts.",
+      "Scrape Precept Austin Hebrew pages → Ingest → Generate Excerpts.",
     steps: [
       { label: "Scrape" },
       { label: "Ingest" },
@@ -200,7 +204,6 @@ export const CARDS: CorpusCard[] = [
       },
     ],
   },
-
   {
     id: "individual-videos",
     name: "Individual Videos",
@@ -209,7 +212,7 @@ export const CARDS: CorpusCard[] = [
     sourceKind: "sermon_transcript",
     extraFilter: "source_name ILIKE '%Individual Videos%'",
     description:
-      "One-off YouTube videos from various speakers. yt-dlp captions \u2192 Whisper fallback \u2192 Groq clean \u2192 ingest.",
+      "One-off YouTube videos from various speakers. yt-dlp captions → Whisper fallback → Groq clean → ingest.",
     steps: [
       { label: "Captions / Whisper" },
       { label: "Clean" },
@@ -266,13 +269,12 @@ export const CARDS: CorpusCard[] = [
   // ── Commentaries ──
   {
     id: "helloao-henry",
-    name: "HelloAO \u2014 Matthew Henry",
+    name: "HelloAO — Matthew Henry",
     group: "Commentaries",
     status: "Complete",
     sourceKind: "commentary",
     extraFilter: "author ILIKE '%matthew henry%'",
-    description:
-      "Matthew Henry commentary ingested via HelloAO Bible API.",
+    description: "Matthew Henry commentary ingested via HelloAO Bible API.",
     commands: [
       {
         label: "Ingest All Night",
@@ -293,13 +295,12 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "helloao-clarke",
-    name: "HelloAO \u2014 Adam Clarke",
+    name: "HelloAO — Adam Clarke",
     group: "Commentaries",
     status: "Complete",
     sourceKind: "commentary",
     extraFilter: "author ILIKE '%adam clarke%'",
-    description:
-      "Adam Clarke commentary ingested via HelloAO Bible API.",
+    description: "Adam Clarke commentary ingested via HelloAO Bible API.",
     commands: [
       {
         label: "Ingest All Night",
@@ -320,7 +321,7 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "helloao-jfb",
-    name: "HelloAO \u2014 Jamieson-Fausset-Brown",
+    name: "HelloAO — Jamieson-Fausset-Brown",
     group: "Commentaries",
     status: "Complete",
     sourceKind: "commentary",
@@ -354,7 +355,7 @@ export const CARDS: CorpusCard[] = [
     extraFilter:
       "source_name ILIKE '%historicalchristianfaith%' OR source_name ILIKE '%historical christian%'",
     description:
-      "325 church fathers ingested. 51,118 chunks.",
+      "Church fathers from HistoricalChristianFaith.com. Document count shown.",
     commands: [
       {
         label: "Ingest All Night",
@@ -372,9 +373,9 @@ export const CARDS: CorpusCard[] = [
           "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_commentaries.py --dry-run",
       },
       {
-        label: 'Single Father Test',
+        label: "Single Father Test",
         command:
-          'cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_commentaries.py --father "Augustine"',
+          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_commentaries.py --father \"Augustine\"",
       },
       {
         label: "Monitor",
@@ -417,10 +418,7 @@ export const CARDS: CorpusCard[] = [
       },
       {
         author: "R.A. Torrey",
-        titles: [
-          "The Person and Work of the Holy Spirit",
-          "How to Pray",
-        ],
+        titles: ["The Person and Work of the Holy Spirit", "How to Pray"],
       },
       {
         author: "Charles Finney",
@@ -431,10 +429,7 @@ export const CARDS: CorpusCard[] = [
         ],
       },
       { author: "Abraham Kuyper", titles: ["The Work of the Holy Spirit"] },
-      {
-        author: "John Owen",
-        titles: ["Pneumatologia (The Holy Spirit)"],
-      },
+      { author: "John Owen", titles: ["Pneumatologia (The Holy Spirit)"] },
       {
         author: "F.B. Meyer",
         titles: ["The Secret of Guidance", "The Way into the Holiest"],
@@ -457,17 +452,14 @@ export const CARDS: CorpusCard[] = [
       },
       { author: "A.B. Simpson", titles: ["The Gospel of Healing"] },
       { author: "Unknown", titles: ["The Kneeling Christian"] },
-      {
-        author: "Smith Wigglesworth",
-        titles: ["Ever Increasing Faith"],
-      },
+      { author: "Smith Wigglesworth", titles: ["Ever Increasing Faith"] },
       {
         author: "Jessie Penn-Lewis",
         titles: ["War on the Saints", "Warfare with Satan"],
       },
       { author: "F.F. Bosworth", titles: ["Christ the Healer"] },
       {
-        author: "George M\u00fcller",
+        author: "George Müller",
         titles: ["Autobiography", "How God Answers Prayer"],
       },
       { author: "Phoebe Palmer", titles: ["The Way of Holiness"] },
@@ -475,10 +467,7 @@ export const CARDS: CorpusCard[] = [
         author: "A.J. Gordon",
         titles: ["The Ministry of the Spirit", "The Twofold Life"],
       },
-      {
-        author: "Catherine Booth",
-        titles: ["Aggressive Christianity"],
-      },
+      { author: "Catherine Booth", titles: ["Aggressive Christianity"] },
       {
         author: "William Booth",
         titles: ["In Darkest England", "Salvation Soldiery"],
@@ -532,7 +521,7 @@ export const CARDS: CorpusCard[] = [
   // ── Lexicons & Reference ──
   {
     id: "lexicon-tbesg",
-    name: "Lexicon \u2014 TBESG (Greek NT)",
+    name: "Lexicon — TBESG (Greek NT)",
     group: "Lexicons & Reference",
     status: "Complete",
     sourceKind: "lexicon",
@@ -560,7 +549,7 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "lexicon-tbesh",
-    name: "Lexicon \u2014 TBESH (Hebrew OT)",
+    name: "Lexicon — TBESH (Hebrew OT)",
     group: "Lexicons & Reference",
     status: "Complete",
     sourceKind: "lexicon",
@@ -588,7 +577,7 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "lexicon-tflsj",
-    name: "Lexicon \u2014 TFLSJ (Liddell-Scott)",
+    name: "Lexicon — TFLSJ (Liddell-Scott)",
     group: "Lexicons & Reference",
     status: "Complete",
     sourceKind: "lexicon",
@@ -616,7 +605,7 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "bible-verses",
-    name: "Bible Verses \u2014 WEB",
+    name: "Bible Verses — WEB",
     group: "Lexicons & Reference",
     status: "Complete",
     specialTable: "verses",
@@ -636,12 +625,13 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "interlinear-tagnt",
-    name: "Interlinear \u2014 TAGNT (Greek NT)",
+    name: "Interlinear — TAGNT (Greek NT)",
     group: "Lexicons & Reference",
     status: "Complete",
     specialTable: "interlinear_words",
     specialWhere: "language=eq.greek",
-    description: "Greek NT interlinear word data from STEPBible TAGNT. Full NT coverage.",
+    description:
+      "Greek NT interlinear word data from STEPBible TAGNT. Full NT coverage.",
     commands: [
       {
         label: "Ingest",
@@ -662,12 +652,13 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "interlinear-tahot",
-    name: "Interlinear \u2014 TAHOT (Hebrew OT)",
+    name: "Interlinear — TAHOT (Hebrew OT)",
     group: "Lexicons & Reference",
     status: "Complete",
     specialTable: "interlinear_words",
     specialWhere: "language=eq.hebrew",
-    description: "Hebrew OT interlinear word data from STEPBible TAHOT. Full OT coverage.",
+    description:
+      "Hebrew OT interlinear word data from STEPBible TAHOT. Full OT coverage.",
     commands: [
       {
         label: "Ingest",
@@ -759,7 +750,7 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "tag-backfill-magazine",
-    name: "Tag Backfill \u2014 Magazine",
+    name: "Tag Backfill — Magazine",
     group: "Maintenance",
     status: "Complete",
     isMaintenance: true,
@@ -775,7 +766,7 @@ export const CARDS: CorpusCard[] = [
   },
   {
     id: "tag-backfill-sermons",
-    name: "Tag Backfill \u2014 Sermons & Transcripts",
+    name: "Tag Backfill — Sermons & Transcripts",
     group: "Maintenance",
     status: "Complete",
     isMaintenance: true,
@@ -794,7 +785,7 @@ export const CARDS: CorpusCard[] = [
 export const FUTURE_TARGETS: FutureTarget[] = [
   {
     id: "andrew-murray-extra",
-    name: "Andrew Murray \u2014 Additional Titles",
+    name: "Andrew Murray — Additional Titles",
     description:
       "More Andrew Murray works beyond the 4 already ingested. Available on olddeadguys.com and Internet Archive.",
     urls: [
@@ -804,9 +795,9 @@ export const FUTURE_TARGETS: FutureTarget[] = [
   },
   {
     id: "azusa-apostolic-faith",
-    name: "Azusa Street \u2014 Apostolic Faith Magazine",
+    name: "Azusa Street — Apostolic Faith Magazine",
     description:
-      "13 issues of the original Apostolic Faith newsletter from the Azusa Street Revival (1906-1908). Primary source documents of the Pentecostal movement.",
+      "13 issues of the original Apostolic Faith newsletter from the Azusa Street Revival (1906–1908). Primary source documents of the Pentecostal movement.",
     urls: ["https://place.asburyseminary.edu/apostolicfaith/"],
   },
   {
@@ -818,23 +809,23 @@ export const FUTURE_TARGETS: FutureTarget[] = [
   },
   {
     id: "frank-bartleman",
-    name: "Frank Bartleman \u2014 Azusa Street Writings",
+    name: "Frank Bartleman — Azusa Street Writings",
     description:
-      "Frank Bartleman\u2019s firsthand accounts of the Azusa Street Revival. Multiple titles available on Internet Archive.",
+      "Frank Bartleman’s firsthand accounts of the Azusa Street Revival. Multiple titles available on Internet Archive.",
     urls: [
       "https://archive.org/search?query=frank+bartleman&mediatype=texts",
     ],
   },
   {
     id: "stepbible-tipnr",
-    name: "STEPBible \u2014 TIPNR (Proper Names)",
+    name: "STEPBible — TIPNR (Proper Names)",
     description:
       "Every proper noun in the Bible with exhaustive references, family relationships, geolocation, and descriptions. CC BY 4.0.",
     urls: ["https://github.com/STEPBible/STEPBible-Data"],
   },
   {
     id: "stepbible-tahot-ref",
-    name: "STEPBible \u2014 TAHOT (Hebrew OT) Additional Books",
+    name: "STEPBible — TAHOT (Hebrew OT) Additional Books",
     description:
       "Already ingested full OT. This card is for reference if re-ingestion or updates are needed.",
     urls: [

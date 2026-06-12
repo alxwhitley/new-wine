@@ -185,7 +185,6 @@ async def toggle_source(toggle_id: str, request: Request, user_id: str = Depends
         raise HTTPException(status_code=500, detail="Failed to update toggle")
 
     # Invalidate cache
-    from app.services.source_filter import _cache_ts
     import app.services.source_filter as sf
     sf._cache = None
     sf._cache_ts = 0.0

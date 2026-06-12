@@ -7,14 +7,15 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getDocumentForEdit, updateDocument } from "@/lib/api";
 
-const ADMIN_ID = "1ea99425-08ec-40f2-9ed3-588b88122a82";
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 type SaveState = "idle" | "saving" | "success" | "error";
 
 export default function AdminEditPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, loading: authLoading } = useAuth();
+  const [roleChecked, setRoleChecked] = useState(false);
 
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
@@ -29,9 +30,19 @@ export default function AdminEditPage() {
 
   const isDirty = title !== origTitle.current || author !== origAuthor.current || content !== origContent.current;
 
+  // Role gate
+  useEffect(() => {
+    if (authLoading || roleChecked) return;
+    if (!user || !accessToken) { router.replace("/"); return; }
+    fetch(`${API}/pastors-notes/me`, { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then((r) => r.json())
+      .then((data) => { if (data.role === "admin") setRoleChecked(true); else router.replace("/"); })
+      .catch(() => router.replace("/"));
+  }, [authLoading, user, accessToken, router, roleChecked]);
+
   // Load document
   useEffect(() => {
-    if (!accessToken || !id) return;
+    if (!accessToken || !id || !roleChecked) return;
     setLoading(true);
     getDocumentForEdit(id, accessToken)
       .then((doc) => {
@@ -72,18 +83,12 @@ export default function AdminEditPage() {
     }
   }, [accessToken, id, title, author, content]);
 
-  // Gate: not admin
-  if (user && user.id !== ADMIN_ID) {
-    return <div className="flex h-screen items-center justify-center bg-background"><p className="text-muted-foreground">Access denied</p></div>;
-  }
-
-  // Gate: loading auth
-  if (!user) {
-    return <div className="flex h-screen items-center justify-center bg-background"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>;
+  if (authLoading || !roleChecked) {
+    return <div className="flex h-screen items-center justify-center bg-background"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center bg-background"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>;
+    return <div className="flex h-screen items-center justify-center bg-background"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
   const isSaving = saveState === "saving";
