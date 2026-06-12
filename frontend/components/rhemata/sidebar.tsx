@@ -16,6 +16,7 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useUserRole } from "@/hooks/useUserRole";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -83,9 +84,10 @@ export function Sidebar({
   const isDiscover = pathname === "/library";
   const isStudy = pathname.startsWith("/study");
 
-  // Role state
-  const [userRole, setUserRole] = useState<"user" | "contributor" | "admin" | null>(null);
-  const [displayName, setDisplayName] = useState<string | null>(null);
+  // Role — shared hook with module-level cache; avoids duplicate fetches
+  const { role: userRole, displayName, updateDisplayName } = useUserRole(
+    isLoggedIn ? accessToken : null
+  );
 
   // Contributor request sheet
   const [contributorOpen, setContributorOpen] = useState(false);
@@ -97,23 +99,6 @@ export function Sidebar({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState("");
   const [settingsStatus, setSettingsStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
-
-  useEffect(() => {
-    if (!isLoggedIn || !accessToken) {
-      setUserRole(null);
-      setDisplayName(null);
-      return;
-    }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/pastors-notes/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        setUserRole(data.role ?? "user");
-        setDisplayName(data.display_name ?? null);
-      })
-      .catch(() => {});
-  }, [isLoggedIn, accessToken]);
 
   useEffect(() => {
     if (isOpen) {
@@ -191,7 +176,7 @@ export function Sidebar({
         body: JSON.stringify({ display_name: trimmed }),
       });
       if (res.ok) {
-        setDisplayName(trimmed);
+        updateDisplayName(trimmed);
         setSettingsStatus("saved");
       } else {
         setSettingsStatus("error");

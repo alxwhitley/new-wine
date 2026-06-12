@@ -14,6 +14,8 @@ import AuthButton from "@/components/auth/AuthButton";
 import LoginModal from "@/components/auth/LoginModal";
 import { supabase } from "@/lib/supabase";
 import { getAdjacentVerseId } from "@/lib/verse-counts";
+import { useUserRole } from "@/hooks/useUserRole";
+import { PastorsNotesSection } from "@/components/rhemata/pastors-notes";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -814,23 +816,11 @@ function CommentarySection({
   );
 }
 
-// ── PastorsNotesSection ───────────────────────────────────────────────────────
-
-function PastorsNotesSection() {
-  return (
-    <section id="section-pastors" className="pt-10">
-      <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-4">Pastors&apos; Notes</h2>
-      <div className="rounded-lg border border-border bg-card p-6 text-center">
-        <p className="text-sm text-muted-foreground">Notes from vetted pastors will appear here.</p>
-      </div>
-    </section>
-  );
-}
-
 // ── StudyPage ─────────────────────────────────────────────────────────────────
 
 export default function StudyPage() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const { role: userRole } = useUserRole(accessToken);
   const [showLogin, setShowLogin] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -1429,7 +1419,12 @@ export default function StudyPage() {
                   />
 
                   {/* 5. Pastors' Notes */}
-                  <PastorsNotesSection />
+                  <PastorsNotesSection
+                    verseId={currentVerseId}
+                    accessToken={accessToken}
+                    role={userRole}
+                    userId={user?.id ?? null}
+                  />
                 </>
               )}
             </div>
