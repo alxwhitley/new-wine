@@ -33,7 +33,7 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
             className="fixed inset-0 z-49"
           />
           <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[140px] rounded-lg border border-border bg-card p-1">
-            {user.email === "alxwhitley@gmail.com" && (
+            {user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL && (
               <a
                 href="/admin"
                 onClick={() => setMenuOpen(false)}
@@ -43,7 +43,7 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
                 Admin
               </a>
             )}
-            {user.email === "alxwhitley@gmail.com" && (
+            {user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL && (
               <a
                 href="/rhemata-corpus-admin"
                 onClick={() => setMenuOpen(false)}

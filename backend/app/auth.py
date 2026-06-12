@@ -37,7 +37,7 @@ def get_optional_user(request: Request) -> Optional[str]:
         return None
 
 
-ADMIN_EMAIL = "alxwhitley@gmail.com"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
 
 
 def require_admin(request: Request) -> str:

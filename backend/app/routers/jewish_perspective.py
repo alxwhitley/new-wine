@@ -7,9 +7,17 @@ from typing import Dict, List, Optional
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from app.auth import get_optional_user
 from app.constants import BOOK_MAP
 from app.db.supabase import get_supabase
+
+GUEST_QUERY_LIMIT = 6
+USER_DAILY_QUERY_LIMIT = 65
+
+
+class JewishPerspectiveRequest(BaseModel):
+    anon_id: Optional[str] = None
 
 logger = logging.getLogger(__name__)
 
@@ -207,11 +215,39 @@ async def get_jewish_perspective(verse_reference: str):
 @router.post("/{verse_reference}")
 async def generate_jewish_perspective(
     verse_reference: str,
+    body: JewishPerspectiveRequest,
     request: Request,
-    user_id: str = Depends(_require_user),
+    user_id: Optional[str] = Depends(get_optional_user),
 ):
-    ref = unquote(verse_reference)
     db = get_supabase()
+
+    # Query limit checks (mirrors /chat endpoint)
+    if not user_id:
+        if not body.anon_id:
+            raise HTTPException(status_code=400, detail="anon_id required for guest users")
+        try:
+            result = db.rpc("increment_guest_query", {"p_anon_id": body.anon_id}).execute()
+            count = result.data if isinstance(result.data, int) else 0
+            logger.info("[GUEST] jewish-perspective anon_id=%s query_count=%s", body.anon_id, count)
+            if count > GUEST_QUERY_LIMIT:
+                raise HTTPException(status_code=429, detail="guest_limit_reached")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("Guest query count check failed for anon_id=%s", body.anon_id)
+    else:
+        try:
+            result = db.rpc("increment_user_daily_query", {"p_user_id": user_id}).execute()
+            count = result.data if isinstance(result.data, int) else 0
+            logger.info("[USER] jewish-perspective user_id=%s daily_query_count=%s", user_id, count)
+            if count > USER_DAILY_QUERY_LIMIT:
+                raise HTTPException(status_code=429, detail="daily_limit_reached")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("User daily query count check failed for user_id=%s", user_id)
+
+    ref = unquote(verse_reference)
 
     # Check cache first
     existing = (
