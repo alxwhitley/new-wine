@@ -311,9 +311,7 @@ export default function LibraryPage() {
       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
     >
       {isNewWine && (
-        <Badge variant="secondary" className="absolute top-3 right-3 text-[10px] uppercase tracking-wider">
-          New Wine Magazine
-        </Badge>
+        <Badge variant="secondary" className="absolute top-3 right-3">New Wine Magazine</Badge>
       )}
       {doc.author && (
         <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>

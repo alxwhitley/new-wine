@@ -69,7 +69,7 @@ export default function AuthorsPage() {
           <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="md:hidden flex-1 text-center font-serif text-lg font-semibold text-foreground">Rhemata</h1>
+          <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
           <div className="md:hidden min-w-[44px]" />
           <div className="hidden md:flex ml-auto">
             <AuthButton user={user} onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }} onSignOut={signOut} />
@@ -86,7 +86,7 @@ export default function AuthorsPage() {
               Back to Library
             </Link>
 
-            <h2 className="font-serif text-2xl md:text-3xl font-semibold text-foreground mb-8">
+            <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground mb-8">
               Authors
             </h2>
 
@@ -120,7 +120,7 @@ export default function AuthorsPage() {
                       </div>
                     )}
                     <div className="flex flex-col min-w-0">
-                      <h4 className="font-serif" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45 }}>{author.name}</h4>
+                      <h4 className="font-sans" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45 }}>{author.name}</h4>
                       <p style={{ fontSize: "11px", color: "#888880", marginTop: "4px" }}>{author.years}</p>
                       <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
                       <p className="line-clamp-4" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>{author.bio}</p>
