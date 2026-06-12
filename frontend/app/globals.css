@@ -149,15 +149,15 @@ mark {
 @keyframes holy-glow {
   0%, 100% {
     box-shadow:
-      0 0 4px rgba(230, 166, 115, 0.3),
-      0 0 12px rgba(230, 166, 115, 0.15),
-      inset 0 0 4px rgba(230, 166, 115, 0.05);
+      0 0 4px hsl(var(--foreground) / 0.2),
+      0 0 12px hsl(var(--foreground) / 0.08),
+      inset 0 0 4px hsl(var(--foreground) / 0.04);
   }
   50% {
     box-shadow:
-      0 0 8px rgba(230, 166, 115, 0.5),
-      0 0 20px rgba(230, 166, 115, 0.3),
-      inset 0 0 8px rgba(230, 166, 115, 0.1);
+      0 0 8px hsl(var(--foreground) / 0.35),
+      0 0 20px hsl(var(--foreground) / 0.15),
+      inset 0 0 8px hsl(var(--foreground) / 0.07);
   }
 }
 
@@ -173,14 +173,14 @@ mark {
   padding: 2px;
   background: linear-gradient(
     90deg,
-    #e6a673,
-    #d9915a,
-    #cc7b41,
-    #bf6629,
-    #f0c99d,
-    #e6a673,
-    #d9915a,
-    #cc7b41
+    hsl(var(--input)),
+    hsl(var(--foreground)),
+    hsl(var(--input)),
+    hsl(var(--border)),
+    hsl(var(--foreground)),
+    hsl(var(--input)),
+    hsl(var(--foreground)),
+    hsl(var(--input))
   );
   background-size: 300% 100%;
   -webkit-mask:
