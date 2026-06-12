@@ -282,6 +282,20 @@ function FlagModal({
   );
 }
 
+const EXCERPT_COMPONENTS: React.ComponentProps<typeof ReactMarkdown>["components"] = {
+  h1: ({ children }) => <p className="text-sm font-medium text-foreground mb-2">{children}</p>,
+  h2: ({ children }) => <p className="text-sm font-medium text-foreground mb-2">{children}</p>,
+  h3: ({ children }) => <p className="text-sm font-medium text-foreground mb-2">{children}</p>,
+  h4: ({ children }) => <p className="text-sm font-medium text-foreground mb-1">{children}</p>,
+  p: ({ children }) => <p className="text-sm text-foreground leading-relaxed mb-3">{children}</p>,
+  strong: ({ children }) => <strong className="font-medium text-foreground">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => <ul className="text-sm text-foreground leading-relaxed mb-3 ml-4 list-disc space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="text-sm text-foreground leading-relaxed mb-3 ml-4 list-decimal space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="text-sm text-foreground">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-border pl-3 text-sm text-muted-foreground italic mb-3">{children}</blockquote>,
+};
+
 function TruncatedExcerpt({ content, wordLimit = 300 }: { content: string; wordLimit?: number }) {
   const [expanded, setExpanded] = useState(false);
   useEffect(() => { setExpanded(false); }, [content]);
@@ -290,8 +304,8 @@ function TruncatedExcerpt({ content, wordLimit = 300 }: { content: string; wordL
   const displayContent = !expanded && needsTruncation ? words.slice(0, wordLimit).join(" ") + "..." : content;
   return (
     <>
-      <div className="prose prose-invert prose-sm max-w-none">
-        <ReactMarkdown>{displayContent}</ReactMarkdown>
+      <div className="text-sm text-foreground">
+        <ReactMarkdown components={EXCERPT_COMPONENTS}>{displayContent}</ReactMarkdown>
       </div>
       {needsTruncation && (
         <div className="border-t border-border">
@@ -642,8 +656,8 @@ function InlineWordPanel({
         ) : corpusResults.length === 0 ? (
           <p className="text-sm text-muted-foreground">No library entries for this word yet.</p>
         ) : corpusResults.some((r) => r.is_excerpt) ? (
-          <div className="prose prose-invert prose-sm max-w-none">
-            <ReactMarkdown>
+          <div className="text-sm text-foreground">
+            <ReactMarkdown components={EXCERPT_COMPONENTS}>
               {corpusResults.filter((r) => r.is_excerpt).map((r) => r.content).join("\n\n")}
             </ReactMarkdown>
           </div>
