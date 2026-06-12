@@ -778,9 +778,10 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     def generate():
-        # Low-material fallback: skip entirely when a position paper was injected — the
-        # system has strong material even if citable chunk count is low.
-        if citable_count < 2 and not topic_context_parts:
+        # True-empty short-circuit: nothing retrieved at all — no citable, no background.
+        # Only bail here; thin-citable-but-has-background takes the graceful-degradation path.
+        truly_empty = not chunks and not topic_context_parts
+        if truly_empty:
             fallback = "I don't have strong material on that topic in my current library."
             yield _sse(json.dumps({"token": fallback}))
             yield _sse(json.dumps({"citations": [], "conversation_id": None}))
@@ -808,6 +809,15 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         if topic_context_parts:
             topic_block = "\n\n---\n\n".join(topic_context_parts)
             context = topic_block + "\n\n---\n\n" + context
+
+        # Graceful-degradation hint: when citable sources are thin but background exists,
+        # tell the model so it follows the graceful degradation rules in the system prompt.
+        if citable_count < 2 and not topic_context_parts:
+            context += (
+                "\n\n[Retrieval note: citable sources on this topic are thin or absent. "
+                "The strongest available material is background-only. "
+                "Follow the graceful degradation rules in your instructions.]"
+            )
 
         if lexicon:
             lex_context = "\n\n---\n\n".join(
