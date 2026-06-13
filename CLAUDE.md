@@ -34,7 +34,9 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   └── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
 ├── taxonomy.md                # 257-tag topic taxonomy (15 categories)
 ├── migrations/                # SQL migrations (run in Supabase SQL Editor)
-│   └── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
+│   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
+│   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
+│   └── 040_fix_increment_user_query.sql  # Conditional increment (SELECT FOR UPDATE, returns allowed bool)
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
 ├── backend/
@@ -49,6 +51,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   ├── library.py     # /library/books + /library/book/{id} endpoints
 │   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon + /study/excerpt + /study/interlinear + /study/commentary + /study/wordsearch + /study/wordstudy
 │   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management (user/contributor/admin)
+│   │   │   ├── usage.py       # GET /usage — weekly query count for authenticated users
 │   │   │   └── ingest.py      # /ingest endpoint (admin-only as of 2026-06-10)
 │   │   ├── services/
 │   │   │   ├── embeddings.py
@@ -64,7 +67,12 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   └── nixpacks.toml          # Locks Python 3.9
 └── frontend/                  # Next.js 16 frontend (Vercel)
     ├── hooks/
-    │   └── useUserRole.ts     # Role + displayName hook; module-level cache keyed by access token
+    │   ├── useUserRole.ts     # Role + displayName hook; module-level cache keyed by access token
+    │   └── useChat.ts         # weeklyUsage state; seeds from GET /usage on mount, updates from SSE meta
+    ├── components/
+    │   └── rhemata/
+    │       ├── usage-ring.tsx        # SVG weekly usage ring (track=--muted, arc=--foreground)
+    │       └── weekly-limit-card.tsx # Inline hard-stop card on 429; BILLING_ENABLED=false flag
     ├── package.json
     └── ...
 ```
@@ -137,7 +145,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 
 ## Database
 - **Supabase** with pgvector enabled
-- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`, `book_quotes`
+- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`, `book_quotes`, `user_usage`
 - `documents.source_type` — `'sermon'` | `'background'` | `'magazine_article'` | `'commentary'` | `'book'` | `'paper'` | `'other'`
 - `documents.source_kind` — taxonomy field (e.g. `'magazine_article'`)
 - `documents.citation_mode` — `'citable'` | `'silent_context'`
@@ -175,6 +183,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - citable_count gate (June 2026): counted from post-Cohere, pre-neighbor-expansion top-8 window. Only sermon/citable chunks count. Controls graceful-degradation and fallback paths.
 - Low-material fallback rework (June 2026): hard short-circuit fires only for truly empty chunk sets. When `citable_count < 2` but silent_context chunks exist, proceeds to normal LLM call with retrieval note appended to context block. System prompt graceful-degradation rules handle the response.
 - System prompt rewrite (June 2026): conviction-first classification (settled convictions evaluated BEFORE retrieved sources; source diversity never reclassifies a conviction as debate); voice and attribution firewall (inflammatory language banned from Rhemata's own voice); graceful degradation (WHAT → synthesize from background; WHO/attribution → direct to Study Mode; truly uncovered → bare refusal); verbatim retrieval quotes permitted up to 50 words from citable sources only; `<research_analysis>` expanded to 5 checks (added demotion guard and voice firewall check).
+- Weekly query metering (June 2026): 50 queries/week per authenticated user, Monday UTC reset. `user_usage` table; `weekly_limit` stored per-row (not hardcoded) so Phase 2 billing can override per user. `increment_user_query` RPC uses `SELECT FOR UPDATE` + conditional UPDATE — counter never exceeds limit, no race at cap. Returns `allowed bool`; hard 429 fires before any LLM call. SSE meta includes `usage: {used, limit, week_start}`. Study endpoints excluded from count. Guest meter unchanged. Frontend: `useChat` owns state, seeds from `GET /usage` on mount, updates from SSE meta. `BILLING_ENABLED=false` flag in `weekly-limit-card.tsx`.
 
 ---
 

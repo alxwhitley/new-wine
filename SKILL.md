@@ -30,8 +30,12 @@ Charismatic and Spirit-filled Christians who want to research theology from with
 repo/
 ├── frontend/          # Next.js 16 app (Vercel)
 │   ├── hooks/
-│   │   └── useUserRole.ts  # Role + displayName hook; module-level cache keyed by access token
+│   │   ├── useUserRole.ts  # Role + displayName hook; module-level cache keyed by access token
+│   │   └── useChat.ts      # Chat state + weeklyUsage state (mount fetch from /usage, update from SSE meta)
 │   └── components/
+│       ├── rhemata/
+│       │   ├── usage-ring.tsx        # SVG weekly usage ring (track=--muted, arc=--foreground, grows with usage)
+│       │   └── weekly-limit-card.tsx # Inline hard-stop card on 429; BILLING_ENABLED=false flag
 │       ├── admin/          # Admin corpus components (corpus-types.ts, corpus-data.ts, corpus-card.tsx, card-modal.tsx)
 │       └── ui/
 │           └── switch.tsx  # shadcn Switch (radix-ui)
@@ -45,6 +49,7 @@ repo/
 │   │   │   ├── document.py   # /document/{id} + /document/{id}/article
 │   │   │   ├── study.py      # /study/verse + /study/corpus + /study/lexicon + /study/excerpt endpoints
 │   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management (user/contributor/admin)
+│   │   │   ├── usage.py      # GET /usage — weekly query count for authenticated users
 │   │   │   └── ingest.py     # /ingest endpoint
 │   │   ├── services/
 │   │   ├── db/
@@ -85,7 +90,9 @@ repo/
 ├── ingest_lexicon.py      # STEPBible lexicon ingestion (TBESG, TBESH, TFLSJ)
 ├── ingest_bible.py        # WEB Bible VPL ingestion into verses table (psycopg2)
 ├── migrations/            # SQL migrations (run in Supabase SQL Editor)
-│   └── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
+│   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
+│   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
+│   └── 040_fix_increment_user_query.sql  # Conditional increment fix (SELECT FOR UPDATE, returns allowed bool)
 ├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
@@ -212,7 +219,8 @@ repo/
 - **Prefix search** — `search_documents` RPC builds `to_tsquery` with `:*` prefix operators per token (colons split to sub-tokens), so `"Romans 8"` matches `"Romans 8:1"`, `"Romans 8:28"`, etc.; falls back to `plainto_tsquery` on parse error
 - **System prompt discipline** — `backend/app/system_prompt.txt` uses XML tags (`<thinking>`, `<research_analysis>`, `<answer>`). Fully rewritten June 2026. `<research_analysis>` runs 5 fixed self-checks: author conflation, silent_context citation, biblical case overreach, settled-conviction demotion guard (check 4), and voice firewall check (check 5). Conviction-first classification: every theological question classified against settled-convictions list BEFORE weighing retrieved sources — source diversity never reclassifies a settled conviction as an in-house debate. Voice and attribution firewall: inflammatory language ("heretical," "demonic," "apostate," etc.) banned from Rhemata's own voice; charged characterizations from sources may be quoted WITH attribution. Graceful degradation: when citable material is thin, WHAT questions synthesize from background without naming sources; WHO/attribution questions direct user to Study Mode; bare "no strong material" refusal reserved for topics not covered at all. Retrieval quote rules: verbatim quotes permitted in retrieval mode only, max 50 words per quote from citable sources only. Response Discipline Rules: multi-part decomposition, retrieval-only format when asked, retrieval scope cap (10 items / 250 words), single-author dominance notice. Citation rules: prompt-injection trust boundary, no anonymous attribution, max 2-3 inline citations. Formatting: minimum 2 `##` headings per theological answer.
 - **Theological guardrails** — `backend/app/theological_guardrails.txt` loaded and appended to system prompt in `chat.py`. Contains non-negotiable theological framings that override source material phrasing. Currently covers Holy Spirit personhood (person of the Trinity, not merely a power/provision).
-- **Chat streaming** — Anthropic Claude Sonnet 4.5 `max_tokens=1500`. `<answer>` tag extraction server-side with 9-char buffer safety for split tags. If stream ends mid-answer, remaining buffer is flushed to client instead of silently dropped. Uses `client.messages.create(stream=True)` (not context manager form, which is incompatible with generator `yield`). Frontend: no timeouts or AbortController; stream completion via `[DONE]` sentinel or reader exhaustion; error handling for 429 (guest/daily limits).
+- **Chat streaming** — Anthropic Claude Sonnet 4.5 `max_tokens=1500`. `<answer>` tag extraction server-side with 9-char buffer safety for split tags. If stream ends mid-answer, remaining buffer is flushed to client instead of silently dropped. Uses `client.messages.create(stream=True)` (not context manager form, which is incompatible with generator `yield`). Frontend: no timeouts or AbortController; stream completion via `[DONE]` sentinel or reader exhaustion; error handling for 429 (`guest_limit_reached` object, `weekly_limit_reached` object). Final SSE meta event includes `usage: {used, limit, week_start}` for authenticated users.
+- **Weekly query metering (June 2026, Workstream B)** — 50 queries/week for authenticated users, Monday UTC reset. `user_usage` table (migration 039): `user_id`, `query_count`, `week_start`, `weekly_limit` (per-row, not hardcoded — Phase 2 billing can override). `increment_user_query(uuid)` RPC (migration 040): `SELECT FOR UPDATE` row-level lock, conditional UPDATE only when `v_new_count <= v_limit` — counter never exceeds limit, no race condition at cap. Returns `{query_count, weekly_limit, week_start, allowed}`. Handler branches on `allowed` flag; hard 429 stop fires before any LLM call. `get_user_usage(uuid)` RPC: read-only, handles stale-week rollover display without writing. Study endpoints never counted. Guest meter unchanged. Frontend: `useChat` seeds from `GET /usage` on mount; updates from SSE meta `usage` field after each query (no extra fetch). Hard-stop card renders inline in message stream. Usage ring in sidebar footer (desktop) and top bar left (mobile). `BILLING_ENABLED=false` flag in `weekly-limit-card.tsx` for future Stripe wiring. `daily_limit_reached` dead code stripped (not emitted by backend).
 - **Batched neighbor chunk expansion** — `fetch_neighbor_chunks_batch()` collects all (document_id, chunk_index±1) pairs from top chunks, builds `.or_()` compound filter with `and()` conditions, batches at 30 pairs per query. Replaces sequential per-chunk lookups (was 10 calls for 5 chunks, now 1-2 calls total).
 - **Sparse citation rule** — system prompt enforces max 2-3 inline citations per response. Only cite when source of claim materially matters. Single citation sufficient when answer draws primarily from one source.
 - **Cohere reranking** — After RRF fusion, top 30 chunks sent to Cohere rerank-v3.5 with original query; top 8 by relevance score returned. Falls back to RRF top 30 if `COHERE_API_KEY` not set or call fails. Cohere client forced to HTTP/1.1 (`httpx.Client(http2=False)`) to avoid HTTP/2 trailer framing errors.
@@ -567,6 +575,8 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - ~~**Library image 400 errors**~~ — **FIXED (2026-06-13, commit f9c286d):** `AUTHOR_IMAGES` trimmed to 5 entries with correct extensions (`.webp`/`.jpeg`); `BOOK_COVERS` trimmed from 40 to 15 entries matching actual files on disk. Updated in both `frontend/app/library/page.tsx` and `frontend/app/library/authors/page.tsx`.
 - **Vercel Analytics not enabled in dashboard** — `<Analytics />` is mounted in `layout.tsx` behind `NODE_ENV === "production"`, but the feature must be toggled on in Vercel → project → Analytics. Until then the analytics script 404s in production.
 - **Study page slow load is Railway cold start** — not a DB issue. DB confirmed optimized: interlinear index scan 4.2ms, `match_sermon_chunks_by_ref` GIN index confirmed active. First request after idle takes 3-8s due to Railway sleep. No code fix; consider Railway paid plan or keep-alive ping if this becomes a user complaint.
+- **Stripe billing not yet wired** — `BILLING_ENABLED = false` constant in `frontend/components/rhemata/weekly-limit-card.tsx`. Upgrade button renders disabled with "Coming soon" label. Flip to `true` and implement Stripe checkout when ready.
+- **Weekly usage ring: 0-query state** — at `used=0` the ring shows only the faint `--muted` track (arc guarded by `used > 0` to prevent zero-length arc producing a dot artifact with `stroke-linecap: round`). Expected behavior on first login of the week.
 
 ---
 
