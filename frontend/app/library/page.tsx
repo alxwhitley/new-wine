@@ -4,11 +4,13 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, ArrowLeft, Loader2, Menu, ChevronDown, Trash2, Pencil } from "lucide-react";
+import { Search, ArrowLeft, Loader2, Menu, ChevronDown, Trash2, Pencil, SlidersHorizontal } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { searchDocumentsFts, browseDocuments, getArticle, fetchBooks, deleteDocument } from "@/lib/api";
 import type { DocumentSearchResult, ArticleResponse, Book } from "@/lib/api";
@@ -23,7 +25,7 @@ const CONTENT_FILTERS: { key: ContentFilter; label: string }[] = [
 ];
 
 const SEARCH_SUGGESTIONS = [
-  "Hearing God\u2019s Voice",
+  "Hearing God’s Voice",
   "Identity in Christ",
   "Renewing the Mind",
 ];
@@ -69,7 +71,7 @@ const AUTHOR_DATA = [
   { name: "Don Basham", years: "1926–1989", specialty: "Specialised in Holy Spirit baptism, deliverance ministry, and spiritual authority." },
   { name: "John Bevere", years: "b. 1959", specialty: "Specialised in the fear of the Lord, spiritual authority, and uncompromising discipleship." },
   { name: "Michael Brown", years: "b. 1955", specialty: "Specialised in revival, Jewish roots of Christianity, and cultural apologetics." },
-  { name: "Jack Deere", years: "b. 1948", specialty: "Specialised in the continuation of spiritual gifts, prophecy, and hearing God\u2019s voice." },
+  { name: "Jack Deere", years: "b. 1948", specialty: "Specialised in the continuation of spiritual gifts, prophecy, and hearing God’s voice." },
   { name: "Oswald J. Smith", years: "1889–1986", specialty: "Specialised in evangelism, world missions, and the Spirit-empowered church." },
 ];
 
@@ -79,6 +81,7 @@ type UnifiedResult =
 
 export default function LibraryPage() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -99,6 +102,11 @@ export default function LibraryPage() {
   const authorPanelRef = useRef<HTMLDivElement>(null);
   const [eraFilter, setEraFilter] = useState("");
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
+
+  // Mobile filter sheet state
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [draftAuthors, setDraftAuthors] = useState<string[]>([]);
+  const [draftEra, setDraftEra] = useState("");
 
   // Results
   const [docResults, setDocResults] = useState<DocumentSearchResult[]>([]);
@@ -135,11 +143,10 @@ export default function LibraryPage() {
       let newBooks: Book[] = [];
 
       if (includeArticles || includeSermons) {
-        // Determine source_kind filter
         let sourceKind: string | undefined;
         if (includeArticles && !includeSermons) sourceKind = "magazine_article";
         else if (includeSermons && !includeArticles) sourceKind = "sermon_transcript";
-        else sourceKind = undefined; // both — no filter
+        else sourceKind = undefined;
 
         if (q && q.trim()) {
           promises.push(
@@ -267,103 +274,93 @@ export default function LibraryPage() {
   const articles = docResults.filter((d) => d.source_kind !== "sermon_transcript");
   const sermons = docResults.filter((d) => d.source_kind === "sermon_transcript");
 
+  const activeFilterCount = selectedAuthors.length + (eraFilter ? 1 : 0);
+
   // Render a doc card
   const renderDocCard = (doc: DocumentSearchResult) => {
     const isNewWine = doc.source_kind !== "sermon_transcript" && (doc.source_name || "").toLowerCase().includes("new wine");
     return (
-    <button
-      key={doc.id}
-      onClick={() => handleCardClick(doc.id, doc.source_kind)}
-      className="flex flex-col text-left cursor-pointer"
-      style={{ position: "relative", backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", transition: "background 0.2s ease" }}
-      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
-    >
-      <div className="flex items-center gap-2">
-        {doc.author && (
-          <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            {doc.author}
-          </p>
-        )}
-        {isNewWine && (
-          <span className="text-xs text-muted-foreground">New Wine Magazine</span>
-        )}
-      </div>
-      <h3 className="font-sans" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
-        {doc.title}
-      </h3>
-      <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
-      {isNewWine && doc.description ? (
-        <p className="line-clamp-2" style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", lineHeight: 1.5 }}>
-          {doc.description.length > 150 ? doc.description.slice(0, 150) + "\u2026" : doc.description}
-        </p>
-      ) : doc.topic_tags && doc.topic_tags.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {doc.topic_tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="inline-block"
-              style={{ fontSize: "11px", color: "#d4b96a", backgroundColor: "rgba(212, 185, 106, 0.08)", border: "1px solid rgba(212, 185, 106, 0.2)", borderRadius: "20px", padding: "3px 10px" }}
-            >
-              {tag}
-            </span>
-          ))}
+      <button
+        key={doc.id}
+        onClick={() => handleCardClick(doc.id, doc.source_kind)}
+        className="relative flex flex-col text-left cursor-pointer bg-card border border-border rounded-xl p-5 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-2">
+          {doc.author && (
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+              {doc.author}
+            </p>
+          )}
+          {isNewWine && (
+            <span className="text-xs text-muted-foreground">New Wine Magazine</span>
+          )}
         </div>
-      ) : null}
-      {doc.year && (
-        <p className="mt-auto" style={{ fontSize: "11px", color: "#555550", paddingTop: "10px" }}>{doc.year}</p>
-      )}
-      {isAdmin && (
-        confirmingDeleteId === doc.id ? (
-          <span
-            style={{ position: "absolute", bottom: "12px", right: "12px", display: "flex", gap: "8px" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {deleteError === doc.id && <span style={{ fontSize: "11px", color: "#e24b4a" }}>Error</span>}
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
-              style={{ fontSize: "11px", color: "#e24b4a", cursor: "pointer", background: "none", border: "none", padding: 0 }}
-            >
-              Delete
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(null); setDeleteError(null); }}
-              style={{ fontSize: "11px", color: "#888880", cursor: "pointer", background: "none", border: "none", padding: 0 }}
-            >
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <span
-            style={{ position: "absolute", bottom: "12px", right: "12px", display: "flex", gap: "8px", alignItems: "center" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <a
-              href={`/admin/edit/${doc.id}`}
-              onClick={(e) => { e.stopPropagation(); }}
-              style={{ cursor: "pointer", display: "flex" }}
-            >
-              <Pencil
-                style={{ width: "14px", height: "14px", color: "#555550", transition: "color 0.15s ease" }}
-                onMouseEnter={(e) => { (e.currentTarget as SVGElement).style.color = "#c1c1b8"; }}
-                onMouseLeave={(e) => { (e.currentTarget as SVGElement).style.color = "#555550"; }}
-              />
-            </a>
+        <h3 className="font-sans text-[17px] font-semibold text-foreground leading-snug mt-1.5">
+          {doc.title}
+        </h3>
+        <div className="border-t border-border my-3" />
+        {isNewWine && doc.description ? (
+          <p className="line-clamp-2 text-xs text-muted-foreground italic leading-relaxed">
+            {doc.description.length > 150 ? doc.description.slice(0, 150) + "…" : doc.description}
+          </p>
+        ) : doc.topic_tags && doc.topic_tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {doc.topic_tags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className="inline-block text-[11px] text-primary bg-primary/10 border border-primary/20 rounded-full px-2.5 py-0.5"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {doc.year && (
+          <p className="mt-auto text-[11px] text-muted-foreground pt-2.5">{doc.year}</p>
+        )}
+        {isAdmin && (
+          confirmingDeleteId === doc.id ? (
             <span
-              style={{ cursor: "pointer", display: "flex" }}
-              onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(doc.id); }}
+              className="absolute bottom-3 right-3 flex gap-2"
+              onClick={(e) => e.stopPropagation()}
             >
-              <Trash2
-                style={{ width: "14px", height: "14px", color: "#555550", transition: "color 0.15s ease" }}
-                onMouseEnter={(e) => { (e.currentTarget as SVGElement).style.color = "#c1c1b8"; }}
-                onMouseLeave={(e) => { (e.currentTarget as SVGElement).style.color = "#555550"; }}
-              />
+              {deleteError === doc.id && <span className="text-[11px] text-destructive">Error</span>}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+                className="text-[11px] text-destructive cursor-pointer bg-transparent border-none p-0"
+              >
+                Delete
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(null); setDeleteError(null); }}
+                className="text-[11px] text-muted-foreground cursor-pointer bg-transparent border-none p-0"
+              >
+                Cancel
+              </button>
             </span>
-          </span>
-        )
-      )}
-    </button>
-  );
+          ) : (
+            <span
+              className="absolute bottom-3 right-3 flex gap-2 items-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <a
+                href={`/admin/edit/${doc.id}`}
+                onClick={(e) => { e.stopPropagation(); }}
+                className="flex cursor-pointer"
+              >
+                <Pencil className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+              </a>
+              <span
+                className="flex cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(doc.id); }}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+              </span>
+            </span>
+          )
+        )}
+      </button>
+    );
   };
 
   // Render a book card
@@ -372,10 +369,7 @@ export default function LibraryPage() {
     return (
       <div
         key={book.id}
-        className="flex flex-row"
-        style={{ backgroundColor: "#262624", border: "1px solid #3c3c38", borderRadius: "14px", padding: "20px", gap: "14px", transition: "background 0.2s ease" }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#262624"; }}
+        className="flex flex-row bg-card border border-border rounded-xl p-5 gap-3.5 transition-colors hover:bg-accent"
       >
         {coverSrc ? (
           <Image
@@ -383,8 +377,7 @@ export default function LibraryPage() {
             alt={book.title}
             width={56}
             height={80}
-            className="object-cover flex-shrink-0"
-            style={{ width: "56px", height: "80px", borderRadius: "4px", boxShadow: "0 2px 8px rgba(0,0,0,0.4)" }}
+            className="object-cover flex-shrink-0 rounded-sm shadow-lg w-14 h-20"
             onError={(e) => {
               const img = e.currentTarget as HTMLImageElement;
               img.style.display = "none";
@@ -392,20 +385,17 @@ export default function LibraryPage() {
             }}
           />
         ) : null}
-        <div
-          className={coverSrc ? "hidden" : ""}
-          style={{ width: "56px", height: "80px", borderRadius: "4px", backgroundColor: "#2a2926", flexShrink: 0 }}
-        />
+        <div className={cn(coverSrc ? "hidden" : "", "w-14 h-20 rounded-sm bg-muted flex-shrink-0")} />
         <div className="flex flex-col min-w-0">
-          <p style={{ fontSize: "11px", fontWeight: 500, color: "#888880", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
             {book.author}
           </p>
-          <h4 className="font-sans" style={{ fontSize: "17px", fontWeight: 600, color: "#e6e6e0", lineHeight: 1.45, marginTop: "6px" }}>
+          <h4 className="font-sans text-[17px] font-semibold text-foreground leading-snug mt-1.5">
             {book.title}
           </h4>
-          <div style={{ borderTop: "1px solid #3c3c38", margin: "12px 0" }} />
+          <div className="border-t border-border my-3" />
           {book.description && (
-            <p className="line-clamp-2" style={{ fontSize: "13px", color: "#c1c1b8", lineHeight: 1.6 }}>
+            <p className="line-clamp-2 text-[13px] text-muted-foreground leading-relaxed">
               {book.description}
             </p>
           )}
@@ -413,10 +403,7 @@ export default function LibraryPage() {
             <a
               href={`/library/book/${book.document_id}`}
               onClick={(e) => e.stopPropagation()}
-              className="text-xs text-center transition-colors"
-              style={{ border: "1px solid #3c3c38", color: "#c1c1b8", borderRadius: "6px", padding: "6px 10px", marginTop: "12px", display: "block", width: "100%" }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; e.currentTarget.style.color = "#e6e6e0"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
+              className="min-h-[44px] flex items-center justify-center text-xs text-center border border-border text-muted-foreground rounded-md px-2.5 mt-3 transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               Read Excerpts
             </a>
@@ -457,7 +444,7 @@ export default function LibraryPage() {
             <div className="mx-auto max-w-2xl px-4 md:px-6 pt-8 pb-16">
               <button
                 onClick={handleBackToResults}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gold transition-colors mb-8 min-h-[44px]"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-8 min-h-[44px]"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back to results
@@ -472,17 +459,14 @@ export default function LibraryPage() {
                     href={article.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="shrink-0 rounded px-3 py-1 text-sm transition-colors"
-                    style={{ border: "1px solid #3c3c38", color: "#c1c1b8" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)"; e.currentTarget.style.color = "#e6e6e6"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
+                    className="shrink-0 rounded px-3 py-1 text-sm border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
                     Visit Original Source
                   </a>
                 )}
               </div>
               {article.issue && (
-                <p className="text-xs mt-1" style={{ color: "#c1c1b8" }}>
+                <p className="text-xs text-muted-foreground mt-1">
                   {(() => {
                     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
                     const [mm, yyyy] = article.issue.split("-");
@@ -493,7 +477,7 @@ export default function LibraryPage() {
               )}
               <div className="border-t border-border my-6" />
               {article.source_kind === "sermon_transcript" && (
-                <p className="text-sm italic mb-6" style={{ color: "#c1c1b8" }}>
+                <p className="text-sm italic text-muted-foreground mb-6">
                   These are structured notes drawn from the sermon, not a word-for-word transcript.
                 </p>
               )}
@@ -530,7 +514,7 @@ export default function LibraryPage() {
         onSignOut={signOut}
       />
 
-      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2">
+      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
         <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
         {/* Top Bar */}
         <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
@@ -558,12 +542,12 @@ export default function LibraryPage() {
                   onFocus={() => setShowSuggestions(true)}
                   onKeyDown={handleKeyDown}
                   placeholder="Search articles, authors, topics..."
-                  className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-gold transition-colors"
+                  className="flex-1 min-h-[44px] rounded-lg border border-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
                 <button
                   onClick={handleSearch}
                   disabled={loading}
-                  className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center justify-center gap-2 text-sm font-medium hover:bg-gold-hover transition-colors disabled:opacity-50"
+                  className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center justify-center gap-2 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   <Search className="h-4 w-4" />
                   <span className="hidden sm:inline">Search</span>
@@ -571,11 +555,8 @@ export default function LibraryPage() {
               </div>
 
               {showSuggestions && (
-                <div
-                  className="absolute left-0 right-0 top-full mt-1 rounded-lg border border-border p-3 z-20"
-                  style={{ backgroundColor: "#2a2a27" }}
-                >
-                  <p className="text-[11px] uppercase tracking-wider mb-2" style={{ color: "#888780", fontFamily: "Inter, sans-serif" }}>
+                <div className="absolute left-0 right-0 top-full mt-1 rounded-lg border border-border bg-popover p-3 z-20">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
                     Suggested topics
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -583,14 +564,7 @@ export default function LibraryPage() {
                       <button
                         key={s}
                         onClick={() => handleSuggestionClick(s)}
-                        className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer"
-                        style={{
-                          color: "#d4b96a",
-                          backgroundColor: "rgba(212, 185, 106, 0.12)",
-                          border: "1px solid rgba(212, 185, 106, 0.25)",
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.22)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(212, 185, 106, 0.12)"; }}
+                        className="rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer text-primary bg-primary/10 border border-primary/25 hover:bg-primary/20"
                       >
                         {s}
                       </button>
@@ -602,12 +576,32 @@ export default function LibraryPage() {
 
             {/* Filter row */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              {/* Author filter trigger + panel */}
-              <div className="relative" ref={authorPanelRef}>
+              {/* Mobile: single Filters button */}
+              <button
+                onClick={() => {
+                  setDraftAuthors(selectedAuthors);
+                  setDraftEra(eraFilter);
+                  setMobileFiltersOpen(true);
+                }}
+                className={cn(
+                  "md:hidden min-h-[44px] flex items-center gap-2 rounded-lg px-4 text-sm border transition-colors",
+                  activeFilterCount > 0 ? "border-primary text-primary" : "border-border text-muted-foreground"
+                )}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Desktop: Author filter trigger + panel */}
+              <div className="relative hidden md:block" ref={authorPanelRef}>
                 <button
                   onClick={() => setAuthorPanelOpen(!authorPanelOpen)}
-                  className="min-h-[36px] text-sm cursor-pointer flex items-center"
-                  style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 12px", gap: "6px" }}
+                  className="min-h-[36px] text-sm cursor-pointer flex items-center gap-1.5 border border-border bg-card text-muted-foreground rounded-lg px-3 py-2"
                 >
                   {selectedAuthors.length === 0
                     ? "All Authors"
@@ -615,15 +609,12 @@ export default function LibraryPage() {
                       ? selectedAuthors[0]
                       : `${selectedAuthors.length} Authors Selected`}
                   <ChevronDown
-                    style={{ width: "14px", height: "14px", color: "#888880", transition: "transform 0.2s ease", transform: authorPanelOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+                    className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", authorPanelOpen && "rotate-180")}
                   />
                 </button>
 
                 {authorPanelOpen && (
-                  <div
-                    className="absolute left-0 top-full mt-2 z-30 flex flex-col"
-                    style={{ width: "320px", height: "360px", backgroundColor: "#1f1e1d", border: "1px solid #3c3c38", borderRadius: "12px", padding: "12px" }}
-                  >
+                  <div className="absolute left-0 top-full mt-2 z-30 flex flex-col w-80 h-[360px] bg-popover border border-border rounded-xl p-3">
                     <div className="flex-1 overflow-y-auto flex flex-col gap-2">
                       {AUTHOR_DATA.map((author) => {
                         const isSelected = selectedAuthors.includes(author.name);
@@ -637,16 +628,10 @@ export default function LibraryPage() {
                                 isSelected ? prev.filter((a) => a !== author.name) : [...prev, author.name]
                               );
                             }}
-                            className="text-left cursor-pointer transition-colors flex flex-row items-center"
-                            style={{
-                              backgroundColor: isSelected ? "#2a2926" : "#262624",
-                              border: isSelected ? "1px solid #b49238" : "1px solid #3c3c38",
-                              borderRadius: "8px",
-                              padding: "10px 14px",
-                              gap: "12px",
-                            }}
-                            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#2e2d2b"; }}
-                            onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "#262624"; }}
+                            className={cn(
+                              "text-left cursor-pointer transition-colors flex flex-row items-center rounded-lg px-3.5 py-2.5 gap-3 border",
+                              isSelected ? "bg-muted border-primary" : "bg-card border-border hover:bg-accent"
+                            )}
                           >
                             {imgSrc && !failedAuthorImages.has(author.name) ? (
                               <Image
@@ -654,21 +639,22 @@ export default function LibraryPage() {
                                 alt={author.name}
                                 width={40}
                                 height={40}
-                                className="rounded-full object-cover flex-shrink-0"
-                                style={{ width: "40px", height: "40px", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)", filter: isClassic ? "grayscale(100%)" : "none" }}
+                                className={cn("rounded-full object-cover flex-shrink-0 w-10 h-10", isClassic && "grayscale")}
+                                style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
                                 onError={() => setFailedAuthorImages((prev) => new Set(prev).add(author.name))}
                               />
                             ) : (
                               <div
-                                style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#2a2926", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
+                                className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
+                                style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
                               >
-                                <span style={{ fontSize: "14px", fontWeight: 600, color: "#888880" }}>{getInitials(author.name)}</span>
+                                <span className="text-[14px] font-semibold text-muted-foreground">{getInitials(author.name)}</span>
                               </div>
                             )}
                             <div className="flex flex-col min-w-0">
-                              <p className="font-sans" style={{ fontSize: "14px", color: "#e6e6e0" }}>{author.name}</p>
-                              <p style={{ fontSize: "11px", color: "#888880", marginTop: "2px" }}>{author.years}</p>
-                              <p style={{ fontSize: "12px", color: "#c1c1b8", fontStyle: "italic", marginTop: "4px", lineHeight: 1.5 }}>{author.specialty}</p>
+                              <p className="font-sans text-sm text-foreground">{author.name}</p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{author.years}</p>
+                              <p className="text-xs text-muted-foreground italic mt-1 leading-relaxed">{author.specialty}</p>
                             </div>
                           </button>
                         );
@@ -678,30 +664,24 @@ export default function LibraryPage() {
                 )}
               </div>
 
-              {/* Era dropdown */}
-              <div className="relative flex items-center">
+              {/* Desktop: Era dropdown */}
+              <div className="relative hidden md:flex items-center">
                 <select
                   value={eraFilter}
                   onChange={(e) => setEraFilter(e.target.value)}
-                  className="min-h-[36px] text-sm cursor-pointer focus:outline-none appearance-none"
-                  style={{ border: "1px solid #3c3c38", backgroundColor: "#262624", color: "#c1c1b8", borderRadius: "8px", padding: "8px 30px 8px 12px" }}
+                  className="min-h-[36px] text-sm cursor-pointer focus:outline-none appearance-none border border-border bg-card text-muted-foreground rounded-lg px-3 py-2 pr-8"
                 >
                   <option value="">All Eras</option>
                   <option value="classic">Classic</option>
                   <option value="contemporary">Contemporary</option>
                 </select>
-                <ChevronDown
-                  style={{ position: "absolute", right: "10px", width: "14px", height: "14px", color: "#888880", pointerEvents: "none" }}
-                />
+                <ChevronDown className="absolute right-2.5 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
 
               {/* Explore Authors link */}
               <Link
                 href="/library/authors"
-                className="ml-auto min-h-[36px] rounded-lg px-3 flex items-center text-sm transition-colors"
-                style={{ border: "1px solid #3c3c38", color: "#c1c1b8" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)"; e.currentTarget.style.color = "#e6e6e0"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#3c3c38"; e.currentTarget.style.color = "#c1c1b8"; }}
+                className="ml-auto min-h-[36px] rounded-lg px-3 flex items-center text-sm transition-colors border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               >
                 Explore Authors
               </Link>
@@ -730,7 +710,7 @@ export default function LibraryPage() {
 
             {/* Loading */}
             {loading && (
-              <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-gold animate-spin" /></div>
+              <div className="flex justify-center mt-12"><Loader2 className="h-6 w-6 text-primary animate-spin" /></div>
             )}
 
             {/* Results */}
@@ -741,36 +721,36 @@ export default function LibraryPage() {
                 ) : contentFilter === "all" ? (
                   <>
                     <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
-                    <div className="flex flex-col" style={{ gap: "32px" }}>
+                    <div className="flex flex-col gap-8">
                       {sermons.length > 0 && (
                         <div>
-                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
-                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Sermons</span>
-                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
+                          <div className="flex items-center gap-2.5 mb-3">
+                            <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground whitespace-nowrap">Sermons</span>
+                            <div className="flex-1 h-px bg-border" />
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                             {sermons.map((doc) => renderDocCard(doc))}
                           </div>
                         </div>
                       )}
                       {articles.length > 0 && (
                         <div>
-                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
-                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Articles</span>
-                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
+                          <div className="flex items-center gap-2.5 mb-3">
+                            <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground whitespace-nowrap">Articles</span>
+                            <div className="flex-1 h-px bg-border" />
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                             {articles.map((doc) => renderDocCard(doc))}
                           </div>
                         </div>
                       )}
                       {bookResults.length > 0 && (
                         <div>
-                          <div className="flex items-center" style={{ gap: "10px", marginBottom: "12px" }}>
-                            <span style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "#666660", whiteSpace: "nowrap" }}>Books</span>
-                            <div style={{ flex: 1, height: "1px", backgroundColor: "#2a2926" }} />
+                          <div className="flex items-center gap-2.5 mb-3">
+                            <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground whitespace-nowrap">Books</span>
+                            <div className="flex-1 h-px bg-border" />
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "14px" }}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                             {bookResults.map((book) => renderBookCard(book))}
                           </div>
                         </div>
@@ -780,7 +760,7 @@ export default function LibraryPage() {
                 ) : (
                   <>
                     <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
-                    <div className={contentFilter === "books" ? "grid grid-cols-1 sm:grid-cols-2" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"} style={{ gap: "14px" }}>
+                    <div className={cn(contentFilter === "books" ? "grid grid-cols-1 sm:grid-cols-2" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3", "gap-3.5")}>
                       {unified.map((item) =>
                         item.type === "doc"
                           ? renderDocCard(item.data)
@@ -795,6 +775,73 @@ export default function LibraryPage() {
         </div>
         </div>
       </main>
+
+      {/* Mobile filters bottom sheet */}
+      <Sheet open={mobileFiltersOpen} onOpenChange={(open) => { if (!open) setMobileFiltersOpen(false); }}>
+        <SheetContent side="bottom" className="h-[85vh] overflow-y-auto rounded-t-xl p-0">
+          <div className="px-4 pt-5 pb-8 flex flex-col gap-6">
+            <h2 className="font-sans text-lg font-semibold text-foreground">Filters</h2>
+
+            {/* Authors */}
+            <div>
+              <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">Authors</h3>
+              <div className="flex flex-col gap-2">
+                {AUTHOR_DATA.map((author) => {
+                  const isSelected = draftAuthors.includes(author.name);
+                  return (
+                    <button
+                      key={author.name}
+                      onClick={() => {
+                        setDraftAuthors((prev) =>
+                          isSelected ? prev.filter((a) => a !== author.name) : [...prev, author.name]
+                        );
+                      }}
+                      className={cn(
+                        "flex items-center justify-between rounded-lg px-3 py-2.5 border transition-colors min-h-[44px] text-left",
+                        isSelected ? "bg-muted border-primary text-foreground" : "bg-card border-border text-muted-foreground"
+                      )}
+                    >
+                      <span className="text-sm">{author.name}</span>
+                      <span className="text-[11px] text-muted-foreground">{author.years}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Era */}
+            <div>
+              <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">Era</h3>
+              <div className="flex gap-2">
+                {(["", "classic", "contemporary"] as const).map((era) => (
+                  <button
+                    key={era}
+                    onClick={() => setDraftEra(era)}
+                    className={cn(
+                      "flex-1 min-h-[44px] rounded-lg px-3 py-2 text-sm border transition-colors",
+                      draftEra === era ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground"
+                    )}
+                  >
+                    {era === "" ? "All" : era === "classic" ? "Classic" : "Contemporary"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Apply */}
+            <button
+              onClick={() => {
+                setSelectedAuthors(draftAuthors);
+                setEraFilter(draftEra);
+                setMobileFiltersOpen(false);
+              }}
+              className="w-full min-h-[44px] rounded-lg bg-primary text-primary-foreground text-sm font-medium transition-colors hover:bg-primary/90"
+            >
+              Apply Filters
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {showLogin && (
         <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} />

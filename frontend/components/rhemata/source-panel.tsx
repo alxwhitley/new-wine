@@ -5,6 +5,7 @@ import {
   Sheet,
   SheetContent,
 } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { Citation } from "@/lib/api";
 
 interface SourcePanelProps {
@@ -15,11 +16,12 @@ interface SourcePanelProps {
 }
 
 export function SourcePanel({ citation, citationIndex, isOpen, onClose }: SourcePanelProps) {
+  const isMobile = useIsMobile();
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent
-        side="right"
-        className="w-96 max-w-96 p-0 bg-popover"
+        side={isMobile ? "bottom" : "right"}
+        className={isMobile ? "h-[85vh] overflow-y-auto rounded-t-xl p-0 bg-popover" : "w-96 max-w-96 p-0 bg-popover"}
         showCloseButton={true}
       >
         {/* Header */}
