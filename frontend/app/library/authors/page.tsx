@@ -10,15 +10,11 @@ import { Sidebar } from "@/components/rhemata/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
 
 const AUTHOR_IMAGES: Record<string, string> = {
-  "Derek Prince": "/images/authors/derek-prince.jpg",
-  "Bob Mumford": "/images/authors/bob-mumford.jpg",
-  "Ern Baxter": "/images/authors/ern-baxter.jpg",
-  "Charles Simpson": "/images/authors/charles-simpson.jpg",
-  "Don Basham": "/images/authors/don-basham.jpg",
-  "Oswald J. Smith": "/images/authors/oswald-smith.jpg",
-  "John Bevere": "/images/authors/john-bevere.jpg",
-  "Michael Brown": "/images/authors/michael-brown.jpg",
-  "Jack Deere": "/images/authors/jack-deere.jpg",
+  "Ern Baxter": "/images/authors/ern-baxter.webp",
+  "Jack Deere": "/images/authors/jack-deere.jpeg",
+  "John Bevere": "/images/authors/john-bevere.webp",
+  "Michael Brown": "/images/authors/michael-brown.jpeg",
+  "Oswald J. Smith": "/images/authors/oswald-smith.jpeg",
 };
 
 const CLASSIC_AUTHORS = new Set(["Derek Prince", "Bob Mumford", "Ern Baxter", "Charles Simpson", "Don Basham", "Oswald J. Smith"]);
