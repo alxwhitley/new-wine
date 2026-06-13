@@ -853,6 +853,16 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
                 stream=True,
             )
             for event in stream:
+                if event.type == "message_start":
+                    usage = getattr(event.message, "usage", None)
+                    if usage:
+                        logger.debug(
+                            "[CACHE] creation=%d read=%d input=%d",
+                            getattr(usage, "cache_creation_input_tokens", 0) or 0,
+                            getattr(usage, "cache_read_input_tokens", 0) or 0,
+                            getattr(usage, "input_tokens", 0),
+                        )
+                    continue
                 if event.type == "content_block_delta" and hasattr(event.delta, "text"):
                     text = event.delta.text
                 else:
