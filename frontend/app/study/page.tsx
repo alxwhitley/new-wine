@@ -5,6 +5,7 @@ import { Search, Menu, Bookmark, Flag, ChevronDown, ChevronUp, X } from "lucide-
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
@@ -550,7 +551,7 @@ function InterlinearBlocks({
               key={i}
               onClick={() => onSelect(isSelected ? null : token.strongs)}
               className={cn(
-                "rounded-md p-1.5 text-center cursor-pointer transition-colors border",
+                "rounded-md p-1.5 text-center cursor-pointer transition-colors border min-h-[44px]",
                 isSelected ? "border-primary bg-primary/10" : "border-transparent hover:bg-accent"
               )}
             >
@@ -865,6 +866,9 @@ export default function StudyPage() {
   // Anchor nav active section tracking
   const [activeSection, setActiveSection] = useState("section-words");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const mobileScrollContainerRef = useRef<HTMLDivElement>(null);
+  const [mobileWordSheetOpen, setMobileWordSheetOpen] = useState(false);
+  const [mobileChapterOpen, setMobileChapterOpen] = useState(false);
 
   // ── Saved words ────────────────────────────────────────────────────────────
 
@@ -972,7 +976,7 @@ export default function StudyPage() {
   // ── Chapter verses ─────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!chapterOpen || !verseData) { setChapterVerses([]); return; }
+    if ((!chapterOpen && !mobileChapterOpen) || !verseData) { setChapterVerses([]); return; }
     const { verse_id } = verseData;
     const parts = verse_id.split(".");
     const book = parts[0];
@@ -993,7 +997,7 @@ export default function StudyPage() {
         }
         setChapterLoading(false);
       });
-  }, [chapterOpen, verseData]);
+  }, [chapterOpen, mobileChapterOpen, verseData]);
 
   // ── Excerpt fetch — fires when word selected ───────────────────────────────
 
@@ -1210,6 +1214,12 @@ export default function StudyPage() {
     fetchVerseById(v.verse_id);
   }, [fetchVerseById]);
 
+  const handleMobileChapterVerseClick = useCallback((v: VerseData) => {
+    setVerseRef(`${v.book} ${v.chapter}:${v.verse}`);
+    setMobileChapterOpen(false);
+    fetchVerseById(v.verse_id);
+  }, [fetchVerseById]);
+
   // ── IntersectionObserver for anchor nav ───────────────────────────────────
 
   useEffect(() => {
@@ -1225,6 +1235,26 @@ export default function StudyPage() {
       { root: container, rootMargin: "-20% 0px -60% 0px", threshold: 0 }
     );
     ids.forEach((id) => { const el = document.getElementById(id); if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, [verseData?.verse_id]);
+
+  // Mobile IntersectionObserver — scoped to mobileScrollContainerRef
+  useEffect(() => {
+    const container = mobileScrollContainerRef.current;
+    if (!container) return;
+    const ids = ANCHORS.map((a) => a.id);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) { setActiveSection(entry.target.id); break; }
+        }
+      },
+      { root: container, rootMargin: "-20% 0px -60% 0px", threshold: 0 }
+    );
+    ids.forEach((id) => {
+      const el = container.querySelector(`#${id}`);
+      if (el) observer.observe(el);
+    });
     return () => observer.disconnect();
   }, [verseData?.verse_id]);
 
@@ -1265,7 +1295,15 @@ export default function StudyPage() {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="flex-1" />
+            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              title="Saved words"
+              className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            >
+              <Bookmark className="h-5 w-5" />
+            </button>
+            <div className="hidden md:block flex-1" />
           </div>
 
           {/* ── Desktop: single-column scrollable ── */}
@@ -1426,34 +1464,131 @@ export default function StudyPage() {
             </div>
           </div>
 
-          {/* ── Mobile: existing single-column layout (unchanged) ── */}
-          <div className="flex flex-1 flex-col overflow-y-auto md:hidden">
-            <div className="px-4 pt-6 pb-16">
-              <VerseSearch {...verseSearchProps} />
+          {/* ── Mobile: full single-column scrollable ── */}
+          <div ref={mobileScrollContainerRef} className="flex flex-1 flex-col overflow-y-auto md:hidden">
 
+            {/* Sticky header: search + anchor nav */}
+            <div className="sticky top-0 z-20 bg-background border-b border-border px-4">
+              <div className="pt-4 pb-2">
+                <VerseSearch {...verseSearchProps} />
+              </div>
+              {verseData && !wordStudyMode && (
+                <nav className="flex gap-6 overflow-x-auto pb-3">
+                  {ANCHORS.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        const container = mobileScrollContainerRef.current;
+                        const el = container?.querySelector(`#${id}`);
+                        if (el && container) {
+                          const containerRect = container.getBoundingClientRect();
+                          const elRect = el.getBoundingClientRect();
+                          const targetTop = container.scrollTop + (elRect.top - containerRect.top) - 130;
+                          container.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+                        }
+                      }}
+                      className={cn(
+                        "text-sm whitespace-nowrap shrink-0 min-h-[44px] transition-colors",
+                        activeSection === id ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+              )}
+            </div>
+
+            <div className="px-4 pb-24">
               {wordStudyMode && wordStudyDoc ? (
-                <WordStudyPanel
-                  doc={wordStudyDoc}
-                  definition={wordStudyDefinition}
-                  isSaved={savedStrongsSet.has(wordStudyDoc.strongs_number)}
-                  onToggleSave={handleToggleSaveWordStudy}
-                  isLoggedIn={!!user}
-                />
+                <div className="pt-6">
+                  <WordStudyPanel
+                    doc={wordStudyDoc}
+                    definition={wordStudyDefinition}
+                    isSaved={savedStrongsSet.has(wordStudyDoc.strongs_number)}
+                    onToggleSave={handleToggleSaveWordStudy}
+                    isLoggedIn={!!user}
+                  />
+                </div>
               ) : (
                 <>
                   {verseError && <p className="text-sm mt-4 text-destructive">{verseError}</p>}
-                  {verseData && (
-                    <div className="mt-4 rounded-lg border border-border bg-card">
-                      <div className="flex items-center justify-center gap-3 py-2 px-4 border-b border-border">
-                        <button onClick={() => stepVerse("prev")} disabled={!prevVerseId} className="text-sm font-medium text-muted-foreground disabled:opacity-50">&larr;</button>
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{verseData.book} {verseData.chapter}:{verseData.verse} ({verseData.translation})</p>
-                        <button onClick={() => stepVerse("next")} disabled={!nextVerseId} className="text-sm font-medium text-muted-foreground disabled:opacity-50">&rarr;</button>
-                      </div>
-                      <div className="p-4">
-                        <p className="text-sm text-foreground leading-relaxed">{verseData.text}</p>
-                      </div>
+                  {verseLoading && (
+                    <div className="mt-4 rounded-lg border border-border bg-card p-4 animate-pulse">
+                      <Skeleton className="h-4 w-1/3 mx-auto mb-4" />
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-5/6" />
                     </div>
                   )}
+
+                  {/* Words section */}
+                  {!verseLoading && verseData && (
+                    <section id="section-words" className="pt-4">
+                      <div className="rounded-lg border border-border bg-card">
+                        <div className="flex items-center justify-center gap-3 py-2 px-4 border-b border-border">
+                          <button
+                            onClick={() => stepVerse("prev")}
+                            disabled={!prevVerseId}
+                            className="text-sm font-medium text-muted-foreground disabled:opacity-30 hover:text-foreground transition-colors min-h-[44px] px-2"
+                          >
+                            &larr;
+                          </button>
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            {verseData.book} {verseData.chapter}:{verseData.verse} ({verseData.translation})
+                          </p>
+                          <button
+                            onClick={() => stepVerse("next")}
+                            disabled={!nextVerseId}
+                            className="text-sm font-medium text-muted-foreground disabled:opacity-30 hover:text-foreground transition-colors min-h-[44px] px-2"
+                          >
+                            &rarr;
+                          </button>
+                        </div>
+                        <div className="p-4">
+                          <p className="font-serif text-base leading-relaxed text-foreground">{verseData.text}</p>
+                          <button
+                            onClick={() => setMobileChapterOpen(true)}
+                            className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                          >
+                            View Chapter
+                          </button>
+                          {/* Interlinear — tapping a word opens the word bottom sheet */}
+                          <InterlinearBlocks
+                            tokens={tokens}
+                            selectedStrongs={selectedStrongs}
+                            onSelect={(strongs) => {
+                              setSelectedStrongs(strongs);
+                              if (strongs) setMobileWordSheetOpen(true);
+                            }}
+                            loading={tokensLoading}
+                            isNT={isNT}
+                          />
+                        </div>
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Commentary */}
+                  <CommentarySection
+                    key={(verseData?.verse_id ?? "no-verse") + "-mobile"}
+                    commentaryResults={commentaryResults}
+                    commentaryLoading={commentaryLoading}
+                    commentaryLoadingMore={commentaryLoadingMore}
+                    commentaryHasMore={commentaryHasMore}
+                    onLoadMoreCommentary={() => {
+                      if (verseData?.text) fetchCommentary(verseData.text, commentaryOffset + 3, verseData.verse_id);
+                    }}
+                    verseRef={verseRef}
+                    accessToken={accessToken}
+                  />
+
+                  {/* Pastors' Notes */}
+                  <PastorsNotesSection
+                    verseId={currentVerseId}
+                    accessToken={accessToken}
+                    role={userRole}
+                    userId={user?.id ?? null}
+                  />
                 </>
               )}
             </div>
@@ -1461,6 +1596,78 @@ export default function StudyPage() {
 
         </div>
       </main>
+
+      {/* Mobile: word definition bottom sheet */}
+      <Sheet
+        open={mobileWordSheetOpen}
+        onOpenChange={(open) => {
+          if (!open) { setMobileWordSheetOpen(false); setSelectedStrongs(null); }
+        }}
+      >
+        <SheetContent side="bottom" className="h-[85vh] overflow-y-auto p-0 rounded-t-xl md:hidden">
+          {selectedStrongs && (
+            <div className="p-4 pt-6">
+              <InlineWordPanel
+                definition={definition}
+                excerptContent={excerptContent}
+                excerptLoading={excerptLoading}
+                corpusResults={corpusResults}
+                corpusLoading={corpusLoading}
+                isSaved={savedStrongsSet.has(selectedStrongs)}
+                onToggleSave={handleToggleSaveSelected}
+                onClose={() => { setMobileWordSheetOpen(false); setSelectedStrongs(null); }}
+                isLoggedIn={!!user}
+              />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Mobile: chapter view bottom sheet */}
+      <Sheet open={mobileChapterOpen} onOpenChange={setMobileChapterOpen}>
+        <SheetContent side="bottom" className="h-[90vh] overflow-y-auto p-0 rounded-t-xl md:hidden">
+          <div className="p-4 pt-6 pb-16">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setMobileChapterOpen(false)}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] pr-4"
+              >
+                &larr; Back
+              </button>
+              {verseData && (
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {verseData.book} {verseData.chapter}
+                </p>
+              )}
+              <div className="w-16" />
+            </div>
+            {chapterLoading ? (
+              <div className="space-y-2">
+                {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-4 w-full" />)}
+              </div>
+            ) : (
+              <p className="font-serif text-base leading-relaxed text-foreground">
+                {chapterVerses.map((v) => {
+                  const isActive = v.verse_id === verseData?.verse_id;
+                  return (
+                    <span
+                      key={v.verse_id}
+                      onClick={() => handleMobileChapterVerseClick(v)}
+                      className={cn(
+                        "cursor-pointer rounded-sm transition-colors px-0.5 -mx-0.5",
+                        isActive ? "bg-accent" : "hover:bg-accent"
+                      )}
+                    >
+                      <sup className="text-[9px] text-muted-foreground mr-0.5">{v.verse}</sup>
+                      {v.text}{" "}
+                    </span>
+                  );
+                })}
+              </p>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {showLogin && (
         <LoginModal onClose={() => setShowLogin(false)} onSignIn={signIn} onSignUp={signUp} />
