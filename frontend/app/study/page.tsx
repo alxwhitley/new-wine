@@ -5,7 +5,8 @@ import { Search, Menu, Bookmark, Flag, ChevronDown, ChevronUp, X } from "lucide-
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
@@ -292,30 +293,19 @@ const EXCERPT_COMPONENTS: React.ComponentProps<typeof ReactMarkdown>["components
   blockquote: ({ children }) => <blockquote className="border-l-2 border-border pl-3 text-sm text-muted-foreground italic mb-3">{children}</blockquote>,
 };
 
-function TruncatedExcerpt({ content, wordLimit = 300 }: { content: string; wordLimit?: number }) {
-  const [expanded, setExpanded] = useState(false);
-  useEffect(() => { setExpanded(false); }, [content]);
-  const words = content.split(/\s+/);
-  const needsTruncation = words.length > wordLimit;
-  const displayContent = !expanded && needsTruncation ? words.slice(0, wordLimit).join(" ") + "..." : content;
-  return (
-    <>
-      <div className="text-sm text-foreground">
-        <ReactMarkdown components={EXCERPT_COMPONENTS}>{displayContent}</ReactMarkdown>
-      </div>
-      {needsTruncation && (
-        <div className="border-t border-border">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1.5 w-full py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            {expanded ? "Show Less" : "Read More"}
-          </button>
-        </div>
-      )}
-    </>
-  );
+function extractTeaser(content: string): string {
+  const plain = content
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join(" ")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/_(.+?)_/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sentences = plain.match(/[^.!?]+[.!?]+/g) ?? [];
+  return sentences.slice(0, 2).join(" ").trim();
 }
 
 interface ScriptureVerse { reference: string; text: string; }
@@ -578,6 +568,8 @@ function InlineWordPanel({
   isSaved: boolean; onToggleSave: () => void;
   onClose: () => void; isLoggedIn: boolean;
 }) {
+  const [wordStudyOpen, setWordStudyOpen] = useState(false);
+  const isMobile = useIsMobile();
   return (
     <div className="mt-4 rounded-md border border-border bg-card p-4 relative">
       {/* Header row */}
@@ -639,7 +631,40 @@ function InlineWordPanel({
         <>
           <Separator className="my-4" />
           <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground mb-3">Word Study</p>
-          <TruncatedExcerpt content={excerptContent} />
+          <p className="text-sm text-foreground leading-relaxed mb-2">{extractTeaser(excerptContent)}</p>
+          <button
+            onClick={() => setWordStudyOpen(true)}
+            className="text-sm text-primary underline-offset-4 hover:underline"
+          >
+            Full word study →
+          </button>
+          <Sheet open={wordStudyOpen} onOpenChange={setWordStudyOpen}>
+            <SheetContent
+              side={isMobile ? "bottom" : "right"}
+              className={isMobile
+                ? "h-[85vh] overflow-y-auto rounded-t-xl p-0 bg-popover"
+                : "w-[480px] sm:max-w-[480px] p-0 bg-popover"}
+              showCloseButton={true}
+            >
+              <div className="flex flex-col h-full">
+                <div className="border-b border-border px-6 py-4 pr-12 shrink-0">
+                  <SheetTitle className="font-sans text-2xl font-normal text-foreground">
+                    {definition?.word}
+                  </SheetTitle>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {definition?.transliteration}
+                    {definition?.transliteration && " · "}
+                    <span className="font-mono">{definition?.strongs}</span>
+                  </p>
+                </div>
+                <div className="overflow-y-auto flex-1 px-6 py-6">
+                  <div className="prose prose-sm prose-invert max-w-none">
+                    <ReactMarkdown>{excerptContent}</ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </>
       ) : null}
 
