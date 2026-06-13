@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { UsageRing } from "@/components/rhemata/usage-ring";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -39,6 +40,7 @@ interface SidebarProps {
   isLoggedIn: boolean;
   user: User | null;
   accessToken?: string | null;
+  weeklyUsage?: { used: number; limit: number } | null;
   isOpen: boolean;
   onClose: () => void;
   onNewChat: () => void;
@@ -71,6 +73,7 @@ export function Sidebar({
   isLoggedIn,
   user,
   accessToken,
+  weeklyUsage,
   isOpen,
   onClose,
   onNewChat,
@@ -370,6 +373,9 @@ export function Sidebar({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent transition-colors text-left">
+                {weeklyUsage && (
+                  <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
                     {displayName ?? user?.email ?? ""}

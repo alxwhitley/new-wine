@@ -11,8 +11,11 @@ import { ChatMessage } from "@/components/rhemata/chat-message";
 import { ChatInput } from "@/components/rhemata/chat-input";
 import { SourcePanel } from "@/components/rhemata/source-panel";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
+import { UsageRing } from "@/components/rhemata/usage-ring";
+import { WeeklyLimitCard } from "@/components/rhemata/weekly-limit-card";
 import LoginModal from "@/components/auth/LoginModal";
 import type { Citation } from "@/lib/api";
+import type { WeeklyLimitDetail } from "@/hooks/useChat";
 
 const SUGGESTIONS = [
   "What is the baptism of the Holy Spirit?",
@@ -25,13 +28,14 @@ export default function Home() {
   const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
-  const [dailyLimitMessage, setDailyLimitMessage] = useState<string | null>(null);
+  const [weeklyLimitDetail, setWeeklyLimitDetail] = useState<WeeklyLimitDetail | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const {
     messages,
     loading: chatLoading,
     error: chatError,
     conversationId,
+    weeklyUsage,
     sendMessage,
     clearMessages,
     loadConversation,
@@ -41,9 +45,7 @@ export default function Home() {
       setLoginReason("You've used your 6 free searches. Create a free account to keep going.");
       setShowLogin(true);
     },
-    () => {
-      setDailyLimitMessage("You've reached your daily usage limit. Your quota resets at midnight UTC.");
-    },
+    (detail) => setWeeklyLimitDetail(detail),
   );
   const {
     conversations,
@@ -127,6 +129,7 @@ export default function Home() {
         isLoggedIn={!!user}
         user={user}
         accessToken={accessToken}
+        weeklyUsage={weeklyUsage}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={handleNewChat}
@@ -143,6 +146,12 @@ export default function Home() {
 
           {/* Top bar — no border needed; panel edge provides separation */}
           <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
+            {/* Mobile usage ring — left side, only for authenticated users */}
+            {user && weeklyUsage && (
+              <div className="md:hidden">
+                <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
+              </div>
+            )}
             <div className="flex-1" />
             <button
               onClick={() => setSidebarOpen(true)}
@@ -180,9 +189,6 @@ export default function Home() {
               {chatError && (
                 <p className="text-sm text-red-400 mt-4">{chatError}</p>
               )}
-              {dailyLimitMessage && (
-                <p className="text-sm text-amber-300 mt-4">{dailyLimitMessage}</p>
-              )}
             </div>
           ) : (
             /* Chat thread */
@@ -214,6 +220,16 @@ export default function Home() {
                     <LoadingIndicator />
                   )}
 
+                  {/* Weekly limit hard-stop — renders where the blocked answer would appear */}
+                  {weeklyLimitDetail && (
+                    <div className="mt-4">
+                      <WeeklyLimitCard
+                        limit={weeklyLimitDetail.limit}
+                        resets={weeklyLimitDetail.resets}
+                      />
+                    </div>
+                  )}
+
                   {chatError && (
                     <p className="text-sm text-red-400 mt-2">{chatError}</p>
                   )}
@@ -223,12 +239,7 @@ export default function Home() {
               </div>
 
               {/* Fixed input area — stays at panel bottom */}
-              {dailyLimitMessage && (
-                <div className="mx-4 mb-2 rounded-lg bg-amber-900/50 border border-amber-700 px-4 py-3 text-sm text-amber-200">
-                  {dailyLimitMessage}
-                </div>
-              )}
-              <ChatInput onSend={handleSend} disabled={chatLoading || !!dailyLimitMessage} streaming={chatLoading} />
+              <ChatInput onSend={handleSend} disabled={chatLoading || !!weeklyLimitDetail} streaming={chatLoading} />
             </>
           )}
         </div>

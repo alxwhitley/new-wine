@@ -1,11 +1,18 @@
-import { useState, useCallback, useRef } from "react";
-import { streamChatMessage, Citation } from "@/lib/api";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { streamChatMessage, fetchWeeklyUsage, Citation } from "@/lib/api";
 
 export interface Message {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
   messageId?: string | null;
+}
+
+export interface WeeklyLimitDetail {
+  used: number;
+  limit: number;
+  week_start: string;
+  resets: string;
 }
 
 function getAnonId(): string {
@@ -21,14 +28,25 @@ function getAnonId(): string {
 export function useChat(
   accessToken: string | null,
   onGuestLimitReached?: () => void,
-  onDailyLimitReached?: () => void,
+  onWeeklyLimitReached?: (detail: WeeklyLimitDetail) => void,
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [weeklyUsage, setWeeklyUsage] = useState<{ used: number; limit: number } | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const topicsEstablishedRef = useRef<Record<string, number>>({});
+
+  // Seed usage count on mount (and whenever token changes from null → value)
+  useEffect(() => {
+    if (!accessToken) return;
+    fetchWeeklyUsage(accessToken)
+      .then((data) => setWeeklyUsage({ used: data.used, limit: data.limit }))
+      .catch(() => {
+        // Silently ignore — ring stays hidden if fetch fails
+      });
+  }, [accessToken]);
 
   const sendMessage = useCallback(
     async (question: string) => {
@@ -72,6 +90,10 @@ export function useChat(
               if (meta.topics_established) {
                 topicsEstablishedRef.current = meta.topics_established;
               }
+              // Update usage count from SSE meta — no extra /usage fetch needed
+              if (meta.usage) {
+                setWeeklyUsage({ used: meta.usage.used, limit: meta.usage.limit });
+              }
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -105,9 +127,13 @@ export function useChat(
           onGuestLimitReached?.();
           return null;
         }
-        if (err instanceof Error && err.message === "daily_limit_reached") {
-          setMessages((prev) => prev.slice(0, -2));
-          onDailyLimitReached?.();
+        if (err instanceof Error && err.message.startsWith("weekly_limit_reached:")) {
+          // Keep user message; remove the empty assistant placeholder
+          setMessages((prev) => prev.slice(0, -1));
+          const detail: WeeklyLimitDetail = JSON.parse(
+            err.message.slice("weekly_limit_reached:".length),
+          );
+          onWeeklyLimitReached?.(detail);
           return null;
         }
         setError("Something went wrong. Please try again.");
@@ -116,7 +142,7 @@ export function useChat(
         setLoading(false);
       }
     },
-    [accessToken, onGuestLimitReached, onDailyLimitReached],
+    [accessToken, onGuestLimitReached, onWeeklyLimitReached],
   );
 
   const clearMessages = useCallback(() => {
@@ -137,6 +163,7 @@ export function useChat(
     loading,
     error,
     conversationId,
+    weeklyUsage,
     sendMessage,
     clearMessages,
     loadConversation,

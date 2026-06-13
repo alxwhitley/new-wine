@@ -66,9 +66,16 @@ export interface ChatMessagePayload {
   content: string;
 }
 
+export interface WeeklyUsage {
+  used: number;
+  limit: number;
+  week_start: string;
+  resets: string;
+}
+
 export interface StreamCallbacks {
   onToken: (token: string) => void;
-  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number> }) => void;
+  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number>; usage?: { used: number; limit: number; week_start: string } }) => void;
   onError: (error: string) => void;
 }
 
@@ -114,8 +121,8 @@ export async function streamChatMessage(
       if (data.detail === "guest_limit_reached") {
         throw new Error("guest_limit_reached");
       }
-      if (data.detail === "daily_limit_reached") {
-        throw new Error("daily_limit_reached");
+      if (data.detail?.error === "weekly_limit_reached") {
+        throw new Error("weekly_limit_reached:" + JSON.stringify(data.detail));
       }
     }
     throw new Error("Chat request failed");
@@ -337,5 +344,13 @@ export interface BookExcerptResponse {
 export async function getBookExcerpts(docId: string): Promise<BookExcerptResponse> {
   const res = await fetch(`${API_URL}/library/book/${docId}`);
   if (!res.ok) throw new Error("Book fetch failed");
+  return res.json();
+}
+
+export async function fetchWeeklyUsage(token: string): Promise<WeeklyUsage> {
+  const res = await fetch(`${API_URL}/usage`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Usage fetch failed");
   return res.json();
 }
