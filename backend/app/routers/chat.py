@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
@@ -434,7 +435,8 @@ class ChatMessage(BaseModel):
 
 
 GUEST_QUERY_LIMIT = 6
-USER_DAILY_QUERY_LIMIT = 65  # ~$2/day at ~$0.03/query
+# weekly_limit is stored per-user in user_usage.weekly_limit (migration 039).
+# No hardcoded constant here — Phase 2 billing raises the limit per subscription tier.
 
 
 class ChatRequest(BaseModel):
@@ -500,9 +502,12 @@ def _sse(data: str) -> str:
 async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_optional_user)):
     db = get_supabase()
 
+    # Captured here so generate() can include it in the final SSE meta event.
+    user_usage_meta = {}  # type: dict
+
     # Query limit checks
     if not user_id:
-        # Guest limit
+        # Guest limit (unchanged)
         if not request.anon_id:
             raise HTTPException(status_code=400, detail="anon_id required for guest users")
         try:
@@ -516,17 +521,29 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         except Exception:
             logger.exception("Guest query count check failed for anon_id=%s", request.anon_id)
     else:
-        # Authenticated user daily limit
+        # Authenticated user weekly limit — atomic RPC, limit from per-user row (migration 039)
         try:
-            result = db.rpc("increment_user_daily_query", {"p_user_id": user_id}).execute()
-            count = result.data if isinstance(result.data, int) else 0
-            logger.info("[USER] user_id=%s daily_query_count=%s", user_id, count)
-            if count > USER_DAILY_QUERY_LIMIT:
-                raise HTTPException(status_code=429, detail="daily_limit_reached")
+            result = db.rpc("increment_user_query", {"p_user_id": user_id}).execute()
+            row = result.data[0] if result.data else {}
+            count = int(row.get("query_count", 0))
+            weekly_limit = int(row.get("weekly_limit", 50))
+            week_start_str = str(row.get("week_start", ""))
+            logger.info("[USER] user_id=%s weekly_count=%d limit=%d", user_id, count, weekly_limit)
+            if count > weekly_limit:
+                week_start_date = datetime.date.fromisoformat(week_start_str) if week_start_str else datetime.date.today()
+                next_monday = week_start_date + datetime.timedelta(days=7)
+                raise HTTPException(status_code=429, detail={
+                    "error": "weekly_limit_reached",
+                    "used": count - 1,
+                    "limit": weekly_limit,
+                    "week_start": week_start_str,
+                    "resets": next_monday.isoformat(),
+                })
+            user_usage_meta = {"used": count, "limit": weekly_limit, "week_start": week_start_str}
         except HTTPException:
             raise
         except Exception:
-            logger.exception("User daily query count check failed for user_id=%s", user_id)
+            logger.exception("User weekly query count check failed for user_id=%s", user_id)
 
     try:
 
@@ -950,6 +967,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         meta = {"citations": citations, "conversation_id": conversation_id, "message_id": message_id}
         if updated_topics:
             meta["topics_established"] = updated_topics
+        if user_usage_meta:
+            meta["usage"] = user_usage_meta
         yield _sse(json.dumps(meta))
         yield _sse("[DONE]")
 
