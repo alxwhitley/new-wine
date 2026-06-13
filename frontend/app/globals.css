@@ -212,3 +212,15 @@ mark {
 .shine-border.streaming {
   animation: holy-glow 2s ease-in-out infinite;
 }
+
+/* ── iOS input zoom fix ─────────────────────────────────────────────────────
+   iOS Safari auto-zooms when a focused input has font-size < 16px.
+   Un-layered rules win over @layer utilities, so this overrides text-sm
+   Tailwind classes on mobile without touching desktop font sizes.
+   Do NOT use maximum-scale=1 or user-scalable=no — those break pinch-zoom.
+   ─────────────────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  input, textarea {
+    font-size: 1rem;
+  }
+}

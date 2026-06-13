@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Menu } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
@@ -21,6 +22,7 @@ const SUGGESTIONS = [
 
 export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
   const [dailyLimitMessage, setDailyLimitMessage] = useState<string | null>(null);
@@ -141,13 +143,13 @@ export default function Home() {
 
           {/* Top bar — no border needed; panel edge provides separation */}
           <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
+            <div className="flex-1" />
             <button
               onClick={() => setSidebarOpen(true)}
               className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="flex-1" />
           </div>
 
           {isEmpty ? (
@@ -161,17 +163,19 @@ export default function Home() {
                 <ChatInput onSend={handleSend} disabled={chatLoading} streaming={chatLoading} />
               </div>
 
-              <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleSend(s)}
-                    className="w-full min-h-[44px] text-left rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              {!isMobile && (
+                <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleSend(s)}
+                      className="w-full min-h-[44px] text-left rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {chatError && (
                 <p className="text-sm text-red-400 mt-4">{chatError}</p>

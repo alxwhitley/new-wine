@@ -540,11 +540,11 @@ export function Sidebar({
         />
       )}
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — slides in from the right */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar px-4 pt-6 transition-transform duration-300 md:hidden",
-          isOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed right-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar px-4 pt-6 transition-transform duration-300 md:hidden",
+          isOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
         {sidebarContent}
