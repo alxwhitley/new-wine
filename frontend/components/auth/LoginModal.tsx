@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 
 interface LoginModalProps {
   onClose: () => void;
@@ -13,12 +14,37 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: LoginModalProps) {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setResetError(null);
+    setResetSubmitting(true);
+    try {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { error: err } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
+      });
+      if (err) throw err;
+      setResetSuccess(true);
+    } catch (err: unknown) {
+      setResetError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setResetSubmitting(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,17 +84,60 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
 
         {/* Title */}
         <h2 className="font-sans text-xl font-semibold text-foreground mb-1">
-          {mode === "signin" ? "Sign in to Rhemata" : "Create an account"}
+          {mode === "forgot" ? "Reset password" : mode === "signin" ? "Sign in to Rhemata" : "Create an account"}
         </h2>
 
         {/* Subtitle / reason */}
         <p className="text-sm text-muted-foreground mb-6">
-          {reason ?? (mode === "signin"
-            ? "Welcome back."
-            : "Create a free account to keep going.")}
+          {mode === "forgot"
+            ? "Enter your email and we'll send you a reset link."
+            : reason ?? (mode === "signin" ? "Welcome back." : "Create a free account to keep going.")}
         </p>
 
-        {signUpSuccess ? (
+        {mode === "forgot" ? (
+          resetSuccess ? (
+            <div>
+              <p className="text-sm text-foreground mb-3">
+                Check your email for a reset link.
+              </p>
+              <button
+                onClick={() => { setMode("signin"); setResetSuccess(false); setResetEmail(""); setResetError(null); }}
+                className="text-sm text-primary hover:underline cursor-pointer"
+              >
+                Back to sign in
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleResetPassword} className="flex flex-col gap-3">
+              <input
+                type="email"
+                placeholder="Email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                required
+                className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              />
+
+              {resetError && (
+                <p className="text-sm text-destructive">{resetError}</p>
+              )}
+
+              <Button type="submit" disabled={resetSubmitting} className="w-full mt-1">
+                {resetSubmitting ? "Sending…" : "Send reset link"}
+              </Button>
+
+              <p className="text-sm text-center">
+                <button
+                  type="button"
+                  onClick={() => { setMode("signin"); setResetError(null); }}
+                  className="text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Back to sign in
+                </button>
+              </p>
+            </form>
+          )
+        ) : signUpSuccess ? (
           <div>
             <p className="text-sm text-foreground mb-3">
               Check your email for a confirmation link.
@@ -90,15 +159,28 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
               required
               className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
             />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
-            />
+            <div className="flex flex-col gap-1">
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              />
+              {mode === "signin" && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setMode("forgot"); setError(null); setResetEmail(email); }}
+                    className="text-sm text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+            </div>
 
             {error && (
               <p className="text-sm text-destructive">{error}</p>
