@@ -528,13 +528,15 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
             count = int(row.get("query_count", 0))
             weekly_limit = int(row.get("weekly_limit", 50))
             week_start_str = str(row.get("week_start", ""))
-            logger.info("[USER] user_id=%s weekly_count=%d limit=%d", user_id, count, weekly_limit)
-            if count > weekly_limit:
+            allowed = bool(row.get("allowed", True))
+            logger.info("[USER] user_id=%s weekly_count=%d limit=%d allowed=%s", user_id, count, weekly_limit, allowed)
+            if not allowed:
+                # RPC did not increment — count is already AT the limit, not over it.
                 week_start_date = datetime.date.fromisoformat(week_start_str) if week_start_str else datetime.date.today()
                 next_monday = week_start_date + datetime.timedelta(days=7)
                 raise HTTPException(status_code=429, detail={
                     "error": "weekly_limit_reached",
-                    "used": count - 1,
+                    "used": count,
                     "limit": weekly_limit,
                     "week_start": week_start_str,
                     "resets": next_monday.isoformat(),
