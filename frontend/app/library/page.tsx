@@ -444,7 +444,7 @@ export default function LibraryPage() {
           onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
           onSignOut={signOut}
         />
-        <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2">
+        <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
           <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
           <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
             <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">

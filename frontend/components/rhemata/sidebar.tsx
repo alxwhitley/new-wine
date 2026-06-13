@@ -217,8 +217,8 @@ export function Sidebar({
         <span>New Chat</span>
       </Button>
 
-      {/* Nav Items */}
-      <nav className="space-y-0.5 mb-4">
+      {/* Nav Items — desktop only; mobile uses bottom tab bar */}
+      <nav className="hidden md:block space-y-0.5 mb-4">
         <Link
           href="/"
           onClick={onClose}

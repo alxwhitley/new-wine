@@ -224,3 +224,8 @@ mark {
     font-size: 1rem;
   }
 }
+
+/* Safe-area bottom clearance — used by MobileTabBar for iOS home indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
