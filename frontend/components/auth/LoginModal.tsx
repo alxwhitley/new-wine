@@ -9,7 +9,7 @@ import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 interface LoginModalProps {
   onClose: () => void;
   onSignIn: (email: string, password: string) => Promise<void>;
-  onSignUp: (email: string, password: string) => Promise<void>;
+  onSignUp: (email: string, password: string) => Promise<{ hasSession: boolean }>;
   reason?: string;
 }
 
@@ -55,8 +55,12 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
         await onSignIn(email, password);
         onClose();
       } else {
-        await onSignUp(email, password);
-        setSignUpSuccess(true);
+        const { hasSession } = await onSignUp(email, password);
+        if (hasSession) {
+          onClose();
+        } else {
+          setSignUpSuccess(true);
+        }
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");

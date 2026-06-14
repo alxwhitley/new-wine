@@ -29,9 +29,10 @@ export function useAuth() {
     if (error) throw error;
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+  const signUp = useCallback(async (email: string, password: string): Promise<{ hasSession: boolean }> => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
+    return { hasSession: !!data.session };
   }, []);
 
   const signOut = useCallback(async () => {
