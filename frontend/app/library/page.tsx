@@ -323,7 +323,7 @@ export default function LibraryPage() {
       setDocResults(newDocs);
       setBookResults(newBooks);
     } catch {
-      setError("Failed to load results.");
+      setError("Couldn't load results — check your connection.");
     } finally {
       setLoading(false);
     }
@@ -367,7 +367,7 @@ export default function LibraryPage() {
       const data = await getArticle(id, version);
       setArticle(data);
     } catch {
-      setError("Failed to load article.");
+      setError("Couldn't open this article — try again.");
     } finally {
       setArticleLoading(false);
     }
@@ -532,7 +532,7 @@ export default function LibraryPage() {
                       rel="noopener noreferrer"
                       className="shrink-0 rounded px-3 py-1 text-sm border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                     >
-                      Visit Original Source
+                      Watch source
                     </a>
                   )}
                 </div>
@@ -549,7 +549,7 @@ export default function LibraryPage() {
                 <div className="border-t border-border my-6" />
                 {article.source_kind === "sermon_transcript" && (
                   <p className="text-sm italic text-muted-foreground mb-6">
-                    These are structured notes drawn from the sermon, not a word-for-word transcript.
+                    Edited transcript — restructured for reading. Not a word-for-word recording.
                   </p>
                 )}
                 <div className="prose prose-sm prose-invert max-w-none">
@@ -641,7 +641,7 @@ export default function LibraryPage() {
 
                 {showSuggestions && (
                   <div className="absolute left-0 right-0 top-full mt-1 rounded-lg border border-border bg-popover p-3 z-20">
-                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Suggested topics</p>
+                    <p className="text-xs text-muted-foreground mb-2">Try a topic:</p>
                     <div className="flex flex-wrap gap-1.5">
                       {SEARCH_SUGGESTIONS.map((s) => (
                         <button
@@ -692,7 +692,7 @@ export default function LibraryPage() {
                       <p className="text-sm text-destructive text-center">{error}</p>
                       <button
                         onClick={() => {
-                          if (lastArticleAttempt && error.includes("article")) {
+                          if (lastArticleAttempt && error.includes("open this article")) {
                             handleCardClick(lastArticleAttempt.id, lastArticleAttempt.sourceKind);
                           } else {
                             fetchResults(query);
@@ -712,7 +712,7 @@ export default function LibraryPage() {
                   ) : (
                     <div className="mt-2">
                       {totalCount === 0 ? (
-                        <p className="text-center text-muted-foreground mt-12">No results found</p>
+                        <p className="text-center text-muted-foreground mt-12">No results — try fewer keywords, a different author, or clear your filters.</p>
                       ) : contentFilter === "all" ? (
                         <>
                           <p className="text-xs text-muted-foreground mb-4">{totalCount} result{totalCount !== 1 ? "s" : ""}</p>
@@ -993,7 +993,7 @@ export default function LibraryPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Nothing added recently.</p>
+                      <p className="text-sm text-muted-foreground">Nothing new yet — check back soon.</p>
                     )}
                   </section>
 
@@ -1047,7 +1047,7 @@ export default function LibraryPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No articles available.</p>
+                      <p className="text-sm text-muted-foreground">No archive articles loaded right now.</p>
                     )}
                   </section>
 
@@ -1070,7 +1070,7 @@ export default function LibraryPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No notes yet.</p>
+                      <p className="text-sm text-muted-foreground">Notes from community pastors will appear here.</p>
                     )}
                   </section>
 
