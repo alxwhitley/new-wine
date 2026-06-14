@@ -897,7 +897,7 @@ export default function LibraryPage() {
                   {/* 3. Featured authors */}
                   <section>
                     <SectionHeader label="Authors" href="/library/authors" linkLabel="See all →" />
-                    <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                       {AUTHOR_DATA.map((author) => {
                         const imgSrc = AUTHOR_IMAGES[author.name];
                         const isClassic = CLASSIC_AUTHORS.has(author.name);
@@ -905,27 +905,27 @@ export default function LibraryPage() {
                           <Link
                             key={author.name}
                             href="/library/authors"
-                            className="flex flex-col items-center gap-1.5 flex-shrink-0 group"
+                            className="flex items-center gap-2 flex-shrink-0 rounded-full border border-border bg-card hover:bg-accent transition-colors px-2 py-1.5 group"
                           >
                             {imgSrc && !failedAuthorImages.has(author.name) ? (
                               <Image
                                 src={imgSrc}
                                 alt={author.name}
-                                width={48}
-                                height={48}
+                                width={24}
+                                height={24}
                                 className={cn(
-                                  "rounded-full object-cover w-12 h-12 ring-1 ring-white/[0.08] group-hover:ring-primary/50 transition-all",
+                                  "rounded-full object-cover w-6 h-6 flex-shrink-0",
                                   isClassic && "grayscale"
                                 )}
                                 onError={() => setFailedAuthorImages((prev) => new Set(prev).add(author.name))}
                               />
                             ) : (
-                              <div className="w-12 h-12 rounded-full bg-muted ring-1 ring-white/[0.08] flex items-center justify-center group-hover:ring-primary/50 transition-all">
-                                <span className="text-sm font-semibold text-muted-foreground">{getInitials(author.name)}</span>
+                              <div className="w-6 h-6 rounded-full bg-muted flex-shrink-0 flex items-center justify-center">
+                                <span className="text-[10px] font-semibold text-muted-foreground">{getInitials(author.name)}</span>
                               </div>
                             )}
-                            <span className="text-[11px] text-muted-foreground text-center max-w-[64px] leading-tight group-hover:text-foreground transition-colors">
-                              {author.name.split(" ").pop()}
+                            <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors whitespace-nowrap pr-1">
+                              {author.name}
                             </span>
                           </Link>
                         );
