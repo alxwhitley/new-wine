@@ -26,11 +26,52 @@ import type {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/**
- * Hand-edited featured document IDs. Replace with real UUIDs from the corpus.
- * Leave empty to hide the Featured section entirely.
- */
-const FEATURED_IDS: string[] = [];
+const FEATURED_POOL: string[] = [
+  // Andrew Murray books
+  "1da1afb1-78b2-4eec-be57-01426d676266", // Absolute Surrender
+  "96c648f6-3222-4a66-a465-4eb2812bca75", // The Master's Indwelling
+  "42098c1c-2ea5-42fc-9d7b-8b4a8f617af4", // The Deeper Christian Life
+  // Derek Prince sermons
+  "edb0e8fb-7ebc-4a9b-8e27-a3942c51cf0a", // Spiritual Blindness - Cause and Cure
+  "843643e2-4b31-425f-ac40-ec70d3b7dec8", // The Fatherhood Of God
+  "240db671-7230-40a2-9075-50d08cbb27b8", // Seven Steps To Christian Love
+  "c4a94c4b-b6ac-436c-ab9d-6adad6f7688a", // Motivation for Living To Do God's Will
+  // John Bevere sermons
+  "038e5864-77ee-4def-9726-59d0d2a987fb", // The Fear of the Lord Is My Treasure
+  "d540ea1c-ecad-44d8-9454-5ca61886ddb6", // Why You Are Not Experiencing the Presence of God
+  "7ebf33e9-15df-49c1-b8a8-68c8245ceb9c", // Pursuing Holiness
+  "bb0fa362-6bcb-4230-8083-45d3e8f59fa9", // Proof That God Still Speaks Today
+  // New Wine magazine articles
+  "0e84a6ce-d4f2-4796-85ea-fba35059fe9d", // Ern Baxter — Christ's Eternal Lordship
+  "978fa7c2-ee76-46b3-925d-3cd88c7fdcc5", // Charles Simpson — Covenant Love
+  "c4354e5a-58bf-472e-8ce9-2c9c9d6712b8", // Juan Carlos Ortiz — The Gospel of God's Government
+  "a51c4fb9-9961-4131-8bd9-72658ca74f0b", // Bob Mumford — The Spirit of Obedience
+  "eb69bf6f-61c5-4320-8589-827ef461352a", // Derek Prince — God's Men on the Move
+  "9f8fc4cc-7ef7-4db9-a251-620c35ce85f4", // Bob Mumford — Maintaining a Life of Worship
+  "f2c10aaf-b0db-4ec5-a02b-fe31f0963929", // Ern Baxter — What Makes God Angry?
+];
+
+// LCG seeded by UTC day index — same 3 docs for all users on a given day,
+// rotates at midnight UTC without any server round-trip.
+function seededRandom(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = (Math.imul(1664525, s) + 1013904223) | 0;
+    return (s >>> 0) / 4294967296;
+  };
+}
+
+function getDailyFeaturedIds(): string[] {
+  const dayIndex = Math.floor(Date.now() / 86_400_000);
+  const rng = seededRandom(dayIndex);
+  const pool = [...FEATURED_POOL];
+  // Partial Fisher-Yates: shuffle last 3 slots, return them
+  for (let i = pool.length - 1; i > pool.length - 4; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(pool.length - 3);
+}
 
 const SEARCH_SUGGESTIONS = [
   "Hearing God's Voice",
@@ -284,9 +325,7 @@ export default function LibraryPage() {
     async function loadDiscover() {
       setDiscoverLoading(true);
       await Promise.allSettled([
-        FEATURED_IDS.length > 0
-          ? fetchDocMeta(FEATURED_IDS).then((r) => setFeaturedDocs(r.results)).catch(() => {})
-          : Promise.resolve(),
+        fetchDocMeta(getDailyFeaturedIds()).then((r) => setFeaturedDocs(r.results)).catch(() => {}),
         fetchRecentDocs(6).then((r) => setRecentDocs(r.results)).catch(() => {}),
         browseDocuments({ source_kind: "magazine_article" })
           .then((r) => setMagazineDocs(r.results.slice(0, 6)))
@@ -782,7 +821,7 @@ export default function LibraryPage() {
                 <div className="flex flex-col gap-12">
 
                   {/* 1. Featured */}
-                  {FEATURED_IDS.length > 0 && featuredDocs.length > 0 && (
+                  {featuredDocs.length > 0 && (
                     <section>
                       <SectionHeader label="Featured" />
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
