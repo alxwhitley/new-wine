@@ -354,3 +354,55 @@ export async function fetchWeeklyUsage(token: string): Promise<WeeklyUsage> {
   if (!res.ok) throw new Error("Usage fetch failed");
   return res.json();
 }
+
+// ── Discover ──────────────────────────────────────────────────────────────────
+
+export interface DiscoverDoc {
+  id: string;
+  title: string;
+  author: string | null;
+  source_kind: string | null;
+  topic_tags: string[];
+  year: number | null;
+  era: string | null;
+  content_summary: string | null;
+}
+
+export interface SourceCounts {
+  magazine_article: number;
+  sermon_transcript: number;
+  books: number;
+}
+
+export interface PastorsNote {
+  id: string;
+  verse_id: string;
+  content: string;
+  display_name: string | null;
+  created_at: string;
+}
+
+export async function fetchDocMeta(ids: string[]): Promise<{ results: DiscoverDoc[] }> {
+  if (!ids.length) return { results: [] };
+  const res = await fetch(`${API_URL}/library/doc-meta?ids=${ids.join(",")}`);
+  if (!res.ok) throw new Error("Doc meta fetch failed");
+  return res.json();
+}
+
+export async function fetchRecentDocs(limit = 6): Promise<{ results: DiscoverDoc[] }> {
+  const res = await fetch(`${API_URL}/library/recent?limit=${limit}`);
+  if (!res.ok) throw new Error("Recent docs fetch failed");
+  return res.json();
+}
+
+export async function fetchSourceCounts(): Promise<SourceCounts> {
+  const res = await fetch(`${API_URL}/library/counts`);
+  if (!res.ok) throw new Error("Source counts fetch failed");
+  return res.json();
+}
+
+export async function fetchRecentNotes(limit = 4): Promise<PastorsNote[]> {
+  const res = await fetch(`${API_URL}/pastors-notes/recent?limit=${limit}`);
+  if (!res.ok) throw new Error("Recent notes fetch failed");
+  return res.json();
+}

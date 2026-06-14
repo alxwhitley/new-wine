@@ -185,6 +185,46 @@ class MeUpdateBody(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+@router.get("/recent")
+async def list_recent_notes(limit: int = Query(4, description="Maximum number of results")):
+    """Public — return recent published pastors' notes across all verses with contributor display name."""
+    db = get_supabase()
+    cards_result = (
+        db.table("pastors_cards")
+        .select("id, verse_id, content, created_at, user_id")
+        .eq("status", "published")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    cards = cards_result.data or []
+    if not cards:
+        return []
+
+    user_ids = list({c["user_id"] for c in cards})
+    roles_result = (
+        db.table("user_roles")
+        .select("user_id, display_name")
+        .in_("user_id", user_ids)
+        .execute()
+    )
+    display_map = {
+        r["user_id"]: r.get("display_name")
+        for r in (roles_result.data or [])
+    }
+
+    return [
+        {
+            "id": c["id"],
+            "verse_id": c["verse_id"],
+            "content": c["content"],
+            "created_at": c["created_at"],
+            "display_name": display_map.get(c["user_id"]),
+        }
+        for c in cards
+    ]
+
+
 @router.get("/cards")
 async def list_cards(verse_id: str):
     """Public — returns all published cards for a verse with contributor display_name."""
