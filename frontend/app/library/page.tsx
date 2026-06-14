@@ -26,22 +26,18 @@ import type {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const FEATURED_POOL: string[] = [
-  // Andrew Murray books
-  "1da1afb1-78b2-4eec-be57-01426d676266", // Absolute Surrender
-  "96c648f6-3222-4a66-a465-4eb2812bca75", // The Master's Indwelling
-  "42098c1c-2ea5-42fc-9d7b-8b4a8f617af4", // The Deeper Christian Life
-  // Derek Prince sermons
-  "edb0e8fb-7ebc-4a9b-8e27-a3942c51cf0a", // Spiritual Blindness - Cause and Cure
-  "843643e2-4b31-425f-ac40-ec70d3b7dec8", // The Fatherhood Of God
-  "240db671-7230-40a2-9075-50d08cbb27b8", // Seven Steps To Christian Love
-  "c4a94c4b-b6ac-436c-ab9d-6adad6f7688a", // Motivation for Living To Do God's Will
-  // John Bevere sermons
-  "038e5864-77ee-4def-9726-59d0d2a987fb", // The Fear of the Lord Is My Treasure
-  "d540ea1c-ecad-44d8-9454-5ca61886ddb6", // Why You Are Not Experiencing the Presence of God
-  "7ebf33e9-15df-49c1-b8a8-68c8245ceb9c", // Pursuing Holiness
-  "bb0fa362-6bcb-4230-8083-45d3e8f59fa9", // Proof That God Still Speaks Today
-  // New Wine magazine articles
+const FEATURED_SERMON_POOL: string[] = [
+  "edb0e8fb-7ebc-4a9b-8e27-a3942c51cf0a", // Derek Prince — Spiritual Blindness - Cause and Cure
+  "843643e2-4b31-425f-ac40-ec70d3b7dec8", // Derek Prince — The Fatherhood Of God
+  "240db671-7230-40a2-9075-50d08cbb27b8", // Derek Prince — Seven Steps To Christian Love
+  "c4a94c4b-b6ac-436c-ab9d-6adad6f7688a", // Derek Prince — Motivation for Living To Do God's Will
+  "038e5864-77ee-4def-9726-59d0d2a987fb", // John Bevere — The Fear of the Lord Is My Treasure
+  "d540ea1c-ecad-44d8-9454-5ca61886ddb6", // John Bevere — Why You Are Not Experiencing the Presence of God
+  "7ebf33e9-15df-49c1-b8a8-68c8245ceb9c", // John Bevere — Pursuing Holiness
+  "bb0fa362-6bcb-4230-8083-45d3e8f59fa9", // John Bevere — Proof That God Still Speaks Today
+];
+
+const FEATURED_ARTICLE_POOL: string[] = [
   "0e84a6ce-d4f2-4796-85ea-fba35059fe9d", // Ern Baxter — Christ's Eternal Lordship
   "978fa7c2-ee76-46b3-925d-3cd88c7fdcc5", // Charles Simpson — Covenant Love
   "c4354e5a-58bf-472e-8ce9-2c9c9d6712b8", // Juan Carlos Ortiz — The Gospel of God's Government
@@ -51,8 +47,7 @@ const FEATURED_POOL: string[] = [
   "f2c10aaf-b0db-4ec5-a02b-fe31f0963929", // Ern Baxter — What Makes God Angry?
 ];
 
-// LCG seeded by UTC day index — same 3 docs for all users on a given day,
-// rotates at midnight UTC without any server round-trip.
+// LCG seeded by UTC day index — deterministic per day, rotates at midnight UTC.
 function seededRandom(seed: number): () => number {
   let s = seed;
   return () => {
@@ -61,16 +56,27 @@ function seededRandom(seed: number): () => number {
   };
 }
 
+// Always returns [sermon, sermon, article].
+// Slot mapping: [0] large hero, [1] small top-right, [2] small bottom-right.
+// Separate seeds per pool so article pick is independent of sermon shuffle.
 function getDailyFeaturedIds(): string[] {
   const dayIndex = Math.floor(Date.now() / 86_400_000);
-  const rng = seededRandom(dayIndex);
-  const pool = [...FEATURED_POOL];
-  // Partial Fisher-Yates: shuffle last 3 slots, return them
-  for (let i = pool.length - 1; i > pool.length - 4; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+
+  const sermonRng = seededRandom(dayIndex * 2);
+  const sermons = [...FEATURED_SERMON_POOL];
+  for (let i = sermons.length - 1; i > 0; i--) {
+    const j = Math.floor(sermonRng() * (i + 1));
+    [sermons[i], sermons[j]] = [sermons[j], sermons[i]];
   }
-  return pool.slice(pool.length - 3);
+
+  const articleRng = seededRandom(dayIndex * 2 + 1);
+  const articles = [...FEATURED_ARTICLE_POOL];
+  for (let i = articles.length - 1; i > 0; i--) {
+    const j = Math.floor(articleRng() * (i + 1));
+    [articles[i], articles[j]] = [articles[j], articles[i]];
+  }
+
+  return [sermons[0], sermons[1], articles[0]];
 }
 
 const SEARCH_SUGGESTIONS = [
