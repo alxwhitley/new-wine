@@ -171,23 +171,25 @@ function sourceKindLabel(kind: string | null): string {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function DiscoverDocCard({
-  doc, onClick, isHero = false,
+  doc, onClick, isHero = false, className,
 }: {
   doc: DiscoverDoc;
   onClick: () => void;
   isHero?: boolean;
+  className?: string;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
         "flex flex-col text-left w-full rounded-lg border border-border bg-card hover:bg-accent transition-colors",
-        isHero ? "overflow-hidden" : "p-4"
+        isHero ? "overflow-hidden lg:h-full" : "p-4",
+        className
       )}
     >
       {/* Image slot — hero only */}
       {isHero && (
-        <div className="relative w-full aspect-[3/1] bg-muted shrink-0 flex items-center justify-center">
+        <div className="relative w-full aspect-[3/1] lg:aspect-auto lg:h-[45%] bg-muted shrink-0 flex items-center justify-center">
           {doc.image_url ? (
             <Image src={doc.image_url} alt={doc.title} fill className="object-cover" />
           ) : (
@@ -212,11 +214,6 @@ function DiscoverDocCard({
         )}>
           {doc.title}
         </h3>
-        {doc.content_summary && (
-          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
-            {doc.content_summary}
-          </p>
-        )}
         {doc.topic_tags && doc.topic_tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {doc.topic_tags.slice(0, 2).map((tag) => (
@@ -844,7 +841,7 @@ export default function LibraryPage() {
                   {featuredDocs.length > 0 && (
                     <section>
                       <SectionHeader label="Featured" />
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-[400px]">
                         <div className="lg:col-span-2">
                           <DiscoverDocCard
                             doc={featuredDocs[0]}
@@ -853,11 +850,12 @@ export default function LibraryPage() {
                           />
                         </div>
                         {featuredDocs.slice(1, 3).length > 0 && (
-                          <div className="flex flex-col gap-3">
+                          <div className="flex flex-col gap-3 lg:h-full">
                             {featuredDocs.slice(1, 3).map((doc) => (
                               <DiscoverDocCard
                                 key={doc.id}
                                 doc={doc}
+                                className="lg:flex-1"
                                 onClick={() => handleCardClick(doc.id, doc.source_kind)}
                               />
                             ))}
