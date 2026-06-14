@@ -76,7 +76,7 @@ function getDailyFeaturedIds(): string[] {
     [articles[i], articles[j]] = [articles[j], articles[i]];
   }
 
-  return [sermons[0], sermons[1], articles[0]];
+  return [articles[0], sermons[0], sermons[1]];
 }
 
 const SEARCH_SUGGESTIONS = [
