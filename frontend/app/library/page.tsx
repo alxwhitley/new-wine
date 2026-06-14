@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import Image from "next/image";
 import {
-  Search, ArrowLeft, Loader2, Menu, ChevronDown,
+  Search, ArrowLeft, Loader2, Menu,
   Trash2, Pencil, SlidersHorizontal, ArrowRight,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -606,10 +606,12 @@ export default function LibraryPage() {
                       onFocus={() => setShowSuggestions(true)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSearch(); } }}
                       placeholder="Search articles, authors, topics…"
+                      aria-label="Search"
                       className="w-full min-h-[44px] rounded-lg border border-border bg-card pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                     />
                   </div>
                   <button
+                    aria-label="Filters"
                     onClick={() => {
                       setDraftAuthors(selectedAuthors);
                       setDraftEra(eraFilter);
@@ -664,7 +666,7 @@ export default function LibraryPage() {
                   <div className="flex items-center gap-3 mb-4 flex-wrap">
                     <button
                       onClick={handleBackToDiscover}
-                      className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[36px]"
+                      className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px]"
                     >
                       <ArrowLeft className="h-4 w-4" />
                       Discover
@@ -720,7 +722,7 @@ export default function LibraryPage() {
                             {sermons.length > 0 && (
                               <div>
                                 <div className="flex items-center gap-2.5 mb-3">
-                                  <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground whitespace-nowrap">Sermons</span>
+                                  <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">Sermons</span>
                                   <div className="flex-1 h-px bg-border" />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -731,7 +733,7 @@ export default function LibraryPage() {
                             {articles.length > 0 && (
                               <div>
                                 <div className="flex items-center gap-2.5 mb-3">
-                                  <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground whitespace-nowrap">Articles</span>
+                                  <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">Articles</span>
                                   <div className="flex-1 h-px bg-border" />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -742,7 +744,7 @@ export default function LibraryPage() {
                             {bookResults.length > 0 && (
                               <div>
                                 <div className="flex items-center gap-2.5 mb-3">
-                                  <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground whitespace-nowrap">Books</span>
+                                  <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">Books</span>
                                   <div className="flex-1 h-px bg-border" />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -798,7 +800,7 @@ export default function LibraryPage() {
                               <span className="text-[10px] text-muted-foreground">{featuredDocs[0].author}</span>
                             )}
                           </div>
-                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2 group-hover:underline underline-offset-4 decoration-border">
+                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2 group-hover:underline underline-offset-4 decoration-primary/40">
                             {featuredDocs[0].title}
                           </h2>
                           {featuredDocs[0].content_summary && (
@@ -900,7 +902,7 @@ export default function LibraryPage() {
                             <span className="text-3xl font-semibold text-muted-foreground block">—</span>
                           )}
                           <span className="text-xs uppercase tracking-wide text-muted-foreground mt-1 block">{label}</span>
-                          <ArrowRight className="absolute top-4 right-4 h-4 w-4 text-border" />
+                          <ArrowRight className="absolute top-4 right-4 h-4 w-4 text-muted-foreground/40" />
                         </button>
                       ))}
                     </div>
@@ -908,14 +910,16 @@ export default function LibraryPage() {
 
                   {/* 3. Featured Authors */}
                   <section className="mb-0">
+                    <span className="text-xs text-muted-foreground mb-3 block">Browse by author</span>
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                       {AUTHOR_DATA.slice(0, 5).map((author) => {
                         const imgSrc = AUTHOR_IMAGES[author.name];
                         const isClassic = CLASSIC_AUTHORS.has(author.name);
                         return (
-                          <div
+                          <button
                             key={author.name}
-                            className="flex items-center gap-2 flex-shrink-0 rounded-full border border-border bg-card px-2 py-1.5"
+                            onClick={() => handleSuggestionClick(author.name)}
+                            className="flex items-center gap-2 flex-shrink-0 rounded-full border border-border bg-card px-2 py-1.5 hover:border-primary/50 hover:bg-accent transition-colors cursor-pointer"
                           >
                             {imgSrc && !failedAuthorImages.has(author.name) ? (
                               <Image
@@ -937,7 +941,7 @@ export default function LibraryPage() {
                             <span className="text-xs text-muted-foreground whitespace-nowrap pr-1">
                               {author.name}
                             </span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -977,7 +981,7 @@ export default function LibraryPage() {
                             {doc.author && (
                               <span className="text-[11px] text-muted-foreground">{doc.author}</span>
                             )}
-                            <span className="text-[13px] font-medium text-foreground/80 leading-snug flex-1">
+                            <span className="text-[13px] font-medium text-foreground leading-snug flex-1">
                               {doc.title}
                             </span>
                             {doc.topic_tags && doc.topic_tags.length > 0 && (
@@ -1031,17 +1035,17 @@ export default function LibraryPage() {
                             onClick={() => handleCardClick(doc.id, doc.source_kind)}
                             className="w-full text-left flex items-baseline gap-3.5 py-3 border-b border-border/40 last:border-b-0 hover:bg-accent transition-colors rounded"
                           >
-                            <span className="text-[11px] text-border font-medium min-w-[18px] flex-shrink-0">
+                            <span className="text-[11px] text-muted-foreground/50 font-medium min-w-[18px] flex-shrink-0">
                               {(i + 1).toString().padStart(2, "0")}
                             </span>
                             <span className="flex-1 min-w-0">
                               {doc.author && (
                                 <span className="block text-[11px] text-muted-foreground mb-0.5">{doc.author}</span>
                               )}
-                              <span className="block text-[13px] font-medium text-foreground/80">{doc.title}</span>
+                              <span className="block text-[13px] font-medium text-foreground">{doc.title}</span>
                             </span>
                             {doc.year && (
-                              <span className="text-[11px] text-border ml-auto flex-shrink-0">{doc.year}</span>
+                              <span className="text-[11px] text-muted-foreground/50 ml-auto flex-shrink-0">{doc.year}</span>
                             )}
                           </button>
                         ))}
@@ -1095,7 +1099,7 @@ export default function LibraryPage() {
 
             {/* Authors */}
             <div>
-              <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">Authors</h3>
+              <h3 className="text-xs font-medium text-muted-foreground mb-3">Authors</h3>
               <div className="flex flex-col gap-2">
                 {AUTHOR_DATA.map((author) => {
                   const isSelected = draftAuthors.includes(author.name);
@@ -1118,7 +1122,7 @@ export default function LibraryPage() {
 
             {/* Era */}
             <div>
-              <h3 className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">Era</h3>
+              <h3 className="text-xs font-medium text-muted-foreground mb-3">Era</h3>
               <div className="flex gap-2">
                 {(["", "classic", "contemporary"] as const).map((era) => (
                   <button
