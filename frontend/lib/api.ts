@@ -362,10 +362,11 @@ export interface DiscoverDoc {
   title: string;
   author: string | null;
   source_kind: string | null;
-  topic_tags: string[];
+  topic_tags: string[] | null;
   year: number | null;
   era: string | null;
   content_summary: string | null;
+  image_url?: string | null;
 }
 
 export interface SourceCounts {

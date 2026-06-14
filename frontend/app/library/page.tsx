@@ -182,43 +182,57 @@ function DiscoverDocCard({
       onClick={onClick}
       className={cn(
         "flex flex-col text-left w-full rounded-lg border border-border bg-card hover:bg-accent transition-colors",
-        isHero ? "p-5 min-h-[180px]" : "p-4"
+        isHero ? "overflow-hidden" : "p-4"
       )}
     >
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-          {sourceKindLabel(doc.source_kind)}
-        </span>
-      </div>
-      {doc.author && (
-        <p className="text-xs text-muted-foreground">{doc.author}</p>
-      )}
-      <h3 className={cn(
-        "font-sans font-semibold text-foreground leading-snug mt-1",
-        isHero ? "text-base md:text-lg" : "text-sm"
-      )}>
-        {doc.title}
-      </h3>
-      {doc.content_summary && (
-        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
-          {doc.content_summary}
-        </p>
-      )}
-      {doc.topic_tags && doc.topic_tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {doc.topic_tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="inline-block text-[10px] bg-secondary text-secondary-foreground rounded-md px-1.5 py-0.5"
-            >
-              {tag}
+      {/* Image slot — hero only */}
+      {isHero && (
+        <div className="relative w-full aspect-[3/1] bg-muted shrink-0 flex items-center justify-center">
+          {doc.image_url ? (
+            <Image src={doc.image_url} alt={doc.title} fill className="object-cover" />
+          ) : (
+            <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground select-none">
+              {doc.topic_tags?.[0] ?? sourceKindLabel(doc.source_kind)}
             </span>
-          ))}
+          )}
         </div>
       )}
-      {doc.year && (
-        <p className="text-[11px] text-muted-foreground mt-auto pt-2">{doc.year}</p>
-      )}
+      <div className={cn("flex flex-col", isHero ? "p-5 flex-1" : "")}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+            {sourceKindLabel(doc.source_kind)}
+          </span>
+        </div>
+        {doc.author && (
+          <p className="text-xs text-muted-foreground">{doc.author}</p>
+        )}
+        <h3 className={cn(
+          "font-sans font-semibold text-foreground leading-snug mt-1",
+          isHero ? "text-base md:text-lg" : "text-sm"
+        )}>
+          {doc.title}
+        </h3>
+        {doc.content_summary && (
+          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
+            {doc.content_summary}
+          </p>
+        )}
+        {doc.topic_tags && doc.topic_tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {doc.topic_tags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className="inline-block text-[10px] bg-secondary text-secondary-foreground rounded-md px-1.5 py-0.5"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+        {doc.year && (
+          <p className="text-[11px] text-muted-foreground mt-auto pt-2">{doc.year}</p>
+        )}
+      </div>
     </button>
   );
 }
