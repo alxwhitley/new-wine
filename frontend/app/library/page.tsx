@@ -265,6 +265,7 @@ export default function LibraryPage() {
   // ── Article reader ─────────────────────────────────────────────────────────
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [articleLoading, setArticleLoading] = useState(false);
+  const [articleFromDiscover, setArticleFromDiscover] = useState(false);
 
   // ── Admin ──────────────────────────────────────────────────────────────────
   const isAdmin = user?.id === "1ea99425-08ec-40f2-9ed3-588b88122a82";
@@ -383,6 +384,7 @@ export default function LibraryPage() {
   }, []);
 
   const handleCardClick = useCallback(async (id: string, sourceKind?: string | null) => {
+    setArticleFromDiscover(discoverMode);
     setArticleLoading(true);
     setError(null);
     try {
@@ -394,7 +396,7 @@ export default function LibraryPage() {
     } finally {
       setArticleLoading(false);
     }
-  }, []);
+  }, [discoverMode]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!accessToken) return;
@@ -537,11 +539,11 @@ export default function LibraryPage() {
             <div className="flex-1 overflow-y-auto">
               <div className="mx-auto max-w-2xl px-4 md:px-6 pt-8 pb-16">
                 <button
-                  onClick={() => setArticle(null)}
+                  onClick={() => { setArticle(null); if (articleFromDiscover) handleBackToDiscover(); }}
                   className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-8 min-h-[44px]"
                 >
                   <ArrowLeft className="h-4 w-4" />
-                  Back to results
+                  {articleFromDiscover ? "Back to Discover" : "Back to results"}
                 </button>
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -610,9 +612,12 @@ export default function LibraryPage() {
             <div className="mx-auto max-w-5xl px-4 md:px-6 pt-10 pb-16">
 
               {/* Page title */}
-              <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center mb-6">
+              <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center mb-2">
                 Discover
               </h2>
+              <p className="text-sm text-muted-foreground text-center mb-6">
+                Sermons, articles, and books from the charismatic tradition
+              </p>
 
               {/* Search bar + filter icon */}
               <div className="relative mb-6" ref={searchBarRef}>
@@ -778,12 +783,10 @@ export default function LibraryPage() {
                   {/* 1. Featured — hero renders directly on page background */}
                   {featuredDocs.length > 0 && (
                     <section>
-                      <SectionHeader label="Featured" />
-
-                      {/* Hero: no card wrapper */}
+                      {/* Hero: no card wrapper, no section label — the gold eyebrow is the label */}
                       <button
                         onClick={() => handleCardClick(featuredDocs[0].id, featuredDocs[0].source_kind)}
-                        className="w-full text-left grid grid-cols-[1fr_200px] gap-7 items-start cursor-pointer mb-6"
+                        className="w-full text-left grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-7 items-start cursor-pointer mb-6 group"
                       >
                         <div>
                           <div className="flex items-center gap-2 mb-3">
@@ -795,7 +798,7 @@ export default function LibraryPage() {
                               <span className="text-[10px] text-muted-foreground">{featuredDocs[0].author}</span>
                             )}
                           </div>
-                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2">
+                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2 group-hover:underline underline-offset-4 decoration-border">
                             {featuredDocs[0].title}
                           </h2>
                           {featuredDocs[0].content_summary && (
@@ -818,7 +821,7 @@ export default function LibraryPage() {
                             <p className="text-xs text-muted-foreground/50">{featuredDocs[0].year}</p>
                           )}
                         </div>
-                        <div className="relative w-[200px] h-[140px] rounded-lg border bg-card flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="hidden lg:flex relative w-[200px] h-[140px] rounded-lg border bg-card items-center justify-center overflow-hidden flex-shrink-0">
                           <span className="text-3xl text-muted-foreground/20 select-none">✦</span>
                           <div
                             className="absolute bottom-0 left-0 right-0 h-[3px]"
@@ -867,7 +870,6 @@ export default function LibraryPage() {
 
                   {/* 2. Browse */}
                   <section className="mb-10">
-                    <SectionHeader label="Browse" />
                     <div className="bg-card border rounded-lg overflow-hidden flex">
                       {[
                         { filter: "articles" as ContentFilter, label: "Articles", count: sourceCounts?.magazine_article },
@@ -942,15 +944,15 @@ export default function LibraryPage() {
 
                   {/* 4. Recently Added */}
                   <section className="mb-0">
-                    <SectionHeader label="Recently Added" onLinkClick={() => handleBrowseTile("all")} linkLabel="See all →" />
+                    <SectionHeader label="Recently Added" onLinkClick={() => handleBrowseTile("all")} linkLabel="Browse all →" />
                     {discoverLoading ? (
-                      <div className="grid grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                         {[1, 2, 3].map((i) => (
                           <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse" />
                         ))}
                       </div>
                     ) : recentDocs.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                         {recentDocs.map((doc) => (
                           <button
                             key={doc.id}
@@ -1036,6 +1038,9 @@ export default function LibraryPage() {
                   {/* 6. Pastors' Notes */}
                   <section className="mt-10">
                     <SectionHeader label="Pastors' Notes" />
+                    <p className="text-[11px] text-muted-foreground/60 -mt-2 mb-4">
+                      Scripture reflections from community pastors and teachers
+                    </p>
                     {discoverLoading ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[1, 2].map((i) => (
