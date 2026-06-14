@@ -215,12 +215,16 @@ export default function LibraryPage() {
   const [recentNotes, setRecentNotes] = useState<PastorsNote[]>([]);
   const [sourceCounts, setSourceCounts] = useState<SourceCounts | null>(null);
   const [discoverLoading, setDiscoverLoading] = useState(true);
+  const [discoverErrors, setDiscoverErrors] = useState<{
+    featured?: boolean; recent?: boolean; archive?: boolean; notes?: boolean;
+  }>({});
 
   // ── Search/browse mode ─────────────────────────────────────────────────────
   const [discoverMode, setDiscoverMode] = useState(true);
   const [query, setQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
   const [eraFilter, setEraFilter] = useState("");
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
@@ -240,6 +244,8 @@ export default function LibraryPage() {
   const [articleLoading, setArticleLoading] = useState(false);
   const [articleFromDiscover, setArticleFromDiscover] = useState(false);
   const [lastArticleAttempt, setLastArticleAttempt] = useState<{ id: string; sourceKind: string | null } | null>(null);
+  const articleTitleRef = useRef<HTMLHeadingElement>(null);
+  const articleCloseFocusRef = useRef(false);
 
   // ── Admin ──────────────────────────────────────────────────────────────────
   const isAdmin = user?.id === "1ea99425-08ec-40f2-9ed3-588b88122a82";
@@ -251,22 +257,24 @@ export default function LibraryPage() {
   const effectiveEra = eraFilter || undefined;
 
   // ── Load Discover sections on mount ───────────────────────────────────────
-  useEffect(() => {
-    async function loadDiscover() {
-      setDiscoverLoading(true);
-      await Promise.allSettled([
-        fetchDocMeta(getDailyFeaturedIds()).then((r) => setFeaturedDocs(r.results)).catch(() => {}),
-        fetchRecentDocs(6).then((r) => setRecentDocs(r.results)).catch(() => {}),
-        browseDocuments({ source_kind: "magazine_article" })
-          .then((r) => setMagazineDocs(r.results.slice(0, 6)))
-          .catch(() => {}),
-        fetchRecentNotes(4).then(setRecentNotes).catch(() => {}),
-        fetchSourceCounts().then(setSourceCounts).catch(() => {}),
-      ]);
-      setDiscoverLoading(false);
-    }
-    loadDiscover();
+  const loadDiscover = useCallback(async () => {
+    setDiscoverLoading(true);
+    setDiscoverErrors({});
+    const errors: { featured?: boolean; recent?: boolean; archive?: boolean; notes?: boolean } = {};
+    await Promise.allSettled([
+      fetchDocMeta(getDailyFeaturedIds()).then((r) => setFeaturedDocs(r.results)).catch(() => { errors.featured = true; }),
+      fetchRecentDocs(6).then((r) => setRecentDocs(r.results)).catch(() => { errors.recent = true; }),
+      browseDocuments({ source_kind: "magazine_article" })
+        .then((r) => setMagazineDocs(r.results.slice(0, 6)))
+        .catch(() => { errors.archive = true; }),
+      fetchRecentNotes(4).then(setRecentNotes).catch(() => { errors.notes = true; }),
+      fetchSourceCounts().then(setSourceCounts).catch(() => {}),
+    ]);
+    setDiscoverErrors(errors);
+    setDiscoverLoading(false);
   }, []);
+
+  useEffect(() => { loadDiscover(); }, [loadDiscover]);
 
   // ── Click outside to dismiss suggestions ──────────────────────────────────
   useEffect(() => {
@@ -279,8 +287,29 @@ export default function LibraryPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ── Focus effects ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (article) {
+      articleTitleRef.current?.focus();
+    } else if (articleCloseFocusRef.current) {
+      articleCloseFocusRef.current = false;
+      searchInputRef.current?.focus();
+    }
+  }, [article]);
+
   // ── Search/browse fetch ────────────────────────────────────────────────────
-  const fetchResults = useCallback(async (q?: string, filter: ContentFilter = contentFilter) => {
+  // explicitAuthors/explicitEra let callers pass the *new* value at the same time
+  // they call setState, avoiding the stale-closure problem.
+  const fetchResults = useCallback(async (
+    q?: string,
+    filter: ContentFilter = contentFilter,
+    explicitAuthors?: string[],
+    explicitEra?: string,
+  ) => {
+    const aParam = explicitAuthors !== undefined
+      ? (explicitAuthors.length > 0 ? explicitAuthors.join(",") : undefined)
+      : authorParam;
+    const eParam = explicitEra !== undefined ? (explicitEra || undefined) : effectiveEra;
     setLoading(true);
     setError(null);
     setDiscoverMode(false);
@@ -302,19 +331,19 @@ export default function LibraryPage() {
 
         if (q && q.trim()) {
           promises.push(
-            searchDocumentsFts({ q: q.trim(), source_kind: sourceKind, include_copyrighted: true, era: effectiveEra, author: authorParam })
+            searchDocumentsFts({ q: q.trim(), source_kind: sourceKind, include_copyrighted: true, era: eParam, author: aParam })
               .then((r) => { newDocs = r.results; })
           );
         } else {
           promises.push(
-            browseDocuments({ source_kind: sourceKind, include_copyrighted: true, era: effectiveEra, author: authorParam })
+            browseDocuments({ source_kind: sourceKind, include_copyrighted: true, era: eParam, author: aParam })
               .then((r) => { newDocs = r.results; })
           );
         }
       }
       if (includeBooks) {
         promises.push(
-          fetchBooks({ q: q?.trim() || undefined, era: effectiveEra, author: authorParam })
+          fetchBooks({ q: q?.trim() || undefined, era: eParam, author: aParam })
             .then((r) => { newBooks = r.results; })
         );
       }
@@ -443,8 +472,8 @@ export default function LibraryPage() {
 
   const renderBookCard = (book: Book) => {
     const coverSrc = BOOK_COVERS[book.title];
-    return (
-      <div key={book.id} className="flex flex-row bg-card border border-border rounded-lg p-4 gap-3.5 transition-colors hover:bg-accent">
+    const inner = (
+      <>
         {coverSrc ? (
           <Image
             src={coverSrc}
@@ -461,22 +490,29 @@ export default function LibraryPage() {
         ) : null}
         <div className={cn(coverSrc ? "hidden" : "", "w-14 h-20 rounded-sm bg-muted flex-shrink-0")} />
         <div className="flex flex-col min-w-0">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{book.author}</p>
+          <p className="text-[11px] text-muted-foreground">{book.author}</p>
           <h4 className="font-sans text-[15px] font-semibold text-foreground leading-snug mt-1.5">{book.title}</h4>
           <div className="border-t border-border my-3" />
           {book.description && (
             <p className="line-clamp-2 text-[13px] text-muted-foreground leading-relaxed">{book.description}</p>
           )}
           {book.document_id && (
-            <a
-              href={`/library/book/${book.document_id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="min-h-[44px] flex items-center justify-center text-xs text-center border border-border text-muted-foreground rounded-md px-2.5 mt-3 transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              Read Excerpts
-            </a>
+            <span className="text-xs text-primary mt-auto pt-3">Read Excerpts →</span>
           )}
         </div>
+      </>
+    );
+    if (book.document_id) {
+      return (
+        <a key={book.id} href={`/library/book/${book.document_id}`}
+          className="flex flex-row bg-card border border-border rounded-lg p-4 gap-3.5 transition-colors hover:bg-accent">
+          {inner}
+        </a>
+      );
+    }
+    return (
+      <div key={book.id} className="flex flex-row bg-card border border-border rounded-lg p-4 gap-3.5">
+        {inner}
       </div>
     );
   };
@@ -514,7 +550,11 @@ export default function LibraryPage() {
             <div className="flex-1 overflow-y-auto">
               <div className="mx-auto max-w-2xl px-4 md:px-6 pt-8 pb-16">
                 <button
-                  onClick={() => { setArticle(null); if (articleFromDiscover) handleBackToDiscover(); }}
+                  onClick={() => {
+                    articleCloseFocusRef.current = true;
+                    setArticle(null);
+                    if (articleFromDiscover) handleBackToDiscover();
+                  }}
                   className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-8 min-h-[44px]"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -522,7 +562,13 @@ export default function LibraryPage() {
                 </button>
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h1 className="font-sans text-2xl font-semibold text-foreground leading-tight">{article.title}</h1>
+                    <h1
+                      ref={articleTitleRef}
+                      tabIndex={-1}
+                      className="font-sans text-2xl font-semibold text-foreground leading-tight outline-none"
+                    >
+                      {article.title}
+                    </h1>
                     {article.author && <p className="text-sm text-muted-foreground mt-2">{article.author}</p>}
                   </div>
                   {article.source_kind === "sermon_transcript" && article.url && (
@@ -600,6 +646,7 @@ export default function LibraryPage() {
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <input
+                      ref={searchInputRef}
                       type="text"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
@@ -658,6 +705,47 @@ export default function LibraryPage() {
                   </div>
                 )}
               </div>
+
+              {/* Active filter chips */}
+              {activeFilterCount > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-4 -mt-2">
+                  {selectedAuthors.map((author) => (
+                    <button
+                      key={author}
+                      onClick={() => {
+                        const next = selectedAuthors.filter((a) => a !== author);
+                        setSelectedAuthors(next);
+                        if (!discoverMode) fetchResults(query, contentFilter, next, eraFilter);
+                      }}
+                      className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs bg-primary/10 text-primary border border-primary/25 hover:bg-primary/20 transition-colors"
+                    >
+                      {author} <span aria-hidden="true">×</span>
+                      <span className="sr-only">Remove {author} filter</span>
+                    </button>
+                  ))}
+                  {eraFilter && (
+                    <button
+                      onClick={() => {
+                        setEraFilter("");
+                        if (!discoverMode) fetchResults(query, contentFilter, selectedAuthors, "");
+                      }}
+                      className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs bg-primary/10 text-primary border border-primary/25 hover:bg-primary/20 transition-colors"
+                    >
+                      {eraFilter === "classic" ? "Classic" : "Contemporary"} <span aria-hidden="true">×</span>
+                      <span className="sr-only">Remove era filter</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Screen-reader result count announcements */}
+              <p aria-live="polite" aria-atomic="true" className="sr-only">
+                {!loading && !discoverMode
+                  ? totalCount === 0
+                    ? "No results found"
+                    : `${totalCount} result${totalCount !== 1 ? "s" : ""} found`
+                  : ""}
+              </p>
 
               {/* ── SEARCH/BROWSE MODE ──────────────────────────────────────── */}
               {!discoverMode && (
@@ -783,6 +871,11 @@ export default function LibraryPage() {
                           <div className="h-3 bg-muted rounded animate-pulse" />
                           <div className="h-3 bg-muted rounded animate-pulse w-5/6" />
                         </div>
+                      </div>
+                    ) : discoverErrors.featured && featuredDocs.length === 0 ? (
+                      <div className="flex flex-col items-start gap-1.5 mb-6">
+                        <p className="text-sm text-muted-foreground">Couldn't load featured content — check your connection.</p>
+                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : featuredDocs.length > 0 ? (
                       /* Hero: no card wrapper, no section label — the gold eyebrow is the label */
@@ -996,6 +1089,11 @@ export default function LibraryPage() {
                           </button>
                         ))}
                       </div>
+                    ) : discoverErrors.recent ? (
+                      <div className="flex flex-col items-start gap-1.5">
+                        <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
+                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Nothing new yet — check back soon.</p>
                     )}
@@ -1050,6 +1148,11 @@ export default function LibraryPage() {
                           </button>
                         ))}
                       </div>
+                    ) : discoverErrors.archive ? (
+                      <div className="flex flex-col items-start gap-1.5">
+                        <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
+                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">No archive articles loaded right now.</p>
                     )}
@@ -1072,6 +1175,11 @@ export default function LibraryPage() {
                         {recentNotes.map((note) => (
                           <PastorsNoteCard key={note.id} note={note} />
                         ))}
+                      </div>
+                    ) : discoverErrors.notes ? (
+                      <div className="flex flex-col items-start gap-1.5">
+                        <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
+                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Notes from community pastors will appear here.</p>
