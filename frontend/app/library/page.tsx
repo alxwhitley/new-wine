@@ -438,11 +438,7 @@ export default function LibraryPage() {
         </div>
         <h3 className="font-sans text-[15px] font-semibold text-foreground leading-snug mt-1.5">{doc.title}</h3>
         <div className="border-t border-border my-3" />
-        {isNewWine && doc.description ? (
-          <p className="line-clamp-2 text-xs text-muted-foreground italic leading-relaxed">
-            {doc.description.length > 150 ? doc.description.slice(0, 150) + "…" : doc.description}
-          </p>
-        ) : doc.topic_tags && doc.topic_tags.length > 0 ? (
+        {doc.topic_tags && doc.topic_tags.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {doc.topic_tags.slice(0, 2).map((tag) => (
               <span key={tag} className="inline-block text-[10px] bg-secondary text-secondary-foreground rounded-md px-1.5 py-0.5">
@@ -826,12 +822,14 @@ export default function LibraryPage() {
                           onClick={() => handleBrowseTile(filter)}
                           className="flex flex-col rounded-lg border border-border bg-card hover:bg-accent transition-colors p-4 text-left"
                         >
-                          {count !== undefined && count !== null ? (
+                          {discoverLoading ? (
+                            <span className="h-8 w-12 rounded bg-muted animate-pulse" />
+                          ) : count !== undefined && count !== null ? (
                             <span className="text-2xl font-semibold text-foreground tabular-nums">
                               {count.toLocaleString()}
                             </span>
                           ) : (
-                            <span className="text-2xl font-semibold text-foreground">—</span>
+                            <span className="text-2xl font-semibold text-muted-foreground">—</span>
                           )}
                           <span className="text-xs text-muted-foreground mt-1">{label}</span>
                         </button>
@@ -879,32 +877,31 @@ export default function LibraryPage() {
                   </section>
 
                   {/* 4. Recently added */}
-                  {(recentDocs.length > 0 || discoverLoading) && (
-                    <section>
-                      <SectionHeader label="Recently Added" />
-                      {discoverLoading ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {[1, 2, 3].map((i) => (
-                            <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse" />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {recentDocs.map((doc) => (
-                            <DiscoverDocCard
-                              key={doc.id}
-                              doc={doc}
-                              onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
+                  <section>
+                    <SectionHeader label="Recently Added" />
+                    {discoverLoading ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse" />
+                        ))}
+                      </div>
+                    ) : recentDocs.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {recentDocs.map((doc) => (
+                          <DiscoverDocCard
+                            key={doc.id}
+                            doc={doc}
+                            onClick={() => handleCardClick(doc.id, doc.source_kind)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Nothing added recently.</p>
+                    )}
+                  </section>
 
                   {/* 5. From the New Wine archive */}
-                  {(magazineDocs.length > 0 || discoverLoading) && (
-                    <section>
+                  <section>
                       <SectionHeader
                         label="From the New Wine Archive"
                         href="/library?browse=magazine"
@@ -918,7 +915,7 @@ export default function LibraryPage() {
                             <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse" />
                           ))}
                         </div>
-                      ) : (
+                      ) : magazineDocs.length > 0 ? (
                         <>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {magazineDocs.map((doc) => (
@@ -931,9 +928,6 @@ export default function LibraryPage() {
                                   <p className="text-xs text-muted-foreground">{doc.author}</p>
                                 )}
                                 <h3 className="text-sm font-semibold text-foreground leading-snug mt-1">{doc.title}</h3>
-                                {doc.description && (
-                                  <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed italic">{doc.description}</p>
-                                )}
                                 {doc.topic_tags && doc.topic_tags.length > 0 && (
                                   <div className="flex flex-wrap gap-1.5 mt-2">
                                     {doc.topic_tags.slice(0, 2).map((tag) => (
@@ -954,29 +948,30 @@ export default function LibraryPage() {
                             Browse all articles →
                           </button>
                         </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No articles available.</p>
                       )}
-                    </section>
-                  )}
+                  </section>
 
                   {/* 6. Recent pastors' notes */}
-                  {(recentNotes.length > 0 || discoverLoading) && (
-                    <section>
-                      <SectionHeader label="Pastors' Notes" />
-                      {discoverLoading ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {[1, 2].map((i) => (
-                            <div key={i} className="rounded-lg border border-border bg-card p-4 h-24 animate-pulse" />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {recentNotes.map((note) => (
-                            <PastorsNoteCard key={note.id} note={note} />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
+                  <section>
+                    <SectionHeader label="Pastors' Notes" />
+                    {discoverLoading ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[1, 2].map((i) => (
+                          <div key={i} className="rounded-lg border border-border bg-card p-4 h-24 animate-pulse" />
+                        ))}
+                      </div>
+                    ) : recentNotes.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {recentNotes.map((note) => (
+                          <PastorsNoteCard key={note.id} note={note} />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No notes yet.</p>
+                    )}
+                  </section>
 
                 </div>
               )}
