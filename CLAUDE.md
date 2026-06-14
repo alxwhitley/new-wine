@@ -48,9 +48,9 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   ├── chat.py        # /chat endpoint — retrieval + LLM
 │   │   │   ├── search.py      # /search + /search/documents endpoints
 │   │   │   ├── document.py    # /document/{id} + /document/{id}/article
-│   │   │   ├── library.py     # /library/books + /library/book/{id} endpoints
+│   │   │   ├── library.py     # /library/books + /library/book/{id} + /library/doc-meta + /library/recent + /library/counts
 │   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon + /study/excerpt + /study/interlinear + /study/commentary + /study/wordsearch + /study/wordstudy
-│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management (user/contributor/admin)
+│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management; + /pastors-notes/recent
 │   │   │   ├── usage.py       # GET /usage — weekly query count for authenticated users
 │   │   │   └── ingest.py      # /ingest endpoint (admin-only as of 2026-06-10)
 │   │   ├── services/
@@ -150,7 +150,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - `documents.source_kind` — taxonomy field (e.g. `'magazine_article'`)
 - `documents.citation_mode` — `'citable'` | `'silent_context'`
 - `documents.is_copyrighted` — boolean, derived from folder path during ingest
-- `documents.topic_tags` — text[] assigned from taxonomy
+- `documents.topic_tags` — text[] assigned from taxonomy (can be `null`, not just empty array — confirmed from live API)
 - `documents.bible_references` — text[], canonical refs like `"Romans 8:28"`, GIN indexed
 - `documents.fts_weighted` — tsvector on title, author, source_name, topic_tags
 - Vector similarity via `match_chunks` SQL function (HNSW index, `hnsw.ef_search=200`)
@@ -184,6 +184,10 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Low-material fallback rework (June 2026): hard short-circuit fires only for truly empty chunk sets. When `citable_count < 2` but silent_context chunks exist, proceeds to normal LLM call with retrieval note appended to context block. System prompt graceful-degradation rules handle the response.
 - System prompt rewrite (June 2026): conviction-first classification (settled convictions evaluated BEFORE retrieved sources; source diversity never reclassifies a conviction as debate); voice and attribution firewall (inflammatory language banned from Rhemata's own voice); graceful degradation (WHAT → synthesize from background; WHO/attribution → direct to Study Mode; truly uncovered → bare refusal); verbatim retrieval quotes permitted up to 50 words from citable sources only; `<research_analysis>` expanded to 5 checks (added demotion guard and voice firewall check).
 - Weekly query metering (June 2026): 50 queries/week per authenticated user, Monday UTC reset. `user_usage` table; `weekly_limit` stored per-row (not hardcoded) so Phase 2 billing can override per user. `increment_user_query` RPC uses `SELECT FOR UPDATE` + conditional UPDATE — counter never exceeds limit, no race at cap. Returns `allowed bool`; hard 429 fires before any LLM call. SSE meta includes `usage: {used, limit, week_start}`. Study endpoints excluded from count. Guest meter unchanged. Frontend: `useChat` owns state, seeds from `GET /usage` on mount, updates from SSE meta. `BILLING_ENABLED=false` flag in `weekly-limit-card.tsx`.
+- Discover page (June 2026): `app/library/page.tsx` rewritten as 6-section Discover view. Section order: Featured → Browse by type → Featured Authors → Recently Added → New Wine Archive → Pastors' Notes. All sections always render (empty state shown when no data). No card renders `description` or `content_summary` — both fields contain raw body text; omit-when-absent rule applies to all cards. Card display: type chip, author, title, up to 2 topic tags, year only.
+- Featured section daily rotation (June 2026): `FEATURED_SERMON_POOL` (8 sermons) and `FEATURED_ARTICLE_POOL` (7 New Wine articles) in `app/library/page.tsx`. LCG seeded by UTC day index, two independent seeds (`dayIndex * 2`, `dayIndex * 2 + 1`). Returns `[articles[0], sermons[0], sermons[1]]` — article in hero, sermons in supporting slots. Books excluded from Featured eligibility.
+- Hero card image slot (June 2026): `DiscoverDocCard` with `isHero=true` renders `aspect-[3/1] lg:aspect-auto lg:h-[45%]` top band. `image_url` field on `DiscoverDoc` TS type (`image_url?: string | null`). No `image_url` column exists in DB yet — placeholder renders `topic_tags?.[0] ?? sourceKindLabel(source_kind)` in uppercase on `bg-muted`. Equal-height Featured grid: `lg:h-[400px]` on container, `lg:h-full` on hero button, `lg:flex-1` on supporting cards.
+- FastAPI `Query` import bug (June 2026): Any `Query(...)`, `Path(...)`, etc. used as route default parameters are evaluated at module import time — missing import causes `NameError` → uvicorn never binds → all routes in the file are absent (not a 500; they 404). Always include fastapi symbols in the import line if used as defaults.
 
 ---
 
