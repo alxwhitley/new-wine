@@ -896,9 +896,9 @@ export default function LibraryPage() {
 
                   {/* 3. Featured authors */}
                   <section>
-                    <SectionHeader label="Authors" href="/library/authors" linkLabel="See all →" />
+                    <SectionHeader label="Featured Authors" href="/library/authors" linkLabel="See all →" />
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                      {AUTHOR_DATA.map((author) => {
+                      {AUTHOR_DATA.slice(0, 5).map((author) => {
                         const imgSrc = AUTHOR_IMAGES[author.name];
                         const isClassic = CLASSIC_AUTHORS.has(author.name);
                         return (
