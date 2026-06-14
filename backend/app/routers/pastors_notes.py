@@ -33,8 +33,7 @@ _TAGGING_PROMPT = (
 
 # ── Role helpers ──────────────────────────────────────────────────────────────
 
-def get_user_role(user_id):
-    # type: (str) -> str
+def get_user_role(user_id: str) -> str:
     """Return the role for user_id from user_roles, defaulting to 'user'."""
     db = get_supabase()
     result = db.table("user_roles").select("role").eq("user_id", user_id).limit(1).execute()
@@ -50,8 +49,7 @@ class _RequireRole:
         # type: (List[str]) -> None
         self.allowed = allowed
 
-    def __call__(self, request):
-        # type: (Request) -> str
+    def __call__(self, request: Request) -> str:
         user_id = get_optional_user(request)
         if not user_id:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -65,8 +63,7 @@ require_contributor = _RequireRole(["contributor", "admin"])
 require_admin_role = _RequireRole(["admin"])
 
 
-def _get_current_user(request):
-    # type: (Request) -> str
+def _get_current_user(request: Request) -> str:
     """Require any authenticated user. Returns user_id or raises 401."""
     user_id = get_optional_user(request)
     if not user_id:
