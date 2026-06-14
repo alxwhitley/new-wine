@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import Link from "next/link";
 import Image from "next/image";
 import {
   Search, ArrowLeft, Loader2, Menu, ChevronDown,
@@ -193,32 +192,6 @@ function PastorsNoteCard({ note }: { note: PastorsNote }) {
   );
 }
 
-function SectionHeader({
-  label, href, linkLabel, onLinkClick,
-}: {
-  label: string;
-  href?: string;
-  linkLabel?: string;
-  onLinkClick?: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-muted-foreground/60">
-        {label}
-      </span>
-      {linkLabel && (href ? (
-        <Link href={href} className="text-xs text-primary hover:underline underline-offset-4 transition-colors">
-          {linkLabel}
-        </Link>
-      ) : onLinkClick ? (
-        <button onClick={onLinkClick} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">
-          {linkLabel}
-        </button>
-      ) : null)}
-    </div>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 type ContentFilter = "all" | "articles" | "sermons" | "books";
@@ -266,6 +239,7 @@ export default function LibraryPage() {
   const [article, setArticle] = useState<ArticleResponse | null>(null);
   const [articleLoading, setArticleLoading] = useState(false);
   const [articleFromDiscover, setArticleFromDiscover] = useState(false);
+  const [lastArticleAttempt, setLastArticleAttempt] = useState<{ id: string; sourceKind: string | null } | null>(null);
 
   // ── Admin ──────────────────────────────────────────────────────────────────
   const isAdmin = user?.id === "1ea99425-08ec-40f2-9ed3-588b88122a82";
@@ -385,6 +359,7 @@ export default function LibraryPage() {
 
   const handleCardClick = useCallback(async (id: string, sourceKind?: string | null) => {
     setArticleFromDiscover(discoverMode);
+    setLastArticleAttempt({ id, sourceKind: sourceKind ?? null });
     setArticleLoading(true);
     setError(null);
     try {
@@ -712,7 +687,23 @@ export default function LibraryPage() {
                     </div>
                   </div>
 
-                  {error && <p className="text-sm text-destructive mt-4 text-center">{error}</p>}
+                  {error && (
+                    <div className="flex flex-col items-center mt-4 gap-2">
+                      <p className="text-sm text-destructive text-center">{error}</p>
+                      <button
+                        onClick={() => {
+                          if (lastArticleAttempt && error.includes("article")) {
+                            handleCardClick(lastArticleAttempt.id, lastArticleAttempt.sourceKind);
+                          } else {
+                            fetchResults(query);
+                          }
+                        }}
+                        className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
 
                   {loading || articleLoading ? (
                     <div className="flex justify-center mt-12">
@@ -781,9 +772,18 @@ export default function LibraryPage() {
                 <div className="flex flex-col">
 
                   {/* 1. Featured — hero renders directly on page background */}
-                  {featuredDocs.length > 0 && (
-                    <section>
-                      {/* Hero: no card wrapper, no section label — the gold eyebrow is the label */}
+                  <section>
+                    {discoverLoading ? (
+                      <div className="mb-6">
+                        <div className="h-3 w-20 bg-muted rounded animate-pulse mb-3" />
+                        <div className="h-6 bg-muted rounded animate-pulse mb-2 w-3/4" />
+                        <div className="space-y-1.5 mb-4">
+                          <div className="h-3 bg-muted rounded animate-pulse" />
+                          <div className="h-3 bg-muted rounded animate-pulse w-5/6" />
+                        </div>
+                      </div>
+                    ) : featuredDocs.length > 0 ? (
+                      /* Hero: no card wrapper, no section label — the gold eyebrow is the label */
                       <button
                         onClick={() => handleCardClick(featuredDocs[0].id, featuredDocs[0].source_kind)}
                         className="w-full text-left grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-7 items-start cursor-pointer mb-6 group"
@@ -804,7 +804,7 @@ export default function LibraryPage() {
                           {featuredDocs[0].content_summary && (
                             <p className="text-sm text-muted-foreground leading-relaxed mb-3">
                               {featuredDocs[0].content_summary.length > 180
-                                ? featuredDocs[0].content_summary.slice(0, 180) + "…"
+                                ? featuredDocs[0].content_summary.slice(0, 180).replace(/\s\S*$/, "") + "…"
                                 : featuredDocs[0].content_summary}
                             </p>
                           )}
@@ -818,7 +818,7 @@ export default function LibraryPage() {
                             </div>
                           )}
                           {featuredDocs[0].year && (
-                            <p className="text-xs text-muted-foreground/50">{featuredDocs[0].year}</p>
+                            <p className="text-xs text-muted-foreground">{featuredDocs[0].year}</p>
                           )}
                         </div>
                         <div className="hidden lg:flex relative w-[200px] h-[140px] rounded-lg border bg-card items-center justify-center overflow-hidden flex-shrink-0">
@@ -829,41 +829,47 @@ export default function LibraryPage() {
                           />
                         </div>
                       </button>
+                    ) : null}
 
-                      {/* Supporting cards — sermons */}
-                      {featuredDocs.slice(1, 3).length > 0 && (
-                        <div className="grid grid-cols-2 gap-2.5">
-                          {featuredDocs.slice(1, 3).map((doc) => (
-                            <button
-                              key={doc.id}
-                              onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                              className="bg-card border rounded-lg p-4 text-left hover:bg-accent transition-colors"
-                            >
-                              <div className="flex items-center gap-1.5 mb-2">
-                                <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
-                                  {sourceKindLabel(doc.source_kind)}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground/50">·</span>
-                                {doc.author && (
-                                  <span className="text-[10px] text-muted-foreground truncate">{doc.author}</span>
-                                )}
-                              </div>
-                              <h3 className="text-sm font-semibold text-foreground leading-snug">{doc.title}</h3>
-                              {doc.topic_tags && doc.topic_tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {doc.topic_tags.slice(0, 2).map((tag) => (
-                                    <span key={tag} className="bg-secondary text-secondary-foreground text-xs rounded-md px-2 py-0.5">
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
+                    {/* Supporting cards — sermons */}
+                    {discoverLoading ? (
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {[1, 2].map((i) => (
+                          <div key={i} className="rounded-lg border bg-card h-20 animate-pulse" />
+                        ))}
+                      </div>
+                    ) : featuredDocs.slice(1, 3).length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {featuredDocs.slice(1, 3).map((doc) => (
+                          <button
+                            key={doc.id}
+                            onClick={() => handleCardClick(doc.id, doc.source_kind)}
+                            className="bg-card border rounded-lg p-4 text-left hover:bg-accent transition-colors"
+                          >
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
+                                {sourceKindLabel(doc.source_kind)}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground/50">·</span>
+                              {doc.author && (
+                                <span className="text-[10px] text-muted-foreground truncate">{doc.author}</span>
                               )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
+                            </div>
+                            <h3 className="text-sm font-semibold text-foreground leading-snug">{doc.title}</h3>
+                            {doc.topic_tags && doc.topic_tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {doc.topic_tags.slice(0, 2).map((tag) => (
+                                  <span key={tag} className="bg-secondary text-secondary-foreground text-xs rounded-md px-2 py-0.5">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
 
                   {/* Divider */}
                   <div className="border-t border-border/50 my-7" />
@@ -902,16 +908,14 @@ export default function LibraryPage() {
 
                   {/* 3. Featured Authors */}
                   <section className="mb-0">
-                    <SectionHeader label="Featured Authors" href="/library/authors" linkLabel="See all →" />
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                       {AUTHOR_DATA.slice(0, 5).map((author) => {
                         const imgSrc = AUTHOR_IMAGES[author.name];
                         const isClassic = CLASSIC_AUTHORS.has(author.name);
                         return (
-                          <Link
+                          <div
                             key={author.name}
-                            href="/library/authors"
-                            className="flex items-center gap-2 flex-shrink-0 rounded-full border border-border bg-card hover:bg-accent transition-colors px-2 py-1.5 group"
+                            className="flex items-center gap-2 flex-shrink-0 rounded-full border border-border bg-card px-2 py-1.5"
                           >
                             {imgSrc && !failedAuthorImages.has(author.name) ? (
                               <Image
@@ -930,10 +934,10 @@ export default function LibraryPage() {
                                 <span className="text-[10px] font-semibold text-muted-foreground">{getInitials(author.name)}</span>
                               </div>
                             )}
-                            <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors whitespace-nowrap pr-1">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap pr-1">
                               {author.name}
                             </span>
-                          </Link>
+                          </div>
                         );
                       })}
                     </div>
@@ -944,7 +948,15 @@ export default function LibraryPage() {
 
                   {/* 4. Recently Added */}
                   <section className="mb-0">
-                    <SectionHeader label="Recently Added" onLinkClick={() => handleBrowseTile("all")} linkLabel="Browse all →" />
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-medium text-foreground">Recently Added</span>
+                      <button
+                        onClick={() => handleBrowseTile("all")}
+                        className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer"
+                      >
+                        Browse all →
+                      </button>
+                    </div>
                     {discoverLoading ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                         {[1, 2, 3].map((i) => (
@@ -990,14 +1002,18 @@ export default function LibraryPage() {
 
                   {/* 5. New Wine Archive — flat list, no card wrapper */}
                   <section className="mb-0">
-                    <SectionHeader
-                      label="From the New Wine Archive"
-                      onLinkClick={() => handleBrowseTile("articles")}
-                      linkLabel="Browse archive →"
-                    />
-                    <p className="text-[11px] text-muted-foreground/60 mb-3 -mt-2">
-                      New Wine Magazine · Charismatic renewal teaching, 1970s–80s
-                    </p>
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <span className="text-sm font-medium text-foreground block mb-0.5">From the New Wine Archive</span>
+                        <span className="text-[11px] text-muted-foreground/60">New Wine Magazine · Charismatic renewal teaching, 1970s–80s</span>
+                      </div>
+                      <button
+                        onClick={() => handleBrowseTile("articles")}
+                        className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer flex-shrink-0 ml-4 mt-0.5"
+                      >
+                        Browse archive →
+                      </button>
+                    </div>
                     {discoverLoading ? (
                       <div className="flex flex-col">
                         {[1, 2, 3, 4].map((i) => (
@@ -1037,10 +1053,10 @@ export default function LibraryPage() {
 
                   {/* 6. Pastors' Notes */}
                   <section className="mt-10">
-                    <SectionHeader label="Pastors' Notes" />
-                    <p className="text-[11px] text-muted-foreground/60 -mt-2 mb-4">
-                      Scripture reflections from community pastors and teachers
-                    </p>
+                    <div className="mb-4">
+                      <span className="text-sm font-medium text-foreground block mb-0.5">Pastors' Notes</span>
+                      <span className="text-[11px] text-muted-foreground/60">Scripture reflections from community pastors and teachers</span>
+                    </div>
                     {discoverLoading ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[1, 2].map((i) => (
