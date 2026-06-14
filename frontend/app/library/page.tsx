@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   Search, ArrowLeft, Loader2, Menu, ChevronDown,
-  Trash2, Pencil, SlidersHorizontal,
+  Trash2, Pencil, SlidersHorizontal, ArrowRight,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
@@ -170,70 +170,6 @@ function sourceKindLabel(kind: string | null): string {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function DiscoverDocCard({
-  doc, onClick, isHero = false, className,
-}: {
-  doc: DiscoverDoc;
-  onClick: () => void;
-  isHero?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex flex-col text-left w-full rounded-lg border border-border bg-card hover:bg-accent transition-colors",
-        isHero ? "overflow-hidden lg:h-full" : "p-4",
-        className
-      )}
-    >
-      {/* Image slot — hero only */}
-      {isHero && (
-        <div className="relative w-full aspect-[3/1] lg:aspect-auto lg:h-[45%] bg-muted shrink-0 flex items-center justify-center">
-          {doc.image_url ? (
-            <Image src={doc.image_url} alt={doc.title} fill className="object-cover" />
-          ) : (
-            <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground select-none">
-              {doc.topic_tags?.[0] ?? sourceKindLabel(doc.source_kind)}
-            </span>
-          )}
-        </div>
-      )}
-      <div className={cn("flex flex-col", isHero ? "p-5 flex-1" : "")}>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-            {sourceKindLabel(doc.source_kind)}
-          </span>
-        </div>
-        {doc.author && (
-          <p className="text-xs text-muted-foreground">{doc.author}</p>
-        )}
-        <h3 className={cn(
-          "font-sans font-semibold text-foreground leading-snug mt-1",
-          isHero ? "text-base md:text-lg" : "text-sm"
-        )}>
-          {doc.title}
-        </h3>
-        {doc.topic_tags && doc.topic_tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {doc.topic_tags.slice(0, 2).map((tag) => (
-              <span
-                key={tag}
-                className="inline-block text-[10px] bg-secondary text-secondary-foreground rounded-md px-1.5 py-0.5"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-        {doc.year && (
-          <p className="text-[11px] text-muted-foreground mt-auto pt-2">{doc.year}</p>
-        )}
-      </div>
-    </button>
-  );
-}
-
 function PastorsNoteCard({ note }: { note: PastorsNote }) {
   const snippet = note.content.length > 160
     ? note.content.slice(0, 160).replace(/\s\S*$/, "") + "…"
@@ -258,25 +194,27 @@ function PastorsNoteCard({ note }: { note: PastorsNote }) {
 }
 
 function SectionHeader({
-  label, href, linkLabel,
+  label, href, linkLabel, onLinkClick,
 }: {
   label: string;
   href?: string;
   linkLabel?: string;
+  onLinkClick?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+      <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-muted-foreground/60">
         {label}
       </span>
-      {href && linkLabel && (
-        <Link
-          href={href}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
+      {linkLabel && (href ? (
+        <Link href={href} className="text-xs text-primary hover:underline underline-offset-4 transition-colors">
           {linkLabel}
         </Link>
-      )}
+      ) : onLinkClick ? (
+        <button onClick={onLinkClick} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">
+          {linkLabel}
+        </button>
+      ) : null)}
     </div>
   );
 }
@@ -835,67 +773,133 @@ export default function LibraryPage() {
 
               {/* ── DISCOVER MODE ───────────────────────────────────────────── */}
               {discoverMode && (
-                <div className="flex flex-col gap-12">
+                <div className="flex flex-col">
 
-                  {/* 1. Featured */}
+                  {/* 1. Featured — hero renders directly on page background */}
                   {featuredDocs.length > 0 && (
                     <section>
                       <SectionHeader label="Featured" />
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-[400px]">
-                        <div className="lg:col-span-2">
-                          <DiscoverDocCard
-                            doc={featuredDocs[0]}
-                            isHero
-                            onClick={() => handleCardClick(featuredDocs[0].id, featuredDocs[0].source_kind)}
+
+                      {/* Hero: no card wrapper */}
+                      <button
+                        onClick={() => handleCardClick(featuredDocs[0].id, featuredDocs[0].source_kind)}
+                        className="w-full text-left grid grid-cols-[1fr_200px] gap-7 items-start cursor-pointer mb-6"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
+                              {sourceKindLabel(featuredDocs[0].source_kind)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/50">·</span>
+                            {featuredDocs[0].author && (
+                              <span className="text-[10px] text-muted-foreground">{featuredDocs[0].author}</span>
+                            )}
+                          </div>
+                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2">
+                            {featuredDocs[0].title}
+                          </h2>
+                          {featuredDocs[0].content_summary && (
+                            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                              {featuredDocs[0].content_summary.length > 180
+                                ? featuredDocs[0].content_summary.slice(0, 180) + "…"
+                                : featuredDocs[0].content_summary}
+                            </p>
+                          )}
+                          {featuredDocs[0].topic_tags && featuredDocs[0].topic_tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {featuredDocs[0].topic_tags.slice(0, 3).map((tag) => (
+                                <span key={tag} className="bg-secondary text-secondary-foreground text-xs rounded-md px-2 py-0.5">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {featuredDocs[0].year && (
+                            <p className="text-xs text-muted-foreground/50">{featuredDocs[0].year}</p>
+                          )}
+                        </div>
+                        <div className="relative w-[200px] h-[140px] rounded-lg border bg-card flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <span className="text-3xl text-muted-foreground/20 select-none">✦</span>
+                          <div
+                            className="absolute bottom-0 left-0 right-0 h-[3px]"
+                            style={{ background: "linear-gradient(90deg, #505a6e, #7d626b, #475971)" }}
                           />
                         </div>
-                        {featuredDocs.slice(1, 3).length > 0 && (
-                          <div className="flex flex-col gap-3 lg:h-full">
-                            {featuredDocs.slice(1, 3).map((doc) => (
-                              <DiscoverDocCard
-                                key={doc.id}
-                                doc={doc}
-                                className="lg:flex-1"
-                                onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      </button>
+
+                      {/* Supporting cards — sermons */}
+                      {featuredDocs.slice(1, 3).length > 0 && (
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {featuredDocs.slice(1, 3).map((doc) => (
+                            <button
+                              key={doc.id}
+                              onClick={() => handleCardClick(doc.id, doc.source_kind)}
+                              className="bg-card border rounded-lg p-4 text-left hover:bg-accent transition-colors"
+                            >
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
+                                  {sourceKindLabel(doc.source_kind)}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground/50">·</span>
+                                {doc.author && (
+                                  <span className="text-[10px] text-muted-foreground truncate">{doc.author}</span>
+                                )}
+                              </div>
+                              <h3 className="text-sm font-semibold text-foreground leading-snug">{doc.title}</h3>
+                              {doc.topic_tags && doc.topic_tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {doc.topic_tags.slice(0, 2).map((tag) => (
+                                    <span key={tag} className="bg-secondary text-secondary-foreground text-xs rounded-md px-2 py-0.5">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </section>
                   )}
 
-                  {/* 2. Browse by type */}
-                  <section>
+                  {/* Divider */}
+                  <div className="border-t border-border/50 my-7" />
+
+                  {/* 2. Browse */}
+                  <section className="mb-10">
                     <SectionHeader label="Browse" />
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-card border rounded-lg overflow-hidden flex">
                       {[
                         { filter: "articles" as ContentFilter, label: "Articles", count: sourceCounts?.magazine_article },
                         { filter: "sermons" as ContentFilter, label: "Sermons", count: sourceCounts?.sermon_transcript },
                         { filter: "books" as ContentFilter, label: "Books", count: sourceCounts?.books },
-                      ].map(({ filter, label, count }) => (
+                      ].map(({ filter, label, count }, idx) => (
                         <button
                           key={filter}
                           onClick={() => handleBrowseTile(filter)}
-                          className="flex flex-col rounded-lg border border-border bg-card hover:bg-accent transition-colors p-4 text-left"
+                          className={cn(
+                            "flex-1 px-5 py-4 relative text-left hover:bg-accent transition-colors",
+                            idx > 0 && "border-l border-border"
+                          )}
                         >
                           {discoverLoading ? (
-                            <span className="h-8 w-12 rounded bg-muted animate-pulse" />
+                            <span className="h-9 w-16 rounded bg-muted animate-pulse block mb-1" />
                           ) : count !== undefined && count !== null ? (
-                            <span className="text-2xl font-semibold text-foreground tabular-nums">
+                            <span className="text-3xl font-semibold text-foreground tabular-nums block">
                               {count.toLocaleString()}
                             </span>
                           ) : (
-                            <span className="text-2xl font-semibold text-muted-foreground">—</span>
+                            <span className="text-3xl font-semibold text-muted-foreground block">—</span>
                           )}
-                          <span className="text-xs text-muted-foreground mt-1">{label}</span>
+                          <span className="text-xs uppercase tracking-wide text-muted-foreground mt-1 block">{label}</span>
+                          <ArrowRight className="absolute top-4 right-4 h-4 w-4 text-border" />
                         </button>
                       ))}
                     </div>
                   </section>
 
-                  {/* 3. Featured authors */}
-                  <section>
+                  {/* 3. Featured Authors */}
+                  <section className="mb-0">
                     <SectionHeader label="Featured Authors" href="/library/authors" linkLabel="See all →" />
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                       {AUTHOR_DATA.slice(0, 5).map((author) => {
@@ -933,23 +937,45 @@ export default function LibraryPage() {
                     </div>
                   </section>
 
-                  {/* 4. Recently added */}
-                  <section>
-                    <SectionHeader label="Recently Added" />
+                  {/* Divider */}
+                  <div className="border-t border-border/50 my-7" />
+
+                  {/* 4. Recently Added */}
+                  <section className="mb-0">
+                    <SectionHeader label="Recently Added" onLinkClick={() => handleBrowseTile("all")} linkLabel="See all →" />
                     {discoverLoading ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-2.5">
                         {[1, 2, 3].map((i) => (
                           <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse" />
                         ))}
                       </div>
                     ) : recentDocs.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-2.5">
                         {recentDocs.map((doc) => (
-                          <DiscoverDocCard
+                          <button
                             key={doc.id}
-                            doc={doc}
                             onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                          />
+                            className="bg-card border rounded-lg p-4 flex flex-col gap-1.5 text-left hover:bg-accent transition-colors"
+                          >
+                            <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
+                              {sourceKindLabel(doc.source_kind)}
+                            </span>
+                            {doc.author && (
+                              <span className="text-[11px] text-muted-foreground">{doc.author}</span>
+                            )}
+                            <span className="text-[13px] font-medium text-foreground/80 leading-snug flex-1">
+                              {doc.title}
+                            </span>
+                            {doc.topic_tags && doc.topic_tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-auto">
+                                {doc.topic_tags.slice(0, 2).map((tag) => (
+                                  <span key={tag} className="bg-secondary text-secondary-foreground text-[10px] rounded-md px-1.5 py-0.5">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </button>
                         ))}
                       </div>
                     ) : (
@@ -957,61 +983,58 @@ export default function LibraryPage() {
                     )}
                   </section>
 
-                  {/* 5. From the New Wine archive */}
-                  <section>
-                      <SectionHeader
-                        label="From the New Wine Archive"
-                        href="/library?browse=magazine"
-                      />
-                      <p className="text-xs text-muted-foreground mb-4 -mt-2">
-                        New Wine Magazine · Charismatic renewal teaching, 1970s–80s
-                      </p>
-                      {discoverLoading ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {[1, 2, 3].map((i) => (
-                            <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse" />
-                          ))}
-                        </div>
-                      ) : magazineDocs.length > 0 ? (
-                        <>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {magazineDocs.map((doc) => (
-                              <button
-                                key={doc.id}
-                                onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                                className="flex flex-col text-left rounded-lg border border-border bg-card hover:bg-accent transition-colors p-4"
-                              >
-                                {doc.author && (
-                                  <p className="text-xs text-muted-foreground">{doc.author}</p>
-                                )}
-                                <h3 className="text-sm font-semibold text-foreground leading-snug mt-1">{doc.title}</h3>
-                                {doc.topic_tags && doc.topic_tags.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 mt-2">
-                                    {doc.topic_tags.slice(0, 2).map((tag) => (
-                                      <span key={tag} className="text-[10px] bg-secondary text-secondary-foreground rounded-md px-1.5 py-0.5">
-                                        {tag}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {doc.year && <p className="text-[11px] text-muted-foreground mt-auto pt-2">{doc.year}</p>}
-                              </button>
-                            ))}
+                  {/* Divider */}
+                  <div className="border-t border-border/50 my-7" />
+
+                  {/* 5. New Wine Archive — flat list, no card wrapper */}
+                  <section className="mb-0">
+                    <SectionHeader
+                      label="From the New Wine Archive"
+                      onLinkClick={() => handleBrowseTile("articles")}
+                      linkLabel="Browse archive →"
+                    />
+                    <p className="text-[11px] text-muted-foreground/60 mb-3 -mt-2">
+                      New Wine Magazine · Charismatic renewal teaching, 1970s–80s
+                    </p>
+                    {discoverLoading ? (
+                      <div className="flex flex-col">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="flex items-center gap-3.5 py-3 border-b border-border/40">
+                            <div className="w-4 h-2.5 bg-muted rounded animate-pulse flex-shrink-0" />
+                            <div className="flex-1 h-2.5 bg-muted rounded animate-pulse" />
                           </div>
+                        ))}
+                      </div>
+                    ) : magazineDocs.length > 0 ? (
+                      <div>
+                        {magazineDocs.map((doc, i) => (
                           <button
-                            onClick={() => handleBrowseTile("articles")}
-                            className="mt-4 text-sm text-primary underline-offset-4 hover:underline"
+                            key={doc.id}
+                            onClick={() => handleCardClick(doc.id, doc.source_kind)}
+                            className="w-full text-left flex items-baseline gap-3.5 py-3 border-b border-border/40 last:border-b-0 hover:bg-accent transition-colors rounded"
                           >
-                            Browse all articles →
+                            <span className="text-[11px] text-border font-medium min-w-[18px] flex-shrink-0">
+                              {(i + 1).toString().padStart(2, "0")}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              {doc.author && (
+                                <span className="block text-[11px] text-muted-foreground mb-0.5">{doc.author}</span>
+                              )}
+                              <span className="block text-[13px] font-medium text-foreground/80">{doc.title}</span>
+                            </span>
+                            {doc.year && (
+                              <span className="text-[11px] text-border ml-auto flex-shrink-0">{doc.year}</span>
+                            )}
                           </button>
-                        </>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No articles available.</p>
-                      )}
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No articles available.</p>
+                    )}
                   </section>
 
-                  {/* 6. Recent pastors' notes */}
-                  <section>
+                  {/* 6. Pastors' Notes */}
+                  <section className="mt-10">
                     <SectionHeader label="Pastors' Notes" />
                     {discoverLoading ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
