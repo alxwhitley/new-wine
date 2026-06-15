@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, BookOpen } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { getDocument, Document, Chunk } from "@/lib/api";
 
 export default function DocumentPage() {
@@ -27,40 +27,17 @@ export default function DocumentPage() {
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          background: "#1f1e1d",
-        }}
-      >
-        <p style={{ fontSize: "14px", color: "#c1c1b8" }}>Loading...</p>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error || !document) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          gap: "16px",
-          background: "#1f1e1d",
-        }}
-      >
-        <p style={{ fontSize: "14px", color: "#e57373" }}>
-          {error || "Document not found"}
-        </p>
-        <Link
-          href="/"
-          style={{ fontSize: "13px", color: "#d4b96a" }}
-        >
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background">
+        <p className="text-sm text-destructive">{error || "Document not found"}</p>
+        <Link href="/" className="text-[13px] text-primary hover:underline transition-colors">
           Back to home
         </Link>
       </div>
@@ -68,45 +45,23 @@ export default function DocumentPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#1f1e1d" }}>
-      <div style={{ maxWidth: "620px", margin: "0 auto", padding: "40px 32px" }}>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-[620px] px-8 py-10">
         <Link
           href="/"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            fontSize: "13px",
-            color: "#c1c1b8",
-            marginBottom: "40px",
-            transition: "color 150ms",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#b49238"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#c1c1b8"; }}
+          className="inline-flex items-center gap-2 text-[13px] text-muted-foreground hover:text-primary transition-colors mb-10"
         >
-          <ArrowLeft size={14} strokeWidth={1.8} />
+          <ArrowLeft className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
           Back
         </Link>
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "14px", marginBottom: "8px" }}>
-          <BookOpen
-            size={22}
-            strokeWidth={1.8}
-            style={{ flexShrink: 0, marginTop: "4px", color: "#d4b96a" }}
-          />
+        <div className="flex items-start gap-3.5 mb-2">
+          <BookOpen className="h-5 w-5 shrink-0 mt-1 text-primary" strokeWidth={1.8} />
           <div>
-            <h1
-              style={{
-                fontSize: "24px",
-                fontWeight: 600,
-                lineHeight: 1.3,
-                fontFamily: "var(--font-lora), Lora, serif",
-                color: "#e6e6e6",
-              }}
-            >
+            <h1 className="font-sans text-2xl font-semibold leading-snug text-foreground text-balance">
               {document.title}
             </h1>
-            <p style={{ fontSize: "14px", color: "#c1c1b8", marginTop: "6px" }}>
+            <p className="text-sm text-muted-foreground mt-1.5">
               {document.author}
               {document.year ? ` · ${document.year}` : ""}
               {document.source_type ? ` · ${document.source_type}` : ""}
@@ -115,47 +70,18 @@ export default function DocumentPage() {
         </div>
 
         {document.topic_tags && document.topic_tags.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "6px",
-              marginTop: "20px",
-              marginBottom: "40px",
-              marginLeft: "36px",
-            }}
-          >
+          <div className="flex flex-wrap gap-1.5 mt-5 mb-10 ml-9">
             {document.topic_tags.map((tag) => (
-              <span
-                key={tag}
-                style={{
-                  fontSize: "11px",
-                  padding: "2px 8px",
-                  borderRadius: "6px",
-                  background: "#262624",
-                  color: "#c1c1b8",
-                  border: "1px solid #2a2a28",
-                }}
-              >
+              <span key={tag} className="text-xs bg-secondary text-secondary-foreground rounded-md px-2 py-0.5">
                 {tag}
               </span>
             ))}
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "32px" }}>
+        <div className="flex flex-col gap-3.5 mt-8">
           {chunks.map((chunk) => (
-            <div
-              key={chunk.id}
-              style={{
-                borderRadius: "10px",
-                padding: "22px",
-                fontSize: "14px",
-                lineHeight: "1.8",
-                background: "#262624",
-                color: "#e6e6e6",
-              }}
-            >
+            <div key={chunk.id} className="rounded-lg p-5 bg-card text-sm text-foreground leading-[1.8]">
               {chunk.content}
             </div>
           ))}

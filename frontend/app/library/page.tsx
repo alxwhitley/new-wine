@@ -177,7 +177,7 @@ function PastorsNoteCard({ note }: { note: PastorsNote }) {
   return (
     <a
       href={`/study?verse=${encodeURIComponent(note.verse_id)}`}
-      className="flex flex-col rounded-lg border border-border bg-card hover:bg-accent transition-colors p-4"
+      className="flex flex-col rounded-lg border border-border bg-card hover:bg-accent transition-colors p-4 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="rounded-full bg-secondary text-secondary-foreground text-[11px] font-medium px-2 py-0.5">
@@ -225,8 +225,14 @@ export default function LibraryPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchBarRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
-  const [eraFilter, setEraFilter] = useState("");
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem("rhemata:library:authors") ?? "[]"); } catch { return []; }
+  });
+  const [eraFilter, setEraFilter] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem("rhemata:library:era") ?? ""; } catch { return ""; }
+  });
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftAuthors, setDraftAuthors] = useState<string[]>([]);
@@ -286,6 +292,27 @@ export default function LibraryPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // ── / shortcut to focus search ────────────────────────────────────────────
+  useEffect(() => {
+    function handleSlash(e: KeyboardEvent) {
+      if (e.key !== "/" || article) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    }
+    document.addEventListener("keydown", handleSlash);
+    return () => document.removeEventListener("keydown", handleSlash);
+  }, [article]);
+
+  // ── Persist filters across sessions ───────────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem("rhemata:library:authors", JSON.stringify(selectedAuthors));
+  }, [selectedAuthors]);
+  useEffect(() => {
+    localStorage.setItem("rhemata:library:era", eraFilter);
+  }, [eraFilter]);
 
   // ── Focus effects ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -430,14 +457,14 @@ export default function LibraryPage() {
       >
         <div className="flex items-center gap-2">
           {doc.author && (
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{doc.author}</p>
+            <p className="text-[11px] text-muted-foreground">{doc.author}</p>
           )}
           {isNewWine && (
             <span className="text-xs text-muted-foreground">New Wine</span>
           )}
         </div>
-        <h3 className="font-sans text-[15px] font-semibold text-foreground leading-snug mt-1.5">{doc.title}</h3>
-        <div className="border-t border-border my-3" />
+        <h3 className="font-sans text-[15px] font-semibold text-foreground leading-snug mt-1.5 text-balance">{doc.title}</h3>
+        <hr className="my-3 border-border" />
         {doc.topic_tags && doc.topic_tags.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {doc.topic_tags.slice(0, 2).map((tag) => (
@@ -491,8 +518,8 @@ export default function LibraryPage() {
         <div className={cn(coverSrc ? "hidden" : "", "w-14 h-20 rounded-sm bg-muted flex-shrink-0")} />
         <div className="flex flex-col min-w-0">
           <p className="text-[11px] text-muted-foreground">{book.author}</p>
-          <h4 className="font-sans text-[15px] font-semibold text-foreground leading-snug mt-1.5">{book.title}</h4>
-          <div className="border-t border-border my-3" />
+          <h4 className="font-sans text-[15px] font-semibold text-foreground leading-snug mt-1.5 text-balance">{book.title}</h4>
+          <hr className="my-3 border-border" />
           {book.description && (
             <p className="line-clamp-2 text-[13px] text-muted-foreground leading-relaxed">{book.description}</p>
           )}
@@ -565,7 +592,7 @@ export default function LibraryPage() {
                     <h1
                       ref={articleTitleRef}
                       tabIndex={-1}
-                      className="font-sans text-2xl font-semibold text-foreground leading-tight outline-none"
+                      className="font-serif text-2xl font-medium tracking-wide text-foreground leading-tight outline-none text-balance"
                     >
                       {article.title}
                     </h1>
@@ -576,7 +603,7 @@ export default function LibraryPage() {
                       href={article.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="shrink-0 rounded px-3 py-1 text-sm border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      className="shrink-0 rounded px-3 py-2 text-sm border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground inline-flex items-center min-h-[44px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       Watch source
                     </a>
@@ -592,17 +619,28 @@ export default function LibraryPage() {
                     })()}
                   </p>
                 )}
-                <div className="border-t border-border my-6" />
+                <hr className="my-6 border-border" />
                 {article.source_kind === "sermon_transcript" && (
                   <p className="text-sm italic text-muted-foreground mb-6">
                     Edited transcript — restructured for reading. Not a word-for-word recording.
                   </p>
                 )}
-                <div className="prose prose-sm prose-invert max-w-none">
+                <div className="prose prose-invert font-serif">
                   <ReactMarkdown>
                     {article.content.replace(/^#\s+[^\n]*\n?/, "").replace(/^\*by\s+[^\n]*\n?/, "").trimStart()}
                   </ReactMarkdown>
                 </div>
+                {article.author && (
+                  <div className="border-t border-border mt-10 pt-8">
+                    <p className="text-xs text-muted-foreground mb-3">More from this author</p>
+                    <button
+                      onClick={() => { setArticle(null); handleSuggestionClick(article.author!); }}
+                      className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+                    >
+                      Browse all by {article.author} <span className="text-primary">→</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -633,7 +671,7 @@ export default function LibraryPage() {
             <div className="mx-auto max-w-5xl px-4 md:px-6 pt-10 pb-16">
 
               {/* Page title */}
-              <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center mb-2">
+              <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center mb-2 text-balance">
                 Discover
               </h2>
               <p className="text-sm text-muted-foreground text-center mb-6">
@@ -654,11 +692,12 @@ export default function LibraryPage() {
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSearch(); } }}
                       placeholder="Search articles, authors, topics…"
                       aria-label="Search"
+                      aria-keyshortcuts="/"
                       className="w-full min-h-[44px] rounded-lg border border-border bg-card pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                     />
                   </div>
                   <button
-                    aria-label="Filters"
+                    aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
                     onClick={() => {
                       setDraftAuthors(selectedAuthors);
                       setDraftEra(eraFilter);
@@ -865,11 +904,11 @@ export default function LibraryPage() {
                   <section>
                     {discoverLoading ? (
                       <div className="mb-6">
-                        <div className="h-3 w-20 bg-muted rounded animate-pulse mb-3" />
-                        <div className="h-6 bg-muted rounded animate-pulse mb-2 w-3/4" />
+                        <div className="h-3 w-20 bg-muted rounded animate-pulse motion-reduce:animate-none mb-3" />
+                        <div className="h-6 bg-muted rounded animate-pulse motion-reduce:animate-none mb-2 w-3/4" />
                         <div className="space-y-1.5 mb-4">
-                          <div className="h-3 bg-muted rounded animate-pulse" />
-                          <div className="h-3 bg-muted rounded animate-pulse w-5/6" />
+                          <div className="h-3 bg-muted rounded animate-pulse motion-reduce:animate-none" />
+                          <div className="h-3 bg-muted rounded animate-pulse motion-reduce:animate-none w-5/6" />
                         </div>
                       </div>
                     ) : discoverErrors.featured && featuredDocs.length === 0 ? (
@@ -881,7 +920,7 @@ export default function LibraryPage() {
                       /* Hero: no card wrapper, no section label — the gold eyebrow is the label */
                       <button
                         onClick={() => handleCardClick(featuredDocs[0].id, featuredDocs[0].source_kind)}
-                        className="w-full text-left grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-7 items-start cursor-pointer mb-6 group"
+                        className="w-full text-left grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-7 items-start cursor-pointer mb-6 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-lg"
                       >
                         <div>
                           <div className="flex items-center gap-2 mb-3">
@@ -893,7 +932,7 @@ export default function LibraryPage() {
                               <span className="text-[10px] text-muted-foreground">{featuredDocs[0].author}</span>
                             )}
                           </div>
-                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2 group-hover:underline underline-offset-4 decoration-primary/40">
+                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2 group-hover:underline underline-offset-4 decoration-primary/40 text-balance">
                             {featuredDocs[0].title}
                           </h2>
                           {featuredDocs[0].content_summary && (
@@ -917,11 +956,8 @@ export default function LibraryPage() {
                           )}
                         </div>
                         <div className="hidden lg:flex relative w-[200px] h-[140px] rounded-lg border bg-card items-center justify-center overflow-hidden flex-shrink-0">
-                          <span className="text-3xl text-muted-foreground/20 select-none">✦</span>
-                          <div
-                            className="absolute bottom-0 left-0 right-0 h-[3px]"
-                            style={{ background: "linear-gradient(90deg, #505a6e, #7d626b, #475971)" }}
-                          />
+                          <span className="text-3xl text-muted-foreground/20 select-none" aria-hidden="true">✦</span>
+                          <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary/25" />
                         </div>
                       </button>
                     ) : null}
@@ -930,7 +966,7 @@ export default function LibraryPage() {
                     {discoverLoading ? (
                       <div className="grid grid-cols-2 gap-2.5">
                         {[1, 2].map((i) => (
-                          <div key={i} className="rounded-lg border bg-card h-20 animate-pulse" />
+                          <div key={i} className="rounded-lg border bg-card h-20 animate-pulse motion-reduce:animate-none" />
                         ))}
                       </div>
                     ) : featuredDocs.slice(1, 3).length > 0 ? (
@@ -939,7 +975,7 @@ export default function LibraryPage() {
                           <button
                             key={doc.id}
                             onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                            className="bg-card border rounded-lg p-4 text-left hover:bg-accent transition-colors"
+                            className="bg-card border rounded-lg p-4 text-left hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             <div className="flex items-center gap-1.5 mb-2">
                               <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
@@ -981,12 +1017,12 @@ export default function LibraryPage() {
                           key={filter}
                           onClick={() => handleBrowseTile(filter)}
                           className={cn(
-                            "flex-1 px-5 py-4 relative text-left hover:bg-accent transition-colors",
+                            "flex-1 px-5 py-4 relative text-left hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:z-10",
                             idx > 0 && "border-l border-border"
                           )}
                         >
                           {discoverLoading ? (
-                            <span className="h-9 w-16 rounded bg-muted animate-pulse block mb-1" />
+                            <span className="h-9 w-16 rounded bg-muted animate-pulse motion-reduce:animate-none block mb-1" />
                           ) : count !== undefined && count !== null ? (
                             <span className="text-3xl font-semibold text-foreground tabular-nums block">
                               {count.toLocaleString()}
@@ -994,7 +1030,7 @@ export default function LibraryPage() {
                           ) : (
                             <span className="text-3xl font-semibold text-muted-foreground block">—</span>
                           )}
-                          <span className="text-xs uppercase tracking-wide text-muted-foreground mt-1 block">{label}</span>
+                          <span className="text-xs text-muted-foreground mt-1 block">{label}</span>
                           <ArrowRight className="absolute top-4 right-4 h-4 w-4 text-muted-foreground/40" />
                         </button>
                       ))}
@@ -1012,7 +1048,7 @@ export default function LibraryPage() {
                           <button
                             key={author.name}
                             onClick={() => handleSuggestionClick(author.name)}
-                            className="flex items-center gap-2 flex-shrink-0 rounded-full border border-border bg-card px-2 py-1.5 hover:border-primary/50 hover:bg-accent transition-colors cursor-pointer"
+                            className="flex items-center gap-2 flex-shrink-0 rounded-full border border-border bg-card px-2 py-1.5 hover:border-primary/50 hover:bg-accent transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             {imgSrc && !failedAuthorImages.has(author.name) ? (
                               <Image
@@ -1046,7 +1082,7 @@ export default function LibraryPage() {
                   {/* 4. Recently Added */}
                   <section className="mb-0">
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm font-medium text-foreground">Recently Added</span>
+                      <h3 className="text-sm font-medium text-foreground text-balance">Recently Added</h3>
                       <button
                         onClick={() => handleBrowseTile("all")}
                         className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer"
@@ -1057,7 +1093,7 @@ export default function LibraryPage() {
                     {discoverLoading ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                         {[1, 2, 3].map((i) => (
-                          <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse" />
+                          <div key={i} className="rounded-lg border border-border bg-card p-4 h-28 animate-pulse motion-reduce:animate-none" />
                         ))}
                       </div>
                     ) : recentDocs.length > 0 ? (
@@ -1066,7 +1102,7 @@ export default function LibraryPage() {
                           <button
                             key={doc.id}
                             onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                            className="bg-card border rounded-lg p-4 flex flex-col gap-1.5 text-left hover:bg-accent transition-colors"
+                            className="bg-card border rounded-lg p-4 flex flex-col gap-1.5 text-left hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
                               {sourceKindLabel(doc.source_kind)}
@@ -1106,7 +1142,7 @@ export default function LibraryPage() {
                   <section className="mb-0">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <span className="text-sm font-medium text-foreground block mb-0.5">From the New Wine Archive</span>
+                        <h3 className="text-sm font-medium text-foreground mb-0.5 text-balance">From the New Wine Archive</h3>
                         <span className="text-[11px] text-muted-foreground/60">New Wine Magazine · Charismatic renewal teaching, 1970s–80s</span>
                       </div>
                       <button
@@ -1120,8 +1156,8 @@ export default function LibraryPage() {
                       <div className="flex flex-col">
                         {[1, 2, 3, 4].map((i) => (
                           <div key={i} className="flex items-center gap-3.5 py-3 border-b border-border/40">
-                            <div className="w-4 h-2.5 bg-muted rounded animate-pulse flex-shrink-0" />
-                            <div className="flex-1 h-2.5 bg-muted rounded animate-pulse" />
+                            <div className="w-4 h-2.5 bg-muted rounded animate-pulse motion-reduce:animate-none flex-shrink-0" />
+                            <div className="flex-1 h-2.5 bg-muted rounded animate-pulse motion-reduce:animate-none" />
                           </div>
                         ))}
                       </div>
@@ -1131,7 +1167,7 @@ export default function LibraryPage() {
                           <button
                             key={doc.id}
                             onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                            className="w-full text-left flex items-baseline gap-3.5 py-3 border-b border-border/40 last:border-b-0 hover:bg-accent transition-colors rounded"
+                            className="w-full text-left flex items-baseline gap-3.5 py-3 border-b border-border/40 last:border-b-0 hover:bg-accent transition-colors rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             <span className="text-[11px] text-muted-foreground/50 font-medium min-w-[18px] flex-shrink-0">
                               {(i + 1).toString().padStart(2, "0")}
@@ -1161,13 +1197,13 @@ export default function LibraryPage() {
                   {/* 6. Pastors' Notes */}
                   <section className="mt-10">
                     <div className="mb-4">
-                      <span className="text-sm font-medium text-foreground block mb-0.5">Pastors' Notes</span>
+                      <h3 className="text-sm font-medium text-foreground mb-0.5 text-balance">Pastors' Notes</h3>
                       <span className="text-[11px] text-muted-foreground/60">Scripture reflections from community pastors and teachers</span>
                     </div>
                     {discoverLoading ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[1, 2].map((i) => (
-                          <div key={i} className="rounded-lg border border-border bg-card p-4 h-24 animate-pulse" />
+                          <div key={i} className="rounded-lg border border-border bg-card p-4 h-24 animate-pulse motion-reduce:animate-none" />
                         ))}
                       </div>
                     ) : recentNotes.length > 0 ? (
@@ -1253,7 +1289,7 @@ export default function LibraryPage() {
                 setEraFilter(draftEra);
                 setFiltersOpen(false);
                 if (!discoverMode) {
-                  fetchResults(query);
+                  fetchResults(query, contentFilter, draftAuthors, draftEra);
                 }
               }}
               className="w-full min-h-[44px] rounded-lg bg-primary text-primary-foreground text-sm font-medium transition-colors hover:bg-primary/90"

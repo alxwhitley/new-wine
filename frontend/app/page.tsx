@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Menu } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
@@ -25,11 +24,11 @@ const SUGGESTIONS = [
 
 export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
-  const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
   const [weeklyLimitDetail, setWeeklyLimitDetail] = useState<WeeklyLimitDetail | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [lastQuery, setLastQuery] = useState<string | null>(null);
   const {
     messages,
     loading: chatLoading,
@@ -59,14 +58,38 @@ export default function Home() {
   const [selectedCitationIndex, setSelectedCitationIndex] = useState<number | null>(null);
   const [isSourcePanelOpen, setIsSourcePanelOpen] = useState(false);
 
-  // Auto-scroll
+  // Auto-scroll — only when user is already near the bottom
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < 150) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, chatLoading]);
+
+  // / shortcut focuses the chat textarea
+  useEffect(() => {
+    function onSlash(e: globalThis.KeyboardEvent) {
+      if (
+        e.key === "/" &&
+        !e.metaKey && !e.ctrlKey && !e.altKey &&
+        !(document.activeElement instanceof HTMLInputElement) &&
+        !(document.activeElement instanceof HTMLTextAreaElement)
+      ) {
+        e.preventDefault();
+        document.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+      }
+    }
+    document.addEventListener("keydown", onSlash);
+    return () => document.removeEventListener("keydown", onSlash);
+  }, []);
 
   const handleSend = useCallback(
     async (question: string) => {
+      setLastQuery(question);
       const newConvId = await sendMessage(question);
       if (newConvId && user) {
         const title = question.split(/\s+/).slice(0, 6).join(" ");
@@ -80,6 +103,12 @@ export default function Home() {
     clearMessages();
     setIsSourcePanelOpen(false);
     setSelectedCitation(null);
+  }
+
+  function handleRetry() {
+    if (!lastQuery) return;
+    handleNewChat();
+    handleSend(lastQuery);
   }
 
   async function handleSelectConversation(id: string) {
@@ -144,27 +173,32 @@ export default function Home() {
         {/* The floating panel */}
         <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
 
-          {/* Top bar — no border needed; panel edge provides separation */}
-          <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
-            {/* Mobile usage ring — left side, only for authenticated users */}
-            {user && weeklyUsage && (
-              <div className="md:hidden">
-                <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
-              </div>
-            )}
-            <div className="flex-1" />
+          {/* Top bar */}
+          <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30 border-b border-border">
             <button
+              aria-label="Open sidebar"
               onClick={() => setSidebarOpen(true)}
               className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
             >
               <Menu className="h-5 w-5" />
             </button>
+            <div className="flex-1 md:hidden" />
+            {/* Mobile usage ring — right side, only for authenticated users */}
+            {user && weeklyUsage && (
+              <div
+                className="md:hidden"
+                role="img"
+                aria-label={`${weeklyUsage.used} of ${weeklyUsage.limit} queries used this week`}
+              >
+                <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
+              </div>
+            )}
           </div>
 
           {isEmpty ? (
             /* Empty state — centred, full remaining height */
             <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6 overflow-y-auto min-h-0">
-              <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg">
+              <h2 suppressHydrationWarning className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg text-balance">
                 {greeting}
               </h2>
 
@@ -172,29 +206,34 @@ export default function Home() {
                 <ChatInput onSend={handleSend} disabled={chatLoading} streaming={chatLoading} />
               </div>
 
-              {!isMobile && (
-                <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => handleSend(s)}
-                      className="w-full min-h-[44px] text-left rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleSend(s)}
+                    className="w-full min-h-[44px] text-left rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
 
               {chatError && (
-                <p className="text-sm text-red-400 mt-4">{chatError}</p>
+                <div className="flex items-center gap-3 mt-4">
+                  <p role="alert" aria-live="polite" className="text-sm text-destructive">{chatError}</p>
+                  {lastQuery && (
+                    <button onClick={handleRetry} className="shrink-0 text-sm text-primary hover:underline transition-colors">
+                      Try again
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ) : (
             /* Chat thread */
             <>
               {/* Scrollable message list — panel corners never clipped */}
-              <div className="flex-1 overflow-y-auto min-h-0">
+              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
                 {/* Scroll fade: messages dissolve into background as they pass the top */}
                 <div className="pointer-events-none sticky top-0 z-10 h-8 bg-gradient-to-b from-background to-transparent" />
                 <div className="mx-auto max-w-3xl px-4 md:px-6 pt-2 pb-8">
@@ -226,12 +265,20 @@ export default function Home() {
                       <WeeklyLimitCard
                         limit={weeklyLimitDetail.limit}
                         resets={weeklyLimitDetail.resets}
+                        onNewChat={handleNewChat}
                       />
                     </div>
                   )}
 
                   {chatError && (
-                    <p className="text-sm text-red-400 mt-2">{chatError}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <p role="alert" aria-live="polite" className="text-sm text-destructive">{chatError}</p>
+                      {lastQuery && (
+                        <button onClick={handleRetry} className="shrink-0 text-sm text-primary hover:underline transition-colors">
+                          Try again
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   <div ref={bottomRef} />

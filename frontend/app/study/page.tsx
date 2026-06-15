@@ -658,7 +658,7 @@ function InlineWordPanel({
                   </p>
                 </div>
                 <div className="overflow-y-auto flex-1 px-6 py-6">
-                  <div className="prose prose-sm prose-invert max-w-none">
+                  <div className="prose prose-invert">
                     <ReactMarkdown>{excerptContent}</ReactMarkdown>
                   </div>
                 </div>
@@ -1313,8 +1313,9 @@ export default function StudyPage() {
         <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
 
           {/* Top Bar */}
-          <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
+          <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30 border-b border-border">
             <button
+              aria-label="Open sidebar"
               onClick={() => setSidebarOpen(true)}
               className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
             >
@@ -1323,6 +1324,7 @@ export default function StudyPage() {
             <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
             <button
               onClick={() => setSidebarOpen(true)}
+              aria-label="Saved words"
               title="Saved words"
               className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
             >
@@ -1369,7 +1371,7 @@ export default function StudyPage() {
                 <>
                   {/* 3. Verse block */}
                   <section id="section-words" className="pt-6">
-                    {verseError && <p className="text-sm text-destructive mt-2">{verseError}</p>}
+                    {verseError && <p role="alert" aria-live="polite" className="text-sm text-destructive mt-2">{verseError}</p>}
                     {verseLoading && (
                       <div className="rounded-lg border border-border bg-card p-4 animate-pulse">
                         <Skeleton className="h-4 w-1/3 mx-auto mb-4" />
@@ -1403,7 +1405,7 @@ export default function StudyPage() {
 
                         <div className="p-4">
                           {/* Verse text */}
-                          <p className="font-serif text-base leading-relaxed text-foreground">{verseData.text}</p>
+                          <p className="font-sans text-base leading-relaxed text-foreground">{verseData.text}</p>
 
                           {/* Interlinear row — always visible */}
                           <InterlinearBlocks
@@ -1440,15 +1442,18 @@ export default function StudyPage() {
                             {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-4 w-full" />)}
                           </div>
                         ) : (
-                          <p className="font-serif text-base leading-relaxed text-foreground">
+                          <p className="font-sans text-base leading-relaxed text-foreground">
                             {chapterVerses.map((v) => {
                               const isActive = v.verse_id === verseData.verse_id;
                               return (
                                 <span
                                   key={v.verse_id}
+                                  role="button"
+                                  tabIndex={0}
                                   onClick={() => handleChapterVerseClick(v)}
+                                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleChapterVerseClick(v); } }}
                                   className={cn(
-                                    "cursor-pointer rounded-sm transition-colors px-0.5 -mx-0.5",
+                                    "cursor-pointer rounded-sm transition-colors px-0.5 -mx-0.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                                     isActive ? "bg-accent" : "hover:bg-accent"
                                   )}
                                 >
@@ -1537,7 +1542,7 @@ export default function StudyPage() {
                 </div>
               ) : (
                 <>
-                  {verseError && <p className="text-sm mt-4 text-destructive">{verseError}</p>}
+                  {verseError && <p role="alert" aria-live="polite" className="text-sm mt-4 text-destructive">{verseError}</p>}
                   {verseLoading && (
                     <div className="mt-4 rounded-lg border border-border bg-card p-4 animate-pulse">
                       <Skeleton className="h-4 w-1/3 mx-auto mb-4" />
@@ -1570,7 +1575,7 @@ export default function StudyPage() {
                           </button>
                         </div>
                         <div className="p-4">
-                          <p className="font-serif text-base leading-relaxed text-foreground">{verseData.text}</p>
+                          <p className="font-sans text-base leading-relaxed text-foreground">{verseData.text}</p>
                           <button
                             onClick={() => setMobileChapterOpen(true)}
                             className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
@@ -1630,6 +1635,7 @@ export default function StudyPage() {
         }}
       >
         <SheetContent side="bottom" className="h-[85vh] overflow-y-auto p-0 rounded-t-xl md:hidden">
+          <SheetTitle className="sr-only">{definition?.word ?? "Word Study"}</SheetTitle>
           {selectedStrongs && (
             <div className="p-4 pt-6">
               <InlineWordPanel
@@ -1651,6 +1657,7 @@ export default function StudyPage() {
       {/* Mobile: chapter view bottom sheet */}
       <Sheet open={mobileChapterOpen} onOpenChange={setMobileChapterOpen}>
         <SheetContent side="bottom" className="h-[90vh] overflow-y-auto p-0 rounded-t-xl md:hidden">
+          <SheetTitle className="sr-only">{verseData ? `${verseData.book} ${verseData.chapter}` : "Chapter View"}</SheetTitle>
           <div className="p-4 pt-6 pb-16">
             <div className="flex items-center justify-between mb-4">
               <button
@@ -1671,15 +1678,18 @@ export default function StudyPage() {
                 {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-4 w-full" />)}
               </div>
             ) : (
-              <p className="font-serif text-base leading-relaxed text-foreground">
+              <p className="font-sans text-base leading-relaxed text-foreground">
                 {chapterVerses.map((v) => {
                   const isActive = v.verse_id === verseData?.verse_id;
                   return (
                     <span
                       key={v.verse_id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleMobileChapterVerseClick(v)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleMobileChapterVerseClick(v); } }}
                       className={cn(
-                        "cursor-pointer rounded-sm transition-colors px-0.5 -mx-0.5",
+                        "cursor-pointer rounded-sm transition-colors px-0.5 -mx-0.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                         isActive ? "bg-accent" : "hover:bg-accent"
                       )}
                     >

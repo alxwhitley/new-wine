@@ -6,6 +6,7 @@ const BILLING_ENABLED = false;
 interface WeeklyLimitCardProps {
   limit: number;
   resets: string; // ISO date "YYYY-MM-DD" from 429 body
+  onNewChat?: () => void;
 }
 
 function formatResetDate(iso: string): string {
@@ -18,11 +19,11 @@ function formatResetDate(iso: string): string {
   });
 }
 
-export function WeeklyLimitCard({ limit, resets }: WeeklyLimitCardProps) {
+export function WeeklyLimitCard({ limit, resets, onNewChat }: WeeklyLimitCardProps) {
   const resetLabel = formatResetDate(resets);
 
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-4 max-w-prose">
+    <div role="alert" className="rounded-xl border border-border bg-card p-4 max-w-prose">
       <p className="text-sm font-semibold text-card-foreground mb-1">
         You&apos;ve reached your weekly limit
       </p>
@@ -35,7 +36,7 @@ export function WeeklyLimitCard({ limit, resets }: WeeklyLimitCardProps) {
       <div className="flex items-center gap-3">
         <button
           disabled={!BILLING_ENABLED}
-          className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-55 disabled:cursor-not-allowed"
+          className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Upgrade — $8/month
         </button>
@@ -43,6 +44,14 @@ export function WeeklyLimitCard({ limit, resets }: WeeklyLimitCardProps) {
           <span className="text-xs text-muted-foreground">Coming soon</span>
         )}
       </div>
+      {onNewChat && (
+        <button
+          onClick={onNewChat}
+          className="mt-3 text-sm text-primary hover:underline transition-colors"
+        >
+          Start a new conversation →
+        </button>
+      )}
     </div>
   );
 }

@@ -64,7 +64,7 @@ export default function AuthorsPage() {
       <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
         <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
           <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30 border-b border-border">
-            <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
+            <button aria-label="Open sidebar" onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
             <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
@@ -81,7 +81,7 @@ export default function AuthorsPage() {
                 Back to Library
               </Link>
 
-              <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground mb-8">
+              <h2 className="font-sans text-2xl md:text-3xl font-semibold text-foreground mb-8 text-balance">
                 Authors
               </h2>
 
@@ -100,15 +100,11 @@ export default function AuthorsPage() {
                           alt={author.name}
                           width={64}
                           height={64}
-                          className={cn("rounded-full object-cover flex-shrink-0 w-16 h-16", isClassic && "grayscale")}
-                          style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
+                          className={cn("rounded-full object-cover shrink-0 w-16 h-16 ring-1 ring-white/8", isClassic && "grayscale")}
                           onError={() => setFailedImages((prev) => new Set(prev).add(author.name))}
                         />
                       ) : (
-                        <div
-                          className="w-16 h-16 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-                          style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
-                        >
+                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center shrink-0 ring-1 ring-white/8">
                           <span className="text-lg font-semibold text-muted-foreground">{getInitials(author.name)}</span>
                         </div>
                       )}
