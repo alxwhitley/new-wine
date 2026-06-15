@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactElement } from "react";
 import { Search, Menu, Bookmark, Flag, ChevronDown, ChevronUp, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
@@ -778,7 +778,7 @@ function CommentarySection({
               const LEMMA_SPLIT_RE = /(?<=\. )(?=[A-Z][^.!?\n]{0,55} - )/g;
               const LEMMA_START_RE = /^(.{1,60}?) - ([\s\S]*)$/;
               const blocks = activeCommentary.content.split(/\n\n+/).filter((b) => b.trim());
-              const elements: React.ReactElement[] = [];
+              const elements: ReactElement[] = [];
               let isFirst = true;
               for (let bi = 0; bi < blocks.length; bi++) {
                 const trimmed = blocks[bi].trim();
