@@ -180,7 +180,7 @@ function PastorsNoteCard({ note }: { note: PastorsNote }) {
       className="flex flex-col rounded-lg border border-border bg-card hover:bg-accent transition-colors p-4 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="rounded-full bg-secondary text-secondary-foreground text-[11px] font-medium px-2 py-0.5">
+        <span className="rounded-full border border-border/70 text-muted-foreground text-[11px] font-medium px-2 py-0.5">
           {formatVerseRef(note.verse_id)}
         </span>
         {note.display_name && (
@@ -468,7 +468,7 @@ export default function LibraryPage() {
         {doc.topic_tags && doc.topic_tags.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {doc.topic_tags.slice(0, 2).map((tag) => (
-              <span key={tag} className="inline-block text-[10px] bg-secondary text-secondary-foreground rounded-md px-1.5 py-0.5">
+              <span key={tag} className="inline-block text-[10px] border border-border/60 text-muted-foreground/70 rounded-md px-1.5 py-0.5">
                 {tag}
               </span>
             ))}
@@ -945,7 +945,7 @@ export default function LibraryPage() {
                           {featuredDocs[0].topic_tags && featuredDocs[0].topic_tags.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mb-3">
                               {featuredDocs[0].topic_tags.slice(0, 3).map((tag) => (
-                                <span key={tag} className="bg-secondary text-secondary-foreground text-xs rounded-md px-2 py-0.5">
+                                <span key={tag} className="border border-border/60 text-muted-foreground/70 text-xs rounded-md px-2 py-0.5">
                                   {tag}
                                 </span>
                               ))}
@@ -990,7 +990,7 @@ export default function LibraryPage() {
                             {doc.topic_tags && doc.topic_tags.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 mt-2">
                                 {doc.topic_tags.slice(0, 2).map((tag) => (
-                                  <span key={tag} className="bg-secondary text-secondary-foreground text-xs rounded-md px-2 py-0.5">
+                                  <span key={tag} className="border border-border/60 text-muted-foreground/70 text-xs rounded-md px-2 py-0.5">
                                     {tag}
                                   </span>
                                 ))}
@@ -1116,7 +1116,7 @@ export default function LibraryPage() {
                             {doc.topic_tags && doc.topic_tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-auto">
                                 {doc.topic_tags.slice(0, 2).map((tag) => (
-                                  <span key={tag} className="bg-secondary text-secondary-foreground text-[10px] rounded-md px-1.5 py-0.5">
+                                  <span key={tag} className="border border-border/60 text-muted-foreground/70 text-[10px] rounded-md px-1.5 py-0.5">
                                     {tag}
                                   </span>
                                 ))}
@@ -1167,7 +1167,7 @@ export default function LibraryPage() {
                           <button
                             key={doc.id}
                             onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                            className="w-full text-left flex items-baseline gap-3.5 py-3 border-b border-border/40 last:border-b-0 hover:bg-accent transition-colors rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="w-full text-left flex items-center gap-3.5 py-4 px-2 -mx-2 border-b border-border/40 last:border-b-0 hover:bg-accent transition-colors rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             <span className="text-[11px] text-muted-foreground/50 font-medium min-w-[18px] flex-shrink-0">
                               {(i + 1).toString().padStart(2, "0")}
@@ -1178,9 +1178,7 @@ export default function LibraryPage() {
                               )}
                               <span className="block text-[13px] font-medium text-foreground">{doc.title}</span>
                             </span>
-                            {doc.year && (
-                              <span className="text-[11px] text-muted-foreground/50 ml-auto flex-shrink-0">{doc.year}</span>
-                            )}
+                            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 ml-auto flex-shrink-0" />
                           </button>
                         ))}
                       </div>
