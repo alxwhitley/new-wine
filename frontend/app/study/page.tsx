@@ -778,7 +778,7 @@ function CommentarySection({
               const LEMMA_SPLIT_RE = /(?<=\. )(?=[A-Z][^.!?\n]{0,55} - )/g;
               const LEMMA_START_RE = /^(.{1,60}?) - ([\s\S]*)$/;
               const blocks = activeCommentary.content.split(/\n\n+/).filter((b) => b.trim());
-              const elements: JSX.Element[] = [];
+              const elements: React.ReactElement[] = [];
               let isFirst = true;
               for (let bi = 0; bi < blocks.length; bi++) {
                 const trimmed = blocks[bi].trim();
