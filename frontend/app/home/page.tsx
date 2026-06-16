@@ -537,16 +537,73 @@ export default function HomePage() {
 
       {/* ── WHY IT MATTERS ── */}
       <section className="py-20 px-6 border-t border-border">
-        <div className="max-w-[760px] mx-auto">
-          <SectionLabel>Why It Matters</SectionLabel>
-          <h2 className="font-serif text-[clamp(1.7rem,3vw,2.4rem)] font-semibold leading-[1.2] mb-6 text-card-foreground text-balance">
-            When you ask general AI a question about God, who&rsquo;s actually answering?
+        <div className="max-w-[1000px] mx-auto">
+          <p className="text-[.7rem] font-bold tracking-[.14em] uppercase text-center mb-4" style={{ color: "hsl(var(--gold-light))" }}>
+            Why It Matters
+          </p>
+          <h2 className="font-serif text-[clamp(1.7rem,3.5vw,2.6rem)] font-semibold leading-[1.2] text-card-foreground text-balance text-center max-w-[20ch] mx-auto mb-12">
+            When you ask general AI about God, who&rsquo;s actually answering?
           </h2>
-          <div className="space-y-5 text-muted-foreground text-[1.0625rem] leading-[1.75]">
-            <p>General AI models answer theology by averaging everything at once — every tradition, every blog, every contradicting opinion blended into one flattened response. No source is trusted over another. No particular voice stands behind the answer.</p>
-            <p>And even when you ask for a Spirit-filled perspective, there&rsquo;s no guarantee where it&rsquo;s coming from — it may simply pull from unvetted sources that happen to use the right words.</p>
-            <p>But in matters of faith, <em>who</em> is speaking matters. You wouldn&rsquo;t take spiritual counsel from a stranger with no name. Rhemata is built on a known, trusted lineage — so you always know whose shoulders an answer stands on.</p>
+
+          {/* Two-column contrast */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
+            {/* Left — General AI */}
+            <div className="border border-border rounded-lg p-7 bg-background">
+              <div className="flex items-center gap-[.45rem] text-[.65rem] font-bold tracking-[.1em] uppercase text-muted-foreground mb-4">
+                <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: "hsl(var(--muted-foreground) / 0.5)" }} />
+                General AI models
+              </div>
+              <h3 className="font-serif text-[1.15rem] font-semibold text-card-foreground leading-[1.3] mb-[1.1rem]">
+                Everything at once. No one in particular.
+              </h3>
+              <ul className="flex flex-col gap-[.85rem] list-none m-0 p-0">
+                {[
+                  "Averages every tradition, blog, and contradicting opinion into one flattened answer.",
+                  "No source is trusted over another.",
+                  "Applies its own content filters to theology — softening or avoiding positions it’s trained to treat as sensitive.",
+                  "No name stands behind the answer.",
+                ].map((text) => (
+                  <li key={text} className="relative pl-[1.4rem] text-[.92rem] text-muted-foreground leading-[1.55]">
+                    <span className="absolute left-0 top-[.05rem] text-[.85rem]" style={{ color: "hsl(var(--muted-foreground) / 0.5)" }}>✕</span>
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Right — Rhemata */}
+            <div className="rounded-lg p-7 bg-accent" style={{ border: "1px solid hsl(var(--gold-light) / 0.3)" }}>
+              <div className="flex items-center gap-[.45rem] text-[.65rem] font-bold tracking-[.1em] uppercase mb-4" style={{ color: "hsl(var(--gold-light))" }}>
+                <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: "hsl(var(--gold-light))" }} />
+                Rhemata
+              </div>
+              <h3 className="font-serif text-[1.15rem] font-semibold text-card-foreground leading-[1.3] mb-[1.1rem]">
+                A known, trusted lineage.
+              </h3>
+              <ul className="flex flex-col gap-[.85rem] list-none m-0 p-0">
+                {[
+                  "Drawn only from vetted sources within the charismatic tradition.",
+                  "No hidden filters — your convictions aren’t treated as something to soften.",
+                  "Every answer points back to the voices behind it.",
+                  "You always know whose shoulders an answer stands on.",
+                ].map((text) => (
+                  <li key={text} className="relative pl-[1.4rem] text-[.92rem] text-foreground leading-[1.55]">
+                    <span className="absolute left-0 top-[.05rem] text-[.85rem]" style={{ color: "hsl(var(--gold-light))" }}>✓</span>
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+
+          {/* Pull-quote */}
+          <blockquote className="font-serif italic text-[clamp(1.3rem,2.6vw,1.7rem)] leading-[1.4] text-card-foreground text-center max-w-[24ch] mx-auto pt-8 pb-2 border-none m-0">
+            &ldquo;You wouldn&rsquo;t take spiritual counsel from{" "}
+            <span style={{ color: "hsl(var(--gold-light))" }}>a stranger with no name.</span>&rdquo;
+          </blockquote>
+          <p className="text-base text-muted-foreground text-center max-w-[52ch] mx-auto mt-4 leading-[1.7]">
+            In matters of faith, <em>who</em> is speaking matters. Rhemata is built on voices you&rsquo;d actually choose.
+          </p>
         </div>
       </section>
 
