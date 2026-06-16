@@ -66,10 +66,15 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── railway.toml
 │   └── nixpacks.toml          # Locks Python 3.9
 └── frontend/                  # Next.js 16 frontend (Vercel)
+    ├── app/
+    │   └── home/              # Public marketing landing page (no auth required)
+    │       └── page.tsx       # Animated mockups, marquee, Why It Matters, CTA — BetaGate + LoginModal wired
     ├── hooks/
     │   ├── useUserRole.ts     # Role + displayName hook; module-level cache keyed by access token
     │   └── useChat.ts         # weeklyUsage state; seeds from GET /usage on mount, updates from SSE meta
     ├── components/
+    │   ├── auth/
+    │   │   └── BetaGate.tsx   # Beta password gate modal — prompts for "rhema", stores beta_access in sessionStorage
     │   └── rhemata/
     │       ├── usage-ring.tsx        # SVG weekly usage ring (track=--muted, arc=--foreground)
     │       └── weekly-limit-card.tsx # Inline hard-stop card on 429; BILLING_ENABLED=false flag
@@ -188,6 +193,8 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Featured section daily rotation (June 2026): `FEATURED_SERMON_POOL` (8 sermons) and `FEATURED_ARTICLE_POOL` (7 New Wine articles) in `app/library/page.tsx`. LCG seeded by UTC day index, two independent seeds (`dayIndex * 2`, `dayIndex * 2 + 1`). Returns `[articles[0], sermons[0], sermons[1]]` — article in hero, sermons in supporting slots. Books excluded from Featured eligibility.
 - Hero card image slot (June 2026): `DiscoverDocCard` with `isHero=true` renders `aspect-[3/1] lg:aspect-auto lg:h-[45%]` top band. `image_url` field on `DiscoverDoc` TS type (`image_url?: string | null`). No `image_url` column exists in DB yet — placeholder renders `topic_tags?.[0] ?? sourceKindLabel(source_kind)` in uppercase on `bg-muted`. Equal-height Featured grid: `lg:h-[400px]` on container, `lg:h-full` on hero button, `lg:flex-1` on supporting cards.
 - FastAPI `Query` import bug (June 2026): Any `Query(...)`, `Path(...)`, etc. used as route default parameters are evaluated at module import time — missing import causes `NameError` → uvicorn never binds → all routes in the file are absent (not a 500; they 404). Always include fastapi symbols in the import line if used as defaults.
+- `/home` landing page (June 2026): New public route `app/home/page.tsx` — no auth required. Animated Chat/Study/Discover mockups (IntersectionObserver, once at 30% viewport), marquee with `@keyframes marquee-left/right` in `globals.css`, Why It Matters two-column contrast, Final CTA. New CSS token: `--gold-light: 44 60% 62%` added to `:root` and `@theme inline` in `globals.css`. `/` route untouched.
+- Beta password gate (June 2026): `components/auth/BetaGate.tsx` — client-side modal, required code "rhema", stores `beta_access=1` in `sessionStorage` on success. Wired in all three app pages and `/home`. "Try it free — no account needed" and direct `/` are ungated. `LoginModal` gained `initialMode?: "signin" | "signup"` prop; sidebar guest footer changed from "Sign in" to "Become a test user" primary Button.
 
 ---
 
