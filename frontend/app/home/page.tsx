@@ -418,24 +418,24 @@ function DiscoverMockup() {
    MARQUEE
 ════════════════════════════════════════════════════════ */
 const ROW1 = [
-  "What does Scripture say about the baptism of the Holy Spirit?",
-  "How do I receive my prayer language?",
-  "Is healing in the atonement?",
-  "What is the gift of discerning of spirits?",
-  "How do I hear God’s voice?",
-  "What does Acts 1:8 mean for the church today?",
-  "Explain prophetic intercession",
-  "What is the spirit of adoption?",
+  "What is the baptism of the Holy Spirit?",
+  "How do I receive the gift of tongues?",
+  "Is speaking in tongues for every believer?",
+  "What’s the difference between the gift of tongues and a prayer language?",
+  "How do I grow in the prophetic?",
+  "What does it mean to be anointed?",
+  "How do I know if a prophetic word is from God?",
+  "What is the laying on of hands?",
 ];
 const ROW2 = [
-  "Walk me through Romans 8:26 in the Greek",
-  "Who are the five-fold ministry gifts?",
-  "How did Smith Wigglesworth pray for the sick?",
-  "What did the Church Fathers believe about prophecy?",
-  "Explain binding and loosing biblically",
-  "What is the difference between the fruit and gifts of the Spirit?",
-  "How do I study a word in the original Greek?",
-  "What is the role of the prophet in the church today?",
+  "What is the fivefold ministry?",
+  "What’s the role of the apostle and prophet today?",
+  "How do I stir up the gift within me?",
+  "What does it mean to be filled with the Spirit?",
+  "How do I activate the gifts of the Spirit?",
+  "What is the difference between the anointing and the fruit of the Spirit?",
+  "How do I interpret tongues?",
+  "What does Scripture say about prophecy in the church?",
 ];
 
 function Pill({ text }: { text: string }) {
@@ -452,10 +452,10 @@ function Marquee() {
     <div style={{ padding: "2.5rem 0", overflow: "hidden", position: "relative" }}>
       <div style={{ pointerEvents: "none", position: "absolute", top: 0, bottom: 0, left: 0, width: 100, background: "linear-gradient(to right, hsl(var(--background)), transparent)", zIndex: 2 }} />
       <div style={{ pointerEvents: "none", position: "absolute", top: 0, bottom: 0, right: 0, width: 100, background: "linear-gradient(to left, hsl(var(--background)), transparent)", zIndex: 2 }} />
-      <div className="marquee-track" style={{ display: "flex", gap: ".625rem", width: "max-content", animation: "marquee-left 45s linear infinite", marginBottom: ".625rem" }}>
+      <div className="marquee-track" style={{ display: "flex", gap: ".625rem", width: "max-content", animation: "marquee-left 88s linear infinite", marginBottom: ".625rem" }}>
         {[...ROW1, ...ROW1].map((t, i) => <Pill key={i} text={t} />)}
       </div>
-      <div className="marquee-track" style={{ display: "flex", gap: ".625rem", width: "max-content", animation: "marquee-right 38s linear infinite" }}>
+      <div className="marquee-track" style={{ display: "flex", gap: ".625rem", width: "max-content", animation: "marquee-right 72s linear infinite" }}>
         {[...ROW2, ...ROW2].map((t, i) => <Pill key={i} text={t} />)}
       </div>
     </div>
