@@ -39,6 +39,7 @@
   --chart-3: 48 10.64% 9.22%;
   --chart-4: 248.28 25.22% 22.55%;
   --chart-5: 17.78 60% 44.12%;
+  --gold-light: 44 60% 62%;
 }
 
 @theme inline {
@@ -81,6 +82,7 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
+  --color-gold-light: hsl(var(--gold-light));
 }
 
 @layer base {
@@ -132,6 +134,20 @@ mark {
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes marquee-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes marquee-right {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none !important; }
 }
 
 @keyframes pulse-dot {
