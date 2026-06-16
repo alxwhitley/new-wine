@@ -509,22 +509,26 @@ export default function HomePage() {
             <Link href="/?login=1">Log in</Link>
           </Button>
           <Button size="sm" asChild>
-            <Link href="/?signup=1">Start for free</Link>
+            <Link href="/?signup=1">Become a test user</Link>
           </Button>
         </div>
       </nav>
 
       {/* ── HERO ── */}
       <section className="pt-[130px] pb-16 px-6 text-center max-w-[860px] mx-auto">
+        <div className="inline-flex items-center gap-1.5 border border-border rounded-full px-3.5 py-1 text-[.72rem] font-semibold tracking-[.12em] uppercase text-muted-foreground mb-6">
+          <span className="w-[5px] h-[5px] rounded-full bg-primary shrink-0" />
+          Now in beta
+        </div>
         <h1 className="font-serif text-[clamp(2.4rem,5.5vw,4.2rem)] font-semibold leading-[1.12] tracking-[-0.025em] mb-5 text-card-foreground text-balance">
           Faithful answers from sources you can trust.
         </h1>
         <p className="text-lg text-muted-foreground max-w-[580px] mx-auto mb-8 leading-[1.75]">
-          Rhemata is an AI-assisted Bible study tool trained on trusted resources rooted in the charismatic tradition.
+          Rhemata is an AI-assisted Bible study tool trained on trusted resources rooted in the charismatic tradition — now in early beta, and looking for testers.
         </p>
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <Button size="lg" asChild>
-            <Link href="/?signup=1">Start for free</Link>
+            <Link href="/?signup=1">Become a test user</Link>
           </Button>
           <Button variant="outline" size="lg" asChild>
             <Link href="/library">Explore Discover →</Link>
@@ -732,11 +736,11 @@ export default function HomePage() {
       {/* ── FINAL CTA ── */}
       <section className="py-28 px-6 text-center border-t border-border">
         <h2 className="font-serif text-[clamp(1.85rem,3.5vw,2.8rem)] font-semibold leading-[1.2] max-w-[560px] mx-auto mb-3 text-card-foreground text-balance">
-          Study Scripture with voices you trust.
+          Help us build it. Become a test user.
         </h2>
-        <p className="text-muted-foreground text-base mb-8">Start free today — no card required.</p>
+        <p className="text-muted-foreground text-base mb-8">Rhemata is in active beta. Jump in free, explore everything, and help shape where it goes — no card required.</p>
         <Button size="lg" asChild>
-          <Link href="/?signup=1">Start for free</Link>
+          <Link href="/?signup=1">Become a test user</Link>
         </Button>
       </section>
 
