@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
+import BetaGate from "@/components/auth/BetaGate";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
@@ -204,8 +205,19 @@ export default function LibraryPage() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
+  const [showGate, setShowGate] = useState(false);
+  const [loginInitialMode, setLoginInitialMode] = useState<"signin" | "signup">("signup");
   const [loginReason, setLoginReason] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  function openAuthGate(mode: "signin" | "signup" = "signup") {
+    setLoginInitialMode(mode);
+    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
+      setShowLogin(true);
+    } else {
+      setShowGate(true);
+    }
+  }
   const { conversations, deleteConversation } = useConversations(user?.id);
 
   // ── Discover data ──────────────────────────────────────────────────────────
@@ -556,7 +568,7 @@ export default function LibraryPage() {
     onNewChat: () => { window.location.href = "/"; },
     onSelectConversation: (id: string) => { window.location.href = `/?c=${id}`; },
     onDeleteConversation: deleteConversation,
-    onSignInClick: () => { setLoginReason(undefined); setShowLogin(true); },
+    onSignInClick: () => { setLoginReason(undefined); openAuthGate("signup"); },
     onSignOut: signOut,
   };
 
@@ -645,7 +657,8 @@ export default function LibraryPage() {
             </div>
           </div>
         </main>
-        {showLogin && <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} />}
+        {showGate && <BetaGate onSuccess={() => { setShowGate(false); setShowLogin(true); }} onClose={() => setShowGate(false)} />}
+        {showLogin && <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} initialMode={loginInitialMode} />}
       </div>
     );
   }
@@ -1298,8 +1311,9 @@ export default function LibraryPage() {
         </SheetContent>
       </Sheet>
 
+      {showGate && <BetaGate onSuccess={() => { setShowGate(false); setShowLogin(true); }} onClose={() => setShowGate(false)} />}
       {showLogin && (
-        <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} />
+        <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} initialMode={loginInitialMode} />
       )}
     </div>
   );

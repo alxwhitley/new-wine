@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import type { SavedWord } from "@/components/rhemata/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
+import BetaGate from "@/components/auth/BetaGate";
 import { supabase } from "@/lib/supabase";
 import { getAdjacentVerseId } from "@/lib/verse-counts";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -883,7 +884,18 @@ export default function StudyPage() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
   const [showLogin, setShowLogin] = useState(false);
+  const [showGate, setShowGate] = useState(false);
+  const [loginInitialMode, setLoginInitialMode] = useState<"signin" | "signup">("signup");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  function openAuthGate(mode: "signin" | "signup" = "signup") {
+    setLoginInitialMode(mode);
+    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
+      setShowLogin(true);
+    } else {
+      setShowGate(true);
+    }
+  }
 
   const [verseRef, setVerseRef] = useState("John 1:1");
   const [selectedStrongs, setSelectedStrongs] = useState<string | null>(null);
@@ -1338,7 +1350,7 @@ export default function StudyPage() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}
-        onSignInClick={() => setShowLogin(true)}
+        onSignInClick={() => openAuthGate("signup")}
         onSignOut={signOut}
         savedWords={savedWords}
         selectedStrongs={selectedStrongs}
@@ -1740,8 +1752,9 @@ export default function StudyPage() {
         </SheetContent>
       </Sheet>
 
+      {showGate && <BetaGate onSuccess={() => { setShowGate(false); setShowLogin(true); }} onClose={() => setShowGate(false)} />}
       {showLogin && (
-        <LoginModal onClose={() => setShowLogin(false)} onSignIn={signIn} onSignUp={signUp} />
+        <LoginModal onClose={() => setShowLogin(false)} onSignIn={signIn} onSignUp={signUp} initialMode={loginInitialMode} />
       )}
     </div>
   );

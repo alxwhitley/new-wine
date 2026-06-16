@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import BetaGate from "@/components/auth/BetaGate";
+import LoginModal from "@/components/auth/LoginModal";
 
 /* ── Inline-style color tokens (mockups only — page uses Tailwind classes) ── */
 const C = {
@@ -487,7 +490,20 @@ const EXPLORE_CARDS = [
    PAGE
 ════════════════════════════════════════════════════════ */
 export default function HomePage() {
+  const { signIn, signUp } = useAuth();
+  const [showGate, setShowGate] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+
+  function openAuthGate() {
+    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
+      setShowLogin(true);
+    } else {
+      setShowGate(true);
+    }
+  }
+
   return (
+    <>
     <div className="bg-background text-foreground min-h-screen font-sans antialiased overflow-x-hidden">
 
       {/* ── NAV ── */}
@@ -505,12 +521,7 @@ export default function HomePage() {
           ))}
         </ul>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/?login=1">Log in</Link>
-          </Button>
-          <Button size="sm" asChild>
-            <Link href="/?signup=1">Become a test user</Link>
-          </Button>
+          <Button size="sm" onClick={openAuthGate}>Become a test user</Button>
         </div>
       </nav>
 
@@ -527,11 +538,9 @@ export default function HomePage() {
           Rhemata is an AI-assisted Bible study tool trained on trusted resources rooted in the charismatic tradition — now in early beta, and looking for testers.
         </p>
         <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Button size="lg" asChild>
-            <Link href="/?signup=1">Become a test user</Link>
-          </Button>
+          <Button size="lg" onClick={openAuthGate}>Become a test user</Button>
           <Button variant="outline" size="lg" asChild>
-            <Link href="/library">Explore Discover →</Link>
+            <Link href="/">Try it free — no account needed</Link>
           </Button>
         </div>
       </section>
@@ -739,9 +748,7 @@ export default function HomePage() {
           Help us build it. Become a test user.
         </h2>
         <p className="text-muted-foreground text-base mb-8">Rhemata is in active beta. Jump in free, explore everything, and help shape where it goes — no card required.</p>
-        <Button size="lg" asChild>
-          <Link href="/?signup=1">Become a test user</Link>
-        </Button>
+        <Button size="lg" onClick={openAuthGate}>Become a test user</Button>
       </section>
 
       {/* ── FOOTER ── */}
@@ -783,5 +790,21 @@ export default function HomePage() {
       </footer>
 
     </div>
+
+    {showGate && (
+      <BetaGate
+        onSuccess={() => { setShowGate(false); setShowLogin(true); }}
+        onClose={() => setShowGate(false)}
+      />
+    )}
+    {showLogin && (
+      <LoginModal
+        onClose={() => setShowLogin(false)}
+        onSignIn={signIn}
+        onSignUp={signUp}
+        initialMode="signup"
+      />
+    )}
+    </>
   );
 }

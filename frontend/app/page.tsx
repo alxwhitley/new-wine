@@ -13,6 +13,7 @@ import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
 import { UsageRing } from "@/components/rhemata/usage-ring";
 import { WeeklyLimitCard } from "@/components/rhemata/weekly-limit-card";
 import LoginModal from "@/components/auth/LoginModal";
+import BetaGate from "@/components/auth/BetaGate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
 
@@ -25,7 +26,18 @@ const SUGGESTIONS = [
 export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
+  const [showGate, setShowGate] = useState(false);
+  const [loginInitialMode, setLoginInitialMode] = useState<"signin" | "signup">("signup");
   const [loginReason, setLoginReason] = useState<string | undefined>();
+
+  function openAuthGate(mode: "signin" | "signup" = "signup") {
+    setLoginInitialMode(mode);
+    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
+      setShowLogin(true);
+    } else {
+      setShowGate(true);
+    }
+  }
   const [weeklyLimitDetail, setWeeklyLimitDetail] = useState<WeeklyLimitDetail | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
@@ -42,7 +54,7 @@ export default function Home() {
     accessToken,
     () => {
       setLoginReason("You've used your 6 free searches. Create a free account to keep going.");
-      setShowLogin(true);
+      openAuthGate("signup");
     },
     (detail) => setWeeklyLimitDetail(detail),
   );
@@ -164,7 +176,7 @@ export default function Home() {
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
-        onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
+        onSignInClick={() => { setLoginReason(undefined); openAuthGate("signup"); }}
         onSignOut={signOut}
       />
 
@@ -299,12 +311,19 @@ export default function Home() {
         isOpen={isSourcePanelOpen}
         onClose={handleCloseSourcePanel}
       />
+      {showGate && (
+        <BetaGate
+          onSuccess={() => { setShowGate(false); setShowLogin(true); }}
+          onClose={() => setShowGate(false)}
+        />
+      )}
       {showLogin && (
         <LoginModal
           onClose={() => { setShowLogin(false); setLoginReason(undefined); }}
           onSignIn={signIn}
           onSignUp={signUp}
           reason={loginReason}
+          initialMode={loginInitialMode}
         />
       )}
     </div>

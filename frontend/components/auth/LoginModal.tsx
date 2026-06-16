@@ -11,10 +11,11 @@ interface LoginModalProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<{ hasSession: boolean }>;
   reason?: string;
+  initialMode?: "signin" | "signup";
 }
 
-export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: LoginModalProps) {
-  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
+export default function LoginModal({ onClose, onSignIn, onSignUp, reason, initialMode }: LoginModalProps) {
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">(initialMode ?? "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +89,7 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
 
         {/* Title */}
         <h2 className="font-sans text-xl font-semibold text-foreground mb-1">
-          {mode === "forgot" ? "Reset password" : mode === "signin" ? "Sign in to Rhemata" : "Create an account"}
+          {mode === "forgot" ? "Reset password" : mode === "signin" ? "Sign in to Rhemata" : "Become a test user"}
         </h2>
 
         {/* Subtitle / reason */}
@@ -191,7 +192,7 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason }: Logi
             )}
 
             <Button type="submit" disabled={submitting} className="w-full mt-1">
-              {submitting ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+              {submitting ? "…" : mode === "signin" ? "Sign in" : "Become a test user"}
             </Button>
 
             <p className="text-sm text-muted-foreground text-center">

@@ -411,13 +411,9 @@ export function Sidebar({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <button
-            onClick={onSignInClick}
-            className="flex w-full items-center gap-2 rounded-md border border-input bg-background px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <LogIn className="h-4 w-4" />
-            Sign in
-          </button>
+          <Button size="sm" className="w-full" onClick={onSignInClick}>
+            Become a test user
+          </Button>
         )}
       </div>
 
