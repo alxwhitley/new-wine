@@ -17,6 +17,7 @@ interface PastorCard {
   topic_tags: string[];
   created_at: string;
   updated_at: string;
+  status: string;
 }
 
 function relativeTime(iso: string): string {
@@ -57,6 +58,7 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Delete confirm
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -75,7 +77,8 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
     setEditingId(null);
     setConfirmDeleteId(null);
 
-    fetch(`${API}/pastors-notes/cards?verse_id=${encodeURIComponent(verseId)}`)
+    const headers: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+    fetch(`${API}/pastors-notes/cards?verse_id=${encodeURIComponent(verseId)}`, { headers })
       .then((r) => r.json())
       .then((data) => setCards(Array.isArray(data) ? data : []))
       .catch(() => setCards([]))
@@ -119,12 +122,14 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
   function startEdit(card: PastorCard) {
     setEditingId(card.id);
     setEditContent(card.content);
+    setEditError(null);
     setConfirmDeleteId(null);
   }
 
   async function handleSaveEdit() {
     if (!accessToken || !editingId) return;
     setEditLoading(true);
+    setEditError(null);
     try {
       const res = await fetch(`${API}/pastors-notes/cards/${editingId}`, {
         method: "PATCH",
@@ -140,7 +145,12 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
           prev.map((c) => (c.id === editingId ? { ...c, ...updated } : c))
         );
         setEditingId(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setEditError(data.detail ?? "Failed to save changes.");
       }
+    } catch {
+      setEditError("Something went wrong.");
     } finally {
       setEditLoading(false);
     }
@@ -250,7 +260,7 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
                   <div className="space-y-3">
                     <Textarea
                       value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
+                      onChange={(e) => { setEditContent(e.target.value); setEditError(null); }}
                       rows={4}
                       maxLength={2000}
                       className="resize-none"
@@ -268,19 +278,29 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
                         )}
                       </Button>
                       <button
-                        onClick={() => setEditingId(null)}
+                        onClick={() => { setEditingId(null); setEditError(null); }}
                         className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         Cancel
                       </button>
                     </div>
+                    {editError && (
+                      <p className="text-xs text-destructive">{editError}</p>
+                    )}
                   </div>
                 ) : (
                   <>
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="text-sm font-medium text-foreground">
-                        {card.display_name ?? "Anonymous"}
-                      </p>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {card.display_name ?? "Anonymous"}
+                        </p>
+                        {card.status === "pending" && (
+                          <span className="mt-1 inline-block text-[11px] rounded border border-border px-1.5 py-0.5 text-muted-foreground">
+                            Pending review
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {canEdit && !isConfirmDelete && (
                           <button

@@ -65,6 +65,17 @@ interface Contributor {
   created_at: string;
 }
 
+interface PendingNote {
+  id: string;
+  verse_id: string;
+  content: string;
+  topic_tags: string[];
+  created_at: string;
+  user_id: string;
+  display_name: string | null;
+  email: string;
+}
+
 interface CountData {
   [cardId: string]: { count: number; lastIngested: string | null };
 }
@@ -92,6 +103,7 @@ const FEEDBACK_TABS: { key: FeedbackTab; label: string }[] = [
 const NAV_ITEMS = [
   { href: "#overview", label: "Overview" },
   { href: "#contributors", label: "Contributors" },
+  { href: "#notes-queue", label: "Notes Queue" },
   { href: "#corpus", label: "Corpus" },
 ];
 
@@ -103,6 +115,12 @@ function fmtDate(iso: string) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatVerseId(verseId: string): string {
+  const parts = verseId.split(".");
+  if (parts.length !== 3) return verseId;
+  return `${parts[0]} ${parts[1]}:${parts[2]}`;
 }
 
 function parseFilter(filter: string): { and: FilterCondition[]; or: FilterCondition[] } {
@@ -220,6 +238,11 @@ export default function AdminPage() {
   const [revokeTarget, setRevokeTarget] = useState<Contributor | null>(null);
   const [revokeRemoveCards, setRevokeRemoveCards] = useState(false);
   const [revokeLoading, setRevokeLoading] = useState(false);
+
+  // Notes queue
+  const [pendingNotes, setPendingNotes] = useState<PendingNote[]>([]);
+  const [pendingNotesLoading, setPendingNotesLoading] = useState(true);
+  const [noteActionIds, setNoteActionIds] = useState<Set<string>>(new Set());
 
   // Corpus retrieval
   const [sources, setSources] = useState<SourceToggle[]>([]);
@@ -423,6 +446,12 @@ export default function AdminPage() {
       .catch(() => setContributors([]))
       .finally(() => setContributorsLoading(false));
 
+    fetch(`${API}/pastors-notes/pending`, { headers })
+      .then((r) => r.json())
+      .then((data) => setPendingNotes(Array.isArray(data) ? data : []))
+      .catch(() => setPendingNotes([]))
+      .finally(() => setPendingNotesLoading(false));
+
     fetchAllCounts();
   }, [roleChecked, accessToken, fetchAllCounts]);
 
@@ -575,6 +604,54 @@ export default function AdminPage() {
     }
   }
 
+  const handleApproveNote = useCallback(
+    async (id: string) => {
+      if (!accessToken) return;
+      setNoteActionIds((prev) => new Set(prev).add(id));
+      try {
+        const res = await fetch(`${API}/pastors-notes/cards/${id}/approve`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (res.ok) {
+          setPendingNotes((prev) => prev.filter((n) => n.id !== id));
+          showToast("Note approved and published.");
+        }
+      } finally {
+        setNoteActionIds((prev) => {
+          const s = new Set(prev);
+          s.delete(id);
+          return s;
+        });
+      }
+    },
+    [accessToken]
+  );
+
+  const handleRejectNote = useCallback(
+    async (id: string) => {
+      if (!accessToken) return;
+      setNoteActionIds((prev) => new Set(prev).add(id));
+      try {
+        const res = await fetch(`${API}/pastors-notes/cards/${id}/reject`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (res.ok) {
+          setPendingNotes((prev) => prev.filter((n) => n.id !== id));
+          showToast("Note rejected.");
+        }
+      } finally {
+        setNoteActionIds((prev) => {
+          const s = new Set(prev);
+          s.delete(id);
+          return s;
+        });
+      }
+    },
+    [accessToken]
+  );
+
   // ── Render guard ───────────────────────────────────────────────────────
 
   if (authLoading || !roleChecked) {
@@ -621,9 +698,14 @@ export default function AdminPage() {
                 <li key={href}>
                   <a
                     href={href}
-                    className="block px-3 py-2 text-sm rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    className="flex items-center justify-between px-3 py-2 text-sm rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                   >
-                    {label}
+                    <span>{label}</span>
+                    {href === "#notes-queue" && pendingNotes.length > 0 && (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-medium text-primary-foreground">
+                        {pendingNotes.length}
+                      </span>
+                    )}
                   </a>
                 </li>
               ))}
@@ -827,6 +909,88 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </div>
+          </section>
+
+          {/* Notes Queue */}
+          <section id="notes-queue">
+            <h2 className="text-xl font-semibold text-foreground font-sans mb-6">
+              Notes Queue
+              {pendingNotes.length > 0 && (
+                <span className="ml-3 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-2 text-xs font-medium text-primary-foreground">
+                  {pendingNotes.length}
+                </span>
+              )}
+            </h2>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Pending Review
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {pendingNotesLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                ) : pendingNotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No notes pending review.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        className="rounded-lg border border-border bg-card p-4 space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                              {formatVerseId(note.verse_id)}
+                            </p>
+                            <p className="text-sm font-medium text-foreground mt-0.5">
+                              {note.display_name ?? (
+                                <span className="italic text-muted-foreground">No display name</span>
+                              )}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {note.email || "—"}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {fmtDate(note.created_at)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApproveNote(note.id)}
+                              disabled={noteActionIds.has(note.id)}
+                            >
+                              {noteActionIds.has(note.id) ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Approve"
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRejectNote(note.id)}
+                              disabled={noteActionIds.has(note.id)}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed border-t border-border pt-3">
+                          {note.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </section>
 
           {/* Corpus */}

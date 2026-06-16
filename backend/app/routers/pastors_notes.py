@@ -226,17 +226,48 @@ async def list_recent_notes(limit: int = Query(4, description="Maximum number of
 
 
 @router.get("/cards")
-async def list_cards(verse_id: str):
-    """Public — returns all published cards for a verse with contributor display_name."""
+async def list_cards(verse_id: str, request: Request):
+    """Public — returns published cards for a verse.
+
+    If the caller is authenticated, also returns their own pending cards
+    (contributors see only their own; admins see all pending for the verse).
+    The 'status' field is included so the UI can render a pending badge.
+    """
     db = get_supabase()
-    cards_result = (
+    caller_id = get_optional_user(request)
+    caller_role = get_user_role(caller_id) if caller_id else "user"
+
+    # Always return published cards (public)
+    pub_result = (
         db.table("pastors_cards")
-        .select("id, verse_id, content, topic_tags, created_at, updated_at, user_id")
+        .select("id, verse_id, content, topic_tags, created_at, updated_at, user_id, status")
         .eq("verse_id", verse_id)
         .eq("status", "published")
         .execute()
     )
-    cards = cards_result.data or []
+    cards = pub_result.data or []
+
+    # Authenticated callers also see pending cards
+    if caller_id:
+        if caller_role == "admin":
+            pending_result = (
+                db.table("pastors_cards")
+                .select("id, verse_id, content, topic_tags, created_at, updated_at, user_id, status")
+                .eq("verse_id", verse_id)
+                .eq("status", "pending")
+                .execute()
+            )
+        else:
+            # Contributors see only their own pending notes
+            pending_result = (
+                db.table("pastors_cards")
+                .select("id, verse_id, content, topic_tags, created_at, updated_at, user_id, status")
+                .eq("verse_id", verse_id)
+                .eq("status", "pending")
+                .eq("user_id", caller_id)
+                .execute()
+            )
+        cards = cards + (pending_result.data or [])
 
     if not cards:
         return []
@@ -264,6 +295,7 @@ async def list_cards(verse_id: str):
             "created_at": c["created_at"],
             "updated_at": c["updated_at"],
             "user_id": c["user_id"],
+            "status": c["status"],
         }
         for c in cards
     ]
@@ -274,9 +306,14 @@ async def create_card(
     body: CardCreateBody,
     user_id: str = Depends(require_contributor),
 ):
-    """Contributor or admin — create a published card for a verse."""
+    """Contributor or admin — create a card for a verse.
+
+    Admins publish immediately. Contributors enter a pending review queue.
+    """
     db = get_supabase()
+    role = get_user_role(user_id)
     topic_tags = _tag_content(body.content)
+    status = "published" if role == "admin" else "pending"
 
     result = (
         db.table("pastors_cards")
@@ -285,7 +322,7 @@ async def create_card(
             "verse_id": body.verse_id,
             "content": body.content,
             "topic_tags": topic_tags,
-            "status": "published",
+            "status": status,
         })
         .execute()
     )
@@ -350,6 +387,132 @@ async def remove_card(
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Card not found")
+    return {"success": True}
+
+
+@router.get("/pending")
+async def list_pending_cards(admin_id: str = Depends(require_admin_role)):
+    """Admin only — list all pending notes awaiting review, oldest first."""
+    db = get_supabase()
+
+    cards_result = (
+        db.table("pastors_cards")
+        .select("id, verse_id, content, topic_tags, created_at, user_id")
+        .eq("status", "pending")
+        .order("created_at", desc=False)
+        .execute()
+    )
+    cards = cards_result.data or []
+    if not cards:
+        return []
+
+    user_ids = list({c["user_id"] for c in cards})
+
+    roles_result = (
+        db.table("user_roles")
+        .select("user_id, display_name")
+        .in_("user_id", user_ids)
+        .execute()
+    )
+    display_map = {
+        r["user_id"]: r.get("display_name")
+        for r in (roles_result.data or [])
+    }  # type: Dict[str, Optional[str]]
+
+    try:
+        emails_result = db.rpc("get_user_emails", {"user_ids": user_ids}).execute()
+        email_map = {
+            row["id"]: row["email"]
+            for row in (emails_result.data or [])
+        }  # type: Dict[str, str]
+    except Exception:
+        logger.warning("Could not fetch emails via RPC for pending cards")
+        email_map = {}
+
+    return [
+        {
+            "id": c["id"],
+            "verse_id": c["verse_id"],
+            "content": c["content"],
+            "topic_tags": c.get("topic_tags") or [],
+            "created_at": c["created_at"],
+            "user_id": c["user_id"],
+            "display_name": display_map.get(c["user_id"]),
+            "email": email_map.get(c["user_id"], ""),
+        }
+        for c in cards
+    ]
+
+
+@router.post("/cards/{card_id}/approve")
+async def approve_card(
+    card_id: str,
+    admin_id: str = Depends(require_admin_role),
+):
+    """Admin only — publish a pending card."""
+    db = get_supabase()
+
+    existing = (
+        db.table("pastors_cards")
+        .select("id, status")
+        .eq("id", card_id)
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Card not found")
+    if existing.data[0]["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Card is not pending")
+
+    result = (
+        db.table("pastors_cards")
+        .update({
+            "status": "published",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        .eq("id", card_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to approve card")
+
+    logger.info("Card approved: card_id=%s by admin=%s", card_id, admin_id)
+    return {"success": True}
+
+
+@router.post("/cards/{card_id}/reject")
+async def reject_card(
+    card_id: str,
+    admin_id: str = Depends(require_admin_role),
+):
+    """Admin only — reject a pending card (soft-delete as removed)."""
+    db = get_supabase()
+
+    existing = (
+        db.table("pastors_cards")
+        .select("id, status")
+        .eq("id", card_id)
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Card not found")
+    if existing.data[0]["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Card is not pending")
+
+    result = (
+        db.table("pastors_cards")
+        .update({
+            "status": "removed",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        .eq("id", card_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to reject card")
+
+    logger.info("Card rejected: card_id=%s by admin=%s", card_id, admin_id)
     return {"success": True}
 
 
@@ -650,9 +813,10 @@ async def revoke_contributor(
     }).eq("user_id", target_user_id).eq("status", "approved").execute()
 
     if body.remove_cards:
+        # Remove both published and pending cards for the revoked contributor
         db.table("pastors_cards").update({
             "status": "removed",
-        }).eq("user_id", target_user_id).eq("status", "published").execute()
+        }).eq("user_id", target_user_id).in_("status", ["published", "pending"]).execute()
         logger.info("Cards soft-deleted for revoked contributor user_id=%s", target_user_id)
 
     logger.info("Contributor revoked: user_id=%s by admin=%s", target_user_id, admin_id)
