@@ -933,7 +933,7 @@ export default function LibraryPage() {
                       /* Hero: no card wrapper, no section label — the gold eyebrow is the label */
                       <button
                         onClick={() => handleCardClick(featuredDocs[0].id, featuredDocs[0].source_kind)}
-                        className="w-full text-left grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-7 items-start cursor-pointer mb-6 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-lg"
+                        className="w-full text-left grid grid-cols-1 lg:grid-cols-2 gap-7 items-start cursor-pointer mb-6 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-lg"
                       >
                         <div>
                           <div className="flex items-center gap-2 mb-3">
@@ -968,7 +968,7 @@ export default function LibraryPage() {
                             <p className="text-xs text-muted-foreground">{featuredDocs[0].year}</p>
                           )}
                         </div>
-                        <div className="hidden lg:flex relative w-[200px] h-[140px] rounded-lg border bg-card items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="hidden lg:flex relative w-full aspect-[4/3] rounded-lg border bg-card items-center justify-center overflow-hidden">
                           <span className="text-3xl text-muted-foreground/20 select-none" aria-hidden="true">✦</span>
                           <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary/25" />
                         </div>
@@ -988,9 +988,9 @@ export default function LibraryPage() {
                           <button
                             key={doc.id}
                             onClick={() => handleCardClick(doc.id, doc.source_kind)}
-                            className="bg-card border rounded-lg p-4 text-left hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="bg-card border rounded-lg p-5 text-left hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
-                            <div className="flex items-center gap-1.5 mb-2">
+                            <div className="flex items-center gap-2 mb-3">
                               <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
                                 {sourceKindLabel(doc.source_kind)}
                               </span>
@@ -999,9 +999,9 @@ export default function LibraryPage() {
                                 <span className="text-[10px] text-muted-foreground truncate">{doc.author}</span>
                               )}
                             </div>
-                            <h3 className="text-sm font-semibold text-foreground leading-snug">{doc.title}</h3>
+                            <h3 className="text-sm font-semibold text-foreground leading-snug mt-1">{doc.title}</h3>
                             {doc.topic_tags && doc.topic_tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-2">
+                              <div className="flex flex-wrap gap-1.5 mt-3">
                                 {doc.topic_tags.slice(0, 2).map((tag) => (
                                   <span key={tag} className="border border-border/60 text-muted-foreground/70 text-xs rounded-md px-2 py-0.5">
                                     {tag}

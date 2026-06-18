@@ -30,7 +30,7 @@ Charismatic and Spirit-filled Christians who want to research theology from with
 repo/
 ├── frontend/          # Next.js 16 app (Vercel)
 │   ├── hooks/
-│   │   ├── useUserRole.ts  # Role + displayName hook; module-level cache keyed by access token
+│   │   ├── useUserRole.ts  # Role + displayName hook; module-level cache keyed by access token; 5-minute TTL
 │   │   └── useChat.ts      # Chat state + weeklyUsage state (mount fetch from /usage, update from SSE meta)
 │   └── components/
 │       ├── auth/
@@ -51,7 +51,7 @@ repo/
 │   │   │   ├── search.py     # /search + /search/documents endpoints
 │   │   │   ├── document.py   # /document/{id} + /document/{id}/article
 │   │   │   ├── study.py      # /study/verse + /study/corpus + /study/lexicon + /study/excerpt endpoints
-│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management; + /pastors-notes/recent
+│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards (pending/approve/reject), requests, role management; /pending + /recent
 │   │   │   ├── usage.py      # GET /usage — weekly query count for authenticated users
 │   │   │   └── ingest.py     # /ingest endpoint
 │   │   ├── services/
@@ -95,7 +95,8 @@ repo/
 ├── migrations/            # SQL migrations (run in Supabase SQL Editor)
 │   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
-│   └── 040_fix_increment_user_query.sql  # Conditional increment fix (SELECT FOR UPDATE, returns allowed bool)
+│   ├── 040_fix_increment_user_query.sql  # Conditional increment fix (SELECT FOR UPDATE, returns allowed bool)
+│   └── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
 ├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
@@ -209,7 +210,8 @@ repo/
 - **Brand reset complete (June 2026):** Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 - **Study Mode restructured (June 2026):** single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
 - **Guest session migration complete (June 2026):** `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
-- **Pastors' Notes complete (June 2026):** three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migration 038).
+- **Pastors' Notes complete (June 2026):** three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migrations 038, 041).
+- **Pastors' Notes approval gate (June 2026):** contributor notes save as `'pending'`, require admin approval before publishing; admins post directly as `'published'`. `pastors_cards.status`: `'pending'` | `'published'` | `'removed'`. New endpoints: `GET /pastors-notes/pending` (admin queue — oldest-first, includes display_name + email via `get_user_emails` RPC), `POST /cards/{id}/approve` (`pending` → `published`), `POST /cards/{id}/reject` (`pending` → `removed`). `revoke_contributor` now also clears pending cards. Contributor sees "Pending review" chip on their own unreviewed note in Study Mode. Admin sees Notes Queue section in `/admin` with pending count badge on nav link. `GET /cards` optionally authenticated — returns own pending + published to contributor, all pending + published to admin. Role cache TTL 5 min added to `useUserRole.ts` (was indefinite — caused new contributors to stay stuck on 'user' role). `editError` state added to `PastorsNotesSection` — surfaces backend error text on failed edits (was silent). **Blocked until migration 041 is run in Supabase SQL Editor** — without it, `pastors_cards` CHECK constraint rejects `'pending'` and `POST /cards` 500s for contributors.
 - **Admin consolidation complete (June 2026):** all admin surfaces merged into single `/admin` page with sticky anchor-nav (Overview · Contributors · Corpus). Role-based auth via `GET /pastors-notes/me` — `ADMIN_USER_ID` hardcoded constant gone from all frontend files. `/admin/contributors` and `/rhemata-corpus-admin` both redirect to `/admin` (Next.js config redirects). `app/rhemata-corpus-admin/` deleted. Corpus components in `frontend/components/admin/`. `components/ui/switch.tsx` added (shadcn Switch using radix-ui). Precept Austin Greek card has `notFilter` to exclude Hebrew docs from count. HistoricalChristianFaith card description de-staled.
 - **Profile menu in sidebar (June 2026):** `AuthButton` email pill removed from all 4 page headers. Sidebar footer now has a profile `DropdownMenu` for logged-in users (displayName + email, Profile sheet, Become a contributor [user role only], Admin panel → /admin [admin only], Log out) and a Sign In button for guests.
 - **JWT auth** via Supabase JWKS endpoint (`PyJWKClient`)
@@ -517,6 +519,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 ## Remaining / Known Issues
 
+- **Migration 041 not yet run** — `migrations/041_pastors_notes_approval.sql` must be applied in Supabase SQL Editor before the approval gate is live. Without it, the `pastors_cards_status_check` constraint rejects `'pending'` and `POST /cards` 500s for contributors. Also creates the `get_user_emails` RPC and the own-pending-read RLS policy.
 - **Full 300-issue batch not yet run** — only 4 articles ingested from issue 03-1973
 - **Migration 012 not yet run** — needs to be applied in Supabase SQL Editor (Migration 013 for `bible_references` is applied as of 2026-04-10)
 - **`sources/youtube/youtube_tracker.xlsx` still tracked** — needs `git rm --cached sources/youtube/youtube_tracker.xlsx` to finish the earlier `sources/` cleanup. Shows up as modified on every commit.

@@ -242,7 +242,7 @@ export function Sidebar({
           )}
         >
           <Compass className="h-4 w-4" />
-          Library
+          Discover
         </Link>
         <Link
           href="/study"

@@ -36,7 +36,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 ├── migrations/                # SQL migrations (run in Supabase SQL Editor)
 │   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
-│   └── 040_fix_increment_user_query.sql  # Conditional increment (SELECT FOR UPDATE, returns allowed bool)
+│   ├── 040_fix_increment_user_query.sql  # Conditional increment (SELECT FOR UPDATE, returns allowed bool)
+│   └── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
 ├── backend/
@@ -50,7 +51,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   │   ├── document.py    # /document/{id} + /document/{id}/article
 │   │   │   ├── library.py     # /library/books + /library/book/{id} + /library/doc-meta + /library/recent + /library/counts
 │   │   │   ├── study.py       # /study/verse + /study/corpus + /study/lexicon + /study/excerpt + /study/interlinear + /study/commentary + /study/wordsearch + /study/wordstudy
-│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards, requests, role management; + /pastors-notes/recent
+│   │   │   ├── pastors_notes.py  # /pastors-notes/* — cards (pending/approve/reject), requests, role management; /pastors-notes/pending + /recent
 │   │   │   ├── usage.py       # GET /usage — weekly query count for authenticated users
 │   │   │   └── ingest.py      # /ingest endpoint (admin-only as of 2026-06-10)
 │   │   ├── services/
@@ -70,7 +71,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
     │   └── home/              # Public marketing landing page (no auth required)
     │       └── page.tsx       # Animated mockups, marquee, Why It Matters, CTA — BetaGate + LoginModal wired
     ├── hooks/
-    │   ├── useUserRole.ts     # Role + displayName hook; module-level cache keyed by access token
+    │   ├── useUserRole.ts     # Role + displayName hook; module-level cache keyed by access token; 5-minute TTL
     │   └── useChat.ts         # weeklyUsage state; seeds from GET /usage on mount, updates from SSE meta
     ├── components/
     │   ├── auth/
@@ -179,7 +180,8 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Brand reset complete (June 2026): Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 - Study Mode restructured (June 2026): single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
 - Guest session migration complete (June 2026): `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
-- Pastors' Notes complete (June 2026): three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migration 038).
+- Pastors' Notes complete (June 2026): three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migrations 038, 041).
+- Pastors' Notes approval gate (June 2026): contributor notes save as `'pending'`, require admin approval before publishing; admins post directly as `'published'`. `pastors_cards.status`: `'pending'` | `'published'` | `'removed'`. New endpoints: `GET /pastors-notes/pending` (admin queue with email + display_name), `POST /cards/{id}/approve`, `POST /cards/{id}/reject`. `get_user_emails` RPC in migration 041. `useUserRole` cache TTL 5 min (was indefinite). `GET /cards` optionally authenticated — returns own pending cards to contributor, all pending to admin.
 - Admin consolidation (June 2026): all admin surfaces merged into single `/admin` page with sticky anchor-nav (Overview · Contributors · Corpus). Role-based auth via `GET /pastors-notes/me` (no more hardcoded ADMIN_USER_ID). `/admin/contributors` and `/rhemata-corpus-admin` redirect to `/admin`. `app/rhemata-corpus-admin/` deleted. Corpus components in `frontend/components/admin/`. `components/ui/switch.tsx` added (shadcn Switch using radix-ui). Precept Austin Greek card has `notFilter` to exclude Hebrew docs. HistoricalChristianFaith card description corrected.
 - SOURCE_KIND_FUSION_WEIGHTS (June 2026): applied at step 2.75 of RRF pipeline (before doc-collapse): commentary ×0.6, book ×0.8, lexicon ×0.5, all others ×1.0. Prevents commentary and lexicon from crowding out citable sermons in the top-30 rerank pool.
 - Commentary context cap (June 2026): after neighbor expansion, commentary chunks capped at 3 in final assembled context (`COMMENTARY_CONTEXT_CAP = 3`).

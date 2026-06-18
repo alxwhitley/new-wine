@@ -9,7 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 const TABS = [
   { href: "/study", label: "Study", icon: BookOpen },
   { href: "/", label: "Chat", icon: MessageSquare, primary: true },
-  { href: "/library", label: "Library", icon: Compass },
+  { href: "/library", label: "Discover", icon: Compass },
 ];
 
 export function MobileTabBar() {
