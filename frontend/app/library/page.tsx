@@ -933,10 +933,10 @@ export default function LibraryPage() {
                       /* Hero: no card wrapper, no section label — the gold eyebrow is the label */
                       <button
                         onClick={() => handleCardClick(featuredDocs[0].id, featuredDocs[0].source_kind)}
-                        className="w-full text-left grid grid-cols-1 lg:grid-cols-2 gap-7 items-start cursor-pointer mb-6 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-lg"
+                        className="w-full text-left grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-6 cursor-pointer mb-6 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-lg"
                       >
                         <div>
-                          <div className="flex items-center gap-2 mb-3">
+                          <div className="flex items-center gap-2 mb-2">
                             <span className="text-[10px] font-semibold tracking-[1.3px] uppercase text-primary">
                               {sourceKindLabel(featuredDocs[0].source_kind)}
                             </span>
@@ -945,18 +945,18 @@ export default function LibraryPage() {
                               <span className="text-[10px] text-muted-foreground">{featuredDocs[0].author}</span>
                             )}
                           </div>
-                          <h2 className="text-2xl font-semibold text-foreground tracking-tight mb-2 group-hover:underline underline-offset-4 decoration-primary/40 text-balance">
+                          <h2 className="text-xl font-semibold text-foreground tracking-tight mb-1.5 group-hover:underline underline-offset-4 decoration-primary/40 text-balance">
                             {featuredDocs[0].title}
                           </h2>
                           {featuredDocs[0].content_summary && (
-                            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                            <p className="text-sm text-muted-foreground leading-relaxed mb-2">
                               {featuredDocs[0].content_summary.length > 180
                                 ? featuredDocs[0].content_summary.slice(0, 180).replace(/\s\S*$/, "") + "…"
                                 : featuredDocs[0].content_summary}
                             </p>
                           )}
                           {featuredDocs[0].topic_tags && featuredDocs[0].topic_tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mb-3">
+                            <div className="flex flex-wrap gap-1.5 mb-2">
                               {featuredDocs[0].topic_tags.slice(0, 3).map((tag) => (
                                 <span key={tag} className="border border-border/60 text-muted-foreground/70 text-xs rounded-md px-2 py-0.5">
                                   {tag}
@@ -968,7 +968,7 @@ export default function LibraryPage() {
                             <p className="text-xs text-muted-foreground">{featuredDocs[0].year}</p>
                           )}
                         </div>
-                        <div className="hidden lg:flex relative w-full aspect-[4/3] rounded-lg border bg-card items-center justify-center overflow-hidden">
+                        <div className="hidden lg:flex relative rounded-lg border bg-card items-center justify-center overflow-hidden">
                           <span className="text-3xl text-muted-foreground/20 select-none" aria-hidden="true">✦</span>
                           <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary/25" />
                         </div>
