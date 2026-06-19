@@ -22,7 +22,7 @@ async def get_doc_meta(ids: str = Query(..., description="Comma-separated docume
         db = get_supabase()
         result = (
             db.table("documents")
-            .select("id, title, author, source_kind, topic_tags, year, era, content_summary")
+            .select("id, title, author, source_kind, topic_tags, year, era, content_summary, image_url")
             .in_("id", id_list)
             .execute()
         )

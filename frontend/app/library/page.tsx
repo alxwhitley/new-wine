@@ -969,8 +969,20 @@ export default function LibraryPage() {
                           )}
                         </div>
                         <div className="hidden lg:flex relative rounded-lg border bg-card items-center justify-center overflow-hidden">
-                          <span className="text-3xl text-muted-foreground/20 select-none" aria-hidden="true">✦</span>
-                          <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary/25" />
+                          {featuredDocs[0].image_url ? (
+                            <Image
+                              src={featuredDocs[0].image_url}
+                              alt={featuredDocs[0].title}
+                              fill
+                              className="object-cover rounded-lg"
+                              sizes="(min-width: 1024px) 40vw, 0px"
+                            />
+                          ) : (
+                            <>
+                              <span className="text-3xl text-muted-foreground/20 select-none" aria-hidden="true">✦</span>
+                              <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary/25" />
+                            </>
+                          )}
                         </div>
                       </button>
                     ) : null}
