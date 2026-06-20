@@ -78,6 +78,7 @@ repo/
 │   └── documents/             # Non-copyrighted docs (sermons, papers)
 │       └── ingested/          # Already in Supabase
 ├── scripts/                   # All pipeline scripts
+│   ├── setup_document_images.py  # One-off: create document-images Storage bucket, upload test image, assign to Mumford doc
 │   ├── scrape_youtube.py      # YouTube transcript scraper (yt-dlp + Supabase dedupe, raw only — no cleaning)
 │   ├── youtube_pipeline.sh    # Full YouTube pipeline: scrape → clean → ingest
 │   ├── whisper_transcribe.py   # Whisper medium + Groq clean (batch from no_captions/ or single URL)
@@ -96,7 +97,8 @@ repo/
 │   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
 │   ├── 040_fix_increment_user_query.sql  # Conditional increment fix (SELECT FOR UPDATE, returns allowed bool)
-│   └── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
+│   ├── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
+│   └── 042_document_image_url.sql        # Adds nullable image_url (text) column to documents
 ├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
@@ -156,6 +158,7 @@ repo/
 - `bible_references` (text[], default `'{}'`) — canonical refs like `"Romans 8:28"`; GIN indexed
 - `fts_weighted` (tsvector) — weighted FTS on title (A), author (A), source_name (B), bible_references (C, colons stripped)
 - `content_summary` (text) — first chunk content for display
+- `image_url` (text, nullable) — Supabase Storage public URL for hero card image (migration 042, pending run)
 - `created_at` (timestamptz)
 
 **`chunks` table** — one row per text chunk
@@ -228,7 +231,7 @@ repo/
 - **Weekly query metering (June 2026, Workstream B)** — 50 queries/week for authenticated users, Monday UTC reset. `user_usage` table (migration 039): `user_id`, `query_count`, `week_start`, `weekly_limit` (per-row, not hardcoded — Phase 2 billing can override). `increment_user_query(uuid)` RPC (migration 040): `SELECT FOR UPDATE` row-level lock, conditional UPDATE only when `v_new_count <= v_limit` — counter never exceeds limit, no race condition at cap. Returns `{query_count, weekly_limit, week_start, allowed}`. Handler branches on `allowed` flag; hard 429 stop fires before any LLM call. `get_user_usage(uuid)` RPC: read-only, handles stale-week rollover display without writing. Study endpoints never counted. Guest meter unchanged. Frontend: `useChat` seeds from `GET /usage` on mount; updates from SSE meta `usage` field after each query (no extra fetch). Hard-stop card renders inline in message stream. Usage ring in sidebar footer (desktop) and top bar left (mobile). `BILLING_ENABLED=false` flag in `weekly-limit-card.tsx` for future Stripe wiring. `daily_limit_reached` dead code stripped (not emitted by backend).
 - **Discover page (June 2026)** — `app/library/page.tsx` rewritten as 6-section Discover view. Section order: Featured → Browse by type → Featured Authors → Recently Added → New Wine Archive → Pastors' Notes. All sections always render (empty state when no data). No card ever renders `description` or `content_summary` — both contain raw body text. Card fields: type chip, author, title, up to 2 topic tags, year only. `DiscoverDoc` TS interface in `frontend/lib/api.ts` — `topic_tags` is `string[] | null` (not just empty array).
 - **Featured section daily rotation (June 2026)** — `FEATURED_SERMON_POOL` (8 sermons) + `FEATURED_ARTICLE_POOL` (7 New Wine articles) in `app/library/page.tsx`. LCG seeded by UTC day index, two independent seeds (`dayIndex * 2`, `dayIndex * 2 + 1`), Fisher-Yates shuffle per pool. Returns `[articles[0], sermons[0], sermons[1]]` — article in hero, sermons in supporting. Books excluded from Featured pools currently. New endpoints: `GET /library/doc-meta?ids=...` (max 20 UUIDs), `GET /library/recent?limit=N`, `GET /library/counts`, `GET /pastors-notes/recent?limit=N`.
-- **Hero card image slot (June 2026)** — `DiscoverDocCard isHero=true` renders `aspect-[3/1] lg:aspect-auto lg:h-[45%]` top band; falls back to first `topic_tags[0]` or sourceKindLabel as placeholder text on `bg-muted`. `image_url?: string | null` on `DiscoverDoc` type — no DB column yet. Equal-height grid: `lg:h-[400px]` on container, `lg:h-full` on hero button, `lg:flex-1` on supporting cards.
+- **Hero card image slot (June 2026, revised)** — Featured hero in `app/library/page.tsx` uses two-column layout: `grid-cols-[3fr_2fr] gap-6`, default grid stretch so image matches text height. Left column: `text-xl` title, tightened inter-element margins (mb-2/mb-1.5). Right panel: renders `<Image fill object-cover className="rounded-lg">` when `image_url` present, sparkle `✦` placeholder otherwise. `image_url?: string | null` on `DiscoverDoc` TS type; `image_url text` column added to `documents` via migration 042 (pending run). `document-images` Supabase Storage bucket (public) holds per-document images; first test image is Mumford "Maintaining a Life of Worship". `scripts/setup_document_images.py` automates bucket creation + image upload + doc assignment. `frontend/next.config.ts` adds Supabase storage hostname (`jjerxncanaxlbdzcybab.supabase.co`) to `images.remotePatterns`.
 - **FastAPI `Query` import bug (June 2026)** — route default parameters like `Query(...)`, `Path(...)` are evaluated at module import time. Missing import → `NameError` at startup → uvicorn never binds → all routes in that file return 404 (not 500). Always include fastapi symbol in the import line if used as a route default.
 - **Batched neighbor chunk expansion** — `fetch_neighbor_chunks_batch()` collects all (document_id, chunk_index±1) pairs from top chunks, builds `.or_()` compound filter with `and()` conditions, batches at 30 pairs per query. Replaces sequential per-chunk lookups (was 10 calls for 5 chunks, now 1-2 calls total).
 - **Sparse citation rule** — system prompt enforces max 2-3 inline citations per response. Only cite when source of claim materially matters. Single citation sufficient when answer draws primarily from one source.
@@ -406,6 +409,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/ingest_commentaries.py` | Ingests HistoricalChristianFaith commentaries from SQLite DB. Groups by father_name, one document per father, chunks with tiktoken, embeds with OpenAI, inserts via psycopg2. Single-transaction pattern (`connect_with_retry()` + `ingest_father()`). Theological tagging (Reformed, Cessationist, Charismatic-Friendly, Desert Fathers, Patristic). Flags: `--dry-run`, `--father "Name"`, `--filter-charismatic`. |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content in Supabase (run 2026-04-17). |
 | `scripts/extract_book_quotes.py` | Extract quotable passages from Andrew Murray books via Claude Haiku 4.5. 10 batches per book, 5 quotes per batch (~50 quotes/book). Validates length (100-600 chars), filters metadata/URLs. Flags: `--dry-run`, `--limit N`, `--title`. Resume-safe. Inserts into `book_quotes` table. |
+| `scripts/setup_document_images.py` | One-off: creates `document-images` Supabase Storage bucket (public), downloads Unsplash image, uploads as `mumford-life-of-worship.jpg`, assigns public URL to "Maintaining a Life of Worship" document's `image_url`. Run after migration 042. |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
@@ -443,7 +447,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - Centered chat input as primary interaction
 - Perplexity-style inline citations rendered as gold-highlighted tags
 - Clicking a citation opens a source panel with document title, author, and page content
-- Sidebar: Shared across all routes. "Rhemata" wordmark, `text-primary` "New Chat" CTA, nav items (Chat/Library/Study), conditional content (Recents on chat, Saved Words on study). Footer: profile `DropdownMenu` for authenticated users (displayName/email, Profile sheet, Become a contributor [user role], Admin panel [admin role], Log out); Sign In button for guests. No right border — blends with `bg-sidebar` outer canvas. Design tokens throughout.
+- Sidebar: Shared across all routes. "Rhemata" wordmark, `text-primary` "New Chat" CTA, nav items (Chat/Discover/Study), conditional content (Recents on chat, Saved Words on study). Footer: profile `DropdownMenu` for authenticated users (displayName/email, Profile sheet, Become a contributor [user role], Admin panel [admin role], Log out); Sign In button for guests. No right border — blends with `bg-sidebar` outer canvas. Design tokens throughout.
 - Chat page: Floating panel layout — outer shell `bg-sidebar`, main content in `bg-background rounded-xl` panel (8px inset on all sides). Scroll fade (`sticky top-0 h-8 gradient`) at top of message list. Top bar has no bottom border; panel edge provides separation.
 - Search page at `/search` with keyword search, browse-all default listing, result cards with topic tag pills, and full article reader
 - Auth flow: all "Become a test user" entry points (sidebar, /home nav, /home hero, /home final CTA, guest limit) route through BetaGate → LoginModal; sessionStorage flag prevents re-gate within session. "Try it free — no account needed" and direct / visits bypass the gate entirely.
@@ -499,7 +503,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 - **Route:** `/study` — Study Mode page with tab-driven layout
 - **Layout:** Shared sidebar (w-64) with Saved Words list | Left panel (380px fixed: search, verse card, chapter view) | Right panel (flex:1: tab content)
-- **Sidebar:** Shared `sidebar.tsx` across Chat and Study. Uses `usePathname()` for active route. Chat shows Recents; Study shows Saved Words. Nav items: Chat (MessageSquare), Discover (Compass), Study (BookOpen). Active nav text `#e6e6e6`, inactive `#c1c1b8`. Gold "New Chat" CTA (`#b49238`). Hover standard: `onMouseEnter` bg `#262624`, `onMouseLeave` transparent.
+- **Sidebar:** Shared `sidebar.tsx` across Chat and Study. Uses `usePathname()` for active route. Chat shows Recents; Study shows Saved Words. Nav items: Chat (MessageSquare), Discover (Compass, href `/library`), Study (BookOpen). Active nav text `#e6e6e6`, inactive `#c1c1b8`. Gold "New Chat" CTA (`#b49238`). Hover standard: `onMouseEnter` bg `#262624`, `onMouseLeave` transparent. Nav label was "Library" — renamed to "Discover" (June 2026) in both `sidebar.tsx` and `mobile-tab-bar.tsx`.
 - **Saved words:** `saved_words` table in Supabase (migration 017). RLS policy scoped to `auth.uid()`. Toggle save/unsave from definition panel bookmark icon. Sidebar shows English gloss + Strong's number, transliteration below.
 - **Verse lookup:** Direct Supabase query from frontend (`verses` table, keyed by `verse_id`). Client-side `parseRef()` with full 66-book `BOOK_MAP` + `ABBREV_TO_NAME`.
 - **Left panel:** Search bar, verse card, "View Chapter" button, chapter view. No interlinear or definition content.
@@ -594,7 +598,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **Study page slow load is Railway cold start** — not a DB issue. DB confirmed optimized: interlinear index scan 4.2ms, `match_sermon_chunks_by_ref` GIN index confirmed active. First request after idle takes 3-8s due to Railway sleep. No code fix; consider Railway paid plan or keep-alive ping if this becomes a user complaint.
 - **Stripe billing not yet wired** — `BILLING_ENABLED = false` constant in `frontend/components/rhemata/weekly-limit-card.tsx`. Upgrade button renders disabled with "Coming soon" label. Flip to `true` and implement Stripe checkout when ready.
 - **All-caps titles (15 documents)** — OCR artifact from early magazine extraction. All are `magazine_article` (14) + 1 paper. Titles like "THE PLACE OF TRANFORMATION" (also has a spelling error). Approach not yet decided — options: in-place SQL title-caser UPDATE, or manual review. Scope confirmed, fix deferred.
-- **`image_url` DB column pending** — `DiscoverDoc` TS type already has `image_url?: string | null`; hero card renders it if present, falls back to placeholder. No `image_url TEXT` column on `documents` table yet. Add column + include in doc-meta SELECT when real images are available.
+- **Migration 042 + image setup not yet run** — `migrations/042_document_image_url.sql` must be run in Supabase SQL Editor to add `image_url text` to `documents`. Then `python3 scripts/setup_document_images.py` creates the `document-images` Storage bucket and assigns the first test image to the Mumford doc. Until migration 042 runs, the backend `/doc-meta` SELECT will error. Hero card falls back to sparkle placeholder until `image_url` is populated.
 - **Weekly usage ring: 0-query state** — at `used=0` the ring shows only the faint `--muted` track (arc guarded by `used > 0` to prevent zero-length arc producing a dot artifact with `stroke-linecap: round`). Expected behavior on first login of the week.
 
 ---

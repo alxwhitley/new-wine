@@ -37,7 +37,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
 │   ├── 040_fix_increment_user_query.sql  # Conditional increment (SELECT FOR UPDATE, returns allowed bool)
-│   └── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
+│   ├── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
+│   └── 042_document_image_url.sql        # Adds nullable image_url (text) column to documents — run before setup_document_images.py
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
 ├── backend/
@@ -159,6 +160,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - `documents.topic_tags` — text[] assigned from taxonomy (can be `null`, not just empty array — confirmed from live API)
 - `documents.bible_references` — text[], canonical refs like `"Romans 8:28"`, GIN indexed
 - `documents.fts_weighted` — tsvector on title, author, source_name, topic_tags
+- `documents.image_url` — text, nullable; Supabase Storage public URL for featured hero card image (migration 042)
 - Vector similarity via `match_chunks` SQL function (HNSW index, `hnsw.ef_search=200`)
 - Hybrid retrieval: query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) → top 30 (SOURCE_KIND_FUSION_WEIGHTS applied: commentary ×0.6, book ×0.8, lexicon ×0.5) → Cohere rerank top 30 → top 8
 - `search_documents` RPC: document-level FTS with highlighted snippets via ts_headline
@@ -193,7 +195,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Weekly query metering (June 2026): 50 queries/week per authenticated user, Monday UTC reset. `user_usage` table; `weekly_limit` stored per-row (not hardcoded) so Phase 2 billing can override per user. `increment_user_query` RPC uses `SELECT FOR UPDATE` + conditional UPDATE — counter never exceeds limit, no race at cap. Returns `allowed bool`; hard 429 fires before any LLM call. SSE meta includes `usage: {used, limit, week_start}`. Study endpoints excluded from count. Guest meter unchanged. Frontend: `useChat` owns state, seeds from `GET /usage` on mount, updates from SSE meta. `BILLING_ENABLED=false` flag in `weekly-limit-card.tsx`.
 - Discover page (June 2026): `app/library/page.tsx` rewritten as 6-section Discover view. Section order: Featured → Browse by type → Featured Authors → Recently Added → New Wine Archive → Pastors' Notes. All sections always render (empty state shown when no data). No card renders `description` or `content_summary` — both fields contain raw body text; omit-when-absent rule applies to all cards. Card display: type chip, author, title, up to 2 topic tags, year only.
 - Featured section daily rotation (June 2026): `FEATURED_SERMON_POOL` (8 sermons) and `FEATURED_ARTICLE_POOL` (7 New Wine articles) in `app/library/page.tsx`. LCG seeded by UTC day index, two independent seeds (`dayIndex * 2`, `dayIndex * 2 + 1`). Returns `[articles[0], sermons[0], sermons[1]]` — article in hero, sermons in supporting slots. Books excluded from Featured eligibility.
-- Hero card image slot (June 2026): `DiscoverDocCard` with `isHero=true` renders `aspect-[3/1] lg:aspect-auto lg:h-[45%]` top band. `image_url` field on `DiscoverDoc` TS type (`image_url?: string | null`). No `image_url` column exists in DB yet — placeholder renders `topic_tags?.[0] ?? sourceKindLabel(source_kind)` in uppercase on `bg-muted`. Equal-height Featured grid: `lg:h-[400px]` on container, `lg:h-full` on hero button, `lg:flex-1` on supporting cards.
+- Hero card image slot (June 2026, revised): Featured hero uses `grid-cols-[3fr_2fr] gap-6` (60/40), grid stretch (no `items-start`), `text-xl` title, tightened margins. Right panel: `<Image fill object-cover>` when `image_url` present, sparkle `✦` placeholder otherwise. `image_url text` column via migration 042 (pending). `document-images` Supabase Storage bucket (public); first image: `mumford-life-of-worship.jpg`. `frontend/next.config.ts` adds Supabase hostname to `images.remotePatterns`. Setup: run migration 042, then `python3 scripts/setup_document_images.py`.
 - FastAPI `Query` import bug (June 2026): Any `Query(...)`, `Path(...)`, etc. used as route default parameters are evaluated at module import time — missing import causes `NameError` → uvicorn never binds → all routes in the file are absent (not a 500; they 404). Always include fastapi symbols in the import line if used as defaults.
 - `/home` landing page (June 2026): New public route `app/home/page.tsx` — no auth required. Animated Chat/Study/Discover mockups (IntersectionObserver, once at 30% viewport), marquee with `@keyframes marquee-left/right` in `globals.css`, Why It Matters two-column contrast, Final CTA. New CSS token: `--gold-light: 44 60% 62%` added to `:root` and `@theme inline` in `globals.css`. `/` route untouched.
 - Beta password gate (June 2026): `components/auth/BetaGate.tsx` — client-side modal, required code "rhema", stores `beta_access=1` in `sessionStorage` on success. Wired in all three app pages and `/home`. "Try it free — no account needed" and direct `/` are ungated. `LoginModal` gained `initialMode?: "signin" | "signup"` prop; sidebar guest footer changed from "Sign in" to "Become a test user" primary Button.
@@ -237,6 +239,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 | `scripts/backfill_phrase_refs.py` | Backfill bible_references via phrase matching (no LLM). Flags: `--source-kind`, `--author`, `--limit`, `--dry-run`, `--force`, `--chunks` |
 | `scripts/fix_article_json.py` | One-off migration: fixed 30 chunks with raw JSON content (run 2026-04-17) |
 | `scripts/extract_book_quotes.py` | Extract quotable passages from Murray books via Claude Haiku 4.5. Flags: `--dry-run`, `--limit`, `--title` |
+| `scripts/setup_document_images.py` | One-off: creates `document-images` Storage bucket, downloads Unsplash image, uploads, assigns `image_url` to Mumford doc. Run after migration 042. |
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
