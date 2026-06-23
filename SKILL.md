@@ -98,7 +98,13 @@ repo/
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
 │   ├── 040_fix_increment_user_query.sql  # Conditional increment fix (SELECT FOR UPDATE, returns allowed bool)
 │   ├── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
-│   └── 042_document_image_url.sql        # Adds nullable image_url (text) column to documents
+│   ├── 042_document_image_url.sql        # Adds nullable image_url (text) column to documents
+│   ├── 043_sources_license.sql           # sources table (one row per rights-holder) + source_license_audit; RLS service-role only
+│   ├── 044_documents_source_id.sql       # documents.source_id uuid FK → sources (ON DELETE SET NULL) + index
+│   ├── 045_sources_visible.sql           # sources.visible boolean (superseded by 046)
+│   ├── 046_sources_visibility.sql        # replaces visible with visibility text ('shown'|'hidden', DEFAULT 'hidden' = fail-closed)
+│   ├── 047_retrieval_visibility_gate.sql # visibility gate WHERE clause in match_chunks + search_chunks_fts (variant a)
+│   └── 048_safe_mode.sql                 # app_settings table + safe_mode='off' row; gate reads flag once per RPC call
 ├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
@@ -152,7 +158,8 @@ repo/
 - `id` (uuid), `title` (text), `author` (text)
 - `source_name` (text), `source_type` (text), `source_kind` (text)
 - `citation_mode` (text) — `'citable'` | `'silent_context'`
-- `is_copyrighted` (boolean, default false)
+- `is_copyrighted` (boolean, default false) — **unreliable** (e.g. Derek Prince docs are `false` despite being copyrighted). License gate ignores this field deliberately.
+- `source_id` (uuid, nullable) — FK → `sources` (ON DELETE SET NULL). Must be set at ingest time. NULL = unlinked; all current unlinked docs (18) are non-copyrighted UNRESOLVED.
 - `year` (int), `issue` (text), `url` (text, nullable)
 - `topic_tags` (text[]) — assigned from taxonomy
 - `bible_references` (text[], default `'{}'`) — canonical refs like `"Romans 8:28"`; GIN indexed
@@ -197,6 +204,23 @@ repo/
 - `quote_text` (text), `quote_index` (int), `created_at` (timestamptz)
 - Index on `document_id`
 
+**`sources` table** — one row per rights-holder entity (migrations 043, 046; 40 rows)
+- `id` (uuid PK), `name` (text UNIQUE), `slug` (text UNIQUE, nullable)
+- `license_status` text NOT NULL DEFAULT 'unlicensed' CHECK ('public_domain'|'owned'|'licensed'|'unlicensed') — TRUTH about rights; never overwritten by switches
+- `visibility` text NOT NULL DEFAULT 'hidden' CHECK ('shown'|'hidden') — what the gate obeys; DEFAULT 'hidden' = fail-closed for new entities
+- `retrievable` boolean GENERATED ALWAYS AS (license_status IN ('public_domain','owned')) — informational only; NOT read by the gate
+- `permission_granted_at`, `permission_contact`, `permission_terms`, `notes` — optional provenance fields
+- RLS: service-role only
+
+**`source_license_audit` table** — immutable log of license_status changes (migration 043)
+- `id` (uuid), `source_id` (FK → sources CASCADE DELETE), `old_status`, `new_status`, `changed_by`, `note`, `changed_at`
+- Created but not yet written by any admin UI.
+
+**`app_settings` table** — global key/value store (migration 048)
+- `key` (text PK), `value` (text NOT NULL), `updated_at` (timestamptz)
+- One row: `key='safe_mode', value='off'` (default — no behavior change on apply)
+- RLS: service-role only
+
 ---
 
 ## Key Decisions Already Made
@@ -220,7 +244,7 @@ repo/
 - **JWT auth** via Supabase JWKS endpoint (`PyJWKClient`)
 - **Bible Study articles excluded** from extraction pipeline (reference materials, not theological teaching)
 - **Ingest auto-tagging** — ingest.py tags every new document post-chunk-insert via Groq Llama 3.3 70B; strict 3–6 tags, main themes only, non-fatal
-- **is_copyrighted path-based** — `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false
+- **is_copyrighted path-based** — `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false. **Unreliable** (Derek Prince → `false` despite being copyrighted). License gate deliberately ignores this flag — do not "fix" the gate to read `is_copyrighted`.
 - **Sermon transcripts excluded from search** — search_documents RPC defaults source_kind to "magazine_article"; transcripts available in chat retrieval only
 - **All scripts in `scripts/`** — no Python files at project root; all use `Path(__file__).resolve().parent.parent` for project root
 - **Bible reference tracking** — `documents.bible_references text[]` populated via Groq Llama 3.3 70B extraction; shared helper at `scripts/bible_refs.py` normalizes to `"Book Chapter:Verse"` canonical form against 66-book set + alias map; non-fatal (returns `[]` on failure); auto-populated during ingest in both `ingest.py` and `ingest_magazine.py`; backfill via `extract_bible_refs.py`
@@ -252,6 +276,14 @@ repo/
 - **`/home` landing page (June 2026):** New public route `app/home/page.tsx` — marketing landing page, no auth required. Sections: nav, hero, marquee, Why It Matters two-column contrast, Chat/Discover/Study feature mockups with IntersectionObserver scroll-triggered animations (once at 30% viewport, no loop), stats strip, Explore More six-card grid, Final CTA, footer. Mockups use imperative DOM manipulation (Chat/Discover) and React state (Study) to avoid excessive re-renders. Marquee: two rows, `@keyframes marquee-left/right` in `globals.css`, 88s/72s durations, Spirit-gifts topic pills, `prefers-reduced-motion` guard. New design token: `--gold-light: 44 60% 62%` added to `:root` and `@theme inline`. `/` route untouched.
 - **Beta password gate (June 2026):** `components/auth/BetaGate.tsx` — client-side modal password prompt for beta access. Required code: `rhema` (case-sensitive, exact). On success: writes `beta_access=1` to `sessionStorage` and calls `onSuccess`. On failure: inline "Incorrect access code", retry allowed. Once unlocked in a session, clicking any "Become a test user" button skips the gate and opens `LoginModal` directly. Gate is client-side only — not server-enforced; acceptable for beta-access-control (not security). Guest path (`/` direct, "Try it free — no account needed") is fully ungated. Gate wired in `app/page.tsx`, `app/library/page.tsx`, `app/study/page.tsx`, and `app/home/page.tsx`. Sidebar guest footer: single "Become a test user" primary Button (replaces "Sign in" ghost button); routes through gate. `/home` nav: "Log in" link removed; "Become a test user" routes through gate.
 - **`LoginModal.initialMode` prop (June 2026):** `initialMode?: "signin" | "signup"` controls which mode the modal opens in (default: "signin"). Signup mode shows "Become a test user" as title and submit button label. Toggle link still present in both modes — returning users can always switch to signin after entering the gate.
+- **License Control System (June 2026, migrations 043–048):** SQL-layer fail-closed gate preventing unlicensed content from reaching retrieval. Does NOT touch `INCLUDE_COPYRIGHTED` env flag or Python `citation_mode` filtering — both still operate as before.
+  - **Architecture:** `sources` (one row per rights-holder, 40 entities): `license_status` text = TRUTH about rights; `visibility` text DEFAULT 'hidden' = what the gate obeys; `retrievable` generated boolean = informational only (NOT read by gate). `documents.source_id` FK → sources ON DELETE SET NULL (3,511 of 3,529 docs linked; 18 unlinked are non-copyrighted UNRESOLVED). `source_license_audit` table created, not yet written by any UI. `app_settings` key/value with `safe_mode='off'` default.
+  - **Gate rule (MUST be preserved in all future RPC edits):** In both `match_chunks` and `search_chunks_fts`, a document is eligible if: `d.source_id IS NULL  OR  EXISTS (SELECT 1 FROM sources s WHERE s.id = d.source_id AND (s.license_status IN ('public_domain','owned') OR (NOT safe_mode_on AND s.visibility = 'shown')))`. `safe_mode_on` is a plpgsql variable read ONCE per function call from `app_settings`. Gate keys on the entity; deliberately ignores `documents.is_copyrighted`.
+  - **Fail-closed cases:** hidden entity → excluded. Copyrighted doc with `source_id IS NULL` → passes through (no such docs currently exist). New entity row → DEFAULT 'hidden' → excluded until explicitly shown.
+  - **`search_chunks_fts` is `LANGUAGE plpgsql`** (converted from sql in migration 048 to support the safe_mode variable). Keep it plpgsql.
+  - **Safe mode toggle:** `UPDATE app_settings SET value='on', updated_at=now() WHERE key='safe_mode'` — serves only PD/owned; ignores visibility; never writes to `sources.visibility` (reversible). `'off'` restores unlicensed-but-shown content. HNSW index preserved in both states.
+  - **⚠ CRITICAL INGEST GAP:** ALL current ingest scripts (`ingest.py`, `ingest_magazine.py`, `ingest_preceptaustin.py`, `ingest_lexicon.py`, and `rh-*` aliases) do NOT set `documents.source_id`. A copyrighted doc with `source_id IS NULL` bypasses the gate entirely. **Setting `source_id` at ingest time is the #1 requirement for any future ingest pipeline work.** This is an open gap — not yet built.
+  - **Open items:** admin UI for source management / `source_license_audit` writes (not built); ingest `source_id` enforcement (not built).
 
 ---
 
@@ -260,6 +292,7 @@ repo/
 - New Wine Magazine pipeline is operational — `is_copyrighted=true`, controlled by `INCLUDE_COPYRIGHTED` env var
 - `INCLUDE_COPYRIGHTED=true` in local `.env` and defaults true in `chat.py`
 - Current non-magazine documents are single-column — no multi-column OCR handling needed
+- **License gate enforcement:** every new document MUST have `source_id` set at ingest time (resolve or create the matching `sources` row). A copyrighted doc with `source_id IS NULL` bypasses the SQL-layer gate ungated. This is currently an open gap in all ingest scripts — see License Control System in Key Decisions.
 
 ---
 
@@ -523,6 +556,8 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 ## Remaining / Known Issues
 
+- **Ingest scripts do not set `source_id`** — `ingest.py`, `ingest_magazine.py`, `ingest_preceptaustin.py`, `ingest_lexicon.py`, and all `rh-*` pipeline aliases omit `documents.source_id`. Every new document ingested via these scripts will have `source_id = NULL`, bypassing the SQL-layer license gate for copyrighted content. Building this enforcement is the #1 open ingest task.
+- **License admin UI not built** — `source_license_audit` table is live but nothing writes to it yet. No UI exists for toggling `sources.visibility` or updating `license_status`. Currently done via direct SQL only.
 - **Migration 041 not yet run** — `migrations/041_pastors_notes_approval.sql` must be applied in Supabase SQL Editor before the approval gate is live. Without it, the `pastors_cards_status_check` constraint rejects `'pending'` and `POST /cards` 500s for contributors. Also creates the `get_user_emails` RPC and the own-pending-read RLS policy.
 - **Full 300-issue batch not yet run** — only 4 articles ingested from issue 03-1973
 - **Migration 012 not yet run** — needs to be applied in Supabase SQL Editor (Migration 013 for `bible_references` is applied as of 2026-04-10)

@@ -38,7 +38,13 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
 │   ├── 040_fix_increment_user_query.sql  # Conditional increment (SELECT FOR UPDATE, returns allowed bool)
 │   ├── 041_pastors_notes_approval.sql    # Adds 'pending' status to pastors_cards, RLS for own-pending read, get_user_emails RPC
-│   └── 042_document_image_url.sql        # Adds nullable image_url (text) column to documents — run before setup_document_images.py
+│   ├── 042_document_image_url.sql        # Adds nullable image_url (text) column to documents — run before setup_document_images.py
+│   ├── 043_sources_license.sql           # sources table (one row per rights-holder) + source_license_audit; RLS service-role only
+│   ├── 044_documents_source_id.sql       # documents.source_id uuid FK → sources (ON DELETE SET NULL) + index
+│   ├── 045_sources_visible.sql           # sources.visible boolean (superseded by 046)
+│   ├── 046_sources_visibility.sql        # replaces visible with visibility text ('shown'|'hidden', DEFAULT 'hidden' = fail-closed)
+│   ├── 047_retrieval_visibility_gate.sql # visibility gate WHERE clause in match_chunks + search_chunks_fts (variant a)
+│   └── 048_safe_mode.sql                 # app_settings table + safe_mode='off' row; gate reads flag once per RPC call
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
 ├── backend/
@@ -152,7 +158,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 
 ## Database
 - **Supabase** with pgvector enabled
-- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`, `book_quotes`, `user_usage`
+- Tables: `documents`, `chunks`, `verses`, `saved_words`, `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`, `book_quotes`, `user_usage`, `sources`, `source_license_audit`, `app_settings`
 - `documents.source_type` — `'sermon'` | `'background'` | `'magazine_article'` | `'commentary'` | `'book'` | `'paper'` | `'other'`
 - `documents.source_kind` — taxonomy field (e.g. `'magazine_article'`)
 - `documents.citation_mode` — `'citable'` | `'silent_context'`
@@ -161,6 +167,10 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - `documents.bible_references` — text[], canonical refs like `"Romans 8:28"`, GIN indexed
 - `documents.fts_weighted` — tsvector on title, author, source_name, topic_tags
 - `documents.image_url` — text, nullable; Supabase Storage public URL for featured hero card image (migration 042)
+- `documents.source_id` — uuid FK → `sources` (ON DELETE SET NULL); must be set at ingest time; NULL means unlinked (18 UNRESOLVED non-copyrighted docs); the SQL-layer license gate reads this column
+- `sources` — one row per rights-holder entity (40 rows). `license_status` text ('public_domain'|'owned'|'licensed'|'unlicensed') = truth about rights; `visibility` text ('shown'|'hidden', DEFAULT 'hidden' = fail-closed) = what the gate obeys; `retrievable` generated boolean (informational only, NOT read by the gate). RLS: service-role only.
+- `source_license_audit` — immutable log of `license_status` changes. Created, not yet written by any UI.
+- `app_settings` — global key/value table. One row: `key='safe_mode', value='off'`. RLS: service-role only.
 - Vector similarity via `match_chunks` SQL function (HNSW index, `hnsw.ef_search=200`)
 - Hybrid retrieval: query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) → top 30 (SOURCE_KIND_FUSION_WEIGHTS applied: commentary ×0.6, book ×0.8, lexicon ×0.5) → Cohere rerank top 30 → top 8
 - `search_documents` RPC: document-level FTS with highlighted snippets via ts_headline
@@ -177,7 +187,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Single-column PDFs only — no multi-column OCR needed yet
 - Bible Study articles excluded from extraction pipeline
 - Topic tagging: 257-tag taxonomy (15 categories), validated against VALID_TAGS set in scripts/taxonomy.py, retry if < 3 valid
-- is_copyrighted derived from folder path: `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false
+- is_copyrighted derived from folder path: `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false. **This flag is unreliable** (e.g. Derek Prince docs are `false` despite being copyrighted works). The license gate deliberately ignores it — do not "fix" the gate to read `is_copyrighted`.
 - Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex.
 - Brand reset complete (June 2026): Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 - Study Mode restructured (June 2026): single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
@@ -199,6 +209,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - FastAPI `Query` import bug (June 2026): Any `Query(...)`, `Path(...)`, etc. used as route default parameters are evaluated at module import time — missing import causes `NameError` → uvicorn never binds → all routes in the file are absent (not a 500; they 404). Always include fastapi symbols in the import line if used as defaults.
 - `/home` landing page (June 2026): New public route `app/home/page.tsx` — no auth required. Animated Chat/Study/Discover mockups (IntersectionObserver, once at 30% viewport), marquee with `@keyframes marquee-left/right` in `globals.css`, Why It Matters two-column contrast, Final CTA. New CSS token: `--gold-light: 44 60% 62%` added to `:root` and `@theme inline` in `globals.css`. `/` route untouched.
 - Beta password gate (June 2026): `components/auth/BetaGate.tsx` — client-side modal, required code "rhema", stores `beta_access=1` in `sessionStorage` on success. Wired in all three app pages and `/home`. "Try it free — no account needed" and direct `/` are ungated. `LoginModal` gained `initialMode?: "signin" | "signup"` prop; sidebar guest footer changed from "Sign in" to "Become a test user" primary Button.
+- License Control System (June 2026, migrations 043–048): SQL-layer fail-closed gate preventing unlicensed content from reaching retrieval. Architecture: `sources` table (one row per rights-holder, 40 entities, `license_status` = truth, `visibility` = gate dial); `documents.source_id` FK (3,511 of 3,529 docs linked; 18 unlinked are non-copyrighted UNRESOLVED); `app_settings` key/value (`safe_mode`). **Gate rule (preserved across all future RPC edits):** a chunk is eligible if `source_id IS NULL` OR `EXISTS (SELECT 1 FROM sources s WHERE s.id = d.source_id AND (s.license_status IN ('public_domain','owned') OR (NOT safe_mode_on AND s.visibility = 'shown')))`. Gate keys on the entity, deliberately ignores `documents.is_copyrighted` (unreliable). `search_chunks_fts` is `LANGUAGE plpgsql` (was sql) — keep it plpgsql so the safe_mode variable can be declared. **Safe mode:** `UPDATE app_settings SET value='on' WHERE key='safe_mode'` serves only PD/owned; `'off'` restores unlicensed-but-shown content; `sources.visibility` is never written by the switch. **CRITICAL — ingest gap:** ALL ingest scripts (`ingest.py`, `ingest_magazine.py`, `ingest_preceptaustin.py`, `ingest_lexicon.py`, and the rh-* aliases) do NOT yet set `documents.source_id`. A copyrighted doc with `source_id IS NULL` slips through the gate ungated. Setting `source_id` at ingest time is the #1 requirement for any future ingest pipeline work. **Open items:** admin UI for `source_license_audit` (not built), ingest source_id enforcement (not built). Did NOT touch `INCLUDE_COPYRIGHTED` env flag or Python `citation_mode` filtering — both still operate as before.
 
 ---
 
