@@ -701,7 +701,7 @@ export default function LibraryPage() {
                       type="text"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      onFocus={() => setShowSuggestions(true)}
+                      onClick={() => setShowSuggestions(true)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSearch(); } }}
                       placeholder="Search articles, authors, topics…"
                       aria-label="Search"
