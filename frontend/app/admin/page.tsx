@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
-import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Sheet,
   SheetContent,
@@ -41,12 +42,6 @@ interface LicenseSource {
   license_status: string;
   visibility: string;
   doc_count: number | null;
-}
-
-interface PendingLicenseChange {
-  sourceId: string;
-  sourceName: string;
-  newStatus: string;
 }
 
 interface SourceToggle {
@@ -276,7 +271,9 @@ export default function AdminPage() {
   const [licenseSourcesLoading, setLicenseSourcesLoading] = useState(true);
   const [safeMode, setSafeMode] = useState<"on" | "off">("off");
   const [safeModeLoading, setSafeModeLoading] = useState(true);
-  const [pendingLicenseChange, setPendingLicenseChange] = useState<PendingLicenseChange | null>(null);
+
+  // Corpus view tab
+  const [corpusTab, setCorpusTab] = useState<"governance" | "pipelines">("governance");
 
   // Corpus monitor
   const [counts, setCounts] = useState<CountData>({});
@@ -434,21 +431,6 @@ export default function AdminPage() {
 
     await Promise.all(filterPromises);
     setCounts(newCounts);
-
-    const [docsRes, chunksRes, versesRes, interlinearRes] = await Promise.all([
-      supabase.from("documents").select("*", { count: "exact", head: true }),
-      supabase.from("chunks").select("*", { count: "exact", head: true }),
-      supabase.from("verses").select("*", { count: "exact", head: true }),
-      supabase.from("interlinear_words").select("*", { count: "exact", head: true }),
-    ]);
-
-    setGlobalStats({
-      totalDocuments: docsRes.count ?? 0,
-      totalChunks: chunksRes.count ?? 0,
-      totalVerses: versesRes.count ?? 0,
-      totalInterlinearWords: interlinearRes.count ?? 0,
-    });
-
     setLastUpdated(new Date());
   }, []);
 
@@ -475,6 +457,18 @@ export default function AdminPage() {
       .then((data) => setSafeMode(data.value === "on" ? "on" : "off"))
       .catch(() => {})
       .finally(() => setSafeModeLoading(false));
+
+    fetch(`${API}/admin/stats`, { headers })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) =>
+        setGlobalStats({
+          totalDocuments: data.documents ?? 0,
+          totalChunks: data.chunks ?? 0,
+          totalVerses: data.verses ?? 0,
+          totalInterlinearWords: data.interlinear_words ?? 0,
+        })
+      )
+      .catch(() => {});
 
     fetch(`${API}/pastors-notes/requests`, { headers })
       .then((r) => r.json())
@@ -596,14 +590,11 @@ export default function AdminPage() {
     [accessToken]
   );
 
-  function handleLicenseStatusSelect(sourceId: string, sourceName: string, currentStatus: string, newStatus: string) {
-    if (newStatus === currentStatus) return;
-    setPendingLicenseChange({ sourceId, sourceName, newStatus });
-  }
-
-  async function handleLicenseStatusConfirm() {
-    if (!pendingLicenseChange || !accessToken) return;
-    const { sourceId, newStatus } = pendingLicenseChange;
+  async function handleLicenseStatusChange(sourceId: string, currentStatus: string, newStatus: string) {
+    if (newStatus === currentStatus || !accessToken) return;
+    setLicenseSources((prev) =>
+      prev.map((s) => (s.id === sourceId ? { ...s, license_status: newStatus } : s))
+    );
     try {
       const res = await fetch(`${API}/admin/license-sources/${sourceId}/license-status`, {
         method: "PATCH",
@@ -611,14 +602,12 @@ export default function AdminPage() {
         body: JSON.stringify({ license_status: newStatus }),
       });
       if (!res.ok) throw new Error();
-      setLicenseSources((prev) =>
-        prev.map((s) => (s.id === sourceId ? { ...s, license_status: newStatus } : s))
-      );
-      showToast("License status updated.");
     } catch {
+      setLicenseSources((prev) =>
+        prev.map((s) => (s.id === sourceId ? { ...s, license_status: currentStatus } : s))
+      );
       showToast("Failed to update license status.");
     }
-    setPendingLicenseChange(null);
   }
 
   async function handleSafeModeToggle() {
@@ -1103,341 +1092,336 @@ export default function AdminPage() {
 
           {/* Corpus */}
           <section id="corpus">
-            <h2 className="text-xl font-semibold text-foreground font-sans mb-8">Corpus</h2>
+            <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Corpus</h2>
 
-            {/* License controls */}
-            <div className="mb-12">
-              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
-                License controls
-              </h3>
+            <Tabs
+              value={corpusTab}
+              onValueChange={(v) => setCorpusTab(v as "governance" | "pipelines")}
+            >
+              <TabsList className="mb-8">
+                <TabsTrigger value="governance">Governance</TabsTrigger>
+                <TabsTrigger value="pipelines">Pipelines</TabsTrigger>
+              </TabsList>
 
-              {/* Safe mode toggle */}
-              <div
-                className={
-                  "flex items-center justify-between rounded-lg border p-4 mb-6 " +
-                  (safeMode === "on"
-                    ? "bg-amber-500/10 border-amber-500/50"
-                    : "bg-card border-border")
-                }
-              >
-                <div>
-                  <p
-                    className={
-                      "text-sm font-semibold " +
-                      (safeMode === "on" ? "text-amber-600 dark:text-amber-400" : "text-foreground")
-                    }
-                  >
-                    Safe mode{safeMode === "on" ? " — ACTIVE" : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {safeMode === "on"
-                      ? "Serving only public_domain + owned sources. Visibility settings are bypassed."
-                      : "Serving all shown sources, including licensed. Visibility controls are active."}
-                  </p>
-                </div>
-                <Switch
-                  checked={safeMode === "on"}
-                  onCheckedChange={handleSafeModeToggle}
-                  disabled={safeModeLoading}
-                  className={safeMode === "on" ? "data-[state=checked]:bg-amber-500" : ""}
-                />
-              </div>
+              {/* ── Governance ─────────────────────────────────────────── */}
+              <TabsContent value="governance">
 
-              {/* Pending license_status confirmation */}
-              {pendingLicenseChange && (
-                <div className="rounded-lg border border-border bg-card p-4 mb-4 flex items-center justify-between gap-4">
-                  <p className="text-sm text-foreground">
-                    Change <span className="font-medium">{pendingLicenseChange.sourceName}</span> to{" "}
-                    <span className="font-medium font-mono">{pendingLicenseChange.newStatus}</span>?
-                  </p>
-                  <div className="flex gap-2 shrink-0">
-                    <Button size="sm" variant="outline" onClick={() => setPendingLicenseChange(null)}>
-                      Cancel
-                    </Button>
-                    <Button size="sm" onClick={handleLicenseStatusConfirm}>
-                      Confirm
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Sources table */}
-              {licenseSourcesLoading ? (
-                <SkeletonRows />
-              ) : licenseSources.length === 0 ? (
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">No sources found. Check the backend connection.</p>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <div className="grid grid-cols-[1fr_3rem_9rem_3.5rem] gap-x-4 px-4 py-2 border-b border-border bg-muted/40">
-                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</span>
-                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Docs</span>
-                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">License</span>
-                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Shown</span>
-                  </div>
-                  <div className="divide-y divide-border">
-                    {licenseSources.map((src) => {
-                      const isSentinel = src.id === SENTINEL_SOURCE_ID;
-                      return (
-                        <div
-                          key={src.id}
-                          className={
-                            "grid grid-cols-[1fr_3rem_9rem_3.5rem] gap-x-4 px-4 py-3 items-center" +
-                            (isSentinel ? " opacity-50" : "")
-                          }
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{src.name}</p>
-                            {isSentinel && (
-                              <p className="text-xs text-muted-foreground">Protected — read-only</p>
-                            )}
-                          </div>
-                          <span className="text-xs text-muted-foreground text-right tabular-nums">
-                            {src.doc_count !== null ? src.doc_count.toLocaleString() : "—"}
-                          </span>
-                          {isSentinel ? (
-                            <span className="text-xs text-muted-foreground text-center">{src.license_status}</span>
-                          ) : (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="flex items-center justify-between gap-1 text-xs border border-border rounded px-2 py-1 text-foreground hover:bg-accent transition-colors w-full">
-                                  <span className="font-mono">{src.license_status}</span>
-                                  <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {LICENSE_STATUSES.map((status) => (
-                                  <DropdownMenuItem
-                                    key={status}
-                                    onClick={() => handleLicenseStatusSelect(src.id, src.name, src.license_status, status)}
-                                  >
-                                    <span className="font-mono">{status}</span>
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                          <div className="flex justify-end">
-                            <Switch
-                              checked={src.visibility === "shown"}
-                              onCheckedChange={() => handleVisibilityToggle(src.id, src.visibility)}
-                              disabled={isSentinel}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Retrieval controls */}
-            <div className="mb-12">
-              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
-                Retrieval controls
-              </h3>
-
-              {sourcesLoading ? (
-                <SkeletonRows />
-              ) : sources.length === 0 ? (
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">
-                    No sources found. Check the backend connection.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-8">
-                  {globalToggles.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-3">
-                        Global Settings
-                      </p>
-                      <div className="space-y-2">
-                        {globalToggles.map((s) => (
-                          <div
-                            key={s.id}
-                            className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                          >
-                            <p className="text-sm font-medium text-foreground">{s.label}</p>
-                            <Switch
-                              checked={s.enabled}
-                              onCheckedChange={() => handleToggle(s.id)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {sourceToggles.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-3">
-                        Source Toggles
-                      </p>
-                      <div className="space-y-2">
-                        {sourceToggles.map((s) => (
-                          <div
-                            key={s.id}
-                            className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-foreground">{s.label}</p>
-                              {s.doc_count !== null && (
-                                <p className="text-xs mt-0.5 text-muted-foreground">
-                                  {s.doc_count.toLocaleString()} document
-                                  {s.doc_count !== 1 ? "s" : ""}
-                                </p>
-                              )}
-                            </div>
-                            <Switch
-                              checked={s.enabled}
-                              onCheckedChange={() => handleToggle(s.id)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {commentaryToggles.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-3">
-                        Commentaries
-                      </p>
-                      <div className="space-y-2">
-                        {commentaryToggles.map((s) => (
-                          <div
-                            key={s.id}
-                            className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-foreground">{s.label}</p>
-                              {s.doc_count !== null && (
-                                <p className="text-xs mt-0.5 text-muted-foreground">
-                                  {s.doc_count.toLocaleString()} document
-                                  {s.doc_count !== 1 ? "s" : ""}
-                                </p>
-                              )}
-                            </div>
-                            <Switch
-                              checked={s.enabled}
-                              onCheckedChange={() => handleToggle(s.id)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Ingestion monitor */}
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Ingestion monitor
-                </h3>
-                <span
-                  className={`inline-block h-2 w-2 rounded-full ${
-                    realtimeConnected ? "animate-pulse bg-green-500" : "bg-muted-foreground"
-                  }`}
-                />
-              </div>
-              {lastUpdated && (
-                <p className="text-xs text-muted-foreground mb-4">
-                  Last updated: {lastUpdated.toLocaleTimeString()}
-                </p>
-              )}
-
-              {/* Stats bar */}
-              <div className="flex flex-wrap gap-3 mb-8 p-3 rounded-lg bg-card border border-border">
-                <StatPill label="Total Documents" value={globalStats.totalDocuments} />
-                <StatPill label="Total Chunks" value={globalStats.totalChunks} />
-                <StatPill label="Total Verses" value={globalStats.totalVerses} />
-                <StatPill label="Interlinear Words" value={globalStats.totalInterlinearWords} />
-              </div>
-
-              {/* Card groups */}
-              {visibleGroups.map((group) => {
-                const groupCards = CARDS.filter((c) => c.group === group);
-                if (groupCards.length === 0) return null;
-                return (
-                  <div key={group} className="mb-8">
-                    <h4 className="text-base font-medium text-foreground font-sans mb-3">
-                      {group}
-                    </h4>
-                    <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                      {groupCards.map((card) => (
-                        <CorpusCardComponent
-                          key={card.id}
-                          card={card}
-                          count={counts[card.id]?.count ?? null}
-                          lastIngested={counts[card.id]?.lastIngested ?? null}
-                          pulsing={pulsingCards.has(card.id)}
-                          onClick={() => setSelectedCard(card)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Maintenance (collapsible) */}
-              {maintenanceCards.length > 0 && (
-                <div className="mb-8">
-                  <button
-                    onClick={() => setMaintenanceOpen((o) => !o)}
-                    className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
-                  >
-                    {maintenanceOpen ? (
-                      <ChevronUp className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    )}
-                    Maintenance
-                  </button>
-                  {maintenanceOpen && (
-                    <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-3">
-                      {maintenanceCards.map((card) => (
-                        <CorpusCardComponent
-                          key={card.id}
-                          card={card}
-                          count={null}
-                          lastIngested={null}
-                          pulsing={false}
-                          onClick={() => setSelectedCard(card)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Future targets (collapsible) */}
-              <div className="mb-8">
-                <button
-                  onClick={() => setFutureTargetsOpen((o) => !o)}
-                  className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
+                {/* Safe mode */}
+                <div
+                  className={
+                    "flex items-center justify-between rounded-lg border p-4 mb-8 " +
+                    (safeMode === "on"
+                      ? "bg-amber-500/10 border-amber-500/50"
+                      : "bg-card border-border")
+                  }
                 >
-                  {futureTargetsOpen ? (
-                    <ChevronUp className="h-3 w-3" />
-                  ) : (
-                    <ChevronDown className="h-3 w-3" />
-                  )}
-                  Future Corpus Targets
-                </button>
-                {futureTargetsOpen && (
-                  <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-3">
-                    {FUTURE_TARGETS.map((target) => (
-                      <FutureTargetCard key={target.id} target={target} />
-                    ))}
+                  <div>
+                    <p
+                      className={
+                        "text-sm font-semibold " +
+                        (safeMode === "on" ? "text-amber-600 dark:text-amber-400" : "text-foreground")
+                      }
+                    >
+                      Safe mode{safeMode === "on" ? " — ACTIVE" : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Serves only public domain + owned. Ignores visibility.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={safeMode === "on"}
+                    onCheckedChange={handleSafeModeToggle}
+                    disabled={safeModeLoading}
+                    className={safeMode === "on" ? "data-[state=checked]:bg-amber-500" : ""}
+                  />
+                </div>
+
+                {/* Counter */}
+                {!licenseSourcesLoading && licenseSources.length > 0 && (() => {
+                  const total = licenseSources.length;
+                  const exposed = licenseSources.filter(
+                    (s) => s.license_status === "unlicensed" && s.visibility === "shown"
+                  ).length;
+                  return (
+                    <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+                      <span>{total} source{total !== 1 ? "s" : ""}</span>
+                      {exposed > 0 && (
+                        <span className="inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-amber-600 dark:text-amber-400 font-medium">
+                          {exposed} unlicensed + shown
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Sources table */}
+                {licenseSourcesLoading ? (
+                  <SkeletonRows />
+                ) : licenseSources.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <p className="text-sm text-muted-foreground">No sources found. Check the backend connection.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <div className="grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-2 border-b border-border bg-muted/40">
+                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Docs</span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">License status</span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Retrievable</span>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {licenseSources.map((src) => {
+                        const isSentinel = src.id === SENTINEL_SOURCE_ID;
+                        const licenseColor =
+                          src.license_status === "public_domain" || src.license_status === "owned"
+                            ? "border-green-600/40 bg-green-600/10 text-green-700 dark:text-green-400"
+                            : src.license_status === "unlicensed"
+                            ? "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                            : "border-border bg-muted/40 text-muted-foreground";
+                        return (
+                          <div
+                            key={src.id}
+                            className={
+                              "grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-3 items-center" +
+                              (isSentinel ? " opacity-50" : "")
+                            }
+                          >
+                            <div className="min-w-0 flex items-center gap-1.5">
+                              {isSentinel && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
+                              <p className="text-sm font-medium text-foreground truncate">{src.name}</p>
+                            </div>
+                            <span className="text-xs text-muted-foreground text-right tabular-nums">
+                              {src.doc_count !== null ? src.doc_count.toLocaleString() : "—"}
+                            </span>
+                            {isSentinel ? (
+                              <span className={"text-xs text-center rounded-full border px-2 py-0.5 font-medium " + licenseColor}>
+                                {src.license_status}
+                              </span>
+                            ) : (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className={
+                                      "flex items-center justify-between gap-1 text-xs rounded-full border px-2 py-0.5 font-medium transition-colors hover:opacity-80 w-full " +
+                                      licenseColor
+                                    }
+                                  >
+                                    <span className="truncate">{src.license_status}</span>
+                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="center">
+                                  {LICENSE_STATUSES.map((status) => (
+                                    <DropdownMenuItem
+                                      key={status}
+                                      onClick={() => handleLicenseStatusChange(src.id, src.license_status, status)}
+                                    >
+                                      {status}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                            <div className="flex justify-end">
+                              {isSentinel ? (
+                                <span className="text-xs text-muted-foreground">protected</span>
+                              ) : (
+                                <Switch
+                                  checked={src.visibility === "shown"}
+                                  onCheckedChange={() => handleVisibilityToggle(src.id, src.visibility)}
+                                  className={src.visibility === "shown" ? "data-[state=checked]:bg-green-600" : ""}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
+              </TabsContent>
+
+              {/* ── Pipelines ──────────────────────────────────────────── */}
+              <TabsContent value="pipelines">
+
+                {/* Retrieval controls */}
+                <div className="mb-12">
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
+                    Retrieval controls
+                  </h3>
+
+                  {sourcesLoading ? (
+                    <SkeletonRows />
+                  ) : sources.length === 0 ? (
+                    <div className="rounded-lg border border-border bg-card p-4">
+                      <p className="text-sm text-muted-foreground">
+                        No sources found. Check the backend connection.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      {globalToggles.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-3">Global Settings</p>
+                          <div className="space-y-2">
+                            {globalToggles.map((s) => (
+                              <div
+                                key={s.id}
+                                className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
+                              >
+                                <p className="text-sm font-medium text-foreground">{s.label}</p>
+                                <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {sourceToggles.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-3">Source Toggles</p>
+                          <div className="space-y-2">
+                            {sourceToggles.map((s) => (
+                              <div
+                                key={s.id}
+                                className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground">{s.label}</p>
+                                  {s.doc_count !== null && (
+                                    <p className="text-xs mt-0.5 text-muted-foreground">
+                                      {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
+                                    </p>
+                                  )}
+                                </div>
+                                <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {commentaryToggles.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-3">Commentaries</p>
+                          <div className="space-y-2">
+                            {commentaryToggles.map((s) => (
+                              <div
+                                key={s.id}
+                                className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground">{s.label}</p>
+                                  {s.doc_count !== null && (
+                                    <p className="text-xs mt-0.5 text-muted-foreground">
+                                      {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
+                                    </p>
+                                  )}
+                                </div>
+                                <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Ingestion monitor */}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Ingestion monitor
+                    </h3>
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${
+                        realtimeConnected ? "animate-pulse bg-green-500" : "bg-muted-foreground"
+                      }`}
+                    />
+                  </div>
+                  {lastUpdated && (
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Last updated: {lastUpdated.toLocaleTimeString()}
+                    </p>
+                  )}
+
+                  {/* Stats bar */}
+                  <div className="flex flex-wrap gap-3 mb-8 p-3 rounded-lg bg-card border border-border">
+                    <StatPill label="Total Documents" value={globalStats.totalDocuments} />
+                    <StatPill label="Total Chunks" value={globalStats.totalChunks} />
+                    <StatPill label="Total Verses" value={globalStats.totalVerses} />
+                    <StatPill label="Interlinear Words" value={globalStats.totalInterlinearWords} />
+                  </div>
+
+                  {/* Card groups */}
+                  {visibleGroups.map((group) => {
+                    const groupCards = CARDS.filter((c) => c.group === group);
+                    if (groupCards.length === 0) return null;
+                    return (
+                      <div key={group} className="mb-8">
+                        <h4 className="text-base font-medium text-foreground font-sans mb-3">{group}</h4>
+                        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                          {groupCards.map((card) => (
+                            <CorpusCardComponent
+                              key={card.id}
+                              card={card}
+                              count={counts[card.id]?.count ?? null}
+                              lastIngested={counts[card.id]?.lastIngested ?? null}
+                              pulsing={pulsingCards.has(card.id)}
+                              onClick={() => setSelectedCard(card)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Maintenance (collapsible) */}
+                  {maintenanceCards.length > 0 && (
+                    <div className="mb-8">
+                      <button
+                        onClick={() => setMaintenanceOpen((o) => !o)}
+                        className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
+                      >
+                        {maintenanceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        Maintenance
+                      </button>
+                      {maintenanceOpen && (
+                        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-3">
+                          {maintenanceCards.map((card) => (
+                            <CorpusCardComponent
+                              key={card.id}
+                              card={card}
+                              count={null}
+                              lastIngested={null}
+                              pulsing={false}
+                              onClick={() => setSelectedCard(card)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Future targets (collapsible) */}
+                  <div className="mb-8">
+                    <button
+                      onClick={() => setFutureTargetsOpen((o) => !o)}
+                      className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
+                    >
+                      {futureTargetsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      Future Corpus Targets
+                    </button>
+                    {futureTargetsOpen && (
+                      <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-3">
+                        {FUTURE_TARGETS.map((target) => (
+                          <FutureTargetCard key={target.id} target={target} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
           </section>
         </main>
       </div>

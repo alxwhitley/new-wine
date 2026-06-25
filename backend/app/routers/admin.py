@@ -310,3 +310,20 @@ async def set_safe_mode(body: SetSafeModeBody, request: Request, user_id: str = 
 
     logger.info("[ADMIN] safe_mode → %s by %s", body.value, user_id)
     return {"value": body.value}
+
+
+@router.get("/stats")
+async def get_corpus_stats(request: Request, user_id: str = Depends(require_admin)):
+    """Return total row counts for documents, chunks, verses, interlinear_words.
+    Uses the service key so RLS is bypassed — the anon client returns 0 for
+    several of these tables because they have no public-read policy."""
+    db = get_supabase()
+    counts = {}
+    for table in ("documents", "chunks", "verses", "interlinear_words"):
+        try:
+            result = db.table(table).select("id", count="exact").execute()
+            counts[table] = result.count or 0
+        except Exception:
+            logger.warning("Failed to count %s", table)
+            counts[table] = 0
+    return counts
