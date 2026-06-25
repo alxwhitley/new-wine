@@ -28,6 +28,12 @@ from supabase import create_client
 from app.services.embeddings import embed_text
 from app.services.chunker import chunk_text
 from bible_refs import extract_bible_references
+from source_resolver import (
+    resolve_source_id,
+    SENTINEL_SOURCE_ID,
+    NEW_WINE_MAGAZINE_SOURCE_ID,
+    print_resolution_table,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -127,6 +133,11 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
     if bible_refs:
         print(f"  Bible refs: {len(bible_refs)} found ({', '.join(bible_refs[:5])}{'...' if len(bible_refs) > 5 else ''})")
 
+    # Resolve source_id — New Wine Magazine is seeded in source_aliases (050).
+    # Routing through resolve_source_id keeps miss-logging consistent with ingest.py.
+    _resolved_id, _norm_key, _via = resolve_source_id(db, "New Wine Magazine", author or None)
+    logger.info("Source resolved: key=%r id=%s via=%s", _norm_key, _resolved_id, _via)
+
     # Insert document
     doc_data = {
         "title": title,
@@ -140,6 +151,7 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
         "year": year,
         "topic_tags": topic_tags if topic_tags else None,
         "bible_references": bible_refs,
+        "source_id": _resolved_id,
     }
 
     doc_result = db.table("documents").insert(doc_data).execute()
@@ -241,5 +253,62 @@ def run():
     print(f"Done. {total_ingested} ingested, {total_skipped} skipped.")
 
 
+def dry_run_sources_magazine() -> None:
+    """Resolve attribution for every pending article in 03_approved/ and print
+    a table.  No DB writes, no chunking, no embeddings.  The source_name is
+    always 'New Wine Magazine' for this pipeline; resolution is via the
+    source_aliases table so the same resolver path is exercised as ingest.py."""
+    db = get_db()
+
+    md_files = sorted(APPROVED_DIR.rglob("*.md"))
+    # Mirror the ingest_issue filter — skip flagged subfolders
+    md_files = [f for f in md_files if "flagged" not in str(f)]
+
+    if not md_files:
+        print(f"No .md files found under {APPROVED_DIR}")
+        return
+
+    print(f"[DRY-RUN-SOURCES] Found {len(md_files)} article(s) — resolving attribution only")
+
+    rows = []
+    for md_path in md_files:
+        text = md_path.read_text(encoding="utf-8")
+        # Strip QA comments (mirrors ingest_article)
+        text = re.sub(r"<!--.*?-->\s*", "", text, flags=re.DOTALL)
+        meta, _ = parse_frontmatter(text)
+
+        author = meta.get("AUTHOR", "") or ""
+        if "(" in author:
+            author = author[: author.index("(")].rstrip()
+
+        # Magazine source_name is always fixed; still route through resolver so
+        # miss-logging fires correctly for any unexpected alias gaps.
+        source_name = "New Wine Magazine"
+        source_id, norm_key, via = resolve_source_id(db, source_name, author or None)
+
+        rows.append({
+            "file":        md_path.name,
+            "source_name": source_name,
+            "author":      author or None,
+            "norm_key":    norm_key,
+            "source_id":   source_id,
+            "via":         via,
+        })
+
+    print_resolution_table(rows, label=f"{len(md_files)} article(s) in 03_approved/")
+
+
 if __name__ == "__main__":
-    run()
+    import argparse
+    parser = argparse.ArgumentParser(description="Rhemata magazine ingestion")
+    parser.add_argument(
+        "--dry-run-sources",
+        action="store_true",
+        help="Resolve attribution strings and print source_id table — no DB writes, no chunking",
+    )
+    args = parser.parse_args()
+
+    if args.dry_run_sources:
+        dry_run_sources_magazine()
+    else:
+        run()

@@ -29,6 +29,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.chunker import chunk_text, token_len
 from bible_refs import extract_bible_references
+from source_resolver import normalize_alias_key, resolve_source_id, SENTINEL_SOURCE_ID, print_resolution_table
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ def already_ingested(source_hash: str) -> bool:
         conn.close()
 
 
-def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None, bible_refs=None) -> str:
+def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None, bible_refs=None, source_id: Optional[str] = None) -> str:
     """Insert a document row and return its UUID."""
     doc_id = str(uuid.uuid4())
     st = metadata.get("source_type", "")
@@ -255,6 +256,8 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
         "file_path":   file_path,
         "is_copyrighted": is_copyrighted,
     }
+    if source_id is not None:
+        row["source_id"] = source_id
     if url:
         row["url"] = url
     try:
@@ -367,7 +370,7 @@ def tag_document(doc_id, chunks):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False) -> tuple:
+def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False) -> tuple:
     """Returns (status, reason) where status is 'processed', 'skipped', or 'failed'."""
     print(f"\n{'='*60}")
     print(f"Processing: {file_path.name} {'[COPYRIGHTED]' if is_copyrighted else '[OPEN]'}")
@@ -375,7 +378,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
     # 0. Duplicate check via file content hash
     source_hash = hashlib.md5(file_path.read_bytes()).hexdigest()
-    if not dry_run and already_ingested(source_hash):
+    if not dry_run and not dry_run_sources and already_ingested(source_hash):
         print(f"  ⏭️  Already ingested — skipping")
         return ("skipped", "already_ingested")
 
@@ -429,6 +432,21 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     print(f"  Source:  {metadata.get('source_name')}")
     print(f"  Tags:    {metadata.get('topic_tags')}")
 
+    # Source resolution dry-run: resolve attribution → source_id and return.
+    # No chunking, embedding, or DB writes happen beyond this point when set.
+    if dry_run_sources:
+        source_name = metadata.get("source_name")
+        author_val = metadata.get("author")
+        source_id, norm_key, via = resolve_source_id(supabase, source_name, author_val)
+        return ("dry_run_sources", {
+            "file":        file_path.name,
+            "source_name": source_name,
+            "author":      author_val,
+            "norm_key":    norm_key,
+            "source_id":   source_id,
+            "via":         via,
+        })
+
     # 3. Chunk by token
     print("Chunking...")
     content = "\n\n".join(p for p in pages if p.strip())
@@ -461,6 +479,14 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
     # 5. Insert document row
     source_url = metadata.get("_url") or (txt_headers.get("SOURCE_URL") if txt_headers else None)
+
+    # Resolve attribution → source_id via alias table.
+    # ALIAS_MISS is printed by the resolver on a miss; source_id falls to sentinel.
+    _resolved_id, _norm_key, _via = resolve_source_id(
+        supabase, metadata.get("source_name"), metadata.get("author")
+    )
+    print(f"  Resolved source: {_norm_key!r} → {_resolved_id} (via {_via})")
+
     print("Inserting document record...")
     doc_id = insert_document(
         metadata,
@@ -468,6 +494,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         is_copyrighted=is_copyrighted,
         url=source_url,
         bible_refs=bible_refs,
+        source_id=_resolved_id,
     )
     print(f"  Document ID: {doc_id}")
 
@@ -490,13 +517,16 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Rhemata document ingestion")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without writing to Supabase")
+    parser.add_argument("--dry-run", action="store_true", help="Preview chunk content without writing to Supabase")
+    parser.add_argument("--dry-run-sources", action="store_true",
+                        help="Resolve attribution strings and print source_id table — no DB writes, no chunking")
     parser.add_argument("--source-dir", type=str, default=None,
                         help="Ingest files from this directory instead of the default scan dirs")
     parser.add_argument("--open", action="store_true",
                         help="Force is_copyrighted=False for all files (use with --source-dir)")
     args = parser.parse_args()
     dry_run = args.dry_run
+    dry_run_sources = args.dry_run_sources
 
     if args.source_dir:
         source_dir = Path(args.source_dir)
@@ -523,11 +553,6 @@ def main():
         print(f"No supported files found in {scan_dirs}")
         return
 
-    if dry_run:
-        print(f"[DRY RUN] Found {len(files)} file(s) to process")
-    else:
-        print(f"Found {len(files)} file(s) to process")
-
     def _is_copyrighted(path: Path) -> bool:
         if args.open:
             return False
@@ -535,6 +560,36 @@ def main():
         if "sources/youtube/" in s or "sources/magazine/" in s:
             return True
         return False
+
+    # ── Source-resolution dry-run (--dry-run-sources) ──────────────────────────
+    # Extracts metadata from each file, resolves attribution → source_id via
+    # source_aliases, and prints a table.  No chunking, embedding, or DB writes.
+    if dry_run_sources:
+        print(f"[DRY-RUN-SOURCES] Found {len(files)} file(s) — resolving attribution only")
+        rows = []
+        failed_files = []
+        for file_path in files:
+            status, result = ingest_file(
+                file_path,
+                is_copyrighted=_is_copyrighted(file_path),
+                dry_run_sources=True,
+            )
+            if status == "dry_run_sources":
+                rows.append(result)
+            else:
+                failed_files.append((file_path.name, result))
+        print_resolution_table(rows, label=f"{len(files)} file(s)")
+        if failed_files:
+            print("Files that failed before resolution could run:")
+            for name, reason in failed_files:
+                print(f"  {name}: {reason}")
+        return
+    # ── End dry-run-sources ────────────────────────────────────────────────────
+
+    if dry_run:
+        print(f"[DRY RUN] Found {len(files)} file(s) to process")
+    else:
+        print(f"Found {len(files)} file(s) to process")
 
     yt_ingested_dir = DOCS_FOLDER / "youtube" / "ingested"
     dp_ingested_dir = DOCS_FOLDER / "web" / "derek_prince" / "ingested"

@@ -10,6 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -24,7 +30,24 @@ import type { CorpusCard } from "@/components/admin/corpus-types";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
+const SENTINEL_SOURCE_ID = "267a09ac-76f3-43fb-901f-3015aef88e22";
+const LICENSE_STATUSES = ["public_domain", "owned", "licensed", "unlicensed"] as const;
+
 // ── Types ──────────────────────────────────────────────────────────────────
+
+interface LicenseSource {
+  id: string;
+  name: string;
+  license_status: string;
+  visibility: string;
+  doc_count: number | null;
+}
+
+interface PendingLicenseChange {
+  sourceId: string;
+  sourceName: string;
+  newStatus: string;
+}
 
 interface SourceToggle {
   id: string;
@@ -248,6 +271,13 @@ export default function AdminPage() {
   const [sources, setSources] = useState<SourceToggle[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(true);
 
+  // License controls
+  const [licenseSources, setLicenseSources] = useState<LicenseSource[]>([]);
+  const [licenseSourcesLoading, setLicenseSourcesLoading] = useState(true);
+  const [safeMode, setSafeMode] = useState<"on" | "off">("off");
+  const [safeModeLoading, setSafeModeLoading] = useState(true);
+  const [pendingLicenseChange, setPendingLicenseChange] = useState<PendingLicenseChange | null>(null);
+
   // Corpus monitor
   const [counts, setCounts] = useState<CountData>({});
   const [globalStats, setGlobalStats] = useState<GlobalStats>({
@@ -434,6 +464,18 @@ export default function AdminPage() {
       .catch(() => setSources([]))
       .finally(() => setSourcesLoading(false));
 
+    fetch(`${API}/admin/license-sources`, { headers })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setLicenseSources(data.sources ?? []))
+      .catch(() => setLicenseSources([]))
+      .finally(() => setLicenseSourcesLoading(false));
+
+    fetch(`${API}/admin/safe-mode`, { headers })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setSafeMode(data.value === "on" ? "on" : "off"))
+      .catch(() => {})
+      .finally(() => setSafeModeLoading(false));
+
     fetch(`${API}/pastors-notes/requests`, { headers })
       .then((r) => r.json())
       .then((data) => setRequests(Array.isArray(data) ? data : []))
@@ -529,6 +571,72 @@ export default function AdminPage() {
     },
     [accessToken]
   );
+
+  const handleVisibilityToggle = useCallback(
+    async (sourceId: string, currentVisibility: string) => {
+      if (!accessToken) return;
+      const newVis = currentVisibility === "shown" ? "hidden" : "shown";
+      setLicenseSources((prev) =>
+        prev.map((s) => (s.id === sourceId ? { ...s, visibility: newVis } : s))
+      );
+      try {
+        const res = await fetch(`${API}/admin/license-sources/${sourceId}/visibility`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ visibility: newVis }),
+        });
+        if (!res.ok) throw new Error();
+      } catch {
+        setLicenseSources((prev) =>
+          prev.map((s) => (s.id === sourceId ? { ...s, visibility: currentVisibility } : s))
+        );
+        showToast("Failed to update visibility.");
+      }
+    },
+    [accessToken]
+  );
+
+  function handleLicenseStatusSelect(sourceId: string, sourceName: string, currentStatus: string, newStatus: string) {
+    if (newStatus === currentStatus) return;
+    setPendingLicenseChange({ sourceId, sourceName, newStatus });
+  }
+
+  async function handleLicenseStatusConfirm() {
+    if (!pendingLicenseChange || !accessToken) return;
+    const { sourceId, newStatus } = pendingLicenseChange;
+    try {
+      const res = await fetch(`${API}/admin/license-sources/${sourceId}/license-status`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ license_status: newStatus }),
+      });
+      if (!res.ok) throw new Error();
+      setLicenseSources((prev) =>
+        prev.map((s) => (s.id === sourceId ? { ...s, license_status: newStatus } : s))
+      );
+      showToast("License status updated.");
+    } catch {
+      showToast("Failed to update license status.");
+    }
+    setPendingLicenseChange(null);
+  }
+
+  async function handleSafeModeToggle() {
+    if (!accessToken) return;
+    const newVal = safeMode === "on" ? "off" : "on";
+    setSafeMode(newVal);
+    try {
+      const res = await fetch(`${API}/admin/safe-mode`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ value: newVal }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setSafeMode(safeMode);
+      showToast("Failed to update safe mode.");
+    }
+  }
 
   const handleApprove = useCallback(
     async (id: string) => {
@@ -996,6 +1104,134 @@ export default function AdminPage() {
           {/* Corpus */}
           <section id="corpus">
             <h2 className="text-xl font-semibold text-foreground font-sans mb-8">Corpus</h2>
+
+            {/* License controls */}
+            <div className="mb-12">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
+                License controls
+              </h3>
+
+              {/* Safe mode toggle */}
+              <div
+                className={
+                  "flex items-center justify-between rounded-lg border p-4 mb-6 " +
+                  (safeMode === "on"
+                    ? "bg-amber-500/10 border-amber-500/50"
+                    : "bg-card border-border")
+                }
+              >
+                <div>
+                  <p
+                    className={
+                      "text-sm font-semibold " +
+                      (safeMode === "on" ? "text-amber-600 dark:text-amber-400" : "text-foreground")
+                    }
+                  >
+                    Safe mode{safeMode === "on" ? " — ACTIVE" : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {safeMode === "on"
+                      ? "Serving only public_domain + owned sources. Visibility settings are bypassed."
+                      : "Serving all shown sources, including licensed. Visibility controls are active."}
+                  </p>
+                </div>
+                <Switch
+                  checked={safeMode === "on"}
+                  onCheckedChange={handleSafeModeToggle}
+                  disabled={safeModeLoading}
+                  className={safeMode === "on" ? "data-[state=checked]:bg-amber-500" : ""}
+                />
+              </div>
+
+              {/* Pending license_status confirmation */}
+              {pendingLicenseChange && (
+                <div className="rounded-lg border border-border bg-card p-4 mb-4 flex items-center justify-between gap-4">
+                  <p className="text-sm text-foreground">
+                    Change <span className="font-medium">{pendingLicenseChange.sourceName}</span> to{" "}
+                    <span className="font-medium font-mono">{pendingLicenseChange.newStatus}</span>?
+                  </p>
+                  <div className="flex gap-2 shrink-0">
+                    <Button size="sm" variant="outline" onClick={() => setPendingLicenseChange(null)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleLicenseStatusConfirm}>
+                      Confirm
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sources table */}
+              {licenseSourcesLoading ? (
+                <SkeletonRows />
+              ) : licenseSources.length === 0 ? (
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-sm text-muted-foreground">No sources found. Check the backend connection.</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <div className="grid grid-cols-[1fr_3rem_9rem_3.5rem] gap-x-4 px-4 py-2 border-b border-border bg-muted/40">
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Docs</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">License</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Shown</span>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {licenseSources.map((src) => {
+                      const isSentinel = src.id === SENTINEL_SOURCE_ID;
+                      return (
+                        <div
+                          key={src.id}
+                          className={
+                            "grid grid-cols-[1fr_3rem_9rem_3.5rem] gap-x-4 px-4 py-3 items-center" +
+                            (isSentinel ? " opacity-50" : "")
+                          }
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{src.name}</p>
+                            {isSentinel && (
+                              <p className="text-xs text-muted-foreground">Protected — read-only</p>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground text-right tabular-nums">
+                            {src.doc_count !== null ? src.doc_count.toLocaleString() : "—"}
+                          </span>
+                          {isSentinel ? (
+                            <span className="text-xs text-muted-foreground text-center">{src.license_status}</span>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="flex items-center justify-between gap-1 text-xs border border-border rounded px-2 py-1 text-foreground hover:bg-accent transition-colors w-full">
+                                  <span className="font-mono">{src.license_status}</span>
+                                  <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {LICENSE_STATUSES.map((status) => (
+                                  <DropdownMenuItem
+                                    key={status}
+                                    onClick={() => handleLicenseStatusSelect(src.id, src.name, src.license_status, status)}
+                                  >
+                                    <span className="font-mono">{status}</span>
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                          <div className="flex justify-end">
+                            <Switch
+                              checked={src.visibility === "shown"}
+                              onCheckedChange={() => handleVisibilityToggle(src.id, src.visibility)}
+                              disabled={isSentinel}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Retrieval controls */}
             <div className="mb-12">
