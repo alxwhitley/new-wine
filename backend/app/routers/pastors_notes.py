@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 
-from app.auth import get_optional_user
+from app.auth import get_optional_user, require_contributor, require_admin_role
 from app.constants import TAXONOMY_LIST, VALID_TAGS
 from app.db.supabase import get_supabase
 
@@ -29,38 +29,6 @@ _TAGGING_PROMPT = (
     "- Return JSON only: {\"topic_tags\": [\"tag1\", \"tag2\", ...]}\n\n"
     "TAXONOMY (use ONLY these exact tags):\n" + TAXONOMY_LIST
 )
-
-
-# ── Role helpers ──────────────────────────────────────────────────────────────
-
-def get_user_role(user_id: str) -> str:
-    """Return the role for user_id from user_roles, defaulting to 'user'."""
-    db = get_supabase()
-    result = db.table("user_roles").select("role").eq("user_id", user_id).limit(1).execute()
-    if result.data:
-        return result.data[0]["role"]
-    return "user"
-
-
-class _RequireRole:
-    """FastAPI dependency: verify user is authenticated and has one of the allowed roles."""
-
-    def __init__(self, allowed):
-        # type: (List[str]) -> None
-        self.allowed = allowed
-
-    def __call__(self, request: Request) -> str:
-        user_id = get_optional_user(request)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        role = get_user_role(user_id)
-        if role not in self.allowed:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-        return user_id
-
-
-require_contributor = _RequireRole(["contributor", "admin"])
-require_admin_role = _RequireRole(["admin"])
 
 
 def _get_current_user(request: Request) -> str:

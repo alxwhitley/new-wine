@@ -293,6 +293,7 @@ export default function AdminPage() {
 
   // Shared
   const [toast, setToast] = useState<string | null>(null);
+  const [adminDataError, setAdminDataError] = useState(false);
 
   // ── Auth check ─────────────────────────────────────────────────────────
 
@@ -443,19 +444,19 @@ export default function AdminPage() {
     fetch(`${API}/admin/sources`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setSources(data.sources ?? []))
-      .catch(() => setSources([]))
+      .catch(() => { setSources([]); setAdminDataError(true); })
       .finally(() => setSourcesLoading(false));
 
     fetch(`${API}/admin/license-sources`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setLicenseSources(data.sources ?? []))
-      .catch(() => setLicenseSources([]))
+      .catch(() => { setLicenseSources([]); setAdminDataError(true); })
       .finally(() => setLicenseSourcesLoading(false));
 
     fetch(`${API}/admin/safe-mode`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setSafeMode(data.value === "on" ? "on" : "off"))
-      .catch(() => {})
+      .catch(() => setAdminDataError(true))
       .finally(() => setSafeModeLoading(false));
 
     fetch(`${API}/admin/stats`, { headers })
@@ -468,7 +469,7 @@ export default function AdminPage() {
           totalInterlinearWords: data.interlinear_words ?? 0,
         })
       )
-      .catch(() => {});
+      .catch(() => setAdminDataError(true));
 
     fetch(`${API}/pastors-notes/requests`, { headers })
       .then((r) => r.json())
@@ -1105,6 +1106,15 @@ export default function AdminPage() {
 
               {/* ── Governance ─────────────────────────────────────────── */}
               <TabsContent value="governance">
+
+                {/* Admin data error banner */}
+                {adminDataError && (
+                  <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                    <p className="text-sm font-medium text-destructive">
+                      Couldn&apos;t load admin data — check backend connection or auth.
+                    </p>
+                  </div>
+                )}
 
                 {/* Safe mode */}
                 <div

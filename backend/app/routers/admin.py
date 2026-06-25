@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from app.auth import require_admin
+from app.auth import require_admin_role
 from app.db.supabase import get_supabase
 from app.services.chunker import chunk_text
 from app.services.embeddings import embed_text
@@ -40,7 +40,7 @@ class SetSafeModeBody(BaseModel):
 
 
 @router.get("/sources")
-async def list_sources(request: Request, user_id: str = Depends(require_admin)):
+async def list_sources(request: Request, user_id: str = Depends(require_admin_role)):
     db = get_supabase()
 
     rows = db.table("source_toggles").select("*").order("created_at").execute()
@@ -85,7 +85,7 @@ async def list_sources(request: Request, user_id: str = Depends(require_admin)):
 
 
 @router.get("/document/{doc_id}/edit")
-async def get_document_for_edit(doc_id: str, request: Request, user_id: str = Depends(require_admin)):
+async def get_document_for_edit(doc_id: str, request: Request, user_id: str = Depends(require_admin_role)):
     """Return document fields and reassembled content for editing."""
     db = get_supabase()
 
@@ -120,7 +120,7 @@ async def get_document_for_edit(doc_id: str, request: Request, user_id: str = De
 
 
 @router.put("/document/{doc_id}/edit")
-async def update_document(doc_id: str, body: EditDocumentBody, request: Request, user_id: str = Depends(require_admin)):
+async def update_document(doc_id: str, body: EditDocumentBody, request: Request, user_id: str = Depends(require_admin_role)):
     """Update document metadata and re-chunk + re-embed content."""
     db = get_supabase()
 
@@ -162,7 +162,7 @@ async def update_document(doc_id: str, body: EditDocumentBody, request: Request,
 
 
 @router.delete("/document/{doc_id}")
-async def delete_document(doc_id: str, request: Request, user_id: str = Depends(require_admin)):
+async def delete_document(doc_id: str, request: Request, user_id: str = Depends(require_admin_role)):
     """Delete a document and all its chunks. Admin only."""
     db = get_supabase()
 
@@ -181,7 +181,7 @@ async def delete_document(doc_id: str, request: Request, user_id: str = Depends(
 
 
 @router.patch("/sources/{toggle_id}")
-async def toggle_source(toggle_id: str, request: Request, user_id: str = Depends(require_admin)):
+async def toggle_source(toggle_id: str, request: Request, user_id: str = Depends(require_admin_role)):
     db = get_supabase()
 
     # Get current state
@@ -211,7 +211,7 @@ async def toggle_source(toggle_id: str, request: Request, user_id: str = Depends
 # ── License controls ───────────────────────────────────────────────────────────
 
 @router.get("/license-sources")
-async def list_license_sources(request: Request, user_id: str = Depends(require_admin)):
+async def list_license_sources(request: Request, user_id: str = Depends(require_admin_role)):
     """List all sources with license_status, visibility, and doc count.
 
     Uses two queries (sources + all doc source_ids) instead of N+1 per-source
@@ -248,7 +248,7 @@ async def list_license_sources(request: Request, user_id: str = Depends(require_
 
 @router.patch("/license-sources/{source_id}/visibility")
 async def set_source_visibility(
-    source_id: str, body: SetVisibilityBody, request: Request, user_id: str = Depends(require_admin)
+    source_id: str, body: SetVisibilityBody, request: Request, user_id: str = Depends(require_admin_role)
 ):
     """Set visibility for a source. Sentinel source is hard-rejected."""
     if source_id == _SENTINEL_SOURCE_ID:
@@ -270,7 +270,7 @@ async def set_source_visibility(
 
 @router.patch("/license-sources/{source_id}/license-status")
 async def set_source_license_status(
-    source_id: str, body: SetLicenseStatusBody, request: Request, user_id: str = Depends(require_admin)
+    source_id: str, body: SetLicenseStatusBody, request: Request, user_id: str = Depends(require_admin_role)
 ):
     """Set license_status for a source. Sentinel source is hard-rejected."""
     if source_id == _SENTINEL_SOURCE_ID:
@@ -294,7 +294,7 @@ async def set_source_license_status(
 
 
 @router.get("/safe-mode")
-async def get_safe_mode(request: Request, user_id: str = Depends(require_admin)):
+async def get_safe_mode(request: Request, user_id: str = Depends(require_admin_role)):
     """Return the current safe_mode value from app_settings."""
     db = get_supabase()
     result = db.table("app_settings").select("value").eq("key", "safe_mode").limit(1).execute()
@@ -303,7 +303,7 @@ async def get_safe_mode(request: Request, user_id: str = Depends(require_admin))
 
 
 @router.patch("/safe-mode")
-async def set_safe_mode(body: SetSafeModeBody, request: Request, user_id: str = Depends(require_admin)):
+async def set_safe_mode(body: SetSafeModeBody, request: Request, user_id: str = Depends(require_admin_role)):
     """Toggle safe_mode on or off in app_settings."""
     if body.value not in {"on", "off"}:
         raise HTTPException(status_code=422, detail="value must be 'on' or 'off'")
@@ -318,7 +318,7 @@ async def set_safe_mode(body: SetSafeModeBody, request: Request, user_id: str = 
 
 
 @router.get("/stats")
-async def get_corpus_stats(request: Request, user_id: str = Depends(require_admin)):
+async def get_corpus_stats(request: Request, user_id: str = Depends(require_admin_role)):
     """Return total row counts for documents, chunks, verses, interlinear_words.
     Uses the service key so RLS is bypassed — the anon client returns 0 for
     several of these tables because they have no public-read policy."""

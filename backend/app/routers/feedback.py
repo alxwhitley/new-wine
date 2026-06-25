@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from app.auth import get_optional_user, require_admin
+from app.auth import get_optional_user, require_admin_role
 from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ async def list_feedback(
     request: Request,
     rating: Optional[str] = Query(None, description="Filter by rating: thumbs_up or thumbs_down"),
     source_type: Optional[str] = Query(None, description="Filter by source_type: chat_answer, commentary, word_study"),
-    user_id: str = Depends(require_admin),
+    user_id: str = Depends(require_admin_role),
 ):
     db = get_supabase()
 

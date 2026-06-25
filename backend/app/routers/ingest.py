@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 
-from app.auth import require_admin
+from app.auth import require_admin_role
 from app.db.supabase import get_supabase
 from app.services.extractor import extract_text_from_pdf
 from app.services.metadata import extract_metadata
@@ -21,7 +21,7 @@ async def ingest(
     request: Request,
     file: UploadFile = File(...),
     source_type: str = Form("sermon"),
-    user_id: str = Depends(require_admin),
+    user_id: str = Depends(require_admin_role),
 ):
     if source_type not in ("sermon", "background"):
         raise HTTPException(status_code=400, detail="source_type must be 'sermon' or 'background'")

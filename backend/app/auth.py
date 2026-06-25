@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+from typing import List, Optional
 
 import jwt
 from jwt import PyJWKClient
 from fastapi import HTTPException, Request
+
+from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
 
@@ -37,29 +39,31 @@ def get_optional_user(request: Request) -> Optional[str]:
         return None
 
 
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
+def get_user_role(user_id: str) -> str:
+    """Return the role for user_id from user_roles, defaulting to 'user'."""
+    db = get_supabase()
+    result = db.table("user_roles").select("role").eq("user_id", user_id).limit(1).execute()
+    if result.data:
+        return result.data[0]["role"]
+    return "user"
 
 
-def require_admin(request: Request) -> str:
-    """Extract JWT, verify email is admin. Returns user_id or raises 403."""
-    auth_header = request.headers.get("authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=403, detail="Not authenticated")
+class _RequireRole:
+    """FastAPI dependency: verify user is authenticated and has one of the allowed roles."""
 
-    token = auth_header[7:]
-    try:
-        signing_key = _jwks_client.get_signing_key_from_jwt(token)
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["ES256", "RS256"],
-            options={"verify_aud": False},
-        )
-    except Exception:
-        raise HTTPException(status_code=403, detail="Invalid token")
+    def __init__(self, allowed):
+        # type: (List[str]) -> None
+        self.allowed = allowed
 
-    email = payload.get("email", "")
-    if email != ADMIN_EMAIL:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    def __call__(self, request: Request) -> str:
+        user_id = get_optional_user(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        role = get_user_role(user_id)
+        if role not in self.allowed:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user_id
 
-    return payload.get("sub", "")
+
+require_contributor = _RequireRole(["contributor", "admin"])
+require_admin_role = _RequireRole(["admin"])
