@@ -212,31 +212,36 @@ async def toggle_source(toggle_id: str, request: Request, user_id: str = Depends
 
 @router.get("/license-sources")
 async def list_license_sources(request: Request, user_id: str = Depends(require_admin)):
-    """List all sources with license_status, visibility, and doc count."""
-    db = get_supabase()
-    rows = db.table("sources").select("id, name, license_status, visibility").order("name").execute()
-    sources = rows.data or []
+    """List all sources with license_status, visibility, and doc count.
 
-    results = []
-    for src in sources:
-        doc_count = None
-        try:
-            count_result = (
-                db.table("documents")
-                .select("id", count="exact")
-                .eq("source_id", src["id"])
-                .execute()
-            )
-            doc_count = count_result.count
-        except Exception:
-            logger.warning("Failed to count docs for source %s", src["id"])
-        results.append({
+    Uses two queries (sources + all doc source_ids) instead of N+1 per-source
+    count queries — the N+1 pattern caused ~4s response times that timed out in
+    production.
+    """
+    db = get_supabase()
+
+    sources_result = db.table("sources").select("id, name, license_status, visibility").order("name").execute()
+    if not sources_result.data:
+        logger.warning("[ADMIN] list_license_sources: sources query returned no data")
+        return {"sources": []}
+
+    # Single bulk fetch of all document source_ids; aggregate in Python.
+    docs_result = db.table("documents").select("source_id").execute()
+    from collections import Counter
+    doc_counts: Counter = Counter(
+        row["source_id"] for row in (docs_result.data or []) if row.get("source_id")
+    )
+
+    results = [
+        {
             "id": src["id"],
             "name": src["name"],
             "license_status": src["license_status"],
             "visibility": src["visibility"],
-            "doc_count": doc_count,
-        })
+            "doc_count": doc_counts.get(src["id"], 0),
+        }
+        for src in sources_result.data
+    ]
 
     return {"sources": results}
 
