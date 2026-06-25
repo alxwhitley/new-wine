@@ -6,11 +6,12 @@ import { Database, LogOut, Shield } from "lucide-react";
 
 interface AuthButtonProps {
   user: User | null;
+  role: string | null;
   onSignInClick: () => void;
   onSignOut: () => void;
 }
 
-export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButtonProps) {
+export default function AuthButton({ user, role, onSignInClick, onSignOut }: AuthButtonProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   if (!user) {
@@ -33,7 +34,7 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
             className="fixed inset-0 z-49"
           />
           <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[140px] rounded-lg border border-border bg-card p-1">
-            {user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL && (
+            {role === "admin" && (
               <a
                 href="/admin"
                 onClick={() => setMenuOpen(false)}
@@ -43,7 +44,7 @@ export default function AuthButton({ user, onSignInClick, onSignOut }: AuthButto
                 Admin
               </a>
             )}
-            {user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL && (
+            {role === "admin" && (
               <a
                 href="/rhemata-corpus-admin"
                 onClick={() => setMenuOpen(false)}

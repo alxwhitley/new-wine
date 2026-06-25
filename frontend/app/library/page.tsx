@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
@@ -203,6 +204,7 @@ type UnifiedResult =
 
 export default function LibraryPage() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const { role } = useUserRole(accessToken);
   const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
   const [showGate, setShowGate] = useState(false);
@@ -266,7 +268,7 @@ export default function LibraryPage() {
   const articleCloseFocusRef = useRef(false);
 
   // ── Admin ──────────────────────────────────────────────────────────────────
-  const isAdmin = user?.id === "1ea99425-08ec-40f2-9ed3-588b88122a82";
+  const isAdmin = role === "admin";
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
