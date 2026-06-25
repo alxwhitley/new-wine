@@ -2,20 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { CorpusCard } from "./corpus-types";
-
-function StatusBadge({ status }: { status: CorpusCard["status"] }) {
-  const cls: Record<string, string> = {
-    Complete: "bg-green-500/15 text-green-500",
-    Ongoing: "bg-amber-600/15 text-amber-400",
-    "Not Started": "bg-gray-400/15 text-gray-400",
-    Partial: "bg-amber-500/15 text-amber-500",
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls[status] ?? ""}`}>
-      {status}
-    </span>
-  );
-}
+import { StatusBadge } from "./status-badge";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -30,7 +17,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       className={`shrink-0 px-2 py-1 rounded text-xs font-medium transition-colors ${
-        copied ? "bg-green-500/15 text-green-500" : "bg-primary/15 text-primary"
+        copied ? "bg-primary/25 text-primary" : "bg-muted text-foreground"
       }`}
     >
       {copied ? "Copied!" : "Copy"}
@@ -59,7 +46,7 @@ export default function CardModal({ card, count, onClose }: CardModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

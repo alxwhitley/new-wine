@@ -1,28 +1,7 @@
 "use client";
 
 import type { CorpusCard } from "./corpus-types";
-
-function StatusBadge({ status }: { status: CorpusCard["status"] }) {
-  const cls: Record<string, string> = {
-    Complete: "bg-green-500/15 text-green-500",
-    Ongoing: "bg-amber-600/15 text-amber-400",
-    "Not Started": "bg-gray-400/15 text-gray-400",
-    Partial: "bg-amber-500/15 text-amber-500",
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls[status] ?? ""}`}>
-      {status}
-    </span>
-  );
-}
-
-interface CorpusCardProps {
-  card: CorpusCard;
-  count: number | null;
-  lastIngested: string | null;
-  pulsing: boolean;
-  onClick: () => void;
-}
+import { StatusBadge } from "./status-badge";
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -40,6 +19,14 @@ function formatRelativeTime(dateStr: string): string {
   if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
   if (diffWeeks < 5) return `${diffWeeks} week${diffWeeks === 1 ? "" : "s"} ago`;
   return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+}
+
+interface CorpusCardProps {
+  card: CorpusCard;
+  count: number | null;
+  lastIngested: string | null;
+  pulsing: boolean;
+  onClick: () => void;
 }
 
 export default function CorpusCardComponent({

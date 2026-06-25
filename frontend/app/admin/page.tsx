@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Sheet,
   SheetContent,
@@ -118,12 +118,7 @@ const FEEDBACK_TABS: { key: FeedbackTab; label: string }[] = [
   { key: "word_study", label: "Word Studies" },
 ];
 
-const NAV_ITEMS = [
-  { href: "#overview", label: "Overview" },
-  { href: "#contributors", label: "Contributors" },
-  { href: "#notes-queue", label: "Notes Queue" },
-  { href: "#corpus", label: "Corpus" },
-];
+type TopTab = "feedback" | "contributors" | "notes-queue" | "governance" | "pipelines";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -189,7 +184,7 @@ function FutureTargetCard({
     <div className="rounded-lg p-4 bg-card/60 border border-dashed border-border">
       <div className="flex items-center gap-2 mb-1">
         <h3 className="font-sans font-medium text-base text-foreground">{target.name}</h3>
-        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-400/15 text-gray-400">
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
           Not Ingested
         </span>
       </div>
@@ -203,7 +198,7 @@ function FutureTargetCard({
             <button
               onClick={() => handleCopy(url)}
               className={`shrink-0 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                copiedUrl === url ? "bg-green-500/15 text-green-500" : "bg-primary/15 text-primary"
+                copiedUrl === url ? "bg-primary/25 text-primary" : "bg-background text-foreground"
               }`}
             >
               {copiedUrl === url ? "Copied!" : "Copy"}
@@ -236,18 +231,29 @@ function SkeletonRows() {
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
+const TRIGGER_CLS =
+  "-mb-px rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground transition-colors";
+
 export default function AdminPage() {
   const { user, accessToken, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [roleChecked, setRoleChecked] = useState(false);
 
-  // Overview
+  // ── Navigation ─────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<TopTab>("feedback");
+
+  // ── Per-tab load flags (prevent re-fetch on revisit) ───────────────────
+  const [contributorsLoaded, setContributorsLoaded] = useState(false);
+  const [governanceLoaded, setGovernanceLoaded] = useState(false);
+  const [pipelinesLoaded, setPipelinesLoaded] = useState(false);
+
+  // ── Feedback ───────────────────────────────────────────────────────────
   const [feedbackEntries, setFeedbackEntries] = useState<FeedbackEntry[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(true);
   const [feedbackTab, setFeedbackTab] = useState<FeedbackTab>("chat_answer");
 
-  // Contributors
+  // ── Contributors ───────────────────────────────────────────────────────
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
@@ -257,25 +263,20 @@ export default function AdminPage() {
   const [revokeRemoveCards, setRevokeRemoveCards] = useState(false);
   const [revokeLoading, setRevokeLoading] = useState(false);
 
-  // Notes queue
+  // ── Notes queue ────────────────────────────────────────────────────────
   const [pendingNotes, setPendingNotes] = useState<PendingNote[]>([]);
   const [pendingNotesLoading, setPendingNotesLoading] = useState(true);
   const [noteActionIds, setNoteActionIds] = useState<Set<string>>(new Set());
 
-  // Corpus retrieval
-  const [sources, setSources] = useState<SourceToggle[]>([]);
-  const [sourcesLoading, setSourcesLoading] = useState(true);
-
-  // License controls
+  // ── Governance ─────────────────────────────────────────────────────────
   const [licenseSources, setLicenseSources] = useState<LicenseSource[]>([]);
   const [licenseSourcesLoading, setLicenseSourcesLoading] = useState(true);
   const [safeMode, setSafeMode] = useState<"on" | "off">("off");
   const [safeModeLoading, setSafeModeLoading] = useState(true);
 
-  // Corpus view tab
-  const [corpusTab, setCorpusTab] = useState<"governance" | "pipelines">("governance");
-
-  // Corpus monitor
+  // ── Pipelines ──────────────────────────────────────────────────────────
+  const [sources, setSources] = useState<SourceToggle[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
   const [counts, setCounts] = useState<CountData>({});
   const [globalStats, setGlobalStats] = useState<GlobalStats>({
     totalDocuments: 0,
@@ -291,7 +292,7 @@ export default function AdminPage() {
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [futureTargetsOpen, setFutureTargetsOpen] = useState(false);
 
-  // Shared
+  // ── Shared ─────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
   const [adminDataError, setAdminDataError] = useState(false);
 
@@ -437,28 +438,76 @@ export default function AdminPage() {
 
   // ── Data fetches ───────────────────────────────────────────────────────
 
+  // Pending notes — always loaded on mount for the tab badge
   useEffect(() => {
     if (!roleChecked || !accessToken) return;
-    const headers = { Authorization: `Bearer ${accessToken}` };
+    fetch(`${API}/pastors-notes/pending`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setPendingNotes(Array.isArray(data) ? data : []))
+      .catch(() => setPendingNotes([]))
+      .finally(() => setPendingNotesLoading(false));
+  }, [roleChecked, accessToken]);
 
-    fetch(`${API}/admin/sources`, { headers })
+  // Feedback — loads when tab active; re-fetches when sub-tab changes
+  useEffect(() => {
+    if (!roleChecked || !accessToken || activeTab !== "feedback") return;
+    setFeedbackLoading(true);
+    const params = new URLSearchParams({ source_type: feedbackTab });
+    fetch(`${API}/feedback?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => setSources(data.sources ?? []))
-      .catch(() => { setSources([]); setAdminDataError(true); })
-      .finally(() => setSourcesLoading(false));
+      .then((data) => setFeedbackEntries(data.feedback ?? []))
+      .catch(() => setFeedbackEntries([]))
+      .finally(() => setFeedbackLoading(false));
+  }, [roleChecked, accessToken, activeTab, feedbackTab]);
 
+  // Contributors — loads once on first tab activation
+  useEffect(() => {
+    if (!roleChecked || !accessToken || activeTab !== "contributors" || contributorsLoaded) return;
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    setContributorsLoaded(true);
+    fetch(`${API}/pastors-notes/requests`, { headers })
+      .then((r) => r.json())
+      .then((data) => setRequests(Array.isArray(data) ? data : []))
+      .catch(() => setRequests([]))
+      .finally(() => setRequestsLoading(false));
+    fetch(`${API}/pastors-notes/contributors`, { headers })
+      .then((r) => r.json())
+      .then((data) => setContributors(Array.isArray(data) ? data : []))
+      .catch(() => setContributors([]))
+      .finally(() => setContributorsLoading(false));
+  }, [roleChecked, accessToken, activeTab, contributorsLoaded]);
+
+  // Governance — loads once on first tab activation
+  useEffect(() => {
+    if (!roleChecked || !accessToken || activeTab !== "governance" || governanceLoaded) return;
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    setGovernanceLoaded(true);
     fetch(`${API}/admin/license-sources`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setLicenseSources(data.sources ?? []))
       .catch(() => { setLicenseSources([]); setAdminDataError(true); })
       .finally(() => setLicenseSourcesLoading(false));
-
     fetch(`${API}/admin/safe-mode`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setSafeMode(data.value === "on" ? "on" : "off"))
       .catch(() => setAdminDataError(true))
       .finally(() => setSafeModeLoading(false));
+  }, [roleChecked, accessToken, activeTab, governanceLoaded]);
 
+  // Pipelines — loads once on first tab activation
+  useEffect(() => {
+    if (!roleChecked || !accessToken || activeTab !== "pipelines" || pipelinesLoaded) return;
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    setPipelinesLoaded(true);
+    fetch(`${API}/admin/sources`, { headers })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setSources(data.sources ?? []))
+      .catch(() => { setSources([]); setAdminDataError(true); })
+      .finally(() => setSourcesLoading(false));
     fetch(`${API}/admin/stats`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) =>
@@ -470,41 +519,10 @@ export default function AdminPage() {
         })
       )
       .catch(() => setAdminDataError(true));
-
-    fetch(`${API}/pastors-notes/requests`, { headers })
-      .then((r) => r.json())
-      .then((data) => setRequests(Array.isArray(data) ? data : []))
-      .catch(() => setRequests([]))
-      .finally(() => setRequestsLoading(false));
-
-    fetch(`${API}/pastors-notes/contributors`, { headers })
-      .then((r) => r.json())
-      .then((data) => setContributors(Array.isArray(data) ? data : []))
-      .catch(() => setContributors([]))
-      .finally(() => setContributorsLoading(false));
-
-    fetch(`${API}/pastors-notes/pending`, { headers })
-      .then((r) => r.json())
-      .then((data) => setPendingNotes(Array.isArray(data) ? data : []))
-      .catch(() => setPendingNotes([]))
-      .finally(() => setPendingNotesLoading(false));
-
     fetchAllCounts();
-  }, [roleChecked, accessToken, fetchAllCounts]);
+  }, [roleChecked, accessToken, activeTab, pipelinesLoaded, fetchAllCounts]);
 
-  useEffect(() => {
-    if (!roleChecked || !accessToken) return;
-    setFeedbackLoading(true);
-    const params = new URLSearchParams({ source_type: feedbackTab });
-    fetch(`${API}/feedback?${params}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => setFeedbackEntries(data.feedback ?? []))
-      .catch(() => setFeedbackEntries([]))
-      .finally(() => setFeedbackLoading(false));
-  }, [roleChecked, accessToken, feedbackTab]);
-
+  // Realtime subscription — active whenever role is confirmed
   useEffect(() => {
     if (!roleChecked) return;
     const channel = supabase
@@ -760,6 +778,8 @@ export default function AdminPage() {
     );
   }
 
+  // ── Derived state ──────────────────────────────────────────────────────
+
   const globalToggles = sources.filter((s) => s.identifier_type === "global");
   const commentaryToggles = sources.filter(
     (s) => s.identifier_type === "source_name" && s.label.includes("Commentary")
@@ -776,6 +796,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-background">
+
       {/* Header */}
       <header className="sticky top-0 z-40 h-14 border-b border-border bg-background flex items-center px-6 gap-4">
         <a
@@ -787,48 +808,54 @@ export default function AdminPage() {
         <span className="text-base font-semibold text-foreground font-sans">Admin</span>
       </header>
 
-      <div className="flex max-w-6xl mx-auto">
-        {/* Anchor nav */}
-        <aside className="hidden md:block w-44 shrink-0">
-          <nav className="sticky top-14 py-8 px-3 h-[calc(100vh-56px)] overflow-y-auto">
-            <ul className="space-y-0.5">
-              {NAV_ITEMS.map(({ href, label }) => (
-                <li key={href}>
-                  <a
-                    href={href}
-                    className="flex items-center justify-between px-3 py-2 text-sm rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  >
-                    <span>{label}</span>
-                    {href === "#notes-queue" && pendingNotes.length > 0 && (
-                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-medium text-primary-foreground">
-                        {pendingNotes.length}
-                      </span>
-                    )}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </aside>
+      {/* Tab bar */}
+      <div className="sticky top-14 z-30 border-b border-border bg-background">
+        <div className="max-w-6xl mx-auto px-6">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TopTab)}>
+            <TabsList className="h-auto bg-transparent rounded-none gap-0 p-0">
+              <TabsTrigger value="feedback" className={TRIGGER_CLS}>
+                Feedback
+              </TabsTrigger>
+              <TabsTrigger value="contributors" className={TRIGGER_CLS}>
+                Contributors
+              </TabsTrigger>
+              <TabsTrigger value="notes-queue" className={TRIGGER_CLS}>
+                Notes Queue
+                {pendingNotes.length > 0 && (
+                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    {pendingNotes.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="governance" className={TRIGGER_CLS}>
+                Governance
+              </TabsTrigger>
+              <TabsTrigger value="pipelines" className={TRIGGER_CLS}>
+                Pipelines
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
 
-        {/* Content */}
-        <main className="flex-1 px-6 py-10 min-w-0 space-y-16">
+      {/* Content */}
+      <main className="max-w-6xl mx-auto px-6 py-10">
 
-          {/* Overview */}
-          <section id="overview">
-            <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Overview</h2>
+        {/* ── Feedback ─────────────────────────────────────────────────── */}
+        {activeTab === "feedback" && (
+          <div role="tabpanel">
+            <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Feedback</h2>
 
             <div className="flex gap-6 mb-6 border-b border-border">
               {FEEDBACK_TABS.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setFeedbackTab(tab.key)}
-                  className={`pb-2 text-sm font-medium transition-colors cursor-pointer ${
+                  className={`-mb-px pb-2 text-sm font-medium transition-colors cursor-pointer ${
                     feedbackTab === tab.key
                       ? "text-foreground border-b-2 border-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
-                  style={{ marginBottom: "-1px" }}
                 >
                   {tab.label}
                 </button>
@@ -848,7 +875,7 @@ export default function AdminPage() {
                     <div className="flex items-start gap-3">
                       <span
                         className={`mt-1.5 inline-block h-2 w-2 rounded-full shrink-0 ${
-                          f.rating === "thumbs_up" ? "bg-green-500" : "bg-red-500"
+                          f.rating === "thumbs_up" ? "bg-primary" : "bg-destructive"
                         }`}
                       />
                       <div className="flex-1 min-w-0">
@@ -870,10 +897,12 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
-          </section>
+          </div>
+        )}
 
-          {/* Contributors */}
-          <section id="contributors">
+        {/* ── Contributors ──────────────────────────────────────────────── */}
+        {activeTab === "contributors" && (
+          <div role="tabpanel">
             <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Contributors</h2>
 
             <div className="space-y-6">
@@ -995,22 +1024,13 @@ export default function AdminPage() {
                   )}
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Flagged Notes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">Card flagging coming soon.</p>
-                </CardContent>
-              </Card>
             </div>
-          </section>
+          </div>
+        )}
 
-          {/* Notes Queue */}
-          <section id="notes-queue">
+        {/* ── Notes Queue ───────────────────────────────────────────────── */}
+        {activeTab === "notes-queue" && (
+          <div role="tabpanel">
             <h2 className="text-xl font-semibold text-foreground font-sans mb-6">
               Notes Queue
               {pendingNotes.length > 0 && (
@@ -1089,352 +1109,351 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
-          </section>
+          </div>
+        )}
 
-          {/* Corpus */}
-          <section id="corpus">
-            <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Corpus</h2>
+        {/* ── Governance ────────────────────────────────────────────────── */}
+        {activeTab === "governance" && (
+          <div role="tabpanel">
+            <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Governance</h2>
 
-            <Tabs
-              value={corpusTab}
-              onValueChange={(v) => setCorpusTab(v as "governance" | "pipelines")}
+            {adminDataError && (
+              <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                <p className="text-sm font-medium text-destructive">
+                  Couldn&apos;t load admin data — check backend connection or auth.
+                </p>
+              </div>
+            )}
+
+            {/* Safe mode */}
+            <div
+              className={
+                "flex items-center justify-between rounded-lg border p-4 mb-8 " +
+                (safeMode === "on"
+                  ? "bg-destructive/10 border-destructive/50"
+                  : "bg-card border-border")
+              }
             >
-              <TabsList className="mb-8">
-                <TabsTrigger value="governance">Governance</TabsTrigger>
-                <TabsTrigger value="pipelines">Pipelines</TabsTrigger>
-              </TabsList>
-
-              {/* ── Governance ─────────────────────────────────────────── */}
-              <TabsContent value="governance">
-
-                {/* Admin data error banner */}
-                {adminDataError && (
-                  <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-                    <p className="text-sm font-medium text-destructive">
-                      Couldn&apos;t load admin data — check backend connection or auth.
-                    </p>
-                  </div>
-                )}
-
-                {/* Safe mode */}
-                <div
+              <div>
+                <p
                   className={
-                    "flex items-center justify-between rounded-lg border p-4 mb-8 " +
-                    (safeMode === "on"
-                      ? "bg-amber-500/10 border-amber-500/50"
-                      : "bg-card border-border")
+                    "text-sm font-semibold " +
+                    (safeMode === "on" ? "text-destructive" : "text-foreground")
                   }
                 >
-                  <div>
-                    <p
-                      className={
-                        "text-sm font-semibold " +
-                        (safeMode === "on" ? "text-amber-600 dark:text-amber-400" : "text-foreground")
-                      }
-                    >
-                      Safe mode{safeMode === "on" ? " — ACTIVE" : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Serves only public domain + owned. Ignores visibility.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={safeMode === "on"}
-                    onCheckedChange={handleSafeModeToggle}
-                    disabled={safeModeLoading}
-                    className={safeMode === "on" ? "data-[state=checked]:bg-amber-500" : ""}
-                  />
-                </div>
+                  Safe mode{safeMode === "on" ? " — ACTIVE" : ""}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Serves only public domain + owned. Ignores visibility.
+                </p>
+              </div>
+              <Switch
+                checked={safeMode === "on"}
+                onCheckedChange={handleSafeModeToggle}
+                disabled={safeModeLoading}
+                className={safeMode === "on" ? "data-[state=checked]:bg-destructive" : ""}
+              />
+            </div>
 
-                {/* Counter */}
-                {!licenseSourcesLoading && licenseSources.length > 0 && (() => {
-                  const total = licenseSources.length;
-                  const exposed = licenseSources.filter(
-                    (s) => s.license_status === "unlicensed" && s.visibility === "shown"
-                  ).length;
-                  return (
-                    <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
-                      <span>{total} source{total !== 1 ? "s" : ""}</span>
-                      {exposed > 0 && (
-                        <span className="inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-amber-600 dark:text-amber-400 font-medium">
-                          {exposed} unlicensed + shown
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Sources table */}
-                {licenseSourcesLoading ? (
-                  <SkeletonRows />
-                ) : licenseSources.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-card p-4">
-                    <p className="text-sm text-muted-foreground">No sources found. Check the backend connection.</p>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-border overflow-hidden">
-                    <div className="grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-2 border-b border-border bg-muted/40">
-                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</span>
-                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Docs</span>
-                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">License status</span>
-                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Retrievable</span>
-                    </div>
-                    <div className="divide-y divide-border">
-                      {licenseSources.map((src) => {
-                        const isSentinel = src.id === SENTINEL_SOURCE_ID;
-                        const licenseColor =
-                          src.license_status === "public_domain" || src.license_status === "owned"
-                            ? "border-green-600/40 bg-green-600/10 text-green-700 dark:text-green-400"
-                            : src.license_status === "unlicensed"
-                            ? "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                            : "border-border bg-muted/40 text-muted-foreground";
-                        return (
-                          <div
-                            key={src.id}
-                            className={
-                              "grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-3 items-center" +
-                              (isSentinel ? " opacity-50" : "")
-                            }
-                          >
-                            <div className="min-w-0 flex items-center gap-1.5">
-                              {isSentinel && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
-                              <p className="text-sm font-medium text-foreground truncate">{src.name}</p>
-                            </div>
-                            <span className="text-xs text-muted-foreground text-right tabular-nums">
-                              {src.doc_count !== null ? src.doc_count.toLocaleString() : "—"}
-                            </span>
-                            {isSentinel ? (
-                              <span className={"text-xs text-center rounded-full border px-2 py-0.5 font-medium " + licenseColor}>
-                                {src.license_status}
-                              </span>
-                            ) : (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    className={
-                                      "flex items-center justify-between gap-1 text-xs rounded-full border px-2 py-0.5 font-medium transition-colors hover:opacity-80 w-full " +
-                                      licenseColor
-                                    }
-                                  >
-                                    <span className="truncate">{src.license_status}</span>
-                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="center">
-                                  {LICENSE_STATUSES.map((status) => (
-                                    <DropdownMenuItem
-                                      key={status}
-                                      onClick={() => handleLicenseStatusChange(src.id, src.license_status, status)}
-                                    >
-                                      {status}
-                                    </DropdownMenuItem>
-                                  ))}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-                            <div className="flex justify-end">
-                              {isSentinel ? (
-                                <span className="text-xs text-muted-foreground">protected</span>
-                              ) : (
-                                <Switch
-                                  checked={src.visibility === "shown"}
-                                  onCheckedChange={() => handleVisibilityToggle(src.id, src.visibility)}
-                                  className={src.visibility === "shown" ? "data-[state=checked]:bg-green-600" : ""}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* ── Pipelines ──────────────────────────────────────────── */}
-              <TabsContent value="pipelines">
-
-                {/* Retrieval controls */}
-                <div className="mb-12">
-                  <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
-                    Retrieval controls
-                  </h3>
-
-                  {sourcesLoading ? (
-                    <SkeletonRows />
-                  ) : sources.length === 0 ? (
-                    <div className="rounded-lg border border-border bg-card p-4">
-                      <p className="text-sm text-muted-foreground">
-                        No sources found. Check the backend connection.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-8">
-                      {globalToggles.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-3">Global Settings</p>
-                          <div className="space-y-2">
-                            {globalToggles.map((s) => (
-                              <div
-                                key={s.id}
-                                className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                              >
-                                <p className="text-sm font-medium text-foreground">{s.label}</p>
-                                <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {sourceToggles.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-3">Source Toggles</p>
-                          <div className="space-y-2">
-                            {sourceToggles.map((s) => (
-                              <div
-                                key={s.id}
-                                className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-foreground">{s.label}</p>
-                                  {s.doc_count !== null && (
-                                    <p className="text-xs mt-0.5 text-muted-foreground">
-                                      {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
-                                    </p>
-                                  )}
-                                </div>
-                                <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {commentaryToggles.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-3">Commentaries</p>
-                          <div className="space-y-2">
-                            {commentaryToggles.map((s) => (
-                              <div
-                                key={s.id}
-                                className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-foreground">{s.label}</p>
-                                  {s.doc_count !== null && (
-                                    <p className="text-xs mt-0.5 text-muted-foreground">
-                                      {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
-                                    </p>
-                                  )}
-                                </div>
-                                <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+            {/* Source count / risk summary */}
+            {!licenseSourcesLoading && licenseSources.length > 0 && (() => {
+              const total = licenseSources.length;
+              const exposed = licenseSources.filter(
+                (s) => s.license_status === "unlicensed" && s.visibility === "shown"
+              ).length;
+              return (
+                <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+                  <span>{total} source{total !== 1 ? "s" : ""}</span>
+                  {exposed > 0 && (
+                    <span className="inline-flex items-center rounded-full border border-destructive/50 bg-destructive/10 px-2 py-0.5 text-destructive font-medium">
+                      {exposed} unlicensed + shown
+                    </span>
                   )}
                 </div>
+              );
+            })()}
 
-                {/* Ingestion monitor */}
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Ingestion monitor
-                    </h3>
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full ${
-                        realtimeConnected ? "animate-pulse bg-green-500" : "bg-muted-foreground"
-                      }`}
-                    />
-                  </div>
-                  {lastUpdated && (
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Last updated: {lastUpdated.toLocaleTimeString()}
-                    </p>
-                  )}
-
-                  {/* Stats bar */}
-                  <div className="flex flex-wrap gap-3 mb-8 p-3 rounded-lg bg-card border border-border">
-                    <StatPill label="Total Documents" value={globalStats.totalDocuments} />
-                    <StatPill label="Total Chunks" value={globalStats.totalChunks} />
-                    <StatPill label="Total Verses" value={globalStats.totalVerses} />
-                    <StatPill label="Interlinear Words" value={globalStats.totalInterlinearWords} />
-                  </div>
-
-                  {/* Card groups */}
-                  {visibleGroups.map((group) => {
-                    const groupCards = CARDS.filter((c) => c.group === group);
-                    if (groupCards.length === 0) return null;
+            {/* Sources table */}
+            {licenseSourcesLoading ? (
+              <SkeletonRows />
+            ) : licenseSources.length === 0 ? (
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm text-muted-foreground">No sources found. Check the backend connection.</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-2 border-b border-border bg-muted/40">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Docs</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">License status</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Retrievable</span>
+                </div>
+                <div className="divide-y divide-border">
+                  {licenseSources.map((src) => {
+                    const isSentinel = src.id === SENTINEL_SOURCE_ID;
+                    const licenseColor =
+                      src.license_status === "public_domain" || src.license_status === "owned"
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : src.license_status === "unlicensed"
+                        ? "border-destructive/40 bg-destructive/10 text-destructive"
+                        : "border-border bg-muted/40 text-muted-foreground";
                     return (
-                      <div key={group} className="mb-8">
-                        <h4 className="text-base font-medium text-foreground font-sans mb-3">{group}</h4>
-                        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                          {groupCards.map((card) => (
-                            <CorpusCardComponent
-                              key={card.id}
-                              card={card}
-                              count={counts[card.id]?.count ?? null}
-                              lastIngested={counts[card.id]?.lastIngested ?? null}
-                              pulsing={pulsingCards.has(card.id)}
-                              onClick={() => setSelectedCard(card)}
+                      <div
+                        key={src.id}
+                        className={
+                          "grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-3 items-center" +
+                          (isSentinel ? " opacity-50" : "")
+                        }
+                      >
+                        <div className="min-w-0 flex items-center gap-1.5">
+                          {isSentinel && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
+                          <p className="text-sm font-medium text-foreground truncate">{src.name}</p>
+                        </div>
+                        <span className="text-xs text-muted-foreground text-right tabular-nums">
+                          {src.doc_count !== null ? src.doc_count.toLocaleString() : "—"}
+                        </span>
+                        {isSentinel ? (
+                          <span className={"text-xs text-center rounded-full border px-2 py-0.5 font-medium " + licenseColor}>
+                            {src.license_status}
+                          </span>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className={
+                                  "flex items-center justify-between gap-1 text-xs rounded-full border px-2 py-0.5 font-medium transition-colors hover:opacity-80 w-full " +
+                                  licenseColor
+                                }
+                              >
+                                <span className="truncate">{src.license_status}</span>
+                                <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="center">
+                              {LICENSE_STATUSES.map((status) => (
+                                <DropdownMenuItem
+                                  key={status}
+                                  onClick={() => handleLicenseStatusChange(src.id, src.license_status, status)}
+                                >
+                                  {status}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                        <div className="flex justify-end">
+                          {isSentinel ? (
+                            <span className="text-xs text-muted-foreground">protected</span>
+                          ) : (
+                            <Switch
+                              checked={src.visibility === "shown"}
+                              onCheckedChange={() => handleVisibilityToggle(src.id, src.visibility)}
+                              className={src.visibility === "shown" ? "data-[state=checked]:bg-primary" : ""}
                             />
-                          ))}
+                          )}
                         </div>
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-                  {/* Maintenance (collapsible) */}
-                  {maintenanceCards.length > 0 && (
-                    <div className="mb-8">
-                      <button
-                        onClick={() => setMaintenanceOpen((o) => !o)}
-                        className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
-                      >
-                        {maintenanceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        Maintenance
-                      </button>
-                      {maintenanceOpen && (
-                        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-3">
-                          {maintenanceCards.map((card) => (
-                            <CorpusCardComponent
-                              key={card.id}
-                              card={card}
-                              count={null}
-                              lastIngested={null}
-                              pulsing={false}
-                              onClick={() => setSelectedCard(card)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+        {/* ── Pipelines ─────────────────────────────────────────────────── */}
+        {activeTab === "pipelines" && (
+          <div role="tabpanel">
+            <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Pipelines</h2>
 
-                  {/* Future targets (collapsible) */}
-                  <div className="mb-8">
-                    <button
-                      onClick={() => setFutureTargetsOpen((o) => !o)}
-                      className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
-                    >
-                      {futureTargetsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                      Future Corpus Targets
-                    </button>
-                    {futureTargetsOpen && (
-                      <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-3">
-                        {FUTURE_TARGETS.map((target) => (
-                          <FutureTargetCard key={target.id} target={target} />
+            {adminDataError && (
+              <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                <p className="text-sm font-medium text-destructive">
+                  Couldn&apos;t load admin data — check backend connection or auth.
+                </p>
+              </div>
+            )}
+
+            {/* Retrieval controls */}
+            <div className="mb-12">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
+                Retrieval controls
+              </h3>
+
+              {sourcesLoading ? (
+                <SkeletonRows />
+              ) : sources.length === 0 ? (
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-sm text-muted-foreground">
+                    No sources found. Check the backend connection.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {globalToggles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-3">Global Settings</p>
+                      <div className="space-y-2">
+                        {globalToggles.map((s) => (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
+                          >
+                            <p className="text-sm font-medium text-foreground">{s.label}</p>
+                            <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
+                          </div>
                         ))}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  {sourceToggles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-3">Source Toggles</p>
+                      <div className="space-y-2">
+                        {sourceToggles.map((s) => (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground">{s.label}</p>
+                              {s.doc_count !== null && (
+                                <p className="text-xs mt-0.5 text-muted-foreground">
+                                  {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
+                                </p>
+                              )}
+                            </div>
+                            <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {commentaryToggles.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-3">Commentaries</p>
+                      <div className="space-y-2">
+                        {commentaryToggles.map((s) => (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground">{s.label}</p>
+                              {s.doc_count !== null && (
+                                <p className="text-xs mt-0.5 text-muted-foreground">
+                                  {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
+                                </p>
+                              )}
+                            </div>
+                            <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </TabsContent>
-            </Tabs>
-          </section>
-        </main>
-      </div>
+              )}
+            </div>
+
+            {/* Ingestion monitor */}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Ingestion monitor
+                </h3>
+                <span
+                  className={`inline-block h-2 w-2 rounded-full ${
+                    realtimeConnected ? "animate-pulse bg-primary" : "bg-muted-foreground"
+                  }`}
+                />
+              </div>
+              {lastUpdated && (
+                <p className="text-xs text-muted-foreground mb-4">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </p>
+              )}
+
+              {/* Stats bar */}
+              <div className="flex flex-wrap gap-3 mb-8 p-3 rounded-lg bg-card border border-border">
+                <StatPill label="Total Documents" value={globalStats.totalDocuments} />
+                <StatPill label="Total Chunks" value={globalStats.totalChunks} />
+                <StatPill label="Total Verses" value={globalStats.totalVerses} />
+                <StatPill label="Interlinear Words" value={globalStats.totalInterlinearWords} />
+              </div>
+
+              {/* Card groups */}
+              {visibleGroups.map((group) => {
+                const groupCards = CARDS.filter((c) => c.group === group);
+                if (groupCards.length === 0) return null;
+                return (
+                  <div key={group} className="mb-8">
+                    <h4 className="text-base font-medium text-foreground font-sans mb-3">{group}</h4>
+                    <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                      {groupCards.map((card) => (
+                        <CorpusCardComponent
+                          key={card.id}
+                          card={card}
+                          count={counts[card.id]?.count ?? null}
+                          lastIngested={counts[card.id]?.lastIngested ?? null}
+                          pulsing={pulsingCards.has(card.id)}
+                          onClick={() => setSelectedCard(card)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Maintenance (collapsible) */}
+              {maintenanceCards.length > 0 && (
+                <div className="mb-8">
+                  <button
+                    onClick={() => setMaintenanceOpen((o) => !o)}
+                    className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
+                  >
+                    {maintenanceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    Maintenance
+                  </button>
+                  {maintenanceOpen && (
+                    <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-3">
+                      {maintenanceCards.map((card) => (
+                        <CorpusCardComponent
+                          key={card.id}
+                          card={card}
+                          count={null}
+                          lastIngested={null}
+                          pulsing={false}
+                          onClick={() => setSelectedCard(card)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Future targets (collapsible) */}
+              <div className="mb-8">
+                <button
+                  onClick={() => setFutureTargetsOpen((o) => !o)}
+                  className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
+                >
+                  {futureTargetsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  Future Corpus Targets
+                </button>
+                {futureTargetsOpen && (
+                  <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-3">
+                    {FUTURE_TARGETS.map((target) => (
+                      <FutureTargetCard key={target.id} target={target} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
 
       {/* CardModal */}
       {selectedCard && (
@@ -1494,6 +1513,7 @@ export default function AdminPage() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
     </div>
   );
 }
