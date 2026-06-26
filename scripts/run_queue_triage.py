@@ -90,19 +90,39 @@ def _normalize_playlist_url(url: str) -> str:
     return url
 
 
+_KNOWN_FILTER_TOKENS = {"min5", "whitelist"}
+
+
 def _parse_filters(filter_cell: str):
-    """Parse the filter cell string. Returns (min_duration, whitelist_mode)."""
-    parts = [p.strip().lower() for p in str(filter_cell or "").split(",") if p.strip()]
+    """Parse the filter cell string. Returns (min_duration, whitelist_mode).
+    Warns on unrecognised tokens so typos in the filter column are visible.
+    Valid values: blank, 'min5', 'whitelist', or comma-combos thereof.
+    """
+    raw = str(filter_cell or "").strip()
+    parts = [p.strip().lower() for p in raw.split(",") if p.strip()]
+    unknown = [p for p in parts if p not in _KNOWN_FILTER_TOKENS]
+    if unknown:
+        print(f"  ⚠  filter: unrecognised token(s) {unknown!r} — ignored. "
+              f"Valid tokens: {sorted(_KNOWN_FILTER_TOKENS)}")
     min_duration   = MIN5_SECS if "min5" in parts else 0
     whitelist_mode = "whitelist" in parts
     return min_duration, whitelist_mode
 
 
 def _parse_limit(limit_cell) -> Optional[int]:
+    """Parse the limit cell. Returns int or None (no cap).
+    Warns loudly if the value is non-integer — defends against filter/limit
+    column mix-ups (e.g. 'min5' accidentally entered in the limit cell).
+    """
+    raw = str(limit_cell or "").strip()
+    if not raw or raw.lower() in ("none", "null", "na"):
+        return None
     try:
-        v = int(str(limit_cell).strip())
+        v = int(float(raw))
         return v if v > 0 else None
     except (ValueError, TypeError):
+        print(f"  ⚠  limit: expected an integer but got {raw!r} — treating as unset (no cap). "
+              f"Did you put a filter token in the limit column by mistake?")
         return None
 
 
