@@ -7,16 +7,21 @@ import warnings; warnings.filterwarnings('ignore')
 import datetime
 import httpx
 import json
+import os
 import sys
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
 
 import psycopg2
 from supabase import create_client
 
 # ── Credentials ──────────────────────────────────────────────────────────────
 SB_URL    = 'https://jjerxncanaxlbdzcybab.supabase.co'
-SB_SVC    = '***REMOVED***'
-DB_URL    = '***REMOVED***'
+SB_SVC    = os.environ["SUPABASE_SERVICE_KEY"]
+DB_URL    = os.environ["SUPABASE_DB_URL"]
 API_BASE  = 'https://rhemata-production.up.railway.app'
 TEST_EMAIL = 'creative@clf-church.com'
 
