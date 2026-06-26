@@ -21,6 +21,7 @@ Charismatic and Spirit-filled Christians who want to research theology from with
 - Git repo initialized and pushed to `alxwhitley/rhemata` on GitHub
 - `.gitignore` covers `.env`, `.env.local`, `__pycache__`, `.venv`, `node_modules`, `.next`, `.DS_Store`, `sources/`, `logs/`, `scripts/logs/`, `scripts/youtube_cookies.txt`, `license-mapping/`
 - `sources/` stripped from git history (2026-06-10) via BFG Repo Cleaner — 1,151 files removed across all 215 commits; `.git` reduced from 55 MB to 3.1 MB; force-pushed to origin main
+- Dead credentials + `scripts/youtube_cookies.txt` permanently removed from all git history via git-filter-repo (2026-06-26): service-role JWT and two postgresql:// DB URLs (previously hardcoded in `test_metering.py` and `ingest_bible.py`) scrubbed across all 319 commits; `.git` 8.0 MB → 4.4 MB. All commit SHAs changed by rewrite; force-pushed to origin main.
 
 ---
 
@@ -686,6 +687,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 - **All-caps titles (15 documents)** — OCR artifact from early magazine extraction. All are `magazine_article` (14) + 1 paper. Titles like "THE PLACE OF TRANFORMATION" (also has a spelling error). Approach not yet decided — options: in-place SQL title-caser UPDATE, or manual review. Scope confirmed, fix deferred.
 - **Migration 042 + image setup not yet run** — `migrations/042_document_image_url.sql` must be run in Supabase SQL Editor to add `image_url text` to `documents`. Then `python3 scripts/setup_document_images.py` creates the `document-images` Storage bucket and assigns the first test image to the Mumford doc. Until migration 042 runs, the backend `/doc-meta` SELECT will error. Hero card falls back to sparkle placeholder until `image_url` is populated.
 - **Weekly usage ring: 0-query state** — at `used=0` the ring shows only the faint `--muted` track (arc guarded by `used > 0` to prevent zero-length arc producing a dot artifact with `stroke-linecap: round`). Expected behavior on first login of the week.
+- **`ingest_bible.py` + `ingest_preceptaustin.py` error hint strings show `***REMOVED***`** — git-filter-repo (2026-06-26) correctly replaced the literal old DB URL that appeared verbatim in each file's startup error message hint (was: an example connection string for the user). Scripts still load env vars correctly and work normally. Cosmetic fix: replace `***REMOVED***` with `postgresql://user:password@host:5432/dbname` in both files (line ~31 in `ingest_bible.py`, line ~59 in `ingest_preceptaustin.py`).
 
 ---
 

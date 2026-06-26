@@ -32,7 +32,16 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq v3 prompt, process_document entry point)
 │   ├── tag_existing_articles.py   # Backfill topic_tags on existing articles via Groq
-│   └── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
+│   ├── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
+│   ├── scrape_preceptaustin.py    # Scrape Precept Austin Greek/Hebrew word studies
+│   ├── ingest_preceptaustin.py    # Ingest Precept Austin word studies into Supabase
+│   ├── ingest_lexicon.py          # Ingest STEPBible lexicon files (TBESG, TBESH, TFLSJ)
+│   ├── ingest_bible.py            # Ingest WEB Bible into verses table
+│   ├── ingest_interlinear.py      # Ingest STEPBible interlinear NT into verses table
+│   ├── ingest_tahot.py            # Ingest TAHOT Hebrew OT alignment data
+│   ├── extract_bible_refs.py      # Backfill bible_references on all documents
+│   ├── download_book_covers.py    # Download book cover images to frontend/public/images/books/
+│   └── test_metering.py           # End-to-end metering test suite (increment, rollover, hard stop)
 ├── taxonomy.md                # 257-tag topic taxonomy (15 categories)
 ├── migrations/                # SQL migrations (run in Supabase SQL Editor)
 │   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
