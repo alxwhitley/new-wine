@@ -262,16 +262,16 @@ def _print_summary(ws_r) -> None:
 
 # ── Sheet helpers ─────────────────────────────────────────────────────────────
 
-def load_or_create_wb(path: Path) -> Tuple[openpyxl.Workbook, openpyxl.worksheet.worksheet.Worksheet]:
-    """Load workbook or create it with the header row. Returns (wb, ws)."""
+def load_or_create_wb(path: Path, sheet_name: str) -> Tuple[openpyxl.Workbook, openpyxl.worksheet.worksheet.Worksheet]:
+    """Load workbook and select the named sheet. Creates the file if absent. Returns (wb, ws)."""
     if path.exists():
         wb = openpyxl.load_workbook(path)
-        ws = wb.active
+        ws = wb[sheet_name]
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Queue"
+        ws.title = sheet_name
         ws.append(COLUMNS)
         wb.save(path)
         print(f"Created {path}")
@@ -304,11 +304,27 @@ def main():
     parser = argparse.ArgumentParser(
         description="YouTube triage — Stage 2 of the unified ingest pipeline"
     )
-    parser.add_argument("--add",           metavar="URL", help="Add a channel or video URL before triaging")
-    parser.add_argument("--limit",         metavar="N",   type=int, help="Max videos to expand per channel")
-    parser.add_argument("--retry-unknown", action="store_true",     help="Re-classify rows where status=triaged AND guess=unknown")
-    parser.add_argument("--dry-run",       action="store_true",     help="Print actions without writing")
+    parser.add_argument("--sheet",         metavar="NAME",           help="Tab name to operate on (required)")
+    parser.add_argument("--add",           metavar="URL",            help="Add a channel or video URL before triaging")
+    parser.add_argument("--limit",         metavar="N",   type=int,  help="Max videos to expand per channel")
+    parser.add_argument("--retry-unknown", action="store_true",      help="Re-classify rows where status=triaged AND guess=unknown")
+    parser.add_argument("--dry-run",       action="store_true",      help="Print actions without writing")
     args = parser.parse_args()
+
+    # ── Sheet validation ──────────────────────────────────────────────────────
+    if QUEUE_PATH.exists():
+        _wb_check = openpyxl.load_workbook(QUEUE_PATH, read_only=True)
+        _available = _wb_check.sheetnames
+        _wb_check.close()
+        if not args.sheet:
+            print("ERROR: --sheet is required. Available tabs: {}".format(_available))
+            sys.exit(1)
+        if args.sheet not in _available:
+            print("ERROR: sheet {!r} not found. Available tabs: {}".format(args.sheet, _available))
+            sys.exit(1)
+    elif not args.sheet:
+        print("ERROR: --sheet is required.")
+        sys.exit(1)
 
     ytdlp = find_ytdlp()
     if not ytdlp:
@@ -321,7 +337,7 @@ def main():
         sys.exit(1)
     groq_client = Groq(api_key=api_key)
 
-    wb, ws = load_or_create_wb(QUEUE_PATH)
+    wb, ws = load_or_create_wb(QUEUE_PATH, args.sheet)
 
     # ── Retry-unknown mode ────────────────────────────────────────────────────
     if args.retry_unknown:
@@ -355,7 +371,7 @@ def main():
                 print(f"  ✓ saved {len(unknown_rows)} updated row(s)")
         # Fall through to summary table
         wb_r = openpyxl.load_workbook(QUEUE_PATH) if (not args.dry_run and QUEUE_PATH.exists()) else wb
-        ws_r = wb_r.active
+        ws_r = wb_r[args.sheet]
         _print_summary(ws_r)
         return
 
@@ -461,7 +477,7 @@ def main():
         print(f"  ✓ saved {len(to_triage)} classified row(s)")
 
     wb_r = openpyxl.load_workbook(QUEUE_PATH) if (not args.dry_run and QUEUE_PATH.exists()) else wb
-    _print_summary(wb_r.active)
+    _print_summary(wb_r[args.sheet])
 
 
 if __name__ == "__main__":

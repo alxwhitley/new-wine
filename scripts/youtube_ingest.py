@@ -280,6 +280,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="YouTube ingest — Stage 3 of the unified ingest pipeline"
     )
+    parser.add_argument("--sheet",   metavar="NAME",
+                        help="Tab name to operate on (required)")
     parser.add_argument("--limit",   metavar="N", type=int,
                         help="Process at most N rows (use 2-3 for demo)")
     parser.add_argument("--dry-run", action="store_true",
@@ -295,10 +297,24 @@ def main() -> None:
         print("ERROR: queue not found at {}".format(QUEUE_PATH))
         sys.exit(1)
 
-    wb = openpyxl.load_workbook(QUEUE_PATH)
-    ws = wb.active
+    _wb_check = openpyxl.load_workbook(QUEUE_PATH, read_only=True)
+    _available = _wb_check.sheetnames
+    _wb_check.close()
 
-    # Collect eligible rows: ingest=TRUE AND status=triaged
+    if not args.sheet:
+        print("ERROR: --sheet is required. Available tabs: {}".format(_available))
+        sys.exit(1)
+    if args.sheet not in _available:
+        print("ERROR: sheet {!r} not found. Available tabs: {}".format(args.sheet, _available))
+        sys.exit(1)
+
+    wb = openpyxl.load_workbook(QUEUE_PATH)
+    ws = wb[args.sheet]
+
+    # Collect eligible rows: ingest=TRUE AND status=triaged.
+    # Terminal statuses (done, done_prior, failed, needs_source, expanded) all
+    # have status != "triaged", so they can never satisfy the condition below.
+    # done_prior rows additionally have ingest=FALSE — double-excluded.
     candidates = []
     for r in range(2, ws.max_row + 1):
         ingest_val = str(gcell(ws, r, "ingest") or "").strip().upper()
