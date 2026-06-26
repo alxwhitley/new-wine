@@ -13,7 +13,7 @@ import json
 import hashlib
 import shutil
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from groq import Groq
 import openai
@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.chunker import chunk_text, token_len
 from bible_refs import extract_bible_references
 from source_resolver import normalize_alias_key, resolve_source_id, SENTINEL_SOURCE_ID, print_resolution_table
+import propositions
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -501,6 +502,14 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     # 5. Embed + insert chunks
     print(f"Embedding and inserting {len(chunks)} chunks...")
     insert_chunks(doc_id, chunks, author=metadata.get("author"), year=metadata.get("year"), source_hash=source_hash)
+
+    # 5b. Extract + store propositions (unlicensed sources only; non-fatal)
+    _prop_conn = psycopg2.connect(**DB_PARAMS)
+    try:
+        prop_result = propositions.process_document(_prop_conn, doc_id, _resolved_id, content, embed_text)
+    finally:
+        _prop_conn.close()
+    print(f"  propositions: {prop_result}")
 
     # 6. Tag document from chunk content
     print("Tagging document...")

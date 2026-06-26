@@ -14,8 +14,10 @@ import re
 import sys
 import shutil
 import logging
+import psycopg2
 from pathlib import Path
 from typing import Dict
+from urllib.parse import urlparse, unquote
 
 from dotenv import load_dotenv
 
@@ -34,9 +36,19 @@ from source_resolver import (
     NEW_WINE_MAGAZINE_SOURCE_ID,
     print_resolution_table,
 )
+import propositions
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+_parsed_db = urlparse(os.environ.get("SUPABASE_DB_URL", ""))
+DB_PARAMS = {
+    "host":     _parsed_db.hostname,
+    "port":     _parsed_db.port or 5432,
+    "user":     unquote(_parsed_db.username or ""),
+    "password": unquote(_parsed_db.password or ""),
+    "dbname":   (_parsed_db.path or "").lstrip("/"),
+}
 
 # -- CONFIGURATION -----------------------------------------------------------
 
@@ -176,6 +188,14 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
             "embedding": embedding,
         }
         db.table("chunks").insert(chunk_data).execute()
+
+    # Extract + store propositions (unlicensed sources only; non-fatal)
+    _prop_conn = psycopg2.connect(**DB_PARAMS)
+    try:
+        prop_result = propositions.process_document(_prop_conn, doc_id, _resolved_id, body, embed_text)
+    finally:
+        _prop_conn.close()
+    print(f"  propositions: {prop_result}")
 
     print(f"  Ingested: {title} ({len(chunks)} chunks)")
     return True
