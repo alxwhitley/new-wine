@@ -289,14 +289,19 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
-### Root-Level Ingestion Scripts
+### Additional Pipeline Scripts (in scripts/)
 
 | Script | Purpose |
 |---|---|
-| `scrape_preceptaustin.py` | Scrape Precept Austin Greek/Hebrew word studies |
-| `ingest_preceptaustin.py` | Ingest Precept Austin word studies into Supabase |
-| `ingest_lexicon.py` | Ingest STEPBible lexicon files (TBESG, TBESH, TFLSJ) |
-| `ingest_bible.py` | Ingest WEB Bible into verses table |
+| `scripts/scrape_preceptaustin.py` | Scrape Precept Austin Greek/Hebrew word studies |
+| `scripts/ingest_preceptaustin.py` | Ingest Precept Austin word studies into Supabase |
+| `scripts/ingest_lexicon.py` | Ingest STEPBible lexicon files (TBESG, TBESH, TFLSJ) |
+| `scripts/ingest_bible.py` | Ingest WEB Bible into verses table |
+| `scripts/ingest_interlinear.py` | Ingest STEPBible interlinear NT into verses table |
+| `scripts/ingest_tahot.py` | Ingest TAHOT Hebrew OT alignment data |
+| `scripts/extract_bible_refs.py` | Backfill bible_references on all documents |
+| `scripts/download_book_covers.py` | Download book cover images to frontend/public/images/books/ |
+| `scripts/test_metering.py` | End-to-end metering test suite (increment, rollover, hard stop) |
 
 ---
 

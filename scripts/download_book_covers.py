@@ -101,7 +101,7 @@ def download_cover(book, output_dir):
 
 def main():
     # Find the output directory relative to this script
-    script_dir = Path(__file__).resolve().parent
+    script_dir = Path(__file__).resolve().parent.parent
     # Try to find frontend/public/images/books
     output_dir = script_dir / "frontend" / "public" / "images" / "books"
 

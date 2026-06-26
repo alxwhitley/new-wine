@@ -19,11 +19,11 @@ import openai
 from supabase import create_client
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LEXICON_DIR = PROJECT_ROOT / "sources" / "lexicon"
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536

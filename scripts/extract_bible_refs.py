@@ -25,11 +25,9 @@ from typing import List, Dict, Optional
 import psycopg2
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent / "backend" / "app" / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
-# Allow importing scripts/bible_refs.py
-sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
-from bible_refs import extract_bible_references  # noqa: E402
+from bible_refs import extract_bible_references
 
 from supabase import create_client  # noqa: E402
 

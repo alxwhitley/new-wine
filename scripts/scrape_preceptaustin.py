@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup
 # Flush stdout on every print for nohup compatibility
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 SLEEP_MIN = 2

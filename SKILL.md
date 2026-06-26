@@ -90,11 +90,16 @@ repo/
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq Llama 3.3 70B, v3 four-corners prompt); process_document() entry point for ingest scripts
 │   ├── source_resolver.py     # Shared source_id resolution + alias normalization; imported by ingest.py and ingest_magazine.py
 │   ├── tag_existing_articles.py  # Backfill topic_tags on existing articles
-│   └── tag_sermons_transcripts.py  # Backfill topic_tags on sermons/transcripts/papers
-├── scrape_preceptaustin.py # Precept Austin word study scraper (page caching, multi-strategy anchor matching)
-├── ingest_preceptaustin.py # Precept Austin word study ingestion (psycopg2 chunks, OpenAI embeddings)
-├── ingest_lexicon.py      # STEPBible lexicon ingestion (TBESG, TBESH, TFLSJ)
-├── ingest_bible.py        # WEB Bible VPL ingestion into verses table (psycopg2)
+│   ├── tag_sermons_transcripts.py  # Backfill topic_tags on sermons/transcripts/papers
+│   ├── scrape_preceptaustin.py  # Precept Austin word study scraper (page caching, multi-strategy anchor matching)
+│   ├── ingest_preceptaustin.py  # Precept Austin word study ingestion (psycopg2 chunks, OpenAI embeddings)
+│   ├── ingest_lexicon.py       # STEPBible lexicon ingestion (TBESG, TBESH, TFLSJ)
+│   ├── ingest_bible.py         # WEB Bible VPL ingestion into verses table (psycopg2)
+│   ├── ingest_interlinear.py   # STEPBible interlinear NT ingestion into verses table
+│   ├── ingest_tahot.py         # TAHOT Hebrew OT alignment data ingestion
+│   ├── extract_bible_refs.py   # Backfill bible_references on all documents (psycopg2)
+│   ├── download_book_covers.py # Download book cover images to frontend/public/images/books/
+│   └── test_metering.py        # End-to-end metering test suite (increment, rollover, hard stop)
 ├── migrations/            # SQL migrations (run in Supabase SQL Editor)
 │   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
@@ -468,7 +473,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/source_resolver.py` | Shared source_id resolution + normalization. Imported by `ingest.py` and `ingest_magazine.py`. `resolve_source_id(db, source_name, author)` → `(source_id, norm_key, via)`. `normalize_alias_key(s)` → lowercase + strip + collapse whitespace (must match migration 050 seeds exactly). Emits `ALIAS_MISS` log on resolution miss. `--dry-run-sources` flag in both ingest scripts exercises this without DB writes. |
 | `scripts/propositions.py` | Shared proposition extraction + storage module. `extract_propositions(text)` — Groq Llama 3.3 70B, v3 "four-corners" prompt; strips ```json fences; returns `[]` + logs `PROPOSITION_EXTRACT_FAIL` on error (never raises). `get_license_status(conn, source_id)` — looks up license_status from sources. `store_propositions(conn, document_id, propositions, embed_fn)` — DELETE by document_id then embed + INSERT each via injected `embed_fn`; commits; returns count. `process_document(conn, doc_id, source_id, text, embed_fn)` — ingest entry point; skips unless unlicensed; returns `"skipped_licensed"` / `"no_propositions"` / `"stored:{n}"` / `"error"`; rolls back + returns `"error"` on exception; never raises. Groq client lazy-init. |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq Llama 3.3 70B). `extract_bible_references(content) -> List[str]`. Segments at ~12k chars, normalizes against 66-book canonical set + alias map, dedupes. Non-fatal (returns `[]`). |
-| `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force`, `--limit N`, `--source-kind KIND`. Uses psycopg2 for reads (avoids PostgREST timeouts). |
+| `scripts/extract_bible_refs.py` | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force`, `--limit N`, `--source-kind KIND`. Uses psycopg2 for reads (avoids PostgREST timeouts). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
 | `scripts/youtube_pipeline.sh` | Full YouTube pipeline convenience script: scrape → clean → whisper → ingest. Shell alias: `rh-youtube`. |
@@ -486,16 +491,19 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 
 **Deleted:** `merge_articles.py` (replaced by Pass 2 per-article segmentation)
 
-### Root-Level Ingestion Scripts
+### Additional Pipeline Scripts (in scripts/)
 
 | Script | Purpose |
 |---|---|
-| `scrape_preceptaustin.py` | Scrapes Precept Austin Greek word studies. Page caching to `sources/precept_austin/page_cache/`, randomized sleep (2-5s), 4-strategy anchor matching (exact → case-insensitive → partial → reverse word), quality filters (<100 words, nav bleed, fragmented). `--fetch` runs full pipeline, `--test` limits to 10 entries. Outputs to `sources/precept_austin/raw/` + `index.json`. |
-| `ingest_preceptaustin.py` | Ingests Precept Austin word studies into Supabase. Chunks via psycopg2 `execute_values` with `::vector` cast. Documents via Supabase client. Skip logic checks `excerpts` table for existing `word_study_article` excerpt (not just document existence). Reuses existing doc_id when document exists but has no excerpt. Uses `backend/app/services/chunker.py` (550 tokens, 80 overlap). |
-| `ingest_lexicon.py` | Ingests STEPBible lexicon files (TBESG, TBESH, TFLSJ). One chunk per lexical entry. tiktoken truncation at 8000 tokens for embedding. Resume-safe (tracks existing chunk counts). CLI flags: `--lexicon TBESG\|TBESH\|TFLSJ`, `--delete` (removes existing data first), `--sample N`. Brief mode for TBESG: stores only gloss + bolded sub-meanings (no full Abbott-Smith HTML). Chunk inserts via psycopg2 `execute_values` with `ON CONFLICT DO NOTHING`. |
-| `ingest_bible.py` | Parses WEB VPL file, maps 66 canonical books (VPL→SBL abbreviations), inserts into `verses` table via psycopg2. Batch size 1000, `ON CONFLICT DO NOTHING`. `--test` limits to 100 verses. Skips deuterocanonical books. |
-
-Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
+| `scripts/scrape_preceptaustin.py` | Scrapes Precept Austin Greek word studies. Page caching to `sources/precept_austin/page_cache/`, randomized sleep (2-5s), 4-strategy anchor matching (exact → case-insensitive → partial → reverse word), quality filters (<100 words, nav bleed, fragmented). `--fetch` runs full pipeline, `--test` limits to 10 entries. Outputs to `sources/precept_austin/raw/` + `index.json`. |
+| `scripts/ingest_preceptaustin.py` | Ingests Precept Austin word studies into Supabase. Chunks via psycopg2 `execute_values` with `::vector` cast. Documents via Supabase client. Skip logic checks `excerpts` table for existing `word_study_article` excerpt (not just document existence). Reuses existing doc_id when document exists but has no excerpt. Uses `backend/app/services/chunker.py` (550 tokens, 80 overlap). |
+| `scripts/ingest_lexicon.py` | Ingests STEPBible lexicon files (TBESG, TBESH, TFLSJ). One chunk per lexical entry. tiktoken truncation at 8000 tokens for embedding. Resume-safe (tracks existing chunk counts). CLI flags: `--lexicon TBESG\|TBESH\|TFLSJ`, `--delete` (removes existing data first), `--sample N`. Brief mode for TBESG: stores only gloss + bolded sub-meanings (no full Abbott-Smith HTML). Chunk inserts via psycopg2 `execute_values` with `ON CONFLICT DO NOTHING`. |
+| `scripts/ingest_bible.py` | Parses WEB VPL file, maps 66 canonical books (VPL→SBL abbreviations), inserts into `verses` table via psycopg2. Batch size 1000, `ON CONFLICT DO NOTHING`. `--test` limits to 100 verses. Skips deuterocanonical books. |
+| `scripts/ingest_interlinear.py` | Ingests STEPBible interlinear NT data into `verses` table via psycopg2. `PROJECT_ROOT / sources/lexicon/`. Flags: `--test` (Matthew 1 only), `--book`. |
+| `scripts/ingest_tahot.py` | Ingests TAHOT Hebrew OT alignment data via psycopg2. `PROJECT_ROOT / sources/`. Cache dir: `/tmp/tahot` (absolute). Flags: `--test` (100 rows), `--book`. |
+| `scripts/extract_bible_refs.py` | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force`, `--limit N`, `--source-kind KIND`. Uses psycopg2 for reads (avoids PostgREST timeouts). Imports `bible_refs.extract_bible_references` as a sibling module. |
+| `scripts/download_book_covers.py` | Downloads book cover images to `frontend/public/images/books/`. No DB credentials needed. |
+| `scripts/test_metering.py` | End-to-end metering test suite (increment sequence, week rollover, hard stop, stale-week GET /usage). Run from repo root — uses CWD-relative `migrations/039_user_usage.sql` path. |
 
 **Data sources:**
 - `sources/precept_austin/` — word study `.txt` files + `index.json` + `page_cache/` (gitignored)
