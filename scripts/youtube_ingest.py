@@ -274,6 +274,79 @@ def ingest_video(
         return "failed", display_name, "ingest_file: {}/{}".format(ingest_status, ingest_reason)
 
 
+# ── Callable pipeline (used by CLI and queue orchestrator) ───────────────────
+
+def ingest_sheet(
+    wb: openpyxl.Workbook,
+    ws,
+    ytdlp: str,
+    limit: Optional[int] = None,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Ingest all ingest=TRUE AND status=triaged rows in ws.
+    Called by CLI main() and by run_queue_ingest.py.
+    Returns {done, failed, needs_source} counts.
+    """
+    candidates = []
+    for r in range(2, ws.max_row + 1):
+        ingest_val = str(gcell(ws, r, "ingest") or "").strip().upper()
+        status_val = str(gcell(ws, r, "status") or "").strip().lower()
+        url_val    = str(gcell(ws, r, "url") or "").strip()
+        title_val  = str(gcell(ws, r, "video_title") or "").strip()
+        if ingest_val == "TRUE" and status_val == "triaged" and url_val and title_val:
+            candidates.append(r)
+
+    if limit:
+        candidates = candidates[:limit]
+
+    mode = "(DRY-RUN) " if dry_run else ""
+    print("\n── Stage 3: YouTube Ingest {}──────────────────────────────────".format(mode))
+    print("  {} row(s) to process".format(len(candidates)))
+
+    stats = {"done": 0, "failed": 0, "needs_source": 0}
+
+    for row_idx in candidates:
+        url          = str(gcell(ws, row_idx, "url")).strip()
+        video_title  = str(gcell(ws, row_idx, "video_title")).strip()
+        channel_name = str(gcell(ws, row_idx, "channel_name") or "").strip()
+
+        print("\n{}".format("─" * 64))
+        print("  {}".format(video_title[:72]))
+        print("  {}".format(url))
+
+        try:
+            final_status, display_name, log_reason = ingest_video(
+                ytdlp, url, video_title, channel_name, dry_run=dry_run
+            )
+        except Exception as exc:
+            final_status = "failed"
+            display_name = ""
+            log_reason   = "unhandled: {}".format(exc)
+
+        if final_status == "dry_run":
+            print("  [DRY-RUN] would ingest → source: {!r}".format(display_name))
+            continue
+
+        print("  → status={}  source={!r}  ({})".format(final_status, display_name, log_reason))
+        stats[final_status] = stats.get(final_status, 0) + 1
+
+        if not dry_run:
+            if final_status == "done":
+                scell(ws, row_idx, "status",          "done")
+                scell(ws, row_idx, "resolved_source", display_name)
+            elif final_status == "needs_source":
+                scell(ws, row_idx, "status",          "needs_source")
+                scell(ws, row_idx, "resolved_source", "⚠ {}".format(log_reason))
+            else:
+                scell(ws, row_idx, "status", "failed")
+                if display_name:
+                    scell(ws, row_idx, "resolved_source", display_name)
+            wb.save(QUEUE_PATH)
+
+    return stats
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -315,61 +388,7 @@ def main() -> None:
     # Terminal statuses (done, done_prior, failed, needs_source, expanded) all
     # have status != "triaged", so they can never satisfy the condition below.
     # done_prior rows additionally have ingest=FALSE — double-excluded.
-    candidates = []
-    for r in range(2, ws.max_row + 1):
-        ingest_val = str(gcell(ws, r, "ingest") or "").strip().upper()
-        status_val = str(gcell(ws, r, "status") or "").strip().lower()
-        url_val    = str(gcell(ws, r, "url") or "").strip()
-        title_val  = str(gcell(ws, r, "video_title") or "").strip()
-        if ingest_val == "TRUE" and status_val == "triaged" and url_val and title_val:
-            candidates.append(r)
-
-    if args.limit:
-        candidates = candidates[: args.limit]
-
-    mode = "(DRY-RUN) " if args.dry_run else ""
-    print("\n── Stage 3: YouTube Ingest {}──────────────────────────────────".format(mode))
-    print("  {} row(s) to process".format(len(candidates)))
-
-    stats = {"done": 0, "failed": 0, "needs_source": 0}
-
-    for row_idx in candidates:
-        url          = str(gcell(ws, row_idx, "url")).strip()
-        video_title  = str(gcell(ws, row_idx, "video_title")).strip()
-        channel_name = str(gcell(ws, row_idx, "channel_name") or "").strip()
-
-        print("\n{}".format("─" * 64))
-        print("  {}".format(video_title[:72]))
-        print("  {}".format(url))
-
-        try:
-            final_status, display_name, log_reason = ingest_video(
-                ytdlp, url, video_title, channel_name, dry_run=args.dry_run
-            )
-        except Exception as exc:
-            final_status = "failed"
-            display_name = ""
-            log_reason   = "unhandled: {}".format(exc)
-
-        if final_status == "dry_run":
-            print("  [DRY-RUN] would ingest → source: {!r}".format(display_name))
-            continue
-
-        print("  → status={}  source={!r}  ({})".format(final_status, display_name, log_reason))
-        stats[final_status] = stats.get(final_status, 0) + 1
-
-        if not args.dry_run:
-            if final_status == "done":
-                scell(ws, row_idx, "status",          "done")
-                scell(ws, row_idx, "resolved_source", display_name)
-            elif final_status == "needs_source":
-                scell(ws, row_idx, "status",          "needs_source")
-                scell(ws, row_idx, "resolved_source", "⚠ {}".format(log_reason))
-            else:
-                scell(ws, row_idx, "status", "failed")
-                if display_name:
-                    scell(ws, row_idx, "resolved_source", display_name)
-            wb.save(QUEUE_PATH)
+    stats = ingest_sheet(wb, ws, ytdlp, limit=args.limit, dry_run=args.dry_run)
 
     print("\n── Results ──────────────────────────────────────────────────────")
     print("  done:         {}".format(stats.get("done", 0)))

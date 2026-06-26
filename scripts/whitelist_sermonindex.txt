@@ -1,0 +1,22 @@
+# SermonIndex speaker whitelist — one name per line.
+# Used by run_queue_triage.py when filter=whitelist for the SermonIndex source.
+# normalize_alias_key() is applied to both this name and the video title at match time.
+# A.W. Tozer and T. Austin-Sparks have punctuation variants that the matcher handles
+# via period-strip fallback (see match_whitelist() in youtube_triage.py).
+David Wilkerson
+Carter Conlon
+Smith Wigglesworth
+Kathryn Kuhlman
+Duncan Campbell
+Frank Bartleman
+Zac Poonen
+Leonard Ravenhill
+A.W. Tozer
+AW Tozer
+A W Tozer
+Keith Green
+Paris Reidhead
+Art Katz
+T. Austin-Sparks
+T Austin-Sparks
+Austin-Sparks

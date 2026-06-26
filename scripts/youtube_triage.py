@@ -102,8 +102,11 @@ def _ytdlp_base_args(ytdlp: str) -> List[str]:
 
 
 def is_channel_url(url: str) -> bool:
-    """True if the URL points to a channel rather than a single video."""
+    """True if the URL points to a channel or playlist (enumerable via flat-playlist).
+    list= is checked BEFORE watch?v= so that watch?v=X&list=Y is treated as a playlist."""
     url = url.strip()
+    if "list=" in url:   # playlist URL — may also contain watch?v=, but it's enumerable
+        return True
     return "watch?v=" not in url and "youtu.be/" not in url
 
 
@@ -364,6 +367,204 @@ def all_urls_in_sheet(ws) -> set:
     }
 
 
+# ── Callable pipeline (used by CLI and queue orchestrator) ───────────────────
+
+def process_sheet(
+    wb: openpyxl.Workbook,
+    ws,
+    ytdlp: str,
+    groq_client,
+    whitelist_names: List[str],
+    min_duration: int = 0,
+    limit: Optional[int] = None,
+    add_url: Optional[str] = None,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Run triage Phases 1-3 on the given (wb, ws) pair.
+    Called by CLI main() and by run_queue_triage.py.
+    Returns stats dict: {written, classified, dur_skipped, wl_no_match, speaker_counts}.
+    """
+    stats: dict = {
+        "written": 0, "classified": 0,
+        "dur_skipped": 0, "wl_no_match": 0, "speaker_counts": {},
+    }
+
+    # ── Pre-step: add URL if requested ───────────────────────────────────────
+    if add_url:
+        url_to_add = add_url.strip()
+        if url_to_add in all_urls_in_sheet(ws):
+            print(f"Already in queue: {url_to_add}")
+        else:
+            ws.append([url_to_add] + [""] * (len(COLUMNS) - 1))
+            if not dry_run:
+                wb.save(QUEUE_PATH)
+            print(f"Added: {url_to_add}")
+
+    # ── Phase 1: Channel expansion ────────────────────────────────────────────
+    print("\n── Phase 1: Channel expansion ──────────────────────────────────")
+    channel_rows = [
+        r for r in range(2, ws.max_row + 1)
+        if gcell(ws, r, "url") and is_blank_status(ws, r)
+        and is_channel_url(str(gcell(ws, r, "url")))
+    ]
+    print(f"  {len(channel_rows)} channel row(s) to expand")
+
+    dur_total_skipped   = 0
+    wl_total_enumerated = 0
+    wl_total_no_match   = 0
+    wl_total_written    = 0
+    wl_speaker_counts: dict = {}
+
+    for row_idx in channel_rows:
+        channel_url = str(gcell(ws, row_idx, "url")).strip()
+        print(f"\n  {channel_url}")
+        try:
+            channel_name, videos = enumerate_channel(ytdlp, channel_url, limit=limit)
+        except Exception as e:
+            print(f"  ✗ enumeration failed: {e}")
+            continue
+
+        print(f"  → {len(videos)} video(s) enumerated | channel: {channel_name!r}")
+        wl_total_enumerated += len(videos)
+
+        # Duration pre-filter: skip videos whose duration is known and <= threshold.
+        if min_duration > 0:
+            kept, n_skipped = [], 0
+            for v in videos:
+                d = v.get("duration")
+                if d is not None and d <= min_duration:
+                    n_skipped += 1
+                else:
+                    kept.append(v)
+            if n_skipped:
+                print(f"  ↳ duration filter (≤{min_duration}s): kept {len(kept)}, skipped {n_skipped}")
+            dur_total_skipped += n_skipped
+            videos = kept
+
+        # Whitelist filter: keep only videos whose title contains a whitelisted name.
+        if whitelist_names:
+            matched_videos, n_no_match = [], 0
+            for v in videos:
+                hit = match_whitelist(v["title"], whitelist_names)
+                if hit:
+                    v["wl_match"] = hit
+                    matched_videos.append(v)
+                    wl_speaker_counts[hit] = wl_speaker_counts.get(hit, 0) + 1
+                else:
+                    n_no_match += 1
+            if n_no_match:
+                print(f"  ↳ whitelist filter: kept {len(matched_videos)}, skipped {n_no_match} (no speaker match)")
+            wl_total_no_match += n_no_match
+            wl_total_written  += len(matched_videos)
+            videos = matched_videos
+
+        if dry_run:
+            for v in videos[:5]:
+                if whitelist_names:
+                    print(f"    [{v.get('wl_match', '?')}] {v['title'][:60]}")
+                else:
+                    print(f"    {v['title'][:72]}")
+            if len(videos) > 5:
+                print(f"    … and {len(videos) - 5} more")
+            continue
+
+        if whitelist_names:
+            for v in videos:
+                ws.append([v["url"], v["title"], v["wl_match"], "sermon", "TRUE", "triaged", ""])
+        else:
+            for v in videos:
+                ws.append([v["url"], v["title"], channel_name, "", "", "", ""])
+            wl_total_written += len(videos)
+
+        scell(ws, row_idx, "channel_name", channel_name)
+        scell(ws, row_idx, "status", "expanded")
+        wb.save(QUEUE_PATH)
+        print(f"  ✓ appended {len(videos)} rows, marked expanded")
+
+    if min_duration > 0 and channel_rows and not dry_run and not whitelist_names:
+        print(f"\n  Duration filter summary: {wl_total_written} written, {dur_total_skipped} skipped (≤{min_duration}s)")
+
+    if whitelist_names and channel_rows and not dry_run:
+        print(f"\n  ── Whitelist filter summary ──────────────────────────────")
+        print(f"     enumerated           : {wl_total_enumerated}")
+        print(f"     skipped (≤{min_duration}s duration) : {dur_total_skipped}")
+        print(f"     skipped (no match)   : {wl_total_no_match}")
+        print(f"     written              : {wl_total_written}")
+        if wl_speaker_counts:
+            print(f"\n     Per speaker:")
+            for spk, cnt in sorted(wl_speaker_counts.items(), key=lambda x: -x[1]):
+                print(f"       {spk}: {cnt}")
+
+    stats["written"]        = wl_total_written
+    stats["dur_skipped"]    = dur_total_skipped
+    stats["wl_no_match"]    = wl_total_no_match
+    stats["speaker_counts"] = wl_speaker_counts
+
+    # ── Phase 2: Title fetch for bare single-video rows ───────────────────────
+    print("\n── Phase 2: Fetch titles for untitled video rows ───────────────")
+    needs_title = [
+        r for r in range(2, ws.max_row + 1)
+        if gcell(ws, r, "url") and is_blank_status(ws, r)
+        and not is_channel_url(str(gcell(ws, r, "url")))
+        and not gcell(ws, r, "video_title")
+    ]
+    print(f"  {len(needs_title)} row(s) need title fetch")
+
+    for row_idx in needs_title:
+        url = str(gcell(ws, row_idx, "url")).strip()
+        title, ch = fetch_video_info(ytdlp, url)
+        if title:
+            print(f"  ✓ {title[:70]}")
+            if not dry_run:
+                scell(ws, row_idx, "video_title",  title)
+                scell(ws, row_idx, "channel_name", ch or "")
+        else:
+            print(f"  ⚠  could not fetch title: {url[:70]}")
+
+    if needs_title and not dry_run:
+        wb.save(QUEUE_PATH)
+
+    # ── Phase 3: Groq classification ──────────────────────────────────────────
+    print("\n── Phase 3: Groq classification ────────────────────────────────")
+    if whitelist_names:
+        print("  Whitelist mode — Groq skipped (matched rows pre-classified as sermon).")
+        return stats
+
+    to_triage = [
+        r for r in range(2, ws.max_row + 1)
+        if gcell(ws, r, "url") and is_blank_status(ws, r)
+        and not is_channel_url(str(gcell(ws, r, "url")))
+        and gcell(ws, r, "video_title")
+        and not gcell(ws, r, "guess")
+    ]
+    print(f"  {len(to_triage)} row(s) to classify")
+
+    for batch_start in range(0, len(to_triage), BATCH_SIZE):
+        batch = to_triage[batch_start: batch_start + BATCH_SIZE]
+        titles = [str(gcell(ws, r, "video_title")) for r in batch]
+        n = len(titles)
+        print(f"  Groq: classifying {n} title(s) (rows {batch_start+1}–{batch_start+n})…")
+        guesses = classify_batch(groq_client, titles)
+
+        for row_idx, guess in zip(batch, guesses):
+            ingest_val = "TRUE" if guess == "sermon" else "FALSE"
+            if not dry_run:
+                scell(ws, row_idx, "guess",  guess)
+                scell(ws, row_idx, "ingest", ingest_val)
+                scell(ws, row_idx, "status", "triaged")
+            else:
+                t = str(gcell(ws, row_idx, "video_title"))[:55]
+                print(f"    {guess:<8} {ingest_val}  {t}")
+
+    if to_triage and not dry_run:
+        wb.save(QUEUE_PATH)
+        print(f"  ✓ saved {len(to_triage)} classified row(s)")
+
+    stats["classified"] = len(to_triage)
+    return stats
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -456,181 +657,14 @@ def main():
         _print_summary(ws_r)
         return
 
-    # ── Pre-step: add URL if requested ───────────────────────────────────────
-    if args.add:
-        url = args.add.strip()
-        if url in all_urls_in_sheet(ws):
-            print(f"Already in queue: {url}")
-        else:
-            ws.append([url] + [""] * (len(COLUMNS) - 1))
-            if not args.dry_run:
-                wb.save(QUEUE_PATH)
-            print(f"Added: {url}")
-
-    # ── Phase 1: Channel expansion ────────────────────────────────────────────
-    print("\n── Phase 1: Channel expansion ──────────────────────────────────")
-    channel_rows = [
-        r for r in range(2, ws.max_row + 1)
-        if gcell(ws, r, "url") and is_blank_status(ws, r)
-        and is_channel_url(str(gcell(ws, r, "url")))
-    ]
-    print(f"  {len(channel_rows)} channel row(s) to expand")
-
-    dur_total_skipped  = 0
-    wl_total_enumerated = 0
-    wl_total_no_match  = 0
-    wl_total_written   = 0
-    wl_speaker_counts: dict = {}   # matched whitelist name → video count
-
-    for row_idx in channel_rows:
-        channel_url = str(gcell(ws, row_idx, "url")).strip()
-        print(f"\n  {channel_url}")
-        try:
-            channel_name, videos = enumerate_channel(ytdlp, channel_url, limit=args.limit)
-        except Exception as e:
-            print(f"  ✗ enumeration failed: {e}")
-            continue
-
-        print(f"  → {len(videos)} video(s) enumerated | channel: {channel_name!r}")
-        wl_total_enumerated += len(videos)
-
-        # Duration pre-filter: skip videos whose duration is known and <= threshold.
-        # Missing/zero/null duration → keep (fail toward inclusion).
-        if args.min_duration > 0:
-            kept, n_skipped = [], 0
-            for v in videos:
-                d = v.get("duration")
-                if d is not None and d <= args.min_duration:
-                    n_skipped += 1
-                else:
-                    kept.append(v)
-            if n_skipped:
-                print(f"  ↳ duration filter (≤{args.min_duration}s): kept {len(kept)}, skipped {n_skipped}")
-            dur_total_skipped += n_skipped
-            videos = kept
-
-        # Whitelist filter: keep only videos whose title contains a whitelisted name.
-        # Matched rows are pre-classified as sermon=TRUE — no Groq needed.
-        # channel_name is set to the matched speaker name (not the channel string) so
-        # Stage 3 resolves to the correct per-speaker source via source_aliases.
-        if whitelist_names:
-            matched_videos, n_no_match = [], 0
-            for v in videos:
-                hit = match_whitelist(v["title"], whitelist_names)
-                if hit:
-                    v["wl_match"] = hit
-                    matched_videos.append(v)
-                    wl_speaker_counts[hit] = wl_speaker_counts.get(hit, 0) + 1
-                else:
-                    n_no_match += 1
-            if n_no_match:
-                print(f"  ↳ whitelist filter: kept {len(matched_videos)}, skipped {n_no_match} (no speaker match)")
-            wl_total_no_match += n_no_match
-            wl_total_written  += len(matched_videos)
-            videos = matched_videos
-
-        if args.dry_run:
-            for v in videos[:5]:
-                if whitelist_names:
-                    print(f"    [{v.get('wl_match', '?')}] {v['title'][:60]}")
-                else:
-                    print(f"    {v['title'][:72]}")
-            if len(videos) > 5:
-                print(f"    … and {len(videos) - 5} more")
-            continue
-
-        if whitelist_names:
-            # Write rows pre-classified as sermon=TRUE with speaker as channel_name
-            for v in videos:
-                ws.append([v["url"], v["title"], v["wl_match"], "sermon", "TRUE", "triaged", ""])
-        else:
-            for v in videos:
-                ws.append([v["url"], v["title"], channel_name, "", "", "", ""])
-            wl_total_written += len(videos)
-
-        scell(ws, row_idx, "channel_name", channel_name)
-        scell(ws, row_idx, "status", "expanded")
-        wb.save(QUEUE_PATH)
-        print(f"  ✓ appended {len(videos)} rows, marked expanded")
-
-    # Duration-only summary (non-whitelist mode)
-    if args.min_duration > 0 and channel_rows and not args.dry_run and not whitelist_names:
-        print(f"\n  Duration filter summary: {wl_total_written} written, {dur_total_skipped} skipped (≤{args.min_duration}s)")
-
-    # Whitelist summary
-    if whitelist_names and channel_rows and not args.dry_run:
-        print(f"\n  ── Whitelist filter summary ──────────────────────────────")
-        print(f"     enumerated           : {wl_total_enumerated}")
-        print(f"     skipped (≤{args.min_duration}s duration) : {dur_total_skipped}")
-        print(f"     skipped (no match)   : {wl_total_no_match}")
-        print(f"     written              : {wl_total_written}")
-        if wl_speaker_counts:
-            print(f"\n     Per speaker:")
-            for spk, cnt in sorted(wl_speaker_counts.items(), key=lambda x: -x[1]):
-                print(f"       {spk}: {cnt}")
-
-    # ── Phase 2: Title fetch for bare single-video rows ───────────────────────
-    print("\n── Phase 2: Fetch titles for untitled video rows ───────────────")
-    needs_title = [
-        r for r in range(2, ws.max_row + 1)
-        if gcell(ws, r, "url") and is_blank_status(ws, r)
-        and not is_channel_url(str(gcell(ws, r, "url")))
-        and not gcell(ws, r, "video_title")
-    ]
-    print(f"  {len(needs_title)} row(s) need title fetch")
-
-    for row_idx in needs_title:
-        url = str(gcell(ws, row_idx, "url")).strip()
-        title, ch = fetch_video_info(ytdlp, url)
-        if title:
-            print(f"  ✓ {title[:70]}")
-            if not args.dry_run:
-                scell(ws, row_idx, "video_title",  title)
-                scell(ws, row_idx, "channel_name", ch or "")
-        else:
-            print(f"  ⚠  could not fetch title: {url[:70]}")
-
-    if needs_title and not args.dry_run:
-        wb.save(QUEUE_PATH)
-
-    # ── Phase 3: Groq classification ──────────────────────────────────────────
-    print("\n── Phase 3: Groq classification ────────────────────────────────")
-    if whitelist_names:
-        print("  Whitelist mode — Groq skipped (matched rows pre-classified as sermon).")
-        wb_r = openpyxl.load_workbook(QUEUE_PATH) if (not args.dry_run and QUEUE_PATH.exists()) else wb
-        _print_summary(wb_r[args.sheet])
-        return
-
-    to_triage = [
-        r for r in range(2, ws.max_row + 1)
-        if gcell(ws, r, "url") and is_blank_status(ws, r)
-        and not is_channel_url(str(gcell(ws, r, "url")))
-        and gcell(ws, r, "video_title")
-        and not gcell(ws, r, "guess")
-    ]
-    print(f"  {len(to_triage)} row(s) to classify")
-
-    for batch_start in range(0, len(to_triage), BATCH_SIZE):
-        batch = to_triage[batch_start: batch_start + BATCH_SIZE]
-        titles = [str(gcell(ws, r, "video_title")) for r in batch]
-        n = len(titles)
-        print(f"  Groq: classifying {n} title(s) (rows {batch_start+1}–{batch_start+n})…")
-        guesses = classify_batch(groq_client, titles)
-
-        for row_idx, guess in zip(batch, guesses):
-            ingest_val = "TRUE" if guess == "sermon" else "FALSE"
-            if not args.dry_run:
-                scell(ws, row_idx, "guess",  guess)
-                scell(ws, row_idx, "ingest", ingest_val)
-                scell(ws, row_idx, "status", "triaged")
-            else:
-                t = str(gcell(ws, row_idx, "video_title"))[:55]
-                print(f"    {guess:<8} {ingest_val}  {t}")
-
-    if to_triage and not args.dry_run:
-        wb.save(QUEUE_PATH)
-        print(f"  ✓ saved {len(to_triage)} classified row(s)")
-
+    process_sheet(
+        wb, ws, ytdlp, groq_client,
+        whitelist_names=whitelist_names,
+        min_duration=args.min_duration,
+        limit=args.limit,
+        add_url=args.add,
+        dry_run=args.dry_run,
+    )
     wb_r = openpyxl.load_workbook(QUEUE_PATH) if (not args.dry_run and QUEUE_PATH.exists()) else wb
     _print_summary(wb_r[args.sheet])
 
