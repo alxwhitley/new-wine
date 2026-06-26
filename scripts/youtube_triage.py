@@ -49,6 +49,13 @@ COOKIES_PATH = ROOT / "scripts" / "youtube_cookies.txt"
 
 load_dotenv(ROOT / "backend" / "app" / ".env")
 
+# normalize_alias_key: the sole normalization contract for source_aliases.
+# MUST be imported from source_resolver — do not re-implement here.
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from source_resolver import normalize_alias_key  # noqa: E402
+
 MODEL      = "llama-3.3-70b-versatile"
 BATCH_SIZE = 10   # titles per Groq call (smaller = less blast radius on mismatch)
 
@@ -101,6 +108,51 @@ def is_channel_url(url: str) -> bool:
 
 
 _NA_VALS = {"na", "none", "null", ""}
+
+
+# ── Whitelist helpers ─────────────────────────────────────────────────────────
+
+def load_whitelist(spec: str) -> List[str]:
+    """
+    Load speaker names from a comma-separated string or a file path (one name per line).
+    Lines starting with '#' are treated as comments and ignored.
+    Returns list of display strings; normalization is applied at match time.
+    """
+    p = Path(spec)
+    if p.exists():
+        names = [
+            line.strip()
+            for line in p.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+    else:
+        names = [n.strip() for n in spec.split(",") if n.strip()]
+    return names
+
+
+def match_whitelist(title: str, wl_entries: List[str]) -> Optional[str]:
+    """
+    Return the first whitelist entry whose normalized form appears as a substring
+    of the normalized title, or None if no entry matches.
+
+    normalize_alias_key() is used for both sides — consistent with alias resolution.
+    A period-strip fallback is also tried so that "AW Tozer" (norm: "aw tozer") can
+    match a title rendered "A.W. Tozer - ..." (norm strips to "aw tozer - ...").
+    This handles the punctuation variants registered for A.W. Tozer and T. Austin-Sparks.
+    """
+    norm_title        = normalize_alias_key(title)
+    norm_title_nodots = norm_title.replace(".", "")
+    for name in wl_entries:
+        norm_name = normalize_alias_key(name)
+        if not norm_name:
+            continue
+        if norm_name in norm_title:
+            return name
+        # Period-strip fallback: "aw tozer" in "aw tozer - prayer" when title had "A.W."
+        if norm_name.replace(".", "") in norm_title_nodots:
+            return name
+    return None
+
 
 def enumerate_channel(
     ytdlp: str, channel_url: str, limit: Optional[int] = None
@@ -323,6 +375,10 @@ def main():
     parser.add_argument("--limit",        metavar="N",   type=int,  help="Max videos to enumerate per channel (applied before duration filter)")
     parser.add_argument("--min-duration", metavar="N",   type=int,  default=0,
                         help="Skip videos whose duration is known and <= N seconds (0 = off)")
+    parser.add_argument("--whitelist",    metavar="NAMES_OR_FILE",
+                        help="Comma-separated speaker names, or path to a text file (one name per line). "
+                             "Only videos whose title contains a whitelisted name are written; "
+                             "matched rows are pre-classified as sermon=TRUE. Groq is skipped.")
     parser.add_argument("--retry-unknown", action="store_true",     help="Re-classify rows where status=triaged AND guess=unknown")
     parser.add_argument("--dry-run",       action="store_true",     help="Print actions without writing")
     args = parser.parse_args()
@@ -346,6 +402,15 @@ def main():
     if not ytdlp:
         print("ERROR: yt-dlp not found. Run: pip3 install yt-dlp")
         sys.exit(1)
+
+    # Load whitelist if provided
+    whitelist_names: List[str] = []
+    if args.whitelist:
+        whitelist_names = load_whitelist(args.whitelist)
+        if not whitelist_names:
+            print("ERROR: --whitelist resolved to an empty list")
+            sys.exit(1)
+        print(f"Whitelist: {len(whitelist_names)} name(s): {', '.join(whitelist_names)}")
 
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
@@ -411,8 +476,11 @@ def main():
     ]
     print(f"  {len(channel_rows)} channel row(s) to expand")
 
-    dur_total_skipped = 0
-    dur_total_written = 0
+    dur_total_skipped  = 0
+    wl_total_enumerated = 0
+    wl_total_no_match  = 0
+    wl_total_written   = 0
+    wl_speaker_counts: dict = {}   # matched whitelist name → video count
 
     for row_idx in channel_rows:
         channel_url = str(gcell(ws, row_idx, "url")).strip()
@@ -424,6 +492,7 @@ def main():
             continue
 
         print(f"  → {len(videos)} video(s) enumerated | channel: {channel_name!r}")
+        wl_total_enumerated += len(videos)
 
         # Duration pre-filter: skip videos whose duration is known and <= threshold.
         # Missing/zero/null duration → keep (fail toward inclusion).
@@ -438,27 +507,67 @@ def main():
             if n_skipped:
                 print(f"  ↳ duration filter (≤{args.min_duration}s): kept {len(kept)}, skipped {n_skipped}")
             dur_total_skipped += n_skipped
-            dur_total_written += len(kept)
             videos = kept
-        else:
-            dur_total_written += len(videos)
+
+        # Whitelist filter: keep only videos whose title contains a whitelisted name.
+        # Matched rows are pre-classified as sermon=TRUE — no Groq needed.
+        # channel_name is set to the matched speaker name (not the channel string) so
+        # Stage 3 resolves to the correct per-speaker source via source_aliases.
+        if whitelist_names:
+            matched_videos, n_no_match = [], 0
+            for v in videos:
+                hit = match_whitelist(v["title"], whitelist_names)
+                if hit:
+                    v["wl_match"] = hit
+                    matched_videos.append(v)
+                    wl_speaker_counts[hit] = wl_speaker_counts.get(hit, 0) + 1
+                else:
+                    n_no_match += 1
+            if n_no_match:
+                print(f"  ↳ whitelist filter: kept {len(matched_videos)}, skipped {n_no_match} (no speaker match)")
+            wl_total_no_match += n_no_match
+            wl_total_written  += len(matched_videos)
+            videos = matched_videos
 
         if args.dry_run:
             for v in videos[:5]:
-                print(f"    {v['title'][:72]}")
+                if whitelist_names:
+                    print(f"    [{v.get('wl_match', '?')}] {v['title'][:60]}")
+                else:
+                    print(f"    {v['title'][:72]}")
             if len(videos) > 5:
                 print(f"    … and {len(videos) - 5} more")
             continue
 
-        for v in videos:
-            ws.append([v["url"], v["title"], channel_name, "", "", "", ""])
+        if whitelist_names:
+            # Write rows pre-classified as sermon=TRUE with speaker as channel_name
+            for v in videos:
+                ws.append([v["url"], v["title"], v["wl_match"], "sermon", "TRUE", "triaged", ""])
+        else:
+            for v in videos:
+                ws.append([v["url"], v["title"], channel_name, "", "", "", ""])
+            wl_total_written += len(videos)
+
         scell(ws, row_idx, "channel_name", channel_name)
         scell(ws, row_idx, "status", "expanded")
         wb.save(QUEUE_PATH)
         print(f"  ✓ appended {len(videos)} rows, marked expanded")
 
-    if args.min_duration > 0 and channel_rows and not args.dry_run:
-        print(f"\n  Duration filter summary: {dur_total_written} written, {dur_total_skipped} skipped (≤{args.min_duration}s)")
+    # Duration-only summary (non-whitelist mode)
+    if args.min_duration > 0 and channel_rows and not args.dry_run and not whitelist_names:
+        print(f"\n  Duration filter summary: {wl_total_written} written, {dur_total_skipped} skipped (≤{args.min_duration}s)")
+
+    # Whitelist summary
+    if whitelist_names and channel_rows and not args.dry_run:
+        print(f"\n  ── Whitelist filter summary ──────────────────────────────")
+        print(f"     enumerated           : {wl_total_enumerated}")
+        print(f"     skipped (≤{args.min_duration}s duration) : {dur_total_skipped}")
+        print(f"     skipped (no match)   : {wl_total_no_match}")
+        print(f"     written              : {wl_total_written}")
+        if wl_speaker_counts:
+            print(f"\n     Per speaker:")
+            for spk, cnt in sorted(wl_speaker_counts.items(), key=lambda x: -x[1]):
+                print(f"       {spk}: {cnt}")
 
     # ── Phase 2: Title fetch for bare single-video rows ───────────────────────
     print("\n── Phase 2: Fetch titles for untitled video rows ───────────────")
@@ -486,6 +595,12 @@ def main():
 
     # ── Phase 3: Groq classification ──────────────────────────────────────────
     print("\n── Phase 3: Groq classification ────────────────────────────────")
+    if whitelist_names:
+        print("  Whitelist mode — Groq skipped (matched rows pre-classified as sermon).")
+        wb_r = openpyxl.load_workbook(QUEUE_PATH) if (not args.dry_run and QUEUE_PATH.exists()) else wb
+        _print_summary(wb_r[args.sheet])
+        return
+
     to_triage = [
         r for r in range(2, ws.max_row + 1)
         if gcell(ws, r, "url") and is_blank_status(ws, r)
