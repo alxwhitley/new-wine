@@ -68,7 +68,8 @@ repo/
 │   │   ├── cleaned/           # Groq-cleaned, ready for ingest
 │   │   ├── ingested/          # Already in Supabase
 │   │   ├── youtube_tracker.xlsx
-│   │   └── individual_videos.xlsx  # Individual video ingestion tracker
+│   │   ├── individual_videos.xlsx  # Individual video ingestion tracker (legacy — scrape_individual_videos.py)
+│   │   └── ingest_queue.xlsx       # Master 11-tab ingest queue (Sam Storms, John Bevere, + 9 other teachers)
 │   ├── magazine/              # New Wine Magazine pipeline
 │   │   ├── 01_to_extract/     # Drop PDFs here (~198 issues)
 │   │   ├── 02_extracted/      # Per-issue .md articles + raw_text.txt
@@ -87,7 +88,9 @@ repo/
 │   ├── fix_article_json.py    # One-off migration: fix raw JSON chunks in Supabase (run 2026-04-17, 30 fixed)
 │   ├── extract_magazine.py    # 3-pass Gemini/Groq extraction pipeline
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
-│   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; moves YouTube transcripts to ingested/ on success
+│   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; skip_dedup=False param bypasses MD5 guard for Stage 3
+│   ├── youtube_triage.py      # Stage 2: channel enumeration + Groq title classification; --sheet NAME required; keyed batch protocol
+│   ├── youtube_ingest.py      # Stage 3: captions-first/Whisper fallback + Groq clean + ingest_file(skip_dedup=True); --sheet NAME required
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq Llama 3.3 70B, v3 four-corners prompt); process_document() entry point for ingest scripts
 │   ├── source_resolver.py     # Shared source_id resolution + alias normalization; imported by ingest.py and ingest_magazine.py
 │   ├── tag_existing_articles.py  # Backfill topic_tags on existing articles
@@ -328,6 +331,10 @@ repo/
   - **Do NOT label paraphrase rewrites as "owned":** A rewrite of copyrighted material is a derivative; labeling it owned would serve verbatim under safe_mode and create an ungated hole. Source stays truthfully unlicensed; propositions are the safe-mode path.
   - **Migration 051 gotcha — no semicolons in `--` SQL comments:** A semicolon inside a comment split the migration mid-statement, caused a syntax error, and silently rolled back the whole transaction. The same-session Supabase SQL editor appeared to show success because the check ran before the implicit rollback. Rule: no semicolons in `--` comments in migration files. Verify via `SELECT to_regclass('public.<table>')` on a FRESH connection.
   - **Validated end-to-end:** Flora "How To Overcome" (stored:12) and "Christ's Eternal Lordship" (stored:15) — all rows non-null embedding + fts; four-corners quality confirmed (no invented scripture references).
+- **Unified YouTube ingest pipeline (Stage 4a, June 2026):** `youtube_triage.py` (Stage 2) + `youtube_ingest.py` (Stage 3) are the new path for all YouTube content ingestion. Master workbook `sources/youtube/ingest_queue.xlsx` — 11 tabs: Sam Storms (renamed from "Queue"; 2 done + 237 triaged rows), John Bevere (221 done_prior rows backfilled from DB), plus 9 empty tabs (Andrew Wommack, Craig Keener, David Pawson, Randy Clark, Mark Virkler, Vlad Savchuk, Roberts Liardon, R.T. Kendall, Daniel Kolenda). Both scripts require `--sheet NAME` — error with available tab list on omission or wrong name; NO silent fall-through to wrong tab. Workbook is gitignored (in `sources/`).
+- **`done_prior` status (June 2026):** new terminal status in `ingest_queue.xlsx` meaning "already in DB before this tool — never re-ingest." Used to seed the John Bevere tab with 221 existing DB documents. Rows have `ingest=FALSE` and `status=done_prior` — double-excluded from Stage 3 ingest loop (allowlist filter requires `ingest=TRUE AND status=triaged`).
+- **`ingest_file()` skip_dedup param (June 2026):** `skip_dedup: bool = False` bypasses the MD5 `already_ingested()` check in `ingest.py`. Default `False` leaves the directory-scan pipeline guard unchanged. Stage 3 (`youtube_ingest.py`) passes `True` because sheet `status=done` is the authoritative dedup guard, and because `chunks.source_hash` is absent from the live DB schema. **DO NOT add `chunks.source_hash` via migration** — it is listed as droppable (see known issues line 678). Migration 053 was proposed for this, created, and immediately deleted.
+- **`chunks.page_number` and `chunks.source_hash` absent from live schema (confirmed June 2026):** Both listed as droppable/unused. Neither column exists in the live DB. `insert_chunks()` in `ingest.py` must NOT include them in PostgREST insert dicts — doing so triggers PGRST204. Do not create migrations to add either column.
 
 ---
 
@@ -470,7 +477,9 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 |---|---|
 | `scripts/extract_magazine.py` | 3-pass Gemini/Groq extraction pipeline (Vision → Segmentation → QA). Supports `--max-issues N` and `--time-limit`. Continuation resolver (BFS, depth 5) handles "continued on page N" markers. PDFs archived into `02_extracted/{issue_stem}/` after extraction. Empty Gemini batches log warning + substitute `""` (non-fatal). |
 | `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase. Auto-populates `bible_references`. Archives PDFs to `05_archived/` on success. |
-| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. Skip reason tracking: `ingest_file()` returns `(status, reason)` tuples; `main()` prints grouped summary table of all skipped/failed files with reasons at end of run. Uses psycopg2 direct query for `already_ingested()` (same `DB_PARAMS` pattern as other scripts). |
+| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. `ingest_file()` has `skip_dedup: bool = False` param — pass `True` to bypass the MD5 `already_ingested()` check (Stage 3 YouTube ingest uses this; default False preserves directory-scan guard). `insert_chunks()` does NOT send `page_number` or `source_hash` — both columns are absent from the live schema and must NOT be added (see known issues). |
+| `scripts/youtube_triage.py` | Stage 2 of the unified YouTube pipeline. Reads/writes `sources/youtube/ingest_queue.xlsx`. `--sheet NAME` required (errors with available tab list if omitted or wrong — no silent fallback). Phases: (1) channel expansion via yt-dlp flat-playlist; (2) title fetch for bare video rows; (3) Groq classification into sermon/worship/promo/other using keyed `{"i": N, "label": "..."}` protocol (BATCH_SIZE=10). Sets `ingest=TRUE` for sermons, `status=triaged` on completion. Flags: `--add URL`, `--limit N`, `--retry-unknown` (re-classifies guess=unknown rows without changing status), `--dry-run`. `done_prior` rows (status ≠ "triaged") are never re-processed. |
+| `scripts/youtube_ingest.py` | Stage 3 of the unified YouTube pipeline. Reads `ingest_queue.xlsx`; processes rows where `ingest=TRUE AND status=triaged`. `--sheet NAME` required. For each row: (1) resolves source via channel_name alias (`_resolve_channel_name()` handles "NA" channel names by fetching real channel via yt-dlp); sentinel hit → `status=needs_source`; (2) fetches transcript — yt-dlp auto-captions first, Whisper-medium fallback; (3) Groq clean; (4) calls `ingest_file(is_copyrighted=True, skip_dedup=True)` — chunks, propositions, tagging all fire; (5) writes `status=done` + `resolved_source` to sheet. `done_prior` rows are excluded by the `status="triaged"` allowlist — double-excluded because `ingest=FALSE` too. Flags: `--limit N`, `--dry-run`. |
 | `scripts/source_resolver.py` | Shared source_id resolution + normalization. Imported by `ingest.py` and `ingest_magazine.py`. `resolve_source_id(db, source_name, author)` → `(source_id, norm_key, via)`. `normalize_alias_key(s)` → lowercase + strip + collapse whitespace (must match migration 050 seeds exactly). Emits `ALIAS_MISS` log on resolution miss. `--dry-run-sources` flag in both ingest scripts exercises this without DB writes. |
 | `scripts/propositions.py` | Shared proposition extraction + storage module. `extract_propositions(text)` — Groq Llama 3.3 70B, v3 "four-corners" prompt; strips ```json fences; returns `[]` + logs `PROPOSITION_EXTRACT_FAIL` on error (never raises). `get_license_status(conn, source_id)` — looks up license_status from sources. `store_propositions(conn, document_id, propositions, embed_fn)` — DELETE by document_id then embed + INSERT each via injected `embed_fn`; commits; returns count. `process_document(conn, doc_id, source_id, text, embed_fn)` — ingest entry point; skips unless unlicensed; returns `"skipped_licensed"` / `"no_propositions"` / `"stored:{n}"` / `"error"`; rolls back + returns `"error"` on exception; never raises. Groq client lazy-init. |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq Llama 3.3 70B). `extract_bible_references(content) -> List[str]`. Segments at ~12k chars, normalizes against 66-book canonical set + alias map, dedupes. Non-fatal (returns `[]`). |
@@ -604,6 +613,10 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 ---
 
 ## Remaining / Known Issues
+
+- **Sam Storms tab has 237 triaged rows** ready for Stage 3 ingest — run `python3 scripts/youtube_ingest.py --sheet "Sam Storms"`. 2 rows already `status=done` (demo rows confirmed clean).
+- **9 teacher tabs are empty** (Andrew Wommack, Craig Keener, David Pawson, Randy Clark, Mark Virkler, Vlad Savchuk, Roberts Liardon, R.T. Kendall, Daniel Kolenda) — seed each by adding a channel URL: `python3 scripts/youtube_triage.py --sheet "Name" --add URL`.
+- **Sam Storms tab has 10 guess=unknown rows** (from `--retry-unknown` run). Remaining unknowns out of original 100 — Groq could not classify them. Manual review or another `--retry-unknown` pass.
 
 - **Proposition backfill not yet run** — `ingest.py` is skip-on-hash, so already-ingested docs never hit the new proposition step. Need a separate backfill script to run `propositions.process_document()` over all unlicensed docs with chunks but no propositions yet. Precept Austin explicitly excluded from backfill (Alex's decision).
 - **Proposition serving rule not yet built into RPCs** — `match_chunks` / `search_chunks_fts` do not yet serve propositions. Designed rule: propositions ALWAYS retrievable; chunks only when `license_status IN ('public_domain','owned','licensed')` OR (`visibility='shown'` AND `safe_mode='off'`). Dedup needed so shown-set sources don't double-weight. Not started.

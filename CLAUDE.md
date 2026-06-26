@@ -14,7 +14,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   ├── cleaned/           # Groq-cleaned, ready for ingest
 │   │   ├── ingested/          # Already in Supabase
 │   │   ├── youtube_tracker.xlsx
-│   │   └── individual_videos.xlsx  # Individual video ingestion tracker
+│   │   ├── individual_videos.xlsx  # Individual video ingestion tracker (legacy)
+│   │   └── ingest_queue.xlsx       # Master 11-tab ingest queue (one tab per teacher)
 │   ├── magazine/              # New Wine Magazine pipeline
 │   │   ├── 01_to_extract/     # Drop PDFs here (~198 issues)
 │   │   ├── 02_extracted/      # Per-issue .md articles + raw_text.txt
@@ -29,7 +30,9 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── clean_transcripts.py   # Clean raw transcripts via Groq Llama 3.3 70B
 │   ├── extract_magazine.py    # 3-pass Gemini/Groq extraction pipeline
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
-│   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging
+│   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; skip_dedup=False param on ingest_file()
+│   ├── youtube_triage.py      # Stage 2: channel enumeration + Groq classification; --sheet NAME required
+│   ├── youtube_ingest.py      # Stage 3: transcript fetch + ingest_file(skip_dedup=True); --sheet NAME required
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq v3 prompt, process_document entry point)
 │   ├── tag_existing_articles.py   # Backfill topic_tags on existing articles via Groq
 │   ├── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
@@ -135,12 +138,19 @@ python3 scripts/extract_magazine.py
 python3 scripts/ingest_magazine.py
 ```
 
-### YouTube Pipeline
+### YouTube Pipeline (legacy — scrape_youtube.py path)
 ```bash
 cd /Users/alexwhitley/Desktop/rhemata
 python3 scripts/scrape_youtube.py      # Scrape → sources/youtube/raw/
 python3 scripts/clean_transcripts.py   # Clean via Groq → sources/youtube/cleaned/
 python3 scripts/ingest.py              # Ingest cleaned transcripts → Supabase
+```
+
+### YouTube Pipeline (new — ingest_queue.xlsx path)
+```bash
+cd /Users/alexwhitley/Desktop/rhemata
+python3 scripts/youtube_triage.py --sheet "Sam Storms" --add URL   # Stage 2: enumerate + classify
+python3 scripts/youtube_ingest.py --sheet "Sam Storms"             # Stage 3: ingest triaged rows
 ```
 
 ### Backfill Topic Tags
@@ -276,7 +286,9 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 |---|---|
 | `scripts/extract_magazine.py` | 3-pass Gemini/Groq extraction pipeline (Vision → Segmentation → QA) |
 | `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase |
-| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal) |
+| `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). `ingest_file(skip_dedup=False)` — pass `True` to bypass MD5 guard (Stage 3 uses this). `insert_chunks()` omits `page_number`/`source_hash` (both absent from live schema). |
+| `scripts/youtube_triage.py` | Stage 2 YouTube pipeline: channel enumeration + Groq title classification (sermon/worship/promo/other). `--sheet NAME` required (errors with available tab list). `--add URL`, `--limit N`, `--retry-unknown`, `--dry-run`. |
+| `scripts/youtube_ingest.py` | Stage 3 YouTube pipeline: captions-first/Whisper fallback + Groq clean + `ingest_file(skip_dedup=True)`. `--sheet NAME` required. `--limit N`, `--dry-run`. `done_prior` rows are excluded from ingest. |
 | `scripts/source_resolver.py` | Shared source_id resolution + alias normalization. Imported by `ingest.py` and `ingest_magazine.py`. Exports `resolve_source_id()`, `normalize_alias_key()`, `SENTINEL_SOURCE_ID`, `NEW_WINE_MAGAZINE_SOURCE_ID`, `print_resolution_table()` |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
