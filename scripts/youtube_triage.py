@@ -25,12 +25,14 @@ Usage:
     python3 scripts/youtube_triage.py                      # process all new rows in sheet
     python3 scripts/youtube_triage.py --add URL            # add URL then triage
     python3 scripts/youtube_triage.py --add URL --limit 20 # cap videos from channel
+    python3 scripts/youtube_triage.py --retry-unknown      # re-classify guess=unknown rows
     python3 scripts/youtube_triage.py --dry-run            # print actions, no writes
 """
 
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -48,7 +50,7 @@ COOKIES_PATH = ROOT / "scripts" / "youtube_cookies.txt"
 load_dotenv(ROOT / "backend" / "app" / ".env")
 
 MODEL      = "llama-3.3-70b-versatile"
-BATCH_SIZE = 20   # titles per Groq call
+BATCH_SIZE = 10   # titles per Groq call (smaller = less blast radius on mismatch)
 
 COLUMNS = ["url", "video_title", "channel_name", "guess", "ingest", "status", "resolved_source"]
 COL     = {name: i + 1 for i, name in enumerate(COLUMNS)}   # 1-based for openpyxl ws.cell()
@@ -60,9 +62,9 @@ TRIAGE_SYSTEM = (
     "worship — music, song, praise, worship set, hymn, choir\n"
     "promo   — trailer, announcement, highlights, teaser, channel intro, behind-the-scenes, event promo\n"
     "other   — anything not clearly covered above\n\n"
-    "Input: a JSON array of title strings.\n"
-    "Output: a JSON array of the SAME LENGTH, each element one of "
-    '"sermon", "worship", "promo", "other". '
+    'Input: a JSON array of objects: [{"i": 1, "title": "..."}, {"i": 2, "title": "..."}, ...]\n'
+    'Output: a JSON array of objects: [{"i": 1, "label": "sermon"}, {"i": 2, "label": "other"}, ...]\n'
+    "Use the SAME \"i\" value from each input object. Include one output object per input. "
     "No explanation. Return the JSON array only."
 )
 
@@ -163,33 +165,99 @@ def fetch_video_info(ytdlp: str, video_url: str) -> Tuple[Optional[str], Optiona
 
 def classify_batch(client: Groq, titles: List[str]) -> List[str]:
     """
-    Classify a batch of video titles. Returns same-length list of guess strings.
-    On any failure, returns 'unknown' for every title in the batch — never raises.
+    Classify a batch of video titles using keyed matching.
+
+    Sends each title as {"i": N, "title": "..."} so Groq returns {"i": N, "label": "..."}.
+    Matches verdicts back by i — a missing verdict for one title yields "unknown" for
+    that title only, never discarding verdicts for the rest of the batch.
+
+    On whole-batch parse failure: all titles in the batch → "unknown". Never raises.
     """
+    keyed_input = [{"i": i + 1, "title": t} for i, t in enumerate(titles)]
     try:
         resp = client.chat.completions.create(
             model=MODEL,
             max_tokens=512,
             messages=[
                 {"role": "system", "content": TRIAGE_SYSTEM},
-                {"role": "user",   "content": json.dumps(titles)},
+                {"role": "user",   "content": json.dumps(keyed_input)},
             ],
         )
         raw = (resp.choices[0].message.content or "").strip()
-        # Strip markdown code fences if Groq wraps the JSON
-        if "```" in raw:
-            parts = raw.split("```")
-            raw = parts[1] if len(parts) > 1 else raw
-            if raw.startswith("json"):
-                raw = raw[4:]
-        guesses = json.loads(raw.strip())
-        if not isinstance(guesses, list) or len(guesses) != len(titles):
-            raise ValueError(f"bad shape: expected {len(titles)} got {len(guesses)}: {raw[:80]}")
-        valid = {"sermon", "worship", "promo", "other"}
-        return [g if g in valid else "unknown" for g in guesses]
+        # Strip markdown code fences — known Groq behavior
+        raw = re.sub(r"^```(?:json)?\s*\n?", "", raw)
+        raw = re.sub(r"\n?```\s*$", "", raw)
+        verdicts = json.loads(raw.strip())
+        if not isinstance(verdicts, list):
+            raise ValueError(f"expected list, got {type(verdicts).__name__}: {raw[:80]}")
     except Exception as e:
-        print(f"  ⚠  Groq batch failed ({len(titles)} titles): {e}")
+        print(f"  ⚠  Groq batch parse failed ({len(titles)} titles): {e}")
         return ["unknown"] * len(titles)
+
+    # Build i → label map; tolerate i as int or string
+    valid = {"sermon", "worship", "promo", "other"}
+    label_map = {}
+    for item in verdicts:
+        if not isinstance(item, dict):
+            continue
+        try:
+            idx = int(item["i"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        label = item.get("label", "")
+        if label in valid:
+            label_map[idx] = label
+
+    # Resolve by 1-based index; any gap → "unknown" for that title only
+    result = [label_map.get(i + 1, "unknown") for i in range(len(titles))]
+    missing = sum(1 for g in result if g == "unknown")
+    if missing:
+        print(f"  ⚠  {missing}/{len(titles)} title(s) had no verdict → unknown")
+    return result
+
+
+# ── Summary printer ──────────────────────────────────────────────────────────
+
+def _print_summary(ws_r) -> None:
+    """Print the full results table and guess-count breakdown."""
+    video_rows = []
+    for r in range(2, ws_r.max_row + 1):
+        url = str(gcell(ws_r, r, "url") or "")
+        if not url or is_channel_url(url):
+            continue
+        video_rows.append({
+            "title":  str(gcell(ws_r, r, "video_title") or ""),
+            "guess":  str(gcell(ws_r, r, "guess") or ""),
+            "ingest": str(gcell(ws_r, r, "ingest") or ""),
+            "status": str(gcell(ws_r, r, "status") or ""),
+        })
+
+    if not video_rows:
+        print("  No video rows in queue.")
+        return
+
+    W = [54, 9, 6, 8]
+    hdr = f"{'TITLE':<{W[0]}} {'GUESS':<{W[1]}} {'INGEST':<{W[2]}} STATUS"
+    print(f"\n── Results ──────────────────────────────────────────────────────")
+    print(hdr)
+    print("─" * len(hdr))
+    for row in video_rows:
+        print(
+            f"{row['title'][:W[0]]:<{W[0]}} "
+            f"{row['guess']:<{W[1]}} "
+            f"{row['ingest']:<{W[2]}} "
+            f"{row['status']}"
+        )
+
+    counts = {}
+    for row in video_rows:
+        g = row["guess"]
+        counts[g] = counts.get(g, 0) + 1
+
+    print(f"\nTotal: {len(video_rows)} video(s)")
+    for label, n in sorted(counts.items()):
+        tick = " ← pre-ticked TRUE" if label == "sermon" else ""
+        print(f"  {label:<8}: {n}{tick}")
 
 
 # ── Sheet helpers ─────────────────────────────────────────────────────────────
@@ -236,9 +304,10 @@ def main():
     parser = argparse.ArgumentParser(
         description="YouTube triage — Stage 2 of the unified ingest pipeline"
     )
-    parser.add_argument("--add",     metavar="URL", help="Add a channel or video URL before triaging")
-    parser.add_argument("--limit",   metavar="N",   type=int, help="Max videos to expand per channel")
-    parser.add_argument("--dry-run", action="store_true",     help="Print actions without writing")
+    parser.add_argument("--add",           metavar="URL", help="Add a channel or video URL before triaging")
+    parser.add_argument("--limit",         metavar="N",   type=int, help="Max videos to expand per channel")
+    parser.add_argument("--retry-unknown", action="store_true",     help="Re-classify rows where status=triaged AND guess=unknown")
+    parser.add_argument("--dry-run",       action="store_true",     help="Print actions without writing")
     args = parser.parse_args()
 
     ytdlp = find_ytdlp()
@@ -253,6 +322,42 @@ def main():
     groq_client = Groq(api_key=api_key)
 
     wb, ws = load_or_create_wb(QUEUE_PATH)
+
+    # ── Retry-unknown mode ────────────────────────────────────────────────────
+    if args.retry_unknown:
+        unknown_rows = [
+            r for r in range(2, ws.max_row + 1)
+            if str(gcell(ws, r, "status") or "").strip() == "triaged"
+            and str(gcell(ws, r, "guess") or "").strip() == "unknown"
+            and gcell(ws, r, "video_title")
+        ]
+        print(f"\n── Retry-unknown: {len(unknown_rows)} row(s) with guess=unknown ──────")
+        if not unknown_rows:
+            print("  Nothing to retry.")
+        else:
+            for batch_start in range(0, len(unknown_rows), BATCH_SIZE):
+                batch = unknown_rows[batch_start: batch_start + BATCH_SIZE]
+                titles = [str(gcell(ws, r, "video_title")) for r in batch]
+                n = len(titles)
+                print(f"  Groq: re-classifying {n} title(s) (rows {batch_start+1}–{batch_start+n})…")
+                guesses = classify_batch(groq_client, titles)
+                for row_idx, guess in zip(batch, guesses):
+                    ingest_val = "TRUE" if guess == "sermon" else "FALSE"
+                    if not args.dry_run:
+                        scell(ws, row_idx, "guess",  guess)
+                        scell(ws, row_idx, "ingest", ingest_val)
+                        # status stays "triaged" — only guess+ingest change
+                    else:
+                        t = str(gcell(ws, row_idx, "video_title"))[:55]
+                        print(f"    {guess:<8} {ingest_val}  {t}")
+            if not args.dry_run:
+                wb.save(QUEUE_PATH)
+                print(f"  ✓ saved {len(unknown_rows)} updated row(s)")
+        # Fall through to summary table
+        wb_r = openpyxl.load_workbook(QUEUE_PATH) if (not args.dry_run and QUEUE_PATH.exists()) else wb
+        ws_r = wb_r.active
+        _print_summary(ws_r)
+        return
 
     # ── Pre-step: add URL if requested ───────────────────────────────────────
     if args.add:
@@ -355,49 +460,8 @@ def main():
         wb.save(QUEUE_PATH)
         print(f"  ✓ saved {len(to_triage)} classified row(s)")
 
-    # ── Summary table ─────────────────────────────────────────────────────────
-    print("\n── Results ──────────────────────────────────────────────────────")
     wb_r = openpyxl.load_workbook(QUEUE_PATH) if (not args.dry_run and QUEUE_PATH.exists()) else wb
-    ws_r = wb_r.active
-
-    video_rows = []
-    for r in range(2, ws_r.max_row + 1):
-        url = str(gcell(ws_r, r, "url") or "")
-        if not url or is_channel_url(url):
-            continue
-        video_rows.append({
-            "title":   str(gcell(ws_r, r, "video_title") or ""),
-            "channel": str(gcell(ws_r, r, "channel_name") or ""),
-            "guess":   str(gcell(ws_r, r, "guess") or ""),
-            "ingest":  str(gcell(ws_r, r, "ingest") or ""),
-            "status":  str(gcell(ws_r, r, "status") or ""),
-        })
-
-    if not video_rows:
-        print("  No video rows in queue.")
-        return
-
-    W = [54, 9, 6, 8]
-    hdr = f"{'TITLE':<{W[0]}} {'GUESS':<{W[1]}} {'INGEST':<{W[2]}} STATUS"
-    print(hdr)
-    print("─" * len(hdr))
-    for row in video_rows:
-        print(
-            f"{row['title'][:W[0]]:<{W[0]}} "
-            f"{row['guess']:<{W[1]}} "
-            f"{row['ingest']:<{W[2]}} "
-            f"{row['status']}"
-        )
-
-    counts = {}
-    for row in video_rows:
-        g = row["guess"]
-        counts[g] = counts.get(g, 0) + 1
-
-    print(f"\nTotal: {len(video_rows)} video(s)")
-    for label, n in sorted(counts.items()):
-        tick = " ← pre-ticked TRUE" if label == "sermon" else ""
-        print(f"  {label:<8}: {n}{tick}")
+    _print_summary(wb_r.active)
 
 
 if __name__ == "__main__":
