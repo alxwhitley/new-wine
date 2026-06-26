@@ -19,7 +19,7 @@ Charismatic and Spirit-filled Christians who want to research theology from with
 
 ## Repo & Git
 - Git repo initialized and pushed to `alxwhitley/rhemata` on GitHub
-- `.gitignore` covers `.env`, `.env.local`, `__pycache__`, `.venv`, `node_modules`, `.next`, `.DS_Store`, `sources/`
+- `.gitignore` covers `.env`, `.env.local`, `__pycache__`, `.venv`, `node_modules`, `.next`, `.DS_Store`, `sources/`, `logs/`, `scripts/logs/`, `scripts/youtube_cookies.txt`, `license-mapping/`
 - `sources/` stripped from git history (2026-06-10) via BFG Repo Cleaner — 1,151 files removed across all 215 commits; `.git` reduced from 55 MB to 3.1 MB; force-pushed to origin main
 
 ---
@@ -88,7 +88,6 @@ repo/
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; moves YouTube transcripts to ingested/ on success
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq Llama 3.3 70B, v3 four-corners prompt); process_document() entry point for ingest scripts
-│   ├── _validate_prop_pilot.py # Throwaway pilot validator — imports from ingest.py; decide keep/delete
 │   ├── source_resolver.py     # Shared source_id resolution + alias normalization; imported by ingest.py and ingest_magazine.py
 │   ├── tag_existing_articles.py  # Backfill topic_tags on existing articles
 │   └── tag_sermons_transcripts.py  # Backfill topic_tags on sermons/transcripts/papers
@@ -110,7 +109,8 @@ repo/
 │   ├── 048_safe_mode.sql                 # app_settings table + safe_mode='off' row; gate reads flag once per RPC call
 │   ├── 049_seal_null_source_id.sql       # sentinel source row + backfill 18 orphans + NOT NULL + ON DELETE SET DEFAULT + removes IS NULL gate arm
 │   ├── 050_source_aliases.sql            # source_aliases table + 54 normalized alias seeds; adds CLF Church + An Unknown Christian sources
-│   └── 051_propositions_table.sql        # propositions table + HNSW index + GIN fts index + btree document_id index (SHIPPED 2026-06-25)
+│   ├── 051_propositions_table.sql        # propositions table + HNSW index + GIN fts index + btree document_id index (SHIPPED 2026-06-25)
+│   └── 052_guest_sessions.sql            # guest_sessions table + increment_guest_query RPC — idempotent doc of existing live schema (COMMITTED 2026-06-26)
 ├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
@@ -193,10 +193,10 @@ repo/
 - Unique constraint on `(user_id, strongs_number)`
 - RLS enabled: users can only manage their own rows (`auth.uid() = user_id`)
 
-**`guest_sessions` table** — server-side guest query tracking
-- `id` (uuid), `anon_id` (text, unique)
-- `query_count` (int, default 0)
-- `created_at` / `last_seen` (timestamptz)
+**`guest_sessions` table** — server-side guest query tracking (migration 052, COMMITTED 2026-06-26)
+- `id` (uuid PK DEFAULT gen_random_uuid()), `anon_id` (text NOT NULL UNIQUE)
+- `query_count` (integer DEFAULT 0), `created_at` / `last_seen` (timestamptz DEFAULT now())
+- RLS enabled; one policy: service_role ALL only. `increment_guest_query(p_anon_id text) RETURNS integer` RPC: INSERT ... ON CONFLICT DO UPDATE upsert; SECURITY DEFINER; returns new query_count as bare integer. Backend checks against `GUEST_QUERY_LIMIT = 6` in `chat.py`.
 
 **`conversations` table** — saved chat history for authenticated users
 - `id` (uuid), `user_id` (uuid, FK → auth.users), `title` (text), `created_at`
@@ -598,7 +598,6 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 - **Proposition backfill not yet run** — `ingest.py` is skip-on-hash, so already-ingested docs never hit the new proposition step. Need a separate backfill script to run `propositions.process_document()` over all unlicensed docs with chunks but no propositions yet. Precept Austin explicitly excluded from backfill (Alex's decision).
 - **Proposition serving rule not yet built into RPCs** — `match_chunks` / `search_chunks_fts` do not yet serve propositions. Designed rule: propositions ALWAYS retrievable; chunks only when `license_status IN ('public_domain','owned','licensed')` OR (`visibility='shown'` AND `safe_mode='off'`). Dedup needed so shown-set sources don't double-weight. Not started.
-- **`scripts/_validate_prop_pilot.py` still present** — throwaway pilot validator; imports from `ingest.py`; decide keep/delete.
 - **Two live test propositions in DB** — Flora doc (12 rows) and "Christ's Eternal Lordship" (15 rows) from validation runs. `store_propositions` is clear-then-write so re-ingest will safely overwrite them; leave as-is.
 - ~~**Ingest scripts do not set `source_id`**~~ — **PARTIALLY DONE (June 2026):** `ingest.py` and `ingest_magazine.py` now resolve `source_id` at ingest time via `scripts/source_resolver.py`. `ingest_preceptaustin.py`, `ingest_lexicon.py`, and `rh-*` aliases still omit `source_id` and land on sentinel via DEFAULT.
 - **License admin UI** — `source_license_audit` table is live but nothing writes to it yet. Governance UI (June 2026) added `sources.visibility` and `license_status` controls directly; `source_license_audit` writes still not implemented.
@@ -610,7 +609,7 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 - **scrape_youtube.py dead Haiku code** — removed (2026-04-15)
 - **content_summary not auto-populated** on new article inserts (trigger only updates fts_weighted, not content_summary)
 - **Tagging retry logic** sometimes needs improvement for complex articles
-- ~~**Guest query limit**~~ — **DONE (June 2026):** `guest_sessions` table and `increment_guest_query` RPC created in Supabase.
+- ~~**Guest query limit**~~ — **DONE (June 2026):** `guest_sessions` table and `increment_guest_query` RPC created in Supabase. ~~**Missing migration file**~~ — **DONE (2026-06-26):** `migrations/052_guest_sessions.sql` committed; idempotent, safe to re-run, does not touch existing data. RLS/service-role policy intentionally NOT in 052 — those live in migration 037.
 - ~~**RLS policies needed** on `conversations` and `messages` tables~~ — **DONE:** RLS enabled on both
 - **INCLUDE_COPYRIGHTED not confirmed on Railway** — check dashboard
 - **poppler no longer required** — pdf2image replaced by PyMuPDF (fitz) in extract_magazine.py

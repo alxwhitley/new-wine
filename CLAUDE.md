@@ -31,7 +31,6 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq v3 prompt, process_document entry point)
-│   ├── _validate_prop_pilot.py # Throwaway pilot — used to validate Flora doc proposition run; decide keep/delete
 │   ├── tag_existing_articles.py   # Backfill topic_tags on existing articles via Groq
 │   └── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
 ├── taxonomy.md                # 257-tag topic taxonomy (15 categories)
@@ -49,7 +48,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── 048_safe_mode.sql                 # app_settings table + safe_mode='off' row; gate reads flag once per RPC call
 │   ├── 049_seal_null_source_id.sql       # sentinel source row + backfill 18 orphans + NOT NULL + ON DELETE SET DEFAULT + removes IS NULL gate arm
 │   ├── 050_source_aliases.sql            # source_aliases table + 54 normalized alias seeds; adds CLF Church + An Unknown Christian sources
-│   └── 051_propositions_table.sql        # propositions table + HNSW index + GIN fts index + btree document_id index (SHIPPED 2026-06-25)
+│   ├── 051_propositions_table.sql        # propositions table + HNSW index + GIN fts index + btree document_id index (SHIPPED 2026-06-25)
+│   └── 052_guest_sessions.sql            # guest_sessions table + increment_guest_query RPC — documents existing live schema; idempotent (COMMITTED 2026-06-26)
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
 ├── backend/
@@ -198,7 +198,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex.
 - Brand reset complete (June 2026): Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
 - Study Mode restructured (June 2026): single-column layout, interlinear always visible attached to verse, inline word expansion, commentary visible without tab click, Pastors' Notes stub in place, Jewish Perspective collapsed by default. Tabs removed.
-- Guest session migration complete (June 2026): `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired.
+- Guest session migration complete (June 2026): `guest_sessions` table and `increment_guest_query` RPC created in Supabase. Frontend and backend were already wired. Schema documented in migration 052 (committed 2026-06-26, idempotent — RLS and service-role policy live in migration 037). `increment_guest_query` uses INSERT ... ON CONFLICT DO UPDATE upsert; returns bare integer; SECURITY DEFINER bypasses RLS. Backend checks count against `GUEST_QUERY_LIMIT = 6`.
 - Pastors' Notes complete (June 2026): three-tier role system (user/contributor/admin), verse-anchored cards, contributor request flow, 50–2000 char limit, soft delete only, auto-tagging via Groq with 5s timeout fallback. Tables: `user_roles`, `contributor_requests`, `pastors_cards` (migrations 038, 041).
 - Pastors' Notes approval gate (June 2026): contributor notes save as `'pending'`, require admin approval before publishing; admins post directly as `'published'`. `pastors_cards.status`: `'pending'` | `'published'` | `'removed'`. New endpoints: `GET /pastors-notes/pending` (admin queue with email + display_name), `POST /cards/{id}/approve`, `POST /cards/{id}/reject`. `get_user_emails` RPC in migration 041. `useUserRole` cache TTL 5 min (was indefinite). `GET /cards` optionally authenticated — returns own pending cards to contributor, all pending to admin.
 - Admin consolidation (June 2026): all admin surfaces merged into single `/admin` page with sticky anchor-nav (Overview · Contributors · Corpus). Role-based auth via `GET /pastors-notes/me` (no more hardcoded ADMIN_USER_ID). `/admin/contributors` and `/rhemata-corpus-admin` redirect to `/admin`. `app/rhemata-corpus-admin/` deleted. Corpus components in `frontend/components/admin/`. `components/ui/switch.tsx` added (shadcn Switch using radix-ui). Precept Austin Greek card has `notFilter` to exclude Hebrew docs. HistoricalChristianFaith card description corrected. Superseded (June 2026): Corpus anchor-nav section replaced by Governance/Pipelines two-tab view; backend auth moved from ADMIN_EMAIL email check (broken — never set on Railway) onto user_roles DB guard (auth.py `require_admin_role`) for all 13 `/admin/*`, `/feedback`-read, and `/ingest` handlers; frontend page gate still uses `GET /pastors-notes/me`.
