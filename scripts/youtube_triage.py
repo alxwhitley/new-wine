@@ -100,36 +100,50 @@ def is_channel_url(url: str) -> bool:
     return "watch?v=" not in url and "youtu.be/" not in url
 
 
+_NA_VALS = {"na", "none", "null", ""}
+
 def enumerate_channel(
     ytdlp: str, channel_url: str, limit: Optional[int] = None
 ) -> Tuple[str, List[dict]]:
     """
-    Enumerate video IDs + titles from a channel via flat-playlist. No downloads.
-    Returns (channel_name, [{"url": ..., "title": ...}, ...]).
+    Enumerate video IDs + titles + durations from a channel via flat-playlist. No downloads.
+    Returns (channel_name, [{"url": ..., "title": ..., "duration": int|None}, ...]).
+    duration is None when missing/zero/live (caller must treat None as keep).
     channel_name is taken from the first video entry's channel field.
     """
     cmd = _ytdlp_base_args(ytdlp) + [
         "--flat-playlist",
-        "--print", "%(id)s\t%(title)s\t%(channel)s",
+        "--print", "%(id)s\t%(title)s\t%(channel)s\t%(duration)s",
         channel_url,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     videos = []
     channel_name = ""
     for line in result.stdout.strip().splitlines():
-        parts = line.split("\t", 2)
+        parts = line.split("\t", 3)
         if len(parts) < 2:
             continue
         vid_id = parts[0].strip()
         title  = parts[1].strip()
         ch     = parts[2].strip() if len(parts) > 2 else ""
+        dur_raw = parts[3].strip() if len(parts) > 3 else ""
         if not vid_id or vid_id in ("NA", "None", "null"):
             continue
         if ch and not channel_name:
             channel_name = ch
+        # Parse duration; treat missing/zero/NA as None (fail toward inclusion)
+        duration: Optional[int] = None
+        if dur_raw and dur_raw.lower() not in _NA_VALS:
+            try:
+                d = int(float(dur_raw))
+                if d > 0:
+                    duration = d
+            except ValueError:
+                pass
         videos.append({
-            "url":   f"https://www.youtube.com/watch?v={vid_id}",
-            "title": title,
+            "url":      f"https://www.youtube.com/watch?v={vid_id}",
+            "title":    title,
+            "duration": duration,
         })
         if limit and len(videos) >= limit:
             break
@@ -304,11 +318,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="YouTube triage — Stage 2 of the unified ingest pipeline"
     )
-    parser.add_argument("--sheet",         metavar="NAME",           help="Tab name to operate on (required)")
-    parser.add_argument("--add",           metavar="URL",            help="Add a channel or video URL before triaging")
-    parser.add_argument("--limit",         metavar="N",   type=int,  help="Max videos to expand per channel")
-    parser.add_argument("--retry-unknown", action="store_true",      help="Re-classify rows where status=triaged AND guess=unknown")
-    parser.add_argument("--dry-run",       action="store_true",      help="Print actions without writing")
+    parser.add_argument("--sheet",        metavar="NAME",           help="Tab name to operate on (required)")
+    parser.add_argument("--add",          metavar="URL",            help="Add a channel or video URL before triaging")
+    parser.add_argument("--limit",        metavar="N",   type=int,  help="Max videos to enumerate per channel (applied before duration filter)")
+    parser.add_argument("--min-duration", metavar="N",   type=int,  default=0,
+                        help="Skip videos whose duration is known and <= N seconds (0 = off)")
+    parser.add_argument("--retry-unknown", action="store_true",     help="Re-classify rows where status=triaged AND guess=unknown")
+    parser.add_argument("--dry-run",       action="store_true",     help="Print actions without writing")
     args = parser.parse_args()
 
     # ── Sheet validation ──────────────────────────────────────────────────────
@@ -395,6 +411,9 @@ def main():
     ]
     print(f"  {len(channel_rows)} channel row(s) to expand")
 
+    dur_total_skipped = 0
+    dur_total_written = 0
+
     for row_idx in channel_rows:
         channel_url = str(gcell(ws, row_idx, "url")).strip()
         print(f"\n  {channel_url}")
@@ -404,7 +423,25 @@ def main():
             print(f"  ✗ enumeration failed: {e}")
             continue
 
-        print(f"  → {len(videos)} video(s) | channel: {channel_name!r}")
+        print(f"  → {len(videos)} video(s) enumerated | channel: {channel_name!r}")
+
+        # Duration pre-filter: skip videos whose duration is known and <= threshold.
+        # Missing/zero/null duration → keep (fail toward inclusion).
+        if args.min_duration > 0:
+            kept, n_skipped = [], 0
+            for v in videos:
+                d = v.get("duration")
+                if d is not None and d <= args.min_duration:
+                    n_skipped += 1
+                else:
+                    kept.append(v)
+            if n_skipped:
+                print(f"  ↳ duration filter (≤{args.min_duration}s): kept {len(kept)}, skipped {n_skipped}")
+            dur_total_skipped += n_skipped
+            dur_total_written += len(kept)
+            videos = kept
+        else:
+            dur_total_written += len(videos)
 
         if args.dry_run:
             for v in videos[:5]:
@@ -419,6 +456,9 @@ def main():
         scell(ws, row_idx, "status", "expanded")
         wb.save(QUEUE_PATH)
         print(f"  ✓ appended {len(videos)} rows, marked expanded")
+
+    if args.min_duration > 0 and channel_rows and not args.dry_run:
+        print(f"\n  Duration filter summary: {dur_total_written} written, {dur_total_skipped} skipped (≤{args.min_duration}s)")
 
     # ── Phase 2: Title fetch for bare single-video rows ───────────────────────
     print("\n── Phase 2: Fetch titles for untitled video rows ───────────────")
