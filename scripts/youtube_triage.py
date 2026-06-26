@@ -458,8 +458,8 @@ def process_sheet(
             if n_no_match:
                 print(f"  ↳ whitelist filter: kept {len(matched_videos)}, skipped {n_no_match} (no speaker match)")
             wl_total_no_match += n_no_match
-            wl_total_written  += len(matched_videos)
             videos = matched_videos
+            # wl_total_written updated below after dedup
 
         if dry_run:
             for v in videos[:5]:
@@ -471,18 +471,26 @@ def process_sheet(
                 print(f"    … and {len(videos) - 5} more")
             continue
 
+        # Dedup: skip URLs already in the sheet so re-runs with a larger limit
+        # are purely additive and never double-write existing rows.
+        existing_urls = all_urls_in_sheet(ws)
+        new_videos = [v for v in videos if v["url"] not in existing_urls]
+        n_dupes = len(videos) - len(new_videos)
+        if n_dupes:
+            print(f"  ↳ dedup: {n_dupes} already in tab, skipping")
+
         if whitelist_names:
-            for v in videos:
+            for v in new_videos:
                 ws.append([v["url"], v["title"], v["wl_match"], "sermon", "TRUE", "triaged", ""])
         else:
-            for v in videos:
+            for v in new_videos:
                 ws.append([v["url"], v["title"], channel_name, "", "", "", ""])
-            wl_total_written += len(videos)
+        wl_total_written += len(new_videos)
 
         scell(ws, row_idx, "channel_name", channel_name)
         scell(ws, row_idx, "status", "expanded")
         wb.save(QUEUE_PATH)
-        print(f"  ✓ appended {len(videos)} rows, marked expanded")
+        print(f"  ✓ appended {len(new_videos)} new row(s), marked expanded")
 
     if min_duration > 0 and channel_rows and not dry_run and not whitelist_names:
         print(f"\n  Duration filter summary: {wl_total_written} written, {dur_total_skipped} skipped (≤{min_duration}s)")
