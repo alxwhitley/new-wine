@@ -28,7 +28,7 @@ SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
 if not SUPABASE_DB_URL:
     print("ERROR: SUPABASE_DB_URL is not set in backend/app/.env")
     print("Set it to your Supabase direct connection string, e.g.:")
-    print("  SUPABASE_DB_URL=***REMOVED***")
+    print("  SUPABASE_DB_URL=postgresql://user:password@host:5432/dbname")
     sys.exit(1)
 
 # ── Book mapping ─────────────────────────────────────────────────────────────
