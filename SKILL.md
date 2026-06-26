@@ -87,6 +87,8 @@ repo/
 │   ├── extract_magazine.py    # 3-pass Gemini/Groq extraction pipeline
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; moves YouTube transcripts to ingested/ on success
+│   ├── propositions.py        # Shared proposition extraction + storage module (Groq Llama 3.3 70B, v3 four-corners prompt); process_document() entry point for ingest scripts
+│   ├── _validate_prop_pilot.py # Throwaway pilot validator — imports from ingest.py; decide keep/delete
 │   ├── source_resolver.py     # Shared source_id resolution + alias normalization; imported by ingest.py and ingest_magazine.py
 │   ├── tag_existing_articles.py  # Backfill topic_tags on existing articles
 │   └── tag_sermons_transcripts.py  # Backfill topic_tags on sermons/transcripts/papers
@@ -107,7 +109,8 @@ repo/
 │   ├── 047_retrieval_visibility_gate.sql # visibility gate WHERE clause in match_chunks + search_chunks_fts (variant a)
 │   ├── 048_safe_mode.sql                 # app_settings table + safe_mode='off' row; gate reads flag once per RPC call
 │   ├── 049_seal_null_source_id.sql       # sentinel source row + backfill 18 orphans + NOT NULL + ON DELETE SET DEFAULT + removes IS NULL gate arm
-│   └── 050_source_aliases.sql            # source_aliases table + 54 normalized alias seeds; adds CLF Church + An Unknown Christian sources
+│   ├── 050_source_aliases.sql            # source_aliases table + 54 normalized alias seeds; adds CLF Church + An Unknown Christian sources
+│   └── 051_propositions_table.sql        # propositions table + HNSW index + GIN fts index + btree document_id index (SHIPPED 2026-06-25)
 ├── taxonomy.md            # 257-tag topic taxonomy (15 categories)
 ├── CLAUDE.md              # Claude Code context
 └── SKILL.md               # Full project skill context
@@ -225,6 +228,15 @@ repo/
 - `id` (uuid), `source_id` (FK → sources CASCADE DELETE), `old_status`, `new_status`, `changed_by`, `note`, `changed_at`
 - Created but not yet written by any admin UI.
 
+**`propositions` table** — atomic paraphrase-level decompositions of unlicensed documents (migration 051, SHIPPED 2026-06-25)
+- `id` (uuid PK), `document_id` (uuid NOT NULL FK → documents ON DELETE CASCADE)
+- `content` (text NOT NULL), `embedding` (vector(1536))
+- `proposition_index` (int NOT NULL), `created_at` (timestamptz)
+- `fts` (tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(content,'')) STORED) — identical expression to `chunks.fts`
+- Indexes: `propositions_embedding_hnsw` (HNSW vector_cosine_ops m=16/ef_construction=64), `propositions_fts_gin` (GIN on fts), `propositions_document_id_idx` (btree)
+- Licensing resolves through document_id → documents.source_id → sources — no license columns on propositions by design
+- Populated for unlicensed sources only; gate enforced in `propositions.process_document()`
+
 **`app_settings` table** — global key/value store (migration 048)
 - `key` (text PK), `value` (text NOT NULL), `updated_at` (timestamptz)
 - One row: `key='safe_mode', value='off'` (default — no behavior change on apply)
@@ -301,6 +313,15 @@ repo/
 - **Admin auth cutover (June 2026):** `/admin/*`, `/feedback` read, `/ingest` moved from `ADMIN_EMAIL` email-equality guard to user_roles DB-role guard. `_RequireRole` and `get_user_role` promoted from `pastors_notes.py` into `auth.py` as single implementation; `pastors_notes.py` now imports from `auth.py`. `require_admin_role` and `require_contributor` exported from `auth.py`. All 13 handlers swapped. `require_admin` function and `ADMIN_EMAIL` env var reference deleted from codebase. Multiple admins possible — grant via `user_roles` row insert, no code change. Railway `ADMIN_EMAIL` env var is dead, can be removed. Root cause: it was never set on Railway, so every `/admin/*` call 403'd since launch — invisible because all admin fetch `.catch()` blocks rendered empty/zero.
 - **Admin fetch failures must surface — never silently render empty (June 2026 lesson):** `.catch(() => setX([]))` / `.catch(() => {})` on admin data fetches masked a total 403 wall behind "No sources found" / zero stats for the entire backend lifetime. Admin fetches now set `adminDataError` → visible error banner in Governance tab. Rule: admin fetches surface errors; never silently substitute empty/zero.
 - **Per-row N+1 queries time out on Railway (June 2026 lesson):** One COUNT (or any per-row query) in a loop runs fine locally but blows Railway's timeout in production. `GET /admin/license-sources` ran 43 sequential COUNTs (≈4.3s), masked by the silent catch. Fix: bulk-fetch, aggregate in Python. If any admin/data endpoint is slow or flaky in production, check for an N+1 loop first.
+- **Propositions layer (June 2026, migration 051 SHIPPED):** `propositions` table stores atomic paraphrase-level decompositions of unlicensed document content. Safe, always-available representation of unlicensed material — parallel to chunks, not a replacement.
+  - **Copyright posture CHANGED (June 2026):** Alex is holding copyrighted chunks (accepted risk for ≤20-person private beta). Propositions are a parallel always-available layer; chunks serve on top only when display-safe.
+  - **Serving rule (designed, NOT yet built in RPCs):** Propositions ALWAYS retrievable (all modes, all license statuses). Chunks served only when `license_status IN ('public_domain','owned','licensed')` OR (`visibility='shown'` AND `safe_mode='off'`). "Hidden" now means "propositions only, never chunks" rather than "fully excluded." Dedup needed at retrieval so shown-set sources don't double-weight.
+  - **Ingest wiring DONE:** `ingest.py` (after chunk insert, before tagging) and `ingest_magazine.py` (after chunk loop, before final print). Both: dedicated psycopg2 connection per document, non-fatal, print `propositions: {result}`. `ingest_magazine.py` passes clean `body` (pre-chunk article text). `ingest.py` is skip-on-hash — propositions only generate on first ingest; backfill needed for already-ingested docs.
+  - **`store_propositions` is clear-then-write:** DELETE by document_id then insert — re-running on same doc_id is always safe.
+  - **Precept Austin decision (locked):** NOT wired, NOT paraphrased. Goes dark under safe_mode=ON. Parked option: reuse existing excerpts as proposition layer. NOT decided.
+  - **Do NOT label paraphrase rewrites as "owned":** A rewrite of copyrighted material is a derivative; labeling it owned would serve verbatim under safe_mode and create an ungated hole. Source stays truthfully unlicensed; propositions are the safe-mode path.
+  - **Migration 051 gotcha — no semicolons in `--` SQL comments:** A semicolon inside a comment split the migration mid-statement, caused a syntax error, and silently rolled back the whole transaction. The same-session Supabase SQL editor appeared to show success because the check ran before the implicit rollback. Rule: no semicolons in `--` comments in migration files. Verify via `SELECT to_regclass('public.<table>')` on a FRESH connection.
+  - **Validated end-to-end:** Flora "How To Overcome" (stored:12) and "Christ's Eternal Lordship" (stored:15) — all rows non-null embedding + fts; four-corners quality confirmed (no invented scripture references).
 
 ---
 
@@ -445,6 +466,7 @@ Transcript files include metadata headers (TITLE, SPEAKER, URL, SOURCE_TYPE) par
 | `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase. Auto-populates `bible_references`. Archives PDFs to `05_archived/` on success. |
 | `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). Auto-populates `bible_references`. Skip reason tracking: `ingest_file()` returns `(status, reason)` tuples; `main()` prints grouped summary table of all skipped/failed files with reasons at end of run. Uses psycopg2 direct query for `already_ingested()` (same `DB_PARAMS` pattern as other scripts). |
 | `scripts/source_resolver.py` | Shared source_id resolution + normalization. Imported by `ingest.py` and `ingest_magazine.py`. `resolve_source_id(db, source_name, author)` → `(source_id, norm_key, via)`. `normalize_alias_key(s)` → lowercase + strip + collapse whitespace (must match migration 050 seeds exactly). Emits `ALIAS_MISS` log on resolution miss. `--dry-run-sources` flag in both ingest scripts exercises this without DB writes. |
+| `scripts/propositions.py` | Shared proposition extraction + storage module. `extract_propositions(text)` — Groq Llama 3.3 70B, v3 "four-corners" prompt; strips ```json fences; returns `[]` + logs `PROPOSITION_EXTRACT_FAIL` on error (never raises). `get_license_status(conn, source_id)` — looks up license_status from sources. `store_propositions(conn, document_id, propositions, embed_fn)` — DELETE by document_id then embed + INSERT each via injected `embed_fn`; commits; returns count. `process_document(conn, doc_id, source_id, text, embed_fn)` — ingest entry point; skips unless unlicensed; returns `"skipped_licensed"` / `"no_propositions"` / `"stored:{n}"` / `"error"`; rolls back + returns `"error"` on exception; never raises. Groq client lazy-init. |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq Llama 3.3 70B). `extract_bible_references(content) -> List[str]`. Segments at ~12k chars, normalizes against 66-book canonical set + alias map, dedupes. Non-fatal (returns `[]`). |
 | `extract_bible_refs.py` (project root) | Backfill `bible_references` on all documents. Flags: `--dry-run`, `--force`, `--limit N`, `--source-kind KIND`. Uses psycopg2 for reads (avoids PostgREST timeouts). |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
@@ -574,6 +596,10 @@ Note: `ingest_commentaries.py` is now in `scripts/` (see Scripts table above).
 
 ## Remaining / Known Issues
 
+- **Proposition backfill not yet run** — `ingest.py` is skip-on-hash, so already-ingested docs never hit the new proposition step. Need a separate backfill script to run `propositions.process_document()` over all unlicensed docs with chunks but no propositions yet. Precept Austin explicitly excluded from backfill (Alex's decision).
+- **Proposition serving rule not yet built into RPCs** — `match_chunks` / `search_chunks_fts` do not yet serve propositions. Designed rule: propositions ALWAYS retrievable; chunks only when `license_status IN ('public_domain','owned','licensed')` OR (`visibility='shown'` AND `safe_mode='off'`). Dedup needed so shown-set sources don't double-weight. Not started.
+- **`scripts/_validate_prop_pilot.py` still present** — throwaway pilot validator; imports from `ingest.py`; decide keep/delete.
+- **Two live test propositions in DB** — Flora doc (12 rows) and "Christ's Eternal Lordship" (15 rows) from validation runs. `store_propositions` is clear-then-write so re-ingest will safely overwrite them; leave as-is.
 - ~~**Ingest scripts do not set `source_id`**~~ — **PARTIALLY DONE (June 2026):** `ingest.py` and `ingest_magazine.py` now resolve `source_id` at ingest time via `scripts/source_resolver.py`. `ingest_preceptaustin.py`, `ingest_lexicon.py`, and `rh-*` aliases still omit `source_id` and land on sentinel via DEFAULT.
 - **License admin UI** — `source_license_audit` table is live but nothing writes to it yet. Governance UI (June 2026) added `sources.visibility` and `license_status` controls directly; `source_license_audit` writes still not implemented.
 - **Migration 041 not yet run** — `migrations/041_pastors_notes_approval.sql` must be applied in Supabase SQL Editor before the approval gate is live. Without it, the `pastors_cards_status_check` constraint rejects `'pending'` and `POST /cards` 500s for contributors. Also creates the `get_user_emails` RPC and the own-pending-read RLS policy.
