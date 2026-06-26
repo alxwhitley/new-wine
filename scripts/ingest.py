@@ -278,14 +278,14 @@ def insert_chunks(doc_id: str, chunks: List[str], author: str = None, year: int 
         prefix = f"Author: {author} | Year: {year} | "
         embedding = embed_text(prefix + text)
 
+        # page_number and source_hash are excluded: both columns are absent from
+        # the live DB schema (listed as droppable/unused in SKILL.md line 678).
         supabase.table("chunks").insert({
             "id":          str(uuid.uuid4()),
             "document_id": doc_id,
             "content":     text,
             "embedding":   embedding,
             "chunk_index": idx,
-            "page_number": 0,
-            "source_hash": source_hash,
         }).execute()
 
 # ── Topic Tagging ────────────────────────────────────────────────────────────
@@ -371,15 +371,21 @@ def tag_document(doc_id, chunks):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False) -> tuple:
-    """Returns (status, reason) where status is 'processed', 'skipped', or 'failed'."""
+def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False, skip_dedup: bool = False) -> tuple:
+    """Returns (status, reason) where status is 'processed', 'skipped', or 'failed'.
+
+    skip_dedup=True bypasses the MD5 chunks.source_hash guard. Use this when the
+    caller already owns dedup responsibility (e.g. youtube_ingest.py tracks
+    status=done per row in the sheet). Default False preserves the directory-scan
+    pipeline's guard unchanged.
+    """
     print(f"\n{'='*60}")
     print(f"Processing: {file_path.name} {'[COPYRIGHTED]' if is_copyrighted else '[OPEN]'}")
     print('='*60)
 
-    # 0. Duplicate check via file content hash
+    # 0. Duplicate check via file content hash (skipped when caller owns dedup)
     source_hash = hashlib.md5(file_path.read_bytes()).hexdigest()
-    if not dry_run and not dry_run_sources and already_ingested(source_hash):
+    if not skip_dedup and not dry_run and not dry_run_sources and already_ingested(source_hash):
         print(f"  ⏭️  Already ingested — skipping")
         return ("skipped", "already_ingested")
 
