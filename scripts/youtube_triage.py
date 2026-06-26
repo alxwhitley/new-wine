@@ -169,9 +169,11 @@ def enumerate_channel(
     cmd = _ytdlp_base_args(ytdlp) + [
         "--flat-playlist",
         "--print", "%(id)s\t%(title)s\t%(channel)s\t%(duration)s",
-        channel_url,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if limit:
+        cmd += ["--playlist-items", f"1:{limit}"]
+    cmd.append(channel_url)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     videos = []
     channel_name = ""
     for line in result.stdout.strip().splitlines():

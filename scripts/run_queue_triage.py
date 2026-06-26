@@ -80,6 +80,21 @@ def _whitelist_path(source_name: str) -> Path:
     return ROOT / "scripts" / f"whitelist_{_slug(source_name)}.txt"
 
 
+def _channel_slug_from_url(url: str) -> str:
+    """Derive a readable label from a YouTube channel URL handle.
+    @sermonindex/videos → 'sermonindex'
+    Used as the workbook tab label for whitelist rows where source_name is blank.
+    """
+    from urllib.parse import urlparse
+    path = urlparse(url.strip()).path.rstrip("/")
+    m = re.search(r'/@([^/?]+)', path)
+    if m:
+        return m.group(1)
+    skip = {"videos", "playlists", "streams", "shorts", "community", "about"}
+    parts = [p for p in path.split("/") if p and p.lower() not in skip]
+    return parts[-1] if parts else "unknown_channel"
+
+
 def _normalize_playlist_url(url: str) -> str:
     """Convert watch?v=X&list=Y to the cleaner playlist?list=Y form."""
     if "list=" in url and "watch?v=" in url:
@@ -144,6 +159,9 @@ def main():
     )
     parser.add_argument("--dry-run", action="store_true",
                         help="Print what would happen without writing to the sheet or DB")
+    parser.add_argument("--only", metavar="LABEL",
+                        help="Process only the Queue row whose tab label matches LABEL "
+                             "(case-insensitive). All other pending rows are skipped.")
     args = parser.parse_args()
 
     if not QUEUE_PATH.exists():
@@ -191,26 +209,38 @@ def main():
         filter_raw  = str(qcell(ws_q, row_idx, "filter") or "").strip()
         limit_raw   = qcell(ws_q, row_idx, "limit")
 
+        # Parse filters early — needed before the source_name guard so that
+        # whitelist rows (which intentionally have blank source_name) are not skipped.
+        min_duration, whitelist_mode = _parse_filters(filter_raw)
+        limit = _parse_limit(limit_raw)
+
         if not url_raw:
             print(f"\n  row {row_idx}: skipping — no URL")
             continue
-        if not source_name:
-            print(f"\n  row {row_idx}: skipping — no source_name")
+        if not source_name and not whitelist_mode:
+            # Blank source_name is only valid for whitelist rows (self-attribute per speaker).
+            print(f"\n  row {row_idx}: skipping — no source_name "
+                  f"(set filter=whitelist if this is a multi-speaker whitelist row)")
+            continue
+
+        # Tab label: use source_name when present; for whitelist rows with blank
+        # source_name, derive from the URL handle (@sermonindex → 'Sermonindex').
+        tab_label = source_name if source_name else _channel_slug_from_url(url_raw).capitalize()
+
+        if args.only and tab_label.lower() != args.only.lower():
             continue
 
         print(f"\n{'─' * 64}")
-        print(f"  Queue row {row_idx}: {source_name!r}")
+        print(f"  Queue row {row_idx}: {tab_label!r}")
         print(f"  url:    {url_raw[:80]}")
         print(f"  review: {review}  filter: {filter_raw!r}  limit: {limit_raw}")
 
         try:
-            min_duration, whitelist_mode = _parse_filters(filter_raw)
-            limit = _parse_limit(limit_raw)
-
-            # Load whitelist if needed
+            # Load whitelist if needed — file resolved by tab_label slug, not source_name,
+            # so blank source_name whitelist rows find the right file.
             whitelist_names: List[str] = []
             if whitelist_mode:
-                wl_path = _whitelist_path(source_name)
+                wl_path = _whitelist_path(tab_label)
                 if not wl_path.exists():
                     raise FileNotFoundError(
                         f"whitelist file not found: {wl_path}\n"
@@ -227,16 +257,16 @@ def main():
             if url != url_raw:
                 print(f"  url normalized → {url[:80]}")
 
-            # Ensure source tab exists
+            # Ensure source tab exists (named by tab_label)
             if not args.dry_run:
-                _ensure_tab(wb, source_name)
+                _ensure_tab(wb, tab_label)
             else:
-                print(f"  [DRY-RUN] would ensure tab: {source_name!r}")
+                print(f"  [DRY-RUN] would ensure tab: {tab_label!r}")
 
             # Run triage on the source tab
             if not args.dry_run:
                 wb_cur = openpyxl.load_workbook(QUEUE_PATH)
-                ws_src = wb_cur[source_name]
+                ws_src = wb_cur[tab_label]
                 stats = process_sheet(
                     wb_cur, ws_src, ytdlp, effective_groq,
                     whitelist_names=whitelist_names,
@@ -245,18 +275,18 @@ def main():
                     add_url=url,
                     dry_run=False,
                 )
-                # Reload Queue sheet to update status (wb_cur shares the file)
+                # Reload Queue sheet to update status
                 wb_cur2 = openpyxl.load_workbook(QUEUE_PATH)
                 ws_q2   = wb_cur2["Queue"]
                 ws_q2.cell(row=row_idx, column=QUEUE_COL["status"]).value = "triaged"
                 wb_cur2.save(QUEUE_PATH)
                 written = stats.get("written", 0)
-                print(f"  ✓ triaged → {written} video row(s) written to {source_name!r}")
-                summary.append((source_name, written, None))
+                print(f"  ✓ triaged → {written} video row(s) written to {tab_label!r}")
+                summary.append((tab_label, written, None))
             else:
-                print(f"  [DRY-RUN] would run process_sheet on {source_name!r} "
+                print(f"  [DRY-RUN] would run process_sheet on {tab_label!r} "
                       f"(min_duration={min_duration}, whitelist={len(whitelist_names)}, limit={limit})")
-                summary.append((source_name, 0, None))
+                summary.append((tab_label, 0, None))
 
         except Exception as exc:
             msg = str(exc)
@@ -269,7 +299,7 @@ def main():
                     wb_err.save(QUEUE_PATH)
                 except Exception:
                     pass
-            summary.append((source_name, 0, msg))
+            summary.append((tab_label, 0, msg))
 
     # ── Summary ───────────────────────────────────────────────────────────────
     print(f"\n{'═' * 64}")
