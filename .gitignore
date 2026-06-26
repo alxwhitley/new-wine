@@ -9,3 +9,6 @@ node_modules/
 frontend/node_modules
 sources/
 scripts/youtube_cookies.txt
+logs/
+scripts/logs/
+license-mapping/
