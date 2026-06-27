@@ -69,7 +69,7 @@ repo/
 │   │   ├── ingested/          # Already in Supabase
 │   │   ├── youtube_tracker.xlsx
 │   │   ├── individual_videos.xlsx  # Individual video ingestion tracker (legacy — scrape_individual_videos.py)
-│   │   └── ingest_queue.xlsx       # Master 11-tab ingest queue (Sam Storms, John Bevere, + 9 other teachers)
+│   │   └── ingest_queue.xlsx       # Master ingest queue (Queue + HowToRun control tabs + source tabs; Sam Storms, John Bevere, + more; gitignored)
 │   ├── magazine/              # New Wine Magazine pipeline
 │   │   ├── 01_to_extract/     # Drop PDFs here (~198 issues)
 │   │   ├── 02_extracted/      # Per-issue .md articles + raw_text.txt
@@ -89,8 +89,12 @@ repo/
 │   ├── extract_magazine.py    # 3-pass Gemini/Groq extraction pipeline
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; skip_dedup=False param bypasses MD5 guard for Stage 3
-│   ├── youtube_triage.py      # Stage 2: channel enumeration + Groq title classification; --sheet NAME required; keyed batch protocol
-│   ├── youtube_ingest.py      # Stage 3: captions-first/Whisper fallback + Groq clean + ingest_file(skip_dedup=True); --sheet NAME required
+│   ├── youtube_triage.py      # Stage 2: channel enumeration + Groq title classification; exports process_sheet() callable; --sheet NAME still works direct
+│   ├── youtube_ingest.py      # Stage 3: captions-first/Whisper fallback + Groq clean + ingest_file(skip_dedup=True); exports ingest_sheet() callable; --sheet NAME still works direct
+│   ├── run_queue_triage.py    # Stage 5 Run 1: Queue-driven triage orchestrator (reads Queue tab, drives process_sheet per source)
+│   ├── run_queue_ingest.py    # Stage 5 Run 2: Queue-driven ingest orchestrator (walks source tabs, drives ingest_sheet per tab)
+│   ├── discover_sermonindex_playlists.py  # Discovery-only: enumerate SermonIndex playlists vs whitelist_sermonindex.txt (prints only, zero writes)
+│   ├── whitelist_sermonindex.txt          # 17-entry whitelist for SermonIndex multi-speaker channel (13 speakers; period variants for Tozer/Austin-Sparks)
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq Llama 3.3 70B, v3 four-corners prompt); process_document() entry point for ingest scripts
 │   ├── source_resolver.py     # Shared source_id resolution + alias normalization; imported by ingest.py and ingest_magazine.py
 │   ├── tag_existing_articles.py  # Backfill topic_tags on existing articles
@@ -331,10 +335,22 @@ repo/
   - **Do NOT label paraphrase rewrites as "owned":** A rewrite of copyrighted material is a derivative; labeling it owned would serve verbatim under safe_mode and create an ungated hole. Source stays truthfully unlicensed; propositions are the safe-mode path.
   - **Migration 051 gotcha — no semicolons in `--` SQL comments:** A semicolon inside a comment split the migration mid-statement, caused a syntax error, and silently rolled back the whole transaction. The same-session Supabase SQL editor appeared to show success because the check ran before the implicit rollback. Rule: no semicolons in `--` comments in migration files. Verify via `SELECT to_regclass('public.<table>')` on a FRESH connection.
   - **Validated end-to-end:** Flora "How To Overcome" (stored:12) and "Christ's Eternal Lordship" (stored:15) — all rows non-null embedding + fts; four-corners quality confirmed (no invented scripture references).
-- **Unified YouTube ingest pipeline (Stage 4a, June 2026):** `youtube_triage.py` (Stage 2) + `youtube_ingest.py` (Stage 3) are the new path for all YouTube content ingestion. Master workbook `sources/youtube/ingest_queue.xlsx` — 11 tabs: Sam Storms (renamed from "Queue"; 2 done + 237 triaged rows), John Bevere (221 done_prior rows backfilled from DB), plus 9 empty tabs (Andrew Wommack, Craig Keener, David Pawson, Randy Clark, Mark Virkler, Vlad Savchuk, Roberts Liardon, R.T. Kendall, Daniel Kolenda). Both scripts require `--sheet NAME` — error with available tab list on omission or wrong name; NO silent fall-through to wrong tab. Workbook is gitignored (in `sources/`).
+- **Unified YouTube ingest pipeline (Stage 4a → Stage 5, June 2026):** `youtube_triage.py` (Stage 2) + `youtube_ingest.py` (Stage 3) are the core ingest path. Both now export `process_sheet()` and `ingest_sheet()` callables used by the Stage 5 queue orchestrators. `--sheet NAME` still works for direct single-tab use. Master workbook `sources/youtube/ingest_queue.xlsx` (gitignored) — now has Queue + HowToRun control tabs plus source tabs: Sam Storms, John Bevere (221 done_prior backfilled from DB), plus tabs for Wommack, Keener, Pawson, Clark, Virkler, Savchuk, Liardon, Kendall, Kolenda, Gabriel Heights, Philip Anthony Mitchell, Sermonindex, Leonard Ravenhill, David Wilkerson.
 - **`done_prior` status (June 2026):** new terminal status in `ingest_queue.xlsx` meaning "already in DB before this tool — never re-ingest." Used to seed the John Bevere tab with 221 existing DB documents. Rows have `ingest=FALSE` and `status=done_prior` — double-excluded from Stage 3 ingest loop (allowlist filter requires `ingest=TRUE AND status=triaged`).
 - **`ingest_file()` skip_dedup param (June 2026):** `skip_dedup: bool = False` bypasses the MD5 `already_ingested()` check in `ingest.py`. Default `False` leaves the directory-scan pipeline guard unchanged. Stage 3 (`youtube_ingest.py`) passes `True` because sheet `status=done` is the authoritative dedup guard, and because `chunks.source_hash` is absent from the live DB schema. **DO NOT add `chunks.source_hash` via migration** — it is listed as droppable (see known issues line 678). Migration 053 was proposed for this, created, and immediately deleted.
 - **`chunks.page_number` and `chunks.source_hash` absent from live schema (confirmed June 2026):** Both listed as droppable/unused. Neither column exists in the live DB. `insert_chunks()` in `ingest.py` must NOT include them in PostgREST insert dicts — doing so triggers PGRST204. Do not create migrations to add either column.
+- **Stage 5 Queue Orchestration (June 2026):** `ingest_queue.xlsx` (gitignored) extended with Queue + HowToRun control tabs. Workflow: paste pending URLs into Queue tab → `run_queue_triage.py` → review source tabs → `run_queue_ingest.py`.
+  - **Queue tab columns:** `url | source_name | review | filter | limit | status` (cols 1–6). `QUEUE_COL = {name: i+1 for i, name in enumerate(QUEUE_COLS)}`.
+  - **Filter tokens (col 4):** `min5` → `--min-duration 300` (skip ≤5min clips); `whitelist` → title-match mode, Groq skipped, pre-classified `sermon=TRUE`. Comma-separate: `whitelist,min5`. Unrecognized tokens warn explicitly.
+  - **limit column (col 5):** integer cap applied via `--playlist-items 1:{limit}` to yt-dlp at enumeration time — NOT a Python break. Critical for large channels. `enumerate_channel()` timeout bumped 120s → 300s. Non-integer in limit warns: "Did you put a filter token in the limit column by mistake?"
+  - **Whitelist mode:** `source_name` blank is valid for multi-speaker channels. Tab label: `@sermonindex/videos` → `sermonindex` → `.capitalize()` → `Sermonindex`. Whitelist file: `scripts/whitelist_{slug}.txt`. Guard: skip only when `not source_name AND not whitelist_mode`.
+  - **De-dup:** `all_urls_in_sheet(ws)` built once per channel expansion; only new URLs appended. Re-runs with larger limit are purely additive. Reset channel row `status` to blank to re-enumerate.
+  - **`run_queue_triage.py`:** `--only LABEL` (case-insensitive). Fault-tolerant: bad rows marked `error: {msg}`.
+  - **`run_queue_ingest.py`:** walks all source tabs (skips Queue + HowToRun); `--sheet NAME` for single-tab. Grand total table: TAB | DONE | FAILED | NEEDS_SOURCE | ERROR.
+  - **`discover_sermonindex_playlists.py`:** prints only, zero writes. Known issues: first page only (~40 playlists); multi-name false positive on playlist titles containing multiple speaker names.
+  - **`whitelist_sermonindex.txt`:** 17 entries, 13 speakers. Period variants for A.W. Tozer (3) and T. Austin-Sparks (3). In `scripts/`, NOT `sources/` (sources/ is gitignored).
+  - **New sources (June 2026):** Gabriel Heights, Philip Anthony Mitchell, Leonard Ravenhill, David Wilkerson, SermonIndex (whitelist, 13 speakers). All `unlicensed/hidden`. Jesus Image: blocks scraping — dropped. Wigglesworth + Bartleman better sourced as TEXT. Always `license_status='unlicensed'`, `visibility='hidden'` for new sources; never set 'shown' before IP review.
+  - **SermonIndex public-domain claim:** "committed to the public domain where applicable" — credible intent but NOT a clean legal grant. SermonIndex doesn't own third-party copyrights; "where applicable" is load-bearing. Stays `unlicensed/hidden` until IP attorney review. Do NOT upgrade to `public_domain` without legal confirmation.
 
 ---
 

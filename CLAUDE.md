@@ -15,7 +15,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   ├── ingested/          # Already in Supabase
 │   │   ├── youtube_tracker.xlsx
 │   │   ├── individual_videos.xlsx  # Individual video ingestion tracker (legacy)
-│   │   └── ingest_queue.xlsx       # Master 11-tab ingest queue (one tab per teacher)
+│   │   └── ingest_queue.xlsx       # Master ingest queue (Queue + HowToRun control tabs + source tabs; gitignored)
 │   ├── magazine/              # New Wine Magazine pipeline
 │   │   ├── 01_to_extract/     # Drop PDFs here (~198 issues)
 │   │   ├── 02_extracted/      # Per-issue .md articles + raw_text.txt
@@ -31,8 +31,12 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── extract_magazine.py    # 3-pass Gemini/Groq extraction pipeline
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; skip_dedup=False param on ingest_file()
-│   ├── youtube_triage.py      # Stage 2: channel enumeration + Groq classification; --sheet NAME required
-│   ├── youtube_ingest.py      # Stage 3: transcript fetch + ingest_file(skip_dedup=True); --sheet NAME required
+│   ├── youtube_triage.py      # Stage 2: channel enumeration + Groq classification; exports process_sheet() callable; --sheet NAME still works direct
+│   ├── youtube_ingest.py      # Stage 3: transcript fetch + ingest_file(skip_dedup=True); exports ingest_sheet() callable; --sheet NAME still works direct
+│   ├── run_queue_triage.py    # Stage 5 Run 1: Queue-driven triage orchestrator (reads Queue tab, drives process_sheet per source)
+│   ├── run_queue_ingest.py    # Stage 5 Run 2: Queue-driven ingest orchestrator (walks source tabs, drives ingest_sheet per tab)
+│   ├── discover_sermonindex_playlists.py  # Discovery-only: enumerate SermonIndex playlists vs whitelist_sermonindex.txt (prints only, zero writes)
+│   ├── whitelist_sermonindex.txt          # 17-entry whitelist for SermonIndex multi-speaker channel (13 speakers; period variants for Tozer/Austin-Sparks)
 │   ├── propositions.py        # Shared proposition extraction + storage module (Groq v3 prompt, process_document entry point)
 │   ├── tag_existing_articles.py   # Backfill topic_tags on existing articles via Groq
 │   ├── tag_sermons_transcripts.py # Backfill topic_tags on sermons/transcripts/papers via Groq
@@ -147,10 +151,28 @@ python3 scripts/ingest.py              # Ingest cleaned transcripts → Supabase
 ```
 
 ### YouTube Pipeline (new — ingest_queue.xlsx path)
+
+Single-source direct (Stage 2/3):
 ```bash
 cd /Users/alexwhitley/Desktop/rhemata
 python3 scripts/youtube_triage.py --sheet "Sam Storms" --add URL   # Stage 2: enumerate + classify
 python3 scripts/youtube_ingest.py --sheet "Sam Storms"             # Stage 3: ingest triaged rows
+```
+
+Queue orchestrator (Stage 5 — all pending rows):
+```bash
+cd /Users/alexwhitley/Desktop/rhemata
+# 1. Paste pending URLs into the Queue tab of sources/youtube/ingest_queue.xlsx
+#    Columns: url | source_name | review | filter | limit | status
+#    filter tokens: min5 (skip ≤5min clips), whitelist (title-whitelist mode)
+#    limit: integer cap applied via --playlist-items at yt-dlp enumeration time
+# 2. Triage — enumerate + classify all pending Queue rows
+python3 scripts/run_queue_triage.py
+python3 scripts/run_queue_triage.py --only "Sermonindex"  # single source only
+# 3. Review source tabs in the workbook; set ingest=TRUE on approved rows
+# 4. Ingest — ingest all ingest=TRUE triaged rows across all source tabs
+python3 scripts/run_queue_ingest.py
+python3 scripts/run_queue_ingest.py --sheet "Sam Storms"  # single tab only
 ```
 
 ### Backfill Topic Tags
@@ -262,6 +284,19 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
   - **Migration 051 gotcha — no semicolons in SQL comments:** Migration failed silently ~3 times because a comment line contained a semicolon, which the multi-statement runner (both Supabase SQL editor and naive `text.split(";")`) treated as a statement terminator. The resulting syntax error mid-batch rolled back the whole transaction, while an earlier verification in the same uncommitted editor session appeared to show the table present. **Rule: never put a semicolon inside a `--` SQL comment in a migration file. Verify migrations via `SELECT to_regclass('public.<table>')` on a FRESH connection, not the same editor session.**
   - **Validated end-to-end (June 2026):** Flora "How To Overcome" (stored:12) and "Christ's Eternal Lordship" (stored:15) — all rows have non-null embedding + fts; four-corners quality held on both documents.
   - **Remaining:** backfill extraction over already-ingested unlicensed corpus (excluding Precept Austin); build serving-rule into retrieval RPCs (proposition RPC or extend match_chunks) with dedup; fan-out remaining ingest paths (commentaries etc.) if desired — module's unlicensed gate makes this safe.
+- Stage 5 Queue Orchestration (June 2026): `ingest_queue.xlsx` (gitignored) extended with two control tabs — Queue and HowToRun — alongside per-teacher source detail tabs. Workflow: paste URLs into Queue tab → run triage → review source tabs → run ingest.
+  - **Queue tab columns:** `url | source_name | review | filter | limit | status` (cols 1–6). `QUEUE_COL = {name: i+1 for i, name in enumerate(QUEUE_COLS)}`.
+  - **Filter tokens (col 4):** `min5` → skip clips ≤5min (`--min-duration 300`); `whitelist` → title-match mode, Groq classification skipped, pre-classified `sermon=TRUE`. Comma-separate for combos (e.g. `whitelist,min5`). Unrecognized tokens warn explicitly.
+  - **limit column (col 5):** integer cap applied via `--playlist-items 1:{limit}` to yt-dlp at enumeration time — NOT a Python break after the fact. Critical for large channels (e.g. `@sermonindex/videos`); prevents subprocess timeout. `enumerate_channel()` timeout bumped 120s → 300s. Non-integer values warn: "Did you put a filter token in the limit column by mistake?"
+  - **Whitelist mode:** `source_name` blank is valid (intentional for multi-speaker channels). Tab label derived from URL handle: `@sermonindex/videos` → `sermonindex` → `.capitalize()` → `Sermonindex`. Whitelist file resolved as `scripts/whitelist_{slug}.txt`. `source_name` guard is conditional: skip only when `not source_name AND not whitelist_mode`.
+  - **De-dup:** `all_urls_in_sheet(ws)` built once per channel expansion; only new URLs appended. Re-runs with larger limit are purely additive. To re-enumerate a channel row: reset its `status` to blank first.
+  - **`run_queue_triage.py`:** `--only LABEL` processes only the Queue row matching tab_label (case-insensitive). Fault-tolerant: bad rows marked `error: {msg}`, run continues.
+  - **`run_queue_ingest.py`:** walks all source tabs (skips Queue + HowToRun); `--sheet NAME` for single-tab mode. Prints grand total table: TAB | DONE | FAILED | NEEDS_SOURCE | ERROR.
+  - **`discover_sermonindex_playlists.py`:** discovery-only (prints only, zero writes). Known issues: fetches only first page of playlists (~40 entries); multi-name false positive (playlist title containing both speaker names matches whichever whitelist entry appears first). Fix needed before trusting output fully.
+  - **`whitelist_sermonindex.txt`:** 17 entries covering 13 speakers. Period variants for A.W. Tozer (3) and T. Austin-Sparks (3). Stored in `scripts/`, NOT `sources/` (`sources/` is gitignored).
+  - **New sources added (June 2026):** Gabriel Heights, Philip Anthony Mitchell, Leonard Ravenhill, David Wilkerson, SermonIndex channel (whitelist mode, 13 speakers). All `unlicensed/hidden`. Jesus Image: actively blocks scraping — dropped. Smith Wigglesworth and Frank Bartleman better sourced as TEXT (little/no audio at SermonIndex). Always use `license_status='unlicensed'`, `visibility='hidden'` for new sources — never set `visibility='shown'` before IP review.
+  - **SermonIndex public-domain claim:** SermonIndex states it is "committed to the public domain where applicable." This is a credible intent signal but NOT a clean legal grant — SermonIndex doesn't own underlying copyrights for third-party preachers, and "where applicable" is load-bearing. All SermonIndex content stays `unlicensed/hidden` until IP attorney review. Do NOT upgrade to `public_domain` without legal confirmation.
+  - **`ingest_file(skip_dedup=True)`:** Stage 3 ingest passes `True` to bypass MD5 guard (sheet `status` column is the authoritative dedup guard). No migration created (053 proposed and immediately deleted). `insert_chunks()` must NOT include `page_number` or `source_hash` — both absent from live schema.
 
 ---
 
@@ -287,8 +322,11 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 | `scripts/extract_magazine.py` | 3-pass Gemini/Groq extraction pipeline (Vision → Segmentation → QA) |
 | `scripts/ingest_magazine.py` | Ingest approved .md articles from sources/magazine/03_approved/ into Supabase |
 | `scripts/ingest.py` | Standalone PDF/docx/txt ingestion with auto-tagging (3–6 tags, Groq, non-fatal). `ingest_file(skip_dedup=False)` — pass `True` to bypass MD5 guard (Stage 3 uses this). `insert_chunks()` omits `page_number`/`source_hash` (both absent from live schema). |
-| `scripts/youtube_triage.py` | Stage 2 YouTube pipeline: channel enumeration + Groq title classification (sermon/worship/promo/other). `--sheet NAME` required (errors with available tab list). `--add URL`, `--limit N`, `--retry-unknown`, `--dry-run`. |
-| `scripts/youtube_ingest.py` | Stage 3 YouTube pipeline: captions-first/Whisper fallback + Groq clean + `ingest_file(skip_dedup=True)`. `--sheet NAME` required. `--limit N`, `--dry-run`. `done_prior` rows are excluded from ingest. |
+| `scripts/youtube_triage.py` | Stage 2 YouTube pipeline: channel enumeration + Groq title classification (sermon/worship/promo/other). Exports `process_sheet()` callable used by run_queue_triage.py. `--sheet NAME` still works direct. `--add URL`, `--limit N`, `--retry-unknown`, `--dry-run`. |
+| `scripts/youtube_ingest.py` | Stage 3 YouTube pipeline: captions-first/Whisper fallback + Groq clean + `ingest_file(skip_dedup=True)`. Exports `ingest_sheet()` callable used by run_queue_ingest.py. `--sheet NAME` still works direct. `--limit N`, `--dry-run`. `done_prior` rows excluded. |
+| `scripts/run_queue_triage.py` | Stage 5 Run 1: Queue-driven triage orchestrator. Reads Queue tab in ingest_queue.xlsx; for each pending row calls `process_sheet()` on the named source tab. `--only LABEL` (case-insensitive tab match), `--dry-run`. Fault-tolerant: bad rows marked `error: {msg}`. |
+| `scripts/run_queue_ingest.py` | Stage 5 Run 2: Queue-driven ingest orchestrator. Walks all source tabs (skips Queue + HowToRun), calls `ingest_sheet()` per tab. `--sheet NAME` for single-tab mode, `--dry-run`. Grand total table: TAB \| DONE \| FAILED \| NEEDS_SOURCE \| ERROR. |
+| `scripts/discover_sermonindex_playlists.py` | Discovery-only: enumerate SermonIndex `/playlists` tab via yt-dlp, match against `whitelist_sermonindex.txt`, print match table. Prints only — no workbook writes, no Queue rows, no triage, no ingest. Known issues: first page only (~40 playlists); multi-name false positive on playlist titles containing multiple speaker names. |
 | `scripts/source_resolver.py` | Shared source_id resolution + alias normalization. Imported by `ingest.py` and `ingest_magazine.py`. Exports `resolve_source_id()`, `normalize_alias_key()`, `SENTINEL_SOURCE_ID`, `NEW_WINE_MAGAZINE_SOURCE_ID`, `print_resolution_table()` |
 | `scripts/tag_existing_articles.py` | Backfill topic_tags on existing magazine articles via Groq |
 | `scripts/tag_sermons_transcripts.py` | Backfill topic_tags on existing sermon/transcript/paper documents via Groq |
