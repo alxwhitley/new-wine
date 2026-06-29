@@ -10,8 +10,9 @@ import {
   ThumbsUp,
   Users,
   Inbox,
-  Shield,
-  GitBranch,
+  Database,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -21,12 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -40,11 +35,12 @@ import CorpusCardComponent from "@/components/admin/corpus-card";
 import CardModal from "@/components/admin/card-modal";
 import { CARDS, GROUPS, FUTURE_TARGETS } from "@/components/admin/corpus-data";
 import type { CorpusCard } from "@/components/admin/corpus-types";
+import { CorpusDocumentsPanel, CopyButton } from "@/components/admin/CorpusDocumentsPanel";
+import type { CorpusLicenseSource } from "@/components/admin/CorpusDocumentsPanel";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 const SENTINEL_SOURCE_ID = "267a09ac-76f3-43fb-901f-3015aef88e22";
-const LICENSE_STATUSES = ["public_domain", "owned", "licensed", "unlicensed"] as const;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -53,15 +49,6 @@ interface LicenseSource {
   name: string;
   license_status: string;
   visibility: string;
-  doc_count: number | null;
-}
-
-interface SourceToggle {
-  id: string;
-  source_identifier: string;
-  identifier_type: string;
-  label: string;
-  enabled: boolean;
   doc_count: number | null;
 }
 
@@ -130,7 +117,8 @@ const FEEDBACK_TABS: { key: FeedbackTab; label: string }[] = [
   { key: "word_study", label: "Word Studies" },
 ];
 
-type TopTab = "feedback" | "contributors" | "notes-queue" | "governance" | "pipelines";
+type TopTab = "corpus" | "feedback" | "contributors" | "notes-queue";
+type CorpusSubView = "documents" | "sources" | "pipelines";
 
 type NavTab = {
   key: TopTab;
@@ -139,11 +127,44 @@ type NavTab = {
 };
 
 const NAV_TABS: NavTab[] = [
-  { key: "feedback",      label: "Feedback",      icon: ThumbsUp  },
-  { key: "contributors",  label: "Contributors",  icon: Users     },
-  { key: "notes-queue",   label: "Notes Queue",   icon: Inbox     },
-  { key: "governance",    label: "Governance",    icon: Shield    },
-  { key: "pipelines",     label: "Pipelines",     icon: GitBranch },
+  { key: "corpus",       label: "Corpus",       icon: Database },
+  { key: "feedback",     label: "Feedback",     icon: ThumbsUp },
+  { key: "contributors", label: "Contributors", icon: Users    },
+  { key: "notes-queue",  label: "Notes Queue",  icon: Inbox    },
+];
+
+// Pipeline command reference (Pipelines sub-view)
+const PIPELINE_CMD_GROUPS = [
+  {
+    group: "YouTube",
+    note: null as string | null,
+    cmds: [
+      { label: "Triage (2h)",  cmd: "python scripts/run_queue_triage.py --time-limit 120" },
+      { label: "Triage (6h)",  cmd: "python scripts/run_queue_triage.py --time-limit 360" },
+      { label: "Ingest (2h)",  cmd: "python scripts/run_queue_ingest.py --time-limit 120"  },
+      { label: "Ingest (6h)",  cmd: "python scripts/run_queue_ingest.py --time-limit 360"  },
+      { label: "Triage (dry)", cmd: "python scripts/run_queue_triage.py --dry-run"         },
+      { label: "Ingest (dry)", cmd: "python scripts/run_queue_ingest.py --dry-run"          },
+    ],
+  },
+  {
+    group: "Magazine",
+    note: "↓ manual: review extracted issues and move approved ones into sources/magazine/03_approved/ before Step 2",
+    cmds: [
+      { label: "Step 1 — Extract",      cmd: "python scripts/extract_magazine.py"                       },
+      { label: "Step 1 — Extract (2h)", cmd: "python scripts/extract_magazine.py --time-limit 120"     },
+      { label: "Step 1 — Extract (6h)", cmd: "python scripts/extract_magazine.py --time-limit 360"     },
+      { label: "Step 2 — Ingest",       cmd: "python scripts/ingest_magazine.py"                       },
+    ],
+  },
+  {
+    group: "Documents",
+    note: null as string | null,
+    cmds: [
+      { label: "Ingest",      cmd: "python scripts/ingest.py"            },
+      { label: "Ingest (dry)", cmd: "python scripts/ingest.py --dry-run" },
+    ],
+  },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -276,12 +297,12 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
   }, [open, authLoading, userRole, onOpenChange]);
 
   // ── Navigation ─────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TopTab>("governance");
+  const [activeTab, setActiveTab] = useState<TopTab>("corpus");
+  const [corpusSubView, setCorpusSubView] = useState<CorpusSubView>("documents");
 
   // ── Per-tab load flags ─────────────────────────────────────────
   const [contributorsLoaded, setContributorsLoaded] = useState(false);
-  const [governanceLoaded, setGovernanceLoaded] = useState(false);
-  const [pipelinesLoaded, setPipelinesLoaded] = useState(false);
+  const [corpusLoaded, setCorpusLoaded] = useState(false);
 
   // ── Feedback ───────────────────────────────────────────────────
   const [feedbackEntries, setFeedbackEntries] = useState<FeedbackEntry[]>([]);
@@ -303,15 +324,14 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
   const [pendingNotesLoading, setPendingNotesLoading] = useState(true);
   const [noteActionIds, setNoteActionIds] = useState<Set<string>>(new Set());
 
-  // ── Governance ─────────────────────────────────────────────────
+  // ── Corpus: Sources sub-view ───────────────────────────────────
   const [licenseSources, setLicenseSources] = useState<LicenseSource[]>([]);
   const [licenseSourcesLoading, setLicenseSourcesLoading] = useState(true);
   const [safeMode, setSafeMode] = useState<"on" | "off">("off");
   const [safeModeLoading, setSafeModeLoading] = useState(true);
+  const [manageSrcTarget, setManageSrcTarget] = useState<LicenseSource | null>(null);
 
-  // ── Pipelines ──────────────────────────────────────────────────
-  const [sources, setSources] = useState<SourceToggle[]>([]);
-  const [sourcesLoading, setSourcesLoading] = useState(true);
+  // ── Corpus: Pipelines sub-view ─────────────────────────────────
   const [counts, setCounts] = useState<CountData>({});
   const [globalStats, setGlobalStats] = useState<GlobalStats>({
     totalDocuments: 0,
@@ -495,9 +515,9 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
   }, [roleChecked, accessToken, activeTab, contributorsLoaded]);
 
   useEffect(() => {
-    if (!roleChecked || !accessToken || activeTab !== "governance" || governanceLoaded) return;
+    if (!roleChecked || !accessToken || activeTab !== "corpus" || corpusLoaded) return;
     const headers = { Authorization: `Bearer ${accessToken}` };
-    setGovernanceLoaded(true);
+    setCorpusLoaded(true);
     fetch(`${API}/admin/license-sources`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setLicenseSources(data.sources ?? []))
@@ -508,17 +528,6 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
       .then((data) => setSafeMode(data.value === "on" ? "on" : "off"))
       .catch(() => setAdminDataError(true))
       .finally(() => setSafeModeLoading(false));
-  }, [roleChecked, accessToken, activeTab, governanceLoaded]);
-
-  useEffect(() => {
-    if (!roleChecked || !accessToken || activeTab !== "pipelines" || pipelinesLoaded) return;
-    const headers = { Authorization: `Bearer ${accessToken}` };
-    setPipelinesLoaded(true);
-    fetch(`${API}/admin/sources`, { headers })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => setSources(data.sources ?? []))
-      .catch(() => { setSources([]); setAdminDataError(true); })
-      .finally(() => setSourcesLoading(false));
     fetch(`${API}/admin/stats`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) =>
@@ -531,7 +540,7 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
       )
       .catch(() => setAdminDataError(true));
     fetchAllCounts();
-  }, [roleChecked, accessToken, activeTab, pipelinesLoaded, fetchAllCounts]);
+  }, [roleChecked, accessToken, activeTab, corpusLoaded, fetchAllCounts]);
 
   // Realtime — active only while modal is open
   useEffect(() => {
@@ -579,23 +588,6 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
     pulseTimers.current.set(cardId, timer);
   }
 
-  const handleToggle = useCallback(
-    async (id: string) => {
-      if (!accessToken) return;
-      setSources((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
-      try {
-        const res = await fetch(`${API}/admin/sources/${id}`, {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!res.ok) throw new Error();
-      } catch {
-        setSources((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
-      }
-    },
-    [accessToken]
-  );
-
   const handleVisibilityToggle = useCallback(
     async (sourceId: string, currentVisibility: string) => {
       if (!accessToken) return;
@@ -619,26 +611,6 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
     },
     [accessToken]
   );
-
-  async function handleLicenseStatusChange(sourceId: string, currentStatus: string, newStatus: string) {
-    if (newStatus === currentStatus || !accessToken) return;
-    setLicenseSources((prev) =>
-      prev.map((s) => (s.id === sourceId ? { ...s, license_status: newStatus } : s))
-    );
-    try {
-      const res = await fetch(`${API}/admin/license-sources/${sourceId}/license-status`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ license_status: newStatus }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      setLicenseSources((prev) =>
-        prev.map((s) => (s.id === sourceId ? { ...s, license_status: currentStatus } : s))
-      );
-      showToast("Failed to update license status.");
-    }
-  }
 
   async function handleSafeModeToggle() {
     if (!accessToken) return;
@@ -765,14 +737,6 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
 
   // ── Derived state ──────────────────────────────────────────────
 
-  const globalToggles = sources.filter((s) => s.identifier_type === "global");
-  const commentaryToggles = sources.filter(
-    (s) => s.identifier_type === "source_name" && s.label.includes("Commentary")
-  );
-  const commentaryIds = new Set(commentaryToggles.map((s) => s.id));
-  const sourceToggles = sources.filter(
-    (s) => s.identifier_type !== "global" && !commentaryIds.has(s.id)
-  );
   const maintenanceCards = CARDS.filter((c) => c.isMaintenance);
   const visibleGroups = (GROUPS as readonly string[]).filter((g) => g !== "Maintenance");
 
@@ -1096,10 +1060,29 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
                 </div>
               )}
 
-              {/* ── Governance ──────────────────────────────────── */}
-              {activeTab === "governance" && (
+              {/* ── Corpus ──────────────────────────────────────── */}
+              {activeTab === "corpus" && (
                 <div role="tabpanel">
-                  <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Governance</h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-semibold text-foreground font-sans">Corpus</h2>
+                  </div>
+
+                  {/* Sub-view tab bar */}
+                  <div className="flex gap-5 mb-6 border-b border-border">
+                    {(["documents", "sources", "pipelines"] as CorpusSubView[]).map((sv) => (
+                      <button
+                        key={sv}
+                        onClick={() => setCorpusSubView(sv)}
+                        className={`-mb-px pb-2 text-sm font-medium capitalize transition-colors cursor-pointer ${
+                          corpusSubView === sv
+                            ? "text-foreground border-b-2 border-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {sv}
+                      </button>
+                    ))}
+                  </div>
 
                   {adminDataError && (
                     <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
@@ -1109,322 +1092,311 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
                     </div>
                   )}
 
-                  <div
-                    className={
-                      "flex items-center justify-between rounded-lg border p-4 mb-8 " +
-                      (safeMode === "on"
-                        ? "bg-destructive/10 border-destructive/50"
-                        : "bg-card border-border")
-                    }
-                  >
+                  {/* Documents */}
+                  {corpusSubView === "documents" && (
+                    <CorpusDocumentsPanel
+                      accessToken={accessToken}
+                      licenseSources={licenseSources.map((s) => ({ id: s.id, name: s.name }))}
+                    />
+                  )}
+
+                  {/* Sources */}
+                  {corpusSubView === "sources" && (
                     <div>
-                      <p
+                      {!licenseSourcesLoading && licenseSources.length > 0 && (() => {
+                        const total = licenseSources.length;
+                        const exposed = licenseSources.filter(
+                          (s) => s.license_status === "unlicensed" && s.visibility === "shown"
+                        ).length;
+                        return (
+                          <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+                            <span>{total} source{total !== 1 ? "s" : ""}</span>
+                            {exposed > 0 && (
+                              <span className="inline-flex items-center rounded-full border border-destructive/50 bg-destructive/10 px-2 py-0.5 text-destructive font-medium">
+                                {exposed} unlicensed + shown
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {licenseSourcesLoading ? (
+                        <SkeletonRows />
+                      ) : licenseSources.length === 0 ? (
+                        <div className="rounded-lg border border-border bg-card p-4">
+                          <p className="text-sm text-muted-foreground">No sources found. Check the backend connection.</p>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-border overflow-hidden mb-8">
+                          <div className="grid grid-cols-[1fr_3.5rem_9rem_4.5rem_5rem] gap-x-3 px-4 py-2 border-b border-border bg-muted/40">
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</span>
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Docs</span>
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">License</span>
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Visible</span>
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Manage</span>
+                          </div>
+                          <div className="divide-y divide-border">
+                            {licenseSources.map((src) => {
+                              const isSentinel = src.id === SENTINEL_SOURCE_ID;
+                              const licenseColor =
+                                src.license_status === "public_domain" || src.license_status === "owned"
+                                  ? "border-primary/40 bg-primary/10 text-primary"
+                                  : src.license_status === "unlicensed"
+                                  ? "border-destructive/40 bg-destructive/10 text-destructive"
+                                  : "border-border bg-muted/40 text-muted-foreground";
+                              return (
+                                <div
+                                  key={src.id}
+                                  className={
+                                    "grid grid-cols-[1fr_3.5rem_9rem_4.5rem_5rem] gap-x-3 px-4 py-3 items-center" +
+                                    (isSentinel ? " opacity-50" : "")
+                                  }
+                                >
+                                  <div className="min-w-0 flex items-center gap-1.5">
+                                    {isSentinel && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
+                                    <p className="text-sm font-medium text-foreground truncate">{src.name}</p>
+                                  </div>
+                                  <span className="text-xs text-muted-foreground text-right tabular-nums">
+                                    {src.doc_count !== null ? src.doc_count.toLocaleString() : "—"}
+                                  </span>
+                                  <span className={"text-xs rounded-full border px-2 py-0.5 inline-block truncate font-medium " + licenseColor}>
+                                    {src.license_status}
+                                  </span>
+                                  <div className="flex justify-end">
+                                    {isSentinel ? (
+                                      <span className="text-xs text-muted-foreground">protected</span>
+                                    ) : (
+                                      <Switch
+                                        checked={src.visibility === "shown"}
+                                        onCheckedChange={() => handleVisibilityToggle(src.id, src.visibility)}
+                                        className={src.visibility === "shown" ? "data-[state=checked]:bg-primary" : ""}
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="flex justify-end">
+                                    {!isSentinel && (
+                                      <button
+                                        onClick={() => setManageSrcTarget(src)}
+                                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                      >
+                                        Manage
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Safe Mode */}
+                      <div
                         className={
-                          "text-sm font-semibold " +
-                          (safeMode === "on" ? "text-destructive" : "text-foreground")
+                          "flex items-center justify-between rounded-lg border p-4 " +
+                          (safeMode === "on"
+                            ? "bg-destructive/10 border-destructive/50"
+                            : "bg-card border-border")
                         }
                       >
-                        Safe mode{safeMode === "on" ? " — ACTIVE" : ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Serves only public domain + owned. Ignores visibility.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={safeMode === "on"}
-                      onCheckedChange={handleSafeModeToggle}
-                      disabled={safeModeLoading}
-                      className={safeMode === "on" ? "data-[state=checked]:bg-destructive" : ""}
-                    />
-                  </div>
-
-                  {!licenseSourcesLoading && licenseSources.length > 0 && (() => {
-                    const total = licenseSources.length;
-                    const exposed = licenseSources.filter(
-                      (s) => s.license_status === "unlicensed" && s.visibility === "shown"
-                    ).length;
-                    return (
-                      <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
-                        <span>{total} source{total !== 1 ? "s" : ""}</span>
-                        {exposed > 0 && (
-                          <span className="inline-flex items-center rounded-full border border-destructive/50 bg-destructive/10 px-2 py-0.5 text-destructive font-medium">
-                            {exposed} unlicensed + shown
-                          </span>
-                        )}
+                        <div>
+                          <p className={"text-sm font-semibold " + (safeMode === "on" ? "text-destructive" : "text-foreground")}>
+                            Safe mode{safeMode === "on" ? " — ACTIVE" : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Serves only public domain + owned. Ignores visibility.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={safeMode === "on"}
+                          onCheckedChange={handleSafeModeToggle}
+                          disabled={safeModeLoading}
+                          className={safeMode === "on" ? "data-[state=checked]:bg-destructive" : ""}
+                        />
                       </div>
-                    );
-                  })()}
 
-                  {licenseSourcesLoading ? (
-                    <SkeletonRows />
-                  ) : licenseSources.length === 0 ? (
-                    <div className="rounded-lg border border-border bg-card p-4">
-                      <p className="text-sm text-muted-foreground">No sources found. Check the backend connection.</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-border overflow-hidden">
-                      <div className="grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-2 border-b border-border bg-muted/40">
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</span>
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Docs</span>
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">License status</span>
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">Retrievable</span>
-                      </div>
-                      <div className="divide-y divide-border">
-                        {licenseSources.map((src) => {
-                          const isSentinel = src.id === SENTINEL_SOURCE_ID;
-                          const licenseColor =
-                            src.license_status === "public_domain" || src.license_status === "owned"
-                              ? "border-primary/40 bg-primary/10 text-primary"
-                              : src.license_status === "unlicensed"
-                              ? "border-destructive/40 bg-destructive/10 text-destructive"
-                              : "border-border bg-muted/40 text-muted-foreground";
-                          return (
-                            <div
-                              key={src.id}
-                              className={
-                                "grid grid-cols-[1fr_3.5rem_10rem_4.5rem] gap-x-3 px-4 py-3 items-center" +
-                                (isSentinel ? " opacity-50" : "")
-                              }
-                            >
-                              <div className="min-w-0 flex items-center gap-1.5">
-                                {isSentinel && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
-                                <p className="text-sm font-medium text-foreground truncate">{src.name}</p>
-                              </div>
-                              <span className="text-xs text-muted-foreground text-right tabular-nums">
-                                {src.doc_count !== null ? src.doc_count.toLocaleString() : "—"}
-                              </span>
-                              {isSentinel ? (
-                                <span className={"text-xs text-center rounded-full border px-2 py-0.5 font-medium " + licenseColor}>
-                                  {src.license_status}
-                                </span>
-                              ) : (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      className={
-                                        "flex items-center justify-between gap-1 text-xs rounded-full border px-2 py-0.5 font-medium transition-colors hover:opacity-80 w-full " +
-                                        licenseColor
-                                      }
-                                    >
-                                      <span className="truncate">{src.license_status}</span>
-                                      <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="center">
-                                    {LICENSE_STATUSES.map((status) => (
-                                      <DropdownMenuItem
-                                        key={status}
-                                        onClick={() => handleLicenseStatusChange(src.id, src.license_status, status)}
-                                      >
-                                        {status}
-                                      </DropdownMenuItem>
-                                    ))}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
-                              <div className="flex justify-end">
-                                {isSentinel ? (
-                                  <span className="text-xs text-muted-foreground">protected</span>
-                                ) : (
+                      {/* Manage Source Sheet */}
+                      <Sheet
+                        open={!!manageSrcTarget}
+                        onOpenChange={(open) => { if (!open) setManageSrcTarget(null); }}
+                      >
+                        <SheetContent side="right" className="flex flex-col w-full sm:max-w-md">
+                          <SheetHeader>
+                            <SheetTitle>{manageSrcTarget?.name ?? "Source"}</SheetTitle>
+                            <SheetDescription>Source details (read-only)</SheetDescription>
+                          </SheetHeader>
+                          <div className="flex-1 overflow-y-auto px-1 pb-4 space-y-4 pt-2">
+                            {manageSrcTarget && (
+                              <>
+                                <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-muted-foreground">License status</span>
+                                    <span className="text-xs font-medium text-foreground">{manageSrcTarget.license_status}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-muted-foreground">Visibility</span>
+                                    <span className="text-xs font-medium text-foreground">{manageSrcTarget.visibility}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-muted-foreground">Documents</span>
+                                    <span className="text-xs font-medium text-foreground tabular-nums">
+                                      {manageSrcTarget.doc_count !== null ? manageSrcTarget.doc_count.toLocaleString() : "—"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-xs text-muted-foreground shrink-0">Source ID</span>
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span className="text-xs font-mono text-foreground break-all">{manageSrcTarget.id}</span>
+                                      <CopyButton text={manageSrcTarget.id} />
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
+                                  <div>
+                                    <p className="text-sm font-medium text-foreground">Visibility</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {manageSrcTarget.visibility === "shown" ? "Shown in retrieval" : "Hidden from retrieval"}
+                                    </p>
+                                  </div>
                                   <Switch
-                                    checked={src.visibility === "shown"}
-                                    onCheckedChange={() => handleVisibilityToggle(src.id, src.visibility)}
-                                    className={src.visibility === "shown" ? "data-[state=checked]:bg-primary" : ""}
+                                    checked={manageSrcTarget.visibility === "shown"}
+                                    onCheckedChange={() => {
+                                      handleVisibilityToggle(manageSrcTarget.id, manageSrcTarget.visibility);
+                                      setManageSrcTarget((prev) =>
+                                        prev ? { ...prev, visibility: prev.visibility === "shown" ? "hidden" : "shown" } : null
+                                      );
+                                    }}
                                   />
-                                )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </SheetContent>
+                      </Sheet>
+                    </div>
+                  )}
+
+                  {/* Pipelines */}
+                  {corpusSubView === "pipelines" && (
+                    <div>
+                      {/* Stats + Ingestion monitor */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Ingestion monitor
+                          </h3>
+                          <span
+                            className={`inline-block h-2 w-2 rounded-full ${
+                              realtimeConnected ? "animate-pulse bg-primary" : "bg-muted-foreground"
+                            }`}
+                          />
+                        </div>
+                        {lastUpdated && (
+                          <p className="text-xs text-muted-foreground mb-4">
+                            Last updated: {lastUpdated.toLocaleTimeString()}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap gap-3 mb-8 p-3 rounded-lg bg-card border border-border">
+                          <StatPill label="Total Documents" value={globalStats.totalDocuments} />
+                          <StatPill label="Total Chunks" value={globalStats.totalChunks} />
+                          <StatPill label="Total Verses" value={globalStats.totalVerses} />
+                          <StatPill label="Interlinear Words" value={globalStats.totalInterlinearWords} />
+                        </div>
+
+                        {visibleGroups.map((group) => {
+                          const groupCards = CARDS.filter((c) => c.group === group);
+                          if (groupCards.length === 0) return null;
+                          return (
+                            <div key={group} className="mb-8">
+                              <h4 className="text-base font-medium text-foreground font-sans mb-3">{group}</h4>
+                              <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                                {groupCards.map((card) => (
+                                  <CorpusCardComponent
+                                    key={card.id}
+                                    card={card}
+                                    count={counts[card.id]?.count ?? null}
+                                    lastIngested={counts[card.id]?.lastIngested ?? null}
+                                    pulsing={pulsingCards.has(card.id)}
+                                    onClick={() => setSelectedCard(card)}
+                                  />
+                                ))}
                               </div>
                             </div>
                           );
                         })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
 
-              {/* ── Pipelines ────────────────────────────────────── */}
-              {activeTab === "pipelines" && (
-                <div role="tabpanel">
-                  <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Pipelines</h2>
-
-                  {adminDataError && (
-                    <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-                      <p className="text-sm font-medium text-destructive">
-                        Couldn&apos;t load admin data — check backend connection or auth.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mb-12">
-                    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
-                      Retrieval controls
-                    </h3>
-
-                    {sourcesLoading ? (
-                      <SkeletonRows />
-                    ) : sources.length === 0 ? (
-                      <div className="rounded-lg border border-border bg-card p-4">
-                        <p className="text-sm text-muted-foreground">
-                          No sources found. Check the backend connection.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-8">
-                        {globalToggles.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-3">Global Settings</p>
-                            <div className="space-y-2">
-                              {globalToggles.map((s) => (
-                                <div
-                                  key={s.id}
-                                  className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                                >
-                                  <p className="text-sm font-medium text-foreground">{s.label}</p>
-                                  <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
-                                </div>
-                              ))}
-                            </div>
+                        {maintenanceCards.length > 0 && (
+                          <div className="mb-8">
+                            <button
+                              onClick={() => setMaintenanceOpen((o) => !o)}
+                              className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
+                            >
+                              {maintenanceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                              Maintenance
+                            </button>
+                            {maintenanceOpen && (
+                              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-3">
+                                {maintenanceCards.map((card) => (
+                                  <CorpusCardComponent
+                                    key={card.id}
+                                    card={card}
+                                    count={null}
+                                    lastIngested={null}
+                                    pulsing={false}
+                                    onClick={() => setSelectedCard(card)}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
-                        {sourceToggles.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-3">Source Toggles</p>
-                            <div className="space-y-2">
-                              {sourceToggles.map((s) => (
-                                <div
-                                  key={s.id}
-                                  className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-foreground">{s.label}</p>
-                                    {s.doc_count !== null && (
-                                      <p className="text-xs mt-0.5 text-muted-foreground">
-                                        {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
-                                </div>
+
+                        <div className="mb-8">
+                          <button
+                            onClick={() => setFutureTargetsOpen((o) => !o)}
+                            className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
+                          >
+                            {futureTargetsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            Future Corpus Targets
+                          </button>
+                          {futureTargetsOpen && (
+                            <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-3">
+                              {FUTURE_TARGETS.map((target) => (
+                                <FutureTargetCard key={target.id} target={target} />
                               ))}
                             </div>
-                          </div>
-                        )}
-                        {commentaryToggles.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-3">Commentaries</p>
-                            <div className="space-y-2">
-                              {commentaryToggles.map((s) => (
-                                <div
-                                  key={s.id}
-                                  className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-foreground">{s.label}</p>
-                                    {s.doc_count !== null && (
-                                      <p className="text-xs mt-0.5 text-muted-foreground">
-                                        {s.doc_count.toLocaleString()} document{s.doc_count !== 1 ? "s" : ""}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <Switch checked={s.enabled} onCheckedChange={() => handleToggle(s.id)} />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Ingestion monitor
-                      </h3>
-                      <span
-                        className={`inline-block h-2 w-2 rounded-full ${
-                          realtimeConnected ? "animate-pulse bg-primary" : "bg-muted-foreground"
-                        }`}
-                      />
-                    </div>
-                    {lastUpdated && (
-                      <p className="text-xs text-muted-foreground mb-4">
-                        Last updated: {lastUpdated.toLocaleTimeString()}
-                      </p>
-                    )}
-
-                    <div className="flex flex-wrap gap-3 mb-8 p-3 rounded-lg bg-card border border-border">
-                      <StatPill label="Total Documents" value={globalStats.totalDocuments} />
-                      <StatPill label="Total Chunks" value={globalStats.totalChunks} />
-                      <StatPill label="Total Verses" value={globalStats.totalVerses} />
-                      <StatPill label="Interlinear Words" value={globalStats.totalInterlinearWords} />
-                    </div>
-
-                    {visibleGroups.map((group) => {
-                      const groupCards = CARDS.filter((c) => c.group === group);
-                      if (groupCards.length === 0) return null;
-                      return (
-                        <div key={group} className="mb-8">
-                          <h4 className="text-base font-medium text-foreground font-sans mb-3">{group}</h4>
-                          <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                            {groupCards.map((card) => (
-                              <CorpusCardComponent
-                                key={card.id}
-                                card={card}
-                                count={counts[card.id]?.count ?? null}
-                                lastIngested={counts[card.id]?.lastIngested ?? null}
-                                pulsing={pulsingCards.has(card.id)}
-                                onClick={() => setSelectedCard(card)}
-                              />
-                            ))}
-                          </div>
+                          )}
                         </div>
-                      );
-                    })}
-
-                    {maintenanceCards.length > 0 && (
-                      <div className="mb-8">
-                        <button
-                          onClick={() => setMaintenanceOpen((o) => !o)}
-                          className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
-                        >
-                          {maintenanceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                          Maintenance
-                        </button>
-                        {maintenanceOpen && (
-                          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-3">
-                            {maintenanceCards.map((card) => (
-                              <CorpusCardComponent
-                                key={card.id}
-                                card={card}
-                                count={null}
-                                lastIngested={null}
-                                pulsing={false}
-                                onClick={() => setSelectedCard(card)}
-                              />
-                            ))}
-                          </div>
-                        )}
                       </div>
-                    )}
 
-                    <div className="mb-8">
-                      <button
-                        onClick={() => setFutureTargetsOpen((o) => !o)}
-                        className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors py-2"
-                      >
-                        {futureTargetsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        Future Corpus Targets
-                      </button>
-                      {futureTargetsOpen && (
-                        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-3">
-                          {FUTURE_TARGETS.map((target) => (
-                            <FutureTargetCard key={target.id} target={target} />
+                      {/* Command reference */}
+                      <div className="mt-2">
+                        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-4">
+                          Command reference
+                        </h3>
+                        <div className="space-y-6">
+                          {PIPELINE_CMD_GROUPS.map((grp) => (
+                            <div key={grp.group}>
+                              <p className="text-sm font-medium text-foreground mb-2">{grp.group}</p>
+                              {grp.note && (
+                                <p className="text-xs text-muted-foreground mb-2 italic">{grp.note}</p>
+                              )}
+                              <div className="rounded-lg border border-border overflow-hidden divide-y divide-border">
+                                {grp.cmds.map((c) => (
+                                  <div key={c.label} className="flex items-center gap-3 px-3 py-2.5 bg-card">
+                                    <span className="text-xs text-muted-foreground w-28 shrink-0">{c.label}</span>
+                                    <code className="flex-1 text-xs font-mono text-foreground truncate">{c.cmd}</code>
+                                    <CopyButton text={c.cmd} />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 

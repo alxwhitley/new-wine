@@ -163,21 +163,127 @@ async def update_document(doc_id: str, body: EditDocumentBody, request: Request,
 
 @router.delete("/document/{doc_id}")
 async def delete_document(doc_id: str, request: Request, user_id: str = Depends(require_admin_role)):
-    """Delete a document and all its chunks. Admin only."""
+    """Delete a document and its cascade (chunks, propositions). Admin only.
+
+    Writes to removed_urls before deleting when the document has a URL so the
+    URL is blocked from being re-ingested on the next pipeline run.
+    """
     db = get_supabase()
 
-    # Verify document exists
-    doc = db.table("documents").select("id").eq("id", doc_id).limit(1).execute()
-    if not doc.data:
+    # Fetch document — need url/title/original_title for the blocklist write
+    doc_q = db.table("documents").select("id, url, title, original_title").eq("id", doc_id).limit(1).execute()
+    if not doc_q.data:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Delete chunks first (FK dependency)
-    db.table("chunks").delete().eq("document_id", doc_id).execute()
-    # Delete document
+    doc_row = doc_q.data[0]
+    doc_url = doc_row.get("url")
+
+    # Write to removed_urls BEFORE deleting so a concurrent re-ingest attempt
+    # sees the block record even if the delete is still in flight
+    if doc_url:
+        db.table("removed_urls").upsert({
+            "url": doc_url,
+            "document_id": doc_id,
+            "title": doc_row.get("title"),
+            "original_title": doc_row.get("original_title"),
+        }).execute()
+        logger.info("[ADMIN] blocked url %s for removed doc %s", doc_url, doc_id)
+
+    # Delete document; chunks + propositions cascade automatically via FK ON DELETE CASCADE
     db.table("documents").delete().eq("id", doc_id).execute()
 
-    logger.info("[ADMIN] Document %s deleted by user %s", doc_id, user_id)
-    return {"success": True}
+    logger.info("[ADMIN] Document %s deleted by %s (url_blocked=%s)", doc_id, user_id, bool(doc_url))
+    return {"success": True, "deleted": True, "blocked_url": doc_url}
+
+
+# ── Corpus documents list ───────────────────────────────────────────────────────
+
+@router.get("/corpus/documents")
+async def list_corpus_documents(
+    request: Request,
+    user_id: str = Depends(require_admin_role),
+    source_kind: Optional[str] = Query(None),
+    source_id: Optional[str] = Query(None),
+    license_status: Optional[str] = Query(None),
+    visibility: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Paginated, server-side-filtered corpus document list with source join.
+
+    Per-kind stats use a separate bulk fetch aggregated in Python (no N+1).
+    License/visibility filters pre-resolve matching source_ids, then filter
+    documents by those ids via IN — avoids ambiguous embedded-table filter syntax.
+    """
+    from collections import Counter
+    db = get_supabase()
+
+    # ── 1. Per-kind stats (unfiltered — for the stats header row) ─────────────
+    all_kinds = db.table("documents").select("source_kind").execute()
+    kind_counts: Counter = Counter(
+        r["source_kind"] for r in (all_kinds.data or []) if r.get("source_kind")
+    )
+    total_all = len(all_kinds.data or [])
+
+    # ── 2. Pre-resolve source_ids if license/visibility filters are active ─────
+    source_id_whitelist = None
+    if license_status or visibility:
+        src_q = db.table("sources").select("id")
+        if license_status:
+            src_q = src_q.eq("license_status", license_status)
+        if visibility:
+            src_q = src_q.eq("visibility", visibility)
+        src_result = src_q.execute()
+        source_id_whitelist = [r["id"] for r in (src_result.data or [])]
+        if not source_id_whitelist:
+            return {"total": 0, "total_all": total_all, "kind_counts": dict(kind_counts), "rows": []}
+
+    # ── 3. Build paginated docs query with embedded source join ───────────────
+    q = db.table("documents").select(
+        "id, title, original_title, author, source_kind, url, created_at, "
+        "sources!source_id(name, license_status, visibility)",
+        count="exact",
+    )
+
+    if source_kind:
+        q = q.eq("source_kind", source_kind)
+    if source_id:
+        q = q.eq("source_id", source_id)
+    elif source_id_whitelist is not None:
+        q = q.in_("source_id", source_id_whitelist)
+    if search:
+        s = search.replace("%", "\\%")
+        q = q.or_(f"title.ilike.%{s}%,original_title.ilike.%{s}%,author.ilike.%{s}%")
+
+    q = q.order("created_at", desc=True).range(offset, offset + limit - 1)
+    result = q.execute()
+
+    docs = result.data or []
+    total = result.count or 0
+
+    rows = []
+    for d in docs:
+        src = d.get("sources") or {}
+        rows.append({
+            "id": d["id"],
+            "title": d.get("title"),
+            "original_title": d.get("original_title"),
+            "author": d.get("author"),
+            "source_kind": d.get("source_kind"),
+            "source_name": src.get("name"),
+            "license_status": src.get("license_status"),
+            "visibility": src.get("visibility"),
+            "url": d.get("url"),
+            "created_at": d.get("created_at"),
+        })
+
+    return {
+        "total": total,
+        "total_all": total_all,
+        "kind_counts": dict(kind_counts),
+        "rows": rows,
+    }
 
 
 @router.patch("/sources/{toggle_id}")

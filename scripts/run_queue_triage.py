@@ -36,6 +36,7 @@ Usage:
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -162,6 +163,9 @@ def main():
     parser.add_argument("--only", metavar="LABEL",
                         help="Process only the Queue row whose tab label matches LABEL "
                              "(case-insensitive). All other pending rows are skipped.")
+    parser.add_argument("--time-limit", type=float, default=None, metavar="MINUTES",
+                        help="Stop gracefully at the next Queue-row boundary once this many "
+                             "minutes have elapsed. Workbook is always saved before stopping.")
     args = parser.parse_args()
 
     if not QUEUE_PATH.exists():
@@ -199,10 +203,18 @@ def main():
     mode = "(DRY-RUN) " if args.dry_run else ""
     print(f"\n── Queue Triage {mode}────────────────────────────────────────────")
     print(f"  {len(pending)} pending row(s) in Queue")
+    if args.time_limit:
+        print(f"  Time limit: {args.time_limit} min")
 
     summary = []   # [(source_name, written, error)]
+    start_time = time.time()
 
     for row_idx in pending:
+        if args.time_limit:
+            elapsed_min = (time.time() - start_time) / 60
+            if elapsed_min >= args.time_limit:
+                print(f"\nTime limit reached ({elapsed_min:.1f} min) — stopping before next row.")
+                break
         url_raw     = str(qcell(ws_q, row_idx, "url") or "").strip()
         source_name = str(qcell(ws_q, row_idx, "source_name") or "").strip()
         review      = str(qcell(ws_q, row_idx, "review") or "yes").strip().lower()
@@ -302,6 +314,7 @@ def main():
             summary.append((tab_label, 0, msg))
 
     # ── Summary ───────────────────────────────────────────────────────────────
+    elapsed = (time.time() - start_time) / 60
     print(f"\n{'═' * 64}")
     print("QUEUE TRIAGE SUMMARY")
     print(f"{'═' * 64}")
@@ -313,6 +326,7 @@ def main():
     print(f"{'─' * 64}")
     print(f"  Total rows processed: {len(summary)}")
     print(f"  Total videos written: {total_written}")
+    print(f"  Elapsed: {elapsed:.1f} min")
     print()
 
 

@@ -22,6 +22,7 @@ Usage:
 """
 
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -53,6 +54,9 @@ def main():
                         help="Resolve sources only — no transcript fetch, no DB writes")
     parser.add_argument("--sheet", metavar="NAME",
                         help="Process only this tab (default: all source tabs)")
+    parser.add_argument("--time-limit", type=float, default=None, metavar="MINUTES",
+                        help="Stop gracefully at the next tab boundary once this many "
+                             "minutes have elapsed. Workbook is always saved before stopping.")
     args = parser.parse_args()
 
     if not QUEUE_PATH.exists():
@@ -78,11 +82,19 @@ def main():
     mode = "(DRY-RUN) " if args.dry_run else ""
     print(f"\n── Queue Ingest {mode}────────────────────────────────────────────")
     print(f"  {len(tabs_to_run)} source tab(s) to process: {tabs_to_run}")
+    if args.time_limit:
+        print(f"  Time limit: {args.time_limit} min")
 
     grand = {"done": 0, "failed": 0, "needs_source": 0}
     tab_results = []   # [(tab_name, stats, error)]
+    start_time = time.time()
 
     for tab_name in tabs_to_run:
+        if args.time_limit:
+            elapsed_min = (time.time() - start_time) / 60
+            if elapsed_min >= args.time_limit:
+                print(f"\nTime limit reached ({elapsed_min:.1f} min) — stopping before next tab.")
+                break
         print(f"\n{'─' * 64}")
         print(f"  Tab: {tab_name!r}")
 
@@ -94,7 +106,7 @@ def main():
             stats = ingest_sheet(wb_tab, ws_tab, ytdlp, dry_run=args.dry_run)
             tab_results.append((tab_name, stats, None))
 
-            for k in ("done", "failed", "needs_source"):
+            for k in ("done", "failed", "needs_source", "blocked"):
                 grand[k] = grand.get(k, 0) + stats.get(k, 0)
 
         except Exception as exc:
@@ -103,6 +115,7 @@ def main():
             tab_results.append((tab_name, {}, msg))
 
     # ── Final tally ───────────────────────────────────────────────────────────
+    elapsed = (time.time() - start_time) / 60
     print(f"\n{'═' * 64}")
     print("QUEUE INGEST SUMMARY")
     print(f"{'═' * 64}")
@@ -121,6 +134,7 @@ def main():
             )
     print(f"  {'─' * (W + 50)}")
     print(f"  {'TOTAL':<{W}} {grand.get('done', 0):<7}{grand.get('failed', 0):<8}{grand.get('needs_source', 0)}")
+    print(f"  Elapsed: {elapsed:.1f} min")
     print()
 
 

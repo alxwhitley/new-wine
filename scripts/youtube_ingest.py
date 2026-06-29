@@ -425,7 +425,7 @@ def ingest_sheet(
     print("\n── Stage 3: YouTube Ingest {}──────────────────────────────────".format(mode))
     print("  {} row(s) to process".format(len(candidates)))
 
-    stats = {"done": 0, "failed": 0, "needs_source": 0}
+    stats = {"done": 0, "failed": 0, "needs_source": 0, "blocked": 0}
 
     for row_idx in candidates:
         url          = str(gcell(ws, row_idx, "url")).strip()
@@ -435,6 +435,22 @@ def ingest_sheet(
         print("\n{}".format("─" * 64))
         print("  {}".format(video_title[:72]))
         print("  {}".format(url))
+
+        # Blocklist guard: skip URLs that were intentionally removed from the corpus.
+        # removed_urls is written by DELETE /admin/document/{id} before the delete fires.
+        try:
+            blocked = supabase.table("removed_urls").select("url").eq("url", url).limit(1).execute()
+            if blocked.data:
+                print("  ✋  SKIPPED (BLOCKED) — this URL is in removed_urls: it was intentionally "
+                      "removed from the corpus and must not be re-ingested.")
+                print("  url: {}".format(url))
+                if not dry_run:
+                    scell(ws, row_idx, "status", "removed")
+                    wb.save(QUEUE_PATH)
+                stats["blocked"] += 1
+                continue
+        except Exception as bl_exc:
+            print("  ⚠  blocklist check failed ({}); proceeding with ingest".format(bl_exc))
 
         try:
             final_status, display_name, log_reason = ingest_video(
