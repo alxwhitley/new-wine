@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-demo_ravenhill_ingest.py — Stage 3 demo: ingest the first 5 Leonard Ravenhill
-triaged rows from the Sermonindex tab.
+demo_ravenhill_ingest.py — Stage 3 ingest for Leonard Ravenhill rows.
 
-Reuses the established ingest_video() path (transcript → Groq clean → embed →
-documents + chunks rows). Writes status=done / resolved_source back to the
-sheet on success. Reports captions vs. Whisper, chunk count, elapsed time, and
-source UUID for each video.
+Processes all status=triaged rows in the Sermonindex tab whose title contains
+"leonard ravenhill", up to --limit (default: all). Reuses the established
+ingest_video() path (transcript → Groq clean → embed → documents + chunks).
+Writes status=done / resolved_source back to the sheet on success.
 
 Usage:
-    python3 scripts/demo_ravenhill_ingest.py
+    python3 scripts/demo_ravenhill_ingest.py            # all remaining rows
+    python3 scripts/demo_ravenhill_ingest.py --limit 5  # demo: first 5 only
     python3 scripts/demo_ravenhill_ingest.py --dry-run
 """
 
@@ -38,9 +38,8 @@ from youtube_ingest import (  # noqa: E402
 from source_resolver import SENTINEL_SOURCE_ID  # noqa: E402
 from ingest import supabase  # noqa: E402
 
-SENTINEL = SENTINEL_SOURCE_ID
+SENTINEL    = SENTINEL_SOURCE_ID
 TARGET_NAME = "leonard ravenhill"
-DEMO_LIMIT  = 5
 TAB         = "Sermonindex"
 
 
@@ -80,9 +79,11 @@ def _chunk_count_for(doc_id: str) -> int:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Demo: ingest first 5 Leonard Ravenhill rows")
+    parser = argparse.ArgumentParser(description="Ingest Leonard Ravenhill rows from Sermonindex tab")
     parser.add_argument("--dry-run", action="store_true",
                         help="Resolve source only — no transcript, no DB writes")
+    parser.add_argument("--limit", type=int, default=0, metavar="N",
+                        help="Process at most N rows (default: 0 = all remaining)")
     args = parser.parse_args()
 
     ytdlp = find_ytdlp()
@@ -90,7 +91,7 @@ def main():
         print("ERROR: yt-dlp not found")
         sys.exit(1)
 
-    # Find the first DEMO_LIMIT Ravenhill triaged rows
+    # Find all remaining Ravenhill triaged rows, up to --limit
     wb  = openpyxl.load_workbook(str(QUEUE_PATH))
     ws  = wb[TAB]
     target_rows = []
@@ -100,7 +101,7 @@ def main():
         url    = str(gcell(ws, r, "url") or "").strip()
         if status == "triaged" and TARGET_NAME in title.lower() and url:
             target_rows.append(r)
-        if len(target_rows) == DEMO_LIMIT:
+        if args.limit and len(target_rows) == args.limit:
             break
 
     if not target_rows:
@@ -108,7 +109,7 @@ def main():
         sys.exit(1)
 
     mode = "(DRY-RUN) " if args.dry_run else ""
-    print(f"\n── Ravenhill Demo Ingest {mode}{'─' * 40}")
+    print(f"\n── Ravenhill Ingest {mode}{'─' * 44}")
     print(f"  {len(target_rows)} row(s) targeted in tab {TAB!r}")
 
     results = []
@@ -178,39 +179,31 @@ def main():
     total_elapsed = time.time() - run_start
 
     # Summary
-    print(f"\n{'═' * 64}")
-    print("DEMO INGEST SUMMARY")
-    print(f"{'═' * 64}")
-    sentinel_hits = [r for r in results if r["source_uuid"] == SENTINEL and r["status"] == "done"]
-    print(f"  Videos processed : {len(results)}")
-    print(f"  Done             : {sum(1 for r in results if r['status'] == 'done')}")
-    print(f"  Failed           : {sum(1 for r in results if r['status'] == 'failed')}")
-    print(f"  Needs source     : {sum(1 for r in results if r['status'] == 'needs_source')}")
-    print(f"  Sentinel hits    : {len(sentinel_hits)}")
-    print(f"  Total elapsed    : {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
-    print()
+    done_count       = sum(1 for r in results if r["status"] == "done")
+    failed_count     = sum(1 for r in results if r["status"] == "failed")
+    needs_src_count  = sum(1 for r in results if r["status"] == "needs_source")
+    sentinel_hits    = [r for r in results if r["source_uuid"] == SENTINEL and r["status"] == "done"]
+    total_chunks     = sum(r["chunks"] for r in results)
+    caption_count    = sum(1 for r in results if "method=captions" in r["log"])
+    whisper_count    = sum(1 for r in results if "method=whisper" in r["log"])
 
-    caption_count = sum(1 for r in results if "method=captions" in r["log"])
-    whisper_count = sum(1 for r in results if "method=whisper" in r["log"])
+    print(f"\n{'═' * 64}")
+    print("RAVENHILL INGEST SUMMARY")
+    print(f"{'═' * 64}")
+    print(f"  Videos processed : {len(results)}")
+    print(f"  Done             : {done_count}")
+    print(f"  Failed           : {failed_count}")
+    print(f"  Needs source     : {needs_src_count}")
+    print(f"  Sentinel hits    : {len(sentinel_hits)}")
+    print(f"  Total chunks     : {total_chunks}")
     print(f"  Captions used    : {caption_count}")
     print(f"  Whisper used     : {whisper_count}")
-    print()
+    print(f"  Total elapsed    : {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
 
-    print(f"{'─' * 64}")
-    print(f"  {'doc_id':<36}  {'title':<40}  {'source':<22}  chunks")
-    print(f"{'─' * 64}")
-    for r in results:
-        if r["doc_info"]:
-            doc_id, title, src_name, src_uuid = r["doc_info"]
-            sentinel_flag = " ⛔SENTINEL" if src_uuid == SENTINEL else ""
-            print(f"  {doc_id:<36}  {title[:38]:<40}  {src_name:<22}  {r['chunks']}{sentinel_flag}")
-        else:
-            print(f"  {'—':<36}  {r['title'][:38]:<40}  {r['status']}")
-
-    if sentinel_hits:
-        print(f"\n⛔  {len(sentinel_hits)} SENTINEL HIT(S) — STOP before full run!")
+    if sentinel_hits or needs_src_count:
+        print(f"\n⛔  WARNING: {len(sentinel_hits)} sentinel hit(s), {needs_src_count} needs_source row(s)")
     else:
-        print(f"\n✓  Zero sentinel hits — all {len([r for r in results if r['status']=='done'])} resolved correctly.")
+        print(f"\n✓  Zero sentinel / zero unresolved — all {done_count} resolved correctly.")
 
 
 if __name__ == "__main__":

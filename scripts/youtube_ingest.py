@@ -362,13 +362,17 @@ def ingest_video(
     # "SermonIndex.net") ever slipping through from a future code path.
     extracted_speaker = _extract_speaker(video_title)
     source_id = _resolve_speaker_source(extracted_speaker) if extracted_speaker else None
+    via = "title_speaker"
+    norm_key = normalize_alias_key(extracted_speaker or "")
     if source_id is None:
         source_id = _resolve_speaker_source(channel_name)
+        via = "channel_name"
+        norm_key = normalize_alias_key(channel_name)
     if source_id is None:
         # Both lookups missed — fall back to the full resolver (tries channel_name
         # then author) so any existing aliases still resolve correctly.
         try:
-            source_id, _norm, _via = resolve_source_id(
+            source_id, norm_key, via = resolve_source_id(
                 supabase, channel_name, extracted_speaker or None
             )
         except Exception as exc:
