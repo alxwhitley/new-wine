@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UsageRing } from "@/components/rhemata/usage-ring";
+import { AdminModal } from "@/components/admin/AdminModal";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -104,6 +105,9 @@ export function Sidebar({
   const [requestMessage, setRequestMessage] = useState("");
   const [requestStatus, setRequestStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [requestError, setRequestError] = useState<string | null>(null);
+
+  // Admin modal
+  const [adminOpen, setAdminOpen] = useState(false);
 
   // Settings sheet
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -399,8 +403,8 @@ export function Sidebar({
               {userRole === "admin" && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/admin">Admin panel</Link>
+                  <DropdownMenuItem onSelect={() => setAdminOpen(true)}>
+                    Admin panel
                   </DropdownMenuItem>
                 </>
               )}
@@ -470,6 +474,9 @@ export function Sidebar({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Admin modal */}
+      <AdminModal open={adminOpen} onOpenChange={setAdminOpen} />
 
       {/* Settings sheet */}
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>

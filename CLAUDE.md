@@ -13,9 +13,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   │   ├── raw/               # Freshly scraped transcripts
 │   │   ├── cleaned/           # Groq-cleaned, ready for ingest
 │   │   ├── ingested/          # Already in Supabase
-│   │   ├── youtube_tracker.xlsx
-│   │   ├── individual_videos.xlsx  # Individual video ingestion tracker (legacy)
-│   │   └── ingest_queue.xlsx       # Master ingest queue (Queue + HowToRun control tabs + source tabs; gitignored)
+│   │   │   └── ingest_queue.xlsx       # Master ingest queue (Queue + HowToRun control tabs + source tabs; gitignored)
+│   │   # NOTE: youtube_tracker.xlsx and individual_videos.xlsx archived to _archive/2026-06-27/ (2026-06-27)
 │   ├── magazine/              # New Wine Magazine pipeline
 │   │   ├── 01_to_extract/     # Drop PDFs here (~198 issues)
 │   │   ├── 02_extracted/      # Per-issue .md articles + raw_text.txt
@@ -32,7 +31,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── ingest_magazine.py     # Supabase ingestion from .md files with frontmatter
 │   ├── ingest.py              # Standalone PDF/docx/txt ingestion with auto-tagging; skip_dedup=False param on ingest_file()
 │   ├── youtube_triage.py      # Stage 2: channel enumeration + Groq classification; exports process_sheet() callable; --sheet NAME still works direct
-│   ├── youtube_ingest.py      # Stage 3: transcript fetch + ingest_file(skip_dedup=True); exports ingest_sheet() callable; --sheet NAME still works direct
+│   ├── youtube_ingest.py      # Stage 3: transcript fetch + ingest_file(skip_dedup=True); exports ingest_sheet() callable; --sheet NAME still works direct. SELF-CONTAINED as of 2026-06-27 (find_ytdlp, try_auto_captions, download_and_whisper, clean_transcript, CLEANING_PROMPT inlined; no longer imports from scrape_individual_videos)
 │   ├── run_queue_triage.py    # Stage 5 Run 1: Queue-driven triage orchestrator (reads Queue tab, drives process_sheet per source)
 │   ├── run_queue_ingest.py    # Stage 5 Run 2: Queue-driven ingest orchestrator (walks source tabs, drives ingest_sheet per tab)
 │   ├── discover_sermonindex_playlists.py  # Discovery-only: enumerate SermonIndex playlists vs whitelist_sermonindex.txt (prints only, zero writes)
@@ -337,7 +336,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 | `scripts/youtube_pipeline.sh` | Full YouTube pipeline: scrape → clean → whisper → ingest |
 | `scripts/retag_sermons.py` | Retag sermon_transcript docs via Claude Haiku against new taxonomy |
 | `scripts/ingest_commentaries.py` | Ingest HistoricalChristianFaith commentaries from SQLite DB |
-| `scripts/scrape_individual_videos.py` | Individual YouTube video ingestion from xlsx tracker |
+| `scripts/scrape_individual_videos.py` | ORPHANED LEGACY (2026-06-27) — individual_videos.xlsx retired; its 21 videos consolidated into ingest_queue.xlsx; utility functions inlined into youtube_ingest.py. Do not run. Do not delete. |
 | `scripts/scrape_channel_titles.py` | Dump all video titles from YouTube channels to CSV |
 | `scripts/propositions.py` | Shared proposition extraction + storage module. `extract_propositions(text)` — Groq Llama 3.3 70B, v3 "four-corners" prompt, strips ```json fences, returns `[]` + logs `PROPOSITION_EXTRACT_FAIL` on any error (never raises). `store_propositions(conn, document_id, propositions, embed_fn)` — DELETE by document_id then embed + INSERT each via injected `embed_fn`; commits. `process_document(conn, doc_id, source_id, text, embed_fn)` — entry point for ingest scripts; returns `"skipped_licensed"` / `"no_propositions"` / `"stored:{n}"` / `"error"`; rolls back + returns `"error"` on any exception. Groq client lazy-init. |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq) — used by ingest.py and ingest_magazine.py |

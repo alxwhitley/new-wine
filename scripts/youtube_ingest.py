@@ -52,9 +52,6 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 # Heavy imports — after load_dotenv and sys.path setup
 from ingest import ingest_file, embed_text, DB_PARAMS, supabase  # noqa: E402
-from scrape_individual_videos import (  # noqa: E402
-    find_ytdlp, try_auto_captions, download_and_whisper, clean_transcript,
-)
 from source_resolver import resolve_source_id, SENTINEL_SOURCE_ID  # noqa: E402
 
 QUEUE_PATH   = ROOT / "sources" / "youtube" / "ingest_queue.xlsx"
@@ -63,6 +60,130 @@ COOKIES_PATH = ROOT / "scripts" / "youtube_cookies.txt"
 
 COLUMNS = ["url", "video_title", "channel_name", "guess", "ingest", "status", "resolved_source"]
 COL     = {name: i + 1 for i, name in enumerate(COLUMNS)}
+
+# ── Transcript utilities (inlined from scrape_individual_videos.py) ───────────
+
+CLEANING_PROMPT = (
+    "You are cleaning a YouTube sermon transcript for a theological research "
+    "database. Remove ALL advertisement segments, sponsor reads, and promotional "
+    "content. Remove non-speech markers like [music], [laughter], [applause], "
+    "[clears throat], [cough]. Remove auto-caption filler artifacts like repeated "
+    "phrases or mid-sentence restarts. Preserve ALL theological content verbatim. "
+    "Return only the cleaned text with no commentary or preamble."
+)
+
+AUDIO_EXTENSIONS = {".m4a", ".mp3", ".opus", ".ogg", ".webm", ".wav"}
+
+
+def find_ytdlp():
+    import shutil as _shutil
+    candidates = [
+        _shutil.which("yt-dlp"),
+        os.path.expanduser("~/Library/Python/3.9/bin/yt-dlp"),
+        os.path.expanduser("~/Library/Python/3.10/bin/yt-dlp"),
+        os.path.expanduser("~/Library/Python/3.11/bin/yt-dlp"),
+        os.path.expanduser("~/Library/Python/3.12/bin/yt-dlp"),
+        os.path.expanduser("~/.local/bin/yt-dlp"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+    return None
+
+
+def _ytdlp_base_args(ytdlp):
+    args = [ytdlp, "-4", "--extractor-args", "youtube:player_client=android_vr,web_safari"]
+    if COOKIES_PATH.exists():
+        args += ["--cookies", str(COOKIES_PATH)]
+    return args
+
+
+def try_auto_captions(ytdlp, url, tmp_dir):
+    """Try to download auto-generated English captions via yt-dlp. Returns text or None."""
+    import os as _os
+    out_template = _os.path.join(tmp_dir, "%(id)s.%(ext)s")
+    cmd = _ytdlp_base_args(ytdlp) + [
+        "--write-auto-sub", "--sub-lang", "en",
+        "--skip-download", "--convert-subs", "srt",
+        "-o", out_template,
+        url,
+    ]
+    subprocess.run(cmd, capture_output=True, text=True)
+    for f in _os.listdir(tmp_dir):
+        if f.endswith(".srt"):
+            srt_path = _os.path.join(tmp_dir, f)
+            raw = Path(srt_path).read_text(encoding="utf-8", errors="replace")
+            lines = []
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if re.match(r"^\d+$", line):
+                    continue
+                if re.match(r"\d{2}:\d{2}:\d{2}", line):
+                    continue
+                line = re.sub(r"<[^>]+>", "", line)
+                if line:
+                    lines.append(line)
+            text = " ".join(lines)
+            text = re.sub(r"\b(\w+(?:\s+\w+){0,3})\s+\1\b", r"\1", text)
+            if len(text.split()) > 100:
+                return text
+    return None
+
+
+def download_and_whisper(ytdlp, url, tmp_dir):
+    """Download audio and transcribe with Whisper medium. Returns text or None."""
+    import os as _os
+    out_template = _os.path.join(tmp_dir, "%(id)s.%(ext)s")
+    cmd = _ytdlp_base_args(ytdlp) + ["-x", "-o", out_template, url]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print("     yt-dlp audio error: {}".format(result.stderr.strip()[:200]))
+        return None
+    audio_path = None
+    for f in _os.listdir(tmp_dir):
+        if _os.path.splitext(f)[1].lower() in AUDIO_EXTENSIONS:
+            audio_path = _os.path.join(tmp_dir, f)
+            break
+    if not audio_path:
+        return None
+    import whisper
+    print("     Loading Whisper model: medium")
+    model = whisper.load_model("medium")
+    print("     Transcribing...")
+    result = model.transcribe(audio_path, fp16=False, language="en")
+    return result["text"].strip()
+
+
+def clean_transcript(raw):
+    """Clean transcript via Groq, chunking if needed."""
+    from groq import Groq
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    words = raw.split()
+    chunk_words = 6000
+    if len(words) <= chunk_words:
+        chunks = [raw]
+    else:
+        chunks = [
+            " ".join(words[i:i + chunk_words])
+            for i in range(0, len(words), chunk_words)
+        ]
+    print("     Cleaning via Groq ({} chunk(s), {:,} words)...".format(len(chunks), len(words)))
+    cleaned_parts = []
+    for i, chunk in enumerate(chunks, 1):
+        if len(chunks) > 1:
+            print("       Chunk {}/{}...".format(i, len(chunks)))
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=8192,
+            messages=[
+                {"role": "system", "content": CLEANING_PROMPT},
+                {"role": "user", "content": chunk},
+            ],
+        )
+        cleaned_parts.append((response.choices[0].message.content or "").strip())
+    return "\n\n".join(cleaned_parts)
 
 
 # ── Sheet helpers ─────────────────────────────────────────────────────────────
