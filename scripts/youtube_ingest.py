@@ -52,7 +52,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 # Heavy imports — after load_dotenv and sys.path setup
 from ingest import ingest_file, embed_text, DB_PARAMS, supabase  # noqa: E402
-from source_resolver import resolve_source_id, SENTINEL_SOURCE_ID  # noqa: E402
+from source_resolver import resolve_source_id, SENTINEL_SOURCE_ID, normalize_alias_key  # noqa: E402
 
 QUEUE_PATH   = ROOT / "sources" / "youtube" / "ingest_queue.xlsx"
 CLEANED_DIR  = ROOT / "sources" / "youtube" / "cleaned"
@@ -298,6 +298,38 @@ def _get_source_display_name(source_id: str) -> Optional[str]:
     return None
 
 
+# ── Speaker-first source resolution ──────────────────────────────────────────
+
+def _resolve_speaker_source(speaker_name: str) -> Optional[str]:
+    """Resolve source_id from a speaker name via source_aliases.alias_key.
+
+    Normalizes via normalize_alias_key() from source_resolver — not re-implemented.
+    Returns source_id on alias hit, None on miss.
+    Emits a loud WARNING on miss so ALIAS_MISS lines are grep-able in run logs.
+    Never raises.
+    """
+    if not speaker_name:
+        return None
+    key = normalize_alias_key(speaker_name)
+    if not key:
+        return None
+    try:
+        result = (
+            supabase.table("source_aliases")
+            .select("source_id")
+            .eq("alias_key", key)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return result.data[0]["source_id"]
+    except Exception as exc:
+        print("  WARNING: alias lookup for {!r} failed: {}".format(speaker_name, exc))
+        return None
+    print("  WARNING: UNRESOLVED SPEAKER — no alias for {!r} (key={!r})".format(speaker_name, key))
+    return None
+
+
 # ── Per-video ingest ──────────────────────────────────────────────────────────
 
 def ingest_video(
@@ -323,13 +355,29 @@ def ingest_video(
         channel_name = _resolve_channel_name(ytdlp, url, channel_name)
         print("    resolved channel: {!r}".format(channel_name))
 
-    try:
-        source_id, norm_key, via = resolve_source_id(supabase, channel_name, None)
-    except Exception as exc:
-        return "failed", "", "source resolution error: {}".format(exc)
+    # Speaker-first resolution: extract name from title, try that alias first.
+    # For whitelist-mode rows the triage stores the matched speaker name in
+    # channel_name (v["wl_match"]), so the two lookups usually resolve the same
+    # key.  The title-extracted path guards against a raw channel name (e.g.
+    # "SermonIndex.net") ever slipping through from a future code path.
+    extracted_speaker = _extract_speaker(video_title)
+    source_id = _resolve_speaker_source(extracted_speaker) if extracted_speaker else None
+    if source_id is None:
+        source_id = _resolve_speaker_source(channel_name)
+    if source_id is None:
+        # Both lookups missed — fall back to the full resolver (tries channel_name
+        # then author) so any existing aliases still resolve correctly.
+        try:
+            source_id, _norm, _via = resolve_source_id(
+                supabase, channel_name, extracted_speaker or None
+            )
+        except Exception as exc:
+            return "failed", "", "source resolution error: {}".format(exc)
 
     if source_id == SENTINEL_SOURCE_ID:
-        return "needs_source", "", "no alias match for {!r}".format(channel_name)
+        return "needs_source", "", "no alias for speaker={!r} channel={!r}".format(
+            extracted_speaker, channel_name
+        )
 
     display_name = _get_source_display_name(source_id) or channel_name
     print("  source: {!r} → {!r} (via {})".format(norm_key, display_name, via))
