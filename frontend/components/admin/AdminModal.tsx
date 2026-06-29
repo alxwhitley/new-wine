@@ -545,25 +545,40 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
   // Realtime — active only while modal is open
   useEffect(() => {
     if (!roleChecked) return;
-    const channel = supabase
-      .channel("admin-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "documents" },
-        (payload) => {
-          const sourceKind = payload.new.source_kind as string;
-          const sourceType = payload.new.source_type as string;
-          for (const card of CARDS) {
-            if (card.sourceKind === sourceKind || card.sourceType === sourceType) {
-              triggerPulse(card.id);
-            }
-          }
-          fetchAllCounts();
-        }
-      )
-      .subscribe((status) => setRealtimeConnected(status === "SUBSCRIBED"));
 
-    return () => { supabase.removeChannel(channel); };
+    // Remove any stale channel with this name before (re-)subscribing.
+    // Without this, re-opening the modal calls .on() on an already-subscribed
+    // channel and throws "cannot add postgres_changes after subscribe()".
+    supabase.getChannels().forEach((ch) => {
+      if (ch.topic === "realtime:admin-realtime") supabase.removeChannel(ch);
+    });
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel("admin-realtime")
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "documents" },
+          (payload) => {
+            const sourceKind = payload.new.source_kind as string;
+            const sourceType = payload.new.source_type as string;
+            for (const card of CARDS) {
+              if (card.sourceKind === sourceKind || card.sourceType === sourceType) {
+                triggerPulse(card.id);
+              }
+            }
+            fetchAllCounts();
+          }
+        )
+        .subscribe((status) => setRealtimeConnected(status === "SUBSCRIBED"));
+    } catch (err) {
+      console.warn("[admin] realtime setup failed:", err);
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [roleChecked, fetchAllCounts]);
 
   // ── Action handlers ────────────────────────────────────────────
