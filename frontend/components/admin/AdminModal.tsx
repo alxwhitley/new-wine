@@ -542,21 +542,17 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
     fetchAllCounts();
   }, [roleChecked, accessToken, activeTab, corpusLoaded, fetchAllCounts]);
 
-  // Realtime — active only while modal is open
+  // Realtime — active only while modal is open.
+  // Use a unique channel name on each mount so we never call .on() on an
+  // already-subscribed channel (Supabase throws on reuse of a subscribed name).
   useEffect(() => {
     if (!roleChecked) return;
 
-    // Remove any stale channel with this name before (re-)subscribing.
-    // Without this, re-opening the modal calls .on() on an already-subscribed
-    // channel and throws "cannot add postgres_changes after subscribe()".
-    supabase.getChannels().forEach((ch) => {
-      if (ch.topic === "realtime:admin-realtime") supabase.removeChannel(ch);
-    });
-
+    const channelName = `admin-realtime-${Date.now()}`;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     try {
       channel = supabase
-        .channel("admin-realtime")
+        .channel(channelName)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "documents" },
