@@ -242,9 +242,10 @@ def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False
         source_kind = "unknown"
         citation_mode = "silent_context"
     row = {
-        "id":          doc_id,
-        "title":       metadata.get("title"),
-        "author":      metadata.get("author"),
+        "id":             doc_id,
+        "title":          metadata.get("title"),
+        "original_title": metadata.get("title"),
+        "author":         metadata.get("author"),
         "year":        metadata.get("year") if isinstance(metadata.get("year"), int) else None,
         "issue":       metadata.get("issue"),
         "source_name": metadata.get("source_name"),

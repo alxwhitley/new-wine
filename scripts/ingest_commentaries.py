@@ -172,11 +172,11 @@ def ingest_father(doc, chunk_rows):
 
             # Insert document
             cur.execute(
-                """INSERT INTO documents (id, title, author, source_name, source_type, source_kind,
+                """INSERT INTO documents (id, title, original_title, author, source_name, source_type, source_kind,
                    is_copyrighted, citation_mode, topic_tags, bible_references, year)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
-                    doc["id"], doc["title"], doc["author"], doc["source_name"],
+                    doc["id"], doc["title"], doc["title"], doc["author"], doc["source_name"],
                     doc["source_type"], doc["source_kind"], doc["is_copyrighted"],
                     doc["citation_mode"], doc["topic_tags"], [], doc.get("year"),
                 ),

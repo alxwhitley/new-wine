@@ -253,6 +253,7 @@ def find_or_create_document(title: str) -> Tuple[str, int]:
     supabase.table("documents").insert({
         "id": doc_id,
         "title": title,
+        "original_title": title,
         "author": "STEPBible / Tyndale House",
         "source_name": "STEPBible",
         "source_type": "background",

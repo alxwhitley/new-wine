@@ -153,6 +153,7 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
     # Insert document
     doc_data = {
         "title": title,
+        "original_title": title,
         "author": author or None,
         "source_name": "New Wine Magazine",
         "source_type": "magazine_article",

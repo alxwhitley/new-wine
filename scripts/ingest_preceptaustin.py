@@ -171,6 +171,7 @@ def ingest_file(filepath, index_lookup):
         supabase.table("documents").insert({
             "id": doc_id,
             "title": title,
+            "original_title": title,
             "author": "Precept Austin",
             "source_name": "Precept Austin",
             "source_type": "background",
