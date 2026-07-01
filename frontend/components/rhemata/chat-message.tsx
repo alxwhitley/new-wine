@@ -236,7 +236,7 @@ export function ChatMessage({
   if (role === "user") {
     return (
       <div className="flex justify-end mb-4">
-        <div className="max-w-[75%] rounded-3xl bg-card border border-border px-4 py-3">
+        <div className="max-w-[75%] rounded-3xl bg-accent border border-border px-4 py-3">
           <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
             {content}
           </p>
