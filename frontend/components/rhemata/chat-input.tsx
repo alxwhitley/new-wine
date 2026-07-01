@@ -34,7 +34,7 @@ export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
   return (
     <div className="shrink-0 bg-background px-4 md:px-6 pb-2 md:pb-6">
       <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-        <div className={cn("flex items-center gap-2 rounded-3xl border border-border bg-card px-4 py-1.5 md:py-2 shine-border", streaming && "streaming")}>
+        <div className={cn("flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-1.5 md:py-2 shine-border", streaming && "streaming")}>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -55,7 +55,7 @@ export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
             type="submit"
             disabled={!input.trim() || disabled}
             size="icon"
-            className="min-h-[44px] min-w-[44px] shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="min-h-[44px] min-w-[44px] shrink-0 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
             <span className="sr-only">Send message</span>
