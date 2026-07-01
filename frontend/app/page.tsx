@@ -200,7 +200,7 @@ export default function Home() {
 
           {isEmpty ? (
             /* Empty state — centred, full remaining height */
-            <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6 overflow-y-auto min-h-0">
+            <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6 overflow-hidden overscroll-none min-h-0">
               <h2 suppressHydrationWarning className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg text-balance">
                 {greeting}
               </h2>
