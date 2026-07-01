@@ -180,32 +180,23 @@ export default function Home() {
         onSignOut={signOut}
       />
 
-      {/* Floating panel wrapper — small inset gap on all sides */}
-      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
-        {/* The floating panel */}
-        <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
+      {/* Floating panel wrapper — inset on desktop, full-bleed on mobile */}
+      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 md:p-2 pb-24 md:pb-2">
+        {/* The floating panel — bordered card on desktop, full-bleed on mobile */}
+        <div className="relative flex flex-col flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
 
-          {/* Top bar */}
-          <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30 border-b border-border">
-            <button
-              aria-label="Open sidebar"
-              onClick={() => setSidebarOpen(true)}
-              className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div className="flex-1 md:hidden" />
-            {/* Mobile usage ring — right side, only for authenticated users */}
-            {user && weeklyUsage && (
-              <div
-                className="md:hidden"
-                role="img"
-                aria-label={`${weeklyUsage.used} of ${weeklyUsage.limit} queries used this week`}
-              >
-                <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
-              </div>
-            )}
-          </div>
+          {/* Mobile floating menu button — replaces full-width bar on mobile */}
+          <button
+            aria-label="Open sidebar"
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden absolute top-3 left-3 z-30 h-11 w-11 flex items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          {/* usage ring moved to drawer (Pass B) */}
+
+          {/* Top bar — desktop only (mobile uses floating button above) */}
+          <div className="hidden md:flex h-14 shrink-0 items-center px-6 z-30 border-b border-border" />
 
           {isEmpty ? (
             /* Empty state — centred, full remaining height */
@@ -248,7 +239,7 @@ export default function Home() {
               <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
                 {/* Scroll fade: messages dissolve into background as they pass the top */}
                 <div className="pointer-events-none sticky top-0 z-10 h-8 bg-gradient-to-b from-background to-transparent" />
-                <div className="mx-auto max-w-3xl px-4 md:px-6 pt-2 pb-8">
+                <div className="mx-auto max-w-3xl px-4 md:px-6 pt-14 md:pt-2 pb-8">
                   {messages.map((message, i) => {
                     const question = message.role === "assistant" && i > 0 && messages[i - 1].role === "user"
                       ? messages[i - 1].content
