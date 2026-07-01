@@ -181,7 +181,7 @@ export default function Home() {
       />
 
       {/* Floating panel wrapper — inset on desktop, full-bleed on mobile */}
-      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 md:p-2 pb-24 md:pb-2">
+      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 md:p-2 pb-14 md:pb-2">
         {/* The floating panel — bordered card on desktop, full-bleed on mobile */}
         <div className="relative flex flex-col flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
 
@@ -238,8 +238,8 @@ export default function Home() {
               {/* Scrollable message list — panel corners never clipped */}
               <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
                 {/* Scroll fade: messages dissolve into background as they pass the top */}
-                <div className="pointer-events-none sticky top-0 z-10 h-8 bg-gradient-to-b from-background to-transparent" />
-                <div className="mx-auto max-w-3xl px-4 md:px-6 pt-14 md:pt-2 pb-8">
+                <div className="pointer-events-none sticky top-0 z-10 h-14 md:h-8 bg-gradient-to-b from-background to-transparent" />
+                <div className="mx-auto max-w-3xl px-4 md:px-6 pt-4 md:pt-2 pb-8">
                   {messages.map((message, i) => {
                     const question = message.role === "assistant" && i > 0 && messages[i - 1].role === "user"
                       ? messages[i - 1].content
