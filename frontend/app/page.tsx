@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Menu } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useChatFocus } from "@/contexts/chat-focus-context";
 import { useAuth } from "@/hooks/useAuth";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
@@ -150,6 +152,7 @@ export default function Home() {
   }
 
   const isEmpty = messages.length === 0;
+  const { inputFocused } = useChatFocus();
 
   const [greeting, setGreeting] = useState("What would you like to learn about?");
   useEffect(() => {
@@ -181,7 +184,7 @@ export default function Home() {
       />
 
       {/* Floating panel wrapper — inset on desktop, full-bleed on mobile */}
-      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 md:p-2 pb-14 md:pb-2">
+      <main className={cn("md:ml-64 flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2", inputFocused ? "pb-0" : "pb-14")}>
         {/* The floating panel — bordered card on desktop, full-bleed on mobile */}
         <div className="relative flex flex-col flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
 

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { MessageSquare, BookOpen, Compass } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useChatFocus } from "@/contexts/chat-focus-context";
 
 const TABS = [
   { href: "/study", label: "Study", icon: BookOpen },
@@ -15,11 +16,16 @@ const TABS = [
 export function MobileTabBar() {
   const isMobile = useIsMobile();
   const pathname = usePathname();
+  const { inputFocused } = useChatFocus();
 
   if (!isMobile) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden bg-sidebar border-t border-border pb-safe">
+    <nav className={cn(
+      "fixed bottom-0 left-0 right-0 z-50 flex md:hidden bg-sidebar border-t border-border pb-safe",
+      "transition-transform duration-200 ease-in-out",
+      inputFocused ? "translate-y-full" : "translate-y-0",
+    )}>
       {TABS.map(({ href, label, icon: Icon, primary }) => {
         const isActive =
           href === "/"

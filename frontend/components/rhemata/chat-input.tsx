@@ -4,6 +4,7 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useChatFocus } from "@/contexts/chat-focus-context";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -13,6 +14,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
   const [input, setInput] = useState("");
+  const { setInputFocused } = useChatFocus();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -37,6 +39,8 @@ export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             placeholder="Enter your prompt..."
             disabled={disabled}
             rows={1}

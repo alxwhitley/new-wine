@@ -3,6 +3,7 @@
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileTabBar } from "@/components/rhemata/mobile-tab-bar";
+import { ChatFocusProvider } from "@/contexts/chat-focus-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -11,10 +12,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       forcedTheme="dark"
       disableTransitionOnChange
     >
-      <TooltipProvider>
-        {children}
-        <MobileTabBar />
-      </TooltipProvider>
+      <ChatFocusProvider>
+        <TooltipProvider>
+          {children}
+          <MobileTabBar />
+        </TooltipProvider>
+      </ChatFocusProvider>
     </ThemeProvider>
   );
 }
