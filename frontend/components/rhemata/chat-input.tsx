@@ -51,7 +51,7 @@ export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
             type="submit"
             disabled={!input.trim() || disabled}
             size="icon"
-            className="min-h-[44px] min-w-[44px] shrink-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="min-h-[44px] min-w-[44px] shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
             <span className="sr-only">Send message</span>
