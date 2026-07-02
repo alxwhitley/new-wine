@@ -14,6 +14,13 @@ logger = logging.getLogger(__name__)
 
 _jwks_client = PyJWKClient(os.environ["SUPABASE_JWT_JWKS_URL"])
 
+# Supabase Auth issues tokens with aud="authenticated" (platform-wide
+# convention, not project-specific) and iss="{SUPABASE_URL}/auth/v1"
+# (project-specific). Verified against a real generated token before adding
+# this check -- both values confirmed exactly, 2026-07-02.
+_EXPECTED_AUDIENCE = "authenticated"
+_EXPECTED_ISSUER = os.environ["SUPABASE_URL"].rstrip("/") + "/auth/v1"
+
 
 def get_optional_user(request: Request) -> Optional[str]:
     """Extract user_id from a Supabase JWT if present. Returns None if missing or invalid."""
@@ -29,7 +36,8 @@ def get_optional_user(request: Request) -> Optional[str]:
             token,
             signing_key.key,
             algorithms=["ES256", "RS256"],
-            options={"verify_aud": False},
+            audience=_EXPECTED_AUDIENCE,
+            issuer=_EXPECTED_ISSUER,
         )
         user_id = payload.get("sub")
         logger.info("[AUTH] JWT decoded successfully, user_id=%s", user_id)

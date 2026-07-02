@@ -498,8 +498,19 @@ def _sse(data: str) -> str:
     return f"data: {data}\n\n"
 
 
+def _get_client_ip(http_request: Request) -> Optional[str]:
+    """Real client IP behind Railway's edge proxy. Uvicorn is not run with
+    --proxy-headers, so http_request.client.host is Railway's internal proxy
+    address, not the real client -- read X-Forwarded-For instead (set by
+    Railway's edge; the leftmost entry is the original client)."""
+    xff = http_request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return http_request.client.host if http_request.client else None
+
+
 @router.post("")
-async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_optional_user)):
+async def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = Depends(get_optional_user)):
     db = get_supabase()
 
     # Captured here so generate() can include it in the final SSE meta event.
@@ -507,21 +518,33 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
 
     # Query limit checks
     if not user_id:
-        # Guest limit (unchanged)
+        # Guest limit. Metering fails CLOSED: any exception here blocks the
+        # request (503) rather than letting it through unmetered -- a
+        # Supabase blip must not silently disable the guest query cap.
         if not request.anon_id:
             raise HTTPException(status_code=400, detail="anon_id required for guest users")
+        client_ip = _get_client_ip(http_request)
         try:
-            result = db.rpc("increment_guest_query", {"p_anon_id": request.anon_id}).execute()
+            result = db.rpc("increment_guest_query", {
+                "p_anon_id": request.anon_id,
+                "p_ip_address": client_ip,
+            }).execute()
             count = result.data if isinstance(result.data, int) else 0
-            logger.info("[GUEST] anon_id=%s query_count=%s", request.anon_id, count)
-            if count > GUEST_QUERY_LIMIT:
+            logger.info("[GUEST] anon_id=%s ip=%s query_count=%s", request.anon_id, client_ip, count)
+            # count == -1 is the RPC's sentinel for "too many new guest
+            # sessions from this IP recently" (migration 057) -- same
+            # user-facing message as the ordinary limit, so an abuser
+            # rotating anon_id gets no signal distinguishing the two reasons.
+            if count < 0 or count > GUEST_QUERY_LIMIT:
                 raise HTTPException(status_code=429, detail="guest_limit_reached")
         except HTTPException:
             raise
         except Exception:
-            logger.exception("Guest query count check failed for anon_id=%s", request.anon_id)
+            logger.exception("Guest query count check failed for anon_id=%s -- failing closed", request.anon_id)
+            raise HTTPException(status_code=503, detail="metering_unavailable")
     else:
-        # Authenticated user weekly limit — atomic RPC, limit from per-user row (migration 039)
+        # Authenticated user weekly limit — atomic RPC, limit from per-user row (migration 039).
+        # Fails CLOSED: see guest branch above for why.
         try:
             result = db.rpc("increment_user_query", {"p_user_id": user_id}).execute()
             row = result.data[0] if result.data else {}
@@ -545,7 +568,8 @@ async def chat(request: ChatRequest, user_id: Optional[str] = Depends(get_option
         except HTTPException:
             raise
         except Exception:
-            logger.exception("User weekly query count check failed for user_id=%s", user_id)
+            logger.exception("User weekly query count check failed for user_id=%s -- failing closed", user_id)
+            raise HTTPException(status_code=503, detail="metering_unavailable")
 
     try:
 
