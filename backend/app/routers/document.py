@@ -2,8 +2,9 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import require_user
 from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/{document_id}")
-async def get_document(document_id: str):
+async def get_document(document_id: str, user_id: str = Depends(require_user)):
     try:
         db = get_supabase()
 
@@ -45,6 +46,7 @@ async def get_document(document_id: str):
 async def get_article(
     document_id: str,
     version: Optional[str] = Query("rewritten", description="Content version: 'rewritten' or 'original'"),
+    user_id: str = Depends(require_user),
 ):
     try:
         db = get_supabase()

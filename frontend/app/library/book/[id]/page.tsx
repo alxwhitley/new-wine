@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getBookExcerpts } from "@/lib/api";
 import type { BookExcerptResponse } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 function cleanChunkContent(raw: string): string {
   const lines = raw.split("\n");
@@ -28,17 +29,18 @@ function cleanChunkContent(raw: string): string {
 
 export default function BookExcerptPage() {
   const { id } = useParams<{ id: string }>();
+  const { accessToken, loading: authLoading } = useAuth();
   const [data, setData] = useState<BookExcerptResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || authLoading) return;
     setLoading(true);
-    getBookExcerpts(id)
+    getBookExcerpts(id, accessToken)
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, accessToken, authLoading]);
 
   // Use quotes if available, otherwise fall back to cleaned chunks
   const excerpts: { id: string; text: string }[] = data

@@ -5,25 +5,27 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, BookOpen, Loader2 } from "lucide-react";
 import { getDocument, Document, Chunk } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function DocumentPage() {
   const params = useParams<{ id: string }>();
+  const { accessToken, loading: authLoading } = useAuth();
   const [document, setDocument] = useState<Document | null>(null);
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!params.id) return;
+    if (!params.id || authLoading) return;
     setLoading(true);
-    getDocument(params.id)
+    getDocument(params.id, accessToken)
       .then((res) => {
         setDocument(res.document);
         setChunks(res.chunks);
       })
       .catch(() => setError("Failed to load document"))
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [params.id, accessToken, authLoading]);
 
   if (loading) {
     return (

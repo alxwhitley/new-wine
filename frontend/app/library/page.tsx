@@ -203,7 +203,7 @@ type UnifiedResult =
   | { type: "book"; data: Book };
 
 export default function LibraryPage() {
-  const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const { user, accessToken, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const { role } = useUserRole(accessToken);
   const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
@@ -277,24 +277,27 @@ export default function LibraryPage() {
   const effectiveEra = eraFilter || undefined;
 
   // ── Load Discover sections on mount ───────────────────────────────────────
-  const loadDiscover = useCallback(async () => {
+  const loadDiscover = useCallback(async (token: string | null) => {
     setDiscoverLoading(true);
     setDiscoverErrors({});
     const errors: { featured?: boolean; recent?: boolean; archive?: boolean; notes?: boolean } = {};
     await Promise.allSettled([
-      fetchDocMeta(getDailyFeaturedIds()).then((r) => setFeaturedDocs(r.results)).catch(() => { errors.featured = true; }),
-      fetchRecentDocs(6).then((r) => setRecentDocs(r.results)).catch(() => { errors.recent = true; }),
+      fetchDocMeta(getDailyFeaturedIds(), token).then((r) => setFeaturedDocs(r.results)).catch(() => { errors.featured = true; }),
+      fetchRecentDocs(6, token).then((r) => setRecentDocs(r.results)).catch(() => { errors.recent = true; }),
       browseDocuments({ source_kind: "magazine_article" })
         .then((r) => setMagazineDocs(r.results.slice(0, 6)))
         .catch(() => { errors.archive = true; }),
       fetchRecentNotes(4).then(setRecentNotes).catch(() => { errors.notes = true; }),
-      fetchSourceCounts().then(setSourceCounts).catch(() => {}),
+      fetchSourceCounts(token).then(setSourceCounts).catch(() => {}),
     ]);
     setDiscoverErrors(errors);
     setDiscoverLoading(false);
   }, []);
 
-  useEffect(() => { loadDiscover(); }, [loadDiscover]);
+  useEffect(() => {
+    if (authLoading) return;
+    loadDiscover(accessToken);
+  }, [loadDiscover, accessToken, authLoading]);
 
   // ── Click outside to dismiss suggestions ──────────────────────────────────
   useEffect(() => {
@@ -372,7 +375,7 @@ export default function LibraryPage() {
 
         if (q && q.trim()) {
           promises.push(
-            searchDocumentsFts({ q: q.trim(), source_kind: sourceKind, include_copyrighted: true, era: eParam, author: aParam })
+            searchDocumentsFts({ q: q.trim(), source_kind: sourceKind, include_copyrighted: true, era: eParam, author: aParam }, accessToken)
               .then((r) => { newDocs = r.results; })
           );
         } else {
@@ -397,7 +400,7 @@ export default function LibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [contentFilter, effectiveEra, authorParam]);
+  }, [contentFilter, effectiveEra, authorParam, accessToken]);
 
   const handleSearch = useCallback(() => {
     setShowSuggestions(false);
@@ -434,14 +437,14 @@ export default function LibraryPage() {
     setError(null);
     try {
       const version = sourceKind === "sermon_transcript" ? "rewritten" : "original";
-      const data = await getArticle(id, version);
+      const data = await getArticle(id, version, accessToken);
       setArticle(data);
     } catch {
       setError("Couldn't open this article — try again.");
     } finally {
       setArticleLoading(false);
     }
-  }, [discoverMode]);
+  }, [discoverMode, accessToken]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!accessToken) return;
@@ -929,7 +932,7 @@ export default function LibraryPage() {
                     ) : discoverErrors.featured && featuredDocs.length === 0 ? (
                       <div className="flex flex-col items-start gap-1.5 mb-6">
                         <p className="text-sm text-muted-foreground">Couldn't load featured content — check your connection.</p>
-                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
+                        <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : featuredDocs.length > 0 ? (
                       /* Hero: no card wrapper, no section label — the gold eyebrow is the label */
@@ -1155,7 +1158,7 @@ export default function LibraryPage() {
                     ) : discoverErrors.recent ? (
                       <div className="flex flex-col items-start gap-1.5">
                         <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
-                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
+                        <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Nothing new yet — check back soon.</p>
@@ -1212,7 +1215,7 @@ export default function LibraryPage() {
                     ) : discoverErrors.archive ? (
                       <div className="flex flex-col items-start gap-1.5">
                         <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
-                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
+                        <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">No archive articles loaded right now.</p>
@@ -1240,7 +1243,7 @@ export default function LibraryPage() {
                     ) : discoverErrors.notes ? (
                       <div className="flex flex-col items-start gap-1.5">
                         <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
-                        <button onClick={loadDiscover} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
+                        <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Notes from community pastors will appear here.</p>

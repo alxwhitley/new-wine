@@ -168,14 +168,18 @@ export async function streamChatMessage(
   }
 }
 
-export async function searchDocuments(query: string): Promise<SearchResponse> {
-  const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
+export async function searchDocuments(query: string, token?: string | null): Promise<SearchResponse> {
+  const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Search request failed");
   return res.json();
 }
 
-export async function getDocument(id: string): Promise<DocumentResponse> {
-  const res = await fetch(`${API_URL}/document/${id}`);
+export async function getDocument(id: string, token?: string | null): Promise<DocumentResponse> {
+  const res = await fetch(`${API_URL}/document/${id}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Document fetch failed");
   return res.json();
 }
@@ -206,14 +210,16 @@ export async function searchDocumentsFts(params: {
   source_kind?: string;
   include_copyrighted?: boolean;
   era?: string;
-}): Promise<DocumentSearchResponse> {
+}, token?: string | null): Promise<DocumentSearchResponse> {
   const sp = new URLSearchParams();
   if (params.q) sp.set("q", params.q);
   if (params.author) sp.set("author", params.author);
   if (params.source_kind) sp.set("source_kind", params.source_kind);
   if (params.include_copyrighted !== undefined) sp.set("include_copyrighted", String(params.include_copyrighted));
   if (params.era) sp.set("era", params.era);
-  const res = await fetch(`${API_URL}/search/documents?${sp.toString()}`);
+  const res = await fetch(`${API_URL}/search/documents?${sp.toString()}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Document search failed");
   return res.json();
 }
@@ -248,11 +254,13 @@ export interface ArticleResponse {
   content: string;
 }
 
-export async function getArticle(id: string, version?: string): Promise<ArticleResponse> {
+export async function getArticle(id: string, version?: string, token?: string | null): Promise<ArticleResponse> {
   const sp = new URLSearchParams();
   if (version) sp.set("version", version);
   const qs = sp.toString();
-  const res = await fetch(`${API_URL}/document/${id}/article${qs ? `?${qs}` : ""}`);
+  const res = await fetch(`${API_URL}/document/${id}/article${qs ? `?${qs}` : ""}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Article fetch failed");
   return res.json();
 }
@@ -341,8 +349,10 @@ export interface BookExcerptResponse {
   chunks?: BookExcerptChunk[];
 }
 
-export async function getBookExcerpts(docId: string): Promise<BookExcerptResponse> {
-  const res = await fetch(`${API_URL}/library/book/${docId}`);
+export async function getBookExcerpts(docId: string, token?: string | null): Promise<BookExcerptResponse> {
+  const res = await fetch(`${API_URL}/library/book/${docId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Book fetch failed");
   return res.json();
 }
@@ -383,21 +393,27 @@ export interface PastorsNote {
   created_at: string;
 }
 
-export async function fetchDocMeta(ids: string[]): Promise<{ results: DiscoverDoc[] }> {
+export async function fetchDocMeta(ids: string[], token?: string | null): Promise<{ results: DiscoverDoc[] }> {
   if (!ids.length) return { results: [] };
-  const res = await fetch(`${API_URL}/library/doc-meta?ids=${ids.join(",")}`);
+  const res = await fetch(`${API_URL}/library/doc-meta?ids=${ids.join(",")}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Doc meta fetch failed");
   return res.json();
 }
 
-export async function fetchRecentDocs(limit = 6): Promise<{ results: DiscoverDoc[] }> {
-  const res = await fetch(`${API_URL}/library/recent?limit=${limit}`);
+export async function fetchRecentDocs(limit = 6, token?: string | null): Promise<{ results: DiscoverDoc[] }> {
+  const res = await fetch(`${API_URL}/library/recent?limit=${limit}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Recent docs fetch failed");
   return res.json();
 }
 
-export async function fetchSourceCounts(): Promise<SourceCounts> {
-  const res = await fetch(`${API_URL}/library/counts`);
+export async function fetchSourceCounts(token?: string | null): Promise<SourceCounts> {
+  const res = await fetch(`${API_URL}/library/counts`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error("Source counts fetch failed");
   return res.json();
 }

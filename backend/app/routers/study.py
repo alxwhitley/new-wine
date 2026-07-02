@@ -4,8 +4,9 @@ import re
 import logging
 from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import require_user
 from app.constants import ABBREV_TO_NAME, BOOK_MAP
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
@@ -52,7 +53,10 @@ def parse_ref(ref: str):
 
 
 @router.get("/lexicon")
-async def get_lexicon_entry(strongs: str = Query(..., description="Strong's number, e.g. 'G3056'")):
+async def get_lexicon_entry(
+    strongs: str = Query(..., description="Strong's number, e.g. 'G3056'"),
+    user_id: str = Depends(require_user),
+):
     db = get_supabase()
 
     # List all lexicon documents for debugging
@@ -156,6 +160,7 @@ async def get_corpus(
     transliteration: Optional[str] = Query(None, description="Transliteration, e.g. 'logos'"),
     strongs: Optional[str] = Query(None, description="Strong's number, e.g. 'G3056'"),
     source_kind: Optional[str] = Query(None, description="Filter to a single source_kind, e.g. 'word_study'"),
+    user_id: str = Depends(require_user),
 ):
     if not verse and not transliteration:
         raise HTTPException(status_code=400, detail="At least one of verse or transliteration is required")
@@ -352,6 +357,7 @@ async def get_word_study(document_id: str):
 @router.get("/excerpt")
 async def get_excerpt(
     strongs: str = Query(..., description="Strong's number, e.g. 'G3056'"),
+    user_id: str = Depends(require_user),
 ):
     """Return the Precept Austin word study excerpt for a Strong's number."""
     db = get_supabase()
@@ -551,6 +557,7 @@ async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     verse_id: Optional[str] = Query(None, description="Verse ID like JHN.3.16 — enables sermon results"),
+    user_id: str = Depends(require_user),
 ):
     filters = get_disabled_filters()
 

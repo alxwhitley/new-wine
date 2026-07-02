@@ -1,8 +1,9 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import require_user
 from app.db.supabase import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -11,7 +12,10 @@ router = APIRouter()
 
 
 @router.get("/doc-meta")
-async def get_doc_meta(ids: str = Query(..., description="Comma-separated document IDs, max 20")):
+async def get_doc_meta(
+    ids: str = Query(..., description="Comma-separated document IDs, max 20"),
+    user_id: str = Depends(require_user),
+):
     """Return lightweight document metadata for specific IDs (no chunks). Used by Featured section."""
     id_list = [i.strip() for i in ids.split(",") if i.strip()]
     if not id_list:
@@ -37,7 +41,10 @@ async def get_doc_meta(ids: str = Query(..., description="Comma-separated docume
 
 
 @router.get("/recent")
-async def list_recent_documents(limit: int = Query(6, description="Maximum results to return")):
+async def list_recent_documents(
+    limit: int = Query(6, description="Maximum results to return"),
+    user_id: str = Depends(require_user),
+):
     """Return recently added non-magazine documents ordered by created_at DESC."""
     try:
         db = get_supabase()
@@ -58,7 +65,7 @@ async def list_recent_documents(limit: int = Query(6, description="Maximum resul
 
 
 @router.get("/counts")
-async def get_source_counts():
+async def get_source_counts(user_id: str = Depends(require_user)):
     """Return document counts per source type for the Discover browse tiles."""
     try:
         db = get_supabase()
@@ -93,7 +100,7 @@ async def get_source_counts():
 
 
 @router.get("/book/{doc_id}")
-async def get_book_excerpts(doc_id: str):
+async def get_book_excerpts(doc_id: str, user_id: str = Depends(require_user)):
     """Return book document metadata and quotes (or chunks as fallback) for the excerpt reader."""
     try:
         db = get_supabase()

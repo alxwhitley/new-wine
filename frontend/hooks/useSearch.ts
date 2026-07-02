@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { searchDocuments, SearchDocument, SearchChunk } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 export function useSearch() {
+  const { accessToken } = useAuth();
   const [query, setQuery] = useState("");
   const [documents, setDocuments] = useState<SearchDocument[]>([]);
   const [chunks, setChunks] = useState<SearchChunk[]>([]);
@@ -16,7 +18,7 @@ export function useSearch() {
     setQuery(q);
 
     try {
-      const res = await searchDocuments(q);
+      const res = await searchDocuments(q, accessToken);
       setDocuments(res.documents);
       setChunks(res.chunks);
       setHasSearched(true);

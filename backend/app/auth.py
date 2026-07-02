@@ -48,6 +48,16 @@ def get_user_role(user_id: str) -> str:
     return "user"
 
 
+def require_user(request: Request) -> str:
+    """FastAPI dependency: verify user is authenticated. No role check -- any
+    logged-in user (role 'user', 'contributor', or 'admin') passes. Use this
+    for endpoints that must exclude guests but don't need role restriction."""
+    user_id = get_optional_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user_id
+
+
 class _RequireRole:
     """FastAPI dependency: verify user is authenticated and has one of the allowed roles."""
 

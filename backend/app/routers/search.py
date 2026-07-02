@@ -2,8 +2,9 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import require_user
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 
@@ -36,7 +37,7 @@ def _gated_source_ids(db) -> list:
 
 
 @router.get("")
-async def search(q: str = Query(..., description="Search query")):
+async def search(q: str = Query(..., description="Search query"), user_id: str = Depends(require_user)):
     try:
         embedding = embed_text(q)
         db = get_supabase()
@@ -141,6 +142,7 @@ async def search_documents(
     author: Optional[str] = Query(None, description="Author name filter"),
     source_kind: Optional[str] = Query("magazine_article", description="Filter by source_kind — excludes sermon_transcript by default"),
     era: Optional[str] = Query(None, description="Filter by era: 'classic' or 'contemporary'"),
+    user_id: str = Depends(require_user),
 ):
     try:
         db = get_supabase()

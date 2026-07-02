@@ -1077,12 +1077,14 @@ export default function StudyPage() {
   useEffect(() => {
     if (!selectedStrongs) { setExcerptContent(null); return; }
     setExcerptLoading(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/excerpt?strongs=${encodeURIComponent(selectedStrongs)}`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/excerpt?strongs=${encodeURIComponent(selectedStrongs)}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => setExcerptContent(data?.content ?? null))
       .catch(() => setExcerptContent(null))
       .finally(() => setExcerptLoading(false));
-  }, [selectedStrongs]);
+  }, [selectedStrongs, accessToken]);
 
   // ── Corpus results (word selected) ────────────────────────────────────────
 
@@ -1096,32 +1098,38 @@ export default function StudyPage() {
     params.set("strongs", token.strongs);
     params.set("source_kind", "word_study");
     setCorpusLoading(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/corpus?${params}`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/corpus?${params}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    })
       .then((res) => { if (!res.ok) throw new Error("corpus fetch failed"); return res.json(); })
       .then((data) => setCorpusResults(data.results ?? []))
       .catch(() => setCorpusResults([]))
       .finally(() => setCorpusLoading(false));
-  }, [selectedStrongs, verseRef, tokens]);
+  }, [selectedStrongs, verseRef, tokens, accessToken]);
 
   // ── Lexicon fetch ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!selectedStrongs) { setLexiconContent(null); return; }
     const params = new URLSearchParams({ strongs: selectedStrongs });
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => setLexiconContent(data?.content ?? null))
       .catch(() => setLexiconContent(null));
-  }, [selectedStrongs]);
+  }, [selectedStrongs, accessToken]);
 
   useEffect(() => {
     if (!wordStudyDoc) { setWordStudyLexicon(null); return; }
     const params = new URLSearchParams({ strongs: wordStudyDoc.strongs_number });
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setWordStudyLexicon(data?.content ?? null))
       .catch(() => setWordStudyLexicon(null));
-  }, [wordStudyDoc]);
+  }, [wordStudyDoc, accessToken]);
 
   // ── Commentary fetch ───────────────────────────────────────────────────────
 
@@ -1130,7 +1138,9 @@ export default function StudyPage() {
     if (isLoadMore) { setCommentaryLoadingMore(true); } else { setCommentaryLoading(true); }
     const params = new URLSearchParams({ verse_text: verseText, offset: String(offset) });
     if (verseId) params.set("verse_id", verseId);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/commentary?${params}`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/commentary?${params}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    })
       .then((res) => { if (!res.ok) throw new Error("commentary fetch failed"); return res.json(); })
       .then((data) => {
         const newResults = data.results ?? [];
@@ -1144,7 +1154,7 @@ export default function StudyPage() {
       })
       .catch(() => { if (!isLoadMore) setCommentaryResults([]); setCommentaryHasMore(false); })
       .finally(() => { if (isLoadMore) { setCommentaryLoadingMore(false); } else { setCommentaryLoading(false); } });
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     if (!verseData?.text) {
