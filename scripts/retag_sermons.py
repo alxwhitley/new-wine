@@ -19,37 +19,19 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / "backend" / "app" / ".env")
 
-
-# ── Load taxonomy from taxonomy.md ───────────────────────────────────────────
-
-def load_valid_tags(taxonomy_path):
-    # type: (Path) -> Set[str]
-    """Parse taxonomy.md and extract all tag names."""
-    text = taxonomy_path.read_text(encoding="utf-8")
-    tags = set()  # type: Set[str]
-    for line in text.splitlines():
-        line = line.strip()
-        # Skip headings, separators, blank lines
-        if not line or line.startswith("#") or line.startswith("---"):
-            continue
-        # Each line is comma-separated tags
-        for tag in line.split(","):
-            tag = tag.strip()
-            if tag:
-                tags.add(tag)
-    return tags
-
-
-TAXONOMY_PATH = ROOT / "taxonomy.md"
-VALID_TAGS = load_valid_tags(TAXONOMY_PATH)
-TAXONOMY_LIST = ", ".join(sorted(VALID_TAGS))
+# Canonical taxonomy source — was previously parsed independently from
+# taxonomy.md, which had drifted to 209 tags vs. taxonomy.py's 257 (49 tags
+# used in production were missing from taxonomy.md's set). scripts/taxonomy.py
+# is the single source of truth; every other tagging script already imports
+# from it.
+from taxonomy import VALID_TAGS, TAXONOMY_LIST
 
 SYSTEM_PROMPT = """You are a theological taxonomy classifier. Based on this document, assign 3-6 topic tags from the taxonomy below.
 

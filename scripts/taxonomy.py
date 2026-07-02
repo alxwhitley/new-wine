@@ -1,7 +1,10 @@
 """Shared topic taxonomy for Rhemata ingestion and tagging scripts.
 
-Auto-parsed from taxonomy.md. Keep this file in sync with taxonomy.md.
-Last updated: May 2026 — 15 categories.
+This is the canonical source of truth (a hardcoded literal, not parsed from
+any file). taxonomy.md is generated FROM this file for human-readable
+reference -- regenerate it whenever VALID_TAGS changes; do not hand-edit
+taxonomy.md and expect it to feed back here.
+Last updated: 2026-07-02 — 15 categories, 258 tags.
 """
 
 VALID_TAGS = {
@@ -38,7 +41,7 @@ VALID_TAGS = {
     # 5. Presence, Worship & Encounter
     "Worship in Spirit and Truth", "Deep Intimacy with God", "Spiritual Hunger",
     "Encounter with God", "Revival Culture", "Intimacy with God", "Knowing God",
-    "God's Presence", "Revival", "Worship",
+    "God's Presence", "Revival", "Worship", "Fear of the Lord",
     # 6. Fivefold Ministry
     "Fivefold Ministry", "Ephesians 4 Leadership", "Equipping the Saints",
     "Recognizing Your Ministry Gift", "Apostolic Ministry", "Apostolic Authority",

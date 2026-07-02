@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from app.auth import require_admin_role
 from app.db.supabase import get_supabase
 from app.services.chunker import chunk_text
-from app.services.embeddings import embed_text
+from app.services.embeddings import embed_batch
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,29 @@ router = APIRouter()
 _SENTINEL_SOURCE_ID = "267a09ac-76f3-43fb-901f-3015aef88e22"
 _VALID_LICENSE_STATUS = frozenset({"public_domain", "owned", "licensed", "unlicensed"})
 _VALID_VISIBILITY = frozenset({"shown", "hidden"})
+
+# Empirically measured against live data: chunks.embedding is HNSW-indexed, so
+# insert cost is dominated by index maintenance, not row count alone.
+# PostgREST's statement_timeout (~8s) is hit reliably at batch sizes >= 20.
+# Batches of 6 with REAL embeddings run ~1.0-2.8s (avg ~1.8s) -- an earlier
+# calibration using random noise vectors instead of real embeddings measured
+# ~4.5s/batch, which turned out not to be representative (HNSW insert cost
+# depends on vector distribution; real, semantically-clustered embeddings are
+# cheaper to place than uniform random noise).
+CHUNK_INSERT_BATCH_SIZE = 6
+
+# Railway's edge proxy hard-caps public HTTP requests at 300s (confirmed via
+# Railway's own docs: https://docs.railway.com/networking/edge-networking).
+# Target: total request wall-clock <= 150s (50% of the hard limit, full 2x
+# margin) -- 30s reserved for non-insert work (doc lookup/update, chunking,
+# batched embedding calls, response), 120s for the insert loop. Using the
+# WORST observed per-batch time (2.8s, not the ~1.8s average) as the design
+# basis: 120s / 2.8s = 42 batches x 6 = 252 chunks, rounded down to 250.
+# The largest real document in the corpus (STEPBible Greek Lexicon, 11,034
+# chunks) is ~44x this threshold -- oversized documents must be re-ingested
+# offline (direct DB connection, no request timeout), not through this
+# request/response endpoint.
+MAX_INGEST_CHUNKS = 250
 
 
 class EditDocumentBody(BaseModel):
@@ -42,10 +65,38 @@ class SetSafeModeBody(BaseModel):
 
 @router.get("/sources")
 async def list_sources(request: Request, user_id: str = Depends(require_admin_role)):
+    """List source_toggles with doc counts.
+
+    Uses a single bulk fetch of all (source_kind, author) pairs instead of one
+    COUNT query per toggle — the N+1 pattern caused ~750ms responses (8 toggles
+    x ~1 query each, including an unanchored ilike("author", ...) seq scan per
+    source_name toggle). Same fix already applied to /license-sources.
+    """
     db = get_supabase()
 
     rows = db.table("source_toggles").select("*").order("created_at").execute()
     toggles = rows.data or []
+
+    # Bulk fetch, paginated -- PostgREST caps a single .execute() at 1000 rows,
+    # which would silently undercount past the first 1000 documents (~3.8k
+    # live). Aggregate in Python. source_kind is an exact-match Counter
+    # lookup; source_name is a substring match against author, so it's a scan
+    # over the in-memory list once per source_name toggle rather than a
+    # per-toggle SQL seq scan.
+    docs: list = []
+    offset = 0
+    while True:
+        page = db.table("documents").select("source_kind, author").range(offset, offset + 999).execute()
+        rows = page.data or []
+        if not rows:
+            break
+        docs.extend(rows)
+        if len(rows) < 1000:
+            break
+        offset += 1000
+    from collections import Counter
+    kind_counts: Counter = Counter(d["source_kind"] for d in docs if d.get("source_kind"))
+    authors = [d.get("author") or "" for d in docs]
 
     results = []
     for toggle in toggles:
@@ -53,25 +104,11 @@ async def list_sources(request: Request, user_id: str = Depends(require_admin_ro
         id_type = toggle["identifier_type"]
 
         doc_count = None
-        try:
-            if id_type == "source_kind":
-                count_result = (
-                    db.table("documents")
-                    .select("id", count="exact")
-                    .eq("source_kind", identifier)
-                    .execute()
-                )
-                doc_count = count_result.count
-            elif id_type == "source_name":
-                count_result = (
-                    db.table("documents")
-                    .select("id", count="exact")
-                    .ilike("author", "%" + identifier + "%")
-                    .execute()
-                )
-                doc_count = count_result.count
-        except Exception:
-            logger.warning("Failed to count docs for %s/%s", id_type, identifier)
+        if id_type == "source_kind":
+            doc_count = kind_counts.get(identifier, 0)
+        elif id_type == "source_name":
+            needle = identifier.lower()
+            doc_count = sum(1 for a in authors if needle in a.lower())
 
         results.append({
             "id": toggle["id"],
@@ -130,33 +167,63 @@ async def update_document(doc_id: str, body: EditDocumentBody, request: Request,
     if not doc.data:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    # Re-chunk content (cheap, CPU-only) and size-check BEFORE any DB mutation
+    # -- see MAX_INGEST_CHUNKS for why. A rejected request here has touched
+    # nothing: no metadata update, no delete, no embedding spend.
+    chunks = chunk_text(body.content, chunk_target=550, overlap=80)
+    if not chunks:
+        chunks = [body.content.strip()] if body.content.strip() else []
+
+    if len(chunks) > MAX_INGEST_CHUNKS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"This document would re-chunk to {len(chunks)} chunks, exceeding the "
+                f"{MAX_INGEST_CHUNKS}-chunk limit for in-request editing. At ~6 chunks/insert-batch "
+                f"and Railway's 300s hard request timeout, larger documents cannot complete this "
+                f"endpoint's embed+insert loop reliably. Re-ingest this document offline instead, "
+                f"following the batched psycopg2 pattern in scripts/ingest_lexicon.py or "
+                f"scripts/ingest_commentaries.py (direct DB connection, no request timeout)."
+            ),
+        )
+
     # Update document metadata
     db.table("documents").update({
         "title": body.title,
         "author": body.author,
     }).eq("id", doc_id).execute()
 
-    # Re-chunk content
-    chunks = chunk_text(body.content, chunk_target=550, overlap=80)
-    if not chunks:
-        chunks = [body.content.strip()] if body.content.strip() else []
-
-    # Delete existing chunks
-    db.table("chunks").delete().eq("document_id", doc_id).execute()
-
-    # Embed and insert new chunks
+    # Embed everything BEFORE touching existing chunks — if embedding fails
+    # partway, the document's existing chunks are untouched (previously the
+    # delete ran first, so any mid-loop failure left the document with zero
+    # chunks). Insert in small batches (CHUNK_INSERT_BATCH_SIZE): a single
+    # INSERT statement is atomic (all rows or none), but the chunks table's
+    # HNSW vector index makes each row's insert cost ~700-900ms regardless of
+    # batching, and a too-large single statement hits PostgREST's ~8s
+    # statement_timeout (measured empirically — batches of 20 reliably
+    # timed out; 6 reliably completes in ~4-4.5s). This still replaces ~1
+    # embed + 1 insert round trip per chunk (a ~110-chunk document was ~220
+    # sequential round trips, 40-90s, guaranteed Railway timeout) with one
+    # batched embedding call plus ~1 insert call per 6 chunks.
     author = body.author or ""
-    for idx, text in enumerate(chunks):
-        logger.info("[ADMIN] Embedding chunk %d/%d for doc %s", idx + 1, len(chunks), doc_id)
-        embedding = embed_text(f"Author: {author} | {text}")
-        db.table("chunks").insert({
+    logger.info("[ADMIN] Embedding %d chunks for doc %s", len(chunks), doc_id)
+    embeddings = embed_batch([f"Author: {author} | {text}" for text in chunks])
+
+    new_rows = [
+        {
             "id": str(uuid.uuid4()),
             "document_id": doc_id,
             "content": text,
             "rewritten_content": text,
             "embedding": embedding,
             "chunk_index": idx,
-        }).execute()
+        }
+        for idx, (text, embedding) in enumerate(zip(chunks, embeddings))
+    ]
+
+    db.table("chunks").delete().eq("document_id", doc_id).execute()
+    for i in range(0, len(new_rows), CHUNK_INSERT_BATCH_SIZE):
+        db.table("chunks").insert(new_rows[i:i + CHUNK_INSERT_BATCH_SIZE]).execute()
 
     logger.info("[ADMIN] Document %s updated by user %s — %d chunks", doc_id, user_id, len(chunks))
     return {"success": True, "chunk_count": len(chunks)}

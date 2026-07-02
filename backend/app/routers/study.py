@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -536,20 +536,46 @@ def _verse_id_to_ref(verse_id):
     return "{} {}:{}".format(book_name, chapter, verse)
 
 
-def _fetch_neighbor_content(db, document_id, chunk_index):
-    # type: (object, str, int) -> str
-    """Fetch chunk_index-1, chunk_index, chunk_index+1 content, concatenated."""
-    indices = [chunk_index - 1, chunk_index, chunk_index + 1]
-    result = (
-        db.table("chunks")
-        .select("chunk_index, content")
-        .eq("document_id", document_id)
-        .in_("chunk_index", indices)
-        .order("chunk_index")
-        .execute()
-    )
-    parts = [row["content"] for row in (result.data or [])]
-    return "\n\n".join(parts)
+def _fetch_neighbor_content_batch(db, requests):
+    # type: (object, List[Dict]) -> Dict[Tuple[str, int], str]
+    """Batch equivalent of _fetch_neighbor_content for multiple (document_id,
+    chunk_index) pairs -- one .or_() query (batched at 30 conditions per the
+    Supabase URL-length limit, same batch size chat.py's
+    fetch_neighbor_chunks_batch uses) instead of one round trip per document.
+    """
+    needed_pairs = set()  # type: set
+    for r in requests:
+        base_idx = r["chunk_index"]
+        for idx in (base_idx - 1, base_idx, base_idx + 1):
+            needed_pairs.add((r["document_id"], idx))
+
+    if not needed_pairs:
+        return {}
+
+    or_parts = [
+        "and(document_id.eq.%s,chunk_index.eq.%s)" % (doc_id, idx)
+        for doc_id, idx in needed_pairs
+    ]
+
+    BATCH = 30
+    all_rows = []  # type: List[dict]
+    for i in range(0, len(or_parts), BATCH):
+        batch_filter = ",".join(or_parts[i:i + BATCH])
+        result = db.table("chunks").select("document_id, chunk_index, content").or_(batch_filter).execute()
+        all_rows.extend(result.data or [])
+
+    by_doc = {}  # type: Dict[str, Dict[int, str]]
+    for row in all_rows:
+        by_doc.setdefault(row["document_id"], {})[row["chunk_index"]] = row["content"]
+
+    content_map = {}  # type: Dict[Tuple[str, int], str]
+    for r in requests:
+        doc_id = r["document_id"]
+        base_idx = r["chunk_index"]
+        doc_chunks = by_doc.get(doc_id, {})
+        parts = [doc_chunks[i] for i in (base_idx - 1, base_idx, base_idx + 1) if i in doc_chunks]
+        content_map[(doc_id, base_idx)] = "\n\n".join(parts)
+    return content_map
 
 
 @router.get("/commentary")
@@ -614,6 +640,9 @@ async def get_commentary(
     # Commentary docs use citation_mode='silent_context' for chat (to prevent
     # inline citations) but are always shown in Study Mode.
     # Do not add a citation_mode filter here.
+    # Neighbor content is deferred until after sort+pagination below (only the
+    # page actually returned to the client needs it — was previously fetched
+    # sequentially, one round trip per document, for all ~30 candidates here).
     for chunk in (result.data or []):
         if chunk.get("source_kind") != "commentary":
             continue
@@ -623,8 +652,6 @@ async def get_commentary(
         if doc_id in seen_docs:
             continue
         seen_docs.add(doc_id)
-        content = _fetch_neighbor_content(db, doc_id, chunk.get("chunk_index", 0))
-        excerpt = content[:200].rsplit(" ", 1)[0] + "..." if len(content) > 200 else content
         similarity = chunk.get("similarity", 0.0)
         author = chunk.get("author", "")
         boost = COMMENTARY_AUTHOR_BOOST.get(author.lower(), COMMENTARY_DEFAULT_PENALTY)
@@ -633,8 +660,7 @@ async def get_commentary(
             "title": chunk.get("title", ""),
             "author": author,
             "source_kind": chunk.get("source_kind", ""),
-            "excerpt": excerpt,
-            "content": content,
+            "_chunk_index": chunk.get("chunk_index", 0),
             "_score": similarity + boost,
         })
 
@@ -663,19 +689,14 @@ async def get_commentary(
                     if len(top_sermons) >= 2:
                         break
 
-                # Neighbor chunk expansion + build results
+                # Build results — neighbor content deferred (see comment above).
                 for sc in top_sermons:
-                    display_content = _fetch_neighbor_content(
-                        db, sc["document_id"], sc["chunk_index"]
-                    )
-                    excerpt = display_content[:200].rsplit(" ", 1)[0] + "..." if len(display_content) > 200 else display_content
                     results.append({
                         "document_id": sc["document_id"],
                         "title": sc.get("title", ""),
                         "author": sc.get("author", ""),
                         "source_kind": "sermon_transcript",
-                        "excerpt": excerpt,
-                        "content": display_content,
+                        "_chunk_index": sc["chunk_index"],
                         "_score": 0.75,
                     })
             except Exception:
@@ -687,5 +708,17 @@ async def get_commentary(
 
     page = results[offset:offset + 3]
     has_more = len(results) > offset + 3
+
+    # Batch-fetch neighbor content for only the page being returned (at most 3
+    # documents) instead of every candidate — one .or_() query instead of up
+    # to ~32 sequential round trips.
+    content_map = _fetch_neighbor_content_batch(
+        db, [{"document_id": r["document_id"], "chunk_index": r["_chunk_index"]} for r in page]
+    )
+    for r in page:
+        content = content_map.get((r["document_id"], r["_chunk_index"]), "")
+        r["excerpt"] = content[:200].rsplit(" ", 1)[0] + "..." if len(content) > 200 else content
+        r["content"] = content
+        del r["_chunk_index"]
 
     return {"results": page, "has_more": has_more, "total": len(results)}

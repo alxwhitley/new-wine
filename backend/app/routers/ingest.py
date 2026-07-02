@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import uuid
 
@@ -9,11 +8,34 @@ from app.db.supabase import get_supabase
 from app.services.extractor import extract_text_from_pdf
 from app.services.metadata import extract_metadata
 from app.services.chunker import chunk_text
-from app.services.embeddings import embed_text
+from app.services.embeddings import embed_batch
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Empirically measured against live data: chunks.embedding is HNSW-indexed, so
+# insert cost is dominated by index maintenance, not row count alone.
+# PostgREST's statement_timeout (~8s) is hit reliably at batch sizes >= 20.
+# Batches of 6 with REAL embeddings run ~1.0-2.8s (avg ~1.8s) -- an earlier
+# calibration using random noise vectors instead of real embeddings measured
+# ~4.5s/batch, which turned out not to be representative (HNSW insert cost
+# depends on vector distribution; real, semantically-clustered embeddings are
+# cheaper to place than uniform random noise).
+CHUNK_INSERT_BATCH_SIZE = 6
+
+# Railway's edge proxy hard-caps public HTTP requests at 300s (confirmed via
+# Railway's own docs: https://docs.railway.com/networking/edge-networking).
+# Target: total request wall-clock <= 150s (50% of the hard limit, full 2x
+# margin) -- 30s reserved for non-insert work (PDF extraction, chunking,
+# batched embedding calls, response), 120s for the insert loop. Using the
+# WORST observed per-batch time (2.8s, not the ~1.8s average) as the design
+# basis: 120s / 2.8s = 42 batches x 6 = 252 chunks, rounded down to 250.
+# The largest real document in the corpus (STEPBible Greek Lexicon, 11,034
+# chunks) is ~44x this threshold -- oversized documents must be re-ingested
+# offline (direct DB connection, no request timeout), not through this
+# request/response endpoint.
+MAX_INGEST_CHUNKS = 250
 
 
 @router.post("")
@@ -31,7 +53,6 @@ async def ingest(
 
     try:
         file_bytes = await file.read()
-        source_hash = hashlib.md5(file_bytes).hexdigest()
 
         text = extract_text_from_pdf(file_bytes)
         if not text:
@@ -40,33 +61,62 @@ async def ingest(
         metadata = extract_metadata(text)
         chunks = chunk_text(text)
 
+        # Size-check BEFORE any DB mutation or embedding spend -- see
+        # MAX_INGEST_CHUNKS for why. A rejected request here has written
+        # nothing.
+        if len(chunks) > MAX_INGEST_CHUNKS:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"This PDF would chunk to {len(chunks)} chunks, exceeding the "
+                    f"{MAX_INGEST_CHUNKS}-chunk limit for in-request ingestion. At ~6 "
+                    f"chunks/insert-batch and Railway's 300s hard request timeout, larger "
+                    f"documents cannot complete this endpoint's embed+insert loop reliably. "
+                    f"Ingest this document offline instead via scripts/ingest.py (direct DB "
+                    f"connection, no request timeout)."
+                ),
+            )
+
+        author = metadata.get("author")
+        year = metadata.get("year")
+
+        # Embed everything BEFORE inserting the document row -- if embedding
+        # fails, nothing is written at all (previously the document row was
+        # inserted first, then chunks were embedded and inserted one at a
+        # time; a mid-loop failure left an orphaned document with zero or
+        # partial chunks). Insert in small batches (CHUNK_INSERT_BATCH_SIZE)
+        # -- see its comment for why a single giant insert isn't safe. This
+        # still replaces ~1 embed + 1 insert round trip per chunk (a
+        # ~110-chunk document was ~220 sequential round trips, 40-90s,
+        # guaranteed Railway timeout) with one batched embedding call plus
+        # ~1 insert call per 6 chunks.
+        prefix = f"Author: {author} | Year: {year} | "
+        embeddings = embed_batch([prefix + chunk_content for chunk_content in chunks])
+
         db = get_supabase()
         doc_id = str(uuid.uuid4())
 
         db.table("documents").insert({
             "id": doc_id,
             "title": metadata.get("title"),
-            "author": metadata.get("author"),
-            "year": metadata.get("year"),
+            "author": author,
+            "year": year,
             "topic_tags": metadata.get("topic_tags"),
             "source_type": source_type,
         }).execute()
 
-        author = metadata.get("author")
-        year = metadata.get("year")
-
-        for i, chunk_content in enumerate(chunks):
-            prefix = f"Author: {author} | Year: {year} | "
-            embedding = embed_text(prefix + chunk_content)
-            db.table("chunks").insert({
+        chunk_rows = [
+            {
                 "id": str(uuid.uuid4()),
                 "document_id": doc_id,
                 "chunk_index": i,
                 "content": chunk_content,
                 "embedding": embedding,
-                "page_number": 0,
-                "source_hash": source_hash,
-            }).execute()
+            }
+            for i, (chunk_content, embedding) in enumerate(zip(chunks, embeddings))
+        ]
+        for i in range(0, len(chunk_rows), CHUNK_INSERT_BATCH_SIZE):
+            db.table("chunks").insert(chunk_rows[i:i + CHUNK_INSERT_BATCH_SIZE]).execute()
 
         return {
             "document_id": doc_id,
