@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -438,3 +439,179 @@ async def get_corpus_stats(request: Request, user_id: str = Depends(require_admi
             logger.warning("Failed to count %s", table)
             counts[table] = 0
     return counts
+
+
+# ── Corpus card counts (server-side fetchAllCounts) ─────────────────────────
+# documents/chunks/propositions/removed_urls are service-role-only as of
+# migration 055 — AdminModal.tsx can no longer read them directly with the
+# anon key. This endpoint runs the same aggregation under the service key.
+# Bulk-fetch + Python aggregation — same no-N+1 pattern as /admin/license-sources.
+
+_FILTER_RE = re.compile(r"^(\w+)\s+ILIKE\s+'([^']+)'$", re.IGNORECASE)
+_SPECIAL_TABLE_ALLOWLIST = frozenset({"verses", "interlinear_words", "excerpts"})
+
+
+def _parse_admin_filter(filter_str: str) -> dict:
+    """Port of frontend/components/admin/AdminModal.tsx::parseFilter — keep in
+    sync. The AND/OR ILIKE mini-language is defined by CARDS in
+    frontend/components/admin/corpus-data.ts."""
+    and_conds: list = []
+    or_conds: list = []
+    cleaned = filter_str.replace("(", "").replace(")", "")
+    and_parts = re.split(r"\s+AND\s+", cleaned, flags=re.IGNORECASE)
+    for part in and_parts:
+        or_parts = re.split(r"\s+OR\s+", part, flags=re.IGNORECASE)
+        if len(or_parts) > 1:
+            for or_part in or_parts:
+                m = _FILTER_RE.match(or_part.strip())
+                if m:
+                    or_conds.append({"col": m.group(1), "val": m.group(2)})
+        else:
+            m = _FILTER_RE.match(part.strip())
+            if m:
+                and_conds.append({"col": m.group(1), "val": m.group(2)})
+    return {"and": and_conds, "or": or_conds}
+
+
+class NotFilterCondition(BaseModel):
+    col: str
+    val: str
+
+
+class CardCountSpec(BaseModel):
+    id: str
+    sourceKind: Optional[str] = None
+    sourceType: Optional[str] = None
+    extraFilter: Optional[str] = None
+    notFilter: Optional[List[NotFilterCondition]] = None
+    specialTable: Optional[str] = None
+    specialWhere: Optional[str] = None
+    countChunks: Optional[bool] = None
+
+
+class CardCountsBody(BaseModel):
+    cards: List[CardCountSpec]
+
+
+@router.post("/corpus/card-counts")
+async def get_card_counts(
+    body: CardCountsBody, request: Request, user_id: str = Depends(require_admin_role)
+):
+    db = get_supabase()
+
+    # Per-kind/per-type counts + max created_at, computed once and reused by
+    # any card that doesn't need a custom filter.
+    all_docs: list = []
+    offset = 0
+    while True:
+        page = (
+            db.table("documents")
+            .select("source_kind, source_type, created_at")
+            .range(offset, offset + 999)
+            .execute()
+        )
+        rows = page.data or []
+        if not rows:
+            break
+        all_docs.extend(rows)
+        if len(rows) < 1000:
+            break
+        offset += 1000
+
+    kind_agg: dict = {}
+    type_agg: dict = {}
+    for row in all_docs:
+        created_at = row.get("created_at")
+        sk = row.get("source_kind")
+        if sk:
+            agg = kind_agg.setdefault(sk, {"count": 0, "max_date": None})
+            agg["count"] += 1
+            if created_at and (not agg["max_date"] or created_at > agg["max_date"]):
+                agg["max_date"] = created_at
+        st = row.get("source_type")
+        if st:
+            agg = type_agg.setdefault(st, {"count": 0, "max_date": None})
+            agg["count"] += 1
+            if created_at and (not agg["max_date"] or created_at > agg["max_date"]):
+                agg["max_date"] = created_at
+
+    counts: dict = {}
+
+    for card in body.cards:
+        if card.specialTable:
+            if card.specialTable not in _SPECIAL_TABLE_ALLOWLIST:
+                counts[card.id] = {"count": 0, "lastIngested": None}
+                continue
+            q = db.table(card.specialTable).select("id", count="exact")
+            if card.specialWhere and "=" in card.specialWhere:
+                col, rest = card.specialWhere.split("=", 1)
+                if "." in rest:
+                    operator, value = rest.split(".", 1)
+                    if operator == "eq":
+                        q = q.eq(col, value)
+            result = q.execute()
+            counts[card.id] = {"count": result.count or 0, "lastIngested": None}
+            continue
+
+        if card.countChunks and card.extraFilter:
+            doc_q = db.table("documents").select("id")
+            if card.sourceKind:
+                doc_q = doc_q.eq("source_kind", card.sourceKind)
+            parsed = _parse_admin_filter(card.extraFilter)
+            for cond in parsed["and"]:
+                doc_q = doc_q.ilike(cond["col"], cond["val"])
+            if parsed["or"]:
+                doc_q = doc_q.or_(",".join(f"{c['col']}.ilike.{c['val']}" for c in parsed["or"]))
+            docs = doc_q.execute()
+            doc_ids = [d["id"] for d in (docs.data or [])]
+            if doc_ids:
+                chunk_result = (
+                    db.table("chunks")
+                    .select("id", count="exact")
+                    .in_("document_id", doc_ids)
+                    .execute()
+                )
+                counts[card.id] = {"count": chunk_result.count or 0, "lastIngested": None}
+            else:
+                counts[card.id] = {"count": 0, "lastIngested": None}
+            continue
+
+        if card.extraFilter or card.notFilter:
+            q = db.table("documents").select("created_at", count="exact")
+            if card.sourceKind:
+                q = q.eq("source_kind", card.sourceKind)
+            if card.extraFilter:
+                parsed = _parse_admin_filter(card.extraFilter)
+                for cond in parsed["and"]:
+                    q = q.ilike(cond["col"], cond["val"])
+                if parsed["or"]:
+                    q = q.or_(",".join(f"{c['col']}.ilike.{c['val']}" for c in parsed["or"]))
+            if card.notFilter:
+                for nc in card.notFilter:
+                    q = q.not_.ilike(nc.col, nc.val)
+            result = q.execute()
+            rows = result.data or []
+            max_date = None
+            for row in rows:
+                created_at = row.get("created_at")
+                if created_at and (not max_date or created_at > max_date):
+                    max_date = created_at
+            counts[card.id] = {
+                "count": result.count if result.count is not None else len(rows),
+                "lastIngested": max_date,
+            }
+            continue
+
+        if card.sourceType:
+            agg = type_agg.get(card.sourceType, {"count": 0, "max_date": None})
+            counts[card.id] = {"count": agg["count"], "lastIngested": agg["max_date"]}
+            continue
+
+        if card.sourceKind:
+            agg = kind_agg.get(card.sourceKind, {"count": 0, "max_date": None})
+            counts[card.id] = {"count": agg["count"], "lastIngested": agg["max_date"]}
+            continue
+
+        counts[card.id] = {"count": 0, "lastIngested": None}
+
+    return {"counts": counts}

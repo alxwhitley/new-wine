@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,11 +103,6 @@ interface GlobalStats {
   totalInterlinearWords: number;
 }
 
-interface FilterCondition {
-  col: string;
-  val: string;
-}
-
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const FEEDBACK_TABS: { key: FeedbackTab; label: string }[] = [
@@ -181,26 +175,6 @@ function formatVerseId(verseId: string): string {
   const parts = verseId.split(".");
   if (parts.length !== 3) return verseId;
   return `${parts[0]} ${parts[1]}:${parts[2]}`;
-}
-
-function parseFilter(filter: string): { and: FilterCondition[]; or: FilterCondition[] } {
-  const and: FilterCondition[] = [];
-  const or: FilterCondition[] = [];
-  const cleaned = filter.replace(/[()]/g, "");
-  const andParts = cleaned.split(/\s+AND\s+/i);
-  for (const part of andParts) {
-    const orParts = part.split(/\s+OR\s+/i);
-    if (orParts.length > 1) {
-      for (const orPart of orParts) {
-        const match = orPart.trim().match(/^(\w+)\s+ILIKE\s+'([^']+)'$/i);
-        if (match) or.push({ col: match[1], val: match[2] });
-      }
-    } else {
-      const match = part.trim().match(/^(\w+)\s+ILIKE\s+'([^']+)'$/i);
-      if (match) and.push({ col: match[1], val: match[2] });
-    }
-  }
-  return { and, or };
 }
 
 // ── Inline display components ──────────────────────────────────────────────
@@ -333,6 +307,9 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
 
   // ── Corpus: Pipelines sub-view ─────────────────────────────────
   const [counts, setCounts] = useState<CountData>({});
+  // Mirrors `counts` synchronously (state updates are async) so the polling
+  // effect below can diff against the previous snapshot without a race.
+  const countsRef = useRef<CountData>({});
   const [globalStats, setGlobalStats] = useState<GlobalStats>({
     totalDocuments: 0,
     totalChunks: 0,
@@ -353,124 +330,41 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
 
   // ── Corpus counts ──────────────────────────────────────────────
 
+  // documents/chunks are service-role-only as of the corpus RLS lockdown, so
+  // counts run server-side under the service key instead of the anon client.
   const fetchAllCounts = useCallback(async () => {
-    const newCounts: CountData = {};
-
-    const allDocs: Array<{ source_kind: string; source_type: string; created_at: string }> = [];
-    let offset = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("documents")
-        .select("source_kind, source_type, created_at")
-        .range(offset, offset + 999);
-      if (!data || data.length === 0) break;
-      allDocs.push(
-        ...(data as Array<{ source_kind: string; source_type: string; created_at: string }>)
-      );
-      if (data.length < 1000) break;
-      offset += 1000;
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`${API}/admin/corpus/card-counts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          cards: CARDS.filter((c) => !c.isMaintenance).map((c) => ({
+            id: c.id,
+            sourceKind: c.sourceKind,
+            sourceType: c.sourceType,
+            extraFilter: c.extraFilter,
+            notFilter: c.notFilter,
+            specialTable: c.specialTable,
+            specialWhere: c.specialWhere,
+            countChunks: c.countChunks,
+          })),
+        }),
+      });
+      if (!res.ok) throw new Error(`card-counts ${res.status}`);
+      const data: { counts: CountData } = await res.json();
+      const nextCounts = data.counts ?? {};
+      setCounts(nextCounts);
+      countsRef.current = nextCounts;
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.warn("[admin] fetchAllCounts failed:", err);
+      setAdminDataError(true);
     }
-
-    const kindAgg: Record<string, { count: number; maxDate: string | null }> = {};
-    const typeAgg: Record<string, { count: number; maxDate: string | null }> = {};
-    for (const row of allDocs) {
-      const sk = row.source_kind;
-      if (!kindAgg[sk]) kindAgg[sk] = { count: 0, maxDate: null };
-      kindAgg[sk].count++;
-      if (row.created_at && (!kindAgg[sk].maxDate || row.created_at > kindAgg[sk].maxDate!)) {
-        kindAgg[sk].maxDate = row.created_at;
-      }
-      const st = row.source_type;
-      if (!typeAgg[st]) typeAgg[st] = { count: 0, maxDate: null };
-      typeAgg[st].count++;
-      if (row.created_at && (!typeAgg[st].maxDate || row.created_at > typeAgg[st].maxDate!)) {
-        typeAgg[st].maxDate = row.created_at;
-      }
-    }
-
-    const filterPromises: Promise<void>[] = [];
-
-    for (const card of CARDS) {
-      if (card.isMaintenance) continue;
-
-      if (card.specialTable) {
-        filterPromises.push(
-          (async () => {
-            let query = supabase.from(card.specialTable!).select("*", { count: "exact", head: true });
-            if (card.specialWhere) {
-              const [col, rest] = card.specialWhere.split("=");
-              const [operator, value] = rest.split(".");
-              if (operator === "eq") query = query.eq(col, value);
-            }
-            const { count } = await query;
-            newCounts[card.id] = { count: count ?? 0, lastIngested: null };
-          })()
-        );
-      } else if (card.countChunks && card.extraFilter) {
-        filterPromises.push(
-          (async () => {
-            let docQuery = supabase.from("documents").select("id");
-            if (card.sourceKind) docQuery = docQuery.eq("source_kind", card.sourceKind);
-            const parsed = parseFilter(card.extraFilter!);
-            for (const cond of parsed.and) docQuery = docQuery.ilike(cond.col, cond.val);
-            if (parsed.or.length > 0) {
-              docQuery = docQuery.or(parsed.or.map((c) => `${c.col}.ilike.${c.val}`).join(","));
-            }
-            const { data: docs } = await docQuery;
-            if (docs && docs.length > 0) {
-              const docIds = docs.map((d) => d.id as string);
-              const { count } = await supabase
-                .from("chunks")
-                .select("*", { count: "exact", head: true })
-                .in("document_id", docIds);
-              newCounts[card.id] = { count: count ?? 0, lastIngested: null };
-            } else {
-              newCounts[card.id] = { count: 0, lastIngested: null };
-            }
-          })()
-        );
-      } else if (card.extraFilter || card.notFilter) {
-        filterPromises.push(
-          (async () => {
-            let query = supabase.from("documents").select("created_at", { count: "exact" });
-            if (card.sourceKind) query = query.eq("source_kind", card.sourceKind);
-            if (card.extraFilter) {
-              const parsed = parseFilter(card.extraFilter);
-              for (const cond of parsed.and) query = query.ilike(cond.col, cond.val);
-              if (parsed.or.length > 0) {
-                query = query.or(parsed.or.map((c) => `${c.col}.ilike.${c.val}`).join(","));
-              }
-            }
-            if (card.notFilter) {
-              for (const nc of card.notFilter) {
-                query = query.not(nc.col, "ilike", nc.val);
-              }
-            }
-            const { data, count } = await query;
-            let maxDate: string | null = null;
-            if (data) {
-              for (const row of data) {
-                if (row.created_at && (!maxDate || row.created_at > maxDate)) {
-                  maxDate = row.created_at as string;
-                }
-              }
-            }
-            newCounts[card.id] = { count: count ?? data?.length ?? 0, lastIngested: maxDate };
-          })()
-        );
-      } else if (card.sourceType) {
-        const agg = typeAgg[card.sourceType];
-        newCounts[card.id] = { count: agg?.count ?? 0, lastIngested: agg?.maxDate ?? null };
-      } else if (card.sourceKind) {
-        const agg = kindAgg[card.sourceKind];
-        newCounts[card.id] = { count: agg?.count ?? 0, lastIngested: agg?.maxDate ?? null };
-      }
-    }
-
-    await Promise.all(filterPromises);
-    setCounts(newCounts);
-    setLastUpdated(new Date());
-  }, []);
+  }, [accessToken]);
 
   // ── Data fetches ───────────────────────────────────────────────
 
@@ -542,40 +436,29 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
     fetchAllCounts();
   }, [roleChecked, accessToken, activeTab, corpusLoaded, fetchAllCounts]);
 
-  // Realtime — active only while modal is open.
-  // Use a unique channel name on each mount so we never call .on() on an
-  // already-subscribed channel (Supabase throws on reuse of a subscribed name).
+  // Polling replaces the old Supabase Realtime subscription on `documents`.
+  // Realtime respects RLS for anon/authenticated roles — under the corpus
+  // RLS lockdown the channel would report SUBSCRIBED but INSERT events would
+  // never arrive (same silent-empty failure mode as a direct anon read).
+  // Poll the same backend-aggregated counts instead, diffing against the
+  // previous snapshot to drive the existing per-card pulse animation.
   useEffect(() => {
-    if (!roleChecked) return;
-
-    const channelName = `admin-realtime-${Date.now()}`;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    try {
-      channel = supabase
-        .channel(channelName)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "documents" },
-          (payload) => {
-            const sourceKind = payload.new.source_kind as string;
-            const sourceType = payload.new.source_type as string;
-            for (const card of CARDS) {
-              if (card.sourceKind === sourceKind || card.sourceType === sourceType) {
-                triggerPulse(card.id);
-              }
-            }
-            fetchAllCounts();
-          }
-        )
-        .subscribe((status) => setRealtimeConnected(status === "SUBSCRIBED"));
-    } catch (err) {
-      console.warn("[admin] realtime setup failed:", err);
-    }
-
+    if (!roleChecked || !accessToken || activeTab !== "corpus") return;
+    setRealtimeConnected(true);
+    const interval = setInterval(async () => {
+      const prevCounts = countsRef.current;
+      await fetchAllCounts();
+      for (const card of CARDS) {
+        const prevCount = prevCounts[card.id]?.count ?? 0;
+        const nextCount = countsRef.current[card.id]?.count ?? 0;
+        if (nextCount > prevCount) triggerPulse(card.id);
+      }
+    }, 30000);
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      clearInterval(interval);
+      setRealtimeConnected(false);
     };
-  }, [roleChecked, fetchAllCounts]);
+  }, [roleChecked, accessToken, activeTab, fetchAllCounts]);
 
   // ── Action handlers ────────────────────────────────────────────
 
