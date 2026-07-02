@@ -26,6 +26,7 @@ from urllib.parse import urlparse, unquote
 import openai
 import psycopg2
 from psycopg2.extras import execute_values
+from supabase import create_client
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -35,6 +36,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 print("Importing chunker...")
 from app.services.chunker import chunk_text
 print("Chunker imported.")
+from source_resolver import resolve_source_id
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,8 @@ DB_PARAMS = {
 print("Initializing OpenAI client...")
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 print("OpenAI client ready.")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── Theological Tagging ───────────────────────────────────────────────────────
 
@@ -173,12 +177,13 @@ def ingest_father(doc, chunk_rows):
             # Insert document
             cur.execute(
                 """INSERT INTO documents (id, title, original_title, author, source_name, source_type, source_kind,
-                   is_copyrighted, citation_mode, topic_tags, bible_references, year)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   is_copyrighted, citation_mode, topic_tags, bible_references, year, source_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     doc["id"], doc["title"], doc["title"], doc["author"], doc["source_name"],
                     doc["source_type"], doc["source_kind"], doc["is_copyrighted"],
                     doc["citation_mode"], doc["topic_tags"], [], doc.get("year"),
+                    doc["source_id"],
                 ),
             )
 
@@ -282,6 +287,15 @@ def main():
         sqlite_conn.close()
         return
 
+    # Resolve source_id once -- every father shares the same collective source
+    # ("HistoricalChristianFaith Commentaries Database"), so a single lookup
+    # up front avoids re-resolving the same alias key per father. ALIAS_MISS
+    # is printed by the resolver on a miss; source_id falls to sentinel.
+    _resolved_source_id, _norm_key, _via = resolve_source_id(
+        supabase, "HistoricalChristianFaith Commentaries Database", None
+    )
+    print("Resolved source: {!r} -> {} (via {})\n".format(_norm_key, _resolved_source_id, _via))
+
     # Ingest each father
     success = 0
     skipped = 0
@@ -340,6 +354,7 @@ def main():
             "citation_mode": "citable",
             "topic_tags": tags,
             "year": min_ts,
+            "source_id": _resolved_source_id,
         }
 
         chunk_rows = []  # type: List[Tuple]

@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from supabase import create_client
 from app.services.embeddings import embed_text
 from bible_refs import extract_bible_references
+from source_resolver import resolve_source_id
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -323,6 +324,13 @@ def ingest_book(commentary_key, book_id, book_name, chapter_count):
     # Extract bible references (the book itself is the primary reference)
     bible_refs = [book_name]
 
+    # Resolve attribution -> source_id via alias table. ALIAS_MISS is
+    # printed by the resolver on a miss; source_id falls to sentinel.
+    _resolved_id, _norm_key, _via = resolve_source_id(
+        supabase, commentary["source_name"], commentary["author"]
+    )
+    logger.info("Resolved source: %r -> %s (via %s)", _norm_key, _resolved_id, _via)
+
     # Insert document
     doc_data = {
         "title": title,
@@ -334,6 +342,7 @@ def ingest_book(commentary_key, book_id, book_name, chapter_count):
         "is_copyrighted": False,
         "topic_tags": topic_tags if topic_tags else None,
         "bible_references": bible_refs,
+        "source_id": _resolved_id,
     }
 
     doc_result = supabase.table("documents").insert(doc_data).execute()

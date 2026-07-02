@@ -21,6 +21,8 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
+from source_resolver import resolve_source_id
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -250,6 +252,10 @@ def find_or_create_document(title: str) -> Tuple[str, int]:
         return doc_id, existing
 
     doc_id = str(uuid.uuid4())
+    # Resolve attribution -> source_id via alias table. ALIAS_MISS is
+    # printed by the resolver on a miss; source_id falls to sentinel.
+    _resolved_id, _norm_key, _via = resolve_source_id(supabase, "STEPBible", "STEPBible / Tyndale House")
+    print("  Resolved source: {!r} -> {} (via {})".format(_norm_key, _resolved_id, _via))
     supabase.table("documents").insert({
         "id": doc_id,
         "title": title,
@@ -262,6 +268,7 @@ def find_or_create_document(title: str) -> Tuple[str, int]:
         "is_copyrighted": False,
         "topic_tags": [],
         "bible_references": [],
+        "source_id": _resolved_id,
     }).execute()
     return doc_id, 0
 

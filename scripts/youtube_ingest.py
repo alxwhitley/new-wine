@@ -305,7 +305,9 @@ def _resolve_speaker_source(speaker_name: str) -> Optional[str]:
 
     Normalizes via normalize_alias_key() from source_resolver — not re-implemented.
     Returns source_id on alias hit, None on miss.
-    Emits a loud WARNING on miss so ALIAS_MISS lines are grep-able in run logs.
+    Prints the same ALIAS_MISS token the shared resolver uses, so `grep
+    ALIAS_MISS` catches every miss in the pipeline (source_resolver.py's own
+    misses, plus this preliminary speaker-lookup miss).
     Never raises.
     """
     if not speaker_name:
@@ -326,7 +328,12 @@ def _resolve_speaker_source(speaker_name: str) -> Optional[str]:
     except Exception as exc:
         print("  WARNING: alias lookup for {!r} failed: {}".format(speaker_name, exc))
         return None
-    print("  WARNING: UNRESOLVED SPEAKER — no alias for {!r} (key={!r})".format(speaker_name, key))
+    # Same ALIAS_MISS token the shared resolver prints (source_resolver.py) so
+    # `grep ALIAS_MISS` catches every miss in the pipeline, not just the final
+    # fallback resolver call. This is a preliminary lookup, not necessarily a
+    # final miss — ingest_video() tries channel_name next, then the full
+    # resolver, before deciding the video needs_source.
+    print("ALIAS_MISS  source_name=None  author={!r}  (speaker lookup, key={!r})".format(speaker_name, key))
     return None
 
 
@@ -431,10 +438,18 @@ def ingest_video(
     print("  wrote: {}  (speaker={!r})".format(fname, speaker or "—"))
 
     # ── 5. Ingest through the full pipeline ───────────────────────────────────
+    # Pass the gate-approved source_id through explicitly rather than letting
+    # ingest_file re-resolve it from the SOURCE:/SPEAKER: headers just written
+    # above. The two resolution orders differ (speaker-first here vs.
+    # source_name-first in ingest_file), so a channel/speaker alias mismatch
+    # could otherwise silently attribute the document differently than this
+    # function's sentinel gate (step 1) already decided.
     ingest_status = None
     ingest_reason = None
     try:
-        ingest_status, ingest_reason = ingest_file(tmp_path, is_copyrighted=True, skip_dedup=True)
+        ingest_status, ingest_reason = ingest_file(
+            tmp_path, is_copyrighted=True, skip_dedup=True, source_id_override=source_id
+        )
     except Exception as exc:
         ingest_status = "error"
         ingest_reason = str(exc)

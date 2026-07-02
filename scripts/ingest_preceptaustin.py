@@ -26,6 +26,7 @@ load_dotenv(PROJECT_ROOT / "backend" / "app" / ".env")
 
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 from app.services.chunker import chunk_text, token_len
+from source_resolver import resolve_source_id
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,10 @@ def ingest_file(filepath, index_lookup):
         print("  Reusing existing document {}".format(doc_id[:12]))
     else:
         doc_id = str(uuid.uuid4())
+        # Resolve attribution -> source_id via alias table. ALIAS_MISS is
+        # printed by the resolver on a miss; source_id falls to sentinel.
+        _resolved_id, _norm_key, _via = resolve_source_id(supabase, "Precept Austin", "Precept Austin")
+        print("  Resolved source: {!r} -> {} (via {})".format(_norm_key, _resolved_id, _via))
         supabase.table("documents").insert({
             "id": doc_id,
             "title": title,
@@ -180,6 +185,7 @@ def ingest_file(filepath, index_lookup):
             "is_copyrighted": True,
             "topic_tags": [],
             "bible_references": [],
+            "source_id": _resolved_id,
         }).execute()
 
     # Embed all chunks

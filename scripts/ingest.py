@@ -372,13 +372,21 @@ def tag_document(doc_id, chunks):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False, skip_dedup: bool = False) -> tuple:
+def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False, skip_dedup: bool = False, source_id_override: Optional[str] = None) -> tuple:
     """Returns (status, reason) where status is 'processed', 'skipped', or 'failed'.
 
     skip_dedup=True bypasses the MD5 chunks.source_hash guard. Use this when the
     caller already owns dedup responsibility (e.g. youtube_ingest.py tracks
     status=done per row in the sheet). Default False preserves the directory-scan
     pipeline's guard unchanged.
+
+    source_id_override: when provided, skip re-resolving source_id from the
+    file's SOURCE:/AUTHOR:/SPEAKER: headers and use this value directly.
+    youtube_ingest.py resolves source_id itself (speaker-first, with a
+    sentinel gate that refuses to ingest unresolved videos) BEFORE calling
+    this function; without the override, ingest_file re-resolved independently
+    from headers (source_name/channel-first), which could silently disagree
+    with the caller's gate decision on a channel/speaker alias mismatch.
     """
     print(f"\n{'='*60}")
     print(f"Processing: {file_path.name} {'[COPYRIGHTED]' if is_copyrighted else '[OPEN]'}")
@@ -488,12 +496,20 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     # 5. Insert document row
     source_url = metadata.get("_url") or (txt_headers.get("SOURCE_URL") if txt_headers else None)
 
-    # Resolve attribution → source_id via alias table.
+    # Resolve attribution → source_id via alias table, unless the caller
+    # already resolved (and gated) it themselves — see source_id_override
+    # docstring above.
     # ALIAS_MISS is printed by the resolver on a miss; source_id falls to sentinel.
-    _resolved_id, _norm_key, _via = resolve_source_id(
-        supabase, metadata.get("source_name"), metadata.get("author")
-    )
-    print(f"  Resolved source: {_norm_key!r} → {_resolved_id} (via {_via})")
+    if source_id_override is not None:
+        _resolved_id = source_id_override
+        _norm_key = normalize_alias_key(metadata.get("source_name") or metadata.get("author") or "")
+        _via = "caller_override"
+        print(f"  Source (caller-provided): {_resolved_id} (norm_key={_norm_key!r})")
+    else:
+        _resolved_id, _norm_key, _via = resolve_source_id(
+            supabase, metadata.get("source_name"), metadata.get("author")
+        )
+        print(f"  Resolved source: {_norm_key!r} → {_resolved_id} (via {_via})")
 
     print("Inserting document record...")
     doc_id = insert_document(
