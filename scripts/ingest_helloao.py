@@ -20,7 +20,9 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import urlparse, unquote
 
+import psycopg2
 import requests
 from dotenv import load_dotenv
 
@@ -33,6 +35,20 @@ from supabase import create_client
 from app.services.embeddings import embed_text
 from bible_refs import extract_bible_references
 from source_resolver import resolve_source_id
+import propositions
+
+# Dedicated psycopg2 connection params for the propositions step only (this
+# script is otherwise entirely Supabase-REST-based) -- mirrors ingest.py's
+# pattern: a fresh connection opened/closed per document, kept separate from
+# the REST client used for everything else.
+_parsed_db = urlparse(os.environ["SUPABASE_DB_URL"])
+DB_PARAMS = {
+    "host": _parsed_db.hostname,
+    "port": _parsed_db.port or 5432,
+    "user": unquote(_parsed_db.username or ""),
+    "password": unquote(_parsed_db.password or ""),
+    "dbname": _parsed_db.path.lstrip("/"),
+}
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -371,6 +387,20 @@ def ingest_book(commentary_key, book_id, book_name, chapter_count):
             logger.info("  Embedded %d/%d chunks", idx + 1, len(all_verses))
 
     logger.info("  Done: %s (%d chunks)", title, len(all_verses))
+
+    # Propositions (unlicensed/licensed sources only -- gate lives in
+    # propositions.py). All three HelloAO commentaries (Matthew Henry, Adam
+    # Clarke, Jamieson-Fausset-Brown) are public_domain, so this currently
+    # always returns "skipped_licensed": one cheap DB lookup, no Groq spend.
+    # Kept wired anyway so a future license_status change needs no code
+    # change. Dedicated connection, opened and closed per document.
+    _prop_conn = psycopg2.connect(**DB_PARAMS)
+    try:
+        prop_result = propositions.process_document(_prop_conn, doc_id, _resolved_id, full_text, embed_text)
+        logger.info("  propositions: %s", prop_result)
+    finally:
+        _prop_conn.close()
+
     return True
 
 

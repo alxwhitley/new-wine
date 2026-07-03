@@ -1,8 +1,9 @@
 """
 propositions.py — shared module for proposition extraction and storage.
 
-Called by ingest scripts after chunk insertion for unlicensed documents.
-Non-fatal by contract: no public function raises.
+Called by ingest scripts after chunk insertion for unlicensed and licensed
+documents (see process_document's gate). Non-fatal by contract: no public
+function raises.
 """
 
 import json
@@ -146,16 +147,22 @@ def process_document(
     """Top-level entry point for ingest scripts.
 
     Returns one of:
-      "skipped_licensed"   — source is not unlicensed; nothing written
+      "skipped_licensed"   — source is owned/public_domain (or missing); nothing written
       "no_propositions"    — extraction returned empty list
       "stored:{n}"         — n propositions written to DB
       "error"              — unexpected failure (logged)
+
+    Extracts for "unlicensed" and "licensed" sources only. Skips "owned" and
+    "public_domain" (already safely servable as verbatim chunks -- no future
+    license-grant toggle applies, so propositions add cost with no serving
+    benefit) and skips a missing/unknown source_id (fail closed, same as the
+    original unlicensed-only gate did for None).
 
     Never raises.
     """
     try:
         license_status = get_license_status(conn, source_id)
-        if license_status != "unlicensed":
+        if license_status not in ("unlicensed", "licensed"):
             return "skipped_licensed"
 
         props = extract_propositions(text, doc_id=document_id)

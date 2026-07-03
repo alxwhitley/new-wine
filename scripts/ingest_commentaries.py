@@ -145,8 +145,14 @@ def embed_batch(texts, max_retries=5):
             time.sleep(wait)
 
 
-def ingest_father(doc, chunk_rows):
-    # type: (Dict, List[Tuple]) -> str
+def embed_one(text):
+    # type: (str) -> List[float]
+    """Single-text embed, for propositions.process_document's embed_fn param."""
+    return embed_batch([text])[0]
+
+
+def ingest_father(doc, chunk_rows, body):
+    # type: (Dict, List[Tuple], str) -> str
     """Check existence, insert document + all chunks in a single transaction.
 
     Returns:
@@ -196,6 +202,17 @@ def ingest_father(doc, chunk_rows):
             )
 
         conn.commit()
+
+        # Propositions (unlicensed/licensed sources only -- gate lives in
+        # propositions.py). HistoricalChristianFaith is public_domain, so
+        # this currently always returns "skipped_licensed": one cheap DB
+        # lookup, no Groq spend. Runs AFTER the document+chunks commit above
+        # so a propositions failure (non-fatal, logged internally by
+        # process_document -- never raises) can't affect the already-durable
+        # document. Reuses this same connection per the caller's contract.
+        prop_result = propositions.process_document(conn, doc["id"], doc["source_id"], body, embed_one)
+        print("    propositions: {}".format(prop_result))
+
         return "ok"
     except Exception as e:
         conn.rollback()
@@ -369,7 +386,7 @@ def main():
             ))
 
         # Single-transaction insert: check + document + all chunks
-        result = ingest_father(doc, chunk_rows)
+        result = ingest_father(doc, chunk_rows, body)
 
         if result == "skip":
             print("  SKIP '{}': document with chunks already exists".format(father_name))

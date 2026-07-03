@@ -16,12 +16,14 @@ from typing import Optional, List, Dict, Tuple
 
 import tiktoken
 import openai
+import psycopg2
 from supabase import create_client
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 from source_resolver import resolve_source_id
+import propositions
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -241,6 +243,27 @@ def embed_batch(texts: List[str]) -> List[List[float]]:
     return [item.embedding for item in response.data]
 
 
+def embed_one(text: str) -> List[float]:
+    """Single-text embed, for propositions.process_document's embed_fn param."""
+    return embed_batch([text])[0]
+
+
+def _propositions_db_params() -> dict:
+    """Build a psycopg2 DSN dict from SUPABASE_DB_URL for the propositions
+    step. Deliberately separate from insert_chunk_batch's own local parsing
+    below -- kept independent so this addition doesn't touch that function."""
+    from urllib.parse import urlparse, unquote
+    db_url = os.environ.get("SUPABASE_DB_URL")
+    parsed = urlparse(db_url)
+    return {
+        "host": parsed.hostname,
+        "port": parsed.port or 5432,
+        "user": unquote(parsed.username or ""),
+        "password": unquote(parsed.password or ""),
+        "dbname": parsed.path.lstrip("/"),
+    }
+
+
 def find_or_create_document(title: str) -> Tuple[str, int]:
     """Find existing document by title or create a new one.
     Returns (doc_id, existing_chunk_count)."""
@@ -442,6 +465,24 @@ def ingest_file(filename: str, title: str, max_entries: Optional[int] = None, br
     stats["inserted"] = total_inserted
     stats["skipped"] += stats["parsed"] - total_inserted
     print(f"  Done: {total_inserted} inserted, {stats['skipped']} skipped")
+
+    # Propositions (unlicensed/licensed sources only -- gate lives in
+    # propositions.py). STEPBible is public_domain, so this currently always
+    # returns "skipped_licensed": one cheap DB lookup, no Groq spend. Kept
+    # wired anyway so a future license_status change needs no code change.
+    # full_text is the whole lexicon's entries joined -- only actually used
+    # if the gate ever passes; each entry is independently short, but a full
+    # lexicon run is thousands of entries, so this is NOT a coherent single
+    # "document" in the sense propositions.py's extraction prompt assumes.
+    _source_id, _, _ = resolve_source_id(supabase, "STEPBible", "STEPBible / Tyndale House")
+    _prop_conn = psycopg2.connect(**_propositions_db_params())
+    try:
+        full_text = "\n".join(chunk_texts)
+        prop_result = propositions.process_document(_prop_conn, doc_id, _source_id, full_text, embed_one)
+        print(f"  propositions: {prop_result}")
+    finally:
+        _prop_conn.close()
+
     return stats
 
 

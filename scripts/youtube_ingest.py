@@ -10,9 +10,12 @@ status=triaged:
   2. Fetch transcript: yt-dlp auto-captions first, Whisper-medium fallback.
   3. Clean via Groq (same CLEANING_PROMPT as scrape_individual_videos.py).
   4. Write temp .txt to sources/youtube/cleaned/ with correct metadata headers.
-  5. Call ingest_file() directly (same path as all other documents):
+  5. Call ingest_file() directly (same path as all other documents), which
+     internally handles, in order:
        - chunk → embed → document row → chunks table
-       - propositions (auto-fires for unlicensed sources)
+       - propositions.process_document() — gate lives in propositions.py
+         (fires for unlicensed/licensed sources; skips owned/public_domain).
+         Not called directly in this file — inherited via ingest_file().
        - topic tagging (Groq)
   6. Delete temp .txt; write status=done in sheet.
 
