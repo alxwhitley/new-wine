@@ -48,7 +48,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 │   ├── extract_bible_refs.py      # Backfill bible_references on all documents
 │   ├── download_book_covers.py    # Download book cover images to frontend/public/images/books/
 │   └── test_metering.py           # End-to-end metering test suite (increment, rollover, hard stop)
-├── taxonomy.md                # 257-tag topic taxonomy (15 categories)
+├── taxonomy.md                # 258-tag topic taxonomy (15 categories); generated from scripts/taxonomy.py, the source of truth
 ├── migrations/                # SQL migrations (run in Supabase SQL Editor)
 │   ├── 038_pastors_notes.sql  # user_roles, contributor_requests, pastors_cards tables + RLS
 │   ├── 039_user_usage.sql     # user_usage table + increment_user_query + get_user_usage RPCs
@@ -99,6 +99,8 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
     ├── app/
     │   └── home/              # Public marketing landing page (no auth required)
     │       └── page.tsx       # Animated mockups, marquee, Why It Matters, CTA — BetaGate + LoginModal wired
+    ├── contexts/
+    │   └── chat-focus-context.tsx    # ChatFocusContext — shares input focus state between ChatInput and MobileTabBar; drives tab-bar keyboard-hide + pb-0 main padding when focused
     ├── hooks/
     │   ├── useUserRole.ts     # Role + displayName hook; module-level cache keyed by access token; 5-minute TTL
     │   └── useChat.ts         # weeklyUsage state; seeds from GET /usage on mount, updates from SSE meta
@@ -111,6 +113,7 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
     │   ├── ui/
     │   │   └── alert-dialog.tsx      # Radix UI AlertDialog primitive (all sub-components)
     │   └── rhemata/
+    │       ├── mobile-tab-bar.tsx    # Mobile bottom nav (Study · Chat · Discover); slides off-screen via translate-y-full when inputFocused (reads ChatFocusContext)
     │       ├── usage-ring.tsx        # SVG weekly usage ring (track=--muted, arc=--foreground)
     │       └── weekly-limit-card.tsx # Inline hard-stop card on 429; BILLING_ENABLED=false flag
     ├── package.json
@@ -242,7 +245,7 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 - k=30 retrieval pool post-RRF; Cohere reranks to top 8
 - Single-column PDFs only — no multi-column OCR needed yet
 - Bible Study articles excluded from extraction pipeline
-- Topic tagging: 257-tag taxonomy (15 categories), validated against VALID_TAGS set in scripts/taxonomy.py, retry if < 3 valid
+- Topic tagging: 258-tag taxonomy (15 categories), validated against VALID_TAGS set in scripts/taxonomy.py, retry if < 3 valid. taxonomy.py is the single source of truth for all tagging scripts (including retag_sermons.py, fixed 2026-07-02 — it previously parsed taxonomy.md independently, which had drifted to 209 tags); taxonomy.md is generated from taxonomy.py for human reference only.
 - is_copyrighted derived from folder path: `sources/youtube/` and `sources/magazine/` → true, `sources/documents/` → false. **This flag is unreliable** (e.g. Derek Prince docs are `false` despite being copyrighted works). The license gate deliberately ignores it — do not "fix" the gate to read `is_copyrighted`.
 - Design system: `DESIGN.md` in project root is the styling authority. Lumen system (shadcn new-york, Tailwind v4 CSS vars, Geist Sans, single dark theme locked via `forcedTheme`). No hardcoded hex.
 - Brand reset complete (June 2026): Lora/Inter/gold hex removed. Geist Sans, shadcn primitives, CSS variable tokens throughout. `DESIGN.md` is source of truth.
@@ -369,6 +372,41 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 | `scripts/extract_bible_refs.py` | Backfill bible_references on all documents |
 | `scripts/download_book_covers.py` | Download book cover images to frontend/public/images/books/ |
 | `scripts/test_metering.py` | End-to-end metering test suite (increment, rollover, hard stop) |
+
+---
+
+## Ingest scripts: propositions are per-script, not enforced
+
+Every ingest script must generate propositions for gated content. This is
+NOT enforced anywhere — no central chokepoint, no DB backstop. It lives in
+each script's discipline. Forget it, and content ingests with zero
+paraphrase layer and NO error. Silent gap.
+
+**Rule for any new or modified ingest script:**
+1. Call `process_document(...)` after chunk insert (or route through
+   `ingest_file()`, which calls it internally).
+2. Confirm the full pre-chunk document text is still in scope at that point.
+3. Verify it actually fires — don't trust comments or docstrings:
+   `grep -n "process_document\|propositions\." scripts/<name>.py`
+
+**What the gate does (propositions.py):** extracts for unlicensed + licensed,
+skips owned + public_domain, fails closed on missing source. A script whose
+sources are all public_domain will correctly produce zero propositions —
+that's expected, not a bug.
+
+**Gotchas, both hit in practice:**
+- Comments/docstrings lie. `youtube_ingest.py` line 15 claimed propositions
+  "auto-fire" — the actual call lived one level down in `ingest_file()`.
+  Only a grep of the real call site proves coverage.
+- This is per-script. Unlike the source_id gate (enforced at DB level via
+  NOT NULL + sentinel default), nothing stops a new script from skipping
+  propositions entirely.
+
+**Known future fix (not yet done):** route all ingest through one shared
+function so propositions can't be skipped by omission. Deferred — it's a
+load-bearing refactor of the live ingest path (magazine passes clean
+pre-chunk body, HelloAO is REST not psycopg2, youtube goes via ingest_file),
+so it gets its own diagnose-first session, not a bundled change.
 
 ---
 
