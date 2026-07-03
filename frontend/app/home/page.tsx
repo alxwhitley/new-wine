@@ -266,158 +266,6 @@ function StudyMockup() {
 }
 
 /* ════════════════════════════════════════════════════════
-   DISCOVER MOCKUP
-════════════════════════════════════════════════════════ */
-function DiscoverMockup() {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const featuredRef = useRef<HTMLDivElement>(null);
-  const card1Ref = useRef<HTMLDivElement>(null);
-  const card2Ref = useRef<HTMLDivElement>(null);
-  const pillsRef = useRef<HTMLDivElement>(null);
-  const hasAnimated = useRef(false);
-
-  const runAnimation = useCallback(() => {
-    const featured = featuredRef.current;
-    if (featured) {
-      featured.style.transition = "background .3s, border-color .3s";
-      featured.style.background = "hsl(var(--primary) / 0.07)";
-      featured.style.borderColor = "hsl(var(--primary) / 0.3)";
-      setTimeout(() => { featured.style.background = ""; featured.style.borderColor = ""; }, 700);
-    }
-
-    const flash = (el: HTMLDivElement | null, delay: number) => {
-      setTimeout(() => {
-        if (!el) return;
-        el.style.transition = "background .2s, border-color .2s";
-        el.style.background = "hsl(var(--primary) / 0.08)";
-        el.style.borderColor = "hsl(var(--primary) / 0.3)";
-        setTimeout(() => { el.style.background = ""; el.style.borderColor = ""; }, 600);
-      }, delay);
-    };
-    flash(card1Ref.current, 1000);
-    flash(card2Ref.current, 1500);
-
-    const pills = pillsRef.current;
-    if (pills) {
-      Array.from(pills.children).forEach((pill, i) => {
-        setTimeout(() => {
-          const el = pill as HTMLElement;
-          el.style.transition = "border-color .2s, color .2s";
-          el.style.borderColor = "hsl(var(--gold-light) / 0.6)";
-          el.style.color = C.gold;
-          setTimeout(() => { el.style.borderColor = ""; el.style.color = ""; }, 400);
-        }, 2200 + i * 180);
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !hasAnimated.current) {
-            hasAnimated.current = true;
-            el.style.opacity = "1";
-            el.style.transform = "translateY(0)";
-            setTimeout(runAnimation, 400);
-          }
-        });
-      },
-      { threshold: 0.3 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [runAnimation]);
-
-  const cardBase: React.CSSProperties = { border: `1px solid ${C.border}`, borderRadius: C.rLg, padding: ".65rem .8rem", display: "flex", flexDirection: "column", gap: ".3rem" };
-
-  return (
-    <div ref={wrapRef} style={{ opacity: 0, transform: "translateY(28px)", transition: "opacity .65s ease, transform .65s ease", borderRadius: C.rLg, overflow: "hidden", background: C.sidebar, border: `1px solid ${C.border}` }}>
-      <div style={{ display: "flex", height: 520, fontSize: 13 }}>
-        <MockSidebar activeItem="discover" />
-        <div style={{ flex: 1, overflow: "hidden", background: C.bg, display: "flex", flexDirection: "column" }}>
-          <div style={{ flex: 1, overflow: "hidden", padding: "1rem 1.5rem", display: "flex", flexDirection: "column", gap: ".85rem" }}>
-            {/* Heading */}
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "1.15rem", fontWeight: 600, color: C.cardFg }}>Discover</div>
-              <div style={{ fontSize: ".72rem", color: C.mutedFg }}>Sermons, articles, and books from the charismatic tradition</div>
-            </div>
-            {/* Search */}
-            <div style={{ display: "flex", gap: ".5rem" }}>
-              <div style={{ flex: 1, background: C.popover, border: `1px solid ${C.border}`, borderRadius: C.rMd, padding: ".4rem .7rem", fontSize: ".75rem", color: C.mutedFg }}>🔍 Search articles, authors, topics…</div>
-              <div style={{ background: C.primary, color: C.primaryFg, borderRadius: C.rMd, padding: ".4rem .8rem", fontSize: ".75rem", fontWeight: 600 }}>Search</div>
-            </div>
-            {/* Featured */}
-            <div ref={featuredRef} style={{ border: `1px solid ${C.border}`, borderRadius: C.rLg, padding: ".8rem 1rem", display: "grid", gridTemplateColumns: "1fr 80px", gap: ".75rem", alignItems: "start" }}>
-              <div>
-                <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: C.gold, marginBottom: ".2rem" }}>
-                  ARTICLE · <span style={{ color: C.mutedFg, fontWeight: 400 }}>Ern Baxter</span>
-                </div>
-                <div style={{ fontSize: ".9rem", fontWeight: 600, color: C.cardFg, marginBottom: ".25rem", lineHeight: 1.3 }}>What Makes God Angry?</div>
-                <div style={{ fontSize: ".7rem", color: C.mutedFg, lineHeight: 1.55 }}>New Wine · January 1978 — God&rsquo;s anger originates in perfect holiness and justice…</div>
-                <div style={{ fontSize: ".65rem", color: C.mutedFg, opacity: .6, marginTop: ".3rem" }}>1978</div>
-              </div>
-              <div style={{ border: `1px solid ${C.border}`, borderRadius: C.rMd, aspectRatio: "3/2", background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.25rem", opacity: .3 }}>◆</div>
-            </div>
-            {/* Sermon cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: ".6rem" }}>
-              <div ref={card1Ref} style={cardBase}>
-                <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: C.gold }}>
-                  SERMON · <span style={{ fontWeight: 400, color: C.mutedFg }}>John Bevere</span>
-                </div>
-                <div style={{ fontSize: ".78rem", fontWeight: 600, color: C.cardFg, lineHeight: 1.3 }}>Proof That God Still Speaks Today</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: ".3rem", marginTop: ".1rem" }}>
-                  {["Discerning God’s Voice", "Hearing God’s Voice"].map((tag) => (
-                    <span key={tag} style={{ fontSize: ".58rem", background: C.popover, border: `1px solid ${C.border}`, borderRadius: C.r, padding: ".15rem .45rem", color: C.mutedFg }}>{tag}</span>
-                  ))}
-                </div>
-              </div>
-              <div ref={card2Ref} style={cardBase}>
-                <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: C.gold }}>
-                  SERMON · <span style={{ fontWeight: 400, color: C.mutedFg }}>Derek Prince</span>
-                </div>
-                <div style={{ fontSize: ".78rem", fontWeight: 600, color: C.cardFg, lineHeight: 1.3 }}>Motivation for Living To Do God&rsquo;s Will</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: ".3rem", marginTop: ".1rem" }}>
-                  {["God’s Will and Guidance", "Purpose and Calling"].map((tag) => (
-                    <span key={tag} style={{ fontSize: ".58rem", background: C.popover, border: `1px solid ${C.border}`, borderRadius: C.r, padding: ".15rem .45rem", color: C.mutedFg }}>{tag}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-            {/* Stats strip */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", border: `1px solid ${C.border}`, borderRadius: C.rLg, overflow: "hidden" }}>
-              {[["33", "Articles"], ["755", "Sermons"], ["50", "Books"]].map(([n, l], i) => (
-                <div key={l} style={{ padding: ".55rem .85rem", display: "flex", alignItems: "center", justifyContent: "space-between", borderRight: i < 2 ? `1px solid ${C.border}` : "none" }}>
-                  <div>
-                    <div style={{ fontSize: "1.2rem", fontWeight: 700, color: C.cardFg }}>{n}</div>
-                    <div style={{ fontSize: ".65rem", color: C.mutedFg }}>{l}</div>
-                  </div>
-                  <span style={{ fontSize: ".75rem", color: C.mutedFg, opacity: .4 }}>→</span>
-                </div>
-              ))}
-            </div>
-            {/* Author pills */}
-            <div>
-              <div style={{ fontSize: ".62rem", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: C.mutedFg, opacity: .7, marginBottom: ".4rem" }}>Browse by author</div>
-              <div ref={pillsRef} style={{ display: "flex", gap: ".4rem", flexWrap: "wrap" }}>
-                {[["DP", "Derek Prince"], ["BM", "Bob Mumford"], ["EB", "Ern Baxter"], ["CS", "Charles Simpson"], ["DB", "Don Basham"]].map(([init, name]) => (
-                  <div key={name} style={{ display: "flex", alignItems: "center", gap: ".3rem", border: `1px solid ${C.border}`, borderRadius: "100px", padding: ".2rem .55rem .2rem .3rem", fontSize: ".65rem", color: C.mutedFg, cursor: "default" }}>
-                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: "hsl(var(--primary) / 0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".5rem", fontWeight: 700, color: C.gold, flexShrink: 0 }}>{init}</div>
-                    {name}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════════
    MARQUEE
 ════════════════════════════════════════════════════════ */
 const ROW1 = [
@@ -479,10 +327,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 ════════════════════════════════════════════════════════ */
 const EXPLORE_CARDS = [
   { icon: "🔡", title: "Greek & Hebrew Interlinear", body: "138,000+ word entries spanning the entire Greek NT and Hebrew OT. Tap any word for Strong’s definition, transliteration, and lexical data." },
-  { icon: "✡️", title: "Jewish Perspective", body: "For every verse: Jewish historical context, Messianic perspective, and cultural setting — generated with numbered citations like a research paper." },
-  { icon: "📌", title: "Pastors’ Notes", body: "Vetted pastors and ministry leaders annotate Bible verses with insights and pastoral wisdom. Three-tier role system: user, contributor, admin." },
+  { icon: "📌", title: "Pastors’ Notes", body: "Coming: vetted pastors and ministry leaders annotating verses with bylined devotional notes. The vetting is the feature — every note from a named shepherd, none of it AI-generated." },
   { icon: "📖", title: "Deep Word Studies", body: "1,700+ Greek and Hebrew word studies from Precept Austin, cross-referenced to the interlinear. Every Strong’s number links to its full article." },
-  { icon: "🏛️", title: "Patristic Commentary", body: "186 documents from the Church Fathers — Chrysostom, Matthew Henry, Adam Clarke, JFB — giving historical grounding to charismatic study." },
+  { icon: "🏛️", title: "Patristic Commentary", body: "186 commentaries spanning the Church Fathers through Matthew Henry, Adam Clarke, and Jamieson-Fausset-Brown — historical grounding for Spirit-filled study." },
   { icon: "🎙️", title: "Charismatic Corpus", body: "Sermon transcripts from trusted charismatic voices alongside New Wine Magazine’s archive — curated for theological reliability, not just volume." },
 ];
 
@@ -512,7 +359,7 @@ export default function HomePage() {
           Rhemata
         </Link>
         <ul className="hidden md:flex items-center gap-7 list-none m-0 p-0">
-          {([["About", "#"], ["Features", "#"], ["Discover", "/library"], ["Study", "/study"]] as [string, string][]).map(([label, href]) => (
+          {([["About", "#"], ["Features", "#"], ["Study", "/study"]] as [string, string][]).map(([label, href]) => (
             <li key={label}>
               <Link href={href} className="text-sm font-medium text-muted-foreground hover:text-card-foreground transition-colors no-underline">
                 {label}
@@ -535,7 +382,7 @@ export default function HomePage() {
           Faithful answers from sources you can trust.
         </h1>
         <p className="text-lg text-muted-foreground max-w-[580px] mx-auto mb-8 leading-[1.75]">
-          Rhemata is an AI-assisted Bible study tool trained on trusted resources rooted in the charismatic tradition — now in early beta, and looking for testers.
+          Rhemata is an AI-assisted Bible study tool that answers from trusted sources rooted in the charismatic tradition — now in early beta, and looking for testers.
         </p>
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <Button size="lg" onClick={openAuthGate}>Become a test user</Button>
@@ -626,46 +473,22 @@ export default function HomePage() {
           <div>
             <SectionLabel>Ask Anything</SectionLabel>
             <h2 className="font-serif text-[clamp(1.7rem,3vw,2.4rem)] font-semibold leading-[1.2] mb-5 text-card-foreground text-balance">
-              Trained on trusted voices. Not everything at once.
+              Ask about the baptism of the Holy Spirit. Get an answer — not a survey.
             </h2>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
-              Ask any question in plain language and get a clear, faithful answer — drawn only from 2,600+ vetted sources within the charismatic tradition.
+              Ask general AI and you get &ldquo;some Christians believe&hellip; others hold&hellip;&rdquo; — every tradition averaged into one careful, beige paragraph. Rhemata answers only from vetted sources across the Spirit-filled tradition, so your question gets an answer with conviction behind it.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
               That includes historic voices like <strong className="text-card-foreground font-semibold">Derek Prince</strong> and <strong className="text-card-foreground font-semibold">Bob Mumford</strong>, alongside trusted modern-day teachers like <strong className="text-card-foreground font-semibold">John Bevere</strong>, <strong className="text-card-foreground font-semibold">Michael Koulianos</strong>, and <strong className="text-card-foreground font-semibold">Dr. Michael Brown</strong>.
             </p>
+            <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
+              And when you see a quote, it&rsquo;s real. Every quote is checked character-for-character against the source before it can appear — a quote cannot exist in Rhemata unless the teacher actually said it. General AI can invent a quote. Rhemata structurally can&rsquo;t.
+            </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75]">
-              Every answer points back to the voices behind it — and where a source is available in full, you can open and read it yourself.
+              Every answer points back to the voices behind it, with the link to the full teaching right there.
             </p>
           </div>
           <ChatMockup />
-        </div>
-      </section>
-
-      {/* ── FEATURE: DISCOVER ── */}
-      <section className="py-20 px-6 border-t border-border">
-        <div className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
-          <div className="order-2 md:order-1">
-            <DiscoverMockup />
-          </div>
-          <div className="order-1 md:order-2">
-            <SectionLabel>Discover</SectionLabel>
-            <h2 className="font-serif text-[clamp(1.7rem,3vw,2.4rem)] font-semibold leading-[1.2] mb-5 text-card-foreground text-balance">
-              See what taught the AI. Find new voices you&rsquo;ll love.
-            </h2>
-            <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
-              Discover is the window into the library behind every answer. See the voices and sources the AI draws from — and read the ones available in full.
-            </p>
-            <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
-              It&rsquo;s also where you stumble onto voices you&rsquo;ve never heard. Overlooked teachers, out-of-print books, and forgotten articles surfaced fresh — the next great book lost to history, waiting to be found again.
-            </p>
-            <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-5">
-              New content is added every day.
-            </p>
-            <Link href="/library" className="inline-flex items-center gap-1 text-sm font-semibold no-underline hover:opacity-80 transition-opacity" style={{ color: "hsl(var(--gold-light))" }}>
-              Explore Discover →
-            </Link>
-          </div>
         </div>
       </section>
 
@@ -684,7 +507,7 @@ export default function HomePage() {
               Open any verse for the full Greek and Hebrew interlinear, tap any word for its Strong&rsquo;s number and definition, and read commentary spanning the whole history of the church.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-5">
-              And it&rsquo;s alive with community. <strong className="text-card-foreground font-semibold">Trusted contributors — pastors and leaders in local communities all across the world — add devotional notes to the passages they&rsquo;re personally reading right now.</strong> Real insight from real shepherds, attached to the verse in front of you.
+              And a human layer is coming. <strong className="text-card-foreground font-semibold">Vetted pastors and leaders will contribute devotional notes attached to the verse in front of you</strong> — real shepherds, present inside the study experience. Every note bylined, none of it AI-generated, and the bar for who contributes stays high.
             </p>
             <Link href="/study" className="inline-flex items-center gap-1 text-sm font-semibold no-underline hover:opacity-80 transition-opacity" style={{ color: "hsl(var(--gold-light))" }}>
               Explore Study →
@@ -699,17 +522,17 @@ export default function HomePage() {
         <div className="max-w-[1100px] mx-auto text-center">
           <SectionLabel>The Library Behind It</SectionLabel>
           <h2 className="font-serif text-[clamp(1.85rem,3.5vw,2.8rem)] font-semibold leading-[1.2] mb-5 text-card-foreground text-balance">
-            Depth you can trust, growing every day.
+            Every answer stands on named shoulders.
           </h2>
           <p className="text-muted-foreground text-[1.05rem] max-w-[580px] mx-auto mb-12 leading-[1.75]">
-            Built from a curated library of sermon transcripts, word studies, books, commentaries, and modern day pastor&rsquo;s notes — sourced from trusted voices within the charismatic and Spirit-filled tradition.
+            Built from a curated library of sermon transcripts, word studies, books, and commentaries — every one from a named, vetted voice in the charismatic and Spirit-filled tradition. If it&rsquo;s in the corpus, someone real stands behind it.
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { num: "2,600+", label: "Source Documents" },
               { num: "1,700+", label: "Word Studies" },
               { num: "186", label: "Commentaries" },
-              { num: "Added", label: "Daily" },
+              { num: "Growing", label: "Week by week" },
             ].map(({ num, label }) => (
               <div key={label} className="bg-card border border-border rounded-lg p-6">
                 <div className="font-serif text-[2.1rem] font-semibold leading-none mb-1.5" style={{ color: "hsl(var(--gold-light))" }}>{num}</div>
