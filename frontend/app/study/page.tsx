@@ -509,12 +509,19 @@ function InterlinearBlocks({
   tokens: WordToken[]; selectedStrongs: string | null;
   onSelect: (strongs: string | null) => void; loading: boolean; isNT: boolean;
 }) {
+  const label = (
+    <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-2">
+      Greek &middot; Interlinear
+    </p>
+  );
+
   if (loading) {
     return (
-      <div className="rounded-md border border-border p-3 mt-4">
-        <div className="flex flex-wrap gap-3">
+      <div className="mt-4">
+        {label}
+        <div className="flex gap-3 overflow-x-auto py-1">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <div key={i} className="flex flex-col items-center gap-1">
+            <div key={i} className="flex shrink-0 flex-col items-center gap-1">
               <Skeleton className="h-5 w-10" />
               <Skeleton className="h-3 w-8" />
               <Skeleton className="h-2.5 w-10" />
@@ -526,15 +533,17 @@ function InterlinearBlocks({
   }
   if (!isNT) {
     return (
-      <div className="rounded-md border border-border p-3 mt-4">
+      <div className="mt-4">
+        {label}
         <p className="text-sm text-muted-foreground">No interlinear data available for this verse</p>
       </div>
     );
   }
   if (tokens.length === 0) return null;
   return (
-    <div className="rounded-md border border-border mt-4">
-      <div className="flex flex-wrap gap-2 p-3">
+    <div className="mt-4">
+      {label}
+      <div className="flex gap-2 overflow-x-auto py-1">
         {tokens.map((token, i) => {
           const isSelected = selectedStrongs === token.strongs;
           return (
@@ -542,7 +551,7 @@ function InterlinearBlocks({
               key={i}
               onClick={() => onSelect(isSelected ? null : token.strongs)}
               className={cn(
-                "rounded-md p-1.5 text-center cursor-pointer transition-colors border min-h-[44px]",
+                "shrink-0 rounded-md p-1.5 text-center cursor-pointer transition-colors border min-h-[44px]",
                 isSelected ? "border-primary bg-primary/10" : "border-transparent hover:bg-accent"
               )}
             >
@@ -1439,9 +1448,9 @@ export default function StudyPage() {
                     )}
 
                     {!verseLoading && verseData && !chapterOpen && (
-                      <div className="rounded-lg border border-border bg-card">
-                        {/* Reference header + arrows */}
-                        <div className="flex items-center justify-center gap-3 py-2 px-4 border-b border-border">
+                      <div>
+                        {/* Reference header + arrows — centered, borderless */}
+                        <div className="flex items-center justify-center gap-3">
                           <button
                             onClick={() => stepVerse("prev")}
                             disabled={!prevVerseId}
@@ -1449,7 +1458,7 @@ export default function StudyPage() {
                           >
                             &larr;
                           </button>
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          <p className="text-xs font-medium uppercase tracking-wide text-primary">
                             {verseData.book} {verseData.chapter}:{verseData.verse} ({verseData.translation})
                           </p>
                           <button
@@ -1461,34 +1470,34 @@ export default function StudyPage() {
                           </button>
                         </div>
 
-                        <div className="p-4">
-                          {/* Verse text */}
-                          <p className="font-sans text-base leading-relaxed text-foreground">{verseData.text}</p>
+                        {/* Verse text — new focal point, no card */}
+                        <p className="font-sans text-[23px] md:text-[28px] leading-relaxed text-foreground text-center mt-4">
+                          {verseData.text}
+                        </p>
 
-                          {/* Interlinear row — always visible */}
-                          <InterlinearBlocks
-                            tokens={tokens}
-                            selectedStrongs={selectedStrongs}
-                            onSelect={(strongs) => setSelectedStrongs(strongs)}
-                            loading={tokensLoading}
-                            isNT={isNT}
+                        {/* Interlinear row — always visible */}
+                        <InterlinearBlocks
+                          tokens={tokens}
+                          selectedStrongs={selectedStrongs}
+                          onSelect={(strongs) => setSelectedStrongs(strongs)}
+                          loading={tokensLoading}
+                          isNT={isNT}
+                        />
+
+                        {/* Inline word panel */}
+                        {selectedStrongs && (
+                          <InlineWordPanel
+                            definition={definition}
+                            excerptContent={excerptContent}
+                            excerptLoading={excerptLoading}
+                            corpusResults={corpusResults}
+                            corpusLoading={corpusLoading}
+                            isSaved={savedStrongsSet.has(selectedStrongs)}
+                            onToggleSave={handleToggleSaveSelected}
+                            onClose={() => setSelectedStrongs(null)}
+                            isLoggedIn={!!user}
                           />
-
-                          {/* Inline word panel */}
-                          {selectedStrongs && (
-                            <InlineWordPanel
-                              definition={definition}
-                              excerptContent={excerptContent}
-                              excerptLoading={excerptLoading}
-                              corpusResults={corpusResults}
-                              corpusLoading={corpusLoading}
-                              isSaved={savedStrongsSet.has(selectedStrongs)}
-                              onToggleSave={handleToggleSaveSelected}
-                              onClose={() => setSelectedStrongs(null)}
-                              isLoggedIn={!!user}
-                            />
-                          )}
-                        </div>
+                        )}
                       </div>
                     )}
 
@@ -1612,8 +1621,8 @@ export default function StudyPage() {
                   {/* Words section */}
                   {!verseLoading && verseData && (
                     <section id="section-words" className="pt-4">
-                      <div className="rounded-lg border border-border bg-card">
-                        <div className="flex items-center justify-center gap-3 py-2 px-4 border-b border-border">
+                      <div>
+                        <div className="flex items-center justify-center gap-3">
                           <button
                             onClick={() => stepVerse("prev")}
                             disabled={!prevVerseId}
@@ -1621,7 +1630,7 @@ export default function StudyPage() {
                           >
                             &larr;
                           </button>
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          <p className="text-xs font-medium uppercase tracking-wide text-primary">
                             {verseData.book} {verseData.chapter}:{verseData.verse} ({verseData.translation})
                           </p>
                           <button
@@ -1632,26 +1641,26 @@ export default function StudyPage() {
                             &rarr;
                           </button>
                         </div>
-                        <div className="p-4">
-                          <p className="font-sans text-base leading-relaxed text-foreground">{verseData.text}</p>
-                          <button
-                            onClick={() => setMobileChapterOpen(true)}
-                            className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-                          >
-                            View Chapter
-                          </button>
-                          {/* Interlinear — tapping a word opens the word bottom sheet */}
-                          <InterlinearBlocks
-                            tokens={tokens}
-                            selectedStrongs={selectedStrongs}
-                            onSelect={(strongs) => {
-                              setSelectedStrongs(strongs);
-                              if (strongs) setMobileWordSheetOpen(true);
-                            }}
-                            loading={tokensLoading}
-                            isNT={isNT}
-                          />
-                        </div>
+                        <p className="font-sans text-[23px] leading-relaxed text-foreground text-center mt-4">
+                          {verseData.text}
+                        </p>
+                        <button
+                          onClick={() => setMobileChapterOpen(true)}
+                          className="mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                        >
+                          View Chapter
+                        </button>
+                        {/* Interlinear — tapping a word opens the word bottom sheet */}
+                        <InterlinearBlocks
+                          tokens={tokens}
+                          selectedStrongs={selectedStrongs}
+                          onSelect={(strongs) => {
+                            setSelectedStrongs(strongs);
+                            if (strongs) setMobileWordSheetOpen(true);
+                          }}
+                          loading={tokensLoading}
+                          isNT={isNT}
+                        />
                       </div>
                     </section>
                   )}

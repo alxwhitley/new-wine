@@ -96,6 +96,7 @@
 **Rules:**
 - NO Lora, NO Inter, NO Google Fonts imports. Geist + system serif only.
 - Reading headings: `text-xl font-medium tracking-wide` — never bold, never larger than xl inside readers.
+- **Exception:** Study Mode's verse-as-focal-point display (`app/study/page.tsx`) is exempt from this size cap — it renders at `text-[23px] md:text-[28px]` so the verse itself reads as the screen's visual focal point. This is a deliberate, single-purpose exception, not general permission to exceed `xl` elsewhere.
 - UI text default `text-sm`; metadata `text-sm text-muted-foreground` or `text-xs`.
 - Letter-spacing normal; the only tracking used is `tracking-wide` on serif headings.
 
