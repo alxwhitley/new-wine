@@ -1,0 +1,48 @@
+# How Rhemata Handles Sources
+
+*Transparency about where our content comes from, how it's used, and how we protect the people who wrote it.*
+
+---
+
+## Rhemata is not trained on this content
+
+Rhemata does not train an AI model on the books, sermons, and commentaries in its library. There is no model that has absorbed these works and learned to imitate them.
+
+Instead, Rhemata is a **retrieval and citation system**. When you ask a question, Rhemata searches its indexed library for relevant passages, retrieves them, and presents an answer built on those passages — with every claim traced back to a named author and source. The original works remain intact, attributed, and pointed back to. Nothing is absorbed, blended, or anonymized into a model.
+
+This distinction is the foundation of everything we do. AI tools that flatten a thousand voices into one synthetic answer erase the people who did the work. Rhemata exists to do the opposite: put named voices in front of you, with receipts.
+
+## Every quote is verified — by code, not trust
+
+A quotation cannot appear in Rhemata unless our software confirms it is an **exact, character-for-character match** against the source text. If the words don't exist verbatim in the original, they cannot be displayed as a quote. This is enforced mechanically, not editorially. No paraphrase wearing quotation marks. No AI-invented citations.
+
+## How content enters the library
+
+Every source in Rhemata passes through the same pipeline:
+
+1. **Classification.** Before anything is served, each source is assigned a rights status: public domain, owned, licensed, or unverified.
+2. **Hidden by default.** New content is not visible to users until its rights status has been reviewed. Our system fails closed — if we haven't cleared it, you can't retrieve it.
+3. **Attribution at ingest.** Every document is tied to its author or rights-holder at the moment it enters the system, so attribution can never be lost downstream.
+4. **Theological review.** Featured voices are selected against our theological foundations (see [Our Theological Lens](/beliefs)) — not scraped indiscriminately.
+
+## What we prioritize
+
+The heart of Rhemata's library is **public domain literature** — the writers of past centuries whose works belong to everyone: R.A. Torrey, Andrew Murray, Charles Finney, the voices of the early Pentecostal outpouring, and many more. These works are freely quotable, and Rhemata's mission is to put them back in front of a generation that has never read them.
+
+For contemporary voices, we pursue **direct permission from authors, estates, and ministries**. Where content carries open licenses (such as Creative Commons), we honor the license terms, including attribution requirements.
+
+## For authors and rights holders
+
+If you are an author, publisher, or rights holder and believe your content appears in Rhemata improperly — or if you'd like to discuss how your work is represented — contact us directly:
+
+**[contact email]**
+
+We respond to every rights inquiry. If content is identified as improperly included, we will remove it from retrieval promptly while the matter is reviewed. We would rather lose a source than misuse one.
+
+<!-- SLOT: Once DMCA agent registration is complete, replace the paragraph above with formal DMCA notice-and-takedown language and the registered agent's contact information. -->
+
+## Why we built it this way
+
+Rhemata's audience carries a healthy suspicion of AI — and we share it. An AI that invents quotes, launders sources, or speaks as an anonymous oracle is not a tool for serious theological study. Every safeguard on this page exists for one reason: so that when Rhemata shows you what Torrey or Murray said, you can trust that they actually said it — and go read them yourself.
+
+Rhemata is not a substitute for the sources. It is a doorway to them.

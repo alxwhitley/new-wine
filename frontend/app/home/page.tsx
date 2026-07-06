@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import BetaGate from "@/components/auth/BetaGate";
 import LoginModal from "@/components/auth/LoginModal";
+import { FooterNav } from "@/components/marketing/footer-nav";
 
 /* ── Inline-style color tokens (mockups only — page uses Tailwind classes) ── */
 const C = {
@@ -607,7 +608,10 @@ export default function HomePage() {
           </div>
         </div>
         <div className="max-w-[1100px] mx-auto pt-6 border-t border-border flex flex-col md:flex-row justify-between items-center gap-3">
-          <p className="text-[.78rem]" style={{ color: "hsl(var(--muted-foreground) / 0.7)" }}>© 2026 Rhemata. All rights reserved.</p>
+          <div className="flex flex-col md:flex-row items-center gap-3">
+            <FooterNav />
+            <p className="text-[.78rem]" style={{ color: "hsl(var(--muted-foreground) / 0.7)" }}>© 2026 Rhemata. All rights reserved.</p>
+          </div>
           <p className="font-serif italic text-[.78rem]" style={{ color: "hsl(var(--muted-foreground) / 0.7)" }}>ῥήματά ἐστιν πνεῦμα καὶ ζωή εἰσιν — John 6:63</p>
         </div>
       </footer>

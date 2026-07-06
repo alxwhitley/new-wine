@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { UsageRing } from "@/components/rhemata/usage-ring";
 import { AdminModal } from "@/components/admin/AdminModal";
+import { FooterNav } from "@/components/marketing/footer-nav";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -420,6 +421,9 @@ export function Sidebar({
           </Button>
         )}
       </div>
+
+      {/* Footer nav — bottom-left of the app shell */}
+      <FooterNav className="pb-2" />
 
       {/* Contributor request sheet */}
       <Sheet open={contributorOpen} onOpenChange={setContributorOpen}>
