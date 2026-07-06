@@ -183,7 +183,7 @@ function FeedbackButtons({
       <div className="flex items-center gap-1 mt-2">
         <button
           onClick={() => { if (!rating) submitFeedback("thumbs_up"); }}
-          className="group p-1 rounded transition-colors cursor-pointer"
+          className="group p-1 rounded-md transition-colors cursor-pointer"
           title="Good answer"
         >
           <ThumbsUp
@@ -196,7 +196,7 @@ function FeedbackButtons({
         </button>
         <button
           onClick={() => { if (!rating) setShowModal(true); }}
-          className="group p-1 rounded transition-colors cursor-pointer"
+          className="group p-1 rounded-md transition-colors cursor-pointer"
           title="Bad answer"
         >
           <ThumbsDown
@@ -251,7 +251,7 @@ export function ChatMessage({
 
   return (
     <div className="mb-4 border-t border-border pt-3">
-      <div className="max-w-none prose-rhemata">
+      <div className="max-w-none">
         <ReactMarkdown
           components={{
             h2: ({ children }) => (

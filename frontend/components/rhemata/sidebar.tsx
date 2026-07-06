@@ -209,7 +209,7 @@ export function Sidebar({
         </h1>
         <button
           onClick={onClose}
-          className="rounded p-1 text-muted-foreground hover:text-foreground md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
+          className="rounded-md p-1 text-muted-foreground hover:text-foreground md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
         >
           <X className="h-5 w-5" />
         </button>
