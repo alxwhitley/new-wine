@@ -1471,7 +1471,7 @@ export default function StudyPage() {
                         </div>
 
                         {/* Verse text — new focal point, no card */}
-                        <p className="font-sans text-[23px] md:text-[28px] leading-relaxed text-foreground text-center mt-4">
+                        <p className="font-sans text-xl md:text-2xl leading-relaxed text-foreground text-center mt-4">
                           {verseData.text}
                         </p>
 
@@ -1641,7 +1641,7 @@ export default function StudyPage() {
                             &rarr;
                           </button>
                         </div>
-                        <p className="font-sans text-[23px] leading-relaxed text-foreground text-center mt-4">
+                        <p className="font-sans text-xl leading-relaxed text-foreground text-center mt-4">
                           {verseData.text}
                         </p>
                         <button
