@@ -7,44 +7,13 @@
 
 **Stack:** shadcn/ui (new-york style), Tailwind CSS variables, lucide-react icons, `tailwindcss-animate`, `class-variance-authority` for variants.
 
-**Theming:** Light theme is DEFAULT. Dark theme via `.dark` class with theme toggle. All colors are HSL CSS variables consumed as `hsl(var(--token))` — never raw hex in components.
+**Theming:** Dark theme only, forced via `forcedTheme="dark"` in `next-themes` (`frontend/components/providers.tsx`) — no light theme, no toggle. All colors are HSL CSS variables consumed as `hsl(var(--token))` — never raw hex in components.
 
 ---
 
 ## Color Tokens
 
-### Light (`:root`) — warm parchment
-```css
---background: 48 33.33% 97.06%;        /* warm off-white paper */
---foreground: 48 19.61% 20%;           /* warm dark brown-gray */
---card: 48 33.33% 97.06%;              /* same as background — cards are NOT elevated by color */
---card-foreground: 60 2.56% 7.65%;
---popover: 0 0% 100%;                  /* pure white — only popovers lift */
---popover-foreground: 50.77 19.4% 13.14%;
---primary: 44.05 73.83% 41.96%;        /* gold — CTAs, links, active states */
---primary-foreground: 0 0% 100%;
---secondary: 46.15 22.81% 88.82%;      /* warm light tan */
---secondary-foreground: 50.77 8.5% 30%;
---muted: 44 29.41% 90%;
---muted-foreground: 50 2.36% 50.2%;
---accent: 46.15 22.81% 88.82%;         /* hover fills — same as secondary */
---accent-foreground: 50.77 19.4% 13.14%;
---destructive: 60 2.56% 7.65%;
---destructive-foreground: 0 0% 100%;
---border: 50 7.5% 84.31%;
---input: 50.77 7.98% 68.04%;
---ring: 210 74.8% 49.8%;               /* blue focus ring — intentional contrast */
---sidebar: 51.43 25.93% 94.71%;        /* sidebar slightly darker than main bg */
---sidebar-foreground: 60 2.52% 23.33%;
---sidebar-primary: 15.11 55.56% 52.35%;
---sidebar-primary-foreground: 0 0% 98.43%;
---sidebar-accent: 46.15 22.81% 88.82%;
---sidebar-accent-foreground: 0 0% 20.39%;
---sidebar-border: 0 0% 92.16%;
---sidebar-ring: 0 0% 70.98%;
-```
-
-### Dark (`.dark`) — warm charcoal
+### `:root` (only theme) — warm charcoal
 ```css
 --background: 60 2.7% 14.51%;
 --foreground: 46.15 9.77% 73.92%;
@@ -75,12 +44,11 @@
 --sidebar-ring: 0 0% 70.98%;
 ```
 
-### Chart tokens (both themes)
+### Chart tokens
 ```css
 --chart-1: 18.28 57.14% 43.92%;  --chart-2: 251.45 84.62% 74.51%;
+--chart-3: 48 10.64% 9.22%;      --chart-4: 248.28 25.22% 22.55%;
 --chart-5: 17.78 60% 44.12%;
-/* light: */ --chart-3: 46.15 28.26% 81.96%;  --chart-4: 256.55 49.15% 88.43%;
-/* dark: */  --chart-3: 48 10.64% 9.22%;      --chart-4: 248.28 25.22% 22.55%;
 ```
 
 ---

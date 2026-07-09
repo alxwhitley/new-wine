@@ -104,7 +104,7 @@ Open blockers, roughly by severity:
 ## Where to Look for More
 
 - **Current architecture, scripts, migrations, decisions log:** `CLAUDE.md` (project root) — the living source of truth, updated every session.
-- **Point-in-time state** (corpus counts, in-flight tasks, known issues, "what's left to run"): `rhemata-status.md` (project root, once created) — this skill file deliberately doesn't carry that kind of detail, because it goes stale within days.
+- **Point-in-time state** (corpus counts, in-flight tasks, known issues, "what's left to run"): `rhemata-status.md` (project root) — this skill file deliberately doesn't carry that kind of detail, because it goes stale within days.
 - **Diagnostic audit reports (2026-07-06/07, repo root, uncommitted):** `GUEST_AUTH_AUDIT.md` (guest→signup→signin flow), `BUTTON_AUTH_UX_AUDIT.md` (auth CTA/button inventory), `DIAGNOSTIC_SWEEP_2026-07-07.md` (11-check facts sweep incl. the quote-verifier finding).
 - **Messaging, voice, positioning decisions:** `POSITIONING.md` (project root, if present).
 - **Styling rules:** `DESIGN.md` (project root).

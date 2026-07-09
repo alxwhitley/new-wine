@@ -417,3 +417,37 @@ so it gets its own diagnose-first session, not a bundled change.
 - Read output directly — never ask Alex to copy-paste terminal output
 - Check actual files before assuming structure
 - Python 3.9 constraint: use `Optional[str]` not `str | None`
+# Rhemata — Project Knowledge Read Contract
+
+Chat reads project state directly from five repo files. No Notion
+mirroring, no sync step, no drift-check for this project — there is
+exactly one copy of each, so there's nothing to drift from. (Notion sync
+retired 2026-07-09; this repo-local change does not touch the shared
+"Client Projects" Notion database, the Rhemata Notion page, any other
+row in it, or the global Notion Project Tracker contract.)
+
+- **CLAUDE.md** — durable architecture, decisions log, conventions.
+  "How the system works."
+- **POSITIONING.md** — messaging/positioning source of truth.
+- **DESIGN.md** — styling-token authority.
+- **PLAN.md** — the roadmap: numbered session list, standing session
+  rules, open-decisions table, ground-truth findings log.
+- **rhemata-status.md** — live session state only ("what's next,"
+  "what's blocked," current counts). Overwritten each session. Never
+  durable truth.
+
+**Writer rules differ by file:**
+- `CLAUDE.md`, `SKILL.md`, `DESIGN.md` — terminal both authors and
+  writes these, from confirmed-working builds only.
+- `rhemata-status.md` — terminal both authors and writes this, directly
+  from live repo/DB state, overwritten each session.
+- `PLAN.md` — **chat is the sole author** of roadmap revisions, handed
+  to terminal as a prompt to commit — same propose→commit pattern as
+  any other repo edit. Terminal is the sole committer but does not
+  originate roadmap content itself.
+
+Chat never edits any of the five files directly. If chat proposes a
+change to a terminal-authored file, terminal makes it in the repo, then
+commits.
+
+Never log planned work as done. Never claim build state you can't see.
