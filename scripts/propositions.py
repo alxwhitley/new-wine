@@ -1,9 +1,10 @@
 """
 propositions.py — shared module for proposition extraction and storage.
 
-Called by ingest scripts after chunk insertion for unlicensed and licensed
-documents (see process_document's gate). Non-fatal by contract: no public
-function raises.
+Called by ingest scripts after chunk insertion. Gate: extracts for licensed
+and unlicensed sources only (skips public_domain and owned), with Precept
+Austin locked out by name (see process_document). Non-fatal by contract: no
+public function raises.
 """
 
 import json
@@ -137,6 +138,14 @@ def store_propositions(
     return inserted
 
 
+# Precept Austin is locked OUT of the propositions layer entirely (decided
+# 2026-07-02): its existing excerpts are near-verbatim reorderings of the
+# source text, not paraphrases, and fresh Groq extraction was explicitly
+# declined. Enforced here by source_id so no caller (including future
+# backfills) can wire it in by accident.
+PRECEPT_AUSTIN_SOURCE_ID = "698e0596-a9c6-4890-958d-9199f1b8f762"
+
+
 def process_document(
     conn,
     document_id: str,
@@ -147,22 +156,26 @@ def process_document(
     """Top-level entry point for ingest scripts.
 
     Returns one of:
-      "skipped_licensed"   — source is owned/public_domain (or missing); nothing written
-      "no_propositions"    — extraction returned empty list
-      "stored:{n}"         — n propositions written to DB
-      "error"              — unexpected failure (logged)
+      "skipped_licensed"        — source is public_domain/owned (or missing); nothing written
+      "skipped_precept_austin"  — Precept Austin, locked out by name; nothing written
+      "no_propositions"         — extraction returned empty list
+      "stored:{n}"              — n propositions written to DB
+      "error"                   — unexpected failure (logged)
 
-    Extracts for "unlicensed" and "licensed" sources only. Skips "owned" and
-    "public_domain" (already safely servable as verbatim chunks -- no future
-    license-grant toggle applies, so propositions add cost with no serving
-    benefit) and skips a missing/unknown source_id (fail closed, same as the
-    original unlicensed-only gate did for None).
+    Gate: extracts for "licensed" and "unlicensed" sources only. Skips
+    "public_domain" and "owned" (already safely servable as verbatim
+    chunks), and skips a missing/unknown source_id (fail closed). One named
+    exception: Precept Austin never gets propositions — see
+    PRECEPT_AUSTIN_SOURCE_ID above.
 
     Never raises.
     """
     try:
+        if source_id == PRECEPT_AUSTIN_SOURCE_ID:
+            return "skipped_precept_austin"
+
         license_status = get_license_status(conn, source_id)
-        if license_status not in ("unlicensed", "licensed"):
+        if license_status not in ("licensed", "unlicensed"):
             return "skipped_licensed"
 
         props = extract_propositions(text, doc_id=document_id)

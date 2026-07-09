@@ -37,6 +37,7 @@ print("Importing chunker...")
 from app.services.chunker import chunk_text
 print("Chunker imported.")
 from source_resolver import resolve_source_id
+import propositions
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -203,8 +204,8 @@ def ingest_father(doc, chunk_rows, body):
 
         conn.commit()
 
-        # Propositions (unlicensed/licensed sources only -- gate lives in
-        # propositions.py). HistoricalChristianFaith is public_domain, so
+        # Propositions (licensed/unlicensed sources only -- gate lives in
+        # propositions.py; Precept Austin locked out by name there). HistoricalChristianFaith is public_domain, so
         # this currently always returns "skipped_licensed": one cheap DB
         # lookup, no Groq spend. Runs AFTER the document+chunks commit above
         # so a propositions failure (non-fatal, logged internally by

@@ -190,7 +190,7 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
         }
         db.table("chunks").insert(chunk_data).execute()
 
-    # Extract + store propositions (unlicensed sources only; non-fatal)
+    # Extract + store propositions (licensed/unlicensed sources only; non-fatal)
     _prop_conn = psycopg2.connect(**DB_PARAMS)
     try:
         prop_result = propositions.process_document(_prop_conn, doc_id, _resolved_id, body, embed_text)

@@ -54,7 +54,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 # Heavy imports — after load_dotenv and sys.path setup
-from ingest import ingest_file, embed_text, DB_PARAMS, supabase  # noqa: E402
+from ingest import ingest_file, DB_PARAMS, supabase  # noqa: E402
 from source_resolver import resolve_source_id, SENTINEL_SOURCE_ID, normalize_alias_key  # noqa: E402
 
 QUEUE_PATH   = ROOT / "sources" / "youtube" / "ingest_queue.xlsx"

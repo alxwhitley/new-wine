@@ -466,8 +466,8 @@ def ingest_file(filename: str, title: str, max_entries: Optional[int] = None, br
     stats["skipped"] += stats["parsed"] - total_inserted
     print(f"  Done: {total_inserted} inserted, {stats['skipped']} skipped")
 
-    # Propositions (unlicensed/licensed sources only -- gate lives in
-    # propositions.py). STEPBible is public_domain, so this currently always
+    # Propositions (licensed/unlicensed sources only -- gate lives in
+    # propositions.py; Precept Austin locked out by name there). STEPBible is public_domain, so this currently always
     # returns "skipped_licensed": one cheap DB lookup, no Groq spend. Kept
     # wired anyway so a future license_status change needs no code change.
     # full_text is the whole lexicon's entries joined -- only actually used

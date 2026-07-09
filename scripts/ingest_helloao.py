@@ -388,8 +388,8 @@ def ingest_book(commentary_key, book_id, book_name, chapter_count):
 
     logger.info("  Done: %s (%d chunks)", title, len(all_verses))
 
-    # Propositions (unlicensed/licensed sources only -- gate lives in
-    # propositions.py). All three HelloAO commentaries (Matthew Henry, Adam
+    # Propositions (licensed/unlicensed sources only -- gate lives in
+    # propositions.py; Precept Austin locked out by name there). All three HelloAO commentaries (Matthew Henry, Adam
     # Clarke, Jamieson-Fausset-Brown) are public_domain, so this currently
     # always returns "skipped_licensed": one cheap DB lookup, no Groq spend.
     # Kept wired anyway so a future license_status change needs no code

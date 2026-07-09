@@ -8,16 +8,12 @@ chunks by paragraph, embeds with OpenAI, writes to Supabase.
 import os
 import re
 import sys
-import uuid
 import json
-import hashlib
 import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from groq import Groq
-import openai
-import psycopg2
 from supabase import create_client
 import subprocess
 import pdfplumber
@@ -29,8 +25,8 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.chunker import chunk_text, token_len
 from bible_refs import extract_bible_references
-from source_resolver import normalize_alias_key, resolve_source_id, SENTINEL_SOURCE_ID, print_resolution_table
-import propositions
+from source_resolver import resolve_source_id, print_resolution_table
+import shared_ingest
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -57,12 +53,8 @@ TAXONOMY (use ONLY these exact tags):
 {TAXONOMY_LIST}"""
 
 GROQ_API_KEY      = os.environ["GROQ_API_KEY"]
-OPENAI_API_KEY    = os.environ["OPENAI_API_KEY"]
 SUPABASE_URL      = os.environ["SUPABASE_URL"]
 SUPABASE_KEY      = os.environ["SUPABASE_SERVICE_KEY"]
-
-EMBEDDING_MODEL  = "text-embedding-3-small"
-EMBEDDING_DIM    = 1536
 
 SUPABASE_DB_URL  = os.environ.get("SUPABASE_DB_URL")
 if not SUPABASE_DB_URL:
@@ -82,7 +74,6 @@ DB_PARAMS = {
 # ── Clients ───────────────────────────────────────────────────────────────────
 
 groq_client      = Groq(api_key=GROQ_API_KEY)
-openai_client    = openai.OpenAI(api_key=OPENAI_API_KEY)
 supabase         = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── Text Extraction ──────────────────────────────────────────────────────────
@@ -203,91 +194,21 @@ Return only the JSON object. No explanation, no markdown.
             return json.loads(match.group())
         raise ValueError(f"LLM returned non-JSON metadata: {raw}")
 
-# ── Embedding ─────────────────────────────────────────────────────────────────
+# ── Document kind/mode derivation ────────────────────────────────────────────
+# ingest.py-specific mapping from Groq-detected source_type to the DB's
+# source_kind/citation_mode fields. Not shared logic — every other ingest
+# script sets these directly since their source_type is already fixed
+# (magazine_article, commentary, lexicon, word_study, ...).
 
-def embed_text(text: str) -> List[float]:
-    response = openai_client.embeddings.create(
-        input=text,
-        model=EMBEDDING_MODEL
-    )
-    return response.data[0].embedding
-
-# ── Supabase Write ────────────────────────────────────────────────────────────
-
-def already_ingested(source_hash: str) -> bool:
-    """Return True if this source_hash already exists in chunks."""
-    conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id FROM chunks WHERE source_hash = %s LIMIT 1", (source_hash,))
-            return cur.fetchone() is not None
-    finally:
-        conn.close()
-
-
-def insert_document(metadata: dict, file_path: str, is_copyrighted: bool = False, url=None, bible_refs=None, source_id: Optional[str] = None) -> str:
-    """Insert a document row and return its UUID."""
-    doc_id = str(uuid.uuid4())
-    st = metadata.get("source_type", "")
-    if st == "sermon":
-        source_kind = "sermon_transcript"
-        citation_mode = "citable"
-    elif st == "background":
-        source_kind = "background_note"
-        citation_mode = "silent_context"
-    elif st == "position_paper":
-        source_kind = "position_paper"
-        citation_mode = "silent_context"
+def derive_kind_and_mode(source_type: str) -> Tuple[str, str]:
+    if source_type == "sermon":
+        return "sermon_transcript", "citable"
+    elif source_type == "background":
+        return "background_note", "silent_context"
+    elif source_type == "position_paper":
+        return "position_paper", "silent_context"
     else:
-        source_kind = "unknown"
-        citation_mode = "silent_context"
-    row = {
-        "id":             doc_id,
-        "title":          metadata.get("title"),
-        "original_title": metadata.get("title"),
-        "author":         metadata.get("author"),
-        "year":        metadata.get("year") if isinstance(metadata.get("year"), int) else None,
-        "issue":       metadata.get("issue"),
-        "source_name": metadata.get("source_name"),
-        "source_type": st,
-        "source_kind": source_kind,
-        "citation_mode": citation_mode,
-        "source":      metadata.get("source_name"),  # mirrors source_name
-        "topic_tags":  metadata.get("topic_tags", []),
-        "bible_references": bible_refs or [],
-        "file_path":   file_path,
-        "is_copyrighted": is_copyrighted,
-    }
-    if source_id is not None:
-        row["source_id"] = source_id
-    if url:
-        row["url"] = url
-    try:
-        supabase.table("documents").insert(row).execute()
-    except Exception:
-        # url/bible_references columns may not exist yet — retry without them
-        row.pop("url", None)
-        row.pop("bible_references", None)
-        supabase.table("documents").insert(row).execute()
-    return doc_id
-
-
-def insert_chunks(doc_id: str, chunks: List[str], author: str = None, year: int = None, source_hash: str = None):
-    """Embed and insert all chunks for a document."""
-    for idx, text in enumerate(chunks):
-        print(f"  Embedding chunk {idx + 1}/{len(chunks)}...")
-        prefix = f"Author: {author} | Year: {year} | "
-        embedding = embed_text(prefix + text)
-
-        # page_number and source_hash are excluded: both columns are absent from
-        # the live DB schema (listed as droppable/unused in SKILL.md line 678).
-        supabase.table("chunks").insert({
-            "id":          str(uuid.uuid4()),
-            "document_id": doc_id,
-            "content":     text,
-            "embedding":   embedding,
-            "chunk_index": idx,
-        }).execute()
+        return "unknown", "silent_context"
 
 # ── Topic Tagging ────────────────────────────────────────────────────────────
 
@@ -375,10 +296,10 @@ def tag_document(doc_id, chunks):
 def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False, skip_dedup: bool = False, source_id_override: Optional[str] = None) -> tuple:
     """Returns (status, reason) where status is 'processed', 'skipped', or 'failed'.
 
-    skip_dedup=True bypasses the MD5 chunks.source_hash guard. Use this when the
-    caller already owns dedup responsibility (e.g. youtube_ingest.py tracks
-    status=done per row in the sheet). Default False preserves the directory-scan
-    pipeline's guard unchanged.
+    skip_dedup=True bypasses the already_ingested() guard (source_url+source_name,
+    or filename fallback). Use this when the caller already owns dedup
+    responsibility (e.g. youtube_ingest.py tracks status=done per row in the
+    sheet). Default False preserves the directory-scan pipeline's guard unchanged.
 
     source_id_override: when provided, skip re-resolving source_id from the
     file's SOURCE:/AUTHOR:/SPEAKER: headers and use this value directly.
@@ -391,12 +312,6 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     print(f"\n{'='*60}")
     print(f"Processing: {file_path.name} {'[COPYRIGHTED]' if is_copyrighted else '[OPEN]'}")
     print('='*60)
-
-    # 0. Duplicate check via file content hash (skipped when caller owns dedup)
-    source_hash = hashlib.md5(file_path.read_bytes()).hexdigest()
-    if not skip_dedup and not dry_run and not dry_run_sources and already_ingested(source_hash):
-        print(f"  ⏭️  Already ingested — skipping")
-        return ("skipped", "already_ingested")
 
     # 1. Extract text
     ext = file_path.suffix.lower()
@@ -463,13 +378,14 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
             "via":         via,
         })
 
-    # 3. Chunk by token
-    print("Chunking...")
-    content = "\n\n".join(p for p in pages if p.strip())
-    chunks = chunk_text(content)
-    print(f"  {len(chunks)} chunks created")
-
+    # Dry-run preview: needs its own throwaway chunk pass since the real
+    # chunking now happens inside shared_ingest.ingest_document() below,
+    # which dry runs never reach. Deliberately not shared with the real path
+    # — dry runs always process regardless of ingest status, so they can't
+    # reuse a chunk list that would only exist after a dedup check passed.
     if dry_run:
+        content = "\n\n".join(p for p in pages if p.strip())
+        chunks = chunk_text(content)
         author = metadata.get("author")
         year = metadata.get("year")
         prefix = f"Author: {author} | Year: {year} | "
@@ -484,8 +400,9 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         print("  [DRY RUN] No data written to Supabase.")
         return ("processed", None)
 
-    # 4. Extract Bible references from chunk content (non-fatal)
+    # 3. Extract Bible references from full document text (non-fatal)
     print("Extracting Bible references...")
+    content = "\n\n".join(p for p in pages if p.strip())
     bible_refs = extract_bible_references(content)
     if bible_refs:
         preview = ", ".join(bible_refs[:5]) + (f" ... (+{len(bible_refs) - 5})" if len(bible_refs) > 5 else "")
@@ -493,48 +410,46 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     else:
         print("  No Bible references found")
 
-    # 5. Insert document row
     source_url = metadata.get("_url") or (txt_headers.get("SOURCE_URL") if txt_headers else None)
+    source_kind, citation_mode = derive_kind_and_mode(metadata.get("source_type", ""))
 
-    # Resolve attribution → source_id via alias table, unless the caller
-    # already resolved (and gated) it themselves — see source_id_override
-    # docstring above.
-    # ALIAS_MISS is printed by the resolver on a miss; source_id falls to sentinel.
-    if source_id_override is not None:
-        _resolved_id = source_id_override
-        _norm_key = normalize_alias_key(metadata.get("source_name") or metadata.get("author") or "")
-        _via = "caller_override"
-        print(f"  Source (caller-provided): {_resolved_id} (norm_key={_norm_key!r})")
-    else:
-        _resolved_id, _norm_key, _via = resolve_source_id(
-            supabase, metadata.get("source_name"), metadata.get("author")
-        )
-        print(f"  Resolved source: {_norm_key!r} → {_resolved_id} (via {_via})")
+    def _embed_with_author_year_prefix(idx, text, _author=metadata.get("author"), _year=metadata.get("year")):
+        return f"Author: {_author} | Year: {_year} | " + text
 
-    print("Inserting document record...")
-    doc_id = insert_document(
-        metadata,
-        str(file_path),
+    # 4. Resolve -> insert -> chunk -> embed -> propositions (shared writer).
+    # Covers the dedup check too (source_url+source_name, filename fallback);
+    # skip_dedup/source_id_override pass straight through — see this
+    # function's docstring for why youtube_ingest.py needs both.
+    result = shared_ingest.ingest_document(
+        db=supabase,
+        db_params=DB_PARAMS,
+        title=metadata.get("title"),
+        body_text=content,
+        filename=file_path.name,
+        author=metadata.get("author"),
+        year=metadata.get("year"),
+        issue=metadata.get("issue"),
+        source_name=metadata.get("source_name"),
+        source_type=metadata.get("source_type", ""),
+        source_kind=source_kind,
+        citation_mode=citation_mode,
         is_copyrighted=is_copyrighted,
+        topic_tags=metadata.get("topic_tags", []),
+        bible_references=bible_refs,
         url=source_url,
-        bible_refs=bible_refs,
-        source_id=_resolved_id,
+        file_path=str(file_path),
+        source_id=source_id_override,
+        skip_dedup=skip_dedup,
+        embed_text_fn=_embed_with_author_year_prefix,
     )
-    print(f"  Document ID: {doc_id}")
 
-    # 5. Embed + insert chunks
-    print(f"Embedding and inserting {len(chunks)} chunks...")
-    insert_chunks(doc_id, chunks, author=metadata.get("author"), year=metadata.get("year"), source_hash=source_hash)
+    if result["status"] == "skipped":
+        return ("skipped", result["reason"])
 
-    # 5b. Extract + store propositions (unlicensed sources only; non-fatal)
-    _prop_conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        prop_result = propositions.process_document(_prop_conn, doc_id, _resolved_id, content, embed_text)
-    finally:
-        _prop_conn.close()
-    print(f"  propositions: {prop_result}")
+    doc_id = result["doc_id"]
+    chunks = result["chunks"]
 
-    # 6. Tag document from chunk content
+    # 5. Tag document from chunk content
     print("Tagging document...")
     assigned_tags = tag_document(doc_id, chunks)
     if assigned_tags:
