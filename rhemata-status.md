@@ -1,47 +1,61 @@
 # rhemata-status.md
 
-**As of:** 2026-07-09 · terminal-owned · **overwritten each session, not a log** (append-only history lives in the Notion Rhemata row's Session Log).
+**As of:** 2026-07-09 (session close) · terminal-owned · **overwritten each session, not a log** (history lives in git history; this file is only the current snapshot).
 
-**Source of truth by domain:** durable architecture/decisions → `CLAUDE.md` · messaging/positioning → `POSITIONING.md` · styling tokens → `DESIGN.md` · **this file → live state only, nothing durable, nothing "how it works."**
+**Source of truth by domain:** durable architecture/decisions → `CLAUDE.md` · messaging/positioning → `POSITIONING.md` · styling tokens → `DESIGN.md` · roadmap → `PLAN.md` · **this file → live state only, nothing durable, nothing "how it works."**
 
 ---
 
 ## Current Priority / Next Action
 
-- **Current priority:** Chokepoint conversion is checkpointed (loss-prevention done); nothing else proceeds until the honesty fix lands, per plan.md's ordering.
-- **Next action:** plan.md **#2 — Honesty fix**. Rewrite `POSITIONING.md` + `docs/how-rhemata-handles-sources.md` to the real posture (paraphrase-and-cite; quotes are a gated future surface, not a live guarantee), and remove `system_prompt.txt:112`'s permission to quote ≤50 words. One commit set.
+- **Current priority:** PLAN.md **#2 — Honesty fix**, next up. Rewrite `POSITIONING.md` + `docs/how-rhemata-handles-sources.md` (and the deployed `frontend/app/sources/page.tsx` copy) to the real posture — paraphrase-and-cite; quotes are a gated future surface, not a live guarantee — and remove `system_prompt.txt:112`'s permission to quote ≤50 words. One commit set. Stop condition: no live claim of a verifier that doesn't exist.
+- The verifier overclaim was re-confirmed live tonight in all three places (`POSITIONING.md:76/:145`, `docs/how-rhemata-handles-sources.md:15-17`, `sources/page.tsx:39`).
 
 ---
 
 ## Where We Are in the Roadmap
 
-(Notion `plan.md` v5.1, linear numbered session list)
+(PLAN.md v5.1, linear numbered session list)
 
-- **#1 Back up `sources/` + `ingest_queue.xlsx`** — DONE this session (Alex confirmed offsite upload to Google Drive).
-- **#1.5 Commit the uncommitted working tree** — DONE this session (commit `72476b7`, pushed to `origin/main`). Includes migration `058_clf_aliases.sql`, committed for the record — it was already applied live in production but had never been committed until this checkpoint.
+- **#1 Back up `sources/` + `ingest_queue.xlsx`** — DONE 2026-07-09 (offsite to Google Drive per Alex; never independently verified from this Mac — real verification lands with #15's restore test).
+- **#1.5 Commit the uncommitted working tree** — DONE 2026-07-09 (commit `72476b7`, pushed). Includes migration `058_clf_aliases.sql`, previously applied live but never committed.
 - **#2 Honesty fix** — NEXT, not started.
-- **#3 Verify the chokepoint conversion actually works** — not started.
+- **#3 Verify the chokepoint conversion** — not started. Tonight's audit sharpened it: the Jul-3 demo doc ("Stuck in the wilderness") resolved to an `owned` source, so the propositions step returned `skipped_licensed` — the gate branch was exercised but extraction+storage never was. Also `ingest.py:33` hardcodes the dead `~/Desktop/rhemata` DOCS_FOLDER path, which will trip #3's demo unless run with `--source-dir` (or fixed first, one line).
 - **#4–37** — untouched.
 
-Notion's row snapshot (Current Priority / Next Action fields) has not been told about #1/#1.5 completing yet — this file is currently ahead of Notion on that point.
+---
+
+## Resolved This Session (2026-07-09)
+
+- **Notion cutover complete and pushed** (`b6da249`): chat now reads five repo files directly (CLAUDE.md, POSITIONING.md, DESIGN.md, PLAN.md, rhemata-status.md); Read Contract in CLAUDE.md; `PLAN.md` created as repo-native v5.1 mirror; `notion-sync/` deleted; Notion mirroring retired for this project.
+- **Chokepoint loss-prevention checkpoint** committed and pushed (`72476b7`) — nothing load-bearing lives only locally anymore.
+- **Theme contradiction fixed and committed**: DESIGN.md corrected to dark-only/`forcedTheme` (matches `providers.tsx` + `globals.css`); retired light tokens deleted.
+- **Tier-1 visibility policy decision recorded** (`ef22a54`): the 25 `unlicensed/shown` sources are a deliberate accepted-risk beta-scope call (Decision 5), not drift; CLAUDE.md policy line corrected to the standing rule (new unlicensed sources register hidden; `shown` requires an explicit recorded beta-scope decision).
+- **Full read-only audit ran clean on the load-bearing systems**: license gate verified in all 7 RPCs (no NULL arm, safe_mode read), RLS locked on corpus tables, sentinel sealed at 3 docs, backfill-gap numbers match docs exactly, git synced with origin.
 
 ---
 
 ## In Progress / Uncommitted Locally
 
-- `CLAUDE.md` — modified, uncommitted. Still carries the false "chokepoint shipped" claim; correction is plan.md #14, deliberately held out of recent commits until the conversion is actually verified (#3).
-- `DESIGN.md` — modified, uncommitted. This session's theme-doc fix (dark-only correction, retired light tokens deleted) — diff shown to Alex, awaiting commit approval.
-- Everything else clean as of commit `72476b7`.
+- `CLAUDE.md` — modified, uncommitted, **only dirty file**. Scoped to #14: the held-out chokepoint doc corrections (the "shipped" claim that must not commit until #3 verifies the conversion). Two surgical commits this session (`b6da249`, `ef22a54`) extracted specific sections from it without committing this content.
 
 ---
 
-## Open Blockers Awaiting a Decision
+## Open Items (from tonight's audit)
 
-- Two sentinel-assigned docs ("So Great a Salvation," "The 59 One Another's of the NT") carry no author/source metadata — need Alex's eyeball, not resolvable from data alone (plan.md #6).
-- Un-ingested `8.21.24 Prophetic Teaching - Prophetic Ministry.docx` — content read, no byline found in the extracted text; unconfirmed whether this is "the Bedford docx" plan.md refers to.
-- `PRODUCT.md` (2026-06-14, oldest doc in the repo) overlaps `POSITIONING.md` (2026-07-02) — unclear if still authoritative or a superseded draft; needs Alex's call.
-- Offsite backup of `sources/` + `ingest_queue.xlsx` — Alex confirmed uploaded to Google Drive; could not be independently located/verified from this Mac (not visible in any local CloudStorage mirror at time of check). Real but unverified.
-- `SKILL.md` may carry the same false "chokepoint shipped" claim `CLAUDE.md` does — flagged, not yet checked line-by-line.
+Bucketed **#14 (housekeeping)** unless noted:
+
+- **Standing-rule wording confirmation** — smaller than #14, can ride any session: confirm the corrected visibility-policy wording in CLAUDE.md reads as intended now that it's committed.
+- **Dead `~/Desktop/rhemata` path in 8 scripts** — `clean_transcripts.py`, `extract_book_quotes.py`, `generate_excerpts.py`, `ingest_interlinear.py`, `ingest_tahot.py`, `ingest.py` (DOCS_FOLDER), `scrape_youtube.py`, `test_excerpt_generation.py`. The `ingest.py` one **blocks #3** — fix it there; the rest at #14.
+- **SKILL.md staleness** — blockers list still says migration 058 "uncommitted" (committed at #1.5) and "`sources/` has no backup" (backup exists, unverified). Make true at #14.
+- **PRODUCT.md staleness** — oldest doc in repo (2026-06-14), overlaps POSITIONING.md, outside the five-file read contract; needs Alex's keep/supersede call at #14.
+- **Duplicate document titles** — ≥5 titles exist twice in `documents` (possible retrieval double-weighting); investigate at #14.
+
+Carry-over blockers (pre-existing, unchanged):
+
+- Two sentinel docs ("So Great a Salvation," "The 59 One Another's") have no metadata — need Alex's eyeball at #6. Bedford-docx identity (`8.21.24 Prophetic Teaching...docx`) still unconfirmed.
+- Offsite backup unverified — proven only by #15's real restore.
+- 1,086 documents carry dead `Desktop/rhemata` `file_path` values (harmless to serving; landmine for future scripts). Track.
 
 ---
 
@@ -49,16 +63,14 @@ Notion's row snapshot (Current Priority / Next Action fields) has not been told 
 
 (queried live, 2026-07-09)
 
-- **Documents:** 3,796
-- **Sources:** 67 total — 39 `unlicensed` / 26 `public_domain` / 2 `owned` / 0 `licensed`
-- **Chunks:** 197,169
-- **Propositions:** 2,028 (all from short-form content; zero full-length books extracted yet — first real test lands at plan.md #17)
-- **`book_quotes`:** 0 rows (table retired per plan.md v5 decision; new verified-only quotes table not yet built)
-- **Sentinel-assigned docs:** 3
-- **Staging Supabase:** none exists — production DB only, no backup/PITR automation found in-repo.
+- **Documents:** 3,796 · **Chunks:** 197,169 · **Propositions:** 2,028 (251 docs covered; 2,980 unlicensed docs at zero — backfill is #17)
+- **Sources:** 67 — 39 `unlicensed` (25 shown per the recorded Tier-1 decision) / 26 `public_domain` / 2 `owned` / 0 `licensed`
+- **`book_quotes`:** 0 rows (retired; new verified-only table is #21)
+- **Sentinel-assigned docs:** 3 · `safe_mode`: off
+- **Staging Supabase:** none — production only, no backup/PITR automation in-repo (#15)
 
 ---
 
 ## Next Session Should
 
-Run plan.md **#2 — honesty fix**: rewrite `POSITIONING.md` + `docs/how-rhemata-handles-sources.md` to the real posture, and remove `system_prompt.txt:112`'s quote permission. Stop condition: no live claim of a verifier that doesn't exist.
+Run PLAN.md **#2 — honesty fix** (copy + system prompt, one commit set). If there's spare capacity, the one-line `ingest.py` DOCS_FOLDER fix unblocks #3 next.
