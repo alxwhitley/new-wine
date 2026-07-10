@@ -89,7 +89,7 @@
 ### Foundation
 
 **3. Verify the chokepoint conversion actually works** (T2·1 remainder) — run `ingest.py` on a demo item, confirm it routes through `shared_ingest` correctly and produces the expected doc/chunks/propositions. Reconcile `CLAUDE.md`'s "shipped" claim to reality. *Was "commit chokepoint work" — the commit moved to #1.5; this is now the verification that was never done.* *Stop: conversion confirmed working on a real item, or the gap documented.*
-**4. Resend transactional email** (T3·2) — kills the live Supabase auth-email rate-limit pain. *Stop: auth emails send via Resend.*
+**4. Resend transactional email** (T3·2) — kills the live Supabase auth-email rate-limit pain. **DONE (2026-07-10) — config confirmed** (Supabase Auth SMTP → `smtp.resend.com`, sending `noreply@rhemata.app`, domain verified in Resend) **and delivery proven** (live password-reset email received in a real inbox; Resend's dashboard send log shows the delivery). *Stop: auth emails send via Resend.*
 **5. Landing page copy rewrite** (T1·7) — drop Discover + Jewish-perspective refs; Pastors' Notes = coming; anti-flattening hook leads; quote language matches #2. *Stop: committed.*
 
 ### Chokepoint — clears the corpus-growth gate at #13
