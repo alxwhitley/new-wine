@@ -18,6 +18,26 @@ Rules enforced here, each traceable to a specific repo lesson:
   4. A semicolon inside a `--` SQL comment line is blocked. CLAUDE.md's
      Migration 051 gotcha.
 
+Interim tightening (2026-07-10, Approach A -- read deterministic_gate.py's
+module docstring in git history / rhemata-status.md for the full writeup):
+rule 1 previously fired on ANY completion-word match regardless of whether a
+write actually happened, so an ordinary read-only diagnostic report ("done,"
+"successfully found") got held to write-reconciliation rules it can't and
+shouldn't satisfy. Fix: a report may declare `WORK_TYPE: read-only` to skip
+rule 1/2 entirely, but ONLY if no independent write-indicating vocabulary
+appears anywhere in the message -- label and content must agree, or the
+exemption doesn't apply and full reconciliation rules run exactly as before.
+No marker, an explicit `WORK_TYPE: write` marker, or a label/content
+disagreement all fail closed into unchanged behavior.
+
+This is self-attested (prose declaring itself, prose cross-checked against
+more prose) and does NOT close the false-negative gap the way real
+tool-invocation tracking would (Approach B: read what guard_pretooluse.py
+actually observed via PreToolUse, deferred). Acceptable now because no write
+work runs through this loop yet; NOT acceptable once the chokepoint band
+(#6-13) starts writing to the corpus through it -- Approach B is a hard
+prerequisite before that point, not an optional hardening.
+
 Exit 0 with a JSON {"decision":"block","reason":...} on stdout blocks the
 subagent from stopping. Exit 0 with no output (or {}) allows it.
 """
@@ -38,6 +58,27 @@ def allow() -> None:
 COMPLETION_WORDS = re.compile(
     r"\b(stored|inserted|ingested|wrote|written|backfilled|completed|complete|"
     r"succeeded|success|successfully|done)\b",
+    re.IGNORECASE,
+)
+
+# Interim tightening (Approach A, 2026-07-10): an executor report may declare
+# its own work type. Must be its own line (not just the substring anywhere in
+# running prose) to count as a real declaration rather than an incidental
+# mention.
+WORK_TYPE_MARKER = re.compile(
+    r"^\s*WORK_TYPE:\s*(read-only|write)\s*$", re.IGNORECASE | re.MULTILINE
+)
+
+# Independent of COMPLETION_WORDS on purpose -- this is what a `WORK_TYPE:
+# read-only` label is cross-checked against. If a "read-only" report actually
+# describes a write, one of these should be present; a report that mislabels
+# itself doesn't get to skip reconciliation just by asserting it.
+WRITE_VOCAB_WORDS = re.compile(
+    r"\b(insert(?:ed|ing)?|updat(?:e|ed|ing)|delet(?:e|ed|ing)|"
+    r"migrat(?:e|ed|ing|ion)|ingest(?:ed|ing)?|backfill(?:ed|ing)?|"
+    r"upsert(?:ed|ing)?|stored?|row(?:s)?\s+(?:added|created)|"
+    r"wrote\s+to\s+(?:the\s+)?(?:db|database)|"
+    r"written\s+to\s+(?:the\s+)?(?:db|database))\b",
     re.IGNORECASE,
 )
 
@@ -63,9 +104,22 @@ SEMICOLON_IN_COMMENT = re.compile(r"--[^\n]*;")
 
 
 def check_reconciliation(message: str):
-    """Rules 1 and 2: all-four-present, and arithmetic consistency."""
+    """Rules 1 and 2: all-four-present, and arithmetic consistency.
+
+    Interim tightening (Approach A): `WORK_TYPE: read-only` exempts a report
+    from this check, but only when no independent write-indicating vocabulary
+    contradicts the label -- see module docstring for the full rationale and
+    the Approach B follow-up this defers to."""
     if not COMPLETION_WORDS.search(message):
         return None  # no completion claim in this report -- nothing to check
+
+    marker = WORK_TYPE_MARKER.search(message)
+    if (
+        marker
+        and marker.group(1).lower() == "read-only"
+        and not WRITE_VOCAB_WORDS.search(message)
+    ):
+        return None  # declared read-only, nothing in the message contradicts it
 
     found = {}
     for field, pattern in RECONCILIATION_FIELDS.items():

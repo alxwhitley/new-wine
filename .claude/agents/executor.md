@@ -54,6 +54,29 @@ by guessing — you escalate it back in your report instead.
 
 # Report format
 
+Start every report with a work-type declaration, its own line, exactly one of:
+
+```
+WORK_TYPE: read-only
+```
+```
+WORK_TYPE: write
+```
+
+`read-only` means you made no `Edit`/`Write` call and no `Bash` command mutated
+anything (the DB, the filesystem outside your own scratch use, git state) — reads,
+greps, dry runs, and SELECT-only queries all count as read-only. `write` means any
+of those happened, even once. If you're unsure which applies, declare `write` — the
+deterministic gate defaults to full reconciliation rules when the marker is absent,
+missing, or ambiguous, and you should hold yourself to the same default.
+
+This marker is load-bearing, not decorative: `.claude/hooks/deterministic_gate.py`
+reads it to decide whether your report needs a reconciliation count. A mislabeled
+`read-only` report that actually describes a write does not get a pass — the gate
+independently checks your message for write-indicating vocabulary and blocks if the
+label and the content disagree. Getting this wrong doesn't quietly slip through; it
+blocks your own report from stopping.
+
 End your report with a plain-language summary of what you did, followed by, if
 applicable:
 
