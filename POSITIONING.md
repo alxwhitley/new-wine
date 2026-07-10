@@ -73,7 +73,7 @@ This section is a decision filter. If a feature makes Rhemata more like any item
 **Genuinely defensible:**
 
 - **The vetted, named-voices constraint.** Every answer traceable to a real teacher the user can look in the eye (or at least look up). This is a trust layer no general AI can offer, because general AI's entire architecture is anonymized averaging. It also can't be bolted on later by a competitor without rebuilding their corpus and their legal posture from scratch.
-- **Verified-verbatim quoting.** Brief quotes are machine-checked character-for-character against the source before they can be served — a quote cannot appear in Rhemata unless the teacher literally said it. General AI can hallucinate quotes; Rhemata structurally cannot. This is the hardest proof behind "every answer has a teacher."
+- **Paraphrase-and-cite discipline.** Every answer is built only from retrieved source material and labeled as summary, never presented as a teacher's own words — nothing is invented and pinned to a name after the fact. General AI can hallucinate what a teacher supposedly said; Rhemata is structurally confined to what the corpus actually contains. (Verified-verbatim quoting — machine-checked, character-for-character, before a quote can ever be served — is a planned, gated future layer; not live today.)
 - **The refusal to flatten or filter.** Taking the charismatic tradition seriously — tongues, healing, deliverance, prophecy treated as live realities within the corpus, not anthropological curiosities — is a posture the big general tools structurally cannot adopt. Their scale forces them toward the middle. Rhemata's niche *is* the edge.
 - **The send-them-back posture.** Every competitor's incentive is retention; Rhemata's stated design goal is connecting users to human teachers. Counterintuitively, this builds the deepest trust — the tool that's willing to send you away is the tool you believe.
 
@@ -124,7 +124,7 @@ Rhemata sounds like a well-read friend from your church who takes both the Word 
 
 ## 9. How Each Surface Expresses the Thesis
 
-**Chat.** The front door. Retrieval with citations — every answer built from the corpus, every claim attributed to its named voice, links out to the original teaching. *Guardrail:* Chat answers in a reporting voice ("Prince taught X; Bevere frames it as Y"), never an authoritative first-person theological voice. When the corpus is thin or the question is pastoral, Chat says so and points to a human rather than improvising. AI-paraphrased material is always framed as summary of a named teacher, never presented as the teacher's own words. Where a brief verified quote is available, it accompanies the summary — the user hears the teacher's actual voice alongside the paraphrase, with the link to the full teaching right there.
+**Chat.** The front door. Retrieval with citations — every answer built from the corpus, every claim attributed to its named voice, links out to the original teaching. *Guardrail:* Chat answers in a reporting voice ("Prince taught X; Bevere frames it as Y"), never an authoritative first-person theological voice. When the corpus is thin or the question is pastoral, Chat says so and points to a human rather than improvising. AI-paraphrased material is always framed as summary of a named teacher, never presented as the teacher's own words.
 
 **Study Mode.** The deep room. Greek/Hebrew interlinear plus historical and patristic commentary — the place the Discerning Student goes when a Chat answer opens a door. *Guardrail:* Study Mode presents texts, tools, and named commentary; it does not editorialize conclusions. The interlinear shows what the words are; the named voices say what they mean; Rhemata itself stays out of the pulpit.
 
@@ -142,7 +142,7 @@ Stated as rules. No exceptions without rewriting this document first.
 
 1. **Rhemata never speaks as God, for God, or about what God is "saying" to a user.**
 2. **Every theological claim is attributed to a named source.** No anonymous synthesis presented as teaching.
-3. **AI-generated paraphrase is always labeled as summary — never presented as a teacher's own words.** Where policy permits, answers include brief verbatim quotes — served only when code-verified as exact source text, within hard caps. A quote cannot exist in Rhemata unless the teacher actually said it.
+3. **AI-generated paraphrase is always labeled as summary — never presented as a teacher's own words.** Answers paraphrase and cite named sources; they do not quote freely today. (Verified-verbatim quoting — machine-checked, character-for-character, before serving — is a planned, gated future capability; not live yet.)
 4. **Unvetted and unlicensed content is never served.** Fail closed, always.
 5. **No feature ships whose success metric is keeping users away from human teachers.** Time-in-app is not a north star.
 6. **Pastoral questions get pointed to people, not answered by the product.**

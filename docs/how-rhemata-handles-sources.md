@@ -12,9 +12,11 @@ Instead, Rhemata is a **retrieval and citation system**. When you ask a question
 
 This distinction is the foundation of everything we do. AI tools that flatten a thousand voices into one synthetic answer erase the people who did the work. Rhemata exists to do the opposite: put named voices in front of you, with receipts.
 
-## Every quote is verified — by code, not trust
+## Every claim is attributed, never invented
 
-A quotation cannot appear in Rhemata unless our software confirms it is an **exact, character-for-character match** against the source text. If the words don't exist verbatim in the original, they cannot be displayed as a quote. This is enforced mechanically, not editorially. No paraphrase wearing quotation marks. No AI-invented citations.
+Rhemata does not put words in a teacher's mouth. Every claim in an answer is a paraphrase of what a named source actually teaches — labeled as summary, never presented as the teacher's own words — and it is always attributed by name, with a link back to where the real teaching lives. No AI-invented citations. No anonymous synthesis presented as someone's words.
+
+Verified, character-for-character verbatim quoting — software-confirmed against the source before a quote can ever be served — is on our roadmap. It is not live yet. Until it ships, Rhemata paraphrases and cites; it does not quote freely.
 
 ## How content enters the library
 
@@ -43,6 +45,6 @@ We respond to every rights inquiry. If content is identified as improperly inclu
 
 ## Why we built it this way
 
-Rhemata's audience carries a healthy suspicion of AI — and we share it. An AI that invents quotes, launders sources, or speaks as an anonymous oracle is not a tool for serious theological study. Every safeguard on this page exists for one reason: so that when Rhemata shows you what Torrey or Murray said, you can trust that they actually said it — and go read them yourself.
+Rhemata's audience carries a healthy suspicion of AI — and we share it. An AI that invents quotes, launders sources, or speaks as an anonymous oracle is not a tool for serious theological study. Every safeguard on this page exists for one reason: so that when Rhemata tells you what Torrey or Murray taught, you can trust it's actually theirs — and go read them yourself.
 
 Rhemata is not a substitute for the sources. It is a doorway to them.
