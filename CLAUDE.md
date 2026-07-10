@@ -5,6 +5,36 @@ Rhemata is an AI-powered theological research tool for charismatic Christians. R
 
 ---
 
+## Session Routing
+
+This table is the load-map. For a given session type, load the listed CLAUDE.md sections and
+files; skip the rest to save context. An agentic loop or a fresh session should read this table
+first and load only what the row calls for.
+
+**Always loaded (every session — small, cheap):**
+- CLAUDE.md: Project Overview, this Session Routing table, Tech Stack, How to Work on This
+  Project, Project Knowledge Read Contract
+- rhemata-status.md (full — live session state)
+- PLAN.md: Standing session rules, the current session's row, Open decisions table
+
+Everything below is loaded IN ADDITION to that core.
+
+| Session type | Also load | Skip |
+|---|---|---|
+| Chokepoint conversion (PLAN #6–13) | CLAUDE.md: Directory Structure, both Scripts tables, the propositions-per-script section, the shared_ingest decision entry; plus the specific script file being converted | POSITIONING.md, DESIGN.md, most of Database, frontend tree |
+| Propositions / quote backfill (#17, #25) | CLAUDE.md: Database (propositions + chunks schema), propositions-per-script section, relevant decision entries; plus scripts/propositions.py | POSITIONING.md, DESIGN.md, frontend tree, Key Commands |
+| Core serving / retrieval (#15–20) | CLAUDE.md: Database (retrieval pipeline, RPCs) + these Key Decisions entries — License Control System (289–297), SOURCE_KIND_FUSION_WEIGHTS (275), Commentary context cap (276), Neighbor expansion skips commentary/lexicon (277), FTS OR-fallback (278), citable_count gate (279), Low-material fallback rework (280), System prompt rewrite (281); plus backend/app/routers/chat.py, search.py. For #18 specifically (propositions into retrieval RPCs): also the Propositions layer decision entry (303–315). | Scripts tables, marketing, DESIGN.md unless the sub-step touches UI |
+| Quote track (#21–24) | CLAUDE.md: Database (chunks schema — verifier ground truth), propositions-per-script section; POSITIONING.md (quote posture / guardrail #3) | DESIGN.md, frontend tree, Scripts tables |
+| Corpus growth (#26–29) | CLAUDE.md: Directory Structure, Scripts tables, propositions-per-script section, the license/alias decision entries | POSITIONING.md, DESIGN.md, Database internals, frontend tree |
+| Marketing / landing (#5) | CLAUDE.md: docs/ + frontend marketing tree; POSITIONING.md (full); DESIGN.md | Database, Scripts, propositions, migrations |
+| Backend infra (#4 Resend; #32–37) | CLAUDE.md: relevant backend tree, Environment Variables, relevant decision entries | POSITIONING.md, DESIGN.md, Scripts tables, Database internals |
+| Planning / status / plan revision | PLAN.md (full); rhemata-status.md; POSITIONING.md if positioning is in question | All CLAUDE.md heavy blocks (Directory, Database, Decisions, Scripts), frontend tree |
+
+Note: "Key Decisions" is coarse here — most sessions need some entries, none need all. When the
+CLAUDE.md restructure (thin core + pull-on-demand detail) lands, these rows get precise.
+
+---
+
 ## Directory Structure
 ```
 /Users/alexwhitley/rhemata/
