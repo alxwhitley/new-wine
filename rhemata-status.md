@@ -8,8 +8,20 @@
 
 ## Current Priority / Next Action
 
-- **Current priority:** #2 (honesty fix) and #3 (chokepoint verification) are both closed out. Next up per plan.md's linear order: **#4 — Resend transactional email** (independent quick win, pulled early per Ordering call D) or **#6 — aliases + sentinel cleanup + strict mode**, first session of the chokepoint conversion band. Alex's call which to run next; nothing blocks either.
-- **Next action:** confirm with Alex which of #4 or #6 to run next session.
+- **Current priority:** finish validating the supervised agentic-loop harness (`.claude/agents/`, `.claude/hooks/`, `.claude/harness-selftest/`) built this session — NOT #4/#6. The harness gates all live work per this session's own scope rule ("live work is a separate later session, gated on this one passing"); #4 vs #6 doesn't become the live decision again until the harness passes.
+- **Next action:** open a fresh Claude Code session in this repo (custom subagent types in `.claude/agents/` aren't picked up mid-session — confirmed this session, `planner-reviewer` returned "Agent type not found" when invoked live) and run planted-failure case A against the real `planner-reviewer` agent. Pass condition: it must REJECT the case-A fixture (`.claude/harness-selftest/fixtures/case-a-dedup-trap.md`) and state the correct reason — that `skipped=1` means `ingest_document()` never reached resolve/insert/chunk/embed/propositions, so nothing downstream was verified. A vague rejection, an approval, or no rejection all count as fail. Only after that passes: report + commit any harness follow-up, then resume #4-vs-#6.
+
+---
+
+## Harness Build (this session, 2026-07-10)
+
+Built and self-tested a supervised agentic-loop harness — `planner-reviewer` (opus, plans + judges) and `executor` (sonnet, mechanical work only) subagents, gated by a SubagentStop deterministic layer and PreToolUse guards. Did ZERO real Rhemata work by design (no ingests, no migrations, no corpus changes) — this was infrastructure-only, gated separately from PLAN.md's numbered session list.
+
+- **Committed:** `c3e1bd8` (harness: agents + hooks + settings.json), `c8eed23` (harness-selftest: 5 planted-failure fixtures). Both pushed.
+- **Deterministic layer: verified.** Piped each fixture's actual report text through `.claude/hooks/deterministic_gate.py` directly. Cases B (count mismatch), C (semicolon inside a `--` SQL comment), D (success claim, no counts), E (partial count — "stored: 8" with attempted/errored/skipped missing) all blocked, each citing the correct rule (PLAN.md Rule 3, or the Migration 051 gotcha) and the correct specific detail (not just "blocked").
+- **Judgment layer: UNVERIFIED.** Case A (an executor report where a dedup-skip is narrated as proof the full write path executed) was confirmed to clear the deterministic layer cleanly — complete, arithmetically-consistent counts, no batch language, no SQL — which is the correct precondition for it to be a genuine test of `planner-reviewer`'s judgment rather than something a regex catches by luck. It has NOT yet been run against the actual `planner-reviewer` agent — this session's Agent tool held its original fixed subagent-type list and didn't recognize `planner-reviewer` after the file was created mid-session.
+- **Structural constraints built in (not yet exercised live):** `.claude/hooks/guard_pretooluse.py` denies subagent-originated `git commit`/`push`/`reset --hard`, subagent writes to the five governed files, and non-dry-run invocation of the five PLAN.md-roadmap-#8–13 unconverted ingest scripts (Rule 10 freeze) — scoped to `agent_type ∈ {executor, planner-reviewer}` via the PreToolUse hook payload's `agent_type` field, main thread unaffected.
+- **The harness is NOT cleared for live work.** Do not run #4, #6, or any other PLAN.md session through `executor`/`planner-reviewer` until case A has run against the real reviewer and passed for the stated reason above.
 
 ---
 
@@ -29,9 +41,7 @@
 
 ## In Progress / Uncommitted Locally
 
-- `CLAUDE.md` — modified, uncommitted. Pre-existing drift from before this session (repo-path corrections, `docs/` additions, `admin.py`/`feedback.py` entries, etc.), scoped to #14 — deliberately not touched this session.
-- `DESIGN.md` — **confirmed clean**, no pending changes (`git status` clean; last touched in `b6da249`, the 2026-07-09 Notion-cutover commit). Prior uncertainty about this resolved via direct check.
-- Everything from #2 and #3's work: committed (`0af69a6`, `12c3870` — see above).
+Nothing. Working tree is clean and local `main` is even with `origin/main` (pushed `0af69a6` through `c8eed23`, 7 commits, this session-block). `CLAUDE.md`'s prior drift (repo-path corrections, session routing table) is committed (`80b1d50`, `0aa38c2`); `DESIGN.md` remains clean since `b6da249`.
 
 ---
 
@@ -65,4 +75,6 @@ These do not block #6 onward but should inform it:
 
 ## Next Session Should
 
-Alex to choose between **#4 — Resend transactional email** (independent, low-risk, pulled early) or **#6 — aliases + sentinel cleanup + strict mode** (first session of the chokepoint conversion band, needs Alex's decision on the two unmetadata'd sentinel docs before it can complete). Either is unblocked. If #6 is chosen, come prepared with a call on "So Great a Salvation" and "The 59 One Another's of the NT."
+**Fresh session, harness validation only:** run planted-failure case A against the real `planner-reviewer` agent (see "Harness Build" above for the pass condition). If it passes: report the result, commit any follow-up, and the harness is cleared — #4-vs-#6 becomes live again. If it fails or gives the wrong reason: the reviewer's checklist needs strengthening before any live session runs through it — that's the next fix, not a reason to route #4/#6 around the harness manually.
+
+Once the harness clears: Alex to choose between **#4 — Resend transactional email** (independent, low-risk, pulled early) or **#6 — aliases + sentinel cleanup + strict mode** (first session of the chokepoint conversion band, needs Alex's decision on the two unmetadata'd sentinel docs before it can complete). If #6 is chosen, come prepared with a call on "So Great a Salvation" and "The 59 One Another's of the NT."
