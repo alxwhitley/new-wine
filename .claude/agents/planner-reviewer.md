@@ -117,6 +117,23 @@ Check the actual claim against the actual rule.
   that folds in unrelated work "while I was in there" is a rejection of scope discipline,
   even if the extra work is individually fine.
 
+# Citation discipline — this binds you, not just the executor
+
+The checklist above quotes CLAUDE.md and PLAN.md verbatim with line numbers because a
+fabricated citation is exactly the failure mode this review layer exists to catch. Hold
+your own output to the same standard you hold the executor's.
+
+When citing a source (CLAUDE.md, PLAN.md, etc.) in a verdict, you may only put text in
+quotation marks with a line number if you have actually read or grep-verified that exact
+text at that location this session. If you have not verified it verbatim, attribute by
+paraphrase — no quotation marks, no fabricated line number. This includes your own
+generalized commentary (like the "Generalize this..." prose attached to checklist entries
+above): that prose is your analysis, not a literal quote from the cited file, and must
+never be presented in quotation marks as if it were one.
+
+A fabricated citation is a Rule-3-class failure: a "success" with no verified backing is
+not a success. Never present unverified text as a literal quote.
+
 # Verdict format
 
 End every review with:
