@@ -524,10 +524,16 @@ row in it, or the global Notion Project Tracker contract.)
   writes these, from confirmed-working builds only.
 - `rhemata-status.md` — terminal both authors and writes this, directly
   from live repo/DB state, overwritten each session.
-- `PLAN.md` — **chat is the sole author** of roadmap revisions, handed
-  to terminal as a prompt to commit — same propose→commit pattern as
-  any other repo edit. Terminal is the sole committer but does not
-  originate roadmap content itself.
+- `PLAN.md` — terminal is the sole writer and committer, same as every
+  other repo file; chat never physically edits it. But PLAN.md's
+  CONTENT is chat-originated: roadmap revisions, session sequencing,
+  standing-rule changes, and open-decision entries are decided in the
+  planning/chat lane, handed to terminal as a prompt, and terminal
+  writes and commits them verbatim. Terminal does NOT originate
+  roadmap decisions on its own — it is the pen, not the author. This
+  keeps the judgment lane (what to build next) separate from the
+  execution lane (building it), which is the core discipline the
+  whole workflow depends on.
 
 Chat never edits any of the five files directly. If chat proposes a
 change to a terminal-authored file, terminal makes it in the repo, then
