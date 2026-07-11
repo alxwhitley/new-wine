@@ -363,6 +363,43 @@ Design system: `DESIGN.md` in project root is the styling authority. Lumen syste
 
 ---
 
+## Harness / Agentic-Loop — Gate Design Principles
+
+Durable architecture the supervised agentic-loop harness (`executor`/`planner-reviewer`
+subagents; `.claude/hooks/guard_pretooluse.py` PreToolUse; `.claude/hooks/deterministic_gate.py`
+SubagentStop) is built toward. These are the stated design constitution, not a claim that
+every line of current code already conforms — where it doesn't yet, that's noted inline
+rather than glossed over.
+
+1. **Mismatch-only rule.** The stop-gate blocks ONLY when the agent's claimed work and the
+   recorded tool-calls disagree — never on the presence of a write alone. A recorded write
+   with a matching honest report must pass.
+2. **Prose is the subject, never the signal.** The agent's self-report is the thing being
+   audited; the gate must never trust its self-declared work-type or scan it for
+   write-flavored words to make its decision. The record-primary migration gets finished;
+   the prose fallback is retired, not left as a permanent bridge.
+   **Current conformance (interim, not final):** the garble fix shipped in `5b43332`
+   (`deterministic_gate.py`'s `check_recorded_writes()`) is an INTERIM conformer to this
+   principle, not a finished one — it still reads and trusts the executor's self-declared
+   `WORK_TYPE` marker to decide whether a recorded write is acceptable, which this principle
+   forbids. This was a deliberate, pragmatic move to stop the garble loop (see PLAN.md #5.5)
+   and it holds — but it is a bridge, not the finished state. Full conformance lands when
+   the record-only migration (#5.5's remaining open exit condition) completes and the prose
+   fallback is retired. Do not describe the garble fix as "done" or "final" anywhere — it is
+   fixed for its original failure mode, not yet fully conformant with this principle.
+3. **Agent identity is first-class.** Every recorded action and every gate decision carries
+   "whose action was this" as a required field, not an enrichment. The stop-gate evaluates
+   only the finishing agent's own records, never the whole session's.
+4. **The machinery is invisible to itself.** The harness's own bookkeeping (any report-save,
+   log-write, etc.) happens off the monitored path, so the enforcement layer can never
+   observe — and never trip on — its own writes.
+5. **Fallible, not adversarial.** Subagents are treated as prone to honest error and drift,
+   not deceit. Broad detection catches mistakes; hard denial (not detection) makes the few
+   genuinely irreversible operations impossible. The harness is not to be grown toward
+   defeating a deliberate adversary.
+
+---
+
 ## Environment Variables (in backend/app/.env)
 - `GROQ_API_KEY`
 - `OPENAI_API_KEY`
