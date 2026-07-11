@@ -106,7 +106,7 @@
 
 ### Housekeeping (low-risk batch)
 
-**14.** (T-tail) Folder renames (lexicon/→stepbible/, documents/→inbox/) + drop `jewish_perspectives` + delete duplicate Murray files + **make `CLAUDE.md`/`SKILL.md` true** (they claim the chokepoint is shipped — correct to reality; source/alias counts, repo path, Ravenhill date). *Stop: committed, docs current.*
+**14.** (T-tail) Folder renames (lexicon/→stepbible/, documents/→inbox/) + drop `jewish_perspectives` + delete duplicate Murray files + make `CLAUDE.md`/`SKILL.md` true (they claim the chokepoint is shipped — correct to reality; source/alias counts, repo path, Ravenhill date). **Docs-truth clause DONE:** landed in commit `80b1d50` (2026-07-10), ahead of this plan being updated — `CLAUDE.md`/`SKILL.md` now read "ingest.py (1 of 5) converted ... not yet: ingest_magazine.py, ingest_preceptaustin.py, ingest_lexicon.py, ingest_commentaries.py," matching the actual conversion state; confirmed still current as of 2026-07-11. **Remaining, unverified:** folder renames, `jewish_perspectives` drop, and duplicate Murray file deletion have NOT happened (`sources/lexicon/` and `sources/documents/` still under old names; `murray_surrender.pdf` and `murray_absolute_surrender.pdf` both still present). *Stop: docs-truth clause satisfied; #14 as a whole is NOT DONE until the folder renames, table drop, and duplicate-file cleanup also land.*
 
 ### Core serving — make the existing corpus answer well
 
