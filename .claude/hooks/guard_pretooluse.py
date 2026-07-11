@@ -74,7 +74,10 @@ DRY_RUN_FLAG = re.compile(r"--dry-run|--test\b")
 # on some non-writes like bare `2>&1`). Not reused from elsewhere because
 # nothing else in this file is a general-purpose write classifier.
 BASH_WRITE_INDICATORS = re.compile(
-    r">>?(?!=)"  # shell redirection (>, >>), not >=
+    r">>?(?!=)(?!&\d)(?!\s*/dev/null)"  # shell redirection to a real target --
+    # excludes fd duplication (2>&1) and /dev/null, both confirmed
+    # false-positive sources in the 2026-07-11 garble diagnosis; still
+    # catches genuine file writes like "> out.txt" or "2> err.log"
     r"|\b(?:rm|mv|cp|touch|mkdir|tee|dd|truncate|chmod|chown)\b"  # file-mutating commands
     r"|\bsed\b[^|;&\n]*-i\b"  # sed -i (in-place edit)
     r"|\b(?:INSERT|UPDATE|DELETE|UPSERT|ALTER|DROP|MERGE|CREATE)\b",  # SQL mutation verbs

@@ -217,10 +217,41 @@ def check_recorded_writes(payload: dict):
     script_records = [r for r in records if r.get("kind") == "script_invocation"]
 
     if write_records:
-        # Record-primary: an observed write beats any prose claim. Do NOT
-        # run check_reconciliation() here -- the record alone decides, even
-        # if a script marker also exists for this run (e.g.
-        # `python3 ingest.py > log.txt` produces both; the write wins).
+        marker = WORK_TYPE_MARKER.search(message)
+        if marker and marker.group(1).lower() == "write":
+            # Record and self-report agree: a write happened, the executor
+            # honestly said so. This is the state Approach B wants -- ground
+            # truth backing the claim, not contradicting it. Allow.
+            #
+            # Garble root-cause fix (2026-07-11): the prior version of this
+            # branch returned a block unconditionally, with no path to ever
+            # satisfy it -- confirmed via this session's own write-state log
+            # as the cause of the executor's repeated "same message, Nth
+            # time" reports across multiple prior sessions. See
+            # /tmp/rhemata-garble-diagnosis.txt for the full evidence.
+            #
+            # Deliberately NOT chaining into check_reconciliation() here --
+            # write_records can be plain code edits (Edit/Write tool calls),
+            # not DB mutations Standing Rule 3's four numbers were written
+            # for. Verified against real evidence: the 8-Edit strict-mode
+            # build (agent a87b30fb3fa215ad5) has real write records with
+            # nothing to reconcile -- chaining in reconciliation would
+            # recreate the same unconditional trap via a different path.
+            #
+            # NAMED GAP, ACCEPTED BY DESIGN (Alex, 2026-07-11), GATED: Rule-3
+            # style four-number reconciliation is NOT enforced for
+            # DB-shaped writes going through this path. Not a regression --
+            # this enforcement was already completely unreachable under the
+            # bug this replaces (permanently blocked before any report
+            # content was ever evaluated). MUST be closed before the harness
+            # processes its first real ingest/backfill run through this
+            # loop -- do not treat this as closed by this fix.
+            return None
+
+        # No WORK_TYPE marker, or an explicit (and here, WRONG) read-only
+        # marker, while a real write record exists -- this is the actual
+        # false-negative Approach B exists to catch: report silent or
+        # actively wrong about a write that really happened.
         items = [
             f"{r.get('tool_name', '?')}: {r.get('target') or r.get('command') or '(unspecified)'}"
             for r in write_records
@@ -228,9 +259,10 @@ def check_recorded_writes(payload: dict):
         return (
             "Approach B (#5.5 piece 2b-ii): guard_pretooluse.py's PreToolUse "
             f"recorder observed {len(write_records)} real write-class tool "
-            "call(s) this run -- " + "; ".join(items) + ". This halts on an "
-            "observed fact, not a self-reported claim -- prose (WORK_TYPE, "
-            "reconciliation counts) is not consulted for this decision."
+            "call(s) this run -- " + "; ".join(items) + " -- but this report "
+            "does not honestly declare WORK_TYPE: write (the marker is "
+            "missing, or says read-only). Add an accurate `WORK_TYPE: write` "
+            "line and resubmit."
         )
 
     if script_records:
