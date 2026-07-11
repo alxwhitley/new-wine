@@ -87,6 +87,26 @@ BASH_WRITE_INDICATORS = re.compile(
 # committed. Keyed by session_id so concurrent/sequential runs don't collide.
 WRITE_STATE_DIR = "/tmp/rhemata-harness-writes"
 
+# Session #5.5 Phase 3 piece 2b-i: script-invocation detection. NEW,
+# first-pass, note-taking only -- does NOT imply a write happened, only that
+# BASH_WRITE_INDICATORS can't see inside this command, so a future gate
+# should fall back to checking prose for this run rather than trusting an
+# empty write record as proof of no write. Known gaps: misses dynamic
+# execution with no visible script path (e.g. piping a script body into an
+# interpreter's stdin), misses a script invoked through a wrapper/alias with
+# no recognizable extension, misses a script re-invoking itself internally.
+# Deliberately over-inclusive in the other direction too: flags read-only
+# utility scripts (e.g. discover_sermonindex_playlists.py, documented as
+# discovery-only) exactly as readily as write-heavy ones -- fine for a
+# fall-back-to-prose marker, would not be fine feeding a block decision
+# directly.
+SCRIPT_INVOCATION_PATTERN = re.compile(
+    r"\b(?:python3?|node|bash|sh|zsh|ruby|perl|php)\s+"
+    r"[\w./\-]+\.(?:py|js|sh|rb|pl|php)\b"
+    r"|\./[\w./\-]+\.(?:py|js|sh|rb|pl|php)\b",
+    re.IGNORECASE,
+)
+
 
 def deny(reason: str) -> None:
     print(
@@ -186,6 +206,33 @@ def record_write_class_call(payload: dict, tool_name: str, tool_input: dict) -> 
         pass
 
 
+def record_script_invocation(payload: dict, command: str) -> None:
+    """Session #5.5 Phase 3 piece 2b-i: note that a script ran via Bash,
+    contents unseen -- a DISTINCT record kind from record_write_class_call's
+    write records, never merged with them. Does not imply a write happened;
+    only that BASH_WRITE_INDICATORS can't see inside this command, so a
+    future gate (piece 2b-ii) should fall back to checking prose for this run
+    rather than trusting an empty write record as proof of no write. Never
+    raises -- a recording failure must never change guard behavior."""
+    try:
+        session_id = payload.get("session_id") or "unknown-session"
+        record = {
+            "kind": "script_invocation",
+            "session_id": session_id,
+            "agent_id": payload.get("agent_id") or "unknown-agent",
+            "agent_type": payload.get("agent_type"),
+            "tool_use_id": payload.get("tool_use_id"),
+            "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "command": command,
+        }
+        os.makedirs(WRITE_STATE_DIR, exist_ok=True)
+        path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -219,6 +266,8 @@ def main() -> None:
                 return
         if is_write_class(tool_name, tool_input):
             record_write_class_call(payload, tool_name, tool_input)
+        if SCRIPT_INVOCATION_PATTERN.search(command):
+            record_script_invocation(payload, command)
         allow()
         return
 
