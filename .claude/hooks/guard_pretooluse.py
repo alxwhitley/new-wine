@@ -107,6 +107,27 @@ SCRIPT_INVOCATION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Session #5.5 MCP database gate (2026-07-11). Full literal tool_name strings
+# only -- the mcp__claude_ai_Supabase__list_tables prefix was verified against
+# a real captured PreToolUse payload in the prior session, not inferred.
+# Scoped to the Supabase connector specifically; any other MCP connector's
+# tools (Notion, Canva, etc.) are untouched by this set and fall through to
+# the default allow() below, exactly as they did before this change -- gating
+# those connectors is out of scope for this session.
+MCP_WRITE_CLASS_TOOLS = {
+    "mcp__claude_ai_Supabase__execute_sql",
+    "mcp__claude_ai_Supabase__apply_migration",
+    "mcp__claude_ai_Supabase__create_branch",
+    "mcp__claude_ai_Supabase__create_project",
+    "mcp__claude_ai_Supabase__delete_branch",
+    "mcp__claude_ai_Supabase__deploy_edge_function",
+    "mcp__claude_ai_Supabase__merge_branch",
+    "mcp__claude_ai_Supabase__pause_project",
+    "mcp__claude_ai_Supabase__rebase_branch",
+    "mcp__claude_ai_Supabase__reset_branch",
+    "mcp__claude_ai_Supabase__restore_project",
+}
+
 
 def deny(reason: str) -> None:
     print(
@@ -148,6 +169,19 @@ def check_destructive_git(command: str):
             "never commits or pushes without Alex's explicit yes on a shown "
             "diff -- that step only ever happens from the orchestrating main "
             "session."
+        )
+    return None
+
+
+def check_mcp_write(tool_name: str):
+    if tool_name in MCP_WRITE_CLASS_TOOLS:
+        return (
+            "MCP database write blocked. Governed sessions route DB writes "
+            "through the psycopg2/script path, not the Supabase MCP "
+            "connector -- this call would mutate data or schema directly "
+            "and bypass every script-level check (dedup, source resolution, "
+            "propositions gate, etc). Use the documented ingest/migration "
+            "scripts, or psycopg2 via SUPABASE_DB_URL, instead."
         )
     return None
 
@@ -233,6 +267,29 @@ def record_script_invocation(payload: dict, command: str) -> None:
         pass
 
 
+def record_mcp_read_call(payload: dict, tool_name: str) -> None:
+    """Session #5.5 MCP-gate build: cheap ground-truth record of an ALLOWED
+    MCP read, mirroring record_write_class_call's pattern. Never raises --
+    a recording failure must never change guard behavior."""
+    try:
+        session_id = payload.get("session_id") or "unknown-session"
+        record = {
+            "kind": "mcp_read",
+            "session_id": session_id,
+            "agent_id": payload.get("agent_id") or "unknown-agent",
+            "agent_type": payload.get("agent_type"),
+            "tool_name": tool_name,
+            "tool_use_id": payload.get("tool_use_id"),
+            "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        os.makedirs(WRITE_STATE_DIR, exist_ok=True)
+        path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -240,12 +297,32 @@ def main() -> None:
         allow()
         return
 
-    if payload.get("agent_type") not in GUARDED_AGENT_TYPES:
+    tool_name = payload.get("tool_name", "")
+    tool_input = payload.get("tool_input", {}) or {}
+
+    # MCP database gate (Session #5.5, 2026-07-11): action-keyed, not
+    # agent_type-keyed -- applies to ANY subagent call (agent_type present at
+    # all), not just the executor/planner-reviewer set the checks below are
+    # scoped to. Deliberate: it means the gate already covers executor/
+    # planner the moment either gains MCP tool access, with no further code
+    # change, and it covers today's actual MCP-capable type (general-purpose)
+    # too. Placed ahead of the GUARDED_AGENT_TYPES allowlist check below
+    # because that check exists to exempt the trusted MAIN session from every
+    # rule in this file, not to narrow MCP coverage down to two subagent
+    # types -- main-session calls (agent_type absent from the payload)
+    # remain exempt here as everywhere else in this file.
+    if payload.get("agent_type") is not None and tool_name.startswith("mcp__"):
+        reason = check_mcp_write(tool_name)
+        if reason:
+            deny(reason)
+            return
+        record_mcp_read_call(payload, tool_name)
         allow()
         return
 
-    tool_name = payload.get("tool_name", "")
-    tool_input = payload.get("tool_input", {}) or {}
+    if payload.get("agent_type") not in GUARDED_AGENT_TYPES:
+        allow()
+        return
 
     if tool_name in ("Edit", "Write"):
         reason = check_governed_file_write(tool_input)
