@@ -175,6 +175,30 @@ def _run_propositions(db_params: dict, propositions_conn, doc_id: str, source_id
         conn.close()
 
 
+# ── Strict mode ──────────────────────────────────────────────────────────────
+
+class SilentSentinelRefused(Exception):
+    """Raised by ingest_document() when strict mode (the default,
+    allow_sentinel=False) would otherwise let a document land silently on the
+    sentinel source because author/source_name matched no alias. Callers
+    should catch this per-document to skip and continue a batch rather than
+    letting one unresolvable doc kill the whole run. Carries the doc's
+    identifying fields so the caller can build a useful skip report without
+    re-deriving them.
+    """
+
+    def __init__(self, *, title, file_path, source_name, author):
+        self.title = title
+        self.file_path = file_path
+        self.source_name = source_name
+        self.author = author
+        identifier = title or file_path or "(untitled)"
+        super().__init__(
+            f"{identifier}: source_name={source_name!r} author={author!r} matched "
+            "no alias -- refusing silent sentinel fallback (allow_sentinel=False)"
+        )
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def ingest_document(
@@ -202,6 +226,13 @@ def ingest_document(
     # given, defaults to resolving from (source_name, author) above.
     source_id: Optional[str] = None,
     resolve_from: Optional[Tuple[Optional[str], Optional[str]]] = None,
+
+    # Strict mode (default ON): refuse to silently land a resolver MISS on
+    # the sentinel source — raises SilentSentinelRefused instead. Only
+    # guards the resolve_from path below; a caller-provided source_id above
+    # is a deliberate attribution choice and is never second-guessed here.
+    # Set True to restore the old silent-fallback behavior.
+    allow_sentinel: bool = False,
 
     # Dedup — source_url+source_name, filename fallback. skip_dedup=True for
     # callers that already own dedup responsibility (e.g. a per-row sheet
@@ -269,6 +300,17 @@ def ingest_document(
         _resolve_from = resolve_from if resolve_from is not None else (source_name, author)
         _resolved_id, _norm_key, _via = resolve_source_id(db, _resolve_from[0], _resolve_from[1])
         print(f"  Resolved source: {_norm_key!r} -> {_resolved_id} (via {_via})")
+        # Strict mode guards only this resolver path -- a caller-provided
+        # source_id (the `if` branch above) is a deliberate attribution
+        # choice and is never second-guessed here. The documents.source_id
+        # column DEFAULT (migration 049) is a separate, unrelated
+        # defense-in-depth layer for inserts that omit source_id entirely --
+        # out of scope for this guard, left unchanged.
+        if _via == "MISS" and not allow_sentinel:
+            raise SilentSentinelRefused(
+                title=title, file_path=file_path,
+                source_name=source_name, author=author,
+            )
 
     # ── Insert document (or reuse) ──
     if existing_doc_id is not None and on_existing == "reuse":

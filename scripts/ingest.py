@@ -293,7 +293,7 @@ def tag_document(doc_id, chunks):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False, skip_dedup: bool = False, source_id_override: Optional[str] = None) -> tuple:
+def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = False, dry_run_sources: bool = False, skip_dedup: bool = False, source_id_override: Optional[str] = None, allow_sentinel: bool = False) -> tuple:
     """Returns (status, reason) where status is 'processed', 'skipped', or 'failed'.
 
     skip_dedup=True bypasses the already_ingested() guard (source_url+source_name,
@@ -308,6 +308,13 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
     this function; without the override, ingest_file re-resolved independently
     from headers (source_name/channel-first), which could silently disagree
     with the caller's gate decision on a channel/speaker alias mismatch.
+
+    allow_sentinel: passed straight through to shared_ingest.ingest_document().
+    Default False (strict mode ON) refuses a resolver MISS instead of silently
+    landing the doc on the sentinel source; the caller (main()'s folder loop)
+    is expected to catch shared_ingest.SilentSentinelRefused per file and
+    continue the batch. Irrelevant when source_id_override is set, since that
+    path never touches the resolver.
     """
     print(f"\n{'='*60}")
     print(f"Processing: {file_path.name} {'[COPYRIGHTED]' if is_copyrighted else '[OPEN]'}")
@@ -441,6 +448,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
         source_id=source_id_override,
         skip_dedup=skip_dedup,
         embed_text_fn=_embed_with_author_year_prefix,
+        allow_sentinel=allow_sentinel,
     )
 
     if result["status"] == "skipped":
@@ -471,6 +479,9 @@ def main():
                         help="Ingest files from this directory instead of the default scan dirs")
     parser.add_argument("--open", action="store_true",
                         help="Force is_copyrighted=False for all files (use with --source-dir)")
+    parser.add_argument("--allow-sentinel", action="store_true",
+                        help="Disable strict mode: allow docs with no author/source alias match "
+                             "to silently land on the sentinel source, instead of being skipped")
     args = parser.parse_args()
     dry_run = args.dry_run
     dry_run_sources = args.dry_run_sources
@@ -543,9 +554,28 @@ def main():
 
     processed = skipped = failed = 0
     skip_reasons: Dict[str, List[str]] = {}
+    sentinel_refused: List[Dict[str, Optional[str]]] = []
     for file_path in files:
         is_copyrighted = _is_copyrighted(file_path)
-        status, reason = ingest_file(file_path, dry_run=dry_run, is_copyrighted=is_copyrighted)
+        try:
+            status, reason = ingest_file(
+                file_path, dry_run=dry_run, is_copyrighted=is_copyrighted,
+                allow_sentinel=args.allow_sentinel,
+            )
+        except shared_ingest.SilentSentinelRefused as e:
+            skipped += 1
+            print(f"\n{'!'*60}")
+            print(f"  SKIPPED — silent sentinel refused: {file_path.name}")
+            print(f"  title={e.title!r}  source_name={e.source_name!r}  author={e.author!r}")
+            print(f"{'!'*60}\n")
+            sentinel_refused.append({
+                "file": file_path.name,
+                "title": e.title,
+                "source_name": e.source_name,
+                "author": e.author,
+            })
+            skip_reasons.setdefault("silent_sentinel_refused", []).append(file_path.name)
+            continue
         if status == "processed":
             processed += 1
             if not dry_run:
@@ -581,6 +611,18 @@ def main():
                 print(f"    • {name}")
             if len(filenames) > 5:
                 print(f"    ... and {len(filenames) - 5} more")
+
+    if sentinel_refused:
+        print(f"\n{'='*60}")
+        print(f"SILENT-SENTINEL REFUSALS — {len(sentinel_refused)} doc(s) need attribution")
+        print("(re-run with --allow-sentinel to bypass, or add the alias and re-run)")
+        print(f"{'='*60}")
+        for d in sentinel_refused:
+            print(f"  - {d['file']}")
+            print(f"      title:       {d['title']}")
+            print(f"      source_name: {d['source_name']}")
+            print(f"      author:      {d['author']}")
+        print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":
