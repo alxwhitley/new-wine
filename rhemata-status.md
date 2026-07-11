@@ -33,6 +33,20 @@ Captured the ground truth the #5.5 diagnostic said was missing. No gate logic bu
 
 ---
 
+## Known Harness Bugs — Diagnosed, NOT Fixed (2026-07-11, after garble-fix commit `5b43332`)
+
+Three bugs found via live testing on top of the garble fix (`5b43332`, confirmed live on origin). None are fixed — diagnostic only, per Alex's explicit instruction. Sequencing matters; do not fix out of order.
+
+1. **Write-state log not scoped per-agent — fix this FIRST.** `check_recorded_writes()` (`deterministic_gate.py:189-253`) opens the write-state log keyed by `session_id` only and reads every record in it — never filters to the current agent's own `agent_id`. Any executor dispatched later in a session that already has write history sees every earlier agent's writes as if they were its own. Confirmed live: a report's cited "write-class calls this run" count grew by exactly 1 with each of one agent's own resubmission attempts, and it was blocked citing tool calls (an Edit to `shared_ingest.py`, `rm murray_surrender.pdf`) that belonged to different agents from hours earlier in the same session.
+2. **Report-to-disk backstop collides with the garble fix on read-only tasks — fix SECOND, depends on #1.** The mandatory disk-save step added to `executor.md` requires a real Bash write (`mkdir` + `cat >`) on every report, including read-only ones. `guard_pretooluse.py`'s `BASH_WRITE_INDICATORS` (lines 76-85) has no path-awareness — it classifies that save the same as any other write. Combined with `5b43332`'s fix ("write record + read-only marker = block"), every honestly-labeled `WORK_TYPE: read-only` report now gets blocked, because the backstop's own save always produces a write record. Confirmed live: a genuinely read-only task (one `wc -l` command) looped 5 times, final chat response degraded to "Unchanged." — same symptom class as the original garble bug, new cause. Exempting only the backstop's own save is NOT sufficient by itself in any session with existing write history (including this one) — bug #1 must close first, or the exemption only helps in a brand-new empty session. If/when a narrow exemption is built, it must verify the ENTIRE command is nothing but the canonical backstop shape — a substring/contains-style check would be defeatable by chaining an unrelated write onto the same command (e.g. `rm -rf X; mkdir -p ... && cat > ...`).
+3. **`check_dry_run_before_batch()` (Rule 2) has the same unconditional-block shape as the original garble bug — fix THIRD, lower urgency.** `BATCH_SCALE_WORDS` (includes "backfill") can match incidentally — e.g. a report that quotes PLAN.md's own Standing Rule 3 text while doing unrelated work trips it, with no way to satisfy the check afterward. Confirmed live: caused 4 consecutive rejections on a task that did no batch work at all. Same unconditional-block pattern as the bug fixed in `5b43332`, different function (`deterministic_gate.py`, `main()`'s check loop, not `check_recorded_writes()`), not yet touched.
+
+**Uncommitted right now:** `.claude/agents/executor.md` and `.claude/agents/planner-reviewer.md` carry the report-to-disk build that surfaced bug #2 — left in place, unconfirmed, not committed. See "In Progress / Uncommitted Locally."
+
+None of these three are logged in PLAN.md.
+
+---
+
 ## Where We Are in the Roadmap
 
 (PLAN.md v5.1+, linear numbered session list)
@@ -56,7 +70,7 @@ Captured the ground truth the #5.5 diagnostic said was missing. No gate logic bu
 
 ## In Progress / Uncommitted Locally
 
-Nothing beyond the accepted standing baseline. Working tree otherwise clean; local `main` == `origin/main` at `9e47b4f8` (confirmed by hash before and after this session's MCP probe work — probe leaves zero trace).
+Local `main` == `origin/main` at `5b43332` (the garble-fix commit — confirmed by hash). Beyond the accepted standing baseline, the tree also currently carries **`.claude/agents/executor.md` and `.claude/agents/planner-reviewer.md` modified and uncommitted** — the report-to-disk backstop build, which live-testing showed has the read-only collision described above (bug #2). Not committed; do not commit until #1 and #2 above are resolved together.
 
 **Accepted standing baseline (intentional carve-out, unchanged across many sessions):** modified `SKILL.md` + untracked `.agents/`, `.claude/skills/`, `skills-lock.json`. Still needs a `.gitignore`-or-commit decision so clean-tree checks stop flagging it.
 
@@ -72,7 +86,7 @@ Nothing beyond the accepted standing baseline. Working tree otherwise clean; loc
 - `PRODUCT.md` vs. `POSITIONING.md` overlap — still unclear if superseded; needs Alex's call.
 - Offsite backup of `sources/` + `ingest_queue.xlsx` — still not independently verified from this Mac.
 - `chunks.content` stray `---` separator — still flagged, no owning session decided.
-- **Executor garbled final-text reports — still not root-caused.** Recurred multiple times this session. Every result was independently re-verified off disk/direct commands rather than trusted from subagent prose — this kept ground truth reliable despite it.
+- **Executor garbled final-text reports — root cause found and fixed (`5b43332`), but two NEW/adjacent bugs surfaced live-testing that fix** — see "Known Harness Bugs" above; not fixed yet.
 - `--dangerously-skip-permissions`: keep OFF for live writes (standing rule, unchanged).
 
 ---
