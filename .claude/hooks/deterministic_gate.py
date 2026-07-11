@@ -38,10 +38,24 @@ work runs through this loop yet; NOT acceptable once the chokepoint band
 (#6-13) starts writing to the corpus through it -- Approach B is a hard
 prerequisite before that point, not an optional hardening.
 
+Approach B, piece 2b-ii (2026-07-11): check_reconciliation()'s prose check
+is no longer the primary decision -- check_recorded_writes() is. It reads
+guard_pretooluse.py's session-keyed state file at SubagentStop and decides
+from what was actually observed via PreToolUse, not from what the executor
+said about itself. Record-primary: any real write record halts directly,
+naming what was written, and check_reconciliation() never runs for that
+case. check_reconciliation() now only fires as a scoped fallback (a script
+ran, contents unseen, no write record either way) or as a fail-closed
+default (session_id or the state file itself couldn't be resolved/read).
+Two exit conditions remain before this bridge retires and the gate
+collapses to record-only -- see check_recorded_writes()'s docstring and
+PLAN.md #5.5.
+
 Exit 0 with a JSON {"decision":"block","reason":...} on stdout blocks the
 subagent from stopping. Exit 0 with no output (or {}) allows it.
 """
 import json
+import os
 import re
 import sys
 
@@ -53,6 +67,14 @@ def block(reason: str) -> None:
 
 def allow() -> None:
     sys.exit(0)
+
+
+# Piece 2b-ii (#5.5): must match guard_pretooluse.py's WRITE_STATE_DIR
+# exactly -- these are two independent standalone hook scripts with no
+# shared module, so this string is duplicated, not imported. If one changes,
+# the other must change too; nothing enforces that automatically. Flagged
+# as a real (small) maintenance risk, not hidden.
+WRITE_STATE_DIR = "/tmp/rhemata-harness-writes"
 
 
 COMPLETION_WORDS = re.compile(
@@ -152,6 +174,88 @@ def check_reconciliation(message: str):
     return None
 
 
+def check_recorded_writes(payload: dict):
+    """Piece 2b-ii (#5.5): the new primary decision. Reads
+    guard_pretooluse.py's session-keyed state file instead of trusting
+    check_reconciliation()'s prose check. Record-primary: a real write
+    record halts directly and check_reconciliation() never runs for that
+    case -- the record alone decides. Falls back to check_reconciliation()
+    only when a script ran and produced no write record (the recorder can't
+    see inside a script), or when session_id/the state file itself can't be
+    resolved or read at all (an unreadable state is not trustworthy ground
+    truth -- fail closed to prose rather than silently treat it as clean).
+    A missing or empty file is NOT a failure: no records means no writes
+    happened, so that case stays quiet without consulting prose at all."""
+    session_id = payload.get("session_id")
+    message = payload.get("last_assistant_message") or ""
+
+    if not session_id:
+        # Can't even identify which state file belongs to this run --
+        # don't trust a read we couldn't attempt. Fail closed to prose.
+        return check_reconciliation(message)
+
+    path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
+    if not os.path.exists(path):
+        # No file at all -- nothing was ever recorded for this run. Clean.
+        return None
+
+    try:
+        with open(path) as f:
+            lines = [line.strip() for line in f if line.strip()]
+        records = [json.loads(line) for line in lines]
+    except Exception:
+        # File exists but couldn't be opened/parsed cleanly -- a corrupted
+        # or unreadable state is not trustworthy ground truth. Fail closed
+        # to prose rather than silently treat garbage as "no writes."
+        return check_reconciliation(message)
+
+    if not records:
+        # File exists but is empty -- same as missing: no writes happened.
+        return None
+
+    write_records = [r for r in records if "kind" not in r]
+    script_records = [r for r in records if r.get("kind") == "script_invocation"]
+
+    if write_records:
+        # Record-primary: an observed write beats any prose claim. Do NOT
+        # run check_reconciliation() here -- the record alone decides, even
+        # if a script marker also exists for this run (e.g.
+        # `python3 ingest.py > log.txt` produces both; the write wins).
+        items = [
+            f"{r.get('tool_name', '?')}: {r.get('target') or r.get('command') or '(unspecified)'}"
+            for r in write_records
+        ]
+        return (
+            "Approach B (#5.5 piece 2b-ii): guard_pretooluse.py's PreToolUse "
+            f"recorder observed {len(write_records)} real write-class tool "
+            "call(s) this run -- " + "; ".join(items) + ". This halts on an "
+            "observed fact, not a self-reported claim -- prose (WORK_TYPE, "
+            "reconciliation counts) is not consulted for this decision."
+        )
+
+    if script_records:
+        # TEMPORARY BRIDGE (#5.5 piece 2b-ii), not permanent: the recorder
+        # cannot see inside a script invocation (guard_pretooluse.py's
+        # BASH_WRITE_INDICATORS has no visibility into what a script does
+        # internally), so when a script ran and produced no write record,
+        # fall back to the prose-based check_reconciliation() for THIS run
+        # only. This bridge retires once a script allowlist (like
+        # check_rule_10_freeze's named scripts, in guard_pretooluse.py)
+        # lets the recorder positively identify write-capable scripts --
+        # at that point the gate collapses to record-only and this branch
+        # goes away.
+        return check_reconciliation(message)
+
+    # No write record, no script marker for this run -- ground truth is
+    # clean. NOTE: this is ground truth only for Bash/Edit/Write tool
+    # calls. MCP write tools (e.g. Supabase execute_sql, apply_migration)
+    # are NOT recorded by the current PreToolUse wiring -- settings.json's
+    # PreToolUse matcher only covers Edit|Write and Bash -- so an MCP write
+    # bypasses this gate entirely today. Closing that is a separate
+    # recorder-side exit condition for #5.5, not yet built.
+    return None
+
+
 def check_dry_run_before_batch(message: str):
     """Rule 2: full-batch claims need a preceding dry-run/single-item step."""
     if BATCH_SCALE_WORDS.search(message) and not DRY_RUN_WORDS.search(message):
@@ -189,13 +293,17 @@ def main() -> None:
         allow()
         return
 
-    message = payload.get("last_assistant_message") or ""
-    if not message:
-        allow()
+    # Piece 2b-ii (#5.5): the primary decision now comes from recorded tool
+    # invocations, not the executor's self-reported prose. check_reconciliation()
+    # only runs indirectly, as check_recorded_writes()'s scoped fallback/fail-closed
+    # path -- it is no longer called unconditionally here.
+    reason = check_recorded_writes(payload)
+    if reason:
+        block(reason)
         return
 
+    message = payload.get("last_assistant_message") or ""
     for check in (
-        check_reconciliation,
         check_dry_run_before_batch,
         check_semicolon_in_sql_comment,
     ):
