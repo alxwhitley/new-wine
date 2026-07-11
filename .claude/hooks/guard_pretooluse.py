@@ -20,8 +20,29 @@ Enforces:
   3. PLAN.md Standing Rule 10 freeze: denies real (non-dry-run/non-test)
      invocation of the five PLAN.md-roadmap-#8-13 unconverted ingest scripts
      for the executor.
+
+Session #5.5, Phase 3 piece 1 (2026-07-10) -- Approach B recording, NOT
+gating yet: on every ALLOWED write-class call from a guarded agent, append a
+record to a per-session state file keyed by agent_id. deterministic_gate.py
+does not read this yet (piece 2). Recording never affects allow/deny --
+wrapped in try/except, only ever called just before an allow() return, never
+on a deny() path (a blocked write didn't happen, so it doesn't belong in a
+ground-truth record). Write-class Bash detection (BASH_WRITE_INDICATORS) is
+a NEW, first-pass, syntax-level heuristic -- flagged in code, not hidden:
+it cannot see what a write-capable Python script does internally (e.g.
+`python3 scripts/ingest.py` shows no SQL or redirection on its command
+line), so real writes routed through an unflagged script will currently go
+unrecorded. It also over-triggers on some non-writes (e.g. bare `2>&1`, or
+the SQL verbs -- esp. CREATE/DROP/DELETE -- matching as bare words anywhere
+in a command, so a read-only command that merely mentions one of those words
+in English prose or in a file path will over-record too) -- deliberately
+biased toward over-recording, since piece 1 only feeds a downstream gate
+(piece 2), and over-recording is the safe direction of error here, not a
+silent one.
 """
+import datetime
 import json
+import os
 import re
 import sys
 
@@ -47,6 +68,24 @@ UNCONVERTED_INGEST_SCRIPTS = re.compile(
 )
 
 DRY_RUN_FLAG = re.compile(r"--dry-run|--test\b")
+
+# Session #5.5 Phase 3 piece 1: write-class Bash detection. NEW, first-pass --
+# see module docstring for known gaps (can't see inside a script; over-fires
+# on some non-writes like bare `2>&1`). Not reused from elsewhere because
+# nothing else in this file is a general-purpose write classifier.
+BASH_WRITE_INDICATORS = re.compile(
+    r">>?(?!=)"  # shell redirection (>, >>), not >=
+    r"|\b(?:rm|mv|cp|touch|mkdir|tee|dd|truncate|chmod|chown)\b"  # file-mutating commands
+    r"|\bsed\b[^|;&\n]*-i\b"  # sed -i (in-place edit)
+    r"|\b(?:INSERT|UPDATE|DELETE|UPSERT|ALTER|DROP|MERGE|CREATE)\b",  # SQL mutation verbs
+    re.IGNORECASE,
+)
+
+# Outside the repo entirely (not .claude/-relative) -- this is live-run-only
+# state, consumed once at the same subagent's SubagentStop, not durable
+# project data. Avoids needing a .gitignore entry or any risk of ever being
+# committed. Keyed by session_id so concurrent/sequential runs don't collide.
+WRITE_STATE_DIR = "/tmp/rhemata-harness-writes"
 
 
 def deny(reason: str) -> None:
@@ -106,6 +145,47 @@ def check_rule_10_freeze(command: str):
     return None
 
 
+def is_write_class(tool_name: str, tool_input: dict) -> bool:
+    """Session #5.5 Phase 3 piece 1: single source of truth for "is this
+    call a write." Edit/Write are always write-class by definition; Bash is
+    write-class iff BASH_WRITE_INDICATORS matches its command. See module
+    docstring and BASH_WRITE_INDICATORS' comment for known gaps."""
+    if tool_name in ("Edit", "Write"):
+        return True
+    if tool_name == "Bash":
+        command = tool_input.get("command", "") or ""
+        return bool(BASH_WRITE_INDICATORS.search(command))
+    return False
+
+
+def record_write_class_call(payload: dict, tool_name: str, tool_input: dict) -> None:
+    """Session #5.5 Phase 3 piece 1: append-only ground-truth record of a
+    write-class call that was actually ALLOWED to run, keyed by agent_id, so
+    a future deterministic_gate.py (piece 2) can read real tool-invocation
+    evidence instead of trusting the executor's self-reported prose. Never
+    raises -- a recording failure must never change guard behavior."""
+    try:
+        session_id = payload.get("session_id") or "unknown-session"
+        record = {
+            "session_id": session_id,
+            "agent_id": payload.get("agent_id") or "unknown-agent",
+            "agent_type": payload.get("agent_type"),
+            "tool_name": tool_name,
+            "tool_use_id": payload.get("tool_use_id"),
+            "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        if tool_name in ("Edit", "Write"):
+            record["target"] = tool_input.get("file_path") or tool_input.get("path")
+        elif tool_name == "Bash":
+            record["command"] = tool_input.get("command")
+        os.makedirs(WRITE_STATE_DIR, exist_ok=True)
+        path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -125,6 +205,8 @@ def main() -> None:
         if reason:
             deny(reason)
             return
+        if is_write_class(tool_name, tool_input):
+            record_write_class_call(payload, tool_name, tool_input)
         allow()
         return
 
@@ -135,6 +217,8 @@ def main() -> None:
             if reason:
                 deny(reason)
                 return
+        if is_write_class(tool_name, tool_input):
+            record_write_class_call(payload, tool_name, tool_input)
         allow()
         return
 
