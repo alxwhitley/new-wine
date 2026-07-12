@@ -378,15 +378,13 @@ rather than glossed over.
    audited; the gate must never trust its self-declared work-type or scan it for
    write-flavored words to make its decision. The record-primary migration gets finished;
    the prose fallback is retired, not left as a permanent bridge.
-   **Current conformance (interim, not final):** the garble fix shipped in `5b43332`
-   (`deterministic_gate.py`'s `check_recorded_writes()`) is an INTERIM conformer to this
-   principle, not a finished one — it still reads and trusts the executor's self-declared
-   `WORK_TYPE` marker to decide whether a recorded write is acceptable, which this principle
-   forbids. This was a deliberate, pragmatic move to stop the garble loop (see PLAN.md #5.5)
-   and it holds — but it is a bridge, not the finished state. Full conformance lands when
-   the record-only migration (#5.5's remaining open exit condition) completes and the prose
-   fallback is retired. Do not describe the garble fix as "done" or "final" anywhere — it is
-   fixed for its original failure mode, not yet fully conformant with this principle.
+   **Conformance: DONE (2026-07-13).** The interim garble fix shipped in `5b43332` read and
+   trusted the executor's self-declared `WORK_TYPE` marker — a deliberate, pragmatic bridge to
+   stop the garble loop, never described as final. That marker-trust is now retired entirely,
+   replaced by a per-write match-check between recorded actions and what the report actually
+   describes (see "Piece A/B — exit condition (a) closed," below). The script-invocation prose
+   bridge is retired too. Nothing in this gate's decision path trusts a self-declared label or
+   scans for write-flavored vocabulary to make a pass/fail decision anymore.
 3. **Agent identity is first-class.** Every recorded action and every gate decision carries
    "whose action was this" as a required field, not an enrichment. The stop-gate evaluates
    only the finishing agent's own records, never the whole session's.
@@ -466,6 +464,67 @@ stops cross-agent blame without weakening the real check.
 never hits this stop-gate itself (the gate is scoped to `agent_type == "executor"` only). Its
 entries sit in the log as history that a differently-scoped future agent could still inherit
 — worth remembering when exit condition (a)'s prose-removal rework is scoped.
+
+### Piece A/B — exit condition (a) closed (2026-07-13)
+
+#5.5's last exit condition — retiring the prose backstop to record-only — is closed. Both
+things principle 2 forbade are gone from the stop-gate's decision path.
+
+**Piece A (the central fix):** `check_recorded_writes()` no longer reads the executor's
+self-declared `WORK_TYPE` label at all. It compares the finishing agent's recorded writes
+against what the report actually describes, and blocks ONLY when a recorded write isn't
+accounted for in recognizable terms — the file, or a clearly-named target, not a
+character-exact string and not a magic declaration line. Checked per-write, not in
+aggregate: five writes with four accounted for is still a block, naming the fifth. The
+reverse direction — a report describing a write with no matching record — does not block;
+it's logged visibly (`claimed_but_unrecorded` in the write-state log) since over-claiming
+isn't a safety risk (principle 5), just something worth being able to see.
+
+**Piece B (shrinks the blind spot):** `guard_pretooluse.py` now recognizes known
+write-capable script invocations directly (`KNOWN_WRITE_SCRIPT_NAMES`, starting with
+`ingest.py` — same allow-listing shape as `UNCONVERTED_INGEST_SCRIPTS`, opposite purpose),
+so a real (non-dry-run) invocation is recorded as an ordinary write and judged by Piece A
+like anything else, instead of falling into the "script ran, contents unseen" blind spot.
+An unrecognized script still lands in that blind spot — but the gate no longer resolves it
+by falling back to prose; it's marked visibly `unverifiable_stop` in the write-state log and
+allowed, since an unproven ambiguity isn't a provable mismatch (principle 1) and isn't a
+genuinely irreversible operation either (principle 5).
+
+**Why both shipped together, a deliberate exception to one-change-per-session:** a prior
+diagnostic proved they can't ship apart. Piece B alone would leave the blind spot as a
+bypass around Piece A's new check (an unrecognized script's write could hide there
+indefinitely). Piece A alone, without Piece B, would mean script-invoked writes stayed on
+the old strict four-number reconciliation fallback — which is not enforced for
+write-record-shaped writes today regardless (see the reconciliation-numbers gap below) — so
+closing Piece A's blind spot without Piece B would have quietly reduced scrutiny on exactly
+the batch writes this rework exists to protect.
+
+**A real implementation bug found and fixed during verification, not swept under anything:**
+the first version of Piece B matched the bare filename `ingest.py` appearing anywhere in a
+Bash command — including a read-only `grep`/`cat` merely mentioning the file, not running
+it. Caught live during test 5's own verification (a `grep` command against `ingest.py` got
+misclassified as a write). Fixed by requiring genuine invocation syntax, reusing
+`SCRIPT_INVOCATION_PATTERN`'s own already-correct detection rather than a bare substring
+match. Re-verified after the fix, including a direct counterfactual: the exact same real,
+Piece-B-recognized write record blocks against a deliberately vague report and passes
+against an honest one — proof this isn't a rubber stamp.
+
+**Verified, all six required cases, before this was trusted:** a silent/undisclosed write
+blocks; an honest disclosure in recognizable (not exact, not declaration-line) terms
+passes; a generic "did some updates" with no specific referent still blocks (the forgiving
+floor holds); a report claiming a write with nothing recorded passes but is logged, not
+silently absorbed; a real, live `ingest.py` invocation is recorded directly and judged by
+the match-check — not the old four-number fallback, not waved through, confirmed both that
+an honest report passes and the identical record blocks a vague one; an unrecognized script
+is marked visibly unverifiable, not silently passed.
+
+**Out of scope, noted as adjacent and still open:** independently verifying claimed
+reconciliation NUMBERS (attempted/stored/errored/skipped) against the database itself.
+Records prove a write happened and can be described; they don't prove the claimed COUNT is
+correct. Nothing in this harness queries the database to check that today, for any path.
+Not a regression — this was already true before this rework — but worth a decision on
+whether and when it's ever built, since it would be a materially larger undertaking (network
+calls, credentials, latency) inside a lightweight hook script.
 
 ---
 

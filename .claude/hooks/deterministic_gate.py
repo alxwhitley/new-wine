@@ -51,9 +51,24 @@ Two exit conditions remain before this bridge retires and the gate
 collapses to record-only -- see check_recorded_writes()'s docstring and
 PLAN.md #5.5.
 
+Piece A/B rework (#5.5 exit condition (a), 2026-07-13): both remaining
+pieces of prose-trust inside check_recorded_writes() are retired. The
+self-declared WORK_TYPE label is no longer read anywhere in that function --
+replaced by a per-write match-check between recorded targets and what the
+report actually describes (Piece A), blocking only on a write the report
+never accounts for. The script-invocation prose bridge is replaced too:
+guard_pretooluse.py now recognizes known write-capable scripts directly
+(Piece B), and a genuinely unrecognized script is marked visibly
+unverifiable instead of falling back to prose. check_reconciliation()
+remains wired only as the fail-closed default when the state file itself
+can't be resolved or read at all. Independently verifying claimed
+reconciliation NUMBERS against the database is explicitly out of scope here
+-- noted as adjacent, still open.
+
 Exit 0 with a JSON {"decision":"block","reason":...} on stdout blocks the
 subagent from stopping. Exit 0 with no output (or {}) allows it.
 """
+import datetime
 import json
 import os
 import re
@@ -174,18 +189,117 @@ def check_reconciliation(message: str):
     return None
 
 
+# Piece A (#5.5 exit condition (a), 2026-07-13): extracts specific, nameable
+# things a report would need to mention to plausibly be describing a given
+# recorded write. Deliberately narrow to concrete referents (a filename, a
+# stem) -- no generic operation-word fallback, since a bare operation word
+# ("did some updates") is exactly the non-specific case that must NOT count
+# as accounting for a write. Matches a path-like or filename-like fragment;
+# falls back to the last whitespace-separated token in the record's text if
+# no such fragment exists (e.g. a bare "mkdir somedir" with no extension).
+_PATH_TOKEN = re.compile(r"[\w./-]+\.\w+|[\w-]+/[\w./-]+")
+
+
+def _referents_for(record: dict) -> list:
+    text = record.get("target") or record.get("command") or ""
+    tokens = _PATH_TOKEN.findall(text)
+    if not tokens:
+        tokens = text.strip().split()[-1:]
+    referents = []
+    for token in tokens:
+        base = os.path.basename(token.strip("'\""))
+        if not base:
+            continue
+        stem = base.rsplit(".", 1)[0] if "." in base else base
+        for candidate in (base, stem):
+            if len(candidate) >= 4:  # skip trivial/near-universal fragments
+                referents.append(candidate.lower())
+    return referents
+
+
+def _write_is_accounted_for(record: dict, message: str) -> bool:
+    """Piece A: does the report reference this specific recorded write in
+    recognizable terms? Forgiving on FORM (no exact string, no declaration
+    line required) but strict on SPECIFICITY (a referent must actually be
+    findable and named -- presence with nothing to check against fails
+    closed, which is what keeps a generic "did some updates" from counting
+    as accounting for any specific write)."""
+    referents = _referents_for(record)
+    if not referents:
+        return False
+    lowered = message.lower()
+    return any(r in lowered for r in referents)
+
+
+def record_claimed_but_unrecorded(payload: dict, message: str) -> None:
+    """Piece A: the reverse-direction case -- a report uses write-claiming
+    language but this agent has no recorded writes to back it up. Not a
+    safety failure (principle 5: broad detection for mistakes, not
+    adversarial denial) -- over-claiming isn't what this gate blocks on.
+    Logged visibly so it isn't silently invisible; same session log,
+    distinct kind. Never raises -- a logging failure must never change the
+    gate's allow decision."""
+    try:
+        session_id = payload.get("session_id") or "unknown-session"
+        record = {
+            "kind": "claimed_but_unrecorded",
+            "session_id": session_id,
+            "agent_id": payload.get("agent_id") or "unknown-agent",
+            "agent_type": payload.get("agent_type"),
+            "message_excerpt": message[:500],
+            "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        os.makedirs(WRITE_STATE_DIR, exist_ok=True)
+        path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+
+def record_unverifiable_stop(payload: dict, script_records: list) -> None:
+    """Piece A/B (#5.5 exit condition (a)): a script ran that
+    guard_pretooluse.py's KNOWN_WRITE_SCRIPTS didn't recognize -- no write
+    record either way, genuinely unverifiable. Never silently passed as if
+    verified, never resolved by falling back to prose (that was the
+    original script-invocation prose bridge this exit condition names).
+    Logged visibly instead, same session log, distinct kind. Never raises."""
+    try:
+        session_id = payload.get("session_id") or "unknown-session"
+        record = {
+            "kind": "unverifiable_stop",
+            "session_id": session_id,
+            "agent_id": payload.get("agent_id") or "unknown-agent",
+            "agent_type": payload.get("agent_type"),
+            "commands": [r.get("command") for r in script_records],
+            "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        os.makedirs(WRITE_STATE_DIR, exist_ok=True)
+        path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+
 def check_recorded_writes(payload: dict):
-    """Piece 2b-ii (#5.5): the new primary decision. Reads
-    guard_pretooluse.py's session-keyed state file instead of trusting
-    check_reconciliation()'s prose check. Record-primary: a real write
-    record halts directly and check_reconciliation() never runs for that
-    case -- the record alone decides. Falls back to check_reconciliation()
-    only when a script ran and produced no write record (the recorder can't
-    see inside a script), or when session_id/the state file itself can't be
-    resolved or read at all (an unreadable state is not trustworthy ground
-    truth -- fail closed to prose rather than silently treat it as clean).
-    A missing or empty file is NOT a failure: no records means no writes
-    happened, so that case stays quiet without consulting prose at all."""
+    """Piece A/B rework (#5.5 exit condition (a), 2026-07-13): reads
+    guard_pretooluse.py's session-keyed state file, scoped to the finishing
+    agent's own records (bug #1 fix). Blocks ONLY on a provable mismatch --
+    a recorded write this agent's own report does not account for in
+    recognizable terms (Piece A). No self-declared WORK_TYPE label is
+    consulted anywhere in this function anymore; principle 2 (prose is
+    never the trusted signal) is honored for this decision path. Known
+    write-capable script invocations (Piece B, guard_pretooluse.py's
+    KNOWN_WRITE_SCRIPTS) arrive here as ordinary write records, judged the
+    same way. Unrecognized script invocations with no write record are
+    marked visibly unverifiable rather than falling back to prose. A report
+    that claims write-shaped work with nothing recorded to back it up is
+    logged visibly (claimed-but-unrecorded) but never blocked -- that
+    direction isn't a safety failure. check_reconciliation() remains wired
+    only as a fail-closed default when the state file itself can't be
+    resolved or read -- an unreadable state is not trustworthy ground
+    truth, a different and much rarer case than "ran but unverified"."""
     session_id = payload.get("session_id")
     message = payload.get("last_assistant_message") or ""
 
@@ -221,74 +335,58 @@ def check_recorded_writes(payload: dict):
     records = [r for r in records if r.get("agent_id") == agent_id]
 
     if not records:
-        # No records belonging to THIS agent -- no writes on its own watch,
-        # so that case stays quiet without consulting prose at all.
+        # No records belonging to THIS agent. Piece A (2026-07-13): a report
+        # can still SAY it made a write with nothing recorded to back it up
+        # -- over-claiming isn't a safety risk, but it shouldn't pass
+        # silently either. Log it visibly, then allow either way.
+        if WRITE_VOCAB_WORDS.search(message):
+            record_claimed_but_unrecorded(payload, message)
         return None
 
     write_records = [r for r in records if "kind" not in r]
     script_records = [r for r in records if r.get("kind") == "script_invocation"]
 
     if write_records:
-        marker = WORK_TYPE_MARKER.search(message)
-        if marker and marker.group(1).lower() == "write":
-            # Record and self-report agree: a write happened, the executor
-            # honestly said so. This is the state Approach B wants -- ground
-            # truth backing the claim, not contradicting it. Allow.
-            #
-            # Garble root-cause fix (2026-07-11): the prior version of this
-            # branch returned a block unconditionally, with no path to ever
-            # satisfy it -- confirmed via this session's own write-state log
-            # as the cause of the executor's repeated "same message, Nth
-            # time" reports across multiple prior sessions. See
-            # /tmp/rhemata-garble-diagnosis.txt for the full evidence.
-            #
-            # Deliberately NOT chaining into check_reconciliation() here --
-            # write_records can be plain code edits (Edit/Write tool calls),
-            # not DB mutations Standing Rule 3's four numbers were written
-            # for. Verified against real evidence: the 8-Edit strict-mode
-            # build (agent a87b30fb3fa215ad5) has real write records with
-            # nothing to reconcile -- chaining in reconciliation would
-            # recreate the same unconditional trap via a different path.
-            #
-            # NAMED GAP, ACCEPTED BY DESIGN (Alex, 2026-07-11), GATED: Rule-3
-            # style four-number reconciliation is NOT enforced for
-            # DB-shaped writes going through this path. Not a regression --
-            # this enforcement was already completely unreachable under the
-            # bug this replaces (permanently blocked before any report
-            # content was ever evaluated). MUST be closed before the harness
-            # processes its first real ingest/backfill run through this
-            # loop -- do not treat this as closed by this fix.
+        # Piece A (2026-07-13): block ONLY on a provable mismatch -- a
+        # recorded write this report does not account for in recognizable
+        # terms. No WORK_TYPE label is read here at all; principle 2 (prose
+        # is never the trusted signal) applies to this decision. Checked
+        # per-write, not in aggregate: five writes with four accounted for
+        # is still a block, naming the fifth.
+        unaccounted = [r for r in write_records if not _write_is_accounted_for(r, message)]
+        if not unaccounted:
             return None
 
-        # No WORK_TYPE marker, or an explicit (and here, WRONG) read-only
-        # marker, while a real write record exists -- this is the actual
-        # false-negative Approach B exists to catch: report silent or
-        # actively wrong about a write that really happened.
         items = [
             f"{r.get('tool_name', '?')}: {r.get('target') or r.get('command') or '(unspecified)'}"
-            for r in write_records
+            for r in unaccounted
         ]
         return (
-            "Approach B (#5.5 piece 2b-ii): guard_pretooluse.py's PreToolUse "
-            f"recorder observed {len(write_records)} real write-class tool "
-            "call(s) this run -- " + "; ".join(items) + " -- but this report "
-            "does not honestly declare WORK_TYPE: write (the marker is "
-            "missing, or says read-only). Add an accurate `WORK_TYPE: write` "
-            "line and resubmit."
+            "Piece A (#5.5 exit condition (a)): guard_pretooluse.py's PreToolUse "
+            f"recorder observed {len(unaccounted)} of {len(write_records)} real "
+            "write-class tool call(s) this run that this report does not account "
+            "for in recognizable terms -- " + "; ".join(items) + ". Silent/"
+            "undisclosed writes are the one thing this gate blocks on "
+            "(principle 1: mismatch-only). Describe what was written -- the "
+            "file, or a clearly-named target -- and resubmit. No particular "
+            "declaration line is required; the description just has to name "
+            "what actually happened."
         )
 
     if script_records:
-        # TEMPORARY BRIDGE (#5.5 piece 2b-ii), not permanent: the recorder
-        # cannot see inside a script invocation (guard_pretooluse.py's
-        # BASH_WRITE_INDICATORS has no visibility into what a script does
-        # internally), so when a script ran and produced no write record,
-        # fall back to the prose-based check_reconciliation() for THIS run
-        # only. This bridge retires once a script allowlist (like
-        # check_rule_10_freeze's named scripts, in guard_pretooluse.py)
-        # lets the recorder positively identify write-capable scripts --
-        # at that point the gate collapses to record-only and this branch
-        # goes away.
-        return check_reconciliation(message)
+        # Piece B (2026-07-13): what's left of the former "script ran,
+        # contents unseen" blind spot after guard_pretooluse.py's
+        # KNOWN_WRITE_SCRIPTS started recognizing known write-capable
+        # scripts directly (those now land in write_records above and never
+        # reach here). What remains here is a genuinely UNRECOGNIZED script
+        # -- no proof either way. Per principle 2 this no longer falls back
+        # to check_reconciliation() (that WAS the original
+        # script-invocation prose bridge this exit condition named). Per
+        # principle 5 (fallible, not adversarial; hard denial only for the
+        # genuinely irreversible), an unproven ambiguity is not a reason to
+        # block. Marked visibly instead of guessed at either way.
+        record_unverifiable_stop(payload, script_records)
+        return None
 
     # No write record, no script marker for this run -- ground truth is
     # clean. NOTE: this is ground truth only for Bash/Edit/Write tool

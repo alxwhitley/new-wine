@@ -110,6 +110,35 @@ SCRIPT_INVOCATION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Piece B (#5.5 exit condition (a), 2026-07-13): known write-capable scripts,
+# same allow-listing shape as UNCONVERTED_INGEST_SCRIPTS above but for the
+# opposite purpose -- these are scripts SAFE to run for real that DO write,
+# so a non-dry-run invocation should be recorded directly as a write instead
+# of falling into the "script ran, contents unseen" blind spot. Starts with
+# ingest.py (the one converted chokepoint script); extend this set only
+# after auditing a script the same way -- an unrecognized script is left
+# alone here and stays in deterministic_gate.py's "unverifiable" bucket,
+# never silently waved through and never guessed at.
+KNOWN_WRITE_SCRIPT_NAMES = {"ingest.py"}
+
+
+def is_known_write_script_invocation(command: str) -> bool:
+    """True only when a known write-capable script is actually being
+    INVOKED (python3 scripts/ingest.py, ./scripts/ingest.py, etc) -- reuses
+    SCRIPT_INVOCATION_PATTERN's own invocation-detection so a command that
+    merely MENTIONS the filename (e.g. `grep ... ingest.py`, `cat
+    ingest.py`) is never misclassified as running it. Caught live
+    (2026-07-13): an earlier version matched the bare filename anywhere in
+    the command and misfired on exactly this kind of read-only mention."""
+    for match in SCRIPT_INVOCATION_PATTERN.finditer(command):
+        invoked = match.group(0)
+        if any(
+            invoked == name or invoked.endswith("/" + name)
+            for name in KNOWN_WRITE_SCRIPT_NAMES
+        ):
+            return True
+    return False
+
 # Session #5.5 MCP database gate (2026-07-11). Full literal tool_name strings
 # only -- the mcp__claude_ai_Supabase__list_tables prefix was verified against
 # a real captured PreToolUse payload in the prior session, not inferred.
@@ -345,6 +374,13 @@ def main() -> None:
                 deny(reason)
                 return
         if is_write_class(tool_name, tool_input):
+            record_write_class_call(payload, tool_name, tool_input)
+        elif is_known_write_script_invocation(command) and not DRY_RUN_FLAG.search(command):
+            # Piece B (#5.5 exit condition (a), 2026-07-13): a known
+            # write-capable script invoked for real -- record it directly as
+            # a write so deterministic_gate.py's match-check judges it like
+            # any other write. `elif` so it's not double-recorded when
+            # BASH_WRITE_INDICATORS already caught it independently.
             record_write_class_call(payload, tool_name, tool_input)
         if SCRIPT_INVOCATION_PATTERN.search(command):
             record_script_invocation(payload, command)
