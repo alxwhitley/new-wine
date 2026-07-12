@@ -209,8 +209,20 @@ def check_recorded_writes(payload: dict):
         # to prose rather than silently treat garbage as "no writes."
         return check_reconciliation(message)
 
+    # Bug #1 fix (2026-07-12): scope to the finishing agent's own records
+    # only. The write-state log is one file per SESSION, shared by every
+    # agent dispatched in it -- without this filter, a later agent inherits
+    # every earlier agent's writes as if they were its own. Confirmed live
+    # via a probe (2026-07-12): the SubagentStop payload already carries the
+    # finishing agent's own agent_id on every real decision, and every
+    # written record already carries the same field (guard_pretooluse.py) --
+    # this is a pure filter, no new identity capture needed anywhere.
+    agent_id = payload.get("agent_id")
+    records = [r for r in records if r.get("agent_id") == agent_id]
+
     if not records:
-        # File exists but is empty -- same as missing: no writes happened.
+        # No records belonging to THIS agent -- no writes on its own watch,
+        # so that case stays quiet without consulting prose at all.
         return None
 
     write_records = [r for r in records if "kind" not in r]

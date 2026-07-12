@@ -416,6 +416,57 @@ rather than glossed over.
   to itself") is the blueprint for rebuilding it off the monitored path — not a reason to
   resurrect this specific implementation.
 
+### Bug #1 — diagnosed and fixed (2026-07-12)
+
+The stop-gate judged every finishing agent against the ENTIRE session's write-state log, not
+just its own writes — an executor dispatched after real writes happened earlier in the same
+session got blamed for writes it never made. Diagnosed across two read-only sessions and
+fixed in a third; recorded here cleanly since the original terminal output describing this
+arrived garbled and no unmangled copy existed on file.
+
+1. **Scope confirmed.** The write-state log is one file per session, shared by every agent
+   dispatched in it. The stop-gate's decision read every record in that file, unfiltered by
+   which agent produced it.
+2. **Identity, split finding.** Every record written to the log already carried a "which
+   agent" field, unconditionally — the write side was never the problem. Whether the
+   stop-gate's own decision-time payload carried the *finishing* agent's identity could not
+   be confirmed from the code alone.
+3. **Blast radius.** Only the `executor` agent type is subject to this gate. The bug fired
+   the moment any real write had happened anywhere earlier in the session by a governed
+   agent (`executor` or `planner-reviewer`) — not a rare dispatch-order edge case, but close
+   to "every session, from the first write onward."
+4. **Principle 3 gap, sized.** The write side already satisfied "every action carries whose
+   action was this." The read side did not evaluate only the finishing agent's own records.
+   Whether the fix was a small filter or a bigger threading job depended on one unconfirmed
+   fact: did the stop-gate already have its own agent's identity in hand.
+5. **Sibling bug (incidental word-match block) is unrelated.** Separate function, no shared
+   code or state, can't even both fire on the same stop attempt. Independently schedulable —
+   confirmed, not assumed.
+
+**Identity probe (2026-07-12):** installed a temporary observe-only hook, dispatched a real
+executor, captured 9 real SubagentStop payloads across its natural retry loop. `agent_id`
+was present in every single one, sitting directly in the payload alongside `session_id` and
+`agent_type` — the exact same field name the write-state log already used. Proved the fix
+was a contained filter: no new identity capture needed anywhere.
+
+**The fix:** `check_recorded_writes()` (`deterministic_gate.py`) now filters the loaded
+write-state records to only those whose `agent_id` matches the finishing agent's own, before
+evaluating anything else. Nothing about how records are written, how identity is captured,
+or any other gate condition changed.
+
+**Verified both directions before trusting it:** a live executor dispatched into a session
+with 7 other agents' write history passed cleanly on the first attempt (previously: blocked,
+retried 9 times, blamed for edits and deletions it never made). Separately, controlled tests
+fed directly to the gate script confirmed it still blocks a genuine same-agent mismatch (a
+write of its own, mislabeled) and still allows a genuine same-agent honest write — the fix
+stops cross-agent blame without weakening the real check.
+
+**Note for later, matters at the record-only migration (exit condition (a)):**
+`planner-reviewer` writes into the same shared write-state log as `executor` even though it
+never hits this stop-gate itself (the gate is scoped to `agent_type == "executor"` only). Its
+entries sit in the log as history that a differently-scoped future agent could still inherit
+— worth remembering when exit condition (a)'s prose-removal rework is scoped.
+
 ---
 
 ## Environment Variables (in backend/app/.env)

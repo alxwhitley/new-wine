@@ -8,8 +8,8 @@
 
 ## Current Priority / Next Action
 
-- **Current priority:** close #5.5's remaining exit condition (a) — the harness is not "finished" until the interim `WORK_TYPE`-marker prose cross-check (`5b43332`) is removed and the gate is fully record-only, per CLAUDE.md's Gate Design Principle 2. The concrete next step toward that is fixing the per-agent write-log scoping bug (below) — it's the foundation the rest of the rework depends on.
-- **Next action:** fix `check_recorded_writes()`'s per-agent scoping (bug #1 below). Two prior blockers are now closed, not open: the parked report-to-disk build is discarded, and the executor/planner-reviewer MCP-scope question is decided (script-only for now) — see CLAUDE.md's "Standing decisions (harness scope)" for both, recorded 2026-07-12.
+- **Current priority:** finish #5.5 exit condition (a) — remove the interim `WORK_TYPE`-marker prose cross-check from `check_recorded_writes()` entirely, per CLAUDE.md's Gate Design Principle 2. Bug #1, the dependency this was blocked on, is now CLOSED (2026-07-12) — see CLAUDE.md "Bug #1 — diagnosed and fixed" for the full trail.
+- **Next action:** scope the exit-condition-(a) rework — what replaces the `WORK_TYPE` marker check now that per-agent scoping is correct. This is the harness's last real piece of unfinished work. Bug #3 (Rule 2's sibling unconditional-block bug) remains open and independent — can be picked up separately, in any order relative to (a).
 
 ---
 
@@ -32,7 +32,7 @@ Both decisions live in CLAUDE.md now, not here — this file doesn't hold durabl
 
 ## Known Harness Bugs (as of `5b43332`, the garble-fix commit)
 
-1. **Write-state log not scoped per-agent — OPEN, fix next.** `check_recorded_writes()` (`deterministic_gate.py:189-253`) opens the write-state log keyed by `session_id` only and reads every record in it — never filters to the current agent's own `agent_id`. Any executor dispatched later in a session that already has write history sees every earlier agent's writes as if they were its own. Confirmed live: a report's cited "write-class calls this run" count grew by exactly 1 with each of one agent's own resubmission attempts, and it was blocked citing tool calls that belonged to different agents from hours earlier in the same session. This is also the foundation #5.5 exit condition (a)'s rework depends on — fix this first.
+1. **Write-state log not scoped per-agent — CLOSED (2026-07-12).** The stop-gate now filters the write-state log to only the finishing agent's own records before judging anything, instead of evaluating the whole session's history. Verified both directions: a read-only agent in a session with 7 other agents' write history now passes cleanly first try; a genuine same-agent mismatch is still caught. Full diagnostic trail and fix details: CLAUDE.md, "Bug #1 — diagnosed and fixed."
 2. **Report-to-disk / read-only collision — CLOSED BY REMOVAL (2026-07-12).** Was: the mandatory disk-save step added to `executor.md` produced a real write on every report, including read-only ones, which collided with `5b43332`'s write-record/marker check and blocked every honest `WORK_TYPE: read-only` report. Resolved by dropping the report-to-disk feature entirely (see "Harness Scope Decisions" above) rather than building the narrow exemption that would have been needed to keep it. No longer a live bug.
 3. **`check_dry_run_before_batch()` (Rule 2) has the same unconditional-block shape as the original garble bug — OPEN, lower urgency.** `BATCH_SCALE_WORDS` (includes "backfill") can match incidentally — e.g. a report that quotes PLAN.md's own Standing Rule 3 text while doing unrelated work trips it, with no way to satisfy the check afterward. Confirmed live: caused 4 consecutive rejections on a task that did no batch work at all. Same unconditional-block pattern as the bug fixed in `5b43332`, different function, not yet touched.
 
@@ -52,7 +52,7 @@ None of these are logged in PLAN.md.
   - Piece 2b-i (script-invocation recording): DONE (`8816804`).
   - Piece 2b-ii (gate reads tool-invocation records): DONE (`6379925`).
   - MCP write-gate: SHIPPED and verified live (`f2378a7`) — exit condition (b) DONE. See above.
-  - Exit condition (a) (retire the prose backstop to record-only): **still OPEN.** Scope includes both the original script-invocation prose bridge AND the newer `WORK_TYPE`-marker cross-check `5b43332` added — CLAUDE.md's Gate Design Principle 2 requires removing both before #5.5 is complete. Bug #1 above is the first concrete step.
+  - Exit condition (a) (retire the prose backstop to record-only): **still OPEN.** Scope includes both the original script-invocation prose bridge AND the newer `WORK_TYPE`-marker cross-check `5b43332` added — CLAUDE.md's Gate Design Principle 2 requires removing both before #5.5 is complete. Bug #1 (per-agent scoping), the dependency this was waiting on, is now DONE (2026-07-12). Note for scoping this work: `planner-reviewer` writes into the same shared write-state log as `executor` without ever hitting this gate itself — see CLAUDE.md's Bug #1 entry for why that matters here.
   - Subagent MCP scope: **DECIDED** (script-only for now) — no longer a blocker to sequence around; see CLAUDE.md.
 - **#6 Aliases + sentinel cleanup + strict mode:**
   - Two-doc sentinel attribution: **RESOLVED** (Alex, 2026-07-11) — migration `059`, committed `fa47ead`, live-verified.
@@ -81,11 +81,11 @@ As of the commit that produced this snapshot, working tree is clean beyond the s
 - `PRODUCT.md` vs. `POSITIONING.md` overlap — still unclear if superseded; needs Alex's call.
 - Offsite backup of `sources/` + `ingest_queue.xlsx` — still not independently verified from this Mac.
 - `chunks.content` stray `---` separator — still flagged, no owning session decided.
-- Executor garbled final-text reports: root cause fixed (`5b43332`). Two follow-on bugs remain open (#1, #3 above); the third (#2) is closed by removal, not by fix.
+- Executor garbled final-text reports: root cause fixed (`5b43332`). Of the two follow-on bugs it surfaced, #1 (per-agent scoping) is now CLOSED (2026-07-12); #2 (report-to-disk collision) is closed by removal; #3 (Rule 2's sibling bug) remains OPEN.
 - `--dangerously-skip-permissions`: keep OFF for live writes (standing rule, unchanged).
 
 ---
 
 ## Next Session Should
 
-Fix bug #1 (per-agent write-log scoping in `check_recorded_writes()`) — it's the concrete next step and the dependency for reworking `5b43332` to drop the `WORK_TYPE`-marker prose cross-check, which is what actually closes #5.5 exit condition (a) and finishes the harness. Separately, and not bundled: close #6's two remaining alias/reassignment writes via the Supabase SQL editor, and land the PLAN.md #14 drift correction. GOVERNED_FILES hardening is a separate, later session. The founder MCP-scope decision and the report-to-disk keep/drop call are both closed — do not reopen either without a new queued task that genuinely requires it.
+Scope and land the #5.5 exit-condition-(a) rework — dropping the `WORK_TYPE`-marker prose cross-check `5b43332` added, now that bug #1 (per-agent scoping) is closed and no longer something the rework has to work around. This is the harness's last real piece of unfinished work. Bug #3 (Rule 2's sibling bug) is open and independent — fine to pick up before, after, or alongside (a). Separately, and not bundled: close #6's two remaining alias/reassignment writes via the Supabase SQL editor, and land the PLAN.md #14 drift correction. GOVERNED_FILES hardening is a separate, later session. The founder MCP-scope decision and the report-to-disk keep/drop call are both closed — do not reopen either without a new queued task that genuinely requires it.
