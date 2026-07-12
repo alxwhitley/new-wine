@@ -88,6 +88,7 @@ def _build_document_row(
     is_copyrighted: bool,
     source_id: Optional[str],
     url: Optional[str],
+    full_text: Optional[str] = None,
 ) -> dict:
     row = {
         "id":              doc_id,
@@ -105,6 +106,7 @@ def _build_document_row(
         "bible_references": bible_references or [],
         "file_path":       file_path,
         "is_copyrighted":  is_copyrighted,
+        "full_text":       full_text,
     }
     if source_id is not None:
         row["source_id"] = source_id
@@ -324,6 +326,7 @@ def ingest_document(
             source_name=source_name, source_type=source_type, source_kind=source_kind,
             citation_mode=citation_mode, topic_tags=topic_tags, bible_references=bible_references,
             file_path=file_path, is_copyrighted=is_copyrighted, source_id=_resolved_id, url=url,
+            full_text=body_text,
         )
         print("  Inserting document record...")
         doc_id = _insert_document_rest(db, row)
