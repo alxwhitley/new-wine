@@ -398,6 +398,24 @@ rather than glossed over.
    genuinely irreversible operations impossible. The harness is not to be grown toward
    defeating a deliberate adversary.
 
+### Standing decisions (harness scope)
+
+- **Subagent scope: `executor`/`planner-reviewer` are SCRIPT-ONLY for now** (Alex,
+  2026-07-12) — no MCP or external-tool access granted to either subagent type. Every task
+  on the current roadmap is expressible as a script; building write-detection for tool
+  access nobody has granted yet is speculative scope. **Revisit trigger:** reopen this
+  decision only when a queued task genuinely cannot be expressed as a script — not
+  preemptively.
+- **Report-to-disk feature: DROPPED, not deferred** (Alex, 2026-07-12) — the mandatory
+  backstop-save build (a prior session's uncommitted changes to `executor.md`/
+  `planner-reviewer.md`) is discarded. A prior diagnostic confirmed nothing in the codebase
+  reads the saved report, and the mechanical write-state record (Approach B) already
+  survives report-garbling untouched, making the backstop redundant. This removes the
+  report-save/read-only write-collision bug by deleting its cause, not by fixing it. If a
+  genuine readable-report need arises later, principle 4 above ("the machinery is invisible
+  to itself") is the blueprint for rebuilding it off the monitored path — not a reason to
+  resurrect this specific implementation.
+
 ---
 
 ## Environment Variables (in backend/app/.env)
