@@ -14,9 +14,8 @@ import re
 import sys
 import shutil
 import logging
-import psycopg2
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple
 from urllib.parse import urlparse, unquote
 
 from dotenv import load_dotenv
@@ -27,7 +26,6 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from supabase import create_client
-from app.services.embeddings import embed_text
 from app.services.chunker import chunk_text
 from bible_refs import extract_bible_references
 from source_resolver import (
@@ -36,7 +34,7 @@ from source_resolver import (
     NEW_WINE_MAGAZINE_SOURCE_ID,
     print_resolution_table,
 )
-import propositions
+import shared_ingest
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -95,8 +93,16 @@ def parse_frontmatter(text: str) -> tuple:
 
 # -- INGESTION ---------------------------------------------------------------
 
-def ingest_article(md_path: Path, issue_stem: str) -> bool:
-    """Ingest a single .md article file into Supabase. Returns True on success."""
+def ingest_article(md_path: Path, issue_stem: str, dry_run: bool = False) -> Tuple[str, object]:
+    """Ingest a single .md article file into Supabase.
+
+    Returns (status, reason) using shared_ingest.ingest_document()'s status
+    vocabulary ("processed" / "skipped" / "failed"), plus a magazine-specific
+    ("skipped", "body_too_short") case for the pre-chunking quality gate below.
+
+    dry_run=True previews chunk content and the embed/stored-content header
+    asymmetry (see header comment below) without touching the database.
+    """
     text = md_path.read_text(encoding="utf-8")
 
     # Strip QA warning comments if present
@@ -129,9 +135,7 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
 
     if not body or len(body) < 100:
         logger.warning("Skipping %s — body too short (%d chars)", md_path.name, len(body))
-        return False
-
-    db = get_db()
+        return ("skipped", "body_too_short")
 
     # Extract Bible references from body (non-fatal — returns [] on failure)
     # Merge with any refs already extracted by regex during Pass 2
@@ -145,65 +149,77 @@ def ingest_article(md_path: Path, issue_stem: str) -> bool:
     if bible_refs:
         print(f"  Bible refs: {len(bible_refs)} found ({', '.join(bible_refs[:5])}{'...' if len(bible_refs) > 5 else ''})")
 
-    # Resolve source_id — New Wine Magazine is seeded in source_aliases (050).
-    # Routing through resolve_source_id keeps miss-logging consistent with ingest.py.
-    _resolved_id, _norm_key, _via = resolve_source_id(db, "New Wine Magazine", author or None)
-    logger.info("Source resolved: key=%r id=%s via=%s", _norm_key, _resolved_id, _via)
-
-    # Insert document
-    doc_data = {
-        "title": title,
-        "original_title": title,
-        "author": author or None,
-        "source_name": "New Wine Magazine",
-        "source_type": "magazine_article",
-        "source_kind": "magazine_article",
-        "citation_mode": "citable",
-        "is_copyrighted": True,
-        "issue": issue or None,
-        "year": year,
-        "topic_tags": topic_tags if topic_tags else None,
-        "bible_references": bible_refs,
-        "source_id": _resolved_id,
-    }
-
-    doc_result = db.table("documents").insert(doc_data).execute()
-    if not doc_result.data:
-        logger.error("Failed to insert document for %s", md_path.name)
-        return False
-
-    doc_id = doc_result.data[0]["id"]
-
-    # Chunk and embed
     header = f"[New Wine | {date} | {title} by {author}]"
-    chunks = chunk_text(body)
 
-    for idx, chunk_content in enumerate(chunks):
-        tagged = f"{header}\n\n{chunk_content}" if idx == 0 else chunk_content
-        embedding = embed_text(tagged)
+    if dry_run:
+        chunks = chunk_text(body)
+        preview = chunks[:3]
+        print(f"\n  [DRY RUN] Previewing first {len(preview)} of {len(chunks)} chunks:")
+        for idx, chunk_content in enumerate(preview):
+            embed_note = "WITH header (chunk 0 only)" if idx == 0 else "WITHOUT header"
+            print(f"  ── Chunk {idx + 1} | embed input {embed_note} | stored content always WITH header ──")
+            print(f"  Header: {header}")
+            print(f"  Content: {chunk_content[:300]}{'...' if len(chunk_content) > 300 else ''}")
+            print()
+        print("  [DRY RUN] No data written to Supabase.")
+        return ("processed", None)
 
-        chunk_data = {
-            "document_id": doc_id,
-            "chunk_index": idx,
-            "content": f"{header}\n\n{chunk_content}",
-            "embedding": embedding,
-        }
-        db.table("chunks").insert(chunk_data).execute()
+    db = get_db()
 
-    # Extract + store propositions (licensed/unlicensed sources only; non-fatal)
-    _prop_conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        prop_result = propositions.process_document(_prop_conn, doc_id, _resolved_id, body, embed_text)
-    finally:
-        _prop_conn.close()
-    print(f"  propositions: {prop_result}")
+    # Chunk-header asymmetry, reproduced exactly from the pre-conversion script:
+    # the header is prepended to the STORED content of every chunk, but only
+    # fed into the EMBEDDING input for chunk 0 -- every other chunk embeds
+    # plain text. Getting this backwards silently changes what gets embedded.
+    def _embed_with_header_idx0_only(idx, chunk_text_):
+        return f"{header}\n\n{chunk_text_}" if idx == 0 else chunk_text_
 
-    print(f"  Ingested: {title} ({len(chunks)} chunks)")
-    return True
+    def _content_always_with_header(idx, chunk_text_):
+        return f"{header}\n\n{chunk_text_}"
+
+    result = shared_ingest.ingest_document(
+        db=db,
+        db_params=DB_PARAMS,
+        title=title,
+        body_text=body,
+        filename=md_path.name,
+        author=author or None,
+        year=year,
+        issue=issue or None,
+        source_name="New Wine Magazine",
+        source_type="magazine_article",
+        source_kind="magazine_article",
+        citation_mode="citable",
+        is_copyrighted=True,
+        topic_tags=topic_tags if topic_tags else None,
+        bible_references=bible_refs,
+        # Resolved HERE (not pre-resolved and passed as source_id) so that
+        # shared_ingest's strict-mode SilentSentinelRefused guard -- which only
+        # guards the resolve_from path -- actually applies to this script.
+        resolve_from=("New Wine Magazine", author or None),
+        # No DB-level dedup exists in this pipeline today -- the issue-folder
+        # move to 04_ingested/ is the real guard. The default dedup key
+        # (url/file_path) is never set on magazine documents, so it would
+        # never fire anyway; skip_dedup=True makes that explicit instead of
+        # relying on an accidental no-op.
+        skip_dedup=True,
+        embed_text_fn=_embed_with_header_idx0_only,
+        content_fn=_content_always_with_header,
+    )
+
+    if result["status"] == "processed":
+        print(f"  Ingested: {title} ({len(result['chunks'])} chunks)")
+    return (result["status"], result["reason"])
 
 
-def ingest_issue(issue_dir: Path) -> Dict:
-    """Ingest all .md files in an issue directory. Returns stats."""
+def ingest_issue(issue_dir: Path, dry_run: bool = False, move_when_done: bool = True) -> Dict:
+    """Ingest all .md files in an issue directory. Returns stats.
+
+    dry_run=True previews every article's chunks with no DB writes and no
+    folder moves. move_when_done=False skips the PDF-archive + folder-move
+    step even for a real (non-dry-run) ingest -- used by --source-dir so an
+    isolated/scratch test folder is left untouched and the real 03_approved/
+    queue state never changes.
+    """
     issue_stem = issue_dir.name
     md_files = sorted(issue_dir.glob("*.md"))
 
@@ -214,20 +230,33 @@ def ingest_issue(issue_dir: Path) -> Dict:
         print(f"  No .md files found in {issue_dir}")
         return {"ingested": 0, "skipped": 0}
 
-    print(f"\nIngesting issue: {issue_stem} ({len(md_files)} articles)")
+    label = "[DRY RUN] " if dry_run else ""
+    print(f"\n{label}Ingesting issue: {issue_stem} ({len(md_files)} articles)")
 
     ingested = 0
     skipped = 0
 
     for md_path in md_files:
         try:
-            if ingest_article(md_path, issue_stem):
-                ingested += 1
-            else:
-                skipped += 1
-        except Exception as e:
+            status, reason = ingest_article(md_path, issue_stem, dry_run=dry_run)
+        except shared_ingest.SilentSentinelRefused as e:
+            skipped += 1
+            print(f"\n{'!'*60}")
+            print(f"  SKIPPED — silent sentinel refused: {md_path.name}")
+            print(f"  title={e.title!r}  source_name={e.source_name!r}  author={e.author!r}")
+            print(f"{'!'*60}\n")
+            continue
+        except Exception:
             logger.exception("Failed to ingest %s", md_path.name)
             skipped += 1
+            continue
+        if status == "processed":
+            ingested += 1
+        else:
+            skipped += 1
+
+    if dry_run or not move_when_done:
+        return {"ingested": ingested, "skipped": skipped}
 
     # Archive any PDF(s) in the issue folder before moving .md files to ingested
     pdf_files = sorted(issue_dir.glob("*.pdf"))
@@ -327,9 +356,43 @@ if __name__ == "__main__":
         action="store_true",
         help="Resolve attribution strings and print source_id table — no DB writes, no chunking",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview chunk content and the embed/stored-content header asymmetry — no DB writes",
+    )
+    parser.add_argument(
+        "--source-dir",
+        type=str,
+        default=None,
+        help="Ingest a single issue-shaped directory of .md files instead of scanning 03_approved/. "
+             "Never archives PDFs or moves the folder to 04_ingested/ — for isolated testing only.",
+    )
     args = parser.parse_args()
 
     if args.dry_run_sources:
         dry_run_sources_magazine()
+    elif args.source_dir:
+        source_dir = Path(args.source_dir)
+        if not source_dir.is_dir():
+            print(f"ERROR: {source_dir} is not a directory")
+            sys.exit(1)
+        stats = ingest_issue(source_dir, dry_run=args.dry_run, move_when_done=False)
+        print(f"\n{'='*60}")
+        print(f"Done. {stats['ingested']} ingested, {stats['skipped']} skipped.")
+    elif args.dry_run:
+        APPROVED_DIR.mkdir(parents=True, exist_ok=True)
+        issue_dirs = sorted([d for d in APPROVED_DIR.iterdir() if d.is_dir()])
+        if not issue_dirs:
+            print(f"No issue folders found in {APPROVED_DIR}")
+        else:
+            print(f"[DRY RUN] Found {len(issue_dirs)} issue folder(s) to preview")
+            total_ingested = total_skipped = 0
+            for issue_dir in issue_dirs:
+                stats = ingest_issue(issue_dir, dry_run=True, move_when_done=False)
+                total_ingested += stats["ingested"]
+                total_skipped += stats["skipped"]
+            print(f"\n{'='*60}")
+            print(f"[DRY RUN] Done. {total_ingested} previewed, {total_skipped} skipped.")
     else:
         run()
