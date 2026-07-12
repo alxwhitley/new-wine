@@ -13,10 +13,22 @@ Rules enforced here, each traceable to a specific repo lesson:
      block, not pass.
   2. If all four numbers are present, they must be arithmetically consistent:
      stored + errored + skipped == attempted. PLAN.md Standing Rule 3.
-  3. A full-batch/backfill claim without a preceding dry-run/single-item mention
-     is blocked. PLAN.md Standing Rule 2.
-  4. A semicolon inside a `--` SQL comment line is blocked. CLAUDE.md's
+  3. A semicolon inside a `--` SQL comment line is blocked. CLAUDE.md's
      Migration 051 gotcha.
+
+RETIRED (bug #3, 2026-07-13): a fourth rule used to block a full-batch/backfill
+claim (PLAN.md Standing Rule 2) with no preceding dry-run/single-item mention
+in the report's own wording -- same unconditional-block-from-prose shape as
+the original garble bug, just triggered by incidental words ("backfill," etc)
+rather than by anything recorded. Removed, not rebuilt on records: whether a
+report is describing genuinely batch-scale work is not knowable from the
+write-state log as currently structured (a script invocation is one recorded
+line regardless of whether it processes one document or ten thousand; a
+dry-run invocation of a known script isn't even distinguishably recorded from
+a real one today). Building real evidence for this would mean the gate
+inspecting the filesystem directly, not just its own log -- a materially
+bigger capability, not a like-for-like replacement. See CLAUDE.md for the
+full writeup.
 
 Interim tightening (2026-07-10, Approach A -- read deterministic_gate.py's
 module docstring in git history / rhemata-status.md for the full writeup):
@@ -125,16 +137,6 @@ RECONCILIATION_FIELDS = {
     "errored": re.compile(r"\berrored[:\s]+(\d+)", re.IGNORECASE),
     "skipped": re.compile(r"\bskipped[:\s]+(\d+)", re.IGNORECASE),
 }
-
-BATCH_SCALE_WORDS = re.compile(
-    r"\b(full batch|backfill|bulk|all\s+\d+\s+documents|entire corpus)\b",
-    re.IGNORECASE,
-)
-
-DRY_RUN_WORDS = re.compile(
-    r"\b(dry[\s-]?run|single[\s-]?item|pilot batch|one[\s-]?item)\b",
-    re.IGNORECASE,
-)
 
 # A `--` SQL comment that also contains a literal semicolon on the same line.
 SEMICOLON_IN_COMMENT = re.compile(r"--[^\n]*;")
@@ -398,17 +400,6 @@ def check_recorded_writes(payload: dict):
     return None
 
 
-def check_dry_run_before_batch(message: str):
-    """Rule 2: full-batch claims need a preceding dry-run/single-item step."""
-    if BATCH_SCALE_WORDS.search(message) and not DRY_RUN_WORDS.search(message):
-        return (
-            "Rule 2 (PLAN.md:26): 'Dry-run + single-item verification before any "
-            "full batch.' This report claims batch/backfill-scale work with no "
-            "dry-run or single-item verification mentioned."
-        )
-    return None
-
-
 def check_semicolon_in_sql_comment(message: str):
     """Migration 051 gotcha: semicolon inside a `--` comment breaks multi-
     statement runners via silent rollback."""
@@ -446,7 +437,6 @@ def main() -> None:
 
     message = payload.get("last_assistant_message") or ""
     for check in (
-        check_dry_run_before_batch,
         check_semicolon_in_sql_comment,
     ):
         reason = check(message)

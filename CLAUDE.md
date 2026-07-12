@@ -526,6 +526,39 @@ Not a regression — this was already true before this rework — but worth a de
 whether and when it's ever built, since it would be a materially larger undertaking (network
 calls, credentials, latency) inside a lightweight hook script.
 
+### Bug #3 — retired (2026-07-13)
+
+The last open harness bug, and the last place the stop-gate reacted to prose instead of
+recorded evidence. `check_dry_run_before_batch()` scanned the report's own wording for
+batch-scale language ("full batch," "backfill," "bulk," etc.) and blocked unless
+dry-run/single-item language also appeared — same unconditional-block-from-prose shape as
+the original garble bug, just triggered by incidental word matches rather than by anything
+recorded.
+
+**Retired, not rebuilt on records.** Whether a report describes genuinely batch-scale work
+is not knowable from the write-state log as currently structured — a script invocation is
+one recorded line regardless of whether it processes one document or ten thousand, and a
+dry-run invocation of a known script isn't even distinguishably recorded from a real one
+today. Building real evidence for this would mean the gate inspecting the filesystem
+directly, not just its own log — a materially bigger capability than a like-for-like
+replacement warrants. The honest outcome, per the standard the exit-(a) rework set, was to
+remove the check rather than invent a new prose rule to replace the old one.
+
+**Confirmed nothing else depended on it:** no other code in the repo references the
+function or its regex constants; no harness self-test fixture exercises it directly (the
+existing fixtures deliberately avoid batch-scale language so they test other checks
+cleanly, not this one). All seven applicable self-test fixtures (cases b–h) were re-run
+against the corrected gate and produced identical verdicts to their documented expected
+behavior — the other checks are fully unaffected.
+
+**With this closed, the stop-gate's live decision path reads no self-declared label and
+scans for no write-flavored or batch-flavored vocabulary anywhere.** `check_reconciliation()`
+still exists and still reads prose, but only as a last-resort fail-closed default when the
+write-state log itself can't be resolved or read at all — a rare, defensive edge case, not
+a routine trusted signal. All three known harness bugs are now closed. The only remaining
+named gap is the adjacent, deliberately out-of-scope database-number verification noted
+above.
+
 ---
 
 ## Environment Variables (in backend/app/.env)
