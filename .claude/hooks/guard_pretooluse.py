@@ -62,8 +62,12 @@ DESTRUCTIVE_GIT = re.compile(
 
 # PLAN.md roadmap #8-13 is authoritative (2026-07-10 call: supersedes the older
 # 4-script list in CLAUDE.md's propositions-per-script section, which is stale).
+# ingest_preceptaustin.py removed 2026-07-13 (#9 conversion). ingest_magazine.py
+# is ALSO already converted (#8) but deliberately left in this list -- Open
+# Flag #1 (rhemata-status.md) already covers this exact staleness and says not
+# to fix it piecemeal mid-conversion; that's its own harness session.
 UNCONVERTED_INGEST_SCRIPTS = re.compile(
-    r"\b(ingest_magazine\.py|ingest_preceptaustin\.py|ingest_lexicon\.py|"
+    r"\b(ingest_magazine\.py|ingest_lexicon\.py|"
     r"ingest_commentaries\.py|ingest_helloao\.py)\b"
 )
 

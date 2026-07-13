@@ -4,20 +4,28 @@ Rhemata Precept Austin Word Study Ingestion Script
 
 Reads extracted word study .txt files from sources/precept_austin/raw/,
 chunks with tiktoken, embeds with OpenAI, and inserts into Supabase.
-Chunk inserts use psycopg2 direct connection for reliability.
+
+Converted (#9) to route through shared_ingest.ingest_document() with
+insert_mode="psycopg2_batch" -- resolve/insert/chunk/embed/propositions is
+the shared writer's job now; this script keeps only what's genuinely
+Precept-Austin-specific: filename parsing, index.json gloss lookup, the
+hardcoded is_copyrighted/citation_mode attribution, and the excerpt-keyed
+reuse/skip guard (title match + excerpts.excerpt_type='word_study_article').
+That guard's known hole -- it checks for an existing excerpt, not existing
+chunks, so a re-run against a document that has no excerpt yet re-chunks
+and re-inserts -- is UNCHANGED here by design; it's #11's fix, not this
+conversion's. The new chunks(document_id, chunk_index) UNIQUE constraint
+(migration 061) now backstops that hole loudly (a raised error) instead of
+silently duplicating.
 """
 
 import json
 import os
-import re
 import sys
-import uuid
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
+from urllib.parse import unquote, urlparse
 
-import openai
-import psycopg2
-from psycopg2.extras import execute_values
 from supabase import create_client
 from dotenv import load_dotenv
 
@@ -26,11 +34,14 @@ load_dotenv(PROJECT_ROOT / "backend" / "app" / ".env")
 
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 from app.services.chunker import chunk_text, token_len
-from source_resolver import resolve_source_id
+import shared_ingest
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-# Language flag: --language hebrew|greek (default: greek)
+# Language flag: --language hebrew|greek (default: greek). Parsed manually
+# from raw sys.argv, same as before conversion -- SOURCES_DIR/RAW_DIR/
+# INDEX_FILE are module-level constants that depend on it, computed before
+# main()'s argparse (for --dry-run/--source-dir, added this session) runs.
 _lang = "greek"
 for _i, _a in enumerate(sys.argv[1:], 1):
     if _a == "--language" and _i < len(sys.argv) - 1:
@@ -45,11 +56,6 @@ SOURCES_DIR = PROJECT_ROOT / "sources" / LANG_SUBDIRS[_lang]
 RAW_DIR = SOURCES_DIR / "raw"
 INDEX_FILE = SOURCES_DIR / "index.json"
 
-EMBEDDING_MODEL = "text-embedding-3-small"
-EMBEDDING_DIM = 1536
-EMBED_BATCH_SIZE = 100
-
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
@@ -60,7 +66,6 @@ if not SUPABASE_DB_URL:
     print("  SUPABASE_DB_URL=postgresql://user:password@host:5432/dbname")
     sys.exit(1)
 
-from urllib.parse import urlparse, unquote
 _parsed_db = urlparse(SUPABASE_DB_URL)
 DB_PARAMS = {
     "host": _parsed_db.hostname,
@@ -70,7 +75,6 @@ DB_PARAMS = {
     "dbname": _parsed_db.path.lstrip("/"),
 }
 
-openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
@@ -87,48 +91,29 @@ def load_index():
     return {e["strongs_number"]: e for e in entries}
 
 
-def embed_batch(texts):
-    # type: (List[str]) -> List[List[float]]
-    """Embed a batch of texts using OpenAI."""
-    response = openai_client.embeddings.create(
-        input=texts,
-        model=EMBEDDING_MODEL,
-        dimensions=EMBEDDING_DIM,
-    )
-    return [item.embedding for item in response.data]
-
-
-def insert_chunks_psycopg2(rows):
-    # type: (List[Tuple]) -> int
-    """Insert all chunks for a document via psycopg2 direct connection.
-    Each row is (id, document_id, content, embedding, chunk_index).
-    Returns number of rows inserted."""
-    conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        with conn.cursor() as cur:
-            execute_values(
-                cur,
-                "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) VALUES %s",
-                rows,
-                template="(%s, %s, %s, %s::vector, %s)",
-            )
-        conn.commit()
-        return len(rows)
-    finally:
-        conn.close()
-
-
-def ingest_file(filepath, index_lookup):
-    # type: (Path, Dict[str, Dict[str, str]]) -> bool
-    """Ingest a single word study .txt file into Supabase."""
-    filename = filepath.stem  # e.g. G1459_egkataleipo
-    parts = filename.split("_", 1)
+def _parse_filename(filepath):
+    # type: (Path) -> Optional[Tuple[str, str]]
+    """Returns (strongs_number, transliteration) or None if the filename
+    doesn't match the expected `G1459_egkataleipo` shape."""
+    parts = filepath.stem.split("_", 1)
     if len(parts) != 2:
-        print("  SKIP {}: unexpected filename format".format(filename))
-        return False
+        return None
+    return parts[0], parts[1]
 
-    strongs_number = parts[0]
-    transliteration = parts[1]
+
+def ingest_file(filepath, index_lookup, dry_run=False):
+    # type: (Path, Dict[str, Dict[str, str]], bool) -> bool
+    """Ingest a single word study .txt file into Supabase.
+
+    dry_run=True previews the parsed filename/index-lookup/title and the
+    first few chunks with zero DB reads or writes -- it returns before the
+    existing-document/excerpt lookup runs at all.
+    """
+    parsed = _parse_filename(filepath)
+    if parsed is None:
+        print("  SKIP {}: unexpected filename format".format(filepath.stem))
+        return False
+    strongs_number, transliteration = parsed
 
     # Look up english_word from index
     index_entry = index_lookup.get(strongs_number)
@@ -136,10 +121,31 @@ def ingest_file(filepath, index_lookup):
 
     title = "Word Study: {} ({}, {})".format(english_word, transliteration, strongs_number)
 
-    # Check if excerpt already exists for this word study
+    if dry_run:
+        content = filepath.read_text(encoding="utf-8").strip()
+        if not content:
+            print("  SKIP {}: empty file".format(strongs_number))
+            return False
+        chunks = chunk_text(content, chunk_target=550, overlap=80)
+        preview = chunks[:3]
+        print(f"\n  [DRY RUN] {title}")
+        print(f"  strongs={strongs_number}  transliteration={transliteration}  english_word={english_word}")
+        print("  is_copyrighted=True  citation_mode=silent_context  source_name='Precept Austin'  author='Precept Austin'")
+        print(f"  [DRY RUN] Previewing first {len(preview)} of {len(chunks)} chunks ({len(chunks)} total):")
+        for idx, chunk_content in enumerate(preview):
+            tokens = token_len(chunk_content)
+            print(f"  ── Chunk {idx + 1} | {tokens} tokens ──")
+            print(f"  Content: {chunk_content[:300]}{'...' if len(chunk_content) > 300 else ''}")
+        print("  [DRY RUN] No data written to Supabase.")
+        return True
+
+    # Check if excerpt already exists for this word study. UNCHANGED reuse/
+    # skip guard, preserved exactly as it was pre-conversion: keys on
+    # excerpts.excerpt_type='word_study_article', not on chunk state. Its
+    # known hole is #11's fix, not this session's.
     doc_result = supabase.table("documents").select("id").eq("title", title).limit(1).execute()
-    if doc_result.data:
-        doc_id_existing = doc_result.data[0]["id"]
+    doc_id_existing = doc_result.data[0]["id"] if doc_result.data else None
+    if doc_id_existing:
         excerpt_result = (
             supabase.table("excerpts")
             .select("id")
@@ -157,87 +163,88 @@ def ingest_file(filepath, index_lookup):
         print("  SKIP {}: empty file".format(strongs_number))
         return False
 
-    # Chunk the content
-    chunks = chunk_text(content, chunk_target=550, overlap=80)
-    if not chunks:
-        print("  SKIP {}: no chunks produced".format(strongs_number))
-        return False
+    def _find_existing():
+        # Reuse-by-identity hook: returns the id found above, or None if no
+        # document with this title exists yet. Same title-keyed lookup PA
+        # always used -- just handed to the shared writer via its
+        # find_existing_fn hook instead of branching on it locally.
+        return doc_id_existing
 
-    # Reuse existing document or create new one
-    if doc_result.data:
-        doc_id = doc_result.data[0]["id"]
-        print("  Reusing existing document {}".format(doc_id[:12]))
+    result = shared_ingest.ingest_document(
+        db=supabase,
+        db_params=DB_PARAMS,
+        title=title,
+        body_text=content,
+        filename=filepath.name,
+        author="Precept Austin",
+        source_name="Precept Austin",
+        source_type="background",
+        source_kind="word_study",
+        citation_mode="silent_context",
+        is_copyrighted=True,
+        topic_tags=[],
+        bible_references=[],
+        # PA's dedup is the title+excerpt check above, not the generic
+        # url/file_path key (PA documents have never set either) --
+        # skip_dedup=True makes that explicit instead of relying on an
+        # accidental no-op from an always-empty file_path.
+        skip_dedup=True,
+        find_existing_fn=_find_existing,
+        on_existing="reuse",
+        insert_mode="psycopg2_batch",
+    )
+
+    if result["status"] == "processed":
+        print("  OK {} ({}): {} chunks".format(strongs_number, english_word, len(result["chunks"])))
+        return True
     else:
-        doc_id = str(uuid.uuid4())
-        # Resolve attribution -> source_id via alias table. ALIAS_MISS is
-        # printed by the resolver on a miss; source_id falls to sentinel.
-        _resolved_id, _norm_key, _via = resolve_source_id(supabase, "Precept Austin", "Precept Austin")
-        print("  Resolved source: {!r} -> {} (via {})".format(_norm_key, _resolved_id, _via))
-        supabase.table("documents").insert({
-            "id": doc_id,
-            "title": title,
-            "original_title": title,
-            "author": "Precept Austin",
-            "source_name": "Precept Austin",
-            "source_type": "background",
-            "source_kind": "word_study",
-            "citation_mode": "silent_context",
-            "is_copyrighted": True,
-            "topic_tags": [],
-            "bible_references": [],
-            "source_id": _resolved_id,
-        }).execute()
-
-    # Embed all chunks
-    all_embeddings = []  # type: List[List[float]]
-    for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
-        batch_end = min(batch_start + EMBED_BATCH_SIZE, len(chunks))
-        batch = chunks[batch_start:batch_end]
-        all_embeddings.extend(embed_batch(batch))
-
-    # Build rows for psycopg2 insert
-    rows = []  # type: List[Tuple]
-    for chunk_index, (text, embedding) in enumerate(zip(chunks, all_embeddings)):
-        embedding_str = "[{}]".format(",".join(str(v) for v in embedding))
-        rows.append((
-            str(uuid.uuid4()),
-            doc_id,
-            text,
-            embedding_str,
-            chunk_index,
-        ))
-
-    # Insert all chunks in a single call
-    inserted = insert_chunks_psycopg2(rows)
-
-    print("  OK {} ({}): {} chunks, {} inserted".format(
-        strongs_number, english_word, len(chunks), inserted
-    ))
-    return True
+        print("  SKIPPED {} ({}): {}".format(strongs_number, english_word, result["reason"]))
+        return False
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Rhemata Precept Austin Word Study Ingestion")
+    parser.add_argument("--dry-run", action="store_true",
+                         help="Preview parsed metadata and chunk content — no DB reads or writes")
+    parser.add_argument("--source-dir", type=str, default=None,
+                         help="Ingest .txt files from this directory instead of the default raw/ folder "
+                              "— for isolated testing only")
+    # parse_known_args: --language is already consumed above via raw
+    # sys.argv scanning (unchanged from pre-conversion) -- ignore it here
+    # rather than erroring on an "unrecognized" argument.
+    args, _unknown = parser.parse_known_args()
+
     print("Rhemata Precept Austin Word Study Ingestion ({})".format(_lang))
     print("=" * 60)
-    print("Source dir: {}".format(SOURCES_DIR))
 
     index_lookup = load_index()
     print("Loaded {} entries from index.json".format(len(index_lookup)))
 
-    txt_files = sorted(RAW_DIR.glob("*.txt"))
+    if args.source_dir:
+        scan_dir = Path(args.source_dir)
+        if not scan_dir.is_dir():
+            print(f"ERROR: {scan_dir} is not a directory")
+            sys.exit(1)
+    else:
+        scan_dir = RAW_DIR
+    print("Source dir: {}".format(scan_dir))
+
+    txt_files = sorted(scan_dir.glob("*.txt"))
     if not txt_files:
-        print("No .txt files found in {}".format(RAW_DIR))
+        print("No .txt files found in {}".format(scan_dir))
         return
 
-    print("Found {} word study files to ingest\n".format(len(txt_files)))
+    label = "[DRY RUN] " if args.dry_run else ""
+    print("{}Found {} word study files to ingest\n".format(label, len(txt_files)))
 
     success = 0
     skipped = 0
 
     for i, filepath in enumerate(txt_files):
-        if ingest_file(filepath, index_lookup):
+        if ingest_file(filepath, index_lookup, dry_run=args.dry_run):
             success += 1
         else:
             skipped += 1
@@ -248,7 +255,7 @@ def main():
             ))
 
     print("\n" + "=" * 60)
-    print("SUMMARY")
+    print("{}SUMMARY".format(label))
     print("  Total files: {}".format(len(txt_files)))
     print("  Ingested: {}".format(success))
     print("  Skipped: {}".format(skipped))
