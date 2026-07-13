@@ -152,6 +152,22 @@
 **36.** Guest-limit hardening (check 052/057 coverage).
 **37.** Admin remainder (contributor activity view, pending-count badge, `DELETE /admin/contributors/{id}`) + Pass B mobile drawer + post-deploy backlog.
 
+### Inline Study Panel track (SP; decision-complete Jul 2026 — full spec: `docs/inline-study-panel-spec.md`)
+
+> Collapses the Chat/Study split: study panel slides into chat on tapped verse/teacher references. Additive — the standalone Study page survives untouched as fallback; ships behind a flag to beta users. **Track start gated on the chokepoint band (#5.5, #6–13) completing.** Phases interleave with core serving (#15–20); they do NOT all wait for it. Hard rules carried from spec: fail-quiet reference resolution (no confident match = plain text, ever), panel never acts on its own (no auto-open/auto-update), honest empty state when no teacher addresses a verse. Explicitly out of scope: citation-to-source-passage opening, retrofitting old conversations, in-panel text-selection follow-ups, user-selectable translations.
+
+**38. SP0 — finish mockups** — desktop mockup done and approved; remaining piece is the mobile full-screen bottom-sheet mockup (drag-to-close, chat hidden while up). Chat-side work, no repo dependency. *Stop: mobile mockup approved.*
+
+**39. SP1 — reference-pointer backend** — new answers generate hidden pointers linking words to exact verses/teachers. Fail-quiet resolution (high-confidence match to a real verse or corpus teacher, else nothing). Answer-writing rules: always name a user-mentioned verse back in the response; teacher first-mention full-name-underlined, later mentions short-form plain; verse refs underlined every occurrence; ranges resolve as one reference; vague refs and biblical figures never resolve. No visible UI change. *Stop: pointers verified on real answers; zero false resolutions in test set.*
+
+**40. SP2 — panel frontend (first beta-visible cut, behind kill switch)** — underline treatment (post-stream fade-in only), nav-out/panel-in single motion at ~1/3 width, verse card (fixed translation + "your teachers on this verse" with honest empty state + inline expansion, no back-stack), pin system (cap 4, per-conversation persistence, edge-tab re-entry — load-bearing, ships with the shell), Open-in-Study handoff, keyboard/screen-reader support. *Stop: beta-flagged, kill switch proven.*
+
+**41. SP3 — tool rows** — Interlinear (three-layer word stacks; Greek LTR first; Hebrew RTL word order as separately scoped work), Translations, Cross-references (inline expansion), width-borrowing while interlinear open, word deep-study view (root, Strong's-style ID, parsing, plain definition, notable-frequency note) — the ONE place in the panel with a back button. **HARD GATE: lexicon conversion (#12) done + word-level-tagged licensed text source confirmed. Do not start before.** *Stop: Greek interlinear live on beta; Hebrew its own stop.*
+
+**42. SP4 — teacher card content** — bio, works-in-corpus, position-on-topic, built out in full. *Stop: teacher cards live.*
+
+**43. SP5 — mobile sheet** — full-screen bottom sheet over chat, drag-to-close, chat peeks only mid-drag, typing requires closing. *Stop: mobile live.* → **Post-SP checkpoint (founder decision, never drift): review whether standalone Study is still used; any permanent fold-in is Alex's explicit call.**
+
 ### Ordering calls (Alex-approved Jul 8)
 
 - **A** — staging/restore/regression gate deferred to #15 (it gates backfill + serving, not the chokepoint conversions); only the two irreversible loss-prevention items stay immediate (#1 backup, #1.5 commit).
@@ -159,6 +175,7 @@
 - **C** — legal/rights clustered at #32–37; lawyer-dependent ones start early to overlap the wait.
 - **D** — Resend (#4) + landing rewrite (#5) pulled early as independent quick wins.
 - **E (Jul 8 sweep)** — commit split out to #1.5 as loss-prevention; #3 became verification. helloao (#13) recommended first-in-band. Commentaries atomicity dropped (Decision 8).
+- **F (Jul 13)** — Inline Study Panel written in as track SP (#38–43). Track start gates on chokepoint completion; SP3 additionally hard-gates on #12 + licensed word-level source. SP0 is ungated chat-side work. SP1–2 naturally slot alongside core serving (#15–20).
 
 ---
 
