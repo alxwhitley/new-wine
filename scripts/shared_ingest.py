@@ -21,16 +21,19 @@ No module-level client construction or env-var reads: callers pass their own
 existing convention in source_resolver.py.
 """
 
+import os
 import sys
 import uuid
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 import psycopg2
+from psycopg2.extras import execute_values
+from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.chunker import chunk_text
-from app.services.embeddings import embed_text
+from app.services.embeddings import embed_text, EMBED_BATCH_SIZE
 
 from source_resolver import normalize_alias_key, resolve_source_id
 import propositions
@@ -160,12 +163,165 @@ def _insert_chunks_rest(
         }).execute()
 
 
+class EmbeddingAlignmentError(Exception):
+    """Raised by _embed_batch_verified / _insert_chunks_psycopg2_batch when
+    the alignment invariant (chunk i's stored embedding must come from
+    embedding chunk i's own text) cannot be proven -- a short/partial batch
+    response, an out-of-range item.index, or a position the API never
+    returned an item for. Always raised, never swallowed: the whole
+    document insert aborts rather than risk a silent cross-pairing. See
+    #9's diagnostic (Q3) -- this is the sharpest previously-unproven link
+    in the batch-insert path, closed here once for every future caller of
+    psycopg2_batch, not re-derived per script.
+    """
+
+
+_openai_client: Optional[OpenAI] = None
+
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _openai_client
+
+
+def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
+    """Batch-embed texts, sub-batched at EMBED_BATCH_SIZE (matching
+    backend/app/services/embeddings.py's own sub-batch size), verifying the
+    OpenAI response's own `item.index` against intended position within
+    each sub-batch before trusting it -- order is checked, never assumed.
+    backend/app/services/embeddings.py's embed_batch() discards item.index
+    today (positional trust only); this is a deliberately separate
+    implementation rather than a wrapper around that function, because by
+    the time embed_batch() returns, the index information is already gone
+    -- there is nothing left to verify post hoc.
+
+    Raises EmbeddingAlignmentError (never silently truncates, reorders, or
+    proceeds) on: a sub-batch returning a different item count than it was
+    sent, an item.index outside the sub-batch's range, or any position no
+    item was ever written to. Returns a list the same length as `texts`,
+    in the same order.
+    """
+    if not texts:
+        return []
+    client = _get_openai_client()
+    embeddings: List[Optional[List[float]]] = [None] * len(texts)
+    for start in range(0, len(texts), EMBED_BATCH_SIZE):
+        batch = texts[start:start + EMBED_BATCH_SIZE]
+        response = client.embeddings.create(
+            input=batch,
+            model="text-embedding-3-small",
+            dimensions=1536,
+        )
+        data = response.data
+        if len(data) != len(batch):
+            raise EmbeddingAlignmentError(
+                f"embed sub-batch at offset {start} returned {len(data)} items "
+                f"for {len(batch)} inputs -- refusing to zip a short/partial response"
+            )
+        for item in data:
+            if not (0 <= item.index < len(batch)):
+                raise EmbeddingAlignmentError(
+                    f"embed sub-batch at offset {start}: item.index={item.index} "
+                    f"out of range for a {len(batch)}-item sub-batch"
+                )
+            embeddings[start + item.index] = item.embedding
+
+    missing = [i for i, e in enumerate(embeddings) if e is None]
+    if missing:
+        raise EmbeddingAlignmentError(
+            f"embed batch never returned an item for position(s) {missing} "
+            f"out of {len(texts)} -- refusing to proceed with gaps"
+        )
+    return embeddings
+
+
+def _insert_chunks_psycopg2_batch(
+    db,
+    db_params: dict,
+    doc_id: str,
+    chunks: List[str],
+    embed_text_fn: Optional[Callable[[int, str], str]],
+    content_fn: Optional[Callable[[int, str], str]],
+) -> None:
+    """Whole-document batch insert: batch-embed all of one document's
+    chunks, then a single execute_values(...) INSERT of every chunk row in
+    one transaction, one commit. All-or-nothing per document by design --
+    a mid-document failure rolls back cleanly, leaving zero chunks for the
+    document, never a partial set. `db` (the REST client) is unused here;
+    accepted only to match every _INSERT_MODES entry's shared call
+    signature.
+
+    Built #9 for ingest_preceptaustin.py's shape specifically (whole-doc
+    batch embed + single-shot insert). Deliberately NOT lexicon's
+    paced/resumable sub-batching (INSERT_BATCH_SIZE/SLEEP, resume-by-count)
+    -- that is a materially different need, scoped separately at #11/#12;
+    building it here would be speculative against this module's own
+    stated discipline (see _INSERT_MODES below).
+
+    Alignment invariant: for chunk i, the row inserted at chunk_index=i
+    must contain exactly the text that was sent to the embedding call
+    whose result becomes that row's embedding.
+      - Client-side UUIDs (uuid.uuid4()) are generated per chunk BEFORE
+        insert, same as every other caller in this codebase -- there is no
+        server-generated-id + RETURNING remapping step to get wrong.
+      - _embed_batch_verified() checks the API's own item.index against
+        intended position (order verified, not assumed) and raises on any
+        short/partial/out-of-range response.
+      - The length assert directly below is a second, explicit,
+        independently-visible check before zip() -- redundant with the
+        guarantee _embed_batch_verified() already provides by
+        construction, but kept as its own visible line rather than only
+        relying on that guarantee, since a reader auditing this function
+        for the alignment invariant should be able to see it enforced
+        here too, not just trust an import.
+    """
+    texts_to_embed = [
+        embed_text_fn(idx, text) if embed_text_fn else text
+        for idx, text in enumerate(chunks)
+    ]
+
+    print(f"  Batch-embedding {len(texts_to_embed)} chunks...")
+    embeddings = _embed_batch_verified(texts_to_embed)
+    assert len(embeddings) == len(chunks), (
+        f"embedding count {len(embeddings)} != chunk count {len(chunks)} for "
+        f"document {doc_id} -- refusing to zip a mismatched batch"
+    )
+
+    rows = []
+    for idx, (text, embedding) in enumerate(zip(chunks, embeddings)):
+        content = content_fn(idx, text) if content_fn else text
+        embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
+        rows.append((str(uuid.uuid4()), doc_id, content, embedding_str, idx))
+
+    print(f"  Inserting {len(rows)} chunks in one transaction...")
+    conn = psycopg2.connect(**db_params)
+    try:
+        with conn.cursor() as cur:
+            execute_values(
+                cur,
+                "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) VALUES %s",
+                rows,
+                template="(%s, %s, %s, %s::vector, %s)",
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 _INSERT_MODES = {
     "rest_per_chunk": _insert_chunks_rest,
-    # "psycopg2_batch" is the shape needed by ingest_preceptaustin.py /
-    # ingest_lexicon.py / ingest_commentaries.py — not implemented yet.
-    # Add it when converting the first of those scripts; don't build it
-    # speculatively against three different batching/pacing needs.
+    # Built #9 for ingest_preceptaustin.py's shape: whole-document batch
+    # embed + single-transaction insert. NOT lexicon's paced/resumable
+    # sub-batching (INSERT_BATCH_SIZE/SLEEP, resume-by-count) -- that's a
+    # materially different need, scoped separately at #11/#12. Don't widen
+    # this mode to cover it speculatively; build a distinct mode when #12
+    # actually needs one.
+    "psycopg2_batch": _insert_chunks_psycopg2_batch,
 }
 
 
