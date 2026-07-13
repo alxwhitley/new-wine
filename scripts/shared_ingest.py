@@ -135,11 +135,15 @@ def _delete_document(db, doc_id: str) -> None:
 
 def _insert_chunks_rest(
     db,
+    db_params: dict,
     doc_id: str,
     chunks: List[str],
     embed_text_fn: Optional[Callable[[int, str], str]],
     content_fn: Optional[Callable[[int, str], str]],
 ) -> None:
+    # db_params is unused here -- REST mode never opens a direct connection.
+    # Accepted anyway so every _INSERT_MODES entry shares one call signature
+    # (see ingest_document()'s single generic call site below).
     for idx, text in enumerate(chunks):
         print(f"  Embedding chunk {idx + 1}/{len(chunks)}...")
         text_to_embed = embed_text_fn(idx, text) if embed_text_fn else text
@@ -339,7 +343,7 @@ def ingest_document(
 
     # ── Embed + insert chunks ──
     print(f"  Embedding and inserting {len(chunks)} chunks...")
-    insert_chunks_fn(db, doc_id, chunks, embed_text_fn, content_fn)
+    insert_chunks_fn(db, db_params, doc_id, chunks, embed_text_fn, content_fn)
 
     # ── Propositions (non-fatal; gate lives in propositions.py) ──
     prop_result = _run_propositions(db_params, propositions_conn, doc_id, _resolved_id, body_text)
