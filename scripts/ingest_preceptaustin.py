@@ -23,9 +23,10 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 
+import psycopg2
 from supabase import create_client
 from dotenv import load_dotenv
 
@@ -202,6 +203,45 @@ def ingest_file(filepath, index_lookup, dry_run=False):
         return False
 
 
+# ── Interim survivability guard (NOT #11) ────────────────────────────────────
+#
+# ingest_preceptaustin.py's excerpt-keyed reuse guard has a known hole (it
+# checks for an existing excerpt, not existing chunks -- see the module
+# docstring above and rhemata-status.md/PLAN.md #11): a re-run against a
+# document that has no excerpt yet reuses the doc_id and attempts to
+# re-insert chunks at chunk_index values already present. Since #9 wired PA
+# through the shared writer's psycopg2_batch insert mode, and migration 061
+# added UNIQUE(document_id, chunk_index) on `chunks`, that reuse attempt now
+# raises psycopg2.errors.UniqueViolation instead of silently duplicating --
+# correct, but with no per-file handling one rejected doc used to kill the
+# entire batch (main()'s loop had no try/except at all).
+#
+# This guard makes that SURVIVABLE, not CORRECT: a colliding doc is skipped
+# and logged, the run continues -- it is NOT retried, updated, or fixed.
+# The excerpt-vs-chunks mismatch underneath is unchanged and stays #11's job.
+#
+# Connection-state check (done, not assumed): _insert_chunks_psycopg2_batch
+# opens its own psycopg2 connection per call and closes it in a `finally`
+# block regardless of success or failure (shared_ingest.py, unmodified this
+# session); _run_propositions does the same. Neither is shared across loop
+# iterations, so there is no connection left aborted/poisoned for the next
+# document to inherit -- verified by reading that code path, and empirically
+# by this session's synthetic proof (fresh docs after a collision still
+# process correctly in the same run).
+
+def _is_chunk_index_collision(exc):
+    # type: (Exception) -> bool
+    """True iff exc is a UniqueViolation specifically on migration 061's
+    chunks_document_id_chunk_index_key constraint -- matched on the
+    constraint name, not just the exception class, so an unrelated unique
+    violation (present or future) is never mistaken for this one expected,
+    benign case."""
+    return (
+        isinstance(exc, psycopg2.errors.UniqueViolation)
+        and getattr(exc.diag, "constraint_name", None) == "chunks_document_id_chunk_index_key"
+    )
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -240,25 +280,49 @@ def main():
     label = "[DRY RUN] " if args.dry_run else ""
     print("{}Found {} word study files to ingest\n".format(label, len(txt_files)))
 
-    success = 0
-    skipped = 0
+    processed = 0
+    skipped_duplicate = 0
+    skipped_other = 0
+    duplicate_files = []  # type: List[str]
 
     for i, filepath in enumerate(txt_files):
-        if ingest_file(filepath, index_lookup, dry_run=args.dry_run):
-            success += 1
-        else:
-            skipped += 1
+        try:
+            if ingest_file(filepath, index_lookup, dry_run=args.dry_run):
+                processed += 1
+            else:
+                skipped_other += 1
+        except psycopg2.errors.UniqueViolation as e:
+            # Narrow catch: only the specific, expected, benign case (this
+            # document's chunks are already present) is swallowed. Anything
+            # else -- including a unique violation on a DIFFERENT constraint
+            # -- re-raises and stops the run. See the guard block above.
+            if not _is_chunk_index_collision(e):
+                raise
+            skipped_duplicate += 1
+            duplicate_files.append(filepath.name)
+            print("  SKIP {}: already ingested — chunks present ({})".format(
+                filepath.name, e.diag.constraint_name
+            ))
 
         if (i + 1) % 10 == 0:
-            print("\n  Progress: {}/{} processed ({} ingested, {} skipped)\n".format(
-                i + 1, len(txt_files), success, skipped
+            print("\n  Progress: {}/{} seen ({} processed, {} skipped-duplicate, {} skipped-other)\n".format(
+                i + 1, len(txt_files), processed, skipped_duplicate, skipped_other
             ))
 
     print("\n" + "=" * 60)
     print("{}SUMMARY".format(label))
-    print("  Total files: {}".format(len(txt_files)))
-    print("  Ingested: {}".format(success))
-    print("  Skipped: {}".format(skipped))
+    print("  Total files seen:       {}".format(len(txt_files)))
+    print("  Processed (real writes): {}".format(processed))
+    print("  Skipped (already present — chunks exist): {}".format(skipped_duplicate))
+    print("  Skipped (other — bad filename / empty file / excerpt already exists): {}".format(skipped_other))
+    if duplicate_files:
+        shown = duplicate_files[:20]
+        suffix = "" if len(duplicate_files) <= 20 else ", showing first 20"
+        print("  Skipped-duplicate files ({}{}):".format(len(duplicate_files), suffix))
+        for name in shown:
+            print("    • {}".format(name))
+        if len(duplicate_files) > 20:
+            print("    ... and {} more".format(len(duplicate_files) - 20))
     print("=" * 60)
 
 
