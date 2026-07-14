@@ -8,54 +8,62 @@
 
 ## Current Priority / Next Action
 
-- **Current priority:** none open. `ingest_preceptaustin.py`'s batch loop is now survivable — a single excerpt-less doc colliding on `chunks(document_id, chunk_index)` no longer kills the whole run. This is an **interim guard, not #11**: skipped docs are still not updated, the excerpt-vs-chunks mismatch underneath is unchanged.
-- **Next action:** #10 — convert `ingest_commentaries.py` (reuses `psycopg2_batch` + the existing `propositions_conn` hook, straight convert per Decision 8). **Resequencing note carried from last session, still unresolved:** #11 (the real reuse-path fix) is now higher priority than its position in the linear list suggests, since #9's conversion made its exposure live. This session's guard buys time — a real PA batch is survivable now — but does not remove the reason to move #11 earlier. Worth a scoping conversation with Alex, not a unilateral reorder.
-- **Still true, unchanged by this session:** no production PA re-ingest has run. PA's ~1,778 already-ingested (excerpt-having) docs would still be skipped correctly by the pre-existing excerpt guard; the ~398 excerpt-less docs would now be skipped too (via the new interim guard) rather than crash the batch — but "skipped" is not "corrected." A real batch run today would produce a clean-looking summary reporting ~398 skips, which is expected and correct to report, but does not mean those 398 docs got updated in any way.
+- **Current priority:** the Sermonindex partial-write remediation thread (not yet a numbered PLAN.md item — an incident-response track running alongside the linear roadmap below). Today's real ingest run of the Sermonindex tab was killed mid-run and left two documents in the live database as broken partials — "Waiting For The Moving Of The Water" and "The Ultimate Heist," both by Carter Conlon, both currently servable in production. Those two documents are still broken; this session did not touch them (out of scope, by design).
+- **Next action:** wire `shared_ingest.py` to act on the honesty signal this session just built (see below) — i.e., have `ingest_document()` check whether the paraphrase step returned `"error"` and, if so, either not count the document as finished or hold the whole write back, per whatever the all-or-nothing writer design decides. After that, the actual all-or-nothing writer restructuring (record + all chunks + propositions committed as one atomic unit, or nothing) can proceed — it was blocked on exactly the ambiguity this session closed.
+- **Separately, still true, unchanged by this session:** the `ingest_preceptaustin.py` PA batch-loop track (#9/#10/#11 below) is untouched. #10 (`ingest_commentaries.py` conversion) is still the next step on that track whenever Alex picks it back up; the #11 resequencing conversation with Alex is still open.
 
 ---
 
-## This session (2026-07-13, interim guard) — PA batch loop survivability
+## This session (2026-07-13) — propositions.py: make model-call failure honest
 
-One commit: **`82ce9e4`**.
+**One commit: `42022a8`.** File touched: `scripts/propositions.py` only, as scoped.
 
-**What changed, narrowly:** `ingest_preceptaustin.py`'s `main()` loop now wraps each file's `ingest_file()` call in a `try/except psycopg2.errors.UniqueViolation`. A new helper, `_is_chunk_index_collision(exc)`, checks `exc.diag.constraint_name == "chunks_document_id_chunk_index_key"` — the loop catches ONLY that exact, expected, benign case (this document's chunks are already present) and re-raises everything else, including a `UniqueViolation` on any *other* constraint. Tally split into three buckets (`processed` / `skipped_duplicate` / `skipped_other`, the last covering the guard's own pre-existing bad-filename/empty-file/excerpt-exists skips) and an end-of-run summary prints total files seen, all three counts, and the skipped-duplicate filenames (first 20 + a remainder count if more). Exits 0 on a clean run with skips — skipping already-present docs is expected behavior for PA, not a failure signal.
+**The problem this closes:** two sessions ago, a read-only diagnostic (prompted by the Carter Conlon partial-write incident) traced the full document-writer sequence and found a second, separate problem sitting underneath the "chunks can die half-written" bug: the paraphrase-extraction step's own model call caught *every* failure — network error, rate limit, timeout, a response that doesn't parse — and silently returned an empty result, indistinguishable from the AI genuinely finding nothing to extract in a document. A later session that tried to start building an all-or-nothing writer hit this directly and **stopped rather than build on top of it**, since "if paraphrase failed, write nothing" is impossible to implement honestly when failure and empty look identical.
 
-**Connection-state check, done not assumed (per this session's explicit ask):** verified by reading `shared_ingest.py` (unmodified this session) that both `_insert_chunks_psycopg2_batch` and `_run_propositions` open their own `psycopg2` connection per call and close it in a `finally` block regardless of outcome — no connection or transaction is shared across loop iterations, so a caught rejection cannot leave a poisoned session behind for the next document. Confirmed empirically too (see proof below): fresh documents processed immediately after a caught collision wrote correctly.
+**What changed:** `extract_propositions()` now raises a new, distinct exception (`PropositionExtractionFailed`) when the model call itself fails, instead of swallowing the failure into `[]`. A genuine empty result (the call succeeds, the model legitimately finds nothing) still returns `[]` exactly as before — untouched. One layer up, `process_document()` already had a catch-all exception handler (originally there for storage-side failures only); that same handler now also catches this new exception and reports `"error"` — so no new code was needed there, only a docstring update clarifying what `"error"` and `"no_propositions"` now precisely mean. `process_document()`'s "never raises" contract is unchanged — a call failure is still non-fatal to the overall ingest run, just no longer silently indistinguishable from success.
 
-**Proof, synthetic only, no production data touched:**
-- Pre-inserted one document ("collidealpha", 3 chunks, deliberately no excerpt row) via a direct `shared_ingest.ingest_document()` call, replicating the exact already-ingested-but-excerpt-less state the real #11 hole describes.
-- Built a 3-file test batch (the pre-existing collider + two fresh word studies) and ran the real, converted script (`python3 scripts/ingest_preceptaustin.py --source-dir ...`) from this main session — not a subagent, so Rule 10 was never in play regardless.
-- Result matched exactly: the colliding file was skipped with a clear log line naming the constraint, the loop continued, both fresh files processed normally. End-of-run summary: 3 seen, 2 processed, 1 skipped-duplicate (named), 0 skipped-other. **Exit code 0.**
-- Verified off the live DB: the collided document still had exactly 3 chunks (no duplication, no partial write — the per-document transaction rolled back cleanly); both fresh documents existed with correct chunk counts and `full_text` populated.
-- Narrowness proven directly, not just asserted: fed the real `_is_chunk_index_collision()` function (via a verbatim copy of the loop's own try/except structure) three rigged cases — a `UniqueViolation` on a fabricated *different* constraint name (correctly NOT caught, propagated), a completely unrelated exception type simulating "the loader itself is broken" (correctly NOT caught, propagated), and the real expected case with the correct constraint name (correctly caught). All three matched the intended behavior.
-- Cleaned up all three synthetic documents (chunks + document rows + propositions, though PA's structural lockout means propositions were never at risk) and confirmed zero remaining across all three tables for all three doc_ids.
+**Result: three cleanly separate, caller-visible outcomes now exist** where there used to be an ambiguous two:
+1. Model ran, found teaching points → the points (unchanged).
+2. Model ran, genuinely found nothing → `"no_propositions"` — a real completed result, not a failure.
+3. The call itself failed → `"error"` — distinct, detectable, and non-fatal.
 
-**Deliberately not done:** no fix to the excerpt-keyed reuse guard itself, no retry/update-on-conflict logic, no real PA batch run against the actual corpus. All of that stays #11's job.
+**Proof, all synthetic, no production data touched:**
+- **Test 1 (forced call failure):** mocked the model call to raise. Confirmed `extract_propositions()` raises `PropositionExtractionFailed`, and confirmed `process_document()` catches it and returns `"error"` — no crash. **Passed.**
+- **Test 2 (genuine empty):** mocked the model call to succeed and return an empty list. Confirmed `extract_propositions()` still returns `[]` with no exception, and `process_document()` returns `"no_propositions"` — cleanly separate from Test 1's `"error"`. **Passed.**
+- **Test 3 (normal case, full round-trip):** mocked the model call to return two real proposition-shaped entries. Created one throwaway `documents` row (required — `propositions.document_id` has a foreign-key constraint, so a real row was needed to test the actual storage path), ran `process_document()` end-to-end, confirmed it returned `"stored:2"` and that the two rows landed in the `propositions` table with the right content. **Passed.** All test artifacts (the throwaway document + its two proposition rows) were deleted immediately after, and a final sweep confirmed zero rows remain anywhere.
+
+**Deliberately not done this session (explicitly out of scope, staged for next):** `shared_ingest.py` was read (to see how it consumes the paraphrase-step result) but not edited — it still just passes `"error"`/`"no_propositions"`/`"stored:N"` straight through without branching on any of them. The all-or-nothing writer restructuring itself is untouched. The skip-check ("already ingested?") logic is untouched. The two broken Carter Conlon documents are untouched. No real/production ingest ran. The stale CLAUDE.md note (which still says the batch-insert path is "deliberately deferred" when it's actually fully built) was left alone, as instructed — that's a separate docs-only pass.
 
 ---
 
 ## Where We Are in the Roadmap
 
-(PLAN.md v5.1+, linear numbered session list)
+(PLAN.md v5.1+, linear numbered session list — unrelated to, and untouched by, this session's Sermonindex work above)
 
 - **#1–#4:** DONE (see git history; not restated here).
 - **#5.5 (harness hardening):** DONE end to end. Commit trail: `35ae840` → `8816804` → `6379925` → `f2378a7` → `b6340d5` → `96bc3ff` → `874ba8f` → `7afc77c`.
 - **#6 (aliases + sentinel cleanup + strict mode): DONE** — `dc39dab`.
 - **#7 (`documents.full_text` chokepoint): DONE** — `55e46f1`.
 - **#8 (convert `ingest_magazine.py`): DONE** — `0935697`.
-- **#9 (build `psycopg2_batch`, convert `ingest_preceptaustin.py`): DONE.** Loader: `ffc8c81` + `fb575ae`. Conversion: `c678514`. Interim survivability guard (this session, not part of #9's original scope but directly downstream of it): `82ce9e4`. No production PA re-ingest has run.
-- **#10–#13, #15–#37:** untouched. #10 next.
+- **#9 (build `psycopg2_batch`, convert `ingest_preceptaustin.py`): DONE.** Loader: `ffc8c81` + `fb575ae`. Conversion: `c678514`. Interim survivability guard (prior session, downstream of #9): `82ce9e4`. No production PA re-ingest has run.
+- **#10–#13, #15–#37:** untouched. #10 next, whenever this track is picked back up.
 - **#14 (T-tail housekeeping):** docs-truth clause DONE (`80b1d50`). Folder renames and the `jewish_perspectives` drop remain open, untouched.
 
 ---
 
-## Open Flags — carried forward, one narrowed further this session
+## Open Flags
 
-1. **Rule 10 freeze is a bare-substring match, not an invocation check** (found at #8, 2026-07-12; `ingest_preceptaustin.py` removed from the list last session). Unchanged this session — the guard built here is unrelated to Rule 10 (it fires inside the script's own loop, not at the PreToolUse layer). Still recurs at #10–13 for the remaining unconverted/stale-listed scripts.
+**New this session:**
+8. **`shared_ingest.py` doesn't yet act on the paraphrase-step's honest failure signal.** `ingest_document()` still treats `"error"`, `"no_propositions"`, and `"stored:N"` identically — prints and returns whatever string it gets, no branching. The signal is now trustworthy; nothing reads it differently yet. This is the very next piece.
+9. **The all-or-nothing writer itself is still unbuilt.** Today's document record / chunks / propositions still commit in three separate steps, in that order, so a kill or crash mid-run can still leave a document half-written (this is precisely how the two Carter Conlon documents broke). This session only removed one blocker to building it safely.
+10. **Two known-broken documents remain live in production, unrepaired:** "Waiting For The Moving Of The Water" and "The Ultimate Heist," both Carter Conlon, both currently servable (Carter Conlon's source is `unlicensed`/`shown`). Cleanup is explicitly its own separate session.
+
+**Carried forward, unchanged (PA/#9-#11 track):**
+1. **Rule 10 freeze is a bare-substring match, not an invocation check** (found at #8, 2026-07-12). Still recurs at #10–13 for the remaining unconverted/stale-listed scripts.
 2. **Magazine queue hard pre-ingest gate — 27 of 27 pending articles contaminated** (found at #8). Unresolved, untouched.
-3. **`on_existing="reuse"` PATTERN — two known holes, now SURVIVABLE but still open.** Holes (1) unconditional re-chunk/re-insert and (2) document-row/`full_text` skipped on reuse remain unchanged — still #11's job. **This session's addition:** a real re-run hitting hole (1) no longer crashes the batch (this session's guard), but still does not correct anything — a colliding doc is silently-to-the-batch-but-visibly-in-the-log skipped, staying stale in the DB. Do not read "survivable" as "fixed." #11 resequencing is still an open conversation with Alex, not resolved by this guard.
+3. **`on_existing="reuse"` PATTERN — two known holes, survivable but still open** (unconditional re-chunk/re-insert; document-row/`full_text` skipped on reuse). Still #11's job.
 4. **Database-number verification gap** (adjacent-and-open since #5.5's exit-condition-(a) close). Not exercised this session.
-5. **GOVERNED_FILES gap.** `guard_pretooluse.py`/`settings.json` not in `GOVERNED_FILES`. Untouched this session (this session edited `ingest_preceptaustin.py`, not the harness gate files).
+5. **GOVERNED_FILES gap.** `guard_pretooluse.py`/`settings.json` not in `GOVERNED_FILES`. Untouched this session.
 6. **PLAN.md #5.5 closing line is stale.** Needs Alex's explicit go-ahead on replacement wording.
 7. **PLAN.md #14 drift.** Folder renames and the `jewish_perspectives` drop are genuinely, separately still open within #14.
 
@@ -63,10 +71,10 @@ One commit: **`82ce9e4`**.
 
 ## Standing Carve-Out (unchanged across many sessions)
 
-Working tree normally carries exactly this and nothing else: modified `SKILL.md` (unrelated pre-existing drift, last touched 2026-07-10/11 — not this session's work) + untracked `.agents/`, `.claude/skills/`, `skills-lock.json` (skill-loader paths). Still needs a `.gitignore`-or-commit decision. Confirmed present and unchanged at this session's close — the one file this session actually edited (`ingest_preceptaustin.py`) plus this doc were both committed, nothing left as carve-out drift.
+Working tree normally carries exactly this and nothing else: modified `SKILL.md` (unrelated pre-existing drift) + untracked `.agents/`, `.claude/skills/`, `skills-lock.json` (skill-loader paths). Still needs a `.gitignore`-or-commit decision. Confirmed present and unchanged at this session's close — the one file this session actually edited (`scripts/propositions.py`) plus this doc were both committed/updated, nothing else touched.
 
 ---
 
 ## Next Session Should
 
-Either (a) convert `ingest_commentaries.py` (#10, straight convert, reuses `psycopg2_batch` + `propositions_conn`), or (b) raise the #11 resequencing question with Alex explicitly before doing anything else — this session's guard means there's no longer time pressure forcing #11 forward (a real PA batch won't crash), but the underlying correctness gap (excerpt-less docs never get corrected on reuse) is unchanged and now two sessions old. Either is a reasonable next step; which one is Alex's call, not a default.
+Wire `shared_ingest.py`'s `ingest_document()` to actually branch on the paraphrase step's result — specifically, decide and implement what happens when it comes back `"error"` (per this session's new, honest signal) versus `"no_propositions"` versus `"stored:N"`, under the "finished" definition already agreed: record + all chunks + paraphrase-step-having-run-to-completion, where a genuine empty counts as finished and a failed call does not. That's the direct prerequisite for the all-or-nothing writer restructuring itself, which remains the larger goal after that. The PA/#10 track (`ingest_commentaries.py` conversion) and the #11 resequencing conversation remain open on their own separate track — Alex's call on which gets picked up first.
