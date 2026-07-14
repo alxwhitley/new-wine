@@ -142,9 +142,23 @@ def _insert_document(cur, row: dict) -> str:
     return row["id"]
 
 
-def _delete_document(db, doc_id: str) -> None:
-    db.table("chunks").delete().eq("document_id", doc_id).execute()
-    db.table("documents").delete().eq("id", doc_id).execute()
+def _get_chunk_count(db_params: dict, doc_id: str) -> int:
+    """Return the next free chunk_index for doc_id -- MAX(chunk_index)+1, or
+    0 if the document has no chunks yet. Deliberately MAX+1, not a raw row
+    COUNT: safe even if a document somehow already has a gap (none do,
+    confirmed corpus-wide in an earlier session, but this is the correct
+    invariant to hold regardless), and it's what reuse/append resumes from.
+    """
+    conn = psycopg2.connect(**db_params)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COALESCE(MAX(chunk_index), -1) + 1 FROM chunks WHERE document_id = %s",
+                (doc_id,),
+            )
+            return cur.fetchone()[0]
+    finally:
+        conn.close()
 
 
 # ── Chunks ────────────────────────────────────────────────────────────────────
@@ -225,14 +239,23 @@ def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
 def _embed_chunks(
     chunks: List[str],
     embed_text_fn: Optional[Callable[[int, str], str]],
+    start_index: int = 0,
 ) -> List[List[float]]:
     """Compute every chunk's embedding in memory -- no database interaction
     at all. Pure computation step, called before any connection is opened,
     so a failure here (including EmbeddingAlignmentError) leaves nothing
     to roll back.
 
-    Alignment invariant: for chunk i, embeddings[i] must come from
-    embedding chunk i's own text.
+    `chunks` may be a SLICE of a document's full chunk list (the reuse/
+    append path only embeds the new tail, never re-embeds what's already
+    stored) -- `start_index` is that slice's offset into the whole
+    document, so embed_text_fn(idx, text) still sees the chunk's real,
+    global position (e.g. magazine's idx==0 header special-case must mean
+    "the document's true first chunk," not "the first chunk of this
+    particular append").
+
+    Alignment invariant: for chunk i (global index), embeddings[i -
+    start_index] must come from embedding chunk i's own text.
       - _embed_batch_verified() checks the API's own item.index against
         intended position (order verified, not assumed) and raises on any
         short/partial/out-of-range response.
@@ -243,8 +266,8 @@ def _embed_chunks(
         relying on that guarantee.
     """
     texts_to_embed = [
-        embed_text_fn(idx, text) if embed_text_fn else text
-        for idx, text in enumerate(chunks)
+        embed_text_fn(start_index + offset, text) if embed_text_fn else text
+        for offset, text in enumerate(chunks)
     ]
     embeddings = _embed_batch_verified(texts_to_embed)
     assert len(embeddings) == len(chunks), (
@@ -260,6 +283,7 @@ def _insert_chunks(
     chunks: List[str],
     embeddings: List[List[float]],
     content_fn: Optional[Callable[[int, str], str]],
+    start_index: int = 0,
 ) -> None:
     """Insert every chunk row via the shared psycopg2 cursor/transaction in
     one execute_values(...) call -- no commit here; the caller
@@ -267,9 +291,15 @@ def _insert_chunks(
     are generated per chunk before insert, same as every other caller in
     this codebase -- there is no server-generated-id + RETURNING remapping
     step to get wrong.
+
+    `start_index` offsets chunk_index so a reuse/append call lands its new
+    rows immediately after whatever already exists (continued numbering,
+    never re-touching chunk_index values already present) -- 0 for a fresh
+    document or a redo's full rewrite, existing_count for an append.
     """
     rows = []
-    for idx, (text, embedding) in enumerate(zip(chunks, embeddings)):
+    for offset, (text, embedding) in enumerate(zip(chunks, embeddings)):
+        idx = start_index + offset
         content = content_fn(idx, text) if content_fn else text
         embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
         rows.append((str(uuid.uuid4()), doc_id, content, embedding_str, idx))
@@ -350,9 +380,12 @@ def ingest_document(
 
     # Reuse-by-identity hook. Unused by ingest.py/ingest_magazine.py (always
     # insert fresh); used by ingest_preceptaustin.py's cross-pipeline excerpt
-    # check. Its two known holes (unconditional re-chunk/re-insert on reuse;
-    # document-row/full_text skipped on reuse) are unchanged this session --
-    # still PLAN #11's job, not touched here.
+    # check (on_existing="reuse"). See the on_existing behaviors documented
+    # in this function's docstring (PLAN #11, resolved 2026-07-13): "reuse"
+    # now does continued-numbering append (the re-chunk-from-0 bug is
+    # fixed); "delete_and_reingest" is now a true atomic swap. The
+    # document-row/full_text-skipped-on-reuse gap is unchanged by design --
+    # reuse never re-inserts the document row, only appends chunks.
     find_existing_fn: Optional[Callable[[], Optional[str]]] = None,
     on_existing: str = "skip",  # "skip" | "reuse" | "delete_and_reingest"
 
@@ -380,26 +413,59 @@ def ingest_document(
     should run at all (licensed/unlicensed sources) -- for gated-off
     sources (public_domain, owned, Precept Austin) "finished" is simply
     record + all chunks, and this function does not second-guess that gate.
+    A document that lands finished is stamped (documents.ingest_completed_at,
+    migration 062) inside this same transaction -- legacy pre-stamp rows
+    stay NULL and are never treated as suspect; only an explicit caller
+    choice (redo/reuse below) ever re-examines an existing document.
 
-    Concretely, once record + chunks are staged (uncommitted) on the shared
-    connection, propositions.process_document() (unmodified, from commit
-    42022a8) runs on that SAME connection:
+    When find_existing_fn() reports an existing document, on_existing picks
+    one of three behaviors (PLAN #11, resolved 2026-07-13):
+      - "skip" (default) -- leave the existing document alone untouched.
+        Applies identically whether it's stamped or not; this function
+        never uses the stamp to second-guess a caller's "skip" choice.
+      - "delete_and_reingest" (REDO) -- for a document the caller has
+        already determined is broken. The old document (and, via ON DELETE
+        CASCADE, its chunks/propositions/excerpts) is deleted and the new
+        one written under a fresh id in the SAME transaction as everything
+        else here -- a true atomic swap. At every instant, another
+        connection sees either the complete old document or the complete
+        new one, never neither and never a partial write of the new one.
+        A paraphrase failure (or any exception) rolls the whole thing back,
+        including the delete -- the old document is left exactly as it was.
+      - "reuse" (REUSE/APPEND) -- for a document that is deliberately built
+        incrementally across multiple calls (lexicon-style: a huge file
+        embedded/inserted in pieces across separate runs). Re-chunks the
+        CURRENT full body_text, finds how many chunks already exist
+        (MAX(chunk_index)+1, not a raw count), and appends only the new
+        tail with continued numbering -- chunk_index values already
+        present are never re-touched, so migration 061's uniqueness
+        constraint is never hit by this path. If the existing chunk count
+        already covers the full re-chunk, there is nothing to append;
+        returns status="skipped", reason="already_complete" without
+        touching the database. Document row is never re-inserted on this
+        path (the existing one stays as-is; the known "full_text on reuse"
+        gap this leaves is unchanged -- not this session's scope).
+
+    Concretely, once record/delete + chunks are staged (uncommitted) on the
+    shared connection, propositions.process_document() (unmodified, from
+    commit 42022a8) runs on that SAME connection:
       - "error" (the paraphrase call itself failed) -- process_document()
         has already rolled back internally; this function rolls back again
         (harmless no-op if already rolled back) and returns status="failed"
-        with nothing written. The source row is left un-ingested by the
-        caller so a retry redoes it cleanly -- and because nothing landed,
-        that retry will not be blocked by a stale, already-exists document
-        the way "The Ultimate Heist" was.
+        with nothing written (and, for a redo, the old document intact).
+        The source row is left un-ingested by the caller so a retry redoes
+        it cleanly -- and because nothing landed, that retry will not be
+        blocked by a stale, already-exists document the way "The Ultimate
+        Heist" was.
       - "stored:{n}" -- process_document() has already committed
-        internally (record + chunks + propositions all land together,
-        since they share this connection). This function's own commit()
-        after that is a harmless no-op.
+        internally (record/delete + chunks + propositions all land
+        together, since they share this connection). This function's own
+        commit() after that is a harmless no-op.
       - "no_propositions" / "skipped_licensed" / "skipped_precept_austin"
         -- process_document() touched neither commit nor rollback (nothing
-        for it to write). This function commits explicitly here: paraphrase
-        ran to completion (or correctly doesn't apply), so record + chunks
-        are finished and saved.
+        for it to write). This function stamps and commits explicitly
+        here: paraphrase ran to completion (or correctly doesn't apply),
+        so record + chunks are finished and saved.
 
     Any exception raised while record/chunks are being written (e.g. a
     duplicate-chunk-index collision on a reused document_id) rolls back and
@@ -426,10 +492,9 @@ def ingest_document(
             "status": "skipped", "reason": "already_exists",
             "doc_id": existing_doc_id, "source_id": None, "chunks": [], "propositions": None,
         }
-    if existing_doc_id is not None and on_existing == "delete_and_reingest":
-        print(f"  Deleting existing document {existing_doc_id[:12]}... for re-ingest")
-        _delete_document(db, existing_doc_id)
-        existing_doc_id = None  # fall through to fresh insert below
+
+    is_redo = existing_doc_id is not None and on_existing == "delete_and_reingest"
+    is_reuse = existing_doc_id is not None and on_existing == "reuse"
 
     # ── Resolve attribution ──
     if source_id is not None:
@@ -452,8 +517,10 @@ def ingest_document(
                 source_name=source_name, author=author,
             )
 
-    is_reuse = existing_doc_id is not None and on_existing == "reuse"
+    old_doc_id = existing_doc_id if is_redo else None
     doc_id = existing_doc_id if is_reuse else str(uuid.uuid4())
+    if is_redo:
+        print(f"  Redo: will delete existing document {old_doc_id[:12]}... and write fresh as one atomic swap")
     if is_reuse:
         print(f"  Reusing existing document {doc_id[:12]}...")
 
@@ -472,19 +539,35 @@ def ingest_document(
     print("  Chunking...")
     chunks = chunk_fn(body_text)
     print(f"  {len(chunks)} chunks created")
-    print(f"  Embedding {len(chunks)} chunks...")
-    embeddings = _embed_chunks(chunks, embed_text_fn)
 
-    # ── Write record + chunks + propositions as one atomic unit ──
+    start_index = 0
+    if is_reuse:
+        start_index = _get_chunk_count(db_params, doc_id)
+        if start_index >= len(chunks):
+            print(f"  Already complete: {start_index} chunks stored, {len(chunks)} expected — nothing to append")
+            return {
+                "status": "skipped", "reason": "already_complete",
+                "doc_id": doc_id, "source_id": _resolved_id, "chunks": [], "propositions": None,
+            }
+        print(f"  Appending from chunk {start_index} ({len(chunks) - start_index} new of {len(chunks)} total)")
+
+    new_chunks = chunks[start_index:]
+    print(f"  Embedding {len(new_chunks)} chunk(s)...")
+    embeddings = _embed_chunks(new_chunks, embed_text_fn, start_index=start_index)
+
+    # ── Write record/delete + chunks + propositions as one atomic unit ──
     conn = psycopg2.connect(**db_params)
     try:
         with conn.cursor() as cur:
+            if is_redo:
+                print(f"  Deleting old document {old_doc_id[:12]}... (cascades chunks/propositions/excerpts)")
+                cur.execute("DELETE FROM documents WHERE id = %s", (old_doc_id,))
             if not is_reuse:
                 print("  Inserting document record...")
                 _insert_document(cur, row)
                 print(f"  Document ID: {doc_id}")
-            print(f"  Inserting {len(chunks)} chunks...")
-            _insert_chunks(cur, doc_id, chunks, embeddings, content_fn)
+            print(f"  Inserting {len(new_chunks)} chunk(s)...")
+            _insert_chunks(cur, doc_id, new_chunks, embeddings, content_fn, start_index=start_index)
 
         prop_result = propositions.process_document(conn, doc_id, _resolved_id, body_text, embed_text)
         print(f"  propositions: {prop_result}")
@@ -498,6 +581,8 @@ def ingest_document(
                 "doc_id": None, "source_id": _resolved_id, "chunks": [], "propositions": prop_result,
             }
 
+        with conn.cursor() as cur:
+            cur.execute("UPDATE documents SET ingest_completed_at = now() WHERE id = %s", (doc_id,))
         conn.commit()  # harmless no-op if process_document() already committed (stored:N)
         conn.close()
         return {
