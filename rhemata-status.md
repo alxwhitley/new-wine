@@ -71,6 +71,7 @@ Today ran three sessions back to back: the Inline Study Panel shell (frontend), 
 13. PA "survivability guard will rarely fire" — see "Still open" #3 above.
 16. No kill switch / beta flag exists for the Study Panel — see "Done today" above.
 17. The Study Panel's verse-reference detector is a narrow client-side stand-in, not the real SP1 backend — see "Done today" above.
+18. CLAUDE.md and SKILL.md are both stale on the quoting rule (found during SP1 diagnostic, 2026-07-14): both describe verbatim quoting permitted up to 50 words pending a verifier that doesn't exist, while the live system prompt bans reproducing any quote or exact wording in any mode, paraphrase-only always — code is stricter than the docs. For the deferred docs pass, not fixed now.
 
 ---
 
