@@ -91,8 +91,17 @@ def _parse_verse_or_range(ref: str) -> Optional[Tuple[str, int, int, Optional[in
     Returns None if the book, chapter, or verse can't be parsed at all
     (e.g. a vague reference like "verse 26" or "that chapter" has no book
     match and always returns None here).
+
+    `ref` originates from the model's own text and is untrusted — capped
+    at 80 chars before it ever reaches the regex below. No real verse
+    reference or teacher name is anywhere close to that length, and the
+    lazy `[A-Za-z ]+?` group immediately followed by `\s+` (both match a
+    space) can backtrack in an O(n^2)-shaped way on adversarial input with
+    letters/spaces and no colon.
     """
     ref = ref.strip()
+    if len(ref) > 80:
+        return None
     m = re.match(r'^(\d?\s*[A-Za-z ]+?)\s+(\d+):(\d+)(?:[-–](\d+))?$', ref)
     if not m:
         return None
@@ -174,27 +183,38 @@ def verify_references(answer_text: str, raw_output: str, db) -> List[Dict]:
         verified = []  # type: List[Dict]
 
         for proposal in proposals:
-            raw = proposal["raw"]
-            positions = find_occurrences(answer_text, raw)
-            if not positions:
-                continue  # presence check failed — model reported something not actually there
+            # Scoped to this one proposal: an exception here (e.g. a
+            # transient DB error) drops only this mention. Mentions already
+            # appended to `verified` earlier in the loop are unaffected —
+            # a single bad proposal must never wipe out the whole batch.
+            try:
+                raw = proposal["raw"]
+                positions = find_occurrences(answer_text, raw)
+                if not positions:
+                    continue  # presence check failed — model reported something not actually there
 
-            if proposal["type"] == "verse":
-                if not verify_verse_mention(db, raw):
-                    continue
-                verified.append({"type": "verse", "raw": raw, "positions": positions})
-            else:
-                source_id = verify_teacher_mention(db, raw)
-                if not source_id:
-                    continue
-                verified.append({
-                    "type": "teacher",
-                    "raw": raw,
-                    "position": positions[0],
-                    "source_id": source_id,
-                })
+                if proposal["type"] == "verse":
+                    if not verify_verse_mention(db, raw):
+                        continue
+                    verified.append({"type": "verse", "raw": raw, "positions": positions})
+                else:
+                    source_id = verify_teacher_mention(db, raw)
+                    if not source_id:
+                        continue
+                    verified.append({
+                        "type": "teacher",
+                        "raw": raw,
+                        "position": positions[0],
+                        "source_id": source_id,
+                    })
+            except Exception:
+                logger.exception("Reference verification failed for one proposal — dropping it")
+                continue
 
         return verified
     except Exception:
+        # Outer safety net: catastrophic failures outside any single
+        # proposal's verification (e.g. parse_reference_mentions itself
+        # throwing) still result in an empty list, never a broken request.
         logger.exception("Reference verification failed — returning no pointers")
         return []
