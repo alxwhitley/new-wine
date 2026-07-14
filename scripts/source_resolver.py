@@ -2,17 +2,23 @@
 """
 Source resolver for Rhemata ingest pipeline.
 
-normalize_alias_key() is the canonical normalization contract — it must match
-exactly how alias_key values were seeded in migration 050.  Both this resolver
-and any future alias re-seed must call this function rather than inline the
-logic.
+normalize_alias_key() now lives in backend/app/services/source_resolver.py —
+the canonical home, shared with the backend's reference-verification code
+(see docs/superpowers/plans/2026-07-14-sp1-reference-pointer-backend.md).
+Byte-identical relocation proven by scripts/test_source_resolver_relocation.py
+before this repoint landed. Do not redefine normalize_alias_key here again —
+import it, as below.
 
 Usage from an ingest script:
     from source_resolver import resolve_source_id, SENTINEL_SOURCE_ID
     source_id, norm_key, via = resolve_source_id(db, source_name, author)
 """
-import re
+import sys
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+from app.services.source_resolver import normalize_alias_key
 
 # Protected sentinel — documents with unresolved attribution land here via the
 # documents.source_id column DEFAULT.  NEVER pass this UUID to a DELETE.
@@ -22,18 +28,6 @@ SENTINEL_SOURCE_ID = "267a09ac-76f3-43fb-901f-3015aef88e22"
 # path rather than a DB lookup — the alias is also seeded, but this avoids a
 # round-trip for a value that never changes.
 NEW_WINE_MAGAZINE_SOURCE_ID = "72b2f583-d7f9-4361-be1c-6d5aebe59fac"
-
-
-def normalize_alias_key(s: Optional[str]) -> str:
-    """Lowercase, trim, collapse internal whitespace to a single space.
-
-    This is the sole normalization contract for source_aliases.alias_key.
-    It must match the Python normalization used when migration 050 was seeded:
-        re.sub(r'\\s+', ' ', s.lower().strip())
-    """
-    if not s:
-        return ""
-    return re.sub(r'\s+', ' ', s.lower().strip())
 
 
 def resolve_source_id(
