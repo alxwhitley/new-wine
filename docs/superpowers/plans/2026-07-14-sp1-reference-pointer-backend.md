@@ -750,7 +750,9 @@ git commit -m "Add reference_verifier.py — presence, resolution, and biblical-
 
 ### Task 7: Track-B tests — constructed/injected verifier cases
 
-These are deterministic checks against `reference_verifier.py` directly, run regardless of whether a live generation happens to produce the same failure shape. Two of these (a biblical-figure misclassification, a plausible-but-wrong verse number) are genuinely unlikely to come up on demand in a live run — fine reasons to construct them directly. **The third is different, and worth stating precisely:** a real, currently-hidden-or-unlicensed teacher (F.F. Bosworth, B3) is NOT tested here because it "can't happen organically." It can — Claude carries its own general knowledge of thousands of real teachers and can name one directly, including one this library has deliberately hidden or never licensed, even when retrieval surfaces zero content about them. This case is constructed anyway because the servability check is the single guard standing between the panel and pointing users at content the product isn't licensed to serve, and a guard that safety-critical needs to be proven on demand, every time — not left dependent on whether a given live run happens to mention that one name. Treat it as load-bearing on every teacher mention, not a corner case.
+These are deterministic checks against `reference_verifier.py` directly, run regardless of whether a live generation happens to produce the same failure shape. Two of these (a biblical-figure misclassification, a plausible-but-wrong verse number) are genuinely unlikely to come up on demand in a live run — fine reasons to construct them directly. **The third is different, and worth stating precisely:** a real, currently-hidden-or-unlicensed teacher (Leonard Ravenhill, B3) is NOT tested here because it "can't happen organically." It can — Claude carries its own general knowledge of thousands of real teachers and can name one directly, including one this library has deliberately hidden or never licensed, even when retrieval surfaces zero content about them. This case is constructed anyway because the servability check is the single guard standing between the panel and pointing users at content the product isn't licensed to serve, and a guard that safety-critical needs to be proven on demand, every time — not left dependent on whether a given live run happens to mention that one name. Treat it as load-bearing on every teacher mention, not a corner case.
+
+**Live-data note (confirmed 2026-07-14, during Task 4's execution):** the plan originally named F.F. Bosworth as the not-servable example, based on CLAUDE.md's migration-050 decision entry (`unlicensed`/`hidden`). Live query shows Bosworth is now `unlicensed`/`shown` — evidently flipped for the Tier-1 beta since that entry was written (CLAUDE.md is stale here, not this check). Task 4's implementer independently caught this and substituted a different source for its own test. This task now uses **Leonard Ravenhill** instead — confirmed live: alias_key `leonard ravenhill`, `unlicensed`/`hidden`, with substantial real content (117 documents per rhemata-status.md), so this is a genuine, currently-accurate not-servable case, not a hypothetical.
 
 **Files:**
 - Create: `scripts/test_reference_verifier.py`
@@ -765,7 +767,7 @@ These are deterministic checks against `reference_verifier.py` directly, run reg
 """
 Track-B (constructed/injected) tests for the SP1 reference verifier.
 Covers: biblical-figure backstop, nonexistent verse, not-servable teacher
-(F.F. Bosworth), MISS/sentinel teacher, presence-check drop, occurrence
+(Leonard Ravenhill), MISS/sentinel teacher, presence-check drop, occurrence
 anchoring (verse=every occurrence, teacher=first only), and malformed/
 vague-reference robustness.
 
@@ -828,17 +830,17 @@ def main():
     result_2 = verify_references(answer_text_2, raw_output_2, db)
     check("B2: nonexistent verse (Genesis 50:99) never resolves", result_2 == [])
 
-    # --- B3: Not-servable teacher (F.F. Bosworth — unlicensed/hidden) ---
-    bosworth_alias = db.table("source_aliases").select("source_id").eq(
-        "alias_key", normalize_alias_key("F.F. Bosworth")
+    # --- B3: Not-servable teacher (Leonard Ravenhill — unlicensed/hidden) ---
+    ravenhill_alias = db.table("source_aliases").select("source_id").eq(
+        "alias_key", normalize_alias_key("Leonard Ravenhill")
     ).limit(1).execute()
-    if not bosworth_alias.data:
-        print("  SKIP  B3: no live alias for 'F.F. Bosworth' — confirm live data before treating this as a gap")
+    if not ravenhill_alias.data:
+        print("  SKIP  B3: no live alias for 'Leonard Ravenhill' — confirm live data before treating this as a gap")
     else:
-        answer_text_3 = "F.F. Bosworth taught extensively on divine healing."
-        raw_output_3 = "<reference_mentions>\nTEACHER: F.F. Bosworth\n</reference_mentions>"
+        answer_text_3 = "Leonard Ravenhill preached extensively on revival and repentance."
+        raw_output_3 = "<reference_mentions>\nTEACHER: Leonard Ravenhill\n</reference_mentions>"
         result_3 = verify_references(answer_text_3, raw_output_3, db)
-        check("B3: F.F. Bosworth (real alias, not servable) never resolves", result_3 == [])
+        check("B3: Leonard Ravenhill (real alias, not servable) never resolves", result_3 == [])
 
     # --- MISS / sentinel: a name with no alias at all ---
     answer_text_4 = "Some Nonexistent Teacher Name talks about grace."
@@ -1429,9 +1431,9 @@ git commit -m "Add SP1 answer-quality regression check (before/after prompt-chan
 
 ### Task 13: Build the Track-A real-answer test harness, with the pinned question set
 
-**Before writing questions with specific names, confirm each candidate's live servability.** This is NOT because a hidden or unlicensed teacher's name could never appear in a real answer — it can: Claude carries its own general knowledge of thousands of real teachers and can name one directly, including one this library has deliberately hidden or never licensed, even when retrieval surfaces zero content about them (see Task 7's corrected note on F.F. Bosworth). The reason to confirm servability here is different: these specific test questions are designed to exercise the FULL real pipeline — retrieval surfacing that teacher's actual citable content, the model citing them from the corpus, the writer marking the mention, the verifier resolving it — and that only happens if the teacher is genuinely retrievable. A teacher reachable only through the model's own general knowledge, with no real corpus content behind them, is a different (and already covered) check — that's exactly what Task 7's Bosworth case already proves deterministically.
+**Before writing questions with specific names, confirm each candidate's live servability.** This is NOT because a hidden or unlicensed teacher's name could never appear in a real answer — it can: Claude carries its own general knowledge of thousands of real teachers and can name one directly, including one this library has deliberately hidden or never licensed, even when retrieval surfaces zero content about them (see Task 7's corrected note on Leonard Ravenhill). The reason to confirm servability here is different: these specific test questions are designed to exercise the FULL real pipeline — retrieval surfacing that teacher's actual citable content, the model citing them from the corpus, the writer marking the mention, the verifier resolving it — and that only happens if the teacher is genuinely retrievable. A teacher reachable only through the model's own general knowledge, with no real corpus content behind them, is a different (and already covered) check — that's exactly what Task 7's Leonard Ravenhill case already proves deterministically.
 
-Run this query for each named teacher below before finalizing the case:
+Run this query for each named teacher below before finalizing the case — servability drifts over time (Task 4/Task 7 already caught one live example, F.F. Bosworth, that had changed since this plan was first written), so don't trust anything written here without re-checking:
 
 ```sql
 SELECT s.name, s.license_status, s.visibility
@@ -1440,7 +1442,7 @@ JOIN source_aliases a ON a.source_id = s.id
 WHERE a.alias_key = '<normalized teacher name>';
 ```
 
-If a candidate below turns out not to be currently servable, that case cannot exercise the full pipeline as designed — treat it the same way Task 7 already handles F.F. Bosworth (a Track-B constructed case instead), and note the substitution plainly rather than forcing a live query to match what was assumed here.
+If a candidate below turns out not to be currently servable, that case cannot exercise the full pipeline as designed — treat it the same way Task 7 already handles Leonard Ravenhill (a Track-B constructed case instead), and note the substitution plainly rather than forcing a live query to match what was assumed here.
 
 **Files:**
 - Create: `scripts/test_sp1_real_answers.py`
@@ -1598,7 +1600,7 @@ for name in ['john bevere', 'derek prince', 'kenneth copeland']:
 "
 ```
 
-Expected: `john bevere` and `derek prince` show `license_status`/`visibility` that pass the gate (`public_domain`/`owned`, or `shown` with safe_mode off); `kenneth copeland` shows no alias found. If either of the first two is NOT currently servable, stop and move that case to a Track-B constructed test (same treatment as F.F. Bosworth in Task 7) rather than forcing the live case — note the substitution explicitly in Task 15's writeup.
+Expected: `john bevere` and `derek prince` show `license_status`/`visibility` that pass the gate (`public_domain`/`owned`, or `shown` with safe_mode off); `kenneth copeland` shows no alias found. If either of the first two is NOT currently servable, stop and move that case to a Track-B constructed test (same treatment as Leonard Ravenhill in Task 7) rather than forcing the live case — note the substitution explicitly in Task 15's writeup.
 
 - [ ] **Step 3: Commit the harness (before running it, since the run itself is Task 14)**
 
