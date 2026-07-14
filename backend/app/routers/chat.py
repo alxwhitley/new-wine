@@ -884,6 +884,9 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
         raw_full = []
         answer_parts = []
         in_answer = False
+        answer_closed = False  # SP1: once True, never re-enter in_answer — protects
+                                # against a stray "<answer>" substring appearing in
+                                # content written after </answer> (see Task 11 note above).
         buffer = ""
 
         try:
@@ -913,7 +916,7 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
                 raw_full.append(text)
                 buffer += text
 
-                if not in_answer:
+                if not in_answer and not answer_closed:
                     # Check if <answer> tag has appeared in the buffer
                     tag_pos = buffer.find("<answer>")
                     if tag_pos != -1:
@@ -943,6 +946,7 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
                             answer_parts.append(part)
                             yield _sse(json.dumps({"token": part}))
                         in_answer = False
+                        answer_closed = True  # SP1 guard — see note above
                         buffer = ""
                     else:
                         # Yield buffer but keep last 9 chars in case
@@ -972,6 +976,17 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
             yield _sse(json.dumps({"token": raw_text}))
 
         answer = "".join(answer_parts).strip()
+        raw_output = "".join(raw_full)
+
+        # SP1: verify proposed verse/teacher mentions against real data.
+        # Wrapped so any failure here can never affect the answer already
+        # sent, the conversation save below, or the final meta event.
+        try:
+            from app.services.reference_verifier import verify_references
+            verified_references = verify_references(answer, raw_output, db)
+        except Exception:
+            logger.exception("SP1 reference verification failed — continuing without pointers")
+            verified_references = []
 
         # Pre-generate IDs and fire background save (Change 6)
         conversation_id = request.conversation_id or str(uuid.uuid4())
@@ -990,7 +1005,12 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
             logger.debug("Skipping conversation save — no authenticated user")
 
         # Send metadata and close
-        meta = {"citations": citations, "conversation_id": conversation_id, "message_id": message_id}
+        meta = {
+            "citations": citations,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "verified_references": verified_references,
+        }
         if updated_topics:
             meta["topics_established"] = updated_topics
         if user_usage_meta:
