@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Citation } from "@/lib/api";
+import { detectVerseReferences, type StudyReference } from "@/lib/study-reference";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -15,6 +16,10 @@ interface ChatMessageProps {
   question?: string;
   accessToken?: string | null;
   onCitationClick?: (citation: Citation, index: number) => void;
+  onVerseClick?: (reference: StudyReference) => void;
+  /** True only while this specific message is still streaming in. Verse
+   * underlines fade in only once streaming finishes (spec: "never mid-stream"). */
+  isStreaming?: boolean;
 }
 
 function CitationPill({
@@ -36,31 +41,87 @@ function CitationPill({
   );
 }
 
-function renderTextWithCitations(
+function VerseReferenceSpan({
+  reference,
+  onClick,
+}: {
+  reference: Extract<StudyReference, { type: "verse" }>;
+  onClick?: (reference: StudyReference) => void;
+}) {
+  // Spec: "same text color as the rest of the sentence... a thin
+  // warm-colored underline... strengthens slightly on hover. Nothing
+  // shouts." Deliberately NOT text-primary like citations — the color must
+  // stay identical to surrounding prose; only the underline is warm-toned.
+  return (
+    <button
+      onClick={() => onClick?.(reference)}
+      className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer"
+    >
+      {reference.raw}
+    </button>
+  );
+}
+
+/**
+ * Splits a text node on BOTH citation markers ([1], [2]...) and detected
+ * verse references in a single ordered pass, so the two interleave
+ * correctly regardless of which appears first in the sentence.
+ */
+function renderMessageText(
   text: string,
   citations: Citation[],
-  onCitationClick?: (citation: Citation, index: number) => void
-) {
-  const parts = text.split(/(\[\d+\])/g);
+  onCitationClick?: (citation: Citation, index: number) => void,
+  onVerseClick?: (reference: StudyReference) => void,
+  detectVerses?: boolean
+): React.ReactNode[] {
+  type Match = { start: number; end: number; render: () => React.ReactNode };
+  const matches: Match[] = [];
 
-  return parts.map((part, i) => {
-    const match = part.match(/\[(\d+)\]/);
-    if (match) {
-      const num = parseInt(match[1]);
-      const citation = citations[num - 1];
-      if (citation) {
-        return (
-          <CitationPill
-            key={i}
-            index={num}
-            citation={citation}
-            onClick={onCitationClick}
-          />
-        );
-      }
+  const citationRe = /\[(\d+)\]/g;
+  let cm: RegExpExecArray | null;
+  while ((cm = citationRe.exec(text)) !== null) {
+    const num = parseInt(cm[1], 10);
+    const citation = citations[num - 1];
+    if (!citation) continue;
+    const start = cm.index;
+    const end = start + cm[0].length;
+    matches.push({
+      start,
+      end,
+      render: () => (
+        <CitationPill key={`c-${start}`} index={num} citation={citation} onClick={onCitationClick} />
+      ),
+    });
+  }
+
+  if (detectVerses) {
+    for (const ref of detectVerseReferences(text)) {
+      const start = ref.index;
+      const end = start + ref.raw.length;
+      // A verse reference should never overlap a citation marker, but stay
+      // safe rather than risk mangled interleaving if it ever did.
+      if (matches.some((m) => start < m.end && end > m.start)) continue;
+      matches.push({
+        start,
+        end,
+        render: () => (
+          <VerseReferenceSpan key={`v-${start}`} reference={ref} onClick={onVerseClick} />
+        ),
+      });
     }
-    return <span key={i}>{part}</span>;
-  });
+  }
+
+  matches.sort((a, b) => a.start - b.start);
+
+  const nodes: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const m of matches) {
+    if (m.start > cursor) nodes.push(<span key={`t-${cursor}`}>{text.slice(cursor, m.start)}</span>);
+    nodes.push(m.render());
+    cursor = m.end;
+  }
+  if (cursor < text.length) nodes.push(<span key={`t-${cursor}`}>{text.slice(cursor)}</span>);
+  return nodes;
 }
 
 function stripXmlTags(text: string): string {
@@ -232,6 +293,8 @@ export function ChatMessage({
   question,
   accessToken,
   onCitationClick,
+  onVerseClick,
+  isStreaming = false,
 }: ChatMessageProps) {
   if (role === "user") {
     return (
@@ -246,8 +309,10 @@ export function ChatMessage({
   }
 
   const cleanedContent = stripXmlTags(content);
-  const hasCitations = citations.length > 0;
   const isComplete = content.length > 0;
+  // Spec: verse underlines fade in only once the answer finishes streaming,
+  // never mid-stream.
+  const detectVerses = !isStreaming;
 
   return (
     <div className="mb-4 border-t border-border pt-3">
@@ -264,20 +329,11 @@ export function ChatMessage({
                 {children}
               </h3>
             ),
-            p: ({ children }) => {
-              if (!hasCitations) {
-                return (
-                  <p className="text-sm text-foreground leading-relaxed mb-3">
-                    {children}
-                  </p>
-                );
-              }
-              return (
-                <p className="text-sm text-foreground leading-relaxed mb-3">
-                  {processChildren(children, citations, onCitationClick)}
-                </p>
-              );
-            },
+            p: ({ children }) => (
+              <p className="text-sm text-foreground leading-relaxed mb-3">
+                {processChildren(children, citations, onCitationClick, onVerseClick, detectVerses)}
+              </p>
+            ),
             strong: ({ children }) => (
               <strong className="font-semibold text-foreground">{children}</strong>
             ),
@@ -294,12 +350,9 @@ export function ChatMessage({
                 {children}
               </ul>
             ),
-            li: ({ children }) => {
-              if (!hasCitations) {
-                return <li>{children}</li>;
-              }
-              return <li>{processChildren(children, citations, onCitationClick)}</li>;
-            },
+            li: ({ children }) => (
+              <li>{processChildren(children, citations, onCitationClick, onVerseClick, detectVerses)}</li>
+            ),
           }}
         >
           {cleanedContent}
@@ -316,18 +369,20 @@ export function ChatMessage({
 }
 
 /**
- * Walk through React children and replace [N] citation markers in text nodes
- * with clickable citation pills.
+ * Walk through React children and replace [N] citation markers and detected
+ * verse references in text nodes with clickable inline elements.
  */
 function processChildren(
   children: React.ReactNode,
   citations: Citation[],
-  onCitationClick?: (citation: Citation, index: number) => void
+  onCitationClick?: (citation: Citation, index: number) => void,
+  onVerseClick?: (reference: StudyReference) => void,
+  detectVerses = false
 ): React.ReactNode {
   if (!children) return children;
 
   if (typeof children === "string") {
-    return renderTextWithCitations(children, citations, onCitationClick);
+    return renderMessageText(children, citations, onCitationClick, onVerseClick, detectVerses);
   }
 
   if (Array.isArray(children)) {
@@ -335,7 +390,7 @@ function processChildren(
       if (typeof child === "string") {
         return (
           <span key={i}>
-            {renderTextWithCitations(child, citations, onCitationClick)}
+            {renderMessageText(child, citations, onCitationClick, onVerseClick, detectVerses)}
           </span>
         );
       }

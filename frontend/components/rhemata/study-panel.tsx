@@ -1,0 +1,305 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Dialog as PanelPrimitive } from "radix-ui";
+import { ChevronDown, Pin, PinOff, X, GraduationCap } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/lib/supabase";
+import {
+  type StudyReference,
+  verseId,
+  referenceLabel,
+  referenceKey,
+} from "@/lib/study-reference";
+
+// ── Verse text fetch ─────────────────────────────────────────────────────────
+// Reuses the same `verses` table + verse_id shape already proven in
+// app/study/page.tsx (read for convention, not imported — that file is
+// spec-mandated read-only this session). This is the one piece of real,
+// uncontroversial data (public-domain WEB text) the shell fetches for real;
+// everything gated on unbuilt backend work (SP1 pointers, SP3 lexicon) stays
+// an honest empty state below.
+
+interface VerseText {
+  text: string;
+  translation: string;
+}
+
+function useVerseText(ref: StudyReference | null): {
+  data: VerseText | null;
+  loading: boolean;
+  error: boolean;
+} {
+  const [data, setData] = useState<VerseText | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  // Nothing to fetch for a non-verse (or absent) reference — short-circuited
+  // below, before the effect, so there's no synchronous setState-in-effect
+  // reset to perform for that case at all.
+  const targetKey = ref && ref.type === "verse" ? verseId(ref) : null;
+
+  useEffect(() => {
+    if (!targetKey) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    setData(null);
+    supabase
+      .from("verses")
+      .select("text, translation")
+      .eq("verse_id", targetKey)
+      .single()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setError(true);
+        } else {
+          setData({ text: data.text ?? "", translation: data.translation ?? "WEB" });
+        }
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetKey]);
+
+  if (!targetKey) return { data: null, loading: false, error: false };
+  return { data, loading, error };
+}
+
+// ── Tool row stub (Interlinear / Translations / Cross-references) ──────────
+// SP3 hard-gates the real content (lexicon word-level tagging + a licensed
+// word-level text source, neither confirmed yet). These rows are a real,
+// honest skeleton of the spec's structure — not functional, not disabled
+// silently either.
+
+function ToolRowStub({ label }: { label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between py-3 text-sm text-foreground hover:text-foreground/80 transition-colors cursor-pointer"
+      >
+        {label}
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform motion-reduce:transition-none",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <p className="pb-3 text-sm text-muted-foreground">
+          Coming soon — {label.toLowerCase()} needs the original-language corpus fully
+          tagged first.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Panel body (shared between desktop side panel and mobile sheet) ────────
+
+function PanelBody({
+  reference,
+  isPinned,
+  pinDisabled,
+  onTogglePin,
+}: {
+  reference: StudyReference;
+  isPinned: boolean;
+  pinDisabled: boolean;
+  onTogglePin: () => void;
+}) {
+  const { data: verse, loading, error } = useVerseText(reference);
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-4 shrink-0">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {reference.type === "verse" ? "Verse" : "Teacher"}
+          </p>
+          <PanelPrimitive.Title className="mt-0.5 truncate text-xl font-medium tracking-wide text-foreground">
+            {referenceLabel(reference)}
+          </PanelPrimitive.Title>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={onTogglePin}
+            disabled={pinDisabled}
+            title={isPinned ? "Unpin" : pinDisabled ? "Pin stack full (4 max)" : "Pin"}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+          >
+            {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+          </button>
+          <PanelPrimitive.Close asChild>
+            <button className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </button>
+          </PanelPrimitive.Close>
+        </div>
+      </div>
+
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {reference.type === "verse" ? (
+          <>
+            {loading && (
+              <div className="space-y-2 animate-pulse">
+                <div className="h-4 w-full rounded bg-border" />
+                <div className="h-4 w-5/6 rounded bg-border" />
+                <div className="h-4 w-2/3 rounded bg-border" />
+              </div>
+            )}
+            {!loading && verse && (
+              <>
+                <p className="font-serif text-lg leading-relaxed text-foreground">
+                  {verse.text}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">{verse.translation}</p>
+              </>
+            )}
+            {!loading && !verse && error && (
+              <p className="text-sm text-muted-foreground">
+                Verse text isn&apos;t available yet for this reference.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Teacher cards (bio, works in the corpus, position on this topic) are a later
+            piece of this build — not wired up yet.
+          </p>
+        )}
+
+        <div className="mt-6">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+            Your teachers on this verse
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            None of your teachers address this verse directly yet. Content is added
+            daily.
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <ToolRowStub label="Interlinear" />
+          <ToolRowStub label="Translations" />
+          <ToolRowStub label="Cross-references" />
+        </div>
+
+        <div className="mt-6 border-t border-border pt-4">
+          <Link
+            href="/study"
+            className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline transition-colors"
+          >
+            <GraduationCap className="h-3.5 w-3.5" />
+            Open in Study
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main panel ───────────────────────────────────────────────────────────────
+
+interface StudyPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  reference: StudyReference | null;
+  pins: StudyReference[];
+  onTogglePin: (ref: StudyReference) => void;
+}
+
+export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin }: StudyPanelProps) {
+  const isMobile = useIsMobile();
+
+  if (!reference) return null;
+
+  const isPinned = pins.some((p) => referenceKey(p) === referenceKey(reference));
+  const pinDisabled = !isPinned && pins.length >= 4;
+
+  return (
+    <PanelPrimitive.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <PanelPrimitive.Portal>
+        {/* Desktop: transparent click-catcher — chat stays fully visible, per
+            spec ("chat keeps two-thirds and stays where it is"). Mobile: a
+            real dark scrim, since the sheet is a full takeover there and chat
+            is not visible underneath (spec, mobile section). */}
+        <PanelPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-50",
+            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+            "motion-reduce:animate-none",
+            isMobile ? "bg-black/50" : "bg-transparent"
+          )}
+        />
+        <PanelPrimitive.Content
+          className={cn(
+            "fixed z-50 flex flex-col bg-background shadow-lg outline-none",
+            "transition ease-in-out motion-reduce:transition-none motion-reduce:animate-none",
+            "data-[state=closed]:animate-out data-[state=closed]:duration-300",
+            "data-[state=open]:animate-in data-[state=open]:duration-300",
+            isMobile
+              ? "inset-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
+              : "inset-y-0 right-0 w-[33vw] min-w-[380px] max-w-[480px] border-l border-border data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
+          )}
+        >
+          {/* Mobile grab handle — visual affordance only; drag-to-dismiss is
+              a follow-up (no drag dependency in this project yet). Tap closes. */}
+          {isMobile && (
+            <PanelPrimitive.Close asChild>
+              <button className="flex shrink-0 items-center justify-center py-3" aria-label="Close">
+                <span className="h-1 w-10 rounded-full bg-border" />
+              </button>
+            </PanelPrimitive.Close>
+          )}
+          <PanelPrimitive.Description className="sr-only">
+            Study panel for {referenceLabel(reference)}
+          </PanelPrimitive.Description>
+          <PanelBody
+            reference={reference}
+            isPinned={isPinned}
+            pinDisabled={pinDisabled}
+            onTogglePin={() => onTogglePin(reference)}
+          />
+        </PanelPrimitive.Content>
+      </PanelPrimitive.Portal>
+    </PanelPrimitive.Root>
+  );
+}
+
+// ── Edge-tab re-entry ────────────────────────────────────────────────────────
+// Spec: "once the panel is closed, the only way back in is clicking an
+// underlined reference again — unless pins exist... a small quiet tab sits
+// on the right edge of the screen." Renders only when there are pins and the
+// panel itself is closed.
+
+export function StudyPanelEdgeTab({
+  pins,
+  panelOpen,
+  onOpenPins,
+}: {
+  pins: StudyReference[];
+  panelOpen: boolean;
+  onOpenPins: () => void;
+}) {
+  if (panelOpen || pins.length === 0) return null;
+  return (
+    <button
+      onClick={onOpenPins}
+      className="fixed right-0 top-1/2 z-40 -translate-y-1/2 rounded-l-md border border-r-0 border-border bg-popover px-1.5 py-3 text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+      title={`${pins.length} pinned`}
+    >
+      <Pin className="h-4 w-4" />
+    </button>
+  );
+}

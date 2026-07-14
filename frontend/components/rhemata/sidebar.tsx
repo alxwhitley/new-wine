@@ -48,6 +48,13 @@ interface SidebarProps {
   onNewChat: () => void;
   onSignInClick: () => void;
   onSignOut: () => void;
+  /** Desktop-only: slides the sidebar off-screen to the left, in the same
+   * motion as the Inline Study Panel opening (spec: "nav slides away, panel
+   * slides in... at the same time, in one motion"). Optional and defaults
+   * to false so every other page rendering this component (unchanged) is
+   * unaffected. Mobile is untouched — it already has its own Sheet-based
+   * off-canvas drawer, unrelated to this. */
+  collapsed?: boolean;
   // Chat
   conversations?: Conversation[];
   activeConversationId?: string | null;
@@ -81,6 +88,7 @@ export function Sidebar({
   onNewChat,
   onSignInClick,
   onSignOut,
+  collapsed = false,
   conversations = [],
   activeConversationId,
   onSelectConversation,
@@ -538,8 +546,17 @@ export function Sidebar({
 
   return (
     <>
-      {/* Desktop sidebar — always visible */}
-      <aside className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar px-4 pt-6">
+      {/* Desktop sidebar — collapses off-screen while the Study Panel is open,
+          same 300ms ease-in-out timing as this component's own mobile drawer
+          transition below, coordinated with the panel's motion so the two
+          read as one gesture (see rhemata-status.md for the exact reasoning). */}
+      <aside
+        className={cn(
+          "hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar px-4 pt-6",
+          "transition-transform duration-300 ease-in-out motion-reduce:transition-none",
+          collapsed && "md:-translate-x-full"
+        )}
+      >
         {sidebarContent}
       </aside>
 

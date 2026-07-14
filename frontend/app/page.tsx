@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Menu } from "lucide-react";
+import { Menu, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatFocus } from "@/contexts/chat-focus-context";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +11,7 @@ import { Sidebar } from "@/components/rhemata/sidebar";
 import { ChatMessage } from "@/components/rhemata/chat-message";
 import { ChatInput } from "@/components/rhemata/chat-input";
 import { SourcePanel } from "@/components/rhemata/source-panel";
+import { StudyPanel, StudyPanelEdgeTab } from "@/components/rhemata/study-panel";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
 import { UsageRing } from "@/components/rhemata/usage-ring";
 import { WeeklyLimitCard } from "@/components/rhemata/weekly-limit-card";
@@ -18,6 +19,20 @@ import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
+import { referenceKey, type StudyReference } from "@/lib/study-reference";
+
+// Dev-only demo reference for the always-available trigger below — lets the
+// panel be opened regardless of chat content. Real triggers come from
+// tapping a detected verse reference inside an actual answer.
+const DEV_DEMO_REFERENCE: StudyReference = {
+  type: "verse",
+  raw: "Romans 8:28",
+  book: "Romans",
+  code: "ROM",
+  chapter: 8,
+  verseStart: 28,
+  verseEnd: null,
+};
 
 const SUGGESTIONS = [
   "What is the baptism of the Holy Spirit?",
@@ -71,6 +86,54 @@ export default function Home() {
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   const [selectedCitationIndex, setSelectedCitationIndex] = useState<number | null>(null);
   const [isSourcePanelOpen, setIsSourcePanelOpen] = useState(false);
+
+  // Inline Study Panel state (SP2 shell — docs/inline-study-panel-spec.md)
+  const [studyPanelOpen, setStudyPanelOpen] = useState(false);
+  const [studyReference, setStudyReference] = useState<StudyReference | null>(null);
+  // In-memory only this session — persistence across reloads is deferred
+  // (see rhemata-status.md). Cap of 4 per spec.
+  const [studyPins, setStudyPins] = useState<StudyReference[]>([]);
+
+  const handleVerseClick = useCallback((reference: StudyReference) => {
+    setStudyReference(reference);
+    setStudyPanelOpen(true);
+  }, []);
+
+  const handleCloseStudyPanel = useCallback(() => {
+    setStudyPanelOpen(false);
+  }, []);
+
+  const handleToggleStudyPin = useCallback((reference: StudyReference) => {
+    setStudyPins((prev) => {
+      const key = referenceKey(reference);
+      if (prev.some((p) => referenceKey(p) === key)) {
+        return prev.filter((p) => referenceKey(p) !== key);
+      }
+      if (prev.length >= 4) return prev; // cap reached — silently ignore, per spec's "cap of 4"
+      return [...prev, reference];
+    });
+  }, []);
+
+  const handleOpenPinnedFromEdgeTab = useCallback(() => {
+    setStudyPins((prev) => {
+      if (prev.length > 0) setStudyReference(prev[prev.length - 1]);
+      return prev;
+    });
+    setStudyPanelOpen(true);
+  }, []);
+
+  // Dev-only demonstration trigger — Cmd/Ctrl+Shift+S opens the panel
+  // regardless of chat content, so the shell is always demonstrable.
+  useEffect(() => {
+    function onKeydown(e: globalThis.KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleVerseClick(DEV_DEMO_REFERENCE);
+      }
+    }
+    document.addEventListener("keydown", onKeydown);
+    return () => document.removeEventListener("keydown", onKeydown);
+  }, [handleVerseClick]);
 
   // Auto-scroll — only when user is already near the bottom
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -181,10 +244,24 @@ export default function Home() {
         onDeleteConversation={handleDeleteConversation}
         onSignInClick={() => { setLoginReason(undefined); openAuthGate("signup"); }}
         onSignOut={signOut}
+        collapsed={studyPanelOpen}
       />
 
-      {/* Floating panel wrapper — inset on desktop, full-bleed on mobile */}
-      <main className={cn("md:ml-64 flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2", inputFocused ? "pb-0" : "pb-14")}>
+      {/* Floating panel wrapper — inset on desktop, full-bleed on mobile.
+          Margin collapses in step with the sidebar (same 300ms timing) so
+          the two read as one motion when the Study Panel opens. The
+          right-side padding below reserves the Study Panel's own width
+          (kept in sync with study-panel.tsx's w-[33vw] min-w-[380px]
+          max-w-[480px]) so the chat card actually resizes to "about
+          two-thirds" per spec, instead of the panel silently overlapping
+          — and re-centering — content meant for the full-width card. */}
+      <main
+        className={cn(
+          "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 transition-[margin-left,padding-right] duration-300 ease-in-out motion-reduce:transition-none",
+          studyPanelOpen ? "md:ml-0 md:pr-[clamp(380px,33vw,480px)]" : "md:ml-64",
+          inputFocused ? "pb-0" : "pb-14"
+        )}
+      >
         {/* The floating panel — bordered card on desktop, full-bleed on mobile */}
         <div className="relative flex flex-col flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
 
@@ -247,6 +324,7 @@ export default function Home() {
                     const question = message.role === "assistant" && i > 0 && messages[i - 1].role === "user"
                       ? messages[i - 1].content
                       : undefined;
+                    const isStreaming = chatLoading && message.role === "assistant" && i === messages.length - 1;
                     return (
                       <ChatMessage
                         key={i}
@@ -257,6 +335,8 @@ export default function Home() {
                         question={question}
                         accessToken={accessToken}
                         onCitationClick={handleCitationClick}
+                        onVerseClick={handleVerseClick}
+                        isStreaming={isStreaming}
                       />
                     );
                   })}
@@ -305,6 +385,35 @@ export default function Home() {
         isOpen={isSourcePanelOpen}
         onClose={handleCloseSourcePanel}
       />
+
+      {/* Inline Study Panel (SP2 shell) — outside the floating panel, same
+          reasoning as SourcePanel above. */}
+      <StudyPanel
+        isOpen={studyPanelOpen}
+        onClose={handleCloseStudyPanel}
+        reference={studyReference}
+        pins={studyPins}
+        onTogglePin={handleToggleStudyPin}
+      />
+      <StudyPanelEdgeTab
+        pins={studyPins}
+        panelOpen={studyPanelOpen}
+        onOpenPins={handleOpenPinnedFromEdgeTab}
+      />
+
+      {/* Dev-only demonstration trigger — opens the Study Panel regardless of
+          chat content. Cmd/Ctrl+Shift+S does the same. Not a real feature
+          flag; fine for Alex's own testing, needs a real kill switch before
+          any beta rollout (see rhemata-status.md). */}
+      <button
+        onClick={() => handleVerseClick(DEV_DEMO_REFERENCE)}
+        title="Open Study Panel (dev) — Cmd/Ctrl+Shift+S"
+        className="fixed bottom-20 right-4 z-30 flex items-center gap-1.5 rounded-full border border-border bg-popover px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground md:bottom-4"
+      >
+        <FlaskConical className="h-3.5 w-3.5" />
+        Study preview
+      </button>
+
       {showGate && (
         <BetaGate
           onSuccess={() => { setShowGate(false); setShowLogin(true); }}
