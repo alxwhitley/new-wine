@@ -8,96 +8,99 @@
 
 ## Current Priority / Next Action
 
-- **Current priority: PLAN #12 is DONE — `ingest_lexicon.py` converted cleanly, no gate stop.** The highest-risk chokepoint conversion is complete: resolve/insert/chunk/embed/propositions now all route through `shared_ingest.ingest_document()`. All five Phase 1 checks confirmed clean before building (see this session below); Phase 2 built in full; Phase 3 proved on real lexicon data via throwaway titles, never touching the four real production STEPBible documents.
-- **The chunk_fn override and the reuse/append mechanism both saw their first production use this session** — previously built generically (`chunk_fn` hook existed since the writer's original design; the append mechanism was built and proven synthetically last session) but never exercised by a real, converted caller until now. Both worked exactly as designed against real lexicon data.
-- **The lexicon path is now ready for a full batch run** — not run this session (explicitly out of scope: proof entries only, single-entry + tiny two-entry append). A full run of all four lexicon files (STEPBible currently holds ~32,000 chunks total across them from the pre-conversion script) is a separate, later session's call. One design note surfaced and resolved with Alex before building: the old script's insert pacing/retry (2s sleeps, 5x retry, meaningful at thousands-of-entries scale) has no equivalent in the new one-shot atomic writer — resolved as the future full-batch runner's job (call the writer once per bounded slice of entries, using the append mechanism itself as the natural checkpoint) rather than something `shared_ingest.py` itself needs. No writer changes were made for this; it's a note for whoever builds that runner.
-- **The Inline Study Panel's SP3 (interlinear/word-study tool rows) is unblocked at the ingest layer.** SP3's hard gate was "lexicon conversion (#12) done + word-level-tagged licensed text source confirmed" (PLAN.md) — the first half is now true. The second half (a word-level-tagged licensed text source) is a separate, unrelated confirmation SP3 still needs before it can actually start.
+- **Current priority: the Inline Study Panel's frontend shell is live in the app for the first time — commit `161c4de`.** Alex can open `localhost:3000`, tap a real verse reference in a finished chat answer (or the dev-only "Study preview" button / Cmd·Ctrl+Shift+S), and see the actual panel-in / sidebar-out motion. Screenshots + desktop and mobile screen recordings are at `~/Desktop/study-panel-review/` for Alex to judge the motion directly.
+- **Naming correction, surfaced not silently absorbed:** the build brief for this session called this work "SP0," but PLAN.md's own numbering says SP0 (#38) is the *mockup* step and what actually got built matches **SP2 (#40) — panel frontend**, minus two things SP2's line item explicitly names that this session did NOT build: no kill switch / feature flag (the panel is unconditionally live for anyone who taps a reference or hits the dev shortcut — there's no beta-gating flag anywhere in this code), and no SP1 (#39) backend reference-pointer system (hidden pointers with fail-quiet resolution against the full verse/teacher corpus). Instead, a much narrower client-side regex detector (`lib/study-reference.ts`) scans already-rendered, finished answer text for explicit `Book Chapter:Verse` patterns. It only catches verses the model happens to spell out in that exact shape — it is not SP1's backend and was never meant to be; it was the cheapest way to give this session one genuine, real (not simulated) trigger without waiting on SP1.
+- **SP3 (tool rows: interlinear/translations/cross-references) remains hard-gated and untouched** — its gate is "#12 done (true, see below) + a word-level-tagged licensed text source confirmed (still open, unrelated to this session)." The panel's three tool rows ship as honest, styled "coming soon" stubs, not real content.
+- **Carried forward, unrelated track:** PLAN #12 (`ingest_lexicon.py` conversion) finished the session before this one (commit `33e92b4`) — a full lexicon batch run is proven-ready but not scheduled. See "Where We Are in the Roadmap" below; this session did not touch that track at all.
 
 ---
 
-## This session (2026-07-14) — #12: convert `ingest_lexicon.py`
+## This session (2026-07-14) — Inline Study Panel: shell + motion
 
-**One commit: `33e92b4`.** File touched: `scripts/ingest_lexicon.py` only — no migration needed this time (last session's `documents.ingest_completed_at` already covers this).
+**One commit: `161c4de`.** Files: `frontend/app/page.tsx`, `frontend/components/rhemata/chat-message.tsx`, `frontend/components/rhemata/sidebar.tsx` (all modified), `frontend/components/rhemata/study-panel.tsx` + `frontend/lib/study-reference.ts` (new).
 
-**Phase 1 (hard read-only gate — all five checks confirmed clean, no STOP triggered):**
-- (a) Confirmed the current write path precisely: title-keyed find-or-create, one-chunk-per-entry formatting with truncation for unusually long entries, count-based resume, batched-and-paced insert with retry, propositions run directly (bypassing `shared_ingest.py` entirely) on the full joined text.
-- (b) Confirmed `chunk_fn` cleanly expresses one-entry-one-chunk: a closure that ignores the writer's default token-chunker and the `body_text` argument entirely, returning the pre-formatted per-entry list captured at call time. No structural mismatch, no writer change needed.
-- (c) Confirmed the gated-off path is correct for lexicon specifically: STEPBible's live `license_status` is `public_domain` (checked directly, not assumed), which the propositions gate already routes to `skipped_licensed` — and last session's writer treats that as a finished, stampable outcome, not an incomplete one. Verified in Phase 3, not just reasoned.
-- (d) Confirmed the reuse/append mechanism (built and proven synthetically last session) needs zero modification to fit lexicon's real pattern — it was generalized FROM this exact script's shape in the first place.
-- (e) Confirmed attribution resolves cleanly: a real `stepbible` alias already exists and points at the correct source, so the writer's resolve step hits no `ALIAS_MISS`.
-- **One thing found beyond the three known edge behaviors, surfaced to Alex before building (not silently decided):** the pacing/retry logic described above. Alex's answer: the future full-batch runner's job, not the writer's — recorded above, no writer change made.
+**What's real:**
+- Verse references in **finished** assistant answers (never mid-stream — underlines only render once `isStreaming` is false) render as tappable underlines via a conservative, fail-quiet regex (`detectVerseReferences` — book name/abbreviation immediately followed by `chapter:verse`, no confident match ever falls back to anything but plain text).
+- Tapping one opens the panel and fetches the real verse text from Supabase's `verses` table (public-domain WEB text) — the one genuinely real, non-source-gated content in the shell.
+- Desktop: panel slides in from the right (~33vw, clamped 380–480px), transparent overlay (chat stays visible underneath, per spec "expansion not navigation"). Mobile (`useIsMobile`, 768px breakpoint): full-screen sheet with a dark scrim and a grab-handle affordance.
+- The left sidebar collapses (`-translate-x-full`) in the same 300ms motion as the panel opening, and the chat's own bordered card now genuinely resizes to occupy the remaining ~two-thirds width (a second-pass self-review catch — see below) rather than staying full-width and having its right edge silently covered by the panel.
+- Pin/unpin (cap 4) with a small edge-tab re-entry point that appears only when the panel is closed and at least one pin exists.
+- Close via the panel's own close button, backdrop click (mobile), or Escape — all handled by the underlying Radix `Dialog` primitive, which also owns focus-trap and background scroll-lock for free.
+- `prefers-reduced-motion` disables all transform/opacity animation via Tailwind's `motion-reduce:` variants.
+- A dev-only trigger (bottom-right pill button, and Cmd/Ctrl+Shift+S) opens the panel to a fixed demo reference (Romans 8:28) regardless of chat content, so the motion is demonstrable without needing a real chat turn first.
 
-**Phase 2 (build):** Converted `ingest_file()` to route through `shared_ingest.ingest_document()`, using the `chunk_fn` override for one-entry-one-chunk and `on_existing="reuse"` for resume/append (or `"delete_and_reingest"` when `--delete` is passed — now a true atomic swap instead of a separate non-atomic pre-delete). Removed the now-duplicated local write logic entirely: `find_or_create_document()`, `insert_chunk_batch()`, `delete_document()`, the direct `propositions.process_document()` call, and the manual `embed_batch()`/`embed_one()` wrappers. Parsing, TSV-header detection, HTML stripping, and entry formatting are all unchanged — only the writing moved.
+**What's honest empty state, not real content (all correctly source-gated, none faked):** "Your teachers on this verse" (always says no teacher addresses it yet — no teacher-content backend exists), and the three tool rows (Interlinear / Translations / Cross-references — each expands to a plain "coming soon" line). "Open in Study" is a real link to the untouched old `/study` page, per spec's fallback-surface requirement.
 
-**Phase 3 (proof, real lexicon file data via throwaway document titles — never touching the four real production STEPBible documents, confirmed untouched before and after by chunk count):**
-- **Single-entry test:** the real first TBESG entry, ingested through the real converted `ingest_file()`, lands as record + exactly one chunk, stamped, zero propositions, correct `source_id`. **Passed.**
-- **Kill test:** a pre-commit kill on one real entry leaves zero trace. **Passed.**
-- **Append test:** a second pass adding one real additional entry appends with continued numbering — verified by direct DB recomputation: the chunk sequence is exactly `[0, 1]`, the first pass's chunk row ID is byte-identical after the second pass (proof it was never re-touched), and the new chunk's stored content matches the real second dictionary entry exactly. **Passed.**
-- **Re-run-no-op test:** a third pass with nothing new correctly no-ops (`already_complete`), touching the database not at all. **Passed.**
-- **Gated-off confirmation:** propositions returned `skipped_licensed` on every pass; no lexicon document was ever treated as incomplete for lacking a paraphrase layer.
-- Final sweep confirmed zero test-artifact rows anywhere; the four real STEPBible documents show identical chunk counts (5324 / 11034 / 10258 / 5709) and remain unstamped, exactly as before this session.
+**Self-review loop (spec required at least two full passes before presenting):**
+1. **First pass:** caught inconsistent padding (`px-5`/`py-5` instead of the app's established `px-4`/`py-4` convention) in the panel header and body — fixed, re-screenshotted.
+2. **Second pass:** caught that the chat's bordered card wasn't actually resizing when the panel opened — it stayed full-width (because only the sidebar's margin collapsed, not the main content's own width), so the panel was silently overlapping and hiding the card's right border/rounded corner instead of the two genuinely resizing side-by-side. Fixed by reserving the panel's own width as right padding on `<main>` when open (`app/page.tsx`, kept in a code comment tied to `study-panel.tsx`'s width so the two don't silently drift apart). Re-screenshotted and confirmed the chat card now visibly meets the panel edge with its own border intact.
+3. Also chased down one intermittent Playwright test failure under a `reducedMotion: "reduce"` browser context (1 timeout in an early batch of runs). Direct DOM/computed-style inspection twice confirmed the panel renders correctly under reduced motion (opacity 1, correct position, visible); a follow-up batch of 4 consecutive runs all passed cleanly, and the reduced-motion screenshot itself (`07-reduced-motion-open.png`) shows a clean render. Concluded: dev-server/Turbopack cold-compile timing flakiness in the test harness, not a product defect — not something fixed in the component code because there was nothing there to fix.
 
-**Deliberately not done this session:** no full lexicon batch ran (proof entries only, per scope). The 2 genuinely-broken Precept Austin documents (own session). The remaining unconverted scripts (`ingest_helloao.py`, `ingest_commentaries.py`). The 551 untouched Sermonindex rows. `--time-limit`. CLAUDE.md's stale notes.
+**Verified before commit:**
+- `tsc --noEmit`: clean.
+- `eslint` on all five touched/new files: two `react-hooks/set-state-in-effect` errors, both pre-existing-pattern noise, not something introduced by this session — confirmed by running the same rule against `hooks/useUserRole.ts` (untouched, established code), which trips the identical error on the identical "set loading state at the top of a data-fetching effect" pattern. This rule ships in `eslint-config-next@16.2.2`'s core-web-vitals config but is not part of the actual build gate — Next.js 16 no longer runs `next lint` as part of `next build` (confirmed in `node_modules/next/dist/docs/` per `frontend/AGENTS.md`'s own instruction to check there first).
+- Old `/study` page: loaded directly, screenshotted, confirmed visually and functionally unchanged (screenshot `08-old-study-page-untouched.png`). Its only console errors are pre-existing CORS failures against the production Railway backend from localhost — unrelated to this session, present before it.
+- Chat view with the panel closed: confirmed visually unchanged from before this session (screenshot `01-desktop-closed.png`).
+- The one hydration console warning seen everywhere (including on the closed chat view and the untouched `/study` page) is a pre-existing `next-themes` SSR/client class-mismatch quirk, unrelated to and not introduced by this session.
 
----
+**Review artifacts (not committed — copied out of the ephemeral scratchpad for Alex):** `~/Desktop/study-panel-review/` — 8 screenshots (desktop closed/open, mobile closed/open, pinned, edge-tab, reduced-motion, old `/study` page) + `desktop-open-close.mp4` + `mobile-open-close.mp4` (the actual open→close motion, converted from Playwright's `.webm` output since macOS QuickTime doesn't play webm natively).
 
-## Sermonindex / ingest-integrity thread — closed (history, compressed)
+**Deliberately not done this session (explicitly out of scope per the brief):** SP1's real backend reference-pointer system; SP3 interlinear/word-study or any other real study content; any edit to the old `/study` page; a kill switch / beta flag (see the naming-correction note above — this is a real gap against SP2's own line item, not an oversight to gloss over); backend/scripts/ingest work of any kind; the lexicon batch run or Sermonindex batches; CLAUDE.md's stale notes.
 
-1. **Incident:** a real, time-capped Sermonindex ingest was killed mid-run, leaving two documents half-written but live.
-2. **Diagnostic session:** traced the write sequence; found the paraphrase step couldn't distinguish "failed" from "genuinely empty."
-3. **Propositions-honesty session:** fixed that ambiguity. Commit `42022a8`.
-4. **Cleanup session:** removed the two broken documents, reset their source rows to pending.
-5. **All-or-nothing writer session:** record + chunks + propositions now commit as one atomic transaction. Commit `6708060`.
-6. **Redo/reuse dispatcher session:** completeness stamp + skip/redo/reuse-append, resolving PLAN #11 and Decision 9 together. Commit `1ec5226`.
-7. **This session:** first real conversion to exercise the append mechanism and the chunk_fn override — PLAN #12. Commit `33e92b4`.
-
-The original incident's thread is fully closed. #12 is downstream of it (it needed the append mechanism the incident's remediation produced) but is really PLAN's chokepoint-conversion track, not the incident thread itself — tracked here once more since this is where the mechanism's history lives.
+**Dev server:** left running at `localhost:3000` (started this session) so Alex can try the real thing immediately, not just watch the recordings.
 
 ---
 
 ## Where We Are in the Roadmap
 
-(PLAN.md v5.1+, linear numbered session list)
+(PLAN.md v5.1+, linear numbered session list, plus the SP track added 2026-07-13)
 
 - **#1–#4:** DONE (see git history; not restated here).
-- **#5.5 (harness hardening):** DONE end to end. Commit trail: `35ae840` → `8816804` → `6379925` → `f2378a7` → `b6340d5` → `96bc3ff` → `874ba8f` → `7afc77c`.
-- **#6 (aliases + sentinel cleanup + strict mode): DONE** — `dc39dab`.
-- **#7 (`documents.full_text` chokepoint): DONE** — `55e46f1`.
-- **#8 (convert `ingest_magazine.py`): DONE** — `0935697`.
-- **#9 (build `psycopg2_batch`, convert `ingest_preceptaustin.py`): DONE.** No production PA re-ingest has run.
-- **#10 (convert `ingest_commentaries.py`): still next on this track**, whenever Alex picks it back up — untouched, independent of #11/#12.
-- **#11 (build `on_existing="reuse"` chunk-dedup): DONE** — `1ec5226`.
-- **#12 (convert `ingest_lexicon.py`): DONE this session** — `33e92b4`. No STOP triggered; one design question surfaced and resolved with Alex before building (see above). Full batch not run — separate session.
+- **#5.5 (harness hardening):** DONE end to end.
+- **#6 (aliases + sentinel cleanup + strict mode):** DONE.
+- **#7 (`documents.full_text` chokepoint):** DONE.
+- **#8 (convert `ingest_magazine.py`):** DONE.
+- **#9 (build `psycopg2_batch`, convert `ingest_preceptaustin.py`):** DONE. No production PA re-ingest has run.
+- **#10 (convert `ingest_commentaries.py`):** still next on this track whenever Alex picks it back up — untouched, independent of the SP track below.
+- **#11 (build `on_existing="reuse"` chunk-dedup):** DONE.
+- **#12 (convert `ingest_lexicon.py`):** DONE (prior session, commit `33e92b4`). Full batch not run — separate session, unrelated to this one.
 - **#13, #15–#37:** untouched.
-- **#14 (T-tail housekeeping):** docs-truth clause DONE (`80b1d50`). Folder renames and the `jewish_perspectives` drop remain open, untouched.
+- **#14 (T-tail housekeeping):** docs-truth clause DONE. Folder renames and the `jewish_perspectives` drop remain open.
+- **SP38 (SP0 — finish mockups):** still nominally open per PLAN.md's own line item (mobile bottom-sheet mockup), though this session shipped a working mobile full-screen sheet directly in code — Alex's call whether the mockup step is now moot or still wants doing formally.
+- **SP39 (SP1 — reference-pointer backend):** NOT built. This session's client-side regex detector is a narrow stand-in for one trigger path, not this item.
+- **SP40 (SP2 — panel frontend):** the shell/motion/pin/close/keyboard piece is now built and live in code (this session, `161c4de`) — but without SP2's own named kill switch / beta flag, and without SP1 underneath it. Whether that's "SP2 done modulo two items" or "a separate pre-SP2 shell pass" is a framing question for Alex, not resolved here.
+- **SP41 (SP3 — tool rows):** untouched, correctly hard-gated (see Current Priority above).
+- **SP42–43:** untouched.
 
 ---
 
 ## Open Flags
 
 **New:**
-14. **A full lexicon batch run is ready but not scheduled.** All four files (TBESG, TBESH, TFLSJ×2) can now be re-run for real through the converted script — but per the design note above, whoever runs it should think about slicing the work into bounded per-call chunks (a few hundred entries per `ingest_document()` call) rather than one call per file, so a mid-run failure only loses the current slice, not the whole file's remaining backlog.
-15. **SP3's ingest-layer gate is cleared; its data-source gate is not.** PLAN.md's SP3 hard-gate had two parts — "#12 done" (now true) and "word-level-tagged licensed text source confirmed" (still open, unrelated to this session's work).
+16. **No kill switch / beta flag exists for the Study Panel.** SP2's PLAN.md line item explicitly names "behind kill switch" and "beta-flagged" — this session's build has neither. The panel is unconditionally live to anyone who taps a detected verse reference. Worth an explicit decision before this reaches beyond Alex's own testing.
+17. **The verse-reference detector is a narrow client-side stand-in, not SP1.** It only catches explicit `Book Chapter:Verse` text the model happens to print; it does not resolve teacher mentions, does not use fail-quiet corpus matching, and generates no hidden pointers. If SP1 is later built, this detector likely gets replaced rather than extended.
+18. **A full lexicon batch run is still ready but not scheduled** (carried from the prior session, untouched here — see PLAN #12 above).
+19. **SP3's ingest-layer gate is cleared; its data-source gate is not** (carried from the prior session, untouched here).
 
 **Carried forward, unchanged:**
-1. **Rule 10 freeze is a bare-substring match, not an invocation check** (found at #8, 2026-07-12). Now recurs for only two remaining unconverted scripts: `ingest_helloao.py`, `ingest_commentaries.py` (`ingest_lexicon.py` is converted as of this session).
-2. **Magazine queue hard pre-ingest gate — 27 of 27 pending articles contaminated** (found at #8). Unresolved, untouched.
-4. **Database-number verification gap** (adjacent-and-open since #5.5's exit-condition-(a) close). Not exercised this session.
-5. **GOVERNED_FILES gap.** `guard_pretooluse.py`/`settings.json` not in `GOVERNED_FILES`. Untouched this session.
-6. **PLAN.md #5.5 closing line is stale.** Needs Alex's explicit go-ahead on replacement wording.
-7. **PLAN.md #14 drift.** Folder renames and the `jewish_perspectives` drop are genuinely, separately still open within #14.
-10. **CLAUDE.md's "unconverted scripts" count is stale and now needs a second correction.** It still says "four" (`ingest_magazine.py`, `ingest_preceptaustin.py`, `ingest_lexicon.py`, `ingest_commentaries.py`) when the real count is now two (`ingest_helloao.py`, `ingest_commentaries.py`). Corrects in its own future docs pass, same as the "batch path deferred" note — not bundled here.
-12. **PA's ~398 "excerpt-less" documents — 396 need `generate_excerpts.py`, not the writer, and 2 need a REDO healing run.** Neither run yet. Unrelated to this session.
-13. **The "PA's survivability guard will now rarely fire" claim (from the #11 session) is still unconfirmed against real data.**
+1. Rule 10 freeze is a bare-substring match, not an invocation check — recurs for `ingest_helloao.py`, `ingest_commentaries.py` only.
+2. Magazine queue hard pre-ingest gate — 27 of 27 pending articles contaminated. Unresolved, untouched.
+4. Database-number verification gap. Not exercised this session.
+5. `GOVERNED_FILES` gap (`guard_pretooluse.py`/`settings.json`). Untouched this session.
+6. PLAN.md #5.5 closing line is stale. Needs Alex's explicit go-ahead on replacement wording.
+7. PLAN.md #14 drift — folder renames and the `jewish_perspectives` drop still open.
+10. CLAUDE.md's "unconverted scripts" count is stale (says four, real count is two: `ingest_helloao.py`, `ingest_commentaries.py`). Untouched this session.
+12. PA's ~398 "excerpt-less" documents — unrelated to this session.
+13. The "PA's survivability guard will now rarely fire" claim is still unconfirmed against real data.
 
 ---
 
 ## Standing Carve-Out (unchanged across many sessions)
 
-Working tree normally carries exactly this and nothing else: modified `SKILL.md` (unrelated pre-existing drift) + untracked `.agents/`, `.claude/skills/`, `skills-lock.json` (skill-loader paths). Still needs a `.gitignore`-or-commit decision. Confirmed present and unchanged at this session's close — this session's real change (`scripts/ingest_lexicon.py`) was committed, plus this doc.
+Working tree normally carries exactly this and nothing else beyond a session's real change: modified `SKILL.md` (unrelated pre-existing drift) + untracked `.agents/`, `.claude/skills/`, `skills-lock.json` (skill-loader paths). Still needs a `.gitignore`-or-commit decision. Confirmed present and unchanged at this session's close — deliberately left out of this session's commit (`161c4de`), which contains only the five Study Panel files.
 
 ---
 
 ## Next Session Should
 
-Alex's call between: (a) schedule the full lexicon batch run (mechanism proven, ready — see the slicing note above), (b) the short PA follow-up (run `generate_excerpts.py` against the 396 complete-but-unexcerpted docs; REDO the 2 genuinely-broken ones), or (c) #10 — convert `ingest_commentaries.py` (unrelated track). All three are independent and unblocked.
+Alex's call between several independent, unblocked options: (a) decide on the kill-switch/beta-flag gap flagged above before showing the Study Panel beyond his own testing, (b) schedule the full lexicon batch run (mechanism proven, ready — see PLAN #12 history), (c) the short PA follow-up (`generate_excerpts.py` against 396 complete-but-unexcerpted docs; REDO the 2 broken ones), (d) #10 — convert `ingest_commentaries.py`, or (e) scope SP1's real backend reference-pointer system if the Study Panel direction is confirmed. All are independent.
