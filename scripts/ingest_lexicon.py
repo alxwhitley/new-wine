@@ -3,45 +3,68 @@
 Rhemata STEPBible Lexicon Ingestion Script
 Parses TBESG, TBESH, and TFLSJ TSV files from sources/lexicon/,
 embeds each lexical entry, and inserts into Supabase.
-Supports resuming — re-run safely after a partial failure.
+
+Converted (#12) to route through shared_ingest.ingest_document() -- resolve/
+insert/chunk/embed/propositions is the shared writer's job now; this script
+keeps only what's genuinely lexicon-specific: TSV parsing, one-entry-one-
+chunk formatting (via a chunk_fn override -- a lexicon entry is not split
+the way a sermon is), and truncation of unusually long entries.
+
+Three edge behaviors this conversion preserves (see rhemata-status.md and
+PLAN.md #12 for the full record):
+  1. One-entry-one-chunk -- `_lexicon_chunk_fn` ignores the writer's default
+     token-chunker entirely and returns the pre-formatted per-entry list.
+  2. Paraphrase stays off -- STEPBible is public_domain, so the writer's
+     existing propositions gate already skips it (`skipped_licensed`);
+     nothing lexicon-specific was needed for this.
+  3. Append, not rewrite -- resuming a partially-loaded lexicon file now
+     goes through the writer's `on_existing="reuse"` continued-numbering
+     append (built and proven in the session before this one), not a
+     bespoke count-and-resume loop. The old re-chunk-from-0 bug this was
+     built to fix was confirmed on this exact script.
+
+Resumable across re-runs (the writer's reuse/append mechanism); `--delete`
+now routes through the writer's `on_existing="delete_and_reingest"` atomic
+swap instead of a separate, non-atomic pre-delete step.
 """
 
 import os
 import re
 import sys
-import time
-import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
+from urllib.parse import urlparse, unquote
 
 import tiktoken
-import openai
-import psycopg2
 from supabase import create_client
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / "backend" / "app" / ".env")
 
-from source_resolver import resolve_source_id
-import propositions
+sys.path.insert(0, str(PROJECT_ROOT / "backend"))
+import shared_ingest
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LEXICON_DIR = PROJECT_ROOT / "sources" / "lexicon"
-EMBEDDING_MODEL = "text-embedding-3-small"
-EMBEDDING_DIM = 1536
-EMBED_BATCH_SIZE = 100
-INSERT_BATCH_SIZE = 5
-INSERT_SLEEP = 2
-RETRY_WAIT = 5
-MAX_RETRIES = 5
 
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
+SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
+if not SUPABASE_DB_URL:
+    print("ERROR: SUPABASE_DB_URL is not set in backend/app/.env")
+    sys.exit(1)
 
-openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+_parsed_db = urlparse(SUPABASE_DB_URL)
+DB_PARAMS = {
+    "host": _parsed_db.hostname,
+    "port": _parsed_db.port or 5432,
+    "user": unquote(_parsed_db.username or ""),
+    "password": unquote(_parsed_db.password or ""),
+    "dbname": _parsed_db.path.lstrip("/"),
+}
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # File configs: (filename, document title)
@@ -233,158 +256,22 @@ def format_chunk_content(entry: Dict[str, str], brief: bool = False) -> str:
     return ' '.join(parts)
 
 
-def embed_batch(texts: List[str]) -> List[List[float]]:
-    """Embed a batch of texts using OpenAI."""
-    response = openai_client.embeddings.create(
-        input=texts,
-        model=EMBEDDING_MODEL,
-        dimensions=EMBEDDING_DIM,
-    )
-    return [item.embedding for item in response.data]
-
-
-def embed_one(text: str) -> List[float]:
-    """Single-text embed, for propositions.process_document's embed_fn param."""
-    return embed_batch([text])[0]
-
-
-def _propositions_db_params() -> dict:
-    """Build a psycopg2 DSN dict from SUPABASE_DB_URL for the propositions
-    step. Deliberately separate from insert_chunk_batch's own local parsing
-    below -- kept independent so this addition doesn't touch that function."""
-    from urllib.parse import urlparse, unquote
-    db_url = os.environ.get("SUPABASE_DB_URL")
-    parsed = urlparse(db_url)
-    return {
-        "host": parsed.hostname,
-        "port": parsed.port or 5432,
-        "user": unquote(parsed.username or ""),
-        "password": unquote(parsed.password or ""),
-        "dbname": parsed.path.lstrip("/"),
-    }
-
-
-def find_or_create_document(title: str) -> Tuple[str, int]:
-    """Find existing document by title or create a new one.
-    Returns (doc_id, existing_chunk_count)."""
+def _find_existing_by_title(title: str) -> Optional[str]:
+    """Title-keyed lookup, same key ingest_lexicon.py has always used --
+    handed to the shared writer's find_existing_fn hook instead of branching
+    on it locally."""
     result = supabase.table("documents").select("id").eq("title", title).limit(1).execute()
-    if result.data:
-        doc_id = result.data[0]["id"]
-        count_result = supabase.table("chunks").select("id", count="exact").eq("document_id", doc_id).execute()
-        existing = count_result.count if count_result.count is not None else 0
-        return doc_id, existing
-
-    doc_id = str(uuid.uuid4())
-    # Resolve attribution -> source_id via alias table. ALIAS_MISS is
-    # printed by the resolver on a miss; source_id falls to sentinel.
-    _resolved_id, _norm_key, _via = resolve_source_id(supabase, "STEPBible", "STEPBible / Tyndale House")
-    print("  Resolved source: {!r} -> {} (via {})".format(_norm_key, _resolved_id, _via))
-    supabase.table("documents").insert({
-        "id": doc_id,
-        "title": title,
-        "original_title": title,
-        "author": "STEPBible / Tyndale House",
-        "source_name": "STEPBible",
-        "source_type": "background",
-        "source_kind": "lexicon",
-        "citation_mode": "silent_context",
-        "is_copyrighted": False,
-        "topic_tags": [],
-        "bible_references": [],
-        "source_id": _resolved_id,
-    }).execute()
-    return doc_id, 0
+    return result.data[0]["id"] if result.data else None
 
 
-def insert_chunk_batch(rows: List[dict]) -> bool:
-    """Insert a small batch of chunks via psycopg2 with ON CONFLICT DO NOTHING."""
-    import psycopg2
-    from psycopg2.extras import execute_values
-    from urllib.parse import urlparse, unquote
-    db_url = os.environ.get("SUPABASE_DB_URL")
-    if not db_url:
-        print("    ERROR: SUPABASE_DB_URL not set")
-        return False
-
-    parsed = urlparse(db_url)
-    db_params = {
-        "host": parsed.hostname,
-        "port": parsed.port or 5432,
-        "user": unquote(parsed.username or ""),
-        "password": unquote(parsed.password or ""),
-        "dbname": parsed.path.lstrip("/"),
-    }
-
-    values = []
-    for r in rows:
-        embedding_str = "[%s]" % ",".join(str(v) for v in r["embedding"])
-        values.append((r["id"], r["document_id"], r["content"], embedding_str, r["chunk_index"]))
-
-    for attempt in range(MAX_RETRIES):
-        try:
-            conn = psycopg2.connect(**db_params)
-            with conn.cursor() as cur:
-                execute_values(
-                    cur,
-                    "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) "
-                    "VALUES %s ON CONFLICT DO NOTHING",
-                    values,
-                    template="(%s, %s, %s, %s::vector, %s)",
-                )
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e:
-            try:
-                conn.close()
-            except Exception:
-                pass
-            if attempt < MAX_RETRIES - 1:
-                print(f"    Insert failed (attempt {attempt + 1}/{MAX_RETRIES}), retrying in {RETRY_WAIT}s: {e}")
-                time.sleep(RETRY_WAIT)
-            else:
-                print(f"    Insert failed after {MAX_RETRIES} attempts, skipping batch at chunk_index {rows[0]['chunk_index']}: {e}")
-                return False
-
-
-def delete_document(title: str) -> None:
-    """Delete a document and all its chunks by title via Supabase REST API."""
-    result = supabase.table("documents").select("id").eq("title", title).limit(1).execute()
-    if not result.data:
-        print(f"  No document found with title: {title}")
-        return
-    doc_id = result.data[0]["id"]
-
-    chunk_count = supabase.table("chunks").select("id", count="exact").eq("document_id", doc_id).execute()
-    total = chunk_count.count if chunk_count.count is not None else 0
-    print(f"  Deleting {total} chunks for doc {doc_id[:12]}...")
-
-    deleted = 0
-    while True:
-        batch = (
-            supabase.table("chunks")
-            .select("id")
-            .eq("document_id", doc_id)
-            .limit(50)
-            .execute()
-        )
-        if not batch.data:
-            break
-        for row in batch.data:
-            supabase.table("chunks").delete().eq("id", row["id"]).execute()
-            deleted += 1
-        if deleted % 500 == 0 or deleted >= total:
-            print(f"    Deleted {deleted}/{total} chunks...")
-        time.sleep(0.2)
-    print(f"  Chunks deleted.")
-
-    supabase.table("documents").delete().eq("id", doc_id).execute()
-    print(f"  Deleted document {doc_id[:12]}... ({title})")
-
-
-def ingest_file(filename: str, title: str, max_entries: Optional[int] = None, brief: bool = False) -> Dict[str, int]:
-    """Ingest a single lexicon file. Returns stats dict.
-    If brief=True, store only gloss + extracted bold sub-meanings (for TBESG)."""
+def ingest_file(filename: str, title: str, max_entries: Optional[int] = None,
+                 brief: bool = False, delete: bool = False) -> Dict[str, int]:
+    """Ingest a single lexicon file through the shared writer. Returns a
+    stats dict compatible with main()'s aggregation.
+    If brief=True, store only gloss + extracted bold sub-meanings (for TBESG).
+    If delete=True, atomically swap out any existing document (REDO) instead
+    of appending to it.
+    """
     filepath = LEXICON_DIR / filename
     stats = {"parsed": 0, "inserted": 0, "skipped": 0}
 
@@ -410,78 +297,68 @@ def ingest_file(filename: str, title: str, max_entries: Optional[int] = None, br
 
     print(f"  {len(entries)} entries parsed")
 
-    # Find existing document or create new one; check how many chunks already exist
-    doc_id, existing_chunks = find_or_create_document(title)
-    print(f"  Document ID: {doc_id}")
+    # One-entry-one-chunk (edge behavior #1): each entry is formatted into
+    # exactly one chunk's worth of content, then truncated if unusually
+    # long -- both the STORED content and the EMBEDDED text are the same
+    # truncated string, matching this script's behavior before conversion.
+    chunk_texts = [
+        truncate_for_embedding(format_chunk_content(entry, brief=brief))
+        for entry in entries
+    ]
+    # full_text is what the writer stores as documents.full_text and would
+    # feed to the paraphrase step if the gate ever passed (it doesn't --
+    # STEPBible is public_domain, edge behavior #2). Each entry is
+    # independently short; a full lexicon file is thousands of them, so
+    # this join is NOT a coherent single "document" in the sense
+    # propositions.py's extraction prompt assumes -- unchanged concern from
+    # before conversion, now just documented once instead of duplicated.
+    full_text = "\n\n".join(chunk_texts)
 
-    # Format all chunk content
-    chunk_texts = []  # type: List[str]
-    for entry in entries:
-        chunk_texts.append(format_chunk_content(entry, brief=brief))
+    def _lexicon_chunk_fn(_body_text: str) -> List[str]:
+        # Ignores the writer's default token-chunker and the body_text
+        # argument entirely -- returns the pre-formatted, one-per-entry
+        # list captured by closure. This is edge behavior #1: a lexicon
+        # entry is not split the way a sermon is.
+        return chunk_texts
 
-    # Resume: skip entries that are already inserted
-    start_from = existing_chunks
-    if start_from > 0:
-        if start_from >= len(chunk_texts):
-            print(f"  All {len(chunk_texts)} entries already inserted — skipping")
-            stats["inserted"] = len(chunk_texts)
-            return stats
-        print(f"  Resuming from entry {start_from} ({existing_chunks} already inserted)")
+    existing_id = _find_existing_by_title(title)
+    on_existing = "delete_and_reingest" if (delete and existing_id) else "reuse"
 
-    remaining = chunk_texts[start_from:]
+    result = shared_ingest.ingest_document(
+        db=supabase,
+        db_params=DB_PARAMS,
+        title=title,
+        body_text=full_text,
+        filename=filename,
+        author="STEPBible / Tyndale House",
+        source_name="STEPBible",
+        source_type="background",
+        source_kind="lexicon",
+        citation_mode="silent_context",
+        is_copyrighted=False,
+        topic_tags=[],
+        bible_references=[],
+        # Title-keyed, not url/file_path -- skip_dedup=True makes that
+        # explicit instead of relying on an accidental no-op.
+        skip_dedup=True,
+        find_existing_fn=lambda: existing_id,
+        on_existing=on_existing,
+        chunk_fn=_lexicon_chunk_fn,
+    )
 
-    # Embed in batches, insert in small sub-batches
-    chunk_index = start_from
-    total_inserted = existing_chunks
-    for batch_start in range(0, len(remaining), EMBED_BATCH_SIZE):
-        batch_end = min(batch_start + EMBED_BATCH_SIZE, len(remaining))
-        batch = remaining[batch_start:batch_end]
-
-        batch = [truncate_for_embedding(t) for t in batch]
-        embeddings = embed_batch(batch)
-
-        rows = []
-        for text, embedding in zip(batch, embeddings):
-            rows.append({
-                "id": str(uuid.uuid4()),
-                "document_id": doc_id,
-                "content": text,
-                "embedding": embedding,
-                "chunk_index": chunk_index,
-            })
-            chunk_index += 1
-
-        # Insert in small sub-batches
-        for sub_start in range(0, len(rows), INSERT_BATCH_SIZE):
-            sub_batch = rows[sub_start:sub_start + INSERT_BATCH_SIZE]
-            if insert_chunk_batch(sub_batch):
-                total_inserted += len(sub_batch)
-            else:
-                stats["skipped"] += len(sub_batch)
-            if total_inserted % 500 == 0 and total_inserted > existing_chunks:
-                print(f"  Progress: {total_inserted}/{len(chunk_texts)} entries inserted")
-            time.sleep(INSERT_SLEEP)
-
-    stats["inserted"] = total_inserted
-    stats["skipped"] += stats["parsed"] - total_inserted
-    print(f"  Done: {total_inserted} inserted, {stats['skipped']} skipped")
-
-    # Propositions (licensed/unlicensed sources only -- gate lives in
-    # propositions.py; Precept Austin locked out by name there). STEPBible is public_domain, so this currently always
-    # returns "skipped_licensed": one cheap DB lookup, no Groq spend. Kept
-    # wired anyway so a future license_status change needs no code change.
-    # full_text is the whole lexicon's entries joined -- only actually used
-    # if the gate ever passes; each entry is independently short, but a full
-    # lexicon run is thousands of entries, so this is NOT a coherent single
-    # "document" in the sense propositions.py's extraction prompt assumes.
-    _source_id, _, _ = resolve_source_id(supabase, "STEPBible", "STEPBible / Tyndale House")
-    _prop_conn = psycopg2.connect(**_propositions_db_params())
-    try:
-        full_text = "\n".join(chunk_texts)
-        prop_result = propositions.process_document(_prop_conn, doc_id, _source_id, full_text, embed_one)
-        print(f"  propositions: {prop_result}")
-    finally:
-        _prop_conn.close()
+    if result["status"] == "processed":
+        total_now = len(result["chunks"])
+        print(f"  OK: document now has {total_now} chunk(s) total")
+        stats["inserted"] = stats["parsed"]
+    elif result["status"] == "skipped" and result["reason"] == "already_complete":
+        print(f"  All {len(chunk_texts)} entries already present — nothing to append")
+        stats["inserted"] = stats["parsed"]
+    elif result["status"] == "skipped":
+        print(f"  SKIPPED: {result['reason']}")
+        stats["skipped"] = stats["parsed"]
+    else:
+        print(f"  FAILED: {result['reason']}")
+        stats["skipped"] = stats["parsed"]
 
     return stats
 
@@ -510,7 +387,7 @@ def main():
     parser.add_argument("--lexicon", type=str, default=None,
                         help="Run a single lexicon: TBESG, TBESH, or TFLSJ")
     parser.add_argument("--delete", action="store_true",
-                        help="Delete existing document + chunks before ingesting")
+                        help="Atomically swap out any existing document + chunks (REDO) instead of appending")
     parser.add_argument("--sample", type=int, default=0,
                         help="Print N sample chunks after parsing (before ingesting)")
     args = parser.parse_args()
@@ -546,10 +423,6 @@ def main():
     for filename, title in configs:
         brief = "TBESG" in title
 
-        if args.delete:
-            print(f"\nDeleting existing data for: {title}")
-            delete_document(title)
-
         if args.sample > 0:
             # Parse and print samples, then continue to ingest
             filepath = LEXICON_DIR / filename
@@ -562,7 +435,7 @@ def main():
                 print(f"  [{i}] {chunk[:200]}")
             print()
 
-        stats = ingest_file(filename, title, max_entries=max_entries, brief=brief)
+        stats = ingest_file(filename, title, max_entries=max_entries, brief=brief, delete=args.delete)
         for k in total_stats:
             total_stats[k] += stats[k]
 
