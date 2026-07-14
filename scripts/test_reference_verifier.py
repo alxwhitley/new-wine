@@ -178,15 +178,39 @@ def main():
     # fake db whose alias lookup returns the sentinel id directly, proving
     # this branch fires — rather than folding it into the MISS case above,
     # which only ever exercised the "no alias row at all" path.
+    #
+    # A tautological version of this test would leave "sources" and
+    # "app_settings" unset in table_responses — _FakeDB.table() then returns
+    # an empty result for both, so is_source_servable() would independently
+    # return False via its own `if not source_result.data: return False`
+    # path regardless of whether the sentinel check exists at all (confirmed:
+    # deleting reference_verifier.py:165-166 entirely and running this same
+    # fixture would still produce None). To prove the sentinel check itself
+    # is what fires, "sources" and "app_settings" are populated here with a
+    # genuinely servable row/setting — the same shape B1 uses above — so
+    # that if the sentinel check were deleted, verify_teacher_mention would
+    # proceed straight into is_source_servable, find a servable-looking
+    # source, and return the sentinel UUID as a valid match (a wrong,
+    # non-None result). A call-tracking flag additionally proves "sources"/
+    # "app_settings" are never even queried while the check is present —
+    # the same rigor B1's on_table_call tracker already established.
+    sentinel_table_calls = []
     sentinel_fake_db = _FakeDB(
         table_responses={
             "source_aliases": [{"source_id": reference_verifier._SENTINEL_SOURCE_ID}],
+            "sources": [{"license_status": "owned", "visibility": "shown"}],
+            "app_settings": [{"value": "off"}],
         },
+        on_table_call=lambda name: sentinel_table_calls.append(name),
     )
     result_sentinel = verify_teacher_mention(sentinel_fake_db, "Fake Sentinel-Resolving Teacher")
     check(
-        "Sentinel: an alias that resolves to the sentinel source_id never resolves",
-        result_sentinel is None,
+        "Sentinel: an alias that resolves to the sentinel source_id never "
+        "resolves — fake sources/app_settings tables (which would otherwise "
+        "make this source look servable) are never even queried",
+        result_sentinel is None
+        and "sources" not in sentinel_table_calls
+        and "app_settings" not in sentinel_table_calls,
     )
 
     # --- Presence-check drop: proposal not actually in the text ---
