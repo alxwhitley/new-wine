@@ -889,6 +889,27 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
                                 # content written after </answer> (see Task 11 note above).
         buffer = ""
 
+        def _close_answer(buf: str, close_pos: int) -> str:
+            """Shared close-tag handling for both close-detection sites
+            (Site A: </answer> found in the same chunk as the opening
+            <answer> tag; Site B: </answer> found mid-stream while already
+            in_answer). Extracts the trailing content before </answer> and
+            permanently flips BOTH guard flags together. Centralizing this
+            makes it impossible for one site to set in_answer=False without
+            also setting answer_closed=True — exactly the drift that caused
+            Task 11's stream-leak bug (Site A set only in_answer=False,
+            leaving answer_closed unset, so a later chunk containing the
+            literal substring "<answer>" in trailing content re-opened
+            in_answer and re-streamed it as real answer text).
+            """
+            nonlocal in_answer, answer_closed
+            part = buf[:close_pos]
+            if part:
+                answer_parts.append(part)
+            in_answer = False
+            answer_closed = True
+            return part
+
         try:
             client = _get_anthropic()
             stream = client.messages.create(
@@ -927,11 +948,9 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
                         # Check if closing tag is already in this chunk
                         close_pos = buffer.find("</answer>")
                         if close_pos != -1:
-                            part = buffer[:close_pos]
+                            part = _close_answer(buffer, close_pos)
                             if part:
-                                answer_parts.append(part)
                                 yield _sse(json.dumps({"token": part}))
-                            in_answer = False
                             buffer = ""
                         elif buffer:
                             answer_parts.append(buffer)
@@ -941,12 +960,9 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
                     # Inside <answer> — check for closing tag
                     close_pos = buffer.find("</answer>")
                     if close_pos != -1:
-                        part = buffer[:close_pos]
+                        part = _close_answer(buffer, close_pos)
                         if part:
-                            answer_parts.append(part)
                             yield _sse(json.dumps({"token": part}))
-                        in_answer = False
-                        answer_closed = True  # SP1 guard — see note above
                         buffer = ""
                     else:
                         # Yield buffer but keep last 9 chars in case
