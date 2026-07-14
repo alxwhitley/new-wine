@@ -453,6 +453,12 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
     if result["status"] == "skipped":
         return ("skipped", result["reason"])
+    if result["status"] == "failed":
+        # The paraphrase step failed to run (network/rate-limit/timeout/parse
+        # error) -- shared_ingest.ingest_document() rolled back its whole
+        # atomic write, so nothing landed for this document. Report it as a
+        # real failure, not success; there is no doc_id or chunks to tag.
+        return ("failed", result["reason"])
 
     doc_id = result["doc_id"]
     chunks = result["chunks"]

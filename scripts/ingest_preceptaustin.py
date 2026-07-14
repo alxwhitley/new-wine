@@ -5,9 +5,11 @@ Rhemata Precept Austin Word Study Ingestion Script
 Reads extracted word study .txt files from sources/precept_austin/raw/,
 chunks with tiktoken, embeds with OpenAI, and inserts into Supabase.
 
-Converted (#9) to route through shared_ingest.ingest_document() with
-insert_mode="psycopg2_batch" -- resolve/insert/chunk/embed/propositions is
-the shared writer's job now; this script keeps only what's genuinely
+Converted (#9) to route through shared_ingest.ingest_document(), which now
+writes record + all chunks + propositions as one atomic transaction
+(no insert_mode choice anymore -- that's the only path) -- resolve/insert/
+chunk/embed/propositions is the shared writer's job now; this script keeps
+only what's genuinely
 Precept-Austin-specific: filename parsing, index.json gloss lookup, the
 hardcoded is_copyrighted/citation_mode attribution, and the excerpt-keyed
 reuse/skip guard (title match + excerpts.excerpt_type='word_study_article').
@@ -192,7 +194,6 @@ def ingest_file(filepath, index_lookup, dry_run=False):
         skip_dedup=True,
         find_existing_fn=_find_existing,
         on_existing="reuse",
-        insert_mode="psycopg2_batch",
     )
 
     if result["status"] == "processed":
@@ -220,14 +221,19 @@ def ingest_file(filepath, index_lookup, dry_run=False):
 # and logged, the run continues -- it is NOT retried, updated, or fixed.
 # The excerpt-vs-chunks mismatch underneath is unchanged and stays #11's job.
 #
-# Connection-state check (done, not assumed): _insert_chunks_psycopg2_batch
-# opens its own psycopg2 connection per call and closes it in a `finally`
-# block regardless of success or failure (shared_ingest.py, unmodified this
-# session); _run_propositions does the same. Neither is shared across loop
+# Connection-state check (done, not assumed): as of the all-or-nothing
+# writer rework, shared_ingest.ingest_document() opens ONE psycopg2
+# connection per call (covering the document record, all chunks, and
+# propositions together) and always closes it before returning -- on
+# success, on a paraphrase failure, and on any other exception (rollback +
+# close in every path). That connection is never shared across loop
 # iterations, so there is no connection left aborted/poisoned for the next
-# document to inherit -- verified by reading that code path, and empirically
-# by this session's synthetic proof (fresh docs after a collision still
-# process correctly in the same run).
+# document to inherit -- true before this rework (two separate per-call
+# connections) and still true now (one), verified by reading the new code
+# path. A prior session verified this empirically under the old two-
+# connection architecture (fresh docs after a collision still processed
+# correctly in the same run); that proof predates this rework and was not
+# re-run against the new single-connection path this session.
 
 def _is_chunk_index_collision(exc):
     # type: (Exception) -> bool

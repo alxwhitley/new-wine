@@ -3,18 +3,24 @@
 shared_ingest.py — shared document-writer chokepoint for Rhemata ingest scripts.
 
 Owns the common resolve -> insert -> chunk -> embed -> propositions flow that
-every document-writing ingest script (ingest.py, ingest_magazine.py,
-ingest_preceptaustin.py, ingest_lexicon.py, ingest_commentaries.py) needs.
-Script-specific concerns (file discovery, metadata extraction, frontmatter
-parsing, Bible-reference extraction, topic tagging) stay in each script —
-only the part every script duplicates today lives here.
+every document-writing ingest script needs. Converted so far: ingest.py
+(and, transitively, youtube_ingest.py), ingest_magazine.py, and
+ingest_preceptaustin.py. ingest_lexicon.py, ingest_helloao.py, and
+ingest_commentaries.py call propositions.process_document() directly and do
+not go through this module yet.
 
-Converted so far: ingest.py only (see CLAUDE.md "Ingest chokepoint consolidation").
-The other four scripts are unconverted; the hooks below (chunk_fn,
-find_existing_fn/on_existing, insert_mode) exist for them but are only
-exercised by ingest.py's default values today. Do not assume they're battle
-tested for lexicon's one-entry-one-chunk override or commentaries' batched
-insert until those scripts are actually converted.
+ingest_document() writes a document record, all of its chunks, and its
+propositions as ONE atomic unit: everything (chunking, embedding, and the
+paraphrase step) is computed first, then written on a single shared
+database connection that either commits as a whole or rolls back as a
+whole. A killed process or any failure along the way leaves zero trace --
+no document record, no chunks, no propositions -- rather than the partial,
+half-written documents this replaces (see the Sermonindex incident in
+rhemata-status.md / CLAUDE.md's shared_ingest decision entry). Propositions
+runs on that same connection; its own existing commit-on-success /
+rollback-on-failure (propositions.py, unmodified) becomes the single
+commit/rollback boundary for the whole document, not just the
+propositions table.
 
 No module-level client construction or env-var reads: callers pass their own
 `db` (supabase client) and `db_params` (psycopg2 DSN dict), matching the
@@ -118,14 +124,21 @@ def _build_document_row(
     return row
 
 
-def _insert_document_rest(db, row: dict) -> str:
-    try:
-        db.table("documents").insert(row).execute()
-    except Exception:
-        # url/bible_references columns may not exist yet — retry without them
-        row.pop("url", None)
-        row.pop("bible_references", None)
-        db.table("documents").insert(row).execute()
+def _insert_document(cur, row: dict) -> str:
+    """Insert a document row via the shared psycopg2 cursor/transaction --
+    no commit here; the caller (ingest_document()) owns the transaction
+    boundary. Column list is built dynamically from the row dict so it
+    naturally omits whatever _build_document_row() didn't set (e.g.
+    source_id, url when absent), the same way the REST insert this
+    replaces did.
+    """
+    columns = list(row.keys())
+    column_list = ", ".join(columns)
+    placeholders = ", ".join(["%s"] * len(columns))
+    cur.execute(
+        f"INSERT INTO documents ({column_list}) VALUES ({placeholders})",
+        [row[c] for c in columns],
+    )
     return row["id"]
 
 
@@ -136,43 +149,15 @@ def _delete_document(db, doc_id: str) -> None:
 
 # ── Chunks ────────────────────────────────────────────────────────────────────
 
-def _insert_chunks_rest(
-    db,
-    db_params: dict,
-    doc_id: str,
-    chunks: List[str],
-    embed_text_fn: Optional[Callable[[int, str], str]],
-    content_fn: Optional[Callable[[int, str], str]],
-) -> None:
-    # db_params is unused here -- REST mode never opens a direct connection.
-    # Accepted anyway so every _INSERT_MODES entry shares one call signature
-    # (see ingest_document()'s single generic call site below).
-    for idx, text in enumerate(chunks):
-        print(f"  Embedding chunk {idx + 1}/{len(chunks)}...")
-        text_to_embed = embed_text_fn(idx, text) if embed_text_fn else text
-        embedding = embed_text(text_to_embed)
-        content = content_fn(idx, text) if content_fn else text
-
-        # page_number is excluded: the column is absent from the live DB schema.
-        db.table("chunks").insert({
-            "id":          str(uuid.uuid4()),
-            "document_id": doc_id,
-            "content":     content,
-            "embedding":   embedding,
-            "chunk_index": idx,
-        }).execute()
-
-
 class EmbeddingAlignmentError(Exception):
-    """Raised by _embed_batch_verified / _insert_chunks_psycopg2_batch when
-    the alignment invariant (chunk i's stored embedding must come from
-    embedding chunk i's own text) cannot be proven -- a short/partial batch
-    response, an out-of-range item.index, or a position the API never
-    returned an item for. Always raised, never swallowed: the whole
-    document insert aborts rather than risk a silent cross-pairing. See
-    #9's diagnostic (Q3) -- this is the sharpest previously-unproven link
-    in the batch-insert path, closed here once for every future caller of
-    psycopg2_batch, not re-derived per script.
+    """Raised by _embed_batch_verified when the alignment invariant (chunk
+    i's stored embedding must come from embedding chunk i's own text)
+    cannot be proven -- a short/partial batch response, an out-of-range
+    item.index, or a position the API never returned an item for. Always
+    raised, never swallowed: nothing has been written to the database yet
+    when this fires (embedding happens entirely in memory, before the
+    transaction opens -- see ingest_document()), so the caller can simply
+    propagate it and nothing is left behind.
     """
 
 
@@ -237,104 +222,64 @@ def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
     return embeddings
 
 
-def _insert_chunks_psycopg2_batch(
-    db,
-    db_params: dict,
-    doc_id: str,
+def _embed_chunks(
     chunks: List[str],
     embed_text_fn: Optional[Callable[[int, str], str]],
-    content_fn: Optional[Callable[[int, str], str]],
-) -> None:
-    """Whole-document batch insert: batch-embed all of one document's
-    chunks, then a single execute_values(...) INSERT of every chunk row in
-    one transaction, one commit. All-or-nothing per document by design --
-    a mid-document failure rolls back cleanly, leaving zero chunks for the
-    document, never a partial set. `db` (the REST client) is unused here;
-    accepted only to match every _INSERT_MODES entry's shared call
-    signature.
+) -> List[List[float]]:
+    """Compute every chunk's embedding in memory -- no database interaction
+    at all. Pure computation step, called before any connection is opened,
+    so a failure here (including EmbeddingAlignmentError) leaves nothing
+    to roll back.
 
-    Built #9 for ingest_preceptaustin.py's shape specifically (whole-doc
-    batch embed + single-shot insert). Deliberately NOT lexicon's
-    paced/resumable sub-batching (INSERT_BATCH_SIZE/SLEEP, resume-by-count)
-    -- that is a materially different need, scoped separately at #11/#12;
-    building it here would be speculative against this module's own
-    stated discipline (see _INSERT_MODES below).
-
-    Alignment invariant: for chunk i, the row inserted at chunk_index=i
-    must contain exactly the text that was sent to the embedding call
-    whose result becomes that row's embedding.
-      - Client-side UUIDs (uuid.uuid4()) are generated per chunk BEFORE
-        insert, same as every other caller in this codebase -- there is no
-        server-generated-id + RETURNING remapping step to get wrong.
+    Alignment invariant: for chunk i, embeddings[i] must come from
+    embedding chunk i's own text.
       - _embed_batch_verified() checks the API's own item.index against
         intended position (order verified, not assumed) and raises on any
         short/partial/out-of-range response.
-      - The length assert directly below is a second, explicit,
-        independently-visible check before zip() -- redundant with the
-        guarantee _embed_batch_verified() already provides by
-        construction, but kept as its own visible line rather than only
-        relying on that guarantee, since a reader auditing this function
-        for the alignment invariant should be able to see it enforced
-        here too, not just trust an import.
+      - The length assert below is a second, explicit, independently
+        visible check before the caller zips chunks with embeddings --
+        redundant with the guarantee _embed_batch_verified() already
+        provides by construction, but kept visible rather than only
+        relying on that guarantee.
     """
     texts_to_embed = [
         embed_text_fn(idx, text) if embed_text_fn else text
         for idx, text in enumerate(chunks)
     ]
-
-    print(f"  Batch-embedding {len(texts_to_embed)} chunks...")
     embeddings = _embed_batch_verified(texts_to_embed)
     assert len(embeddings) == len(chunks), (
-        f"embedding count {len(embeddings)} != chunk count {len(chunks)} for "
-        f"document {doc_id} -- refusing to zip a mismatched batch"
+        f"embedding count {len(embeddings)} != chunk count {len(chunks)} -- "
+        f"refusing to zip a mismatched batch"
     )
+    return embeddings
 
+
+def _insert_chunks(
+    cur,
+    doc_id: str,
+    chunks: List[str],
+    embeddings: List[List[float]],
+    content_fn: Optional[Callable[[int, str], str]],
+) -> None:
+    """Insert every chunk row via the shared psycopg2 cursor/transaction in
+    one execute_values(...) call -- no commit here; the caller
+    (ingest_document()) owns the transaction boundary. Client-side UUIDs
+    are generated per chunk before insert, same as every other caller in
+    this codebase -- there is no server-generated-id + RETURNING remapping
+    step to get wrong.
+    """
     rows = []
     for idx, (text, embedding) in enumerate(zip(chunks, embeddings)):
         content = content_fn(idx, text) if content_fn else text
         embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
         rows.append((str(uuid.uuid4()), doc_id, content, embedding_str, idx))
 
-    print(f"  Inserting {len(rows)} chunks in one transaction...")
-    conn = psycopg2.connect(**db_params)
-    try:
-        with conn.cursor() as cur:
-            execute_values(
-                cur,
-                "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) VALUES %s",
-                rows,
-                template="(%s, %s, %s, %s::vector, %s)",
-            )
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-
-_INSERT_MODES = {
-    "rest_per_chunk": _insert_chunks_rest,
-    # Built #9 for ingest_preceptaustin.py's shape: whole-document batch
-    # embed + single-transaction insert. NOT lexicon's paced/resumable
-    # sub-batching (INSERT_BATCH_SIZE/SLEEP, resume-by-count) -- that's a
-    # materially different need, scoped separately at #11/#12. Don't widen
-    # this mode to cover it speculatively; build a distinct mode when #12
-    # actually needs one.
-    "psycopg2_batch": _insert_chunks_psycopg2_batch,
-}
-
-
-# ── Propositions ──────────────────────────────────────────────────────────────
-
-def _run_propositions(db_params: dict, propositions_conn, doc_id: str, source_id: str, body_text: str) -> str:
-    if propositions_conn is not None:
-        return propositions.process_document(propositions_conn, doc_id, source_id, body_text, embed_text)
-    conn = psycopg2.connect(**db_params)
-    try:
-        return propositions.process_document(conn, doc_id, source_id, body_text, embed_text)
-    finally:
-        conn.close()
+    execute_values(
+        cur,
+        "INSERT INTO chunks (id, document_id, content, embedding, chunk_index) VALUES %s",
+        rows,
+        template="(%s, %s, %s, %s::vector, %s)",
+    )
 
 
 # ── Strict mode ──────────────────────────────────────────────────────────────
@@ -398,12 +343,16 @@ def ingest_document(
 
     # Dedup — source_url+source_name, filename fallback. skip_dedup=True for
     # callers that already own dedup responsibility (e.g. a per-row sheet
-    # status column).
+    # status column). Unchanged this session -- the skip-check's own design
+    # (whether it should test completeness, not just existence) is a
+    # separate, deliberately deferred decision (see rhemata-status.md).
     skip_dedup: bool = False,
 
-    # Reuse-by-identity hook. Unused by ingest.py (always inserts fresh);
-    # exists for precept_austin's cross-pipeline excerpt check, lexicon's
-    # resume-by-chunk-count, and commentaries' crash-recovery delete pattern.
+    # Reuse-by-identity hook. Unused by ingest.py/ingest_magazine.py (always
+    # insert fresh); used by ingest_preceptaustin.py's cross-pipeline excerpt
+    # check. Its two known holes (unconditional re-chunk/re-insert on reuse;
+    # document-row/full_text skipped on reuse) are unchanged this session --
+    # still PLAN #11's job, not touched here.
     find_existing_fn: Optional[Callable[[], Optional[str]]] = None,
     on_existing: str = "skip",  # "skip" | "reuse" | "delete_and_reingest"
 
@@ -412,25 +361,54 @@ def ingest_document(
     chunk_fn: Callable[[str], List[str]] = chunk_text,
     embed_text_fn: Optional[Callable[[int, str], str]] = None,
     content_fn: Optional[Callable[[int, str], str]] = None,
-
-    insert_mode: str = "rest_per_chunk",
-
-    # Propositions connection: reuse the caller's (commentaries' pattern) or
-    # leave None to open+close a dedicated one (everyone else's pattern).
-    propositions_conn=None,
 ) -> dict:
-    """Resolve -> insert -> chunk -> embed -> propositions, in that order.
+    """Resolve -> compute (chunk + embed + paraphrase) -> write, in that
+    order. The document record, all of its chunks, and its propositions
+    land in ONE atomic transaction: everything is computed in memory first
+    (chunking is pure text splitting; embedding and the paraphrase step are
+    external API calls, not database writes), then a single shared
+    connection is opened and the record + chunks + propositions are
+    written together. A killed process or any failure along the way rolls
+    back the whole thing -- there is no point where a document record can
+    exist with a partial chunk set, or with a paraphrase step that never
+    ran, the way the two Sermonindex incident documents did.
+
+    "Finished" (Alex-confirmed definition): record + all chunks + the
+    paraphrase step having RUN TO COMPLETION, where "ran and found nothing"
+    counts as finished and "failed to run" does not. This only applies
+    where propositions.process_document()'s own gate says paraphrase
+    should run at all (licensed/unlicensed sources) -- for gated-off
+    sources (public_domain, owned, Precept Austin) "finished" is simply
+    record + all chunks, and this function does not second-guess that gate.
+
+    Concretely, once record + chunks are staged (uncommitted) on the shared
+    connection, propositions.process_document() (unmodified, from commit
+    42022a8) runs on that SAME connection:
+      - "error" (the paraphrase call itself failed) -- process_document()
+        has already rolled back internally; this function rolls back again
+        (harmless no-op if already rolled back) and returns status="failed"
+        with nothing written. The source row is left un-ingested by the
+        caller so a retry redoes it cleanly -- and because nothing landed,
+        that retry will not be blocked by a stale, already-exists document
+        the way "The Ultimate Heist" was.
+      - "stored:{n}" -- process_document() has already committed
+        internally (record + chunks + propositions all land together,
+        since they share this connection). This function's own commit()
+        after that is a harmless no-op.
+      - "no_propositions" / "skipped_licensed" / "skipped_precept_austin"
+        -- process_document() touched neither commit nor rollback (nothing
+        for it to write). This function commits explicitly here: paraphrase
+        ran to completion (or correctly doesn't apply), so record + chunks
+        are finished and saved.
+
+    Any exception raised while record/chunks are being written (e.g. a
+    duplicate-chunk-index collision on a reused document_id) rolls back and
+    re-raises unchanged -- callers that catch specific exception types
+    (e.g. ingest_preceptaustin.py's UniqueViolation guard) still see them.
 
     Returns a dict: {status, reason, doc_id, source_id, chunks, propositions}
     status is one of "processed", "skipped", "failed".
     """
-    if insert_mode not in _INSERT_MODES:
-        raise NotImplementedError(
-            f"insert_mode={insert_mode!r} is not implemented yet. "
-            f"Available: {list(_INSERT_MODES)}"
-        )
-    insert_chunks_fn = _INSERT_MODES[insert_mode]
-
     # ── Dedup ──
     if not skip_dedup:
         if already_ingested(db_params, url, source_name, filename):
@@ -474,12 +452,13 @@ def ingest_document(
                 source_name=source_name, author=author,
             )
 
-    # ── Insert document (or reuse) ──
-    if existing_doc_id is not None and on_existing == "reuse":
-        doc_id = existing_doc_id
+    is_reuse = existing_doc_id is not None and on_existing == "reuse"
+    doc_id = existing_doc_id if is_reuse else str(uuid.uuid4())
+    if is_reuse:
         print(f"  Reusing existing document {doc_id[:12]}...")
-    else:
-        doc_id = str(uuid.uuid4())
+
+    row = None
+    if not is_reuse:
         row = _build_document_row(
             doc_id,
             title=title, author=author, year=year, issue=issue,
@@ -488,24 +467,44 @@ def ingest_document(
             file_path=file_path, is_copyrighted=is_copyrighted, source_id=_resolved_id, url=url,
             full_text=body_text,
         )
-        print("  Inserting document record...")
-        doc_id = _insert_document_rest(db, row)
-        print(f"  Document ID: {doc_id}")
 
-    # ── Chunk ──
+    # ── Compute everything in memory first -- nothing written yet ──
     print("  Chunking...")
     chunks = chunk_fn(body_text)
     print(f"  {len(chunks)} chunks created")
+    print(f"  Embedding {len(chunks)} chunks...")
+    embeddings = _embed_chunks(chunks, embed_text_fn)
 
-    # ── Embed + insert chunks ──
-    print(f"  Embedding and inserting {len(chunks)} chunks...")
-    insert_chunks_fn(db, db_params, doc_id, chunks, embed_text_fn, content_fn)
+    # ── Write record + chunks + propositions as one atomic unit ──
+    conn = psycopg2.connect(**db_params)
+    try:
+        with conn.cursor() as cur:
+            if not is_reuse:
+                print("  Inserting document record...")
+                _insert_document(cur, row)
+                print(f"  Document ID: {doc_id}")
+            print(f"  Inserting {len(chunks)} chunks...")
+            _insert_chunks(cur, doc_id, chunks, embeddings, content_fn)
 
-    # ── Propositions (non-fatal; gate lives in propositions.py) ──
-    prop_result = _run_propositions(db_params, propositions_conn, doc_id, _resolved_id, body_text)
-    print(f"  propositions: {prop_result}")
+        prop_result = propositions.process_document(conn, doc_id, _resolved_id, body_text, embed_text)
+        print(f"  propositions: {prop_result}")
 
-    return {
-        "status": "processed", "reason": None,
-        "doc_id": doc_id, "source_id": _resolved_id, "chunks": chunks, "propositions": prop_result,
-    }
+        if prop_result == "error":
+            conn.rollback()  # harmless no-op if process_document() already rolled back
+            conn.close()
+            print("  ✗ Paraphrase step failed — rolled back, nothing written for this document")
+            return {
+                "status": "failed", "reason": "paraphrase_failed",
+                "doc_id": None, "source_id": _resolved_id, "chunks": [], "propositions": prop_result,
+            }
+
+        conn.commit()  # harmless no-op if process_document() already committed (stored:N)
+        conn.close()
+        return {
+            "status": "processed", "reason": None,
+            "doc_id": doc_id, "source_id": _resolved_id, "chunks": chunks, "propositions": prop_result,
+        }
+    except Exception:
+        conn.rollback()
+        conn.close()
+        raise
