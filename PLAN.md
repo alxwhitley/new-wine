@@ -49,6 +49,7 @@
 | 6 | Where this file lives | **Repo root, `PLAN.md` (canonical, as of 2026-07-09).** Chat authors revisions; terminal is sole committer — same propose→commit pattern as any other repo edit. Notion sync retired for this project. *(Superseded: previously "Notion (canonical) + local mirror `notion-sync/`.")* |
 | 7 | Bake a full-text column at the chokepoint? | **Yes.** `shared_ingest.py` has `body_text` in scope at the right moment — add a `documents.full_text` write once (#7); every conversion inherits it. Backfill for existing docs: parked |
 | 8 | Commentaries atomicity (Jul 8) | **Dropped.** Converting commentaries loses the current atomic doc+chunks transaction (a failed load could leave a half-written document). Accepted because loads are watched, one-at-a-time, re-runnable. **Revisit if commentary ingestion is ever automated or bulk-run (e.g. at #27).** |
+| 9 | **Skip-check ∕ #11 overlap.** The completeness-aware skip-check (can a re-run tell "done" from "broken, redo"?) and #11's reuse-path fix answer the same underlying question — what the writer does on finding an existing document. Decide before building either: merge into one design session, or keep separate with an explicit boundary. | Decision owner: Alex, on Fable's analysis. Current lean: merge. |
 
 ---
 
@@ -102,6 +103,13 @@
 **8. Convert `ingest_magazine.py`** (T2·3a) — uses the existing chunk-header bake hook (idx==0 special case). *Stop: dry-run + single-item verified.*
 **9. Build + demo `psycopg2_batch`, then convert `ingest_preceptaustin.py`** (T2·3b) — batched-chunk insert only (atomicity dropped, Decision 8); reuse-by-title. *Mid-point stop: batch demoed + committed. Final stop: conversion verified.*
 **10. Convert `ingest_commentaries.py`** (T2·3c) — reuses the batch + connection-reuse hook. **Straight convert, no atomicity rework** (Decision 8). *Mid-point stop at the dry-run line if long.*
+
+**10.5 — Ingest integrity track (inserted 2026-07-13).** Triggered by the Sermonindex partial-write incident: an interrupted ingest left two partially-written, live-servable documents, and the already-ingested check could never repair them. Three pieces:
+(a) **Paraphrase failure honesty** — DONE (42022a8): a failed paraphrase call is now distinguishable from a genuinely-empty result.
+(b) **Broken-document cleanup** — DONE (2026-07-13): both partial Carter Conlon documents deleted, queue rows reset to re-ingest cleanly.
+(c) **All-or-nothing writer** — DONE (6708060): shared writer restructured so a document lands whole (record + chunks + paraphrase-ran, where the paraphrase gate applies; record + chunks alone for gated-off sources) or leaves zero trace. Kill test and paraphrase-failure test both proven. Completeness definition confirmed by Alex 2026-07-13.
+Remaining piece — the completeness-aware skip-check — is deliberately NOT scheduled standalone: see the open decision below.
+
 **11. Build + demo `on_existing="reuse"` chunk-dedup** (T2·3d prep) — chunk-count lookup + positional-skip + continued numbering (fixes the confirmed re-chunk-from-0 bug). Lexicon needs it. *Stop: mechanism demoed on one item.*
 **12. Convert `ingest_lexicon.py`** (T2·3d) — highest risk. *Stop: dry-run + single-item verified.*
 **13. Convert `ingest_helloao.py`** (T2·3e) — **convert (easiest, needs no unbuilt hook — consider doing FIRST in this band as a confidence-builder).** → **Chokepoint complete. PD corpus growth unblocked (rule 10 lifts).** *Stop: all pipelines route through shared_ingest.*
@@ -190,6 +198,7 @@
 **Superseded structure:**
 - **Thematic tracks (Track 1/2/2B/2C/3)** — replaced Jul 8 by the linear session list. Track labels kept in parentheses for provenance.
 - **Notion as this file's home** — replaced 2026-07-09 by repo-native `PLAN.md`. See Decision #6.
+- The 2026-07-08 call to skip atomicity rework ("straight convert, no atomicity" — watched-load basis) is **superseded 2026-07-13** by new evidence: real usage is unattended hour-long batch runs, and the Sermonindex incident proved interruptions leave live-servable partial documents. Atomicity now lives in the shared writer (10.5c), so all remaining conversions inherit it rather than retrofit it.
 
 **Deferred (not cut — revisit post-launch):**
 - **Discover surface** — parked this cycle. Routes/code dormant, don't rip out.
