@@ -74,14 +74,14 @@
 
 **Carried forward, unchanged:**
 1. Rule 10 freeze is a bare-substring match, not an invocation check — recurs for `ingest_helloao.py`, `ingest_commentaries.py` only.
-2. Magazine queue hard pre-ingest gate — 27 of 27 pending articles contaminated. Unresolved, untouched.
+2. Magazine queue hard pre-ingest gate — 27 of 27 pending articles contaminated. Unresolved, untouched. **NEEDS ALEX REVIEW (2026-07-14 records-vs-database reconciliation):** the original "27 contaminated" signal can't be located against current state. Closest current signal: 32 articles across 5 issues sit in `sources/magazine/02_extracted/` awaiting approval; the extraction tracker shows 53 issues with failed (mostly transient network) extraction runs and 48 with QA flags — none of these cleanly confirms or refutes the original "27" figure. Flagging, not correcting, until Alex says what this originally referred to.
 4. Database-number verification gap. Not exercised this session.
 5. `GOVERNED_FILES` gap (`guard_pretooluse.py`/`settings.json`). Untouched this session.
 6. PLAN.md #5.5 closing line is stale. Needs Alex's explicit go-ahead on replacement wording.
 7. PLAN.md #14 drift — folder renames and the `jewish_perspectives` drop still open.
 10. CLAUDE.md's "unconverted scripts" count is stale (says four, real count is two: `ingest_helloao.py`, `ingest_commentaries.py`). Untouched this session.
 12. PA's ~398 "excerpt-less" documents — unrelated to this session.
-13. The "PA's survivability guard will now rarely fire" claim is still unconfirmed against real data.
+13. The "PA's survivability guard will now rarely fire" claim is still unconfirmed against real data. **NEEDS ALEX REVIEW (2026-07-14 records-vs-database reconciliation):** this is a claim about future behavior under real failure conditions, not a present DB state — it can't be confirmed or refuted by a database query either way. Left flagged as genuinely open, not stale.
 16. No kill switch / beta flag exists for the Study Panel (carried from the prior session, untouched here).
 17. The Study Panel's verse-reference detector is a narrow client-side stand-in, not the real SP1 backend (carried from the prior session, untouched here).
 
