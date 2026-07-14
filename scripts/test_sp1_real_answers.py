@@ -90,6 +90,18 @@ CASES = [
 ]
 
 
+def extract_reference_mentions_block(raw_output):
+    """Return the raw substring between <reference_mentions> tags, if
+    present, so a reader can see what the writer actually proposed versus
+    what survived verification. Returns None if the block is absent
+    (e.g. generation was truncated before reaching it)."""
+    start = raw_output.find("<reference_mentions>")
+    end = raw_output.find("</reference_mentions>")
+    if start != -1 and end != -1:
+        return raw_output[start + len("<reference_mentions>"):end].strip()
+    return None
+
+
 def run_case(case):
     print("=" * 70)
     print(f"CASE: {case['id']}")
@@ -99,6 +111,19 @@ def run_case(case):
 
     answer, raw_output = generate_real_answer(case["question"], db)
 
+    # Fix 2: an empty/absent verifier result is only meaningful evidence if
+    # generation actually completed. Without a real </answer> closing tag,
+    # the model was truncated (max_tokens) before finishing — possibly
+    # before it ever reached the <reference_mentions> block — so there is
+    # nothing to score. Treat this the same as DID NOT MATERIALIZE rather
+    # than letting a vacuous empty result be reported as a clean pass.
+    generation_complete = "</answer>" in raw_output
+    if not generation_complete:
+        print("*** GENERATION TRUNCATED — no closing </answer> tag found in raw output. ***")
+        print("*** The model's response was cut off (max_tokens) before finishing. This case CANNOT be scored — an empty verifier result here would be meaningless, not a pass. ***")
+        print(f"Raw output for review:\n{raw_output}\n")
+        return {"id": case["id"], "materialized": False, "truncated": True}
+
     materialized = case["expect_mention"] in answer
     print(f"Target mention present in answer: {materialized}")
     if not materialized:
@@ -107,7 +132,9 @@ def run_case(case):
         return {"id": case["id"], "materialized": False}
 
     verified = verify_references(answer, raw_output, db)
+    mentions_block = extract_reference_mentions_block(raw_output)
     print(f"Answer:\n{answer}\n")
+    print(f"Raw <reference_mentions> block (what the writer actually proposed):\n{mentions_block}\n")
     print(f"Verifier output:\n{json.dumps(verified, indent=2)}\n")
 
     return {"id": case["id"], "materialized": True, "answer": answer, "verified": verified}
@@ -121,7 +148,12 @@ def main():
     print("=" * 70)
     print("SUMMARY — review each result against its stated bar by hand.")
     for r in results:
-        status = "MATERIALIZED — inspect above against the bar" if r["materialized"] else "DID NOT MATERIALIZE — rerun with reworded question"
+        if r["materialized"]:
+            status = "MATERIALIZED — inspect above against the bar"
+        elif r.get("truncated"):
+            status = "TRUNCATED — generation cut off before </answer>, rerun before scoring"
+        else:
+            status = "DID NOT MATERIALIZE — rerun with reworded question"
         print(f"  {r['id']}: {status}")
 
 

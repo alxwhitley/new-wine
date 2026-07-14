@@ -56,7 +56,7 @@ def generate_real_answer(question: str, db) -> Tuple[str, str]:
     client = _get_anthropic()
     response = client.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=1500,
+        max_tokens=3000,
         system=ANSWER_SYSTEM_BLOCKS,
         messages=history,
         stream=False,
