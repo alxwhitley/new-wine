@@ -17,6 +17,8 @@
 - Out of scope (do not build): citation-to-source-passage opening, retrofitting old conversations, in-panel text-selection follow-ups, user-selectable translations, SP3 tool rows, anything in `chat-message.tsx` / `study-panel.tsx` / `lib/study-reference.ts`.
 - Any DB schema change would go through the `migrations/` path with Alex's review — this plan does not require one (no new tables/columns; only reads existing `verses`, `sources`, `source_aliases`, `app_settings`).
 - Reuse, never fork: verse parsing reuses `app.routers.study`'s existing code; teacher-name normalization reuses (after relocation) the same function `scripts/source_resolver.py` uses for ingest; the servability check reuses the exact predicate already live in migrations 049/056.
+- If a user's question names a specific verse, the answer must explicitly name that verse back in its own text — otherwise there is nothing in the answer for the panel to ever underline for the very reference the user asked about. This is a writer instruction (Task 10), proven by a dedicated Track-A case (A7, Task 13).
+- The system-prompt change (Task 10) is the one part of this plan that is not purely additive — it touches every answer, not just SP1's new block. Phase B is not complete until the answer-quality regression check (Tasks 9 + 12) confirms ordinary answers are unchanged in length, tone, and quality before vs. after.
 
 ---
 
@@ -748,7 +750,7 @@ git commit -m "Add reference_verifier.py — presence, resolution, and biblical-
 
 ### Task 7: Track-B tests — constructed/injected verifier cases
 
-These are deterministic checks against `reference_verifier.py` directly. They exist specifically for failure shapes that a real model generation is unlikely to reliably reproduce on demand (a biblical-figure misclassification, a plausible-but-wrong verse number, a real-but-currently-hidden teacher) — see the design discussion in this plan's history for why these are constructed rather than fished for organically.
+These are deterministic checks against `reference_verifier.py` directly, run regardless of whether a live generation happens to produce the same failure shape. Two of these (a biblical-figure misclassification, a plausible-but-wrong verse number) are genuinely unlikely to come up on demand in a live run — fine reasons to construct them directly. **The third is different, and worth stating precisely:** a real, currently-hidden-or-unlicensed teacher (F.F. Bosworth, B3) is NOT tested here because it "can't happen organically." It can — Claude carries its own general knowledge of thousands of real teachers and can name one directly, including one this library has deliberately hidden or never licensed, even when retrieval surfaces zero content about them. This case is constructed anyway because the servability check is the single guard standing between the panel and pointing users at content the product isn't licensed to serve, and a guard that safety-critical needs to be proven on demand, every time — not left dependent on whether a given live run happens to mention that one name. Treat it as load-bearing on every teacher mention, not a corner case.
 
 **Files:**
 - Create: `scripts/test_reference_verifier.py`
@@ -895,9 +897,213 @@ Everything up to here is committed, isolated, and independently proven: the alia
 
 ---
 
-## Phase B — Wire into the live answer path, then prove it on real answers (Tasks 8–12)
+## Phase B — Wire into the live answer path, then prove it on real answers (Tasks 8–15)
 
-### Task 8: Add the `<reference_mentions>` instructions to `system_prompt.txt`
+### Task 8: Build the shared real-answer generation helper
+
+**Why this is its own task:** two later tasks (the answer-quality baseline/regression check, and the Track-A pinned reference test) both need to run a real question through the actual retrieval + Claude answer-writing path outside the live `/chat` endpoint. Rather than inline that ~40 lines of retrieval-and-call logic twice, it lives in exactly one place, imported by both.
+
+**Files:**
+- Create: `scripts/sp1_answer_harness.py`
+
+**Interfaces:**
+- Consumes: `hybrid_search_rrf`, `_is_citable`, `ANSWER_SYSTEM_BLOCKS`, `_get_anthropic` (all existing, unmodified, from `app.routers.chat`)
+- Produces: `generate_real_answer(question: str, db) -> Tuple[str, str]` — returns `(answer_text, raw_output)`
+
+- [ ] **Step 1: Write the helper**
+
+```python
+# scripts/sp1_answer_harness.py
+"""
+Shared real-answer generation helper for SP1 test scripts. Runs a question
+through the actual retrieval + Claude answer-writing path (same system
+prompt, same model, same retrieval fusion as production) via direct
+function calls — NOT the live /chat HTTP endpoint, so no weekly-query-limit
+/ guest-limit metering and no conversations/messages rows are touched (per
+Alex's confirmed harness choice). Used by the answer-quality baseline/
+regression scripts (Tasks 9, 12) and the Track-A pinned reference test
+(Task 13) — the retrieval+Claude-call logic lives in exactly one place.
+
+Note: ANSWER_SYSTEM_BLOCKS is read from system_prompt.txt once, at import
+time, inside app.routers.chat. Each script that imports this helper does so
+in its own fresh `python3` process, so a script run before Task 10's
+system_prompt.txt edit picks up the OLD prompt, and one run after picks up
+the NEW prompt — no special handling needed, just run things in the order
+the tasks specify.
+"""
+import sys
+from pathlib import Path
+from typing import Tuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+
+from app.routers.chat import hybrid_search_rrf, _is_citable, ANSWER_SYSTEM_BLOCKS, _get_anthropic
+
+
+def generate_real_answer(question: str, db) -> Tuple[str, str]:
+    """Returns (answer_text, raw_output). answer_text is what a user would
+    see (the <answer> block's contents); raw_output is the model's complete
+    raw response, including anything written after </answer>.
+    """
+    scores, _ = hybrid_search_rrf(question, db, include_copyrighted=True)
+    ranked = sorted(scores.items(), key=lambda x: x[1][0], reverse=True)
+    chunks = [chunk for _, (_, chunk) in ranked[:8]]
+
+    context_parts = []
+    source_num = 0
+    for c in chunks:
+        if _is_citable(c):
+            source_num += 1
+            label = f"[Source {source_num}]"
+        else:
+            label = "[Background]"
+        context_parts.append(
+            f"{label} (source_kind={c.get('source_kind') or c.get('source_type', 'unknown')}, "
+            f"citation_mode={c.get('citation_mode', 'citable')}) "
+            f"\"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}\n{c['content']}"
+        )
+    context = "\n\n---\n\n".join(context_parts)
+
+    history = [{
+        "role": "user",
+        "content": f"Sources:\n{context}\n\nQuestion: {question}",
+    }]
+
+    client = _get_anthropic()
+    response = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1500,
+        system=ANSWER_SYSTEM_BLOCKS,
+        messages=history,
+        stream=False,
+    )
+    raw_output = response.content[0].text
+
+    answer_start = raw_output.find("<answer>")
+    answer_end = raw_output.find("</answer>")
+    if answer_start != -1 and answer_end != -1:
+        answer = raw_output[answer_start + len("<answer>"):answer_end].strip()
+    else:
+        answer = raw_output.strip()
+
+    return answer, raw_output
+```
+
+- [ ] **Step 2: Smoke-test it**
+
+Run: `cd /Users/alexwhitley/rhemata && python3 -c "
+import sys; sys.path.insert(0, 'scripts')
+from dotenv import load_dotenv
+load_dotenv('backend/app/.env')
+import os
+from supabase import create_client
+from sp1_answer_harness import generate_real_answer
+db = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
+answer, raw = generate_real_answer('What does it mean to be baptized in the Holy Spirit?', db)
+print(len(answer), 'chars')
+print(answer[:200])
+"`
+Expected: a real answer prints, no exceptions, non-trivial length (well over 200 chars for this question).
+
+- [ ] **Step 3: Commit**
+
+```bash
+cd /Users/alexwhitley/rhemata
+git add scripts/sp1_answer_harness.py
+git commit -m "Add shared real-answer generation helper for SP1 test scripts"
+```
+
+---
+
+### Task 9: Capture answer-quality baseline — BEFORE the prompt change lands
+
+**Why this must run before Task 10:** the system-prompt change is the one part of this feature that is not purely additive — it touches the instructions behind every single answer, not just SP1's new block. The reference-resolution test set proves pointers resolve correctly; nothing so far proves the answers themselves still read the same. This task captures the "before" side of that comparison. Do not skip this and do not run it after Task 10 — there would be nothing left to compare against.
+
+**Files:**
+- Create: `scripts/test_sp1_answer_quality_baseline.py`
+- Creates at runtime: `scripts/sp1_answer_quality_baseline.json` (the saved baseline, read back by Task 12)
+
+**Interfaces:**
+- Consumes: `generate_real_answer` (Task 8)
+
+- [ ] **Step 1: Write the capture script**
+
+```python
+#!/usr/bin/env python3
+"""
+SP1 answer-quality baseline capture. Run this BEFORE Task 10's
+system_prompt.txt edit lands. Saves real answers to a fixed set of
+ordinary questions using the CURRENT (pre-SP1) prompt, for later
+side-by-side comparison in Task 12. This is an explicit Phase B
+acceptance criterion, not optional: the writer-instruction change touches
+every answer, so proving ordinary answers are unchanged matters as much as
+proving references resolve correctly.
+
+Run from project root: python3 scripts/test_sp1_answer_quality_baseline.py
+"""
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
+
+from supabase import create_client
+from sp1_answer_harness import generate_real_answer
+
+SB_URL = os.environ["SUPABASE_URL"]
+SB_SVC = os.environ["SUPABASE_SERVICE_KEY"]
+
+BASELINE_FILE = Path(__file__).resolve().parent / "sp1_answer_quality_baseline.json"
+
+# A fixed set of ordinary questions, deliberately unrelated to any SP1 hard
+# case — this checks general answer quality (length, tone, structure), not
+# reference resolution.
+QUESTIONS = [
+    "What does it mean to be baptized in the Holy Spirit?",
+    "How should a believer respond when a prayer for healing isn't answered?",
+    "What is the charismatic understanding of prophetic ministry today?",
+    "Why do Spirit-filled Christians believe tongues is still active?",
+    "What does it look like to walk in the fruit of the Spirit day to day?",
+]
+
+
+def main():
+    db = create_client(SB_URL, SB_SVC)
+    baseline = {}
+    for question in QUESTIONS:
+        answer, _ = generate_real_answer(question, db)
+        baseline[question] = answer
+        print(f"Captured baseline for: {question!r} ({len(answer)} chars)")
+
+    BASELINE_FILE.write_text(json.dumps(baseline, indent=2))
+    print(f"\nSaved {len(baseline)} baseline answers to {BASELINE_FILE}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 2: Run it**
+
+Run: `cd /Users/alexwhitley/rhemata && python3 scripts/test_sp1_answer_quality_baseline.py`
+Expected: five "Captured baseline for..." lines, then a confirmation that `sp1_answer_quality_baseline.json` was saved.
+
+- [ ] **Step 3: Commit — the script only; the generated baseline JSON is working data, not something to hand-review yet**
+
+```bash
+cd /Users/alexwhitley/rhemata
+git add scripts/test_sp1_answer_quality_baseline.py
+git commit -m "Add SP1 answer-quality baseline capture script (pre-prompt-change)"
+```
+
+---
+
+### Task 10: Add the `<reference_mentions>` instructions to `system_prompt.txt`
 
 **Files:**
 - Modify: `backend/app/system_prompt.txt` (insert after the existing "Response Structure" section, which currently ends after the `<answer>...</answer>` block description, before "# Rules for the `<answer>` block")
@@ -920,6 +1126,12 @@ Replace it with:
 <answer>
 Write your final, verified answer here. This is the only part the user sees.
 </answer>
+
+If the user's question names a specific Bible verse or passage (e.g. "What
+does Romans 8:28 mean?" or "explain John 3:16"), your answer above must
+explicitly name that same reference back in its text — not just discuss
+the passage thematically without ever writing out the reference. If you
+never name it, there is nothing for the system to confirm or point back to.
 
 <reference_mentions>
 After closing </answer>, list every verse reference and named-teacher
@@ -963,14 +1175,14 @@ Expected: `OK, length: <some number>` with no exception.
 ```bash
 cd /Users/alexwhitley/rhemata
 git add backend/app/system_prompt.txt
-git commit -m "system_prompt: add <reference_mentions> instructions for SP1 writer pass"
+git commit -m "system_prompt: add <reference_mentions> instructions + user-verse-naming rule for SP1"
 ```
 
 ---
 
-### Task 9: Wire the verifier into `chat.py`'s streaming loop
+### Task 11: Wire the verifier into `chat.py`'s streaming loop
 
-**Why the stream-parser guard matters:** `chat.py`'s current tag-boundary parser (lines 916–955 in the version read for this plan) toggles `in_answer` purely by watching for `<answer>` / `</answer>` substrings in the buffer, with no "already closed, never reopen" flag. Today that's harmless because nothing meaningful is ever written after `</answer>`. Task 8 changes that — the model now writes a real block after `</answer>`. If that trailing content ever happened to contain the literal substring `<answer>` again (an echo, a stray quote, anything), the existing parser would technically reopen and leak it to the user as if it were more answer text. This task adds the guard as a required companion to the wiring, not an optional hardening.
+**Why the stream-parser guard matters:** `chat.py`'s current tag-boundary parser (lines 916–955 in the version read for this plan) toggles `in_answer` purely by watching for `<answer>` / `</answer>` substrings in the buffer, with no "already closed, never reopen" flag. Today that's harmless because nothing meaningful is ever written after `</answer>`. Task 10 changes that — the model now writes a real block after `</answer>`. If that trailing content ever happened to contain the literal substring `<answer>` again (an echo, a stray quote, anything), the existing parser would technically reopen and leak it to the user as if it were more answer text. This task adds the guard as a required companion to the wiring, not an optional hardening.
 
 **Files:**
 - Modify: `backend/app/routers/chat.py:883-999` (the `generate()` function's streaming section, tag-parsing loop, and final meta assembly)
@@ -1000,7 +1212,7 @@ Replace with:
         in_answer = False
         answer_closed = False  # SP1: once True, never re-enter in_answer — protects
                                 # against a stray "<answer>" substring appearing in
-                                # content written after </answer> (see Task 9 note).
+                                # content written after </answer> (see Task 11 note above).
         buffer = ""
 ```
 
@@ -1126,9 +1338,100 @@ git commit -m "chat.py: wire SP1 reference verifier into the answer stream, addi
 
 ---
 
-### Task 10: Build the Track-A real-answer test harness, with the pinned question set
+### Task 12: Answer-quality regression check — run AFTER the prompt change and chat.py wiring
 
-**Before writing questions with specific names, confirm each candidate's live servability** — the retrieval RPCs (`match_chunks`, `search_chunks_fts`) already exclude any source that fails the license/visibility gate, so a teacher whose source is currently hidden can never be organically surfaced by real retrieval, and a real-generation case built around them cannot work as designed. Run this query for each named teacher below before finalizing the case:
+**Why this is a required acceptance criterion, not an optional nice-to-have:** Task 10 changed the live system prompt — the one part of this feature that touches every single answer, not just SP1's new block. Everything else in this plan proves references resolve correctly; nothing so far proves ordinary answers still read the same. This task closes that gap.
+
+**Files:**
+- Create: `scripts/test_sp1_answer_quality_regression.py`
+
+**Interfaces:**
+- Consumes: `generate_real_answer` (Task 8), `scripts/sp1_answer_quality_baseline.json` (written by Task 9)
+
+- [ ] **Step 1: Write the comparison script**
+
+```python
+#!/usr/bin/env python3
+"""
+SP1 answer-quality regression check. Run AFTER Task 10's system_prompt.txt
+edit and Task 11's chat.py wiring have both landed. Re-runs the exact same
+questions from Task 9's baseline capture, through the NEW prompt, and
+prints both answers side by side for manual comparison of length, tone,
+and structure. This is an explicit Phase B acceptance criterion — not
+optional, not a "looks fine, moving on."
+
+Run from project root: python3 scripts/test_sp1_answer_quality_regression.py
+"""
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
+
+from supabase import create_client
+from sp1_answer_harness import generate_real_answer
+
+SB_URL = os.environ["SUPABASE_URL"]
+SB_SVC = os.environ["SUPABASE_SERVICE_KEY"]
+
+BASELINE_FILE = Path(__file__).resolve().parent / "sp1_answer_quality_baseline.json"
+
+
+def main():
+    if not BASELINE_FILE.exists():
+        print(f"No baseline file at {BASELINE_FILE} — run Task 9's capture script "
+              f"BEFORE this comparison, or this check proves nothing.")
+        sys.exit(1)
+
+    baseline = json.loads(BASELINE_FILE.read_text())
+    db = create_client(SB_URL, SB_SVC)
+
+    for question, before_answer in baseline.items():
+        after_answer, raw_output = generate_real_answer(question, db)
+        assert "<reference_mentions>" not in after_answer, (
+            "The <reference_mentions> block leaked into the visible answer text — "
+            "this is a hard failure, stop and fix the prompt/parsing before proceeding."
+        )
+        print("=" * 70)
+        print(f"QUESTION: {question}")
+        print(f"BEFORE ({len(before_answer)} chars):\n{before_answer}\n")
+        print(f"AFTER  ({len(after_answer)} chars):\n{after_answer}\n")
+        print("Compare by hand: same length ballpark? same tone, structure, headings? "
+              "same level of conviction and citation style?")
+
+    print("\nReview every pair above. This check passes only when a human confirms "
+          "no case reads meaningfully different in length, tone, or quality.")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 2: Run it and read every pair**
+
+Run: `cd /Users/alexwhitley/rhemata && python3 scripts/test_sp1_answer_quality_regression.py`
+Expected: the hard assertion never fires (no `<reference_mentions>` leakage), and for every one of the five questions, the before/after pair reads as the same quality of answer — comparable length, same tone, same structure. If any pair reads meaningfully worse or different, stop and revisit Task 10's prompt wording before continuing — this is a hard gate on Phase B, not a note-and-proceed issue.
+
+- [ ] **Step 3: Commit**
+
+```bash
+cd /Users/alexwhitley/rhemata
+git add scripts/test_sp1_answer_quality_regression.py
+git commit -m "Add SP1 answer-quality regression check (before/after prompt-change comparison)"
+```
+
+---
+
+### Task 13: Build the Track-A real-answer test harness, with the pinned question set
+
+**Before writing questions with specific names, confirm each candidate's live servability.** This is NOT because a hidden or unlicensed teacher's name could never appear in a real answer — it can: Claude carries its own general knowledge of thousands of real teachers and can name one directly, including one this library has deliberately hidden or never licensed, even when retrieval surfaces zero content about them (see Task 7's corrected note on F.F. Bosworth). The reason to confirm servability here is different: these specific test questions are designed to exercise the FULL real pipeline — retrieval surfacing that teacher's actual citable content, the model citing them from the corpus, the writer marking the mention, the verifier resolving it — and that only happens if the teacher is genuinely retrievable. A teacher reachable only through the model's own general knowledge, with no real corpus content behind them, is a different (and already covered) check — that's exactly what Task 7's Bosworth case already proves deterministically.
+
+Run this query for each named teacher below before finalizing the case:
 
 ```sql
 SELECT s.name, s.license_status, s.visibility
@@ -1137,13 +1440,13 @@ JOIN source_aliases a ON a.source_id = s.id
 WHERE a.alias_key = '<normalized teacher name>';
 ```
 
-If a candidate below turns out not to be currently servable, that case cannot run as a Track-A real generation — treat it the same way Task 7 already handles F.F. Bosworth (a Track-B constructed case instead), and note the substitution plainly rather than forcing a live query to match what was assumed here.
+If a candidate below turns out not to be currently servable, that case cannot exercise the full pipeline as designed — treat it the same way Task 7 already handles F.F. Bosworth (a Track-B constructed case instead), and note the substitution plainly rather than forcing a live query to match what was assumed here.
 
 **Files:**
 - Create: `scripts/test_sp1_real_answers.py`
 
 **Interfaces:**
-- Consumes: `hybrid_search_rrf`, `expand_query`, `fetch_neighbor_chunks_batch`, `_is_citable`, `SOURCE_KIND_FUSION_WEIGHTS`, `COMMENTARY_CONTEXT_CAP`, `_NEIGHBOR_SKIP_KINDS`, `ANSWER_SYSTEM_BLOCKS`, `_get_anthropic`, `is_word_study_query` (all existing, unmodified, from `app.routers.chat`); `verify_references` (Task 6)
+- Consumes: `generate_real_answer` (Task 8); `verify_references` (Task 6)
 
 - [ ] **Step 1: Write the harness**
 
@@ -1151,8 +1454,8 @@ If a candidate below turns out not to be currently servable, that case cannot ru
 #!/usr/bin/env python3
 """
 Track-A (real-generation) test harness for SP1. Runs real questions through
-the actual retrieval + Claude answer-writing path (same system prompt, same
-model, same retrieval fusion as production) via direct function calls — NOT
+the actual retrieval + Claude answer-writing path via generate_real_answer()
+(same system prompt, same model, same retrieval fusion as production) — NOT
 the live /chat HTTP endpoint, so no weekly-query-limit / guest-limit
 metering and no conversations/messages rows are touched (per Alex's
 confirmed harness choice).
@@ -1171,23 +1474,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 from supabase import create_client
-from app.routers.chat import (
-    hybrid_search_rrf,
-    expand_query,
-    fetch_neighbor_chunks_batch,
-    _is_citable,
-    SOURCE_KIND_FUSION_WEIGHTS,
-    COMMENTARY_CONTEXT_CAP,
-    _NEIGHBOR_SKIP_KINDS,
-    ANSWER_SYSTEM_BLOCKS,
-    _get_anthropic,
-    is_word_study_query,
-)
+from sp1_answer_harness import generate_real_answer
 from app.services.reference_verifier import verify_references
 
 SB_URL = os.environ["SUPABASE_URL"]
@@ -1235,6 +1528,12 @@ CASES = [
         "expect_mention": "renewing",
         "bar": "The model's own answer should name the real reference (Romans 12:2) explicitly rather than staying vague — if it does, that resolves normally. This case primarily checks the writer follows instructions; the verifier's robustness against genuinely vague strings is separately proven in Track B.",
     },
+    {
+        "id": "A7_user_mentioned_verse_named_back",
+        "question": "What does Romans 8:28 mean, and how should it shape the way I process a hard season?",
+        "expect_mention": "Romans 8:28",
+        "bar": "The answer must explicitly name 'Romans 8:28' back in its own text — not just discuss the passage thematically without ever citing the reference (this is the writer-instruction added in Task 10, tested directly here). Once named, it must also appear in verified_references as a resolved verse pointer — this is the exact case the spec's own rationale is about: if the answer never names the verse the user asked about, there is nothing for the panel to ever trigger on.",
+    },
 ]
 
 
@@ -1245,47 +1544,7 @@ def run_case(case):
     print(f"Bar: {case['bar']}")
     print("-" * 70)
 
-    variants, keywords = expand_query(case["question"])
-    scores, _ = hybrid_search_rrf(case["question"], db, include_copyrighted=True)
-    ranked = sorted(scores.items(), key=lambda x: x[1][0], reverse=True)
-    chunks = [chunk for _, (_, chunk) in ranked[:8]]
-
-    context_parts = []
-    source_num = 0
-    for c in chunks:
-        if _is_citable(c):
-            source_num += 1
-            label = f"[Source {source_num}]"
-        else:
-            label = "[Background]"
-        context_parts.append(
-            f"{label} (source_kind={c.get('source_kind') or c.get('source_type', 'unknown')}, "
-            f"citation_mode={c.get('citation_mode', 'citable')}) "
-            f"\"{c.get('title', 'Unknown')}\" by {c.get('author', 'Unknown')}\n{c['content']}"
-        )
-    context = "\n\n---\n\n".join(context_parts)
-
-    history = [{
-        "role": "user",
-        "content": f"Sources:\n{context}\n\nQuestion: {case['question']}",
-    }]
-
-    client = _get_anthropic()
-    response = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=1500,
-        system=ANSWER_SYSTEM_BLOCKS,
-        messages=history,
-        stream=False,
-    )
-    raw_output = response.content[0].text
-
-    answer_match_start = raw_output.find("<answer>")
-    answer_match_end = raw_output.find("</answer>")
-    if answer_match_start != -1 and answer_match_end != -1:
-        answer = raw_output[answer_match_start + len("<answer>"):answer_match_end].strip()
-    else:
-        answer = raw_output.strip()
+    answer, raw_output = generate_real_answer(case["question"], db)
 
     materialized = case["expect_mention"] in answer
     print(f"Target mention present in answer: {materialized}")
@@ -1296,7 +1555,7 @@ def run_case(case):
 
     verified = verify_references(answer, raw_output, db)
     print(f"Answer:\n{answer}\n")
-    print(f"Raw reference_mentions + verifier output:\n{json.dumps(verified, indent=2)}\n")
+    print(f"Verifier output:\n{json.dumps(verified, indent=2)}\n")
 
     return {"id": case["id"], "materialized": True, "answer": answer, "verified": verified}
 
@@ -1339,21 +1598,21 @@ for name in ['john bevere', 'derek prince', 'kenneth copeland']:
 "
 ```
 
-Expected: `john bevere` and `derek prince` show `license_status`/`visibility` that pass the gate (`public_domain`/`owned`, or `shown` with safe_mode off); `kenneth copeland` shows no alias found. If either of the first two is NOT currently servable, stop and move that case to a Track-B constructed test (same treatment as F.F. Bosworth in Task 7) rather than forcing the live case — note the substitution explicitly in Task 12's writeup.
+Expected: `john bevere` and `derek prince` show `license_status`/`visibility` that pass the gate (`public_domain`/`owned`, or `shown` with safe_mode off); `kenneth copeland` shows no alias found. If either of the first two is NOT currently servable, stop and move that case to a Track-B constructed test (same treatment as F.F. Bosworth in Task 7) rather than forcing the live case — note the substitution explicitly in Task 15's writeup.
 
-- [ ] **Step 3: Commit the harness (before running it, since the run itself is Task 11)**
+- [ ] **Step 3: Commit the harness (before running it, since the run itself is Task 14)**
 
 ```bash
 cd /Users/alexwhitley/rhemata
 git add scripts/test_sp1_real_answers.py
-git commit -m "Add Track-A real-answer test harness for SP1, pinned question set"
+git commit -m "Add Track-A real-answer test harness for SP1, pinned question set (incl. user-verse-naming case)"
 ```
 
 ---
 
-### Task 11: Run the pinned test set, reword/rerun until every mention materializes
+### Task 14: Run the pinned test set, reword/rerun until every mention materializes
 
-**Files:** none new — this task runs Task 10's script and records results.
+**Files:** none new — this task runs Task 13's script and records results.
 
 - [ ] **Step 1: Run the harness**
 
@@ -1381,7 +1640,7 @@ git commit -m "SP1: finalize real-answer test questions after materialization pa
 
 ---
 
-### Task 12: Final acceptance check
+### Task 15: Final acceptance check
 
 - [ ] **Step 1: Re-run every test script from this plan in sequence, confirming all still pass together**
 
@@ -1396,11 +1655,15 @@ python3 scripts/test_sp1_real_answers.py
 
 Expected: all PASSED / all cases materialized and matching their bar, zero false resolutions anywhere.
 
-- [ ] **Step 2: Confirm the plain answer stream is unaffected — manually run one real question through the harness and read the `answer` field only, ignoring `verified_references`**
+- [ ] **Step 2: Confirm the answer-quality regression check (Task 12) was run and every pair read as unchanged quality**
+
+This is a hard part of the acceptance bar, not a formality — go back and actually re-read Task 12's output if it wasn't reviewed carefully the first time. A feature that resolves references perfectly but degrades ordinary answers has not met Phase B's bar.
+
+- [ ] **Step 3: Confirm the plain answer stream is unaffected — manually run one real question through the harness and read the `answer` field only, ignoring `verified_references`**
 
 Confirm it reads exactly as a normal Rhemata answer would — no visible `<reference_mentions>` leakage, no stray tags, no truncation.
 
-- [ ] **Step 3: Final commit closing out SP1**
+- [ ] **Step 4: Final commit closing out SP1**
 
 ```bash
 cd /Users/alexwhitley/rhemata
@@ -1408,4 +1671,4 @@ git add -A
 git commit -m "SP1: reference-pointer backend complete — writer proposes, verifier disposes, zero false resolutions confirmed"
 ```
 
-SP1 is done when this commit lands with every script in Step 1 passing. SP2 (frontend panel consuming `verified_references`) is separate, unscheduled work — this plan does not include it.
+SP1 is done when this commit lands with every script in Step 1 passing AND Task 12's regression check confirmed clean. SP2 (frontend panel consuming `verified_references`) is separate, unscheduled work — this plan does not include it.
