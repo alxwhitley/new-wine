@@ -62,11 +62,27 @@ def _get_groq() -> Groq:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+class PropositionExtractionFailed(Exception):
+    """Raised by extract_propositions() when the model call itself did not
+    complete -- network error, rate limit, timeout, or a response that
+    doesn't parse as the expected JSON array. Deliberately distinct from a
+    genuine empty result: extract_propositions() returning [] must always
+    mean the model was called successfully and legitimately found nothing
+    to extract, never that the call broke. process_document() catches this
+    (it's still an Exception) and reports "error" -- the same signal
+    already used for a storage-side failure, since both mean "nothing was
+    written, safe to retry," just at different steps.
+    """
+
+
 def extract_propositions(text: str, doc_id: str = "") -> List[dict]:
     """Send text to Groq and return parsed proposition list.
 
-    Returns [] on any failure — never raises.
-    Logs PROPOSITION_EXTRACT_FAIL on error.
+    Returns [] ONLY for a genuine empty result -- the model was called
+    successfully and found nothing worth extracting. Raises
+    PropositionExtractionFailed for everything else (network error, rate
+    limit, timeout, a response that fails to parse as JSON): a failed call
+    must never be indistinguishable from a legitimate empty one.
     """
     try:
         client = _get_groq()
@@ -83,7 +99,7 @@ def extract_propositions(text: str, doc_id: str = "") -> List[dict]:
         return json.loads(raw)
     except Exception as exc:
         logger.warning("PROPOSITION_EXTRACT_FAIL doc=%r error=%s", doc_id, exc)
-        return []
+        raise PropositionExtractionFailed(str(exc)) from exc
 
 
 def get_license_status(conn, source_id: str) -> Optional[str]:
@@ -158,9 +174,14 @@ def process_document(
     Returns one of:
       "skipped_licensed"        — source is public_domain/owned (or missing); nothing written
       "skipped_precept_austin"  — Precept Austin, locked out by name; nothing written
-      "no_propositions"         — extraction returned empty list
+      "no_propositions"         — the model ran successfully and genuinely found nothing
+                                   to extract. A completed result, not a failure.
       "stored:{n}"              — n propositions written to DB
-      "error"                   — unexpected failure (logged)
+      "error"                   — the extraction call itself failed (network, rate limit,
+                                   timeout, unparseable response) or a later step (license
+                                   lookup, storage) failed. Nothing was written; safe to
+                                   retry. Distinct from "no_propositions" by construction —
+                                   see PropositionExtractionFailed above.
 
     Gate: extracts for "licensed" and "unlicensed" sources only. Skips
     "public_domain" and "owned" (already safely servable as verbatim
