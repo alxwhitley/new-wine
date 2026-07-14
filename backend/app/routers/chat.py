@@ -937,7 +937,7 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
                             answer_parts.append(buffer)
                             yield _sse(json.dumps({"token": buffer}))
                             buffer = ""
-                else:
+                elif in_answer:
                     # Inside <answer> — check for closing tag
                     close_pos = buffer.find("</answer>")
                     if close_pos != -1:
@@ -957,6 +957,16 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
                             answer_parts.append(safe)
                             yield _sse(json.dumps({"token": safe}))
                             buffer = buffer[safe_len:]
+                # else: answer_closed and not in_answer — SP1 guard. Silently
+                # discard everything after </answer> (e.g. Task 10's trailing
+                # <reference_mentions> block). Without this explicit no-op
+                # branch, the two-way if/else above would fall through into
+                # the "elif in_answer" branch's old unconditional "else" and
+                # start re-streaming trailing content as if it were still
+                # inside the answer — confirmed by simulation during Task 11
+                # self-review. Never re-enters emission; never re-checks for
+                # a stray "<answer>" substring (branch A above requires
+                # `not answer_closed`).
         except Exception:
             logger.exception("Chat LLM stream failed")
             yield _sse(json.dumps({"error": "AI service temporarily unavailable"}))
