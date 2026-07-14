@@ -20,3 +20,30 @@ def normalize_alias_key(s: Optional[str]) -> str:
     if not s:
         return ""
     return re.sub(r'\s+', ' ', s.lower().strip())
+
+
+def is_source_servable(db, source_id: str) -> bool:
+    """Return True if this source may currently be served, using the exact
+    same predicate as migration 049/056's SQL gate:
+
+        s.license_status IN ('public_domain', 'owned')
+        OR (NOT safe_mode_on AND s.visibility = 'shown')
+
+    safe_mode is read fresh on every call — it is a global kill switch and
+    must never be cached across requests.
+    """
+    safe_mode_result = (
+        db.table("app_settings").select("value").eq("key", "safe_mode").limit(1).execute()
+    )
+    safe_mode_on = bool(safe_mode_result.data) and safe_mode_result.data[0]["value"] == "on"
+
+    source_result = (
+        db.table("sources").select("license_status, visibility").eq("id", source_id).limit(1).execute()
+    )
+    if not source_result.data:
+        return False
+
+    row = source_result.data[0]
+    if row["license_status"] in ("public_domain", "owned"):
+        return True
+    return (not safe_mode_on) and row["visibility"] == "shown"
