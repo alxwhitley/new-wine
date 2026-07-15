@@ -84,8 +84,10 @@ def find_occurrences(answer_text: str, raw: str) -> List[int]:
 
 
 def _parse_verse_or_range(ref: str) -> Optional[Tuple[str, int, int, Optional[int]]]:
-    """Parse 'Romans 8:28' or 'Romans 8:26-28' / 'Romans 8:26–28' into
-    (abbrev, chapter, verse_start, verse_end_or_None). Reuses the same
+    """Parse 'Romans 8:28' or 'Romans 8:26-28' / 'Romans 8:26–28' /
+    'Romans 8:26—28' (em-dash — confirmed the model reaches for these
+    constantly in its own prose) into (abbrev, chapter, verse_start,
+    verse_end_or_None). Reuses the same
     book-name matching BOOK_MAP already uses in app.routers.study.parse_ref
     — this is an extension to support ranges, not a fork of book matching.
     Returns None if the book, chapter, or verse can't be parsed at all
@@ -102,7 +104,7 @@ def _parse_verse_or_range(ref: str) -> Optional[Tuple[str, int, int, Optional[in
     ref = ref.strip()
     if len(ref) > 80:
         return None
-    m = re.match(r'^(\d?\s*[A-Za-z ]+?)\s+(\d+):(\d+)(?:[-–](\d+))?$', ref)
+    m = re.match(r'^(\d?\s*[A-Za-z ]+?)\s+(\d+):(\d+)(?:[-–—](\d+))?$', ref)
     if not m:
         return None
 

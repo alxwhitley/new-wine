@@ -995,9 +995,16 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
             yield _sse(json.dumps({"token": buffer}))
             buffer = ""
 
-        # If we never found <answer> tags, the full raw output is the answer
+        # If we never found <answer> tags, the full raw output is the answer.
+        # SP1: strip anything from a stray <reference_mentions> tag onward first —
+        # a malformed generation could otherwise leak that block into what the
+        # user reads (Global Constraint: answer text must be byte-for-byte
+        # unaffected by anything added for the new block, even on malformed output).
         if not answer_parts:
             raw_text = "".join(raw_full).strip()
+            ref_tag_pos = raw_text.find("<reference_mentions>")
+            if ref_tag_pos != -1:
+                raw_text = raw_text[:ref_tag_pos].strip()
             answer_parts.append(raw_text)
             yield _sse(json.dumps({"token": raw_text}))
 
