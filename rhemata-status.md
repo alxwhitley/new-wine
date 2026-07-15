@@ -1,6 +1,6 @@
 # rhemata-status.md
 
-**As of:** 2026-07-14 · terminal-owned · **overwritten each session, not a log** (history lives in git history; this file is only the current snapshot).
+**As of:** 2026-07-15 · terminal-owned · **overwritten each session, not a log** (history lives in git history; this file is only the current snapshot).
 
 **Source of truth by domain:** durable architecture/decisions → `CLAUDE.md` · messaging/positioning → `POSITIONING.md` · styling tokens → `DESIGN.md` · roadmap → `PLAN.md` · **this file → live state only, nothing durable, nothing "how it works."**
 
@@ -8,52 +8,73 @@
 
 ## Current Priority / Next Action
 
-Today ran three sessions back to back: the Inline Study Panel shell (frontend), the lexicon slice-runner (ingest tooling), and a records-vs-database reconciliation (docs only). All three are committed; all commits through this file's own regeneration are about to be pushed. **Nothing corpus-side changed today — every write this session is either code, docs, or already-cleaned-up test data.**
+Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2 Phase 1 (kill switch), and ran a 10-question live verification of SP1's coverage. This session is a **records-only wrap-up** — nothing further was built. **SP2 Phase 2 (attribution) has NOT been started.**
 
-- **No default next action is forced.** Everything below is independent and Alex's call: the Sermonindex volume run, the 2 broken PA docs, the 2 ambiguous reconciliation flags, the optional lexicon restamp, or picking up #10/CLAUDE.md/Study-Panel follow-ups. See "Next Session Should."
-- **Boundary that holds across all three sessions today:** where this file states corpus/ingest status, it was verified against the live database or git log at write time, not carried forward from prior text. This file being accurate does **not** mean the corpus itself has been audited end-to-end — the ~3,800 documents with no partial-write-verification signal remain unaudited by any of today's work.
-
----
-
-## Done today (verified against git log / DB just now, not carried forward)
-
-**Study Panel shell + motion (frontend) — commit `161c4de`, status commit `fc2f273`, both PUSHED LIVE to `origin/main`.**
-- Panel slides in over chat from the right (desktop side panel / mobile full-screen sheet), sidebar collapses in the same motion, real trigger (verse references detected in finished chat answers), pin system, honest empty states for ungated content. Confirmed via `git log`: `161c4de` and `fc2f273` are both in `origin/main`'s history (pushed earlier today).
-- **Open gap, not closed by anything since:** shipped **without a kill switch / beta flag** — the panel is unconditionally live to any user who taps a detected verse reference (or hits the dev shortcut) in production right now. Also shipped **without the real SP1 pointer backend** — the trigger is a narrow client-side regex over already-rendered text (`lib/study-reference.ts`), not the hidden-pointer, fail-quiet-resolution system PLAN.md's SP1 describes. By PLAN.md's own numbering this build is shaped like **SP2 minus those two pieces**, not SP0 (the brief's original label).
-
-**Lexicon slice-runner — commit `dd609fb`, status commit `5b49eaf`.**
-- `scripts/ingest_lexicon_runner.py` built, driving the already-converted `ingest_lexicon.py` through `shared_ingest.ingest_document()` in checkpointed slices with retry→bisect→skip-and-log on a single bad entry. Proven end-to-end on a bounded real slice (initial load, resumability, forced-failure) — all three re-verified by direct DB recomputation, not self-report.
-- **Key finding, re-confirmed fresh just now:** all four real STEPBible lexicon documents are still exactly as found — TBESG 11,034 / TBESH 10,258 / TFLSJ(0-5624) 5,709 / TFLSJ(extra) 5,324 chunks, all `ingest_completed_at IS NULL` (unstamped, from the pre-conversion script). **There is no backlog for the runner to run against these four files.** The runner is ready for future lexicon sources, not a queued job for today's four. A deliberate restamp-for-consistency of these four (via `on_existing="delete_and_reingest"`) remains an **open option, not a default next step** — it's a real, brief-outage-shaped write to live production docs that already serve correctly.
-- Confirmed fresh: zero leftover test/throwaway documents from this build's proof runs (`RUNNER PROOF` titles) — cleanup was real, not just claimed.
-
-**Records-vs-database reconciliation — commit `4addc06`.**
-- Audited every "work remains" claim in `PLAN.md` and `rhemata-status.md` against direct DB/repo queries. **9 stale claims corrected, 2 flagged as ambiguous** (needs Alex, not a build). Headline: the propositions backlog was recorded as ~2,980 unlicensed docs pending — the real, actionable number (re-confirmed fresh just now) is **810** non-PA unlicensed docs; the old figure counted Precept Austin's 2,176 permanently-excluded docs as if they were backlog. Full detail lives in `PLAN.md`'s Ground Truth section and Roadmap #17, not restated here.
-- `CLAUDE.md` untouched by design — its "two unconverted scripts" count (`ingest_helloao.py`, `ingest_commentaries.py`) was independently verified accurate via code inspection this session; that specific number needs no fix. Other stale notes in CLAUDE.md remain deferred to its own docs pass.
-
-**Prior thread, already closed, unaffected by today:** the Sermonindex ingest-integrity remediation (all-or-nothing writer `6708060`, redo/reuse dispatcher + completeness stamp `1ec5226`, lexicon conversion `33e92b4`) — confirmed present in `git log` exactly where expected, nothing about them changed today.
+- **No default next action is forced.** Alex's call: continue SP2 (Phase 2 — attribution — is next in sequence), or pick up any of yesterday's carried-forward items below (Sermonindex volume run, PA redo, ambiguous reconciliation flags, lexicon restamp, #10 conversion, CLAUDE.md docs pass). None block each other.
+- Everything logged below as "done today" was verified against real commits, real test output, or real saved data from this session — not carried forward from memory.
 
 ---
 
-## Still open (verified against DB/queue just now)
+## Done today (2026-07-15, verified against git log / real data just now)
 
-1. **The Sermonindex volume run has not happened.** Queue re-checked fresh: 741 total rows in the `Sermonindex` tab, **553 `triaged`** (ready for ingest, not yet run — "551" in earlier notes was an approximation, off by 2), 173 `done`, 15 `expanded`. The 173 `done` rows are confirmed real: 117 Leonard Ravenhill + 50 Zac Poonen + 6 Carter Conlon docs actually exist in the DB with matching counts. The 553 triaged rows are the real, unstarted volume run.
-2. **2 genuinely-broken PA documents** ("Word Study: Fortunes," "Word Study: Innocent" — confirmed fresh, both still zero chunks) still need a REDO through the atomic-swap mechanism (`on_existing="delete_and_reingest"`). Not touched today — real cleanup, deliberately out of scope for a records-only session.
-3. **2 ambiguous reconciliation flags, both need Alex, not a build:**
-   - Magazine "27 of 27 pending articles contaminated" — the original signal can't be located against current state; closest match is 32 articles across 5 issues sitting in `sources/magazine/02_extracted/` awaiting approval. Needs Alex's memory of what "27 contaminated" originally referred to.
-   - PA "survivability guard will rarely fire" — a claim about future behavior under real failure conditions; not something a database query can confirm or refute either way.
-4. **Optional lexicon restamp** (see above) — Alex's call, not scheduled.
-5. **CLAUDE.md's own docs pass remains deferred** — its unconverted-script count is fine (verified accurate this session); its other stale notes (folder renames, `jewish_perspectives` drop, etc.) are unrelated open items, not touched today.
+**1. SP1 range/prefix double-count fix — commit `76105a0`, merged to `main`.**
+- **What it fixed:** whenever SP1's writer named a verse range (e.g. "Romans 8:26-28"), it also listed the range's own start verse as a separate line in its private `<reference_mentions>` block — both independently real, both verifying, one textual span producing two verified references. Confirmed live in 2 of 10 real questions (Q3, Q9) during today's verification run, not a rare edge case.
+- **Reclassified, not silently fixed:** SP1's own final review had judged this cosmetic and accepted it — correctly, at the time, since nothing consumed `verified_references` yet and both entries were genuinely real (not a false-resolution). It is now reclassified **load-bearing**, because SP2 is the first thing to render this data, and PLAN.md #39's own rule requires "ranges resolve as one reference." Recorded as a reclassification in PLAN.md #39, not backdated as if always known.
+- **Generalized beyond ranges:** the fix is a position-overlap de-duplication pass (longer span wins, shorter dropped; exact-length ties drop both, fail-quiet) applied after all four existing verification guards — none weakened. It also covers cross-book nested substrings (confirmed: "John 3:16" is a literal substring of "1 John 3:16") and teacher-name nesting, since both share the same presence-check mechanism as the range case.
+- **Proof:** reproduced on the real Q3/Q9 failing cases; confirmed Q9's genuine, non-overlapping second mention of "Matthew 12:31" survives untouched; zero regressions across all 10 real coverage-run questions. 5 new tests added to `scripts/test_reference_verifier.py`, each proven non-tautological by disabling the fix and confirming the test actually flips to FAIL (per SP1's own hard-won lesson — two tautological tests were caught this same way during SP1's original build).
+
+**2. SP2 (Inline Study Panel frontend) plan — written, amended, committed.**
+- Lives at `docs/superpowers/plans/2026-07-15-sp2-inline-study-panel-frontend.md`. Written as a corrected delta against the already-live SP2-shaped shell (`161c4de`), not a greenfield build. Committed `a0437d1`; amended once, `29dbdaa` (reorder + endpoint-split protection + guest pin behavior + real cap message).
+- **Confirmed from the actual file, not memory:** 10 phases, 36 tasks, strictly ordered — 1 kill switch, 2 attribution, 3 SP1 verified-verse swap, **MID-POINT STOP**, 4 fix "your teachers on this verse" (deliberately moved ahead of the pin system, since the live shell states a falsehood on every verse today), 5 pin system rebuild, 6 shared-component extraction, 7 add Commentaries + Pastors' Notes rows, 8 Interlinear + lexicon word study move-in (SP3 dissolved), 9 keyboard/screen-reader verification, 10 records correction.
+- Supersession decisions recorded in PLAN.md #40/#41 and Open Decisions #10/#11 (see PLAN.md itself — not restated here).
+
+**3. SP2 Phase 1 — kill switch — commit `7ca171b`, merged to `main`.**
+- `NEXT_PUBLIC_STUDY_PANEL_ENABLED` (`frontend/lib/study-panel-flag.ts`) gates: verse-underline detection in `chat-message.tsx`; the dev "Study preview" button, its Cmd/Ctrl+Shift+S shortcut, and `handleVerseClick` in `page.tsx`. Defaults enabled unless explicitly set to `"false"`.
+- **Verified, not assumed:** an independent reviewer read the actual shipped code (not the implementer's report) and confirmed correct guard placement; a real `next dev` server was run twice (flag unset, then `"false"`) and the rendered HTML diffed directly — the dev button is present exactly once when on, zero times when off, confirmed via real curl output, not code inspection.
+- **Honest gap, not glossed over:** the keyboard-shortcut no-op and live-answer underline suppression were NOT verified via live interactive/browser test — no browser-automation tool was available in this environment. Confidence rests on the same proven mechanism (identical flag, same code path) plus the independent code review. See Open Flags below.
+- Production default confirmed with Alex: left unset (enabled) — beta users get the panel as each phase lands. Documented in `CLAUDE.md`'s Environment Variables section.
+
+**4. 10-question live SP1 verification run (read-only, no commits from the run itself — scratchpad only).**
+- Real questions run through the real answer-generation harness (`scripts/sp1_answer_harness.py`), the real verifier (`reference_verifier.py`), and the real, unmodified client-side guesser (`frontend/lib/study-reference.ts`), side by side.
+- **Coverage parity, precisely counted:** the guesser detected 28 verse references total across all 10 answers; SP1 independently verified a matching reference for all 28 — **zero misses, full parity.**
+- **Teacher resolutions — pure gain over the guesser (which cannot detect teachers at all, by design):** 6 of the 10 questions produced at least one genuine, currently-servable teacher resolution (8 total resolution events across 3 distinct teachers: Derek Prince ×6, Michael Brown ×1, Daniel Kolenda ×1).
+- **Correction to how the biblical-figure and license guards were characterized going into this run:** Paul, Thomas, and Peter were named repeatedly across 8 of the 10 real answers. In every case, the model's own writer-level instruction (never propose a biblical figure as a TEACHER line) already prevented them from ever being proposed as a teacher mention — so the verifier's independent biblical-figure backstop guard was **never actually triggered** by this run; it never got the chance to fire. Likewise, Q8 was built specifically to tempt a hidden/unlicensed teacher (F.F. Bosworth), but the model declined to name any individual, so the license/visibility guard was also never reached. **Both guards remain lab-proven only** (SP1's own constructed test suite), not field-proven. Do not record either as "proven live" in a future session — that would overstate this run's actual coverage.
+- **One real defect found and now fixed:** the range/prefix double-count (see item 1 above) — found by this run, not assumed.
+- **Minor answer-writing oddity, flagged not fixed:** on Q5, the answer discussed "1 Corinthians 12:31" at length but only literally named the verse in its closing "view in the study panel" sign-off line, never in the substantive discussion. PLAN.md #39's naming-back rule technically passed, but the resulting underline would land on the sign-off line rather than the substance. Not an SP2 defect — a system-prompt wording gap, worth a tweak whenever answer-writing is next touched.
+
+---
+
+## Prior session (2026-07-14), unaffected by today, still real
+
+**Study Panel shell + motion — commit `161c4de`, status commit `fc2f273`.** Panel slides in over chat, sidebar collapses, real trigger (client-side regex detector), pin system, honest empty states. **Its two open gaps as of yesterday are now PARTIALLY closed by today's work:** the kill switch now exists (today's item 3, closes Open Flag 16); the real SP1 pointer backend is built and merged but **not yet wired into this shell's trigger** — that's SP2 Phase 3, not yet built (Open Flag 17 stays open — see below).
+
+**Lexicon slice-runner — commit `dd609fb`, status commit `5b49eaf`.** `scripts/ingest_lexicon_runner.py` built and proven end-to-end. All four real STEPBible lexicon documents remain fully ingested with no backlog for the runner to run against — the runner is ready for future sources, not a queued job today. A restamp-for-consistency of the four existing files remains an open option, not a default next step.
+
+**Records-vs-database reconciliation — commit `4addc06`.** 9 stale claims corrected, 2 flagged ambiguous (needs Alex's memory, not a build) — see "Still open" below.
+
+**Older, already closed, unaffected:** Sermonindex ingest-integrity remediation (`6708060`, `1ec5226`, `33e92b4`) — confirmed present in `git log` exactly where expected.
+
+---
+
+## Still open (carried forward — none of these were touched today)
+
+1. **The Sermonindex volume run has not happened.** 553 `triaged` rows ready in the Queue, unstarted.
+2. **2 genuinely-broken PA documents** ("Word Study: Fortunes," "Word Study: Innocent") still need a REDO via `on_existing="delete_and_reingest"`.
+3. **2 ambiguous reconciliation flags, both need Alex, not a build:** the magazine "27 of 27 contaminated" figure (can't locate the original signal against current state — closest match is 32 articles across 5 issues in `02_extracted/`); the PA "survivability guard will rarely fire" claim (a claim about future behavior, not DB-checkable).
+4. **Optional lexicon restamp** — Alex's call, not scheduled.
+5. **CLAUDE.md's own docs pass remains deferred** — folder renames, `jewish_perspectives` drop, and other stale notes, unrelated to today's work.
+6. **#10 — `ingest_commentaries.py` conversion** — still unstarted, still the last unconverted script in the shared-writer migration.
+7. **SP2 Phases 2–10** — not started. Phase 2 (attribution) is next in sequence per the committed plan.
 
 ---
 
 ## Where We Are in the Roadmap
 
-(PLAN.md v5.1+, linear numbered session list, plus the SP track added 2026-07-13 — see PLAN.md itself for full detail; this is a pointer, not a restatement)
+(PLAN.md v5.1+, linear numbered session list, plus the SP track — see PLAN.md itself for full detail; this is a pointer, not a restatement)
 
 - **#1–#14:** all DONE except #10 (`ingest_commentaries.py` conversion, still unstarted) and #14's folder-rename/`jewish_perspectives`-drop remainder.
-- **#12's batch-scale companion (the slice-runner) is DONE** — but per above, there's no pending "full run" for the four existing lexicon files specifically.
-- **#17 (propositions backfill):** target corrected today to 810 non-PA unlicensed docs (was wrongly recorded as 2,980) — not run, just correctly sized now.
-- **SP track:** SP2-shaped shell is live in production (see above) without SP2's own named kill switch or SP1 underneath it. SP3 (tool rows) remains correctly hard-gated, untouched.
+- **#17 (propositions backfill):** 810 non-PA unlicensed docs, correctly sized, not run.
+- **SP track:** SP1 (reference-pointer backend) fully built, merged, and today's live-run defect fixed — see PLAN.md #39. SP2 (panel frontend) is a re-planned corrected delta, Phase 1 (kill switch) DONE and merged; Phases 2–10 not started. SP3 formally dissolved into SP2 (PLAN.md #41) — no longer a separate track.
 
 ---
 
@@ -66,21 +87,31 @@ Today ran three sessions back to back: the Inline Study Panel shell (frontend), 
 5. `GOVERNED_FILES` gap (`guard_pretooluse.py`/`settings.json` not in `GOVERNED_FILES`).
 6. PLAN.md #5.5 closing line is stale. Needs Alex's explicit go-ahead on replacement wording.
 7. PLAN.md #14 drift — folder renames and the `jewish_perspectives` drop still open.
-10. CLAUDE.md's own "unconverted scripts" prose is stale in places (says four in its Directory Structure section) even though the true count (two) is confirmed accurate — CLAUDE.md's own docs pass, deferred, not this session's job.
+10. CLAUDE.md's own "unconverted scripts" prose is stale in places (says four in its Directory Structure section) even though the true count (two) is confirmed accurate — deferred to CLAUDE.md's own docs pass.
 12. PA's 398 "excerpt-less" documents — 396 just need `generate_excerpts.py` (not broken); 2 are the genuinely-broken docs in "Still open" #2 above.
 13. PA "survivability guard will rarely fire" — see "Still open" #3 above.
-16. No kill switch / beta flag exists for the Study Panel — see "Done today" above.
-17. The Study Panel's verse-reference detector is a narrow client-side stand-in, not the real SP1 backend — see "Done today" above.
-18. CLAUDE.md and SKILL.md are both stale on the quoting rule (found during SP1 diagnostic, 2026-07-14): both describe verbatim quoting permitted up to 50 words pending a verifier that doesn't exist, while the live system prompt bans reproducing any quote or exact wording in any mode, paraphrase-only always — code is stricter than the docs. For the deferred docs pass, not fixed now.
+18. CLAUDE.md and SKILL.md are both stale on the quoting rule (found 2026-07-14): both describe verbatim quoting permitted up to 50 words pending a verifier that doesn't exist, while the live system prompt bans reproducing any quote or exact wording in any mode. Deferred to the docs pass, not fixed now.
+
+**Closed today:**
+- ~~16. No kill switch / beta flag exists for the Study Panel.~~ **CLOSED — commit `7ca171b`.** Built, independently reviewed, and verified via real rendered-HTML diff with the flag on and off.
+
+**Stays open — do NOT close early:**
+17. The Study Panel's verse-reference detector is still the narrow client-side stand-in (`lib/study-reference.ts`'s regex guesser), not SP1's verified-pointer data. This closes at SP2 Phase 3 (the guesser→SP1 swap), not before. Today's 10-question run proved SP1's data is ready and has full coverage parity with the guesser — but nothing today wired the panel's actual trigger to it.
+
+**New today:**
+19. **Kill switch is deploy-time, not instant.** `NEXT_PUBLIC_STUDY_PANEL_ENABLED` is a build-time environment variable — flipping it requires a Vercel redeploy to take effect (minutes, not immediate). This differs from `safe_mode`, which is a database row read fresh per request and takes effect instantly. Accepted deliberately for a private beta. A future session must not assume the panel can be pulled instantly in an emergency the way `safe_mode` can.
+20. **SP2 Phase 1 verification gap.** The keyboard-shortcut suppression and the live-streamed-answer underline suppression were verified by independent code review plus the same proven flag mechanism — not by a live interactive/browser test, because no browser-automation tool was available in this environment. A Playwright skill exists in Alex's skill set and could close this gap cheaply in a future session.
+21. **SP1's license/visibility and biblical-figure guards are LAB-PROVEN ONLY, not field-tested.** Today's 10-question live run never actually exercised either guard — the model self-filtered (never proposed a biblical figure as a teacher; never named a hidden/unlicensed teacher even when tempted by Q8) before either guard got the chance to fire. Do not let a future session record or assume these guards have been proven against live traffic — only SP1's own constructed test suite has actually exercised them.
+22. **Answer-writing oddity (Q5), minor, not an SP2 issue.** The naming-back rule (PLAN.md #39) can technically pass while placing the named verse only in the closing sign-off line rather than the substantive discussion, producing a technically-correct but poorly-placed underline. Worth a system-prompt tweak whenever answer-writing is next touched — not urgent.
 
 ---
 
-## Standing Carve-Out (unchanged across many sessions)
+## Standing Carve-Out
 
-Working tree carries exactly this and nothing else beyond today's real, committed changes: modified `SKILL.md` (unrelated pre-existing drift) + untracked `.agents/`, `.claude/skills/`, `skills-lock.json` (skill-loader paths). Still needs a `.gitignore`-or-commit decision. Confirmed via `git status` immediately before this file was written — nothing else uncommitted, nothing else untracked.
+**Corrected today — the prior note was stale.** `git status` immediately before writing this file shows only untracked `.agents/`, `.claude/skills/`, `skills-lock.json` (skill-loader paths, still need a `.gitignore`-or-commit decision) plus this session's own now-committed work. `SKILL.md`, previously noted as modified, is now clean (matches `HEAD`) — the prior session's uncommitted drift there is gone, either committed or reconciled at some point before today; not independently re-diagnosed further, since it's not this session's concern.
 
 ---
 
 ## Next Session Should
 
-Alex's call between several fully independent, unblocked options: (a) run the Sermonindex volume batch (553 triaged rows ready), (b) REDO the 2 broken PA docs, (c) resolve the 2 ambiguous reconciliation flags (needs Alex's memory/judgment, not a build), (d) decide on the optional lexicon restamp, (e) #10 — convert `ingest_commentaries.py`, (f) decide the Study Panel's kill-switch/SP1 gaps now that it's live in production, or (g) CLAUDE.md's own docs pass. None block each other.
+Alex's call between fully independent, unblocked options: (a) SP2 Phase 2 — attribution (next in the committed plan sequence), (b) run the Sermonindex volume batch (553 triaged rows ready), (c) REDO the 2 broken PA docs, (d) resolve the 2 ambiguous reconciliation flags (needs Alex's memory/judgment, not a build), (e) decide on the optional lexicon restamp, (f) #10 — convert `ingest_commentaries.py`, (g) CLAUDE.md's own docs pass, (h) close Open Flag 20 with a Playwright-driven interactive pass over SP2 Phase 1's remaining verification gap. None block each other.
