@@ -257,6 +257,102 @@ def main():
         and result_8[0]["position"] == expected_first_position,
     )
 
+    # --- Overlap de-duplication ---
+    # These tests use a FakeDB whose "verses" table returns one non-empty
+    # row for any verse_id (the fake query ignores its own .eq() filter
+    # args, same as every other FakeDB fixture in this file) — every verse
+    # reference below resolves as real regardless of which one is asked
+    # for. This is deliberate: resolution itself is already covered by the
+    # tests above, so these isolate the overlap rule specifically, exactly
+    # as B1/Sentinel isolate their own guard above.
+    overlap_fake_db = _FakeDB(table_responses={"verses": [{"verse_id": "ROM.8.26"}]})
+
+    # T1 — the exact reported bug shape: a range and its own start verse,
+    # both independently real, both co-located at the same position.
+    answer_t1 = "Romans 8:26-28 is a key passage."
+    raw_t1 = "<reference_mentions>\nVERSE: Romans 8:26-28\nVERSE: Romans 8:26\n</reference_mentions>"
+    result_t1 = verify_references(answer_t1, raw_t1, overlap_fake_db)
+    check(
+        "T1: range/prefix overlap — only the longer range survives, its "
+        "own start-verse duplicate at the same position is dropped",
+        len(result_t1) == 1
+        and result_t1[0]["raw"] == "Romans 8:26-28"
+        and result_t1[0]["positions"] == [0],
+    )
+
+    # T2 — Q9's real shape: the same co-located duplicate, PLUS a genuinely
+    # separate later mention of the start verse on its own. Proves the fix
+    # removes only the overlapping position, not the whole entry — the
+    # non-overlapping position must survive untouched.
+    answer_t2 = (
+        "Matthew 12:31-32 is a famous warning. "
+        "Later in the discussion, Matthew 12:31 is quoted again on its own."
+    )
+    raw_t2 = "<reference_mentions>\nVERSE: Matthew 12:31-32\nVERSE: Matthew 12:31\n</reference_mentions>"
+    result_t2 = verify_references(answer_t2, raw_t2, overlap_fake_db)
+    range_position = find_occurrences(answer_t2, "Matthew 12:31-32")[0]
+    start_verse_positions = find_occurrences(answer_t2, "Matthew 12:31")
+    genuine_separate_position = start_verse_positions[1]  # [0] is the co-located dup, [1] is the real second mention
+    by_raw_t2 = {r["raw"]: r for r in result_t2}
+    check(
+        "T2: co-located range/start-verse duplicate dropped, but a "
+        "genuinely separate later mention of the same start verse "
+        "survives (Q9 shape)",
+        by_raw_t2.get("Matthew 12:31-32", {}).get("positions") == [range_position]
+        and by_raw_t2.get("Matthew 12:31", {}).get("positions") == [genuine_separate_position],
+    )
+
+    # T3 — a shorter reference nested inside a DIFFERENT, unrelated longer
+    # reference's own text (not a range/endpoint relationship at all):
+    # "John 3:16" is a literal substring of "1 John 3:16". Proves the rule
+    # is general — position-overlap-based, not a special case for ranges.
+    answer_t3 = "1 John 3:16 says we know love by this — that Christ laid down His life for us."
+    raw_t3 = "<reference_mentions>\nVERSE: 1 John 3:16\nVERSE: John 3:16\n</reference_mentions>"
+    result_t3 = verify_references(answer_t3, raw_t3, overlap_fake_db)
+    check(
+        "T3: a shorter reference nested inside a different, unrelated "
+        "longer reference's own text is dropped ('John 3:16' inside "
+        "'1 John 3:16') — not just the range/endpoint case",
+        len(result_t3) == 1 and result_t3[0]["raw"] == "1 John 3:16",
+    )
+
+    # T4 — exact-length tie between two overlapping entries. Calls the
+    # private helper directly with a hand-built input, since forcing a real
+    # tie through two genuinely different Bible references is incidental;
+    # the point is the tie-breaking rule itself. Fail-quiet: ambiguous, so
+    # both are dropped rather than guessing which one the model meant.
+    tie_input = [
+        {"type": "verse", "raw": "AAAAAAAAA", "positions": [10]},  # span [10, 19)
+        {"type": "verse", "raw": "BBBBBBBBB", "positions": [10]},  # same span, same length — exact tie
+    ]
+    tie_result = reference_verifier._deduplicate_overlapping_spans(tie_input)
+    check(
+        "T4: exact-length tie between two overlapping different entries — "
+        "fail-quiet drops BOTH rather than arbitrarily keeping one",
+        tie_result == [],
+    )
+
+    # T5 — the same rule applied to TEACHER mentions, not just verses.
+    # "Grace Church" is a literal substring of "Amazing Grace Church".
+    # Proves generality across both proposal types, since find_occurrences
+    # is the same presence-check mechanism for both.
+    teacher_overlap_fake_db = _FakeDB(
+        table_responses={
+            "source_aliases": [{"source_id": "11111111-2222-3333-4444-555555555555"}],
+            "sources": [{"license_status": "owned", "visibility": "shown"}],
+            "app_settings": [{"value": "off"}],
+        }
+    )
+    answer_t5 = "Amazing Grace Church hosted the conference this year."
+    raw_t5 = "<reference_mentions>\nTEACHER: Amazing Grace Church\nTEACHER: Grace Church\n</reference_mentions>"
+    result_t5 = verify_references(answer_t5, raw_t5, teacher_overlap_fake_db)
+    check(
+        "T5: teacher-teacher nested-name overlap — the longer full name "
+        "survives, the shorter nested name's overlapping occurrence is "
+        "dropped",
+        len(result_t5) == 1 and result_t5[0]["raw"] == "Amazing Grace Church",
+    )
+
     print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILURE(S): ' + ', '.join(failures)}")
     if failures:
         sys.exit(1)

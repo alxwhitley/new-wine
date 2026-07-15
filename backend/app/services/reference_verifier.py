@@ -19,6 +19,19 @@ must survive all of them):
   3. Biblical-figure backstop — independent of #2's result. Runs regardless
      of what source_aliases says.
 
+After all four guards, one more pass runs over the surviving, already-
+verified list: overlap de-duplication (see _deduplicate_overlapping_spans).
+The writer is instructed to list every verse it names, including repeats,
+so it never deduplicates a range against its own start verse (e.g. it
+proposes "Romans 8:26-28" AND "Romans 8:26" as separate lines, because it
+did name 8:26 — as the front half of the range). Both proposals are
+individually true and both survive guards 1-3 independently; the result is
+two verified references anchored at the same textual span. This pass fixes
+that by keeping the longer of any two overlapping spans and dropping the
+shorter — it is not a fifth validity guard (it never makes a resolvable
+reference unresolvable), just a precedence rule for spans two already-
+verified references both claim.
+
 See docs/superpowers/plans/2026-07-14-sp1-reference-pointer-backend.md for
 the full design rationale.
 """
@@ -173,6 +186,64 @@ def verify_teacher_mention(db, raw: str) -> Optional[str]:
     return source_id
 
 
+def _deduplicate_overlapping_spans(verified: List[Dict]) -> List[Dict]:
+    """When two DIFFERENT verified references occupy overlapping character
+    spans in answer_text, keep the longer span and drop the shorter's
+    overlapping occurrence. Generic over cause — a verse range vs. its own
+    start verse (e.g. "Romans 8:26-28" vs "Romans 8:26" both at position 0)
+    is the case this was built for, but the same rule also covers a shorter
+    reference nested inside an unrelated longer one (e.g. "John 3:16" as a
+    literal substring of "1 John 3:16"), and applies identically to teacher
+    mentions since they share the same presence-check mechanism.
+
+    Never compares an entry's own repeated occurrences against each other —
+    only overlaps ACROSS different entries are redundant; the same
+    reference legitimately mentioned twice in different places (SP1's
+    anchor-every-occurrence design) must survive untouched.
+
+    Fail-quiet: an exact-length tie between two overlapping spans from
+    different entries is ambiguous (nothing here can judge which one the
+    model meant) — both are dropped rather than guessed.
+
+    A verse entry that loses all its positions to this pass is dropped
+    entirely; one that keeps a subset keeps only the survivors. Same for a
+    teacher entry's single position.
+    """
+    occurrences = []  # each: (entry_idx, pos, start, end, raw_len)
+    for entry_idx, entry in enumerate(verified):
+        raw_len = len(entry["raw"])
+        positions = entry["positions"] if entry["type"] == "verse" else [entry["position"]]
+        for pos in positions:
+            occurrences.append((entry_idx, pos, pos, pos + raw_len, raw_len))
+
+    dropped = set()  # {(entry_idx, pos), ...}
+    for i in range(len(occurrences)):
+        i_entry, i_pos, i_start, i_end, i_len = occurrences[i]
+        for j in range(i + 1, len(occurrences)):
+            j_entry, j_pos, j_start, j_end, j_len = occurrences[j]
+            if i_entry == j_entry:
+                continue  # same reference's own repeats never conflict with themselves
+            if i_start < j_end and j_start < i_end:  # spans overlap
+                if i_len > j_len:
+                    dropped.add((j_entry, j_pos))
+                elif j_len > i_len:
+                    dropped.add((i_entry, i_pos))
+                else:
+                    dropped.add((i_entry, i_pos))
+                    dropped.add((j_entry, j_pos))
+
+    result = []
+    for entry_idx, entry in enumerate(verified):
+        if entry["type"] == "verse":
+            surviving = [p for p in entry["positions"] if (entry_idx, p) not in dropped]
+            if surviving:
+                result.append({**entry, "positions": surviving})
+        else:
+            if (entry_idx, entry["position"]) not in dropped:
+                result.append(entry)
+    return result
+
+
 def verify_references(answer_text: str, raw_output: str, db) -> List[Dict]:
     """Top-level entry point. Never raises — any unexpected failure
     anywhere in this function results in an empty list, never a broken
@@ -213,7 +284,7 @@ def verify_references(answer_text: str, raw_output: str, db) -> List[Dict]:
                 logger.exception("Reference verification failed for one proposal — dropping it")
                 continue
 
-        return verified
+        return _deduplicate_overlapping_spans(verified)
     except Exception:
         # Outer safety net: catastrophic failures outside any single
         # proposal's verification (e.g. parse_reference_mentions itself
