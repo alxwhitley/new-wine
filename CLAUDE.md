@@ -575,6 +575,9 @@ above.
 - `INCLUDE_COPYRIGHTED` — `true`/`false` (default `true` in chat.py, `false` in search.py)
 - `ALLOWED_ORIGINS`
 
+### Frontend (Vercel)
+- `NEXT_PUBLIC_STUDY_PANEL_ENABLED` — Inline Study Panel (SP2) kill switch, read via `frontend/lib/study-panel-flag.ts`'s `isStudyPanelEnabled()`. Defaults enabled unless explicitly set to the string `"false"` (matches this repo's `BILLING_ENABLED`-style flag convention). Gates verse-underline detection in `chat-message.tsx`, and the dev "Study preview" button/Cmd-Ctrl-Shift-S shortcut/click handler in `page.tsx` — when off, all three are genuinely absent, not just disabled-looking. **Production default (Alex, 2026-07-15): left unset (enabled)** — beta users get the panel as each SP2 phase lands, rather than waiting for the full build to finish.
+
 ---
 
 ## Scripts
