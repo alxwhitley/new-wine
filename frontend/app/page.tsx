@@ -20,6 +20,7 @@ import BetaGate from "@/components/auth/BetaGate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
 import { referenceKey, type StudyReference } from "@/lib/study-reference";
+import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
 
 // Dev-only demo reference for the always-available trigger below — lets the
 // panel be opened regardless of chat content. Real triggers come from
@@ -95,6 +96,7 @@ export default function Home() {
   const [studyPins, setStudyPins] = useState<StudyReference[]>([]);
 
   const handleVerseClick = useCallback((reference: StudyReference) => {
+    if (!isStudyPanelEnabled()) return; // defense in depth — kill switch off
     setStudyReference(reference);
     setStudyPanelOpen(true);
   }, []);
@@ -125,6 +127,7 @@ export default function Home() {
   // Dev-only demonstration trigger — Cmd/Ctrl+Shift+S opens the panel
   // regardless of chat content, so the shell is always demonstrable.
   useEffect(() => {
+    if (!isStudyPanelEnabled()) return; // kill switch off — never register the listener
     function onKeydown(e: globalThis.KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
@@ -402,17 +405,19 @@ export default function Home() {
       />
 
       {/* Dev-only demonstration trigger — opens the Study Panel regardless of
-          chat content. Cmd/Ctrl+Shift+S does the same. Not a real feature
-          flag; fine for Alex's own testing, needs a real kill switch before
-          any beta rollout (see rhemata-status.md). */}
-      <button
-        onClick={() => handleVerseClick(DEV_DEMO_REFERENCE)}
-        title="Open Study Panel (dev) — Cmd/Ctrl+Shift+S"
-        className="fixed bottom-20 right-4 z-30 flex items-center gap-1.5 rounded-full border border-border bg-popover px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground md:bottom-4"
-      >
-        <FlaskConical className="h-3.5 w-3.5" />
-        Study preview
-      </button>
+          chat content. Cmd/Ctrl+Shift+S does the same. Gated by the
+          NEXT_PUBLIC_STUDY_PANEL_ENABLED kill switch — absent from the DOM
+          entirely when the flag is off, not just disabled-looking. */}
+      {isStudyPanelEnabled() && (
+        <button
+          onClick={() => handleVerseClick(DEV_DEMO_REFERENCE)}
+          title="Open Study Panel (dev) — Cmd/Ctrl+Shift+S"
+          className="fixed bottom-20 right-4 z-30 flex items-center gap-1.5 rounded-full border border-border bg-popover px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground md:bottom-4"
+        >
+          <FlaskConical className="h-3.5 w-3.5" />
+          Study preview
+        </button>
+      )}
 
       {showGate && (
         <BetaGate

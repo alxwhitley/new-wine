@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Citation } from "@/lib/api";
 import { detectVerseReferences, type StudyReference } from "@/lib/study-reference";
+import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -311,8 +312,9 @@ export function ChatMessage({
   const cleanedContent = stripXmlTags(content);
   const isComplete = content.length > 0;
   // Spec: verse underlines fade in only once the answer finishes streaming,
-  // never mid-stream.
-  const detectVerses = !isStreaming;
+  // never mid-stream. Also forced off entirely when the Study Panel kill
+  // switch is off — an underline that opens to nothing is worse than none.
+  const detectVerses = !isStreaming && isStudyPanelEnabled();
 
   return (
     <div className="mb-4 border-t border-border pt-3">
