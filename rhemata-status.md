@@ -8,7 +8,9 @@
 
 ## Current Priority / Next Action
 
-**2026-07-17, second session today — SP2 Phase 2 (attribution) DONE.** Commits `1000bef` (Task 4) + `d4e1423` (Task 5). Found and fixed a real production bug along the way: the live `/sources` page had been stating a false quote-verification claim for a week — see "Done today" below. **SP2 Phase 3 (SP1 verified-verse swap) is next in sequence per the committed plan.**
+**2026-07-17, third session today — SP2 Phase 3 (SP1 verified-verse swap) DONE, MID-POINT STOP reached.** Commit `da37bba`. Closes Open Flag 17. Verified live in a real headless browser, not just code/curl — see "Done today" below. Found a real, separate CORS gap along the way (not fixed, needs Alex's call). **Everything through the plan's MID-POINT STOP is now shipped: kill switch (Phase 1), attribution (Phase 2), and the real verified-verse trigger (Phase 3). No panel content has changed yet — Phase 4 (fixing the false "your teachers on this verse" claim) is next in sequence, and is explicitly the first thing after the stop per the plan's own sequencing, since that falsehood is live in production right now.**
+
+**2026-07-17, second session today — SP2 Phase 2 (attribution) DONE.** Commits `1000bef` (Task 4) + `d4e1423` (Task 5). Found and fixed a real production bug along the way: the live `/sources` page had been stating a false quote-verification claim for a week — see "Done today" below.
 
 **2026-07-17, first session today — records-correction pass:** no code was written or run — Alex asked for a pure docs-accuracy pass following two corrections surfaced in conversation. Fixed in CLAUDE.md, PLAN.md, and this file: (1) Rule 10's ingest freeze is per-script, not global — the Sermonindex/YouTube growth path was never blocked by #10 or #13; (2) `ingest_commentaries.py` (#10) is reclassified from "pending conversion" to a retire-or-rebuild decision (its source SQLite dump is a hardcoded, ephemeral `/tmp` path, almost certainly gone, and the script can't target any other collection) — new PLAN.md Open Decision #12; (3) `ingest_helloao.py` (#13) is confirmed the one real, live-blocking chokepoint gap, but scoped only to HelloAO-sourced commentary growth (PLAN.md #27), not corpus growth generally.
 
@@ -16,6 +18,30 @@
 
 - **No default next action is forced.** Alex's call: continue SP2 (Phase 3 — SP1 verified-verse swap — is next in sequence), or pick up any of the carried-forward items below (Sermonindex volume run, PA redo, ambiguous reconciliation flags, lexicon restamp, `ingest_commentaries.py` retire-or-rebuild decision, `ingest_helloao.py` conversion). None block each other.
 - Everything logged below as "done" was verified against real commits, real test output, or real saved data — not carried forward from memory.
+
+---
+
+## Done today (2026-07-17, third session — SP2 Phase 3, verified live in a real browser)
+
+**1. Task 6 — confirmed SP1's verified-reference shape live, no deviation from the plan.**
+- Ran a real question through the live `/chat` endpoint (curl, SSE stream) and inspected the final meta event directly: `"verified_references": [{"type": "verse", "raw": "John 3:16", "positions": [0, 1589]}]` — matches the plan's assumed shape exactly. No code written against a wrong assumption.
+
+**2. Task 7 — swapped the client-side verse guess for SP1's verified data — commit `da37bba`.**
+- `lib/study-reference.ts`: factored the book-name/range parsing out of `detectVerseReferences` into a shared `parseVerseIdentity()` (one parser, used by both detection and verification, per the plan's explicit instruction not to duplicate it); added `isVerified()`.
+- `hooks/useChat.ts`: messages now carry `verifiedReferences` from the meta event, same pattern as `citations`/`messageId`.
+- `chat-message.tsx`: threads `verifiedReferences` down to the underline branch — a detected candidate only renders as a clickable underline if SP1 verified the same verse identity for that message.
+- **Two files beyond the plan's named list, both necessary for the feature to actually work:** `lib/api.ts` (the `onMeta` callback type never had `verified_references` on it, even though the backend has sent it since SP1 shipped) and `app/page.tsx` (nothing passed `message.verifiedReferences` into `<ChatMessage>` — without this the filter always defaults to empty and no verse ever verifies, silently). Included in the same commit since a partial version would have shipped a non-functional feature.
+- Confirmed the Phase 1 kill-switch gate (`detectVerses = !isStreaming && isStudyPanelEnabled()`) is untouched — the new filter sits strictly inside the existing `if (detectVerses)` block.
+- `tsc --noEmit` clean.
+
+**3. Task 8 — verified fail-quiet end-to-end, live, in a real browser — closes Open Flag 17.**
+- Used Playwright directly (the installed `playwright-skill` turned out to be non-functional — see Open Flags below) against the real local dev server calling the real production backend.
+- **The clean proof Task 8 Step 3 asks for, found live, not constructed:** one real question produced a backend response with completely empty `verified_references` despite the visible answer containing 12 verse-shaped substrings (Romans 8:28 ×6, Romans 8:16, 1 Thessalonians 3:3 ×2, Romans 8:16-17, Romans 8:17, Romans 8:18) — DOM showed **zero** underlines. A second question verified 4 distinct verses; every occurrence of each (including repeats) underlined correctly, and zero unverified candidates were wrongly underlined.
+- Also confirmed live: teacher-type verified references (e.g. `{"type": "teacher", "raw": "John Bevere", ...}`) never render as underlines anywhere — matches the Global Constraint ("No teacher underlines in SP2").
+
+**4. Real bug found during Task 8 verification, not fixed — needs Alex's call.**
+- The local dev frontend (`localhost:3000`) cannot call the production Railway backend from an actual browser: the `/chat` preflight `OPTIONS` request fails with no `Access-Control-Allow-Origin` header — Railway's `ALLOWED_ORIGINS` doesn't include `localhost:3000`. `curl` and the SP1 Python test harness never hit this because CORS is a browser-only enforcement; this session's earlier curl-based Task 6 verification was unaffected.
+- Worked around it for verification purposes only, in an isolated test browser (`--disable-web-security`, never touched production config) — see Open Flags below for the standing gap.
 
 ---
 
@@ -82,7 +108,7 @@
 4. **Optional lexicon restamp** — Alex's call, not scheduled.
 5. **CLAUDE.md's own docs pass remains deferred** — folder renames, `jewish_perspectives` drop, and other stale notes, unrelated to today's work.
 6. **#10 — `ingest_commentaries.py`** — reclassified 2026-07-17 as a retire-or-rebuild decision (PLAN.md Open Decisions #12), not a scheduled conversion. Its source SQLite dump is a hardcoded, ephemeral `/tmp` path and is almost certainly gone; the script can't target any other collection. Alex needs to decide retire vs. rebuild-from-scratch before this is buildable work again.
-7. **SP2 Phases 3–10** — not started. Phase 2 (attribution) is DONE (commits `1000bef`, `d4e1423`, this session). Phase 3 (SP1 verified-verse swap) is next in sequence per the committed plan.
+7. **SP2 Phases 4–10** — not started. Phase 2 (attribution) DONE (commits `1000bef`, `d4e1423`); Phase 3 (SP1 verified-verse swap) DONE (commit `da37bba`), MID-POINT STOP reached. Phase 4 (fix "your teachers on this verse") is next in sequence per the committed plan — deliberately ahead of everything else, since that's a live falsehood in production today.
 
 ---
 
@@ -92,7 +118,7 @@
 
 - **#1–#14:** **corrected 2026-07-17** (previously read "all DONE except #10 and #14's remainder" — that implied #13, the `ingest_helloao.py` conversion, was complete; verified false by direct code read: no `shared_ingest` import anywhere in the file, own Supabase REST `.insert()` calls on `documents` and `chunks`). Actual state: all DONE except #10 (`ingest_commentaries.py` conversion, still unstarted), **#13 (`ingest_helloao.py` conversion, still unstarted — not merely undocumented, a real unconverted write path)**, and #14's folder-rename/`jewish_perspectives`-drop remainder. **Second correction, same day:** #10 and #13 are not equivalent-risk items. `ingest_commentaries.py` reads a hardcoded `/tmp` SQLite dump that's almost certainly gone and can't target any other collection — conversion is likely busywork on a script that can't run; reclassified as a retire-or-rebuild decision (PLAN.md Open Decisions #12), not a scheduled build. `ingest_helloao.py` is the real, live gap (live API, resume-safe) — but it blocks only HelloAO-sourced commentary growth (PLAN.md #27), not corpus growth generally. Rule 10's ingest freeze is per-script: the YouTube/Sermonindex path (`youtube_ingest.py` → `ingest_file()` → `shared_ingest`) is fully converted and was never blocked by #10 or #13.
 - **#17 (propositions backfill):** 810 non-PA unlicensed docs, correctly sized, not run.
-- **SP track:** SP1 (reference-pointer backend) fully built and merged — see PLAN.md #39. SP2 (panel frontend) is a re-planned corrected delta: Phase 1 (kill switch) DONE and merged (2026-07-15); Phase 2 (attribution) DONE (commits `1000bef`, `d4e1423`, 2026-07-17) — also fixed a real production bug found along the way (see "Done today" above). Phases 3–10 not started. SP3 formally dissolved into SP2 (PLAN.md #41) — no longer a separate track.
+- **SP track:** SP1 (reference-pointer backend) fully built and merged — see PLAN.md #39. SP2 (panel frontend) is a re-planned corrected delta: Phase 1 (kill switch) DONE (2026-07-15); Phase 2 (attribution) DONE (commits `1000bef`, `d4e1423`) — also fixed a real production bug found along the way; Phase 3 (SP1 verified-verse swap) DONE (commit `da37bba`) — closes Open Flag 17, verified live in a real browser, surfaced a real CORS gap (Open Flag 23) along the way. **MID-POINT STOP reached — everything through here is safety/legal/trigger-integrity only, no panel content changed.** Phases 4–10 not started; Phase 4 is next, deliberately sequenced first since it fixes a live falsehood. SP3 formally dissolved into SP2 (PLAN.md #41) — no longer a separate track.
 
 ---
 
@@ -112,15 +138,20 @@
 
 **Closed today:**
 - ~~16. No kill switch / beta flag exists for the Study Panel.~~ **CLOSED — commit `7ca171b`.** Built, independently reviewed, and verified via real rendered-HTML diff with the flag on and off.
+- ~~17. The Study Panel's verse-reference detector is still the narrow client-side stand-in, not SP1's verified-pointer data.~~ **CLOSED — commit `da37bba`, 2026-07-17.** Detected candidates now only underline if SP1 independently verified the same identity. Verified live in a real browser: a case with 12 unverified candidate mentions produced zero underlines; a case with 4 verified verses underlined every occurrence correctly, including repeats.
 
 **Stays open — do NOT close early:**
-17. The Study Panel's verse-reference detector is still the narrow client-side stand-in (`lib/study-reference.ts`'s regex guesser), not SP1's verified-pointer data. This closes at SP2 Phase 3 (the guesser→SP1 swap), not before. Today's 10-question run proved SP1's data is ready and has full coverage parity with the guesser — but nothing today wired the panel's actual trigger to it.
+(none currently)
 
-**New today:**
+**New today (2026-07-15):**
 19. **Kill switch is deploy-time, not instant.** `NEXT_PUBLIC_STUDY_PANEL_ENABLED` is a build-time environment variable — flipping it requires a Vercel redeploy to take effect (minutes, not immediate). This differs from `safe_mode`, which is a database row read fresh per request and takes effect instantly. Accepted deliberately for a private beta. A future session must not assume the panel can be pulled instantly in an emergency the way `safe_mode` can.
-20. **SP2 Phase 1 verification gap.** The keyboard-shortcut suppression and the live-streamed-answer underline suppression were verified by independent code review plus the same proven flag mechanism — not by a live interactive/browser test, because no browser-automation tool was available in this environment. A Playwright skill exists in Alex's skill set and could close this gap cheaply in a future session.
+20. **SP2 Phase 1 verification gap.** ~~The keyboard-shortcut suppression and the live-streamed-answer underline suppression were verified by independent code review plus the same proven flag mechanism — not by a live interactive/browser test, because no browser-automation tool was available in this environment.~~ **Partially superseded 2026-07-17:** live browser automation IS now available (raw Playwright via `npx`, not the broken `playwright-skill` — see Flag 23), and was used successfully for Phase 3's Task 8. The original Phase 1 keyboard-shortcut/mid-stream-suppression claims specifically have still not been re-verified live — would need a dedicated pass, not automatically closed by this.
 21. **SP1's license/visibility and biblical-figure guards are LAB-PROVEN ONLY, not field-tested.** Today's 10-question live run never actually exercised either guard — the model self-filtered (never proposed a biblical figure as a teacher; never named a hidden/unlicensed teacher even when tempted by Q8) before either guard got the chance to fire. Do not let a future session record or assume these guards have been proven against live traffic — only SP1's own constructed test suite has actually exercised them.
 22. **Answer-writing oddity (Q5), minor, not an SP2 issue.** The naming-back rule (PLAN.md #39) can technically pass while placing the named verse only in the closing sign-off line rather than the substantive discussion, producing a technically-correct but poorly-placed underline. Worth a system-prompt tweak whenever answer-writing is next touched — not urgent.
+
+**New today (2026-07-17, SP2 Phase 3 session):**
+23. **`localhost:3000` cannot call the production `/chat` endpoint from a real browser — CORS, not a code bug.** Railway's `ALLOWED_ORIGINS` doesn't include `localhost:3000`; the preflight `OPTIONS` request fails with no `Access-Control-Allow-Origin` header. This means no browser-based live-chat testing from local dev has ever actually exercised a real backend call, until this session routed around it with `--disable-web-security` in an isolated Playwright test browser (verification-only, no production config touched). **Needs Alex's call:** add `localhost:3000` to Railway's `ALLOWED_ORIGINS` (same class of gap as the already-known `https://rhemata.app` / `/pastors-notes/requests` CORS item), or accept curl/script-based testing as the standing method for chat-flow verification and treat browser testing of chat as `--disable-web-security`-only when needed.
+24. **The installed `playwright-skill` is non-functional.** `~/.claude/skills/playwright-skill/` contains only `SKILL.md` — no `package.json`, no `lib/helpers.js`, no `run.js`, despite the skill's own instructions assuming those exist. `npm run setup` as documented would fail (no `package.json` to run it against). Worked around by installing `playwright` directly via `npm install` in the scratchpad directory and writing raw Playwright scripts — this works fine (Chromium was already cached locally) and is what actually closed Open Flag 20/Task 8 this session, but the skill itself needs reinstalling before relying on its documented workflow again.
 
 ---
 
@@ -132,4 +163,4 @@
 
 ## Next Session Should
 
-Alex's call between fully independent, unblocked options: (a) SP2 Phase 3 — swap the client-side verse guess for SP1's real verified verses (next in the committed plan sequence, closes Open Flag 17), (b) run the Sermonindex volume batch (553 triaged rows ready — **confirmed 2026-07-17 this was never gated by #10/#13; routes through the fully-converted YouTube pipeline**), (c) REDO the 2 broken PA docs, (d) resolve the 2 ambiguous reconciliation flags (needs Alex's memory/judgment, not a build), (e) decide on the optional lexicon restamp, (f) decide retire-vs-rebuild on `ingest_commentaries.py` (#10 — reclassified 2026-07-17, its source data is almost certainly gone; see PLAN.md Open Decisions #12), (f2) convert `ingest_helloao.py` (#13 — the one real remaining chokepoint gap, blocks only HelloAO commentary growth at PLAN.md #27), (g) CLAUDE.md's own docs pass, (h) close Open Flag 20 with a Playwright-driven interactive pass over SP2 Phase 1's remaining verification gap. None block each other.
+Alex's call between fully independent, unblocked options: (a) SP2 Phase 4 — fix "your teachers on this verse" (next in the committed plan sequence; deliberately first after the MID-POINT STOP since the current shell states a falsehood on every verse in production today), (b) run the Sermonindex volume batch (553 triaged rows ready — **confirmed 2026-07-17 this was never gated by #10/#13; routes through the fully-converted YouTube pipeline**), (c) REDO the 2 broken PA docs, (d) resolve the 2 ambiguous reconciliation flags (needs Alex's memory/judgment, not a build), (e) decide on the optional lexicon restamp, (f) decide retire-vs-rebuild on `ingest_commentaries.py` (#10 — reclassified 2026-07-17, its source data is almost certainly gone; see PLAN.md Open Decisions #12), (f2) convert `ingest_helloao.py` (#13 — the one real remaining chokepoint gap, blocks only HelloAO commentary growth at PLAN.md #27), (g) CLAUDE.md's own docs pass, (h) decide on the new CORS gap (Open Flag 23 — add `localhost:3000` to Railway's `ALLOWED_ORIGINS`, or accept the curl/script-based testing workaround as standing practice), (i) reinstall the broken `playwright-skill` (Open Flag 24) so future sessions don't need the raw-Playwright workaround. None block each other.
