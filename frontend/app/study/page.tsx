@@ -18,16 +18,10 @@ import { supabase } from "@/lib/supabase";
 import { getAdjacentVerseId } from "@/lib/verse-counts";
 import { useUserRole } from "@/hooks/useUserRole";
 import { PastorsNotesSection } from "@/components/rhemata/pastors-notes";
+import { InterlinearBlocks, type WordToken } from "@/components/rhemata/interlinear-blocks";
+import { useInterlinear } from "@/hooks/useInterlinear";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-interface WordToken {
-  greek: string;
-  transliteration: string;
-  english: string;
-  strongs: string;
-  morph: string;
-}
 
 interface VerseData {
   verse_id: string;
@@ -190,21 +184,6 @@ const FALLBACK_VERSES: Record<string, VerseData> = {
     translation: "WEB",
   },
 };
-
-const NT_BOOKS = new Set([
-  "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO",
-  "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI",
-  "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN",
-  "3JN", "JUD", "REV",
-]);
-const OT_BOOKS = new Set([
-  "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT",
-  "1SA", "2SA", "1KI", "2KI", "1CH", "2CH", "EZR", "NEH",
-  "EST", "JOB", "PSA", "PRO", "ECC", "SNG", "ISA", "JER",
-  "LAM", "EZK", "DAN", "HOS", "JOL", "AMO", "OBA", "JON",
-  "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL",
-]);
-const INTERLINEAR_BOOKS = new Set([...NT_BOOKS, ...OT_BOOKS]);
 
 const BOOK_NAMES = [
   "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
@@ -501,74 +480,6 @@ function AnchorNav({
         </button>
       ))}
     </nav>
-  );
-}
-
-// ── InterlinearBlocks ─────────────────────────────────────────────────────────
-
-function InterlinearBlocks({
-  tokens, selectedStrongs, onSelect, loading, isNT,
-}: {
-  tokens: WordToken[]; selectedStrongs: string | null;
-  onSelect: (strongs: string | null) => void; loading: boolean; isNT: boolean;
-}) {
-  const label = (
-    <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-2">
-      Greek &middot; Interlinear
-    </p>
-  );
-
-  if (loading) {
-    return (
-      <div className="mt-4">
-        {label}
-        <div className="flex gap-3 overflow-x-auto py-1">
-          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <div key={i} className="flex shrink-0 flex-col items-center gap-1">
-              <Skeleton className="h-5 w-10" />
-              <Skeleton className="h-3 w-8" />
-              <Skeleton className="h-2.5 w-10" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (!isNT) {
-    return (
-      <div className="mt-4">
-        {label}
-        <p className="text-sm text-muted-foreground">No interlinear data available for this verse</p>
-      </div>
-    );
-  }
-  if (tokens.length === 0) return null;
-  return (
-    <div className="mt-4">
-      {label}
-      <div className="flex gap-2 overflow-x-auto py-1">
-        {tokens.map((token, i) => {
-          const isSelected = selectedStrongs === token.strongs;
-          return (
-            <button
-              key={i}
-              onClick={() => onSelect(isSelected ? null : token.strongs)}
-              className={cn(
-                "shrink-0 rounded-md p-1.5 text-center cursor-pointer transition-colors border min-h-[44px]",
-                isSelected ? "border-primary bg-primary/10" : "border-transparent hover:bg-accent"
-              )}
-            >
-              <span className="font-sans text-sm block leading-tight">{token.greek}</span>
-              <span className="font-medium text-[11px] block leading-tight text-primary">{token.english}</span>
-              <span className="text-[10px] block leading-tight text-muted-foreground font-mono">{token.strongs}</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-xs text-muted-foreground mt-2">
-        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
-      </p>
-    </div>
   );
 }
 
@@ -921,8 +832,7 @@ export default function StudyPage() {
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseError, setVerseError] = useState<string | null>(null);
 
-  const [tokens, setTokens] = useState<WordToken[]>([]);
-  const [tokensLoading, setTokensLoading] = useState(false);
+  const { tokens, loading: tokensLoading, isNT } = useInterlinear(verseData?.verse_id ?? null);
 
   const [chapterOpen, setChapterOpen] = useState(false);
   const [chapterVerses, setChapterVerses] = useState<VerseData[]>([]);
@@ -1038,30 +948,12 @@ export default function StudyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Interlinear fetch — fires on every verse load ──────────────────────────
-
+  // Word selection is page-level, shared by excerpt/corpus/lexicon fetches
+  // too — reset it whenever the verse changes, same as before extraction
+  // (this used to live inside the interlinear fetch effect; useInterlinear
+  // now owns the tokens/loading/isNT fetch itself, keyed on the same verseId).
   useEffect(() => {
     setSelectedStrongs(null);
-    setTokens([]);
-
-    const verseId = verseData?.verse_id;
-    if (!verseId) return;
-
-    const book = verseId.split(".")[0];
-    if (!INTERLINEAR_BOOKS.has(book)) return;
-
-    setTokensLoading(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/interlinear?verse_id=${encodeURIComponent(verseId)}`)
-      .then((res) => { if (!res.ok) throw new Error("interlinear fetch failed"); return res.json(); })
-      .then((data: Array<{ original_word: string; transliteration: string; strongs_number: string; english_gloss: string; morphology: string; word_position: number }>) => {
-        const mapped = data.map((w) => ({
-          greek: w.original_word, transliteration: w.transliteration || "",
-          english: w.english_gloss || "", strongs: w.strongs_number || "", morph: w.morphology || "",
-        }));
-        setTokens(mapped);
-      })
-      .catch(() => setTokens([]))
-      .finally(() => setTokensLoading(false));
   }, [verseData?.verse_id]);
 
   // ── Chapter verses ─────────────────────────────────────────────────────────
@@ -1361,7 +1253,6 @@ export default function StudyPage() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  const isNT = !!verseData?.verse_id && NT_BOOKS.has(verseData.verse_id.split(".")[0]);
   const verseSearchProps = {
     verseRef, onChange: setVerseRef, onSubmit: lookupVerse, loading: verseLoading,
     wordSearchResults, wordSearchOpen, onWordStudySelect: handleWordStudySelect,
