@@ -583,6 +583,9 @@ async def get_commentary(
     verse_text: str = Query(..., description="Full English verse text"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     verse_id: Optional[str] = Query(None, description="Verse ID like JHN.3.16 — enables sermon results"),
+    source_kind_filter: Optional[str] = Query(
+        None, description="'commentary' or 'sermon_transcript' — restricts to one source; omit for both (current behavior, unchanged)"
+    ),
     user_id: str = Depends(require_user),
 ):
     filters = get_disabled_filters()
@@ -606,66 +609,67 @@ async def get_commentary(
     seen_docs = set()  # type: set
     results = []
 
-    # --- Step 1+2: Book-level pre-filter via bible_references ---
-    book_doc_ids = set()  # type: set
-    if verse_id:
-        book_code = verse_id.split(".")[0] if "." in verse_id else ""
-        book_name = ABBREV_TO_NAME.get(book_code)
-        if book_name:
-            try:
-                ref_result = db.rpc("match_commentary_by_book", {"book_name": book_name}).execute()
-                book_doc_ids = {str(row["id"]) for row in (ref_result.data or [])}
-            except Exception as e:
-                logger.error("bible_references book lookup failed for %s: %s", book_name, e)
+    if source_kind_filter in (None, "commentary"):
+        # --- Step 1+2: Book-level pre-filter via bible_references ---
+        book_doc_ids = set()  # type: set
+        if verse_id:
+            book_code = verse_id.split(".")[0] if "." in verse_id else ""
+            book_name = ABBREV_TO_NAME.get(book_code)
+            if book_name:
+                try:
+                    ref_result = db.rpc("match_commentary_by_book", {"book_name": book_name}).execute()
+                    book_doc_ids = {str(row["id"]) for row in (ref_result.data or [])}
+                except Exception as e:
+                    logger.error("bible_references book lookup failed for %s: %s", book_name, e)
 
-    # --- Step 3: Vector search, filtered to book docs when available ---
-    try:
-        if book_doc_ids:
-            result = db.rpc("match_commentary_chunks", {
-                "query_embedding": embedding,
-                "match_count": 30,
-                "document_ids": list(book_doc_ids),
-            }).execute()
-            logger.info("[commentary] book_doc_ids: %d, chunks returned: %d", len(book_doc_ids), len(result.data or []))
-        else:
-            result = db.rpc("match_chunks", {
-                "query_embedding": embedding,
-                "match_count": 30,
-                "include_copyrighted": filters["include_copyrighted"],
-            }).execute()
-    except Exception:
-        logger.exception("match_chunks RPC failed for commentary query")
-        raise HTTPException(status_code=500, detail="Search service error")
+        # --- Step 3: Vector search, filtered to book docs when available ---
+        try:
+            if book_doc_ids:
+                result = db.rpc("match_commentary_chunks", {
+                    "query_embedding": embedding,
+                    "match_count": 30,
+                    "document_ids": list(book_doc_ids),
+                }).execute()
+                logger.info("[commentary] book_doc_ids: %d, chunks returned: %d", len(book_doc_ids), len(result.data or []))
+            else:
+                result = db.rpc("match_chunks", {
+                    "query_embedding": embedding,
+                    "match_count": 30,
+                    "include_copyrighted": filters["include_copyrighted"],
+                }).execute()
+        except Exception:
+            logger.exception("match_chunks RPC failed for commentary query")
+            raise HTTPException(status_code=500, detail="Search service error")
 
-    # Commentary docs use citation_mode='silent_context' for chat (to prevent
-    # inline citations) but are always shown in Study Mode.
-    # Do not add a citation_mode filter here.
-    # Neighbor content is deferred until after sort+pagination below (only the
-    # page actually returned to the client needs it — was previously fetched
-    # sequentially, one round trip per document, for all ~30 candidates here).
-    for chunk in (result.data or []):
-        if chunk.get("source_kind") != "commentary":
-            continue
-        if is_chunk_disabled(chunk, study_filters):
-            continue
-        doc_id = chunk.get("document_id")
-        if doc_id in seen_docs:
-            continue
-        seen_docs.add(doc_id)
-        similarity = chunk.get("similarity", 0.0)
-        author = chunk.get("author", "")
-        boost = COMMENTARY_AUTHOR_BOOST.get(author.lower(), COMMENTARY_DEFAULT_PENALTY)
-        results.append({
-            "document_id": doc_id,
-            "title": chunk.get("title", ""),
-            "author": author,
-            "source_kind": chunk.get("source_kind", ""),
-            "_chunk_index": chunk.get("chunk_index", 0),
-            "_score": similarity + boost,
-        })
+        # Commentary docs use citation_mode='silent_context' for chat (to prevent
+        # inline citations) but are always shown in Study Mode.
+        # Do not add a citation_mode filter here.
+        # Neighbor content is deferred until after sort+pagination below (only the
+        # page actually returned to the client needs it — was previously fetched
+        # sequentially, one round trip per document, for all ~30 candidates here).
+        for chunk in (result.data or []):
+            if chunk.get("source_kind") != "commentary":
+                continue
+            if is_chunk_disabled(chunk, study_filters):
+                continue
+            doc_id = chunk.get("document_id")
+            if doc_id in seen_docs:
+                continue
+            seen_docs.add(doc_id)
+            similarity = chunk.get("similarity", 0.0)
+            author = chunk.get("author", "")
+            boost = COMMENTARY_AUTHOR_BOOST.get(author.lower(), COMMENTARY_DEFAULT_PENALTY)
+            results.append({
+                "document_id": doc_id,
+                "title": chunk.get("title", ""),
+                "author": author,
+                "source_kind": chunk.get("source_kind", ""),
+                "_chunk_index": chunk.get("chunk_index", 0),
+                "_score": similarity + boost,
+            })
 
     # --- Sermon results (new path, requires verse_id) ---
-    if verse_id:
+    if verse_id and source_kind_filter in (None, "sermon_transcript"):
         verse_ref = _verse_id_to_ref(verse_id)
         if verse_ref:
             try:
