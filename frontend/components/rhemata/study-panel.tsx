@@ -386,29 +386,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
   );
 }
 
-// ── Edge-tab re-entry ────────────────────────────────────────────────────────
-// Spec: "once the panel is closed, the only way back in is clicking an
-// underlined reference again — unless pins exist... a small quiet tab sits
-// on the right edge of the screen." Renders only when there are pins and the
-// panel itself is closed.
-
-export function StudyPanelEdgeTab({
-  pins,
-  panelOpen,
-  onOpenPins,
-}: {
-  pins: StudyReference[];
-  panelOpen: boolean;
-  onOpenPins: () => void;
-}) {
-  if (panelOpen || pins.length === 0) return null;
-  return (
-    <button
-      onClick={onOpenPins}
-      className="fixed right-0 top-1/2 z-40 -translate-y-1/2 rounded-l-md border border-r-0 border-border bg-popover px-1.5 py-3 text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-      title={`${pins.length} pinned`}
-    >
-      <Pin className="h-4 w-4" />
-    </button>
-  );
-}
+// Edge-tab re-entry removed (SP2 Phase 5) — replaced by the top-bar pin
+// dropdown (components/rhemata/pin-dropdown.tsx), which is reachable
+// regardless of panel state and lets you pick a specific pin rather than
+// only reopening "the last one."

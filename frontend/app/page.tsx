@@ -12,7 +12,8 @@ import { Sidebar } from "@/components/rhemata/sidebar";
 import { ChatMessage } from "@/components/rhemata/chat-message";
 import { ChatInput } from "@/components/rhemata/chat-input";
 import { SourcePanel } from "@/components/rhemata/source-panel";
-import { StudyPanel, StudyPanelEdgeTab } from "@/components/rhemata/study-panel";
+import { StudyPanel } from "@/components/rhemata/study-panel";
+import { PinDropdown } from "@/components/rhemata/pin-dropdown";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
 import { UsageRing } from "@/components/rhemata/usage-ring";
 import { WeeklyLimitCard } from "@/components/rhemata/weekly-limit-card";
@@ -192,16 +193,6 @@ export default function Home() {
     },
     [accessToken, studyPins],
   );
-
-  // Kept working (adapted to the new pin shape) until Task 18 removes the
-  // edge tab entirely and replaces this with the pin dropdown.
-  const handleOpenPinnedFromEdgeTab = useCallback(() => {
-    setStudyPins((prev) => {
-      if (prev.length > 0) setStudyReference(prev[prev.length - 1].reference);
-      return prev;
-    });
-    setStudyPanelOpen(true);
-  }, []);
 
   // Wraps useAuth's signUp (LoginModal itself is untouched — it's load-bearing
   // and already owns the whole success/close flow internally) so a guest pin
@@ -398,8 +389,17 @@ export default function Home() {
           </button>
           {/* usage ring moved to drawer (Pass B) */}
 
-          {/* Top bar — desktop only (mobile uses floating button above) */}
-          <div className="hidden md:flex h-14 shrink-0 items-center px-6 z-30 border-b border-border" />
+          {/* Top bar — desktop only (mobile uses floating button above).
+              Pin dropdown is desktop-only in this phase — see Open Flags. */}
+          <div className="hidden md:flex h-14 shrink-0 items-center justify-end px-6 z-30 border-b border-border">
+            {isStudyPanelEnabled() && (
+              <PinDropdown
+                pins={studyPins.map((p) => p.reference)}
+                isSignedIn={!!user}
+                onSelectPin={handleVerseClick}
+              />
+            )}
+          </div>
 
           {isEmpty ? (
             /* Empty state — centred, full remaining height */
@@ -519,11 +519,6 @@ export default function Home() {
         pins={studyPins.map((p) => p.reference)}
         onTogglePin={handleToggleStudyPin}
         accessToken={accessToken}
-      />
-      <StudyPanelEdgeTab
-        pins={studyPins.map((p) => p.reference)}
-        panelOpen={studyPanelOpen}
-        onOpenPins={handleOpenPinnedFromEdgeTab}
       />
 
       {/* Dev-only demonstration trigger — opens the Study Panel regardless of
