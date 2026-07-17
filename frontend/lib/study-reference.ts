@@ -124,7 +124,33 @@ const ALL_NAMES = Array.from(NAME_TO_CODE.keys())
   .sort((a, b) => b.length - a.length)
   .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 
-const REFERENCE_SOURCE = `\\b(${ALL_NAMES.join("|")})\\.?\\s(\\d{1,3}):(\\d{1,3})(?:[-\\u2013](\\d{1,3}))?\\b`;
+const REFERENCE_CORE = `(${ALL_NAMES.join("|")})\\.?\\s(\\d{1,3}):(\\d{1,3})(?:[-\\u2013](\\d{1,3}))?`;
+const REFERENCE_SOURCE = `\\b${REFERENCE_CORE}\\b`;
+const REFERENCE_ANCHORED = new RegExp(`^${REFERENCE_CORE}$`);
+
+export interface VerseIdentity {
+  code: string;
+  chapter: number;
+  verseStart: number;
+  verseEnd: number | null;
+}
+
+// The one place that turns a raw string like "Romans 8:26-28" into a verse
+// identity. detectVerseReferences (scanning free text) and isVerified
+// (matching SP1's already-isolated `raw` strings) both call this — do not
+// duplicate the book-name/range parsing anywhere else.
+export function parseVerseIdentity(raw: string): VerseIdentity | null {
+  const m = REFERENCE_ANCHORED.exec(raw.trim());
+  if (!m) return null;
+  const code = NAME_TO_CODE.get(m[1]);
+  if (!code) return null; // shouldn't happen — alternation is built from the map itself
+  return {
+    code,
+    chapter: parseInt(m[2], 10),
+    verseStart: parseInt(m[3], 10),
+    verseEnd: m[4] ? parseInt(m[4], 10) : null,
+  };
+}
 
 export function detectVerseReferences(
   text: string
@@ -133,18 +159,48 @@ export function detectVerseReferences(
   const results: Array<Extract<StudyReference, { type: "verse" }> & { index: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    const code = NAME_TO_CODE.get(m[1]);
-    if (!code) continue; // shouldn't happen — alternation is built from the map itself
+    const identity = parseVerseIdentity(m[0]);
+    if (!identity) continue;
     results.push({
       type: "verse",
       raw: m[0],
       book: m[1],
-      code,
-      chapter: parseInt(m[2], 10),
-      verseStart: parseInt(m[3], 10),
-      verseEnd: m[4] ? parseInt(m[4], 10) : null,
+      ...identity,
       index: m.index,
     });
   }
   return results;
+}
+
+// SP1's hidden pointers, as attached to the SSE meta event's
+// verified_references array (backend/app/services/reference_verifier.py).
+// Only the verse shape is consumed here — SP2 has no teacher underlines
+// (see the plan's Global Constraints).
+export interface VerifiedReference {
+  type: string;
+  raw: string;
+  positions?: number[];
+  position?: number;
+  source_id?: string;
+}
+
+// Allowlist by identity, not by position: a candidate the client-side
+// detector found only renders as an underline if SP1 independently verified
+// the same verse identity for this message. This sidesteps aligning the
+// backend's raw-text character offsets with rendered-DOM text entirely.
+export function isVerified(
+  ref: Extract<StudyReference, { type: "verse" }>,
+  verifiedRefs: VerifiedReference[]
+): boolean {
+  return verifiedRefs.some((v) => {
+    if (v.type !== "verse") return false;
+    const identity = parseVerseIdentity(v.raw);
+    return (
+      identity !== null &&
+      identity.code === ref.code &&
+      identity.chapter === ref.chapter &&
+      identity.verseStart === ref.verseStart &&
+      identity.verseEnd === ref.verseEnd
+    );
+  });
 }

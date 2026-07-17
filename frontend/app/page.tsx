@@ -340,6 +340,7 @@ export default function Home() {
                         onCitationClick={handleCitationClick}
                         onVerseClick={handleVerseClick}
                         isStreaming={isStreaming}
+                        verifiedReferences={message.verifiedReferences}
                       />
                     );
                   })}

@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { streamChatMessage, fetchWeeklyUsage, Citation } from "@/lib/api";
+import type { VerifiedReference } from "@/lib/study-reference";
 
 export interface Message {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
   messageId?: string | null;
+  verifiedReferences?: VerifiedReference[];
 }
 
 export interface WeeklyLimitDetail {
@@ -102,6 +104,7 @@ export function useChat(
                     ...last,
                     ...(meta.citations?.length ? { citations: meta.citations } : {}),
                     ...(meta.message_id ? { messageId: meta.message_id } : {}),
+                    ...(meta.verified_references?.length ? { verifiedReferences: meta.verified_references } : {}),
                   };
                 }
                 return updated;

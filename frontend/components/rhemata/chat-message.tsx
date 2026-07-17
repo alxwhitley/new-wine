@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Citation } from "@/lib/api";
-import { detectVerseReferences, type StudyReference } from "@/lib/study-reference";
+import { detectVerseReferences, isVerified, type StudyReference, type VerifiedReference } from "@/lib/study-reference";
 import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
 
 interface ChatMessageProps {
@@ -21,6 +21,9 @@ interface ChatMessageProps {
   /** True only while this specific message is still streaming in. Verse
    * underlines fade in only once streaming finishes (spec: "never mid-stream"). */
   isStreaming?: boolean;
+  /** SP1's verified pointers for this message. A detected verse candidate
+   * only renders as an underline if it matches one of these by identity. */
+  verifiedReferences?: VerifiedReference[];
 }
 
 function CitationPill({
@@ -73,7 +76,8 @@ function renderMessageText(
   citations: Citation[],
   onCitationClick?: (citation: Citation, index: number) => void,
   onVerseClick?: (reference: StudyReference) => void,
-  detectVerses?: boolean
+  detectVerses?: boolean,
+  verifiedReferences: VerifiedReference[] = []
 ): React.ReactNode[] {
   type Match = { start: number; end: number; render: () => React.ReactNode };
   const matches: Match[] = [];
@@ -97,6 +101,7 @@ function renderMessageText(
 
   if (detectVerses) {
     for (const ref of detectVerseReferences(text)) {
+      if (!isVerified(ref, verifiedReferences)) continue;
       const start = ref.index;
       const end = start + ref.raw.length;
       // A verse reference should never overlap a citation marker, but stay
@@ -296,6 +301,7 @@ export function ChatMessage({
   onCitationClick,
   onVerseClick,
   isStreaming = false,
+  verifiedReferences = [],
 }: ChatMessageProps) {
   if (role === "user") {
     return (
@@ -333,7 +339,7 @@ export function ChatMessage({
             ),
             p: ({ children }) => (
               <p className="text-sm text-foreground leading-relaxed mb-3">
-                {processChildren(children, citations, onCitationClick, onVerseClick, detectVerses)}
+                {processChildren(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences)}
               </p>
             ),
             strong: ({ children }) => (
@@ -353,7 +359,7 @@ export function ChatMessage({
               </ul>
             ),
             li: ({ children }) => (
-              <li>{processChildren(children, citations, onCitationClick, onVerseClick, detectVerses)}</li>
+              <li>{processChildren(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences)}</li>
             ),
           }}
         >
@@ -379,12 +385,13 @@ function processChildren(
   citations: Citation[],
   onCitationClick?: (citation: Citation, index: number) => void,
   onVerseClick?: (reference: StudyReference) => void,
-  detectVerses = false
+  detectVerses = false,
+  verifiedReferences: VerifiedReference[] = []
 ): React.ReactNode {
   if (!children) return children;
 
   if (typeof children === "string") {
-    return renderMessageText(children, citations, onCitationClick, onVerseClick, detectVerses);
+    return renderMessageText(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences);
   }
 
   if (Array.isArray(children)) {
@@ -392,7 +399,7 @@ function processChildren(
       if (typeof child === "string") {
         return (
           <span key={i}>
-            {renderMessageText(child, citations, onCitationClick, onVerseClick, detectVerses)}
+            {renderMessageText(child, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences)}
           </span>
         );
       }

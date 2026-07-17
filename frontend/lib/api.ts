@@ -1,3 +1,5 @@
+import type { VerifiedReference } from "@/lib/study-reference";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 // Types
@@ -75,7 +77,7 @@ export interface WeeklyUsage {
 
 export interface StreamCallbacks {
   onToken: (token: string) => void;
-  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number>; usage?: { used: number; limit: number; week_start: string } }) => void;
+  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number>; usage?: { used: number; limit: number; week_start: string }; verified_references?: VerifiedReference[] }) => void;
   onError: (error: string) => void;
 }
 
