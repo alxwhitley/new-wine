@@ -1,6 +1,6 @@
 # rhemata-status.md
 
-**As of:** 2026-07-15 · terminal-owned · **overwritten each session, not a log** (history lives in git history; this file is only the current snapshot).
+**As of:** 2026-07-17 · terminal-owned · **overwritten each session, not a log** (history lives in git history; this file is only the current snapshot).
 
 **Source of truth by domain:** durable architecture/decisions → `CLAUDE.md` · messaging/positioning → `POSITIONING.md` · styling tokens → `DESIGN.md` · roadmap → `PLAN.md` · **this file → live state only, nothing durable, nothing "how it works."**
 
@@ -8,10 +8,12 @@
 
 ## Current Priority / Next Action
 
-Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2 Phase 1 (kill switch), and ran a 10-question live verification of SP1's coverage. This session is a **records-only wrap-up** — nothing further was built. **SP2 Phase 2 (attribution) has NOT been started.**
+**2026-07-17 records-correction pass (this session):** no code was written or run — Alex asked for a pure docs-accuracy pass following two corrections surfaced in conversation. Fixed in CLAUDE.md, PLAN.md, and this file: (1) Rule 10's ingest freeze is per-script, not global — the Sermonindex/YouTube growth path was never blocked by #10 or #13; (2) `ingest_commentaries.py` (#10) is reclassified from "pending conversion" to a retire-or-rebuild decision (its source SQLite dump is a hardcoded, ephemeral `/tmp` path, almost certainly gone, and the script can't target any other collection) — new PLAN.md Open Decision #12; (3) `ingest_helloao.py` (#13) is confirmed the one real, live-blocking chokepoint gap, but scoped only to HelloAO-sourced commentary growth (PLAN.md #27), not corpus growth generally.
 
-- **No default next action is forced.** Alex's call: continue SP2 (Phase 2 — attribution — is next in sequence), or pick up any of yesterday's carried-forward items below (Sermonindex volume run, PA redo, ambiguous reconciliation flags, lexicon restamp, #10 conversion, CLAUDE.md docs pass). None block each other.
-- Everything logged below as "done today" was verified against real commits, real test output, or real saved data from this session — not carried forward from memory.
+2026-07-15 (prior session, unaffected by today's docs pass): fixed a real SP1 defect (range/prefix double-count), built and merged SP2 Phase 1 (kill switch), and ran a 10-question live verification of SP1's coverage. **SP2 Phase 2 (attribution) has NOT been started.**
+
+- **No default next action is forced.** Alex's call: continue SP2 (Phase 2 — attribution — is next in sequence), or pick up any of the carried-forward items below (Sermonindex volume run, PA redo, ambiguous reconciliation flags, lexicon restamp, `ingest_commentaries.py` retire-or-rebuild decision, `ingest_helloao.py` conversion, CLAUDE.md docs pass). None block each other.
+- Everything logged below as "done" was verified against real commits, real test output, or real saved data — not carried forward from memory.
 
 ---
 
@@ -63,7 +65,7 @@ Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2
 3. **2 ambiguous reconciliation flags, both need Alex, not a build:** the magazine "27 of 27 contaminated" figure (can't locate the original signal against current state — closest match is 32 articles across 5 issues in `02_extracted/`); the PA "survivability guard will rarely fire" claim (a claim about future behavior, not DB-checkable).
 4. **Optional lexicon restamp** — Alex's call, not scheduled.
 5. **CLAUDE.md's own docs pass remains deferred** — folder renames, `jewish_perspectives` drop, and other stale notes, unrelated to today's work.
-6. **#10 — `ingest_commentaries.py` conversion** — still unstarted, still the last unconverted script in the shared-writer migration.
+6. **#10 — `ingest_commentaries.py`** — reclassified 2026-07-17 as a retire-or-rebuild decision (PLAN.md Open Decisions #12), not a scheduled conversion. Its source SQLite dump is a hardcoded, ephemeral `/tmp` path and is almost certainly gone; the script can't target any other collection. Alex needs to decide retire vs. rebuild-from-scratch before this is buildable work again.
 7. **SP2 Phases 2–10** — not started. Phase 2 (attribution) is next in sequence per the committed plan.
 
 ---
@@ -72,7 +74,7 @@ Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2
 
 (PLAN.md v5.1+, linear numbered session list, plus the SP track — see PLAN.md itself for full detail; this is a pointer, not a restatement)
 
-- **#1–#14:** **corrected 2026-07-17** (previously read "all DONE except #10 and #14's remainder" — that implied #13, the `ingest_helloao.py` conversion, was complete; verified false by direct code read: no `shared_ingest` import anywhere in the file, own Supabase REST `.insert()` calls on `documents` and `chunks`). Actual state: all DONE except #10 (`ingest_commentaries.py` conversion, still unstarted), **#13 (`ingest_helloao.py` conversion, still unstarted — not merely undocumented, a real unconverted write path)**, and #14's folder-rename/`jewish_perspectives`-drop remainder.
+- **#1–#14:** **corrected 2026-07-17** (previously read "all DONE except #10 and #14's remainder" — that implied #13, the `ingest_helloao.py` conversion, was complete; verified false by direct code read: no `shared_ingest` import anywhere in the file, own Supabase REST `.insert()` calls on `documents` and `chunks`). Actual state: all DONE except #10 (`ingest_commentaries.py` conversion, still unstarted), **#13 (`ingest_helloao.py` conversion, still unstarted — not merely undocumented, a real unconverted write path)**, and #14's folder-rename/`jewish_perspectives`-drop remainder. **Second correction, same day:** #10 and #13 are not equivalent-risk items. `ingest_commentaries.py` reads a hardcoded `/tmp` SQLite dump that's almost certainly gone and can't target any other collection — conversion is likely busywork on a script that can't run; reclassified as a retire-or-rebuild decision (PLAN.md Open Decisions #12), not a scheduled build. `ingest_helloao.py` is the real, live gap (live API, resume-safe) — but it blocks only HelloAO-sourced commentary growth (PLAN.md #27), not corpus growth generally. Rule 10's ingest freeze is per-script: the YouTube/Sermonindex path (`youtube_ingest.py` → `ingest_file()` → `shared_ingest`) is fully converted and was never blocked by #10 or #13.
 - **#17 (propositions backfill):** 810 non-PA unlicensed docs, correctly sized, not run.
 - **SP track:** SP1 (reference-pointer backend) fully built, merged, and today's live-run defect fixed — see PLAN.md #39. SP2 (panel frontend) is a re-planned corrected delta, Phase 1 (kill switch) DONE and merged; Phases 2–10 not started. SP3 formally dissolved into SP2 (PLAN.md #41) — no longer a separate track.
 
@@ -81,7 +83,7 @@ Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2
 ## Open Flags
 
 **Carried forward, unchanged from before today (still real, none resolved by today's records-only work):**
-1. Rule 10 freeze is a bare-substring match, not an invocation check — recurs for `ingest_helloao.py`, `ingest_commentaries.py` only.
+1. Rule 10 freeze is a bare-substring match, not an invocation check — recurs for `ingest_helloao.py`, `ingest_commentaries.py` only. **Scope reminder (2026-07-17): this mechanism gap only matters for content routed through those two specific scripts** — the freeze itself is per-script, not global, and does not touch any already-converted pipeline (e.g. YouTube/Sermonindex).
 2. Magazine queue "27 of 27 pending articles contaminated" — see "Still open" #3 above.
 4. Database-number verification gap (independently verifying claimed reconciliation counts against the DB itself — nothing in the harness does this today).
 5. `GOVERNED_FILES` gap (`guard_pretooluse.py`/`settings.json` not in `GOVERNED_FILES`).
@@ -114,4 +116,4 @@ Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2
 
 ## Next Session Should
 
-Alex's call between fully independent, unblocked options: (a) SP2 Phase 2 — attribution (next in the committed plan sequence), (b) run the Sermonindex volume batch (553 triaged rows ready), (c) REDO the 2 broken PA docs, (d) resolve the 2 ambiguous reconciliation flags (needs Alex's memory/judgment, not a build), (e) decide on the optional lexicon restamp, (f) #10 — convert `ingest_commentaries.py`, (g) CLAUDE.md's own docs pass, (h) close Open Flag 20 with a Playwright-driven interactive pass over SP2 Phase 1's remaining verification gap. None block each other.
+Alex's call between fully independent, unblocked options: (a) SP2 Phase 2 — attribution (next in the committed plan sequence), (b) run the Sermonindex volume batch (553 triaged rows ready — **confirmed 2026-07-17 this was never gated by #10/#13; routes through the fully-converted YouTube pipeline**), (c) REDO the 2 broken PA docs, (d) resolve the 2 ambiguous reconciliation flags (needs Alex's memory/judgment, not a build), (e) decide on the optional lexicon restamp, (f) decide retire-vs-rebuild on `ingest_commentaries.py` (#10 — reclassified 2026-07-17, its source data is almost certainly gone; see PLAN.md Open Decisions #12), (f2) convert `ingest_helloao.py` (#13 — the one real remaining chokepoint gap, blocks only HelloAO commentary growth at PLAN.md #27), (g) CLAUDE.md's own docs pass, (h) close Open Flag 20 with a Playwright-driven interactive pass over SP2 Phase 1's remaining verification gap. None block each other.
