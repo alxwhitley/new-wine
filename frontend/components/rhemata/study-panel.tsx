@@ -166,6 +166,8 @@ function ToolRowStub({ label }: { label: string }) {
 
 // ── Panel body (shared between desktop side panel and mobile sheet) ────────
 
+type PinToggleResult = "pinned" | "unpinned" | "cap_reached" | "guest_prompt";
+
 function PanelBody({
   reference,
   isPinned,
@@ -176,10 +178,19 @@ function PanelBody({
   reference: StudyReference;
   isPinned: boolean;
   pinDisabled: boolean;
-  onTogglePin: () => void;
+  onTogglePin: () => Promise<PinToggleResult>;
   accessToken?: string | null;
 }) {
   const { data: verse, loading, error } = useVerseText(reference);
+  const [showCapMessage, setShowCapMessage] = useState(false);
+
+  async function handlePinClick() {
+    const result = await onTogglePin();
+    if (result === "cap_reached") {
+      setShowCapMessage(true);
+      setTimeout(() => setShowCapMessage(false), 2500);
+    }
+  }
   const isVerseRef = reference.type === "verse";
   const { results: teacherResults, loading: teachersLoading } = useTeachersOnVerse(
     reference.type === "verse" ? verse?.text ?? null : null,
@@ -200,14 +211,20 @@ function PanelBody({
           </PanelPrimitive.Title>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            onClick={onTogglePin}
-            disabled={pinDisabled}
-            title={isPinned ? "Unpin" : pinDisabled ? "Pin stack full (4 max)" : "Pin"}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
-          >
-            {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-          </button>
+          <div className="relative">
+            <button
+              onClick={handlePinClick}
+              title={isPinned ? "Unpin" : pinDisabled ? "Pin limit reached (8)" : "Pin"}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+            </button>
+            {showCapMessage && (
+              <div className="absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-foreground shadow-md">
+                Pin limit reached (8) — unpin something first
+              </div>
+            )}
+          </div>
           <PanelPrimitive.Close asChild>
             <button className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
               <X className="h-4 w-4" />
@@ -306,7 +323,7 @@ interface StudyPanelProps {
   onClose: () => void;
   reference: StudyReference | null;
   pins: StudyReference[];
-  onTogglePin: (ref: StudyReference) => void;
+  onTogglePin: (ref: StudyReference) => Promise<PinToggleResult>;
   accessToken?: string | null;
 }
 
