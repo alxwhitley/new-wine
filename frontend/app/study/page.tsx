@@ -20,6 +20,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { PastorsNotesSection } from "@/components/rhemata/pastors-notes";
 import { InterlinearBlocks, type WordToken } from "@/components/rhemata/interlinear-blocks";
 import { useInterlinear } from "@/hooks/useInterlinear";
+import type { WordDefinition } from "@/components/rhemata/word-definition-card";
+import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,15 +59,6 @@ interface CommentaryResult {
   source_kind: string;
   excerpt: string;
   content: string;
-}
-
-interface WordDefinition {
-  strongs: string;
-  word: string;
-  transliteration: string;
-  gloss: string;
-  lexiconDefinition: string;
-  meaning: string;
 }
 
 // ── Book maps ────────────────────────────────────────────────────────────────
@@ -861,9 +854,6 @@ export default function StudyPage() {
   const [corpusResults, setCorpusResults] = useState<CorpusResult[]>([]);
   const [corpusLoading, setCorpusLoading] = useState(false);
 
-  const [lexiconContent, setLexiconContent] = useState<string | null>(null);
-  const [wordStudyLexicon, setWordStudyLexicon] = useState<string | null>(null);
-
   // Anchor nav active section tracking
   const [activeSection, setActiveSection] = useState("section-words");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1019,27 +1009,8 @@ export default function StudyPage() {
 
   // ── Lexicon fetch ──────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!selectedStrongs) { setLexiconContent(null); return; }
-    const params = new URLSearchParams({ strongs: selectedStrongs });
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`, {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    })
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => setLexiconContent(data?.content ?? null))
-      .catch(() => setLexiconContent(null));
-  }, [selectedStrongs, accessToken]);
-
-  useEffect(() => {
-    if (!wordStudyDoc) { setWordStudyLexicon(null); return; }
-    const params = new URLSearchParams({ strongs: wordStudyDoc.strongs_number });
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`, {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setWordStudyLexicon(data?.content ?? null))
-      .catch(() => setWordStudyLexicon(null));
-  }, [wordStudyDoc, accessToken]);
+  const selectedLexiconEntry = useLexiconDefinition(selectedStrongs, accessToken);
+  const wordStudyLexiconEntry = useLexiconDefinition(wordStudyDoc?.strongs_number ?? null, accessToken);
 
   // ── Commentary fetch ───────────────────────────────────────────────────────
 
@@ -1146,42 +1117,21 @@ export default function StudyPage() {
 
   const selectedToken = selectedStrongs ? tokens.find((t) => t.strongs === selectedStrongs) ?? null : null;
 
-  let lexDef = "";
-  let lexUsage = "";
-  if (lexiconContent) {
-    const colonIdx = lexiconContent.indexOf(":");
-    const afterColon = colonIdx >= 0 ? lexiconContent.slice(colonIdx + 1).trim() : lexiconContent;
-    const dotIdx = afterColon.indexOf(".");
-    if (dotIdx >= 0) {
-      lexDef = afterColon.slice(0, dotIdx).trim();
-      const rest = afterColon.slice(dotIdx + 1).trim();
-      lexUsage = rest.length > 200 ? rest.slice(0, 200).trimEnd() + "…" : rest;
-    } else {
-      lexDef = afterColon;
-    }
-  }
-
   const definition: WordDefinition | null = selectedToken
-    ? { strongs: selectedToken.strongs, word: selectedToken.greek, transliteration: selectedToken.transliteration, gloss: selectedToken.english, lexiconDefinition: lexDef, meaning: lexUsage }
-    : selectedStrongs && lexiconContent
-    ? { strongs: selectedStrongs, word: selectedStrongs, transliteration: "", gloss: lexDef, lexiconDefinition: lexDef, meaning: lexUsage }
+    ? { strongs: selectedToken.strongs, word: selectedToken.greek, transliteration: selectedToken.transliteration, gloss: selectedToken.english, lexiconDefinition: selectedLexiconEntry?.lexiconDefinition ?? "", meaning: selectedLexiconEntry?.meaning ?? "" }
+    : selectedStrongs && selectedLexiconEntry
+    ? { strongs: selectedStrongs, word: selectedStrongs, transliteration: "", gloss: selectedLexiconEntry.gloss, lexiconDefinition: selectedLexiconEntry.lexiconDefinition, meaning: selectedLexiconEntry.meaning }
     : null;
 
   const wordStudyDefinition: WordDefinition | null = wordStudyDoc
-    ? (() => {
-        let gloss = ""; let meaning = "";
-        if (wordStudyLexicon) {
-          const colonIdx = wordStudyLexicon.indexOf(":");
-          const afterColon = colonIdx >= 0 ? wordStudyLexicon.slice(colonIdx + 1).trim() : wordStudyLexicon;
-          const dotIdx = afterColon.indexOf(".");
-          if (dotIdx >= 0) {
-            gloss = afterColon.slice(0, dotIdx).trim();
-            const rest = afterColon.slice(dotIdx + 1).trim();
-            meaning = rest.length > 200 ? rest.slice(0, 200).trimEnd() + "…" : rest;
-          } else { gloss = afterColon; }
-        }
-        return { strongs: wordStudyDoc.strongs_number, word: wordStudyDoc.word || wordStudyDoc.transliteration, transliteration: wordStudyDoc.transliteration, gloss, lexiconDefinition: "", meaning };
-      })()
+    ? {
+        strongs: wordStudyDoc.strongs_number,
+        word: wordStudyDoc.word || wordStudyDoc.transliteration,
+        transliteration: wordStudyDoc.transliteration,
+        gloss: wordStudyLexiconEntry?.gloss ?? "",
+        lexiconDefinition: "",
+        meaning: wordStudyLexiconEntry?.meaning ?? "",
+      }
     : null;
 
   // ── Save handlers ──────────────────────────────────────────────────────────
