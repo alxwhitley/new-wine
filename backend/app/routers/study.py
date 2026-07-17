@@ -5,6 +5,7 @@ import logging
 from typing import Optional, List, Dict, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from app.auth import require_user
 from app.constants import ABBREV_TO_NAME, BOOK_MAP
@@ -726,3 +727,43 @@ async def get_commentary(
         del r["_chunk_index"]
 
     return {"results": page, "has_more": has_more, "total": len(results)}
+
+
+# ── SP2 Phase 5: global, account-level verse pins ────────────────────────────
+
+class PinCreate(BaseModel):
+    verse_id: str
+
+
+@router.get("/pins")
+async def list_pins(user_id: str = Depends(require_user)):
+    db = get_supabase()
+    result = (
+        db.table("study_pins")
+        .select("id, verse_id, created_at")
+        .eq("user_id", user_id)
+        .order("created_at")
+        .execute()
+    )
+    return {"pins": result.data or []}
+
+
+@router.post("/pins")
+async def create_pin(body: PinCreate, user_id: str = Depends(require_user)):
+    db = get_supabase()
+    existing = db.table("study_pins").select("id").eq("user_id", user_id).execute()
+    if len(existing.data or []) >= 8:
+        raise HTTPException(status_code=409, detail="pin_cap_reached")
+    result = (
+        db.table("study_pins")
+        .insert({"user_id": user_id, "verse_id": body.verse_id})
+        .execute()
+    )
+    return result.data[0] if result.data else {}
+
+
+@router.delete("/pins/{pin_id}")
+async def delete_pin(pin_id: str, user_id: str = Depends(require_user)):
+    db = get_supabase()
+    db.table("study_pins").delete().eq("id", pin_id).eq("user_id", user_id).execute()
+    return {"ok": True}
