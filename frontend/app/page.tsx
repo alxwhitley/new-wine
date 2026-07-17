@@ -19,7 +19,7 @@ import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
-import { referenceKey, type StudyReference } from "@/lib/study-reference";
+import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference } from "@/lib/study-reference";
 import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
 
 // Dev-only demo reference for the always-available trigger below — lets the
@@ -91,9 +91,41 @@ export default function Home() {
   // Inline Study Panel state (SP2 shell — docs/inline-study-panel-spec.md)
   const [studyPanelOpen, setStudyPanelOpen] = useState(false);
   const [studyReference, setStudyReference] = useState<StudyReference | null>(null);
-  // In-memory only this session — persistence across reloads is deferred
-  // (see rhemata-status.md). Cap of 4 per spec.
-  const [studyPins, setStudyPins] = useState<StudyReference[]>([]);
+  // SP2 Phase 5: global, account-level pins — fetched from and persisted to
+  // /study/pins, not in-memory. `id` is the server row id (needed for
+  // DELETE); `reference` is reconstructed client-side from the server's
+  // compact verse_id via referenceFromVerseId.
+  const [studyPins, setStudyPins] = useState<
+    Array<{ id: string; reference: Extract<StudyReference, { type: "verse" }> }>
+  >([]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setStudyPins([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/pins`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((res) => (res.ok ? res.json() : { pins: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const pins = ((data.pins ?? []) as Array<{ id: string; verse_id: string }>)
+          .map((p) => {
+            const reference = referenceFromVerseId(p.verse_id);
+            return reference ? { id: p.id, reference } : null;
+          })
+          .filter((p): p is { id: string; reference: Extract<StudyReference, { type: "verse" }> } => p !== null);
+        setStudyPins(pins);
+      })
+      .catch(() => {
+        if (!cancelled) setStudyPins([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const handleVerseClick = useCallback((reference: StudyReference) => {
     if (!isStudyPanelEnabled()) return; // defense in depth — kill switch off
@@ -105,20 +137,57 @@ export default function Home() {
     setStudyPanelOpen(false);
   }, []);
 
-  const handleToggleStudyPin = useCallback((reference: StudyReference) => {
-    setStudyPins((prev) => {
-      const key = referenceKey(reference);
-      if (prev.some((p) => referenceKey(p) === key)) {
-        return prev.filter((p) => referenceKey(p) !== key);
-      }
-      if (prev.length >= 4) return prev; // cap reached — silently ignore, per spec's "cap of 4"
-      return [...prev, reference];
-    });
-  }, []);
+  // Returns a result the pin button can react to (Task 17 wires the visible
+  // cap message off "cap_reached"; the guest sign-up flow off "guest_prompt").
+  const handleToggleStudyPin = useCallback(
+    async (reference: StudyReference): Promise<"pinned" | "unpinned" | "cap_reached" | "guest_prompt"> => {
+      if (reference.type !== "verse") return "unpinned"; // pins are verse-only in SP2
 
+      if (!accessToken) {
+        return "guest_prompt";
+      }
+
+      const key = referenceKey(reference);
+      const existing = studyPins.find((p) => referenceKey(p.reference) === key);
+
+      if (existing) {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/pins/${existing.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }).catch(() => {});
+        setStudyPins((prev) => prev.filter((p) => p.id !== existing.id));
+        return "unpinned";
+      }
+
+      if (studyPins.length >= 8) {
+        return "cap_reached";
+      }
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/pins`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ verse_id: verseIdOf(reference) }),
+      }).catch(() => null);
+
+      if (!res) return "cap_reached";
+      if (res.status === 409) return "cap_reached"; // server-enforced, races with another device
+      if (!res.ok) return "cap_reached";
+
+      const row = await res.json();
+      setStudyPins((prev) => [...prev, { id: row.id, reference }]);
+      return "pinned";
+    },
+    [accessToken, studyPins],
+  );
+
+  // Kept working (adapted to the new pin shape) until Task 18 removes the
+  // edge tab entirely and replaces this with the pin dropdown.
   const handleOpenPinnedFromEdgeTab = useCallback(() => {
     setStudyPins((prev) => {
-      if (prev.length > 0) setStudyReference(prev[prev.length - 1]);
+      if (prev.length > 0) setStudyReference(prev[prev.length - 1].reference);
       return prev;
     });
     setStudyPanelOpen(true);
@@ -396,12 +465,12 @@ export default function Home() {
         isOpen={studyPanelOpen}
         onClose={handleCloseStudyPanel}
         reference={studyReference}
-        pins={studyPins}
+        pins={studyPins.map((p) => p.reference)}
         onTogglePin={handleToggleStudyPin}
         accessToken={accessToken}
       />
       <StudyPanelEdgeTab
-        pins={studyPins}
+        pins={studyPins.map((p) => p.reference)}
         panelOpen={studyPanelOpen}
         onOpenPins={handleOpenPinnedFromEdgeTab}
       />

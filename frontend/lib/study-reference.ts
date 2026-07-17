@@ -120,6 +120,8 @@ for (const b of BOOKS) {
   NAME_TO_CODE.set(b.full, b.code);
   for (const a of b.abbrevs) NAME_TO_CODE.set(a, b.code);
 }
+const CODE_TO_NAME = new Map<string, string>();
+for (const b of BOOKS) CODE_TO_NAME.set(b.code, b.full);
 const ALL_NAMES = Array.from(NAME_TO_CODE.keys())
   .sort((a, b) => b.length - a.length)
   .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -182,6 +184,32 @@ export interface VerifiedReference {
   positions?: number[];
   position?: number;
   source_id?: string;
+}
+
+// Reconstructs a full verse reference from a persisted verse_id string
+// (e.g. "ROM.8.28" — the same code.chapter.verse shape the `verses` table
+// and study_pins use). Pins fetched from the server only carry this compact
+// identity, not the full StudyReference shape, so the pin dropdown/panel
+// need this to render a real book name and reference text.
+export function referenceFromVerseId(
+  verseIdStr: string
+): Extract<StudyReference, { type: "verse" }> | null {
+  const parts = verseIdStr.split(".");
+  if (parts.length !== 3) return null;
+  const [code, chapterStr, verseStr] = parts;
+  const chapter = parseInt(chapterStr, 10);
+  const verseStart = parseInt(verseStr, 10);
+  const book = CODE_TO_NAME.get(code);
+  if (!book || Number.isNaN(chapter) || Number.isNaN(verseStart)) return null;
+  return {
+    type: "verse",
+    raw: `${book} ${chapter}:${verseStart}`,
+    book,
+    code,
+    chapter,
+    verseStart,
+    verseEnd: null,
+  };
 }
 
 // Allowlist by identity, not by position: a candidate the client-side
