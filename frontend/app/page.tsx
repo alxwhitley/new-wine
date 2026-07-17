@@ -5,6 +5,7 @@ import { Menu, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatFocus } from "@/contexts/chat-focus-context";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
@@ -34,6 +35,12 @@ const DEV_DEMO_REFERENCE: StudyReference = {
   verseStart: 28,
   verseEnd: null,
 };
+
+// SP2 Phase 5: a guest's pin attempt is stored here (verse identity only,
+// not the whole StudyReference) while they complete signup, then landed
+// automatically — see handleToggleStudyPin's guest branch and
+// handleSignUpWithPendingPin below.
+const PENDING_PIN_KEY = "rhemata_pending_pin";
 
 const SUGGESTIONS = [
   "What is the baptism of the Holy Spirit?",
@@ -144,6 +151,9 @@ export default function Home() {
       if (reference.type !== "verse") return "unpinned"; // pins are verse-only in SP2
 
       if (!accessToken) {
+        sessionStorage.setItem(PENDING_PIN_KEY, verseIdOf(reference));
+        setLoginReason("Sign up to save this verse and access it anytime.");
+        openAuthGate("signup");
         return "guest_prompt";
       }
 
@@ -192,6 +202,47 @@ export default function Home() {
     });
     setStudyPanelOpen(true);
   }, []);
+
+  // Wraps useAuth's signUp (LoginModal itself is untouched — it's load-bearing
+  // and already owns the whole success/close flow internally) so a guest pin
+  // attempt lands automatically once signup succeeds, with no manual re-pin.
+  // Reads the fresh session directly from the Supabase client rather than
+  // this closure's `accessToken`, which won't have flushed from
+  // onAuthStateChange yet at the point signUp's own promise resolves.
+  const handleSignUpWithPendingPin = useCallback(
+    async (email: string, password: string) => {
+      const result = await signUp(email, password);
+      if (result.hasSession) {
+        const pendingVerseId = sessionStorage.getItem(PENDING_PIN_KEY);
+        if (pendingVerseId) {
+          sessionStorage.removeItem(PENDING_PIN_KEY);
+          const { data } = await supabase.auth.getSession();
+          const freshToken = data.session?.access_token;
+          if (freshToken) {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/pins`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${freshToken}`,
+              },
+              body: JSON.stringify({ verse_id: pendingVerseId }),
+            }).catch(() => null);
+            // Fail quietly on any error (e.g. cap already reached from another
+            // device) — never block the signup flow itself over a pin.
+            if (res && res.ok) {
+              const reference = referenceFromVerseId(pendingVerseId);
+              if (reference) {
+                const row = await res.json();
+                setStudyPins((prev) => [...prev, { id: row.id, reference }]);
+              }
+            }
+          }
+        }
+      }
+      return result;
+    },
+    [signUp],
+  );
 
   // Dev-only demonstration trigger — Cmd/Ctrl+Shift+S opens the panel
   // regardless of chat content, so the shell is always demonstrable.
@@ -500,7 +551,7 @@ export default function Home() {
         <LoginModal
           onClose={() => { setShowLogin(false); setLoginReason(undefined); }}
           onSignIn={signIn}
-          onSignUp={signUp}
+          onSignUp={handleSignUpWithPendingPin}
           reason={loginReason}
           initialMode={loginInitialMode}
         />
