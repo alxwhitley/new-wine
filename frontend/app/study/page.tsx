@@ -22,6 +22,7 @@ import { InterlinearBlocks, type WordToken } from "@/components/rhemata/interlin
 import { useInterlinear } from "@/hooks/useInterlinear";
 import type { WordDefinition } from "@/components/rhemata/word-definition-card";
 import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
+import { useCommentarySearch, type CommentaryResult } from "@/hooks/useCommentarySearch";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,15 +51,6 @@ interface CorpusResult {
   source_kind: string;
   url: string | null;
   is_excerpt?: boolean;
-}
-
-interface CommentaryResult {
-  document_id: string;
-  title: string;
-  author: string;
-  source_kind: string;
-  excerpt: string;
-  content: string;
 }
 
 // ── Book maps ────────────────────────────────────────────────────────────────
@@ -845,12 +837,6 @@ export default function StudyPage() {
   const [savedWords, setSavedWords] = useState<SavedWord[]>([]);
   const savedStrongsSet = new Set(savedWords.map((w) => w.strongs_number));
 
-  const [commentaryResults, setCommentaryResults] = useState<CommentaryResult[]>([]);
-  const [commentaryLoading, setCommentaryLoading] = useState(false);
-  const [commentaryLoadingMore, setCommentaryLoadingMore] = useState(false);
-  const [commentaryOffset, setCommentaryOffset] = useState(0);
-  const [commentaryHasMore, setCommentaryHasMore] = useState(false);
-
   const [corpusResults, setCorpusResults] = useState<CorpusResult[]>([]);
   const [corpusLoading, setCorpusLoading] = useState(false);
 
@@ -1014,38 +1000,13 @@ export default function StudyPage() {
 
   // ── Commentary fetch ───────────────────────────────────────────────────────
 
-  const fetchCommentary = useCallback((verseText: string, offset: number, verseId?: string) => {
-    const isLoadMore = offset > 0;
-    if (isLoadMore) { setCommentaryLoadingMore(true); } else { setCommentaryLoading(true); }
-    const params = new URLSearchParams({ verse_text: verseText, offset: String(offset) });
-    if (verseId) params.set("verse_id", verseId);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/commentary?${params}`, {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    })
-      .then((res) => { if (!res.ok) throw new Error("commentary fetch failed"); return res.json(); })
-      .then((data) => {
-        const newResults = data.results ?? [];
-        if (isLoadMore) {
-          setCommentaryResults((prev) => [...prev, ...newResults]);
-        } else {
-          setCommentaryResults(newResults);
-        }
-        setCommentaryHasMore(data.has_more ?? false);
-        setCommentaryOffset(offset);
-      })
-      .catch(() => { if (!isLoadMore) setCommentaryResults([]); setCommentaryHasMore(false); })
-      .finally(() => { if (isLoadMore) { setCommentaryLoadingMore(false); } else { setCommentaryLoading(false); } });
-  }, [accessToken]);
-
-  useEffect(() => {
-    if (!verseData?.text) {
-      setCommentaryResults([]);
-      setCommentaryOffset(0);
-      setCommentaryHasMore(false);
-      return;
-    }
-    fetchCommentary(verseData.text, 0, verseData.verse_id);
-  }, [verseData?.text, verseData?.verse_id, fetchCommentary]);
+  const {
+    results: commentaryResults,
+    loading: commentaryLoading,
+    loadingMore: commentaryLoadingMore,
+    hasMore: commentaryHasMore,
+    loadMore: loadMoreCommentary,
+  } = useCommentarySearch(verseData?.text ?? null, verseData?.verse_id ?? null, accessToken);
 
   // ── Word search (debounced) ────────────────────────────────────────────────
 
@@ -1101,7 +1062,8 @@ export default function StudyPage() {
     setVerseData(null);
     setVerseError(null);
     setSelectedStrongs(null);
-    setCommentaryResults([]);
+    // commentaryResults clears itself — useCommentarySearch reacts to
+    // verseData becoming null the same way the old inline effect did.
     setCorpusResults([]);
     setVerseRef(result.word || result.transliteration);
     setWordStudyLoading(true);
@@ -1392,9 +1354,7 @@ export default function StudyPage() {
                     commentaryLoading={commentaryLoading}
                     commentaryLoadingMore={commentaryLoadingMore}
                     commentaryHasMore={commentaryHasMore}
-                    onLoadMoreCommentary={() => {
-                      if (verseData?.text) fetchCommentary(verseData.text, commentaryOffset + 3, verseData.verse_id);
-                    }}
+                    onLoadMoreCommentary={loadMoreCommentary}
                     verseRef={verseRef}
                     accessToken={accessToken}
                   />
@@ -1522,9 +1482,7 @@ export default function StudyPage() {
                     commentaryLoading={commentaryLoading}
                     commentaryLoadingMore={commentaryLoadingMore}
                     commentaryHasMore={commentaryHasMore}
-                    onLoadMoreCommentary={() => {
-                      if (verseData?.text) fetchCommentary(verseData.text, commentaryOffset + 3, verseData.verse_id);
-                    }}
+                    onLoadMoreCommentary={loadMoreCommentary}
                     verseRef={verseRef}
                     accessToken={accessToken}
                   />
