@@ -382,6 +382,9 @@ function WordStudyPanel({
           </div>
         )}
       </div>
+      <p className="text-xs text-muted-foreground mt-6">
+        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
+      </p>
     </div>
   );
 }
@@ -562,6 +565,9 @@ function InterlinearBlocks({
           );
         })}
       </div>
+      <p className="text-xs text-muted-foreground mt-2">
+        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
+      </p>
     </div>
   );
 }
