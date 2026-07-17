@@ -154,6 +154,15 @@ export default function Home() {
       if (!accessToken) {
         sessionStorage.setItem(PENDING_PIN_KEY, verseIdOf(reference));
         setLoginReason("Sign up to save this verse and access it anytime.");
+        // Close the panel before opening the auth gate: BetaGate/LoginModal
+        // and the study panel's own Radix Dialog overlay are both fixed,
+        // full-screen, and z-50 — tied. With the panel left open, its
+        // overlay paints on top (later in DOM) and silently swallows every
+        // click meant for the modal underneath, even though it looks
+        // completely normal in a screenshot. The pending pin already lives
+        // in sessionStorage above, independent of the panel's own state, so
+        // closing it here doesn't affect whether the pin lands after signup.
+        setStudyPanelOpen(false);
         openAuthGate("signup");
         return "guest_prompt";
       }
