@@ -102,11 +102,15 @@ CLAUDE.md restructure (thin core + pull-on-demand detail) lands, these rows get 
 │   ├── 056_gate_remaining_rpcs.sql       # ports the license gate to the 5 retrieval RPCs that bypassed it (match_lexicon_chunks, match_commentary_by_book, match_commentary_chunks, match_sermon_chunks_by_ref, search_documents) (APPLIED 2026-06)
 │   ├── 057_guest_ip_rate_limit.sql       # guest_sessions.ip_address + IP-capped new-session creation in increment_guest_query (20/hr/IP) — closes anon_id-rotation metering bypass (APPLIED 2026-07)
 │   └── 058_clf_aliases.sql               # source_aliases: 'alex whitley' (author-key) + 'clf church' (source_name-key), both -> CLF Church (29bfe81f-a150-4e43-baac-042e366fb4b3) — closes migration-050 doc/DB mismatch (APPLIED 2026-07-03)
+├── recovery/                  # Recovery exports for corpus deletions — NOT under sources/ (sources/ is gitignored and would silently drop these); added 2026-07-16
+│   ├── deleted_urls_backup_2026-07-16.json      # Every document deleted in the 2026-07-16 speaker-attribution cleanup: url, title, resolved speaker, source name, chunk + proposition counts, deciding pile; plus all 242 cleared Sam Storms queue rows
+│   └── ingest_queue.xlsx.PRE_0a_DELETE_2026-07-16.bak  # Pre-edit copy of sources/youtube/ingest_queue.xlsx, taken before the Sam Storms tab was cleared
 ├── CLAUDE.md                  # This file
 ├── SKILL.md                   # Full project skill context
-├── docs/                      # Source markdown for static marketing pages
+├── docs/                      # Source markdown for static marketing pages, plus QA/audit reports
 │   ├── how-rhemata-handles-sources.md   # Content source for /sources page
-│   └── our-theological-lens.md          # Content source for /beliefs page
+│   ├── our-theological-lens.md          # Content source for /beliefs page
+│   └── proposition-v3-v4-comparison-2026-07-16.md  # Side-by-side v3 vs v4 propositions-prompt output on 20 sample propositions (8 Ravenhill, 5 Poonen, 5 Savchuk, 2 Conlon) — uncommitted
 ├── backend/
 │   ├── app/                   # FastAPI Python package
 │   │   ├── main.py            # FastAPI app entry point
@@ -605,7 +609,7 @@ above.
 | `scripts/ingest_commentaries.py` | Ingest HistoricalChristianFaith commentaries from SQLite DB |
 | `scripts/scrape_individual_videos.py` | ORPHANED LEGACY (2026-06-27) — individual_videos.xlsx retired; its 21 videos consolidated into ingest_queue.xlsx; utility functions inlined into youtube_ingest.py. Do not run. Do not delete. |
 | `scripts/scrape_channel_titles.py` | Dump all video titles from YouTube channels to CSV |
-| `scripts/propositions.py` | Shared proposition extraction + storage module. `extract_propositions(text)` — Groq Llama 3.3 70B, v3 "four-corners" prompt, strips ```json fences, returns `[]` + logs `PROPOSITION_EXTRACT_FAIL` on any error (never raises). `store_propositions(conn, document_id, propositions, embed_fn)` — DELETE by document_id then embed + INSERT each via injected `embed_fn`; commits. `process_document(conn, doc_id, source_id, text, embed_fn)` — entry point for ingest scripts; gate: extracts for licensed/unlicensed only (skips public_domain + owned), Precept Austin locked out by name; returns `"skipped_licensed"` / `"skipped_precept_austin"` / `"no_propositions"` / `"stored:{n}"` / `"error"`; rolls back + returns `"error"` on any exception. Groq client lazy-init. |
+| `scripts/propositions.py` | Shared proposition extraction + storage module. `extract_propositions(text, doc_id="", speaker=None, prompt_version="v3")` — Groq Llama 3.3 70B, strips ```json fences, returns `[]` + logs `PROPOSITION_EXTRACT_FAIL` on any error (never raises). `prompt_version="v3"` (default, unchanged) uses `EXTRACTION_PROMPT`, the original "four-corners" prompt. `prompt_version="v4"` (added 2026-07-16, not yet committed, not wired into any ingest script — must be called explicitly) uses `EXTRACTION_PROMPT_V4`: named-speaker attribution instead of "the author" (raises `ValueError` if `speaker` is empty), fuller 80–150-word target with explicit claim+grounding+qualification structure, specifics-preserving voice. `store_propositions(conn, document_id, propositions, embed_fn)` — DELETE by document_id then embed + INSERT each via injected `embed_fn`; commits. `process_document(conn, doc_id, source_id, text, embed_fn)` — entry point for ingest scripts (always uses v3 — does not expose `prompt_version`); gate: extracts for licensed/unlicensed only (skips public_domain + owned), Precept Austin locked out by name; returns `"skipped_licensed"` / `"skipped_precept_austin"` / `"no_propositions"` / `"stored:{n}"` / `"error"`; rolls back + returns `"error"` on any exception. Groq client lazy-init. |
 | `scripts/taxonomy.py` | Single source of truth for the 258-tag `VALID_TAGS` set — all tagging scripts import from here; `taxonomy.md` is generated from it for human reference |
 | `scripts/bible_refs.py` | Shared Bible reference extractor (Groq) — used by ingest.py and ingest_magazine.py |
 | `scripts/backfill_phrase_refs.py` | Backfill bible_references via phrase matching (no LLM). Flags: `--source-kind`, `--author`, `--limit`, `--dry-run`, `--force`, `--chunks` |

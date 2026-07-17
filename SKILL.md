@@ -36,7 +36,7 @@ See `CLAUDE.md` (project root) for the full annotated directory tree, script tab
 
 Top-level shape: `frontend/` (Next.js 16, Vercel) · `backend/` (FastAPI, Railway) · `sources/` (per-pipeline raw/cleaned/ingested folders, gitignored) · `scripts/` (all ingestion + maintenance scripts) · `migrations/` (SQL, run manually in the Supabase SQL Editor) · `docs/` (source markdown for static marketing pages) · `CLAUDE.md` / `SKILL.md` (context docs) · `DESIGN.md` (styling authority).
 
-**Repo location (2026-07-06):** the repo moved from `~/Desktop/rhemata` to **`/Users/alexwhitley/rhemata`**. A stub of the old Desktop path may still exist — it is not the repo.
+**Repo location (2026-07-06):** the repo moved from `~/Desktop/rhemata` to **`/Users/alexwhitley/rhemata`**. The old Desktop stub was found and deleted 2026-07-16 — confirmed unrelated to the repo (no `.git`, different inode, just 2 stale docs files + an `.impeccable` cache from a 2026-07-06 editing session). It no longer exists.
 
 Public marketing routes (no auth): `/home` (landing), `/sources` ("How Rhemata Handles Sources"), `/beliefs` ("Our Theological Lens") — the latter two added 2026-07-06, long-form static pages built from `docs/*.md`, linked via a shared `FooterNav` (landing-page footer + app-shell sidebar bottom-left).
 
@@ -86,18 +86,22 @@ Single `/admin` route, role-gated (`user_roles` table, DB-role guard in `auth.py
 
 ---
 
-## Known Blockers (as of 2026-07-07 — see the audit reports below for full detail)
+## Known Blockers (as of 2026-07-16 — see the audit reports below for full detail)
 
 Resolved this session (2026-07-05→07): chat-UI design drift fixed (`--ring` restored to blue, shine-border restored to gold `--primary`, dead `mode-toggle.tsx` deleted, off-scale radii fixed — commits `1db5077`/`a627705`); Study Mode verse+interlinear restructured borderless with horizontal-scroll interlinear (`cfda88b`/`69b78b4`); `/sources` + `/beliefs` marketing pages + FooterNav shipped (`c47bbd3`); `.gitignore`'s unanchored `sources/` rule fixed to `/sources/` (was silently ignoring `frontend/app/sources/`).
+
+Resolved this session (2026-07-16): six living-ministry YouTube sources (Vlad Savchuk, John Bevere, Daniel Kolenda, Jack Deere, CLF Church, Bible Study Podcast) had never been checked for guest/multi-speaker misattribution — content hosted on a teacher's channel but not actually spoken by them, served under their name. Classified all 403 in-scope documents (free metadata pass + a Groq check reading only each document's first 2 chunks). Deleted 17 Savchuk documents (12 confirmed-guest + 5 unresolvable), 2 Bevere, 2 Deere. Deleted Sam Storms entirely (5 document rows — 3 distinct videos, 2 of which were accidental duplicate ingests — plus cleared 242 unvetted queue rows; the source row itself was kept, dark, for a future clean re-ingest). Deleted Bible Study Podcast entirely — both its 10 documents and the source row — no reliable single-host attribution exists for that channel at all. Set 4 CLF Church documents to `citation_mode='silent_context'` (still retrievable as context, never cited). Every deletion has a full recovery export — `recovery/deleted_urls_backup_2026-07-16.json`, committed to git — with url/title/speaker/chunk+proposition counts for every removed document and all 242 cleared queue rows. Separately, the stale Desktop repo stub (see Repo Structure above) was located and deleted.
 
 Open blockers, roughly by severity:
 1. **Quote verifier doesn't exist** (see Core Product Philosophy status note above) — and no canonical full text exists to verify against; 186 docs have broken `chunk_index` sequences.
 2. **8 scripts hardcode the dead `~/Desktop/rhemata` path** (broken since the 2026-07-06 repo move): `clean_transcripts.py`, `extract_book_quotes.py`, `generate_excerpts.py`, `ingest_interlinear.py`, `ingest_tahot.py`, `ingest.py` (`DOCS_FOLDER`), `scrape_youtube.py`, `test_excerpt_generation.py`.
-3. **`sources/` has no visible backup** — gitignored, single GitHub remote, no backup script/config anywhere; raw corpus exists only on this Mac.
+3. **`sources/` has no visible backup** — gitignored, single GitHub remote, no backup script/config anywhere; raw corpus exists only on this Mac. (Distinct from the new `recovery/` directory added 2026-07-16 — that only backs up specific deleted rows, not the corpus as a whole.)
 4. **Guest→account conversion is unlinked** and the email-confirmation session handoff is likely broken (cookie-vs-localStorage mismatch) — full trace in `GUEST_AUTH_AUDIT.md`.
 5. **Auth CTA inconsistencies** — `/library/authors` bypasses BetaGate and opens the wrong modal mode; `/home` shows signup CTAs to logged-in users; dead `AuthButton.tsx` — full trace in `BUTTON_AUTH_UX_AUDIT.md`.
 6. **Proposition backfill gap: 2,980 unlicensed docs with zero propositions** (251 covered). Aliases still missing for Jack Deere, Michael Brown, Tom Bedford, Church Life Class (new ingests would sentinel).
 7. Migration `058_clf_aliases.sql` applied live but still uncommitted to git; `jewish_perspectives` table (2 rows) is fully orphaned — zero code references remain.
+8. **v4 propositions prompt built, not deployed.** `scripts/propositions.py::EXTRACTION_PROMPT_V4` (named-speaker attribution instead of "the author," fuller 80–150-word target, specifics-preserving voice — added 2026-07-16) exists alongside v3, which is unchanged and still the default everywhere. v4 is uncommitted and not wired into any ingest script — calling it requires passing `prompt_version="v4"` explicitly. Tested against 18 real documents (`docs/proposition-v3-v4-comparison-2026-07-16.md`): median word count improved from v3's 40 to 60, still short of the 80–150 target. Awaiting a decision — adopt, iterate further, or discard — and, if adopted, whether to backfill existing propositions.
+9. **Precept Austin raw-source gap (found 2026-07-16).** 2,176 documents are ingested in the DB, but only 1,778 raw scrape files remain in `sources/precept_austin/raw/` — 398 documents have no local raw-source backing if re-verification or re-scraping is ever needed. Not confirmed whether this is the same 398 referenced in blocker #6's "excerpt-less" figure — the two weren't cross-checked against each other.
 
 ---
 
