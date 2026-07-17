@@ -710,6 +710,9 @@ function InlineWordPanel({
           ))}
         </div>
       )}
+      <p className="text-xs text-muted-foreground mt-6">
+        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
+      </p>
     </div>
   );
 }
