@@ -72,7 +72,7 @@ Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2
 
 (PLAN.md v5.1+, linear numbered session list, plus the SP track — see PLAN.md itself for full detail; this is a pointer, not a restatement)
 
-- **#1–#14:** all DONE except #10 (`ingest_commentaries.py` conversion, still unstarted) and #14's folder-rename/`jewish_perspectives`-drop remainder.
+- **#1–#14:** **corrected 2026-07-17** (previously read "all DONE except #10 and #14's remainder" — that implied #13, the `ingest_helloao.py` conversion, was complete; verified false by direct code read: no `shared_ingest` import anywhere in the file, own Supabase REST `.insert()` calls on `documents` and `chunks`). Actual state: all DONE except #10 (`ingest_commentaries.py` conversion, still unstarted), **#13 (`ingest_helloao.py` conversion, still unstarted — not merely undocumented, a real unconverted write path)**, and #14's folder-rename/`jewish_perspectives`-drop remainder.
 - **#17 (propositions backfill):** 810 non-PA unlicensed docs, correctly sized, not run.
 - **SP track:** SP1 (reference-pointer backend) fully built, merged, and today's live-run defect fixed — see PLAN.md #39. SP2 (panel frontend) is a re-planned corrected delta, Phase 1 (kill switch) DONE and merged; Phases 2–10 not started. SP3 formally dissolved into SP2 (PLAN.md #41) — no longer a separate track.
 
@@ -87,7 +87,7 @@ Today: fixed a real SP1 defect (range/prefix double-count), built and merged SP2
 5. `GOVERNED_FILES` gap (`guard_pretooluse.py`/`settings.json` not in `GOVERNED_FILES`).
 6. PLAN.md #5.5 closing line is stale. Needs Alex's explicit go-ahead on replacement wording.
 7. PLAN.md #14 drift — folder renames and the `jewish_perspectives` drop still open.
-10. CLAUDE.md's own "unconverted scripts" prose is stale in places (says four in its Directory Structure section) even though the true count (two) is confirmed accurate — deferred to CLAUDE.md's own docs pass.
+10. CLAUDE.md's own "unconverted scripts" prose was stale (said four in its Directory Structure section). **Corrected 2026-07-17, re-verified by reading all six real ingest scripts' code directly (the original five plus `ingest_helloao.py`, which this flag and CLAUDE.md had both omitted from the count):** true count of NOT-converted is **two** — `ingest_commentaries.py` and `ingest_helloao.py` (confirmed live: neither file contains any `shared_ingest` import or `ingest_document()` call; commentaries runs its own SQLite-driven psycopg2 INSERTs, helloao runs its own Supabase REST `.insert()` calls). This "two" is a different pair than whatever this flag originally meant (helloao was never counted before) — coincidence of count, not confirmation of the original claim. CLAUDE.md's four flagged locations have now been corrected to match, in this same session — this is no longer deferred to a future docs pass.
 12. PA's 398 "excerpt-less" documents — 396 just need `generate_excerpts.py` (not broken); 2 are the genuinely-broken docs in "Still open" #2 above.
 13. PA "survivability guard will rarely fire" — see "Still open" #3 above.
 18. CLAUDE.md and SKILL.md are both stale on the quoting rule (found 2026-07-14): both describe verbatim quoting permitted up to 50 words pending a verifier that doesn't exist, while the live system prompt bans reproducing any quote or exact wording in any mode. Deferred to the docs pass, not fixed now.
