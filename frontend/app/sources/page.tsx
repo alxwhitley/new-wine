@@ -7,6 +7,7 @@ import {
   ArticleH2,
   ArticleP,
   ArticleOl,
+  ArticleRefs,
 } from "@/components/marketing/article";
 
 export const metadata = {
@@ -34,9 +35,12 @@ export default function SourcesPage() {
         This distinction is the foundation of everything we do. AI tools that flatten a thousand voices into one synthetic answer erase the people who did the work. Rhemata exists to do the opposite: put named voices in front of you, with receipts.
       </ArticleP>
 
-      <ArticleH2>Every quote is verified — by code, not trust</ArticleH2>
+      <ArticleH2>Every claim is attributed, never invented</ArticleH2>
       <ArticleP>
-        A quotation cannot appear in Rhemata unless our software confirms it is an{" "}<strong className="font-semibold text-card-foreground">exact, character-for-character match</strong>{" "}against the source text. If the words don&rsquo;t exist verbatim in the original, they cannot be displayed as a quote. This is enforced mechanically, not editorially. No paraphrase wearing quotation marks. No AI-invented citations.
+        Rhemata does not put words in a teacher&rsquo;s mouth. Every claim in an answer is a{" "}<strong className="font-semibold text-card-foreground">paraphrase</strong>{" "}of what a named source actually teaches — labeled as summary, never presented as the teacher&rsquo;s own words — and it is always attributed by name, with a link back to where the real teaching lives. No AI-invented citations. No anonymous synthesis presented as someone&rsquo;s words.
+      </ArticleP>
+      <ArticleP>
+        Verified, character-for-character verbatim quoting — software-confirmed against the source before a quote can ever be served — is on our roadmap. It is not live yet. Until it ships, Rhemata paraphrases and cites; it does not quote freely.
       </ArticleP>
 
       <ArticleH2>How content enters the library</ArticleH2>
@@ -64,6 +68,9 @@ export default function SourcesPage() {
       <ArticleP>
         For contemporary voices, we pursue{" "}<strong className="font-semibold text-card-foreground">direct permission from authors, estates, and ministries</strong>.{" "}Where content carries open licenses (such as Creative Commons), we honor the license terms, including attribution requirements.
       </ArticleP>
+      <ArticleRefs>
+        Our interlinear and lexicon word-study data carries this required attribution: &ldquo;Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0).&rdquo;
+      </ArticleRefs>
 
       <ArticleH2>For authors and rights holders</ArticleH2>
       <ArticleP>

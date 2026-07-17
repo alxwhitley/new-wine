@@ -33,6 +33,8 @@ The heart of Rhemata's library is **public domain literature** — the writers o
 
 For contemporary voices, we pursue **direct permission from authors, estates, and ministries**. Where content carries open licenses (such as Creative Commons), we honor the license terms, including attribution requirements.
 
+Our interlinear and lexicon word-study data carries this required attribution: "Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)."
+
 ## For authors and rights holders
 
 If you are an author, publisher, or rights holder and believe your content appears in Rhemata improperly — or if you'd like to discuss how your work is represented — contact us directly:
