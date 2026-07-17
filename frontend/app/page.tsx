@@ -398,6 +398,7 @@ export default function Home() {
         reference={studyReference}
         pins={studyPins}
         onTogglePin={handleToggleStudyPin}
+        accessToken={accessToken}
       />
       <StudyPanelEdgeTab
         pins={studyPins}
