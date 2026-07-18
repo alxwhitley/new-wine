@@ -23,6 +23,7 @@ import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
 import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference } from "@/lib/study-reference";
 import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
+import { useUserRole } from "@/hooks/useUserRole";
 
 // Dev-only demo reference for the always-available trigger below — lets the
 // panel be opened regardless of chat content. Real triggers come from
@@ -51,6 +52,7 @@ const SUGGESTIONS = [
 
 export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const { role: userRole } = useUserRole(accessToken);
   const [showLogin, setShowLogin] = useState(false);
   const [showGate, setShowGate] = useState(false);
   const [loginInitialMode, setLoginInitialMode] = useState<"signin" | "signup">("signup");
@@ -528,6 +530,8 @@ export default function Home() {
         pins={studyPins.map((p) => p.reference)}
         onTogglePin={handleToggleStudyPin}
         accessToken={accessToken}
+        role={userRole}
+        userId={user?.id ?? null}
       />
 
       {/* Dev-only demonstration trigger — opens the Study Panel regardless of

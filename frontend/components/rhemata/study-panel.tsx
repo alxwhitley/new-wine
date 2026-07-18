@@ -15,6 +15,7 @@ import {
 } from "@/lib/study-reference";
 import { AccordionRow } from "@/components/rhemata/accordion-row";
 import { CommentaryAccordionRow } from "@/components/rhemata/commentary-accordion-row";
+import { PastorsNotesSection } from "@/components/rhemata/pastors-notes";
 
 // ── Verse text fetch ─────────────────────────────────────────────────────────
 // Reuses the same `verses` table + verse_id shape already proven in
@@ -144,12 +145,16 @@ function PanelBody({
   pinDisabled,
   onTogglePin,
   accessToken,
+  role,
+  userId,
 }: {
   reference: StudyReference;
   isPinned: boolean;
   pinDisabled: boolean;
   onTogglePin: () => Promise<PinToggleResult>;
   accessToken?: string | null;
+  role?: string | null;
+  userId?: string | null;
 }) {
   const { data: verse, loading, error } = useVerseText(reference);
   const [showCapMessage, setShowCapMessage] = useState(false);
@@ -275,6 +280,14 @@ function PanelBody({
                 accessToken={accessToken}
               />
             </AccordionRow>
+            <AccordionRow label="Pastors' Notes">
+              <PastorsNotesSection
+                verseId={verseId(reference)}
+                accessToken={accessToken ?? null}
+                role={role ?? null}
+                userId={userId ?? null}
+              />
+            </AccordionRow>
           </div>
         )}
 
@@ -301,9 +314,11 @@ interface StudyPanelProps {
   pins: StudyReference[];
   onTogglePin: (ref: StudyReference) => Promise<PinToggleResult>;
   accessToken?: string | null;
+  role?: string | null;
+  userId?: string | null;
 }
 
-export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken }: StudyPanelProps) {
+export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId }: StudyPanelProps) {
   const isMobile = useIsMobile();
 
   if (!reference) return null;
@@ -355,6 +370,8 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             pinDisabled={pinDisabled}
             onTogglePin={() => onTogglePin(reference)}
             accessToken={accessToken}
+            role={role}
+            userId={userId}
           />
         </PanelPrimitive.Content>
       </PanelPrimitive.Portal>
