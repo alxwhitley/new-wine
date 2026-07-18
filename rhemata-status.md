@@ -3,7 +3,63 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-18 (SP4 pre-build data fix, DB writes verified live).
+Last verified: 2026-07-18 (SP4 teacher cards built + partially live-verified).
+
+---
+
+## SP4 — Teacher Cards (session state, 2026-07-18)
+
+Built per `docs/superpowers/plans/2026-07-18-sp4-teacher-cards.md` (11 tasks),
+following the pre-build data fix recorded below. Shipped: migrations `064`
+(`teacher_profiles` table + 9-row seed) and `065` (`match_teacher_chunks`
+RPC, license-gated); `app/services/llm_client.py` (extracted shared
+Anthropic client + guardrails-text loader, also now used by `chat.py`);
+`GET /study/teachers` + `GET /study/teacher/{source_id}` (combined
+bio/works/live-position-synthesis endpoint, own similarity floor since the
+RPC supplies none); frontend curated-teacher detection/verification
+(`study-reference.ts`), underline rendering (`chat-message.tsx`), the
+`TeacherCard` component, and full wiring through `study-panel.tsx` /
+`page.tsx`. All 10 build commits pushed; `origin/main` confirmed at each
+step.
+
+**Live-verified, real evidence:**
+- Backend: `curl https://rhemata-production.up.railway.app/study/teachers`
+  returns all 9 curated teachers with correct `source_id`s, live in
+  production — confirmed directly, not assumed from a successful deploy.
+- The `TEACHER_POSITION_SIMILARITY_FLOOR = 0.3` value is empirically
+  validated against this corpus's real score distribution, not a guess:
+  `scripts/test_teacher_card.py` shows an on-topic query's best similarity
+  at 0.508 (clears the floor) and an off-topic query's best score at 0.152
+  (stays well below it) — this directly closes the gap the 2026-07-18
+  pre-build diagnostic flagged (no threshold exists in `match_chunks`/
+  `match_teacher_chunks` themselves).
+- Frontend, live on `rhemata.app` (real Playwright session, guest/no
+  auth): asked "What does Derek Prince teach about deliverance?", waited
+  for the real streamed answer to fully stabilize (not a fixed timeout —
+  polled until page text stopped changing), confirmed **2 real underlined
+  "Derek Prince" buttons** in the rendered answer, exact class match to
+  `TeacherReferenceSpan`'s styling. Clicked one: the panel opened with
+  header "TEACHER" / "Derek Prince" (confirms correct mode-switch, not the
+  verse card, no nesting/back-stack residue). As a guest (no access token),
+  the card body read "This teacher's card isn't available right now" —
+  honest and non-crashing, not a silently-swallowed fake-empty state (the
+  exact bug class Phase 7 found in `pastors_notes.py`), though it doesn't
+  specifically prompt sign-in the way some other gated surfaces do — see
+  Open Flags below.
+
+**NOT verified this session — needs Alex's own pass, blocked by the Beta
+Access gate:** signing up a real disposable test account to check requires
+a beta access code this session doesn't have (`Become a test user` → a
+`BetaGate` code-entry screen, dead end without the code). Specifically
+unverified: (1) real card content for a signed-in user — actual bio text,
+a real works-in-corpus list, a real synthesized position; (2) the
+Interlinear-width-collapse fix (Task 9) — switching from a verse card with
+Interlinear open to a teacher card should snap the panel back to 33vw, not
+stay at 50vw; (3) the fail-quiet floor behavior live, end-to-end, on an
+authenticated off-topic question (Task 5's script validates the floor
+value itself against real scores, but not the full authenticated request
+path). None of these are new risks invented for this note — they're the
+literal gaps left by not being able to sign in.
 
 ---
 
