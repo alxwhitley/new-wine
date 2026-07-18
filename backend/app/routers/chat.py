@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import anthropic
 import cohere
 import httpx
 from groq import Groq
@@ -23,6 +22,7 @@ from app.auth import get_optional_user
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
+from app.services.llm_client import get_anthropic_client, get_guardrails_text
 
 
 def is_word_study_query(question: str) -> bool:
@@ -40,7 +40,6 @@ def is_word_study_query(question: str) -> bool:
     return any(phrase in q for phrase in word_study_phrases)
 
 COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +53,6 @@ COMMENTARY_CONTEXT_CAP = 3  # max commentary chunks in the final assembled conte
 
 _app_dir = Path(__file__).resolve().parent.parent
 _system_prompt_text = (_app_dir / "system_prompt.txt").read_text()
-_guardrails_text = (_app_dir / "theological_guardrails.txt").read_text() + (
-    "\n\nRepresent the views of the source documents faithfully and accurately, "
-    "even when those views reflect traditional or complementarian theology. "
-    "Do not editorialize or add modern qualifications unless they appear in the source material."
-)
 ANSWER_SYSTEM_BLOCKS = [
     {
         "type": "text",
@@ -67,7 +61,7 @@ ANSWER_SYSTEM_BLOCKS = [
     },
     {
         "type": "text",
-        "text": _guardrails_text,
+        "text": get_guardrails_text(),
         "cache_control": {"type": "ephemeral"},
     },
 ]
@@ -185,15 +179,6 @@ def _get_cohere():
     return _cohere_client
 
 
-_anthropic_client = None
-
-
-def _get_anthropic():
-    # type: () -> anthropic.Anthropic
-    global _anthropic_client
-    if _anthropic_client is None:
-        _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    return _anthropic_client
 
 
 def expand_query(question: str) -> Tuple[List[str], Optional[str]]:
@@ -911,7 +896,7 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
             return part
 
         try:
-            client = _get_anthropic()
+            client = get_anthropic_client()
             stream = client.messages.create(
                 model="claude-sonnet-4-5",
                 max_tokens=1500,
