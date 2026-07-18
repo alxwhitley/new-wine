@@ -296,7 +296,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
   if (!reference) return null;
 
   const isPinned = pins.some((p) => referenceKey(p) === referenceKey(reference));
-  const pinDisabled = !isPinned && pins.length >= 4;
+  const pinDisabled = !isPinned && pins.length >= 8;
 
   return (
     <PanelPrimitive.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
