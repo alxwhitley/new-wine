@@ -279,5 +279,20 @@ until that permission is obtained.
 
 ## Next
 
-PLAN.md #11 (reuse-path fix) → gates #12 (lexicon conversion) and the Inline
-Study Panel track (SP3).
+1. **#1 — back up `sources/`.** Oldest untouched item on the plan; 15+ sessions
+   shipped around it. Only copy of the corpus, one machine, no backup. 5-minute
+   loss-prevention task. Do first.
+2. **#13 — route `ingest_helloao.py` through `shared_ingest`.** Sole remaining
+   chokepoint conversion. Unblocks HelloAO commentary growth (#27) only, not
+   corpus growth generally.
+3. **#14 remainder — folder renames** (`lexicon/`→`stepbible/`,
+   `documents/`→`inbox/`) + drop `jewish_perspectives` table.
+4. **#15 — staging Supabase + backup/restore test.** Gates the core-serving
+   band (#16–20).
+
+SP track: SP2 done (Phases 1–9), SP3 dissolved 2026-07-15 (absorbed into SP2
+Phase 8, shipped `9415f11`). Next SP item is #42 (SP4, teacher card content).
+#38 (SP0 mobile mockup) completion status unverified — confirm before assuming.
+
+#11/#12 are DONE (reuse path resolved 2026-07-13). The old "#11 → #12 → SP3"
+chain no longer holds — all three links resolved.
