@@ -15,3 +15,5 @@ license-mapping/
 
 # Local read-only mirror of Notion canonical docs — Notion is source of truth
 notion-sync/
+logs/
+*.log
