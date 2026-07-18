@@ -75,9 +75,65 @@ already-correct, already-typechecked work.
   is actually lost, just an extra tap. The plan's Task 29 doesn't specify
   either way.
 
-SP2 Phases 1–8 are now all shipped. Remaining: Phase 9 (keyboard/screen-reader
-verification) and Phase 10 (records correction per Standing Rule #12 — the
-PLAN.md updates Task 35/36 describe, not yet done).
+**Phase 9 (keyboard + screen-reader verification) shipped and live-verified on
+`rhemata.app`, same session.** Commit `bb8aa43`. Diagnostic-first: audited
+read-only, reported 5 confirmed gaps plus 4 confirmed-clean surfaces, stopped
+for Alex's go-ahead before touching anything — all 5 confirmed gaps approved
+for a fix, all additive, none of the 4 clean surfaces touched.
+
+- **Gap 1 — accordion rows didn't announce open/closed state.** `aria-expanded`
+  added to all three `AccordionRow` triggers (Interlinear/Commentaries/
+  Pastors' Notes) and to Commentaries' nested per-excerpt toggle. Live,
+  before/after a real keyboard toggle: all four went `false → true` correctly.
+- **Gap 2 — closing the panel dropped focus to `<body>`.** This panel has no
+  `Dialog.Trigger` (opened from verse-underline clicks, the dev button, or a
+  keyboard shortcut), so Radix had nothing to restore focus to. Now captures
+  `document.activeElement` on open and restores it via `onCloseAutoFocus`
+  (Radix's own override point — doesn't touch the focus-trap mechanism, a
+  separate concern), falling back to the chat textarea if the original
+  element is gone. Live, both close paths tested: clicking the panel's own
+  Close button and pressing Escape each correctly returned focus to the
+  actual triggering element (the dev button, in both tests).
+- **Gap 3 — word-study view lost focus to a generic container, both
+  directions.** Entering now focuses the Back button (the one actionable
+  element at the top of this back-stack surface); leaving via Back now
+  refocuses the *specific* token that was tapped, not just "the row" —
+  `data-strongs-token` added to the shared `InterlinearBlocks` (inert
+  markup, zero behavior change for the standalone page's existing use),
+  read by a `PanelBody` effect that fires once after Back clears the word
+  view. Live: tapped a real token (Strong's `G6063`), confirmed focus
+  landed on "← Back" on entry, confirmed focus returned to the *exact same*
+  `G6063` token button on exit (`data-strongs-token` matched exactly, not
+  just "some token"). Falls back to the row view's own container
+  (`tabIndex={-1}`) if the exact token isn't found — not separately
+  exercised live (no known way to force that path without breaking the
+  fetch deliberately), but the fallback ref is real and typechecked.
+- **Gap 4 — pin button had no real accessible name, only a `title`
+  fallback.** Added `aria-label` mirroring the existing title text. Live:
+  confirmed `aria-label="Pin limit reached (8)"` on the live DOM in the
+  cap-reached state.
+- **Gap 5 — pin-cap message wasn't announced.** Added `role="alert"` (implies
+  assertive live-region semantics, fires on insertion — correct for a
+  message that auto-dismisses in ~2.5s and can't rely on the user already
+  being focused on it). Live: confirmed `role="alert"` on the live DOM
+  element, using a real 9th-pin-attempt trigger (8 real seeded pins, a real
+  refusal).
+- **All 4 previously-clean surfaces re-confirmed unaffected, live:** focus
+  trap (25 tabs, no leak), `aria-labelledby`/`aria-describedby` panel
+  labeling both present, pin dropdown (real `role="menu"`, opens/closes via
+  keyboard), verse underlines (real, keyboard-activatable buttons in a
+  fresh answer).
+- **Honesty bar, explicit:** every claim above is either real keyboard
+  interaction (Tab/Enter/Escape driving the actual page) or live
+  accessibility-tree/DOM attribute inspection (`aria-expanded`, `aria-label`,
+  `role`, `data-*`) on the deployed site — not source-code inference and not
+  a screen-reader run. **No actual screen reader (VoiceOver/NVDA) has been
+  run against this panel.** That remains a genuinely open, unproven check —
+  logged as a new open flag below, not closed by this session.
+
+SP2 Phases 1–9 are now all shipped. Remaining: Phase 10 (records correction
+per Standing Rule #12 — the PLAN.md updates Task 35/36 describe, not yet
+done) and a real VoiceOver/NVDA pass (net-new flag, not previously tracked).
 
 ---
 
@@ -140,6 +196,17 @@ collapsed away in the all-or-nothing rewrite.
 
 **12. `jewish_perspectives` table is orphaned.** 2 rows, zero code references
 outside migrations and docs.
+
+**13. SP2 Study Panel — no real screen-reader pass has ever been run.**
+Phase 9 (2026-07-17) fixed 5 real keyboard/ARIA gaps and verified them via
+real keyboard interaction plus live accessibility-tree/DOM inspection
+(`aria-expanded`, `aria-label`, `role`, `data-*` attributes) — that is a
+genuine, live-proven check of what a screen reader *would* consume, but it
+is not the same as actually running one. No VoiceOver, NVDA, or other
+screen reader has been used against this panel. Don't treat Phase 9 as
+having closed this — it closed the 5 gaps the structural/keyboard audit
+could find and prove; a real screen-reader listen could still surface
+things that audit can't (announcement phrasing, reading order, timing).
 
 ---
 
