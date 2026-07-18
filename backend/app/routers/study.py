@@ -12,12 +12,32 @@ from app.constants import ABBREV_TO_NAME, BOOK_MAP
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
+from app.services.source_resolver import is_source_servable
+from app.services.llm_client import get_anthropic_client, get_guardrails_text
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 CORPUS_SOURCE_KINDS = {"sermon_transcript", "magazine_article", "word_study", "commentary"}
+
+# SP4 teacher-card position synthesis. match_chunks/match_teacher_chunks
+# supply no similarity threshold at all (confirmed by direct inspection of
+# both RPCs' SQL, 2026-07-18 diagnostic) -- this floor is applied here,
+# in Python, after retrieval. Starting default, empirically checked against
+# this corpus's real query/chunk score distribution by
+# scripts/test_teacher_card.py before this feature is considered verified.
+TEACHER_POSITION_SIMILARITY_FLOOR = 0.3
+
+TEACHER_POSITION_PROMPT = (
+    "You are summarizing what a specific teacher has said on a topic, based "
+    "only on the excerpts provided below. Paraphrase in your own words — "
+    "never quote more than a few words verbatim. Cite specific works by "
+    "title when relevant. If the excerpts don't address the question, say "
+    "so plainly rather than guessing or generalizing. Do not editorialize "
+    "or add your own theological commentary — represent only what appears "
+    "in the source material."
+)
 
 
 def parse_ref(ref: str):
@@ -767,3 +787,113 @@ async def delete_pin(pin_id: str, user_id: str = Depends(require_user)):
     db = get_supabase()
     db.table("study_pins").delete().eq("id", pin_id).eq("user_id", user_id).execute()
     return {"ok": True}
+
+
+# ── SP4: teacher cards ───────────────────────────────────────────────────────
+
+@router.get("/teachers")
+async def list_curated_teachers():
+    db = get_supabase()
+    result = (
+        db.table("teacher_profiles")
+        .select("source_id, sources(name)")
+        .execute()
+    )
+    teachers = [
+        {"name": row["sources"]["name"], "source_id": row["source_id"]}
+        for row in (result.data or [])
+        if row.get("sources")
+    ]
+    return {"teachers": teachers}
+
+
+@router.get("/teacher/{source_id}")
+async def get_teacher_card(
+    source_id: str,
+    question: str = Query(..., description="The user's current turn question"),
+    user_id: str = Depends(require_user),
+):
+    db = get_supabase()
+
+    profile_result = (
+        db.table("teacher_profiles")
+        .select("bio, sources(name)")
+        .eq("source_id", source_id)
+        .limit(1)
+        .execute()
+    )
+    if not profile_result.data:
+        raise HTTPException(status_code=404, detail="Not a curated teacher")
+    bio = profile_result.data[0]["bio"]
+    name = profile_result.data[0]["sources"]["name"]
+
+    if not is_source_servable(db, source_id):
+        return {"bio": bio, "works": [], "position": None}
+
+    docs_result = (
+        db.table("documents")
+        .select("id, title")
+        .eq("source_id", source_id)
+        .order("created_at", desc=True)
+        .limit(20)
+        .execute()
+    )
+    works = [{"id": d["id"], "title": d["title"]} for d in (docs_result.data or [])]
+
+    if not works:
+        return {"bio": bio, "works": [], "position": None}
+
+    try:
+        embedding = embed_text(question)
+    except Exception:
+        logger.exception("Embedding failed for teacher-position query: %s", question[:100])
+        raise HTTPException(status_code=500, detail="Embedding service error")
+
+    document_ids = [w["id"] for w in works]
+    try:
+        chunk_result = db.rpc("match_teacher_chunks", {
+            "query_embedding": embedding,
+            "match_count": 15,
+            "document_ids": document_ids,
+        }).execute()
+    except Exception:
+        logger.exception("match_teacher_chunks RPC failed for source_id=%s", source_id)
+        raise HTTPException(status_code=500, detail="Search service error")
+
+    relevant = [
+        c for c in (chunk_result.data or [])
+        if c.get("similarity", 0.0) >= TEACHER_POSITION_SIMILARITY_FLOOR
+    ]
+    relevant.sort(key=lambda c: c["similarity"], reverse=True)
+    top_chunks = relevant[:5]
+
+    if not top_chunks:
+        return {"bio": bio, "works": works, "position": None}
+
+    excerpts_text = "\n\n".join(
+        f'From "{c["title"]}":\n{c["content"]}' for c in top_chunks
+    )
+
+    try:
+        client = get_anthropic_client()
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=400,
+            system=[
+                {"type": "text", "text": TEACHER_POSITION_PROMPT},
+                {"type": "text", "text": get_guardrails_text()},
+            ],
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Teacher: {name}\n\nBio: {bio}\n\n"
+                    f"Excerpts:\n{excerpts_text}\n\nQuestion: {question}"
+                ),
+            }],
+        )
+        position = response.content[0].text
+    except Exception:
+        logger.exception("Anthropic call failed for teacher-position synthesis, source_id=%s", source_id)
+        raise HTTPException(status_code=500, detail="Answer generation error")
+
+    return {"bio": bio, "works": works, "position": position}
