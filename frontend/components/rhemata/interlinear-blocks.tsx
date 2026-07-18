@@ -63,6 +63,7 @@ export function InterlinearBlocks({
           return (
             <button
               key={i}
+              data-strongs-token={token.strongs}
               onClick={() => onSelect(isSelected ? null : token.strongs)}
               className={cn(
                 "shrink-0 rounded-md p-1.5 text-center cursor-pointer transition-colors border min-h-[44px]",

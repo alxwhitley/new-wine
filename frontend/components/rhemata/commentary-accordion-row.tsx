@@ -56,6 +56,7 @@ export function CommentaryAccordionRow({
           <div key={r.document_id} className="rounded-lg border border-border bg-card p-3">
             <button
               onClick={() => setExpandedId(isExpanded ? null : r.document_id)}
+              aria-expanded={isExpanded}
               className="w-full text-left cursor-pointer"
             >
               <p className="text-sm font-medium text-primary">{r.author}</p>

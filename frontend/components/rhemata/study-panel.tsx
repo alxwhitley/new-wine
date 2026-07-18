@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Dialog as PanelPrimitive } from "radix-ui";
 import { Pin, PinOff, X, GraduationCap } from "lucide-react";
@@ -146,9 +146,19 @@ function useTeachersOnVerse(
 // corpus section, by design.
 
 function WordStudyView({ definition, onBack }: { definition: WordDefinition | null; onBack: () => void }) {
+  // SP2 Phase 9 (Fix 3, entry): this view fully replaces the row view's DOM
+  // subtree on mount, so the tapped token's focus is gone by the time this
+  // renders — land focus on Back, the one actionable element at the top of
+  // this back-stack surface, rather than leaving it on the generic container.
+  const backRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    backRef.current?.focus();
+  }, []);
+
   return (
     <div>
       <button
+        ref={backRef}
         onClick={onBack}
         className="text-sm cursor-pointer hover:underline text-muted-foreground hover:text-foreground transition-colors"
       >
@@ -192,6 +202,25 @@ function PanelBody({
   const { data: verse, loading, error } = useVerseText(reference);
   const [showCapMessage, setShowCapMessage] = useState(false);
   const [selectedStrongs, setSelectedStrongs] = useState<string | null>(null);
+  // SP2 Phase 9 (Fix 3, exit): remembers which token to return focus to when
+  // leaving the word-study view via Back — read once, after the row view has
+  // re-rendered, then cleared. Falls back to the row view's own scrollable
+  // container if that exact token isn't found (e.g. tokens still loading).
+  const pendingRefocusStrongsRef = useRef<string | null>(null);
+  const rowViewContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedStrongs !== null || !pendingRefocusStrongsRef.current) return;
+    const strongs = pendingRefocusStrongsRef.current;
+    pendingRefocusStrongsRef.current = null;
+    const target = document.querySelector<HTMLElement>(`[data-strongs-token="${strongs}"]`);
+    (target ?? rowViewContainerRef.current)?.focus();
+  }, [selectedStrongs]);
+
+  function handleBackFromWordStudy() {
+    pendingRefocusStrongsRef.current = selectedStrongs;
+    setSelectedStrongs(null);
+  }
 
   async function handlePinClick() {
     const result = await onTogglePin();
@@ -259,7 +288,7 @@ function PanelBody({
           </PanelPrimitive.Close>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          <WordStudyView definition={wordDefinition} onBack={() => setSelectedStrongs(null)} />
+          <WordStudyView definition={wordDefinition} onBack={handleBackFromWordStudy} />
         </div>
       </div>
     );
@@ -282,12 +311,16 @@ function PanelBody({
             <button
               onClick={handlePinClick}
               title={isPinned ? "Unpin" : pinDisabled ? "Pin limit reached (8)" : "Pin"}
+              aria-label={isPinned ? "Unpin" : pinDisabled ? "Pin limit reached (8)" : "Pin"}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
             </button>
             {showCapMessage && (
-              <div className="absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-foreground shadow-md">
+              <div
+                role="alert"
+                className="absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-foreground shadow-md"
+              >
                 Pin limit reached (8) — unpin something first
               </div>
             )}
@@ -302,7 +335,7 @@ function PanelBody({
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={rowViewContainerRef} tabIndex={-1} className="flex-1 overflow-y-auto px-4 py-4">
         {reference.type === "verse" ? (
           <>
             {loading && (
@@ -429,6 +462,33 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
   // why selectedStrongs, unlike this, DOES reset per verse).
   const [interlinearOpen, setInterlinearOpen] = useState(false);
 
+  // SP2 Phase 9 (Fix 2): this panel has no Dialog.Trigger — it's opened from
+  // several different places (verse-underline clicks, the dev button, the
+  // keyboard shortcut), so Radix has nothing reliable to restore focus to on
+  // close by default, and it was landing on <body>. Capture whatever had
+  // focus right before opening; restore it on close via onCloseAutoFocus
+  // (Radix's own sanctioned override point — doesn't touch the focus-trap
+  // itself, which is a separate mechanism). Falls back to the chat input if
+  // the original element is no longer in the DOM.
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previouslyFocusedRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+  }, [isOpen]);
+
+  function handleCloseAutoFocus(event: Event) {
+    event.preventDefault();
+    const el = previouslyFocusedRef.current;
+    if (el && document.contains(el)) {
+      el.focus();
+      return;
+    }
+    document.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+  }
+
   function handleInterlinearOpenChange(open: boolean) {
     setInterlinearOpen(open);
     onInterlinearOpenChange?.(open);
@@ -455,6 +515,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
           )}
         />
         <PanelPrimitive.Content
+          onCloseAutoFocus={handleCloseAutoFocus}
           className={cn(
             "fixed z-50 flex flex-col bg-background shadow-lg outline-none",
             "transition ease-in-out motion-reduce:transition-none motion-reduce:animate-none",

@@ -41,6 +41,7 @@ export function AccordionRow({
     <div className="border-b border-border last:border-b-0">
       <button
         onClick={toggle}
+        aria-expanded={open}
         className="flex w-full items-center justify-between py-3 text-sm text-foreground hover:text-foreground/80 transition-colors cursor-pointer"
       >
         {label}
