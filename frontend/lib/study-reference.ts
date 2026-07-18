@@ -7,10 +7,12 @@
 // followed by chapter:verse counts as a match. No vague references
 // ("verse 26", "that chapter"), no bare numbers, no guessing.
 //
-// Teacher-reference detection is not implemented yet — the spec's real
-// mechanism (SP1's backend hidden-pointer generation) doesn't exist. Verse
-// detection is the one genuinely real trigger for this session; see
-// rhemata-status.md for what's deferred.
+// Teacher-reference detection (SP4): unlike verses, teacher names aren't a
+// generic regex-detectable pattern — detectTeacherReferences instead does a
+// literal search against the small, known curated-teacher list (fetched
+// once via GET /study/teachers), then isTeacherVerified gates each match
+// against SP1's backend-verified pointers by source_id, exactly like verses
+// gate by identity.
 
 export type StudyReference =
   | {
@@ -25,6 +27,7 @@ export type StudyReference =
   | {
       type: "teacher";
       name: string;
+      source_id: string;
     };
 
 export function verseId(ref: Extract<StudyReference, { type: "verse" }>): string {
@@ -37,7 +40,7 @@ export function referenceLabel(ref: StudyReference): string {
 }
 
 export function referenceKey(ref: StudyReference): string {
-  return ref.type === "verse" ? `verse:${verseId(ref)}` : `teacher:${ref.name}`;
+  return ref.type === "verse" ? `verse:${verseId(ref)}` : `teacher:${ref.source_id}`;
 }
 
 // Book name/abbreviation -> canonical 3-letter code, matching the same
@@ -176,8 +179,8 @@ export function detectVerseReferences(
 
 // SP1's hidden pointers, as attached to the SSE meta event's
 // verified_references array (backend/app/services/reference_verifier.py).
-// Only the verse shape is consumed here — SP2 has no teacher underlines
-// (see the plan's Global Constraints).
+// Both shapes are consumed as of SP4 — see isVerified (verse) and
+// isTeacherVerified (teacher) below.
 export interface VerifiedReference {
   type: string;
   raw: string;
@@ -231,4 +234,44 @@ export function isVerified(
       identity.verseEnd === ref.verseEnd
     );
   });
+}
+
+// The finite, known set of curated teachers (GET /study/teachers) — small
+// enough that literal substring search is the right tool, unlike verse
+// detection's regex-over-arbitrary-text problem.
+export interface CuratedTeacher {
+  name: string;
+  source_id: string;
+}
+
+export function detectTeacherReferences(
+  text: string,
+  curatedTeachers: CuratedTeacher[]
+): Array<Extract<StudyReference, { type: "teacher" }> & { index: number }> {
+  const results: Array<Extract<StudyReference, { type: "teacher" }> & { index: number }> = [];
+  for (const teacher of curatedTeachers) {
+    const escaped = teacher.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${escaped}\\b`, "g");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      results.push({
+        type: "teacher",
+        name: teacher.name,
+        source_id: teacher.source_id,
+        index: m.index,
+      });
+    }
+  }
+  return results;
+}
+
+// Allowlist by source_id, not name string: a curated-teacher candidate the
+// client detected only renders as an underline if SP1 independently
+// verified the same source_id for this message. Simpler than isVerified's
+// identity-parsing since both sides already carry the same source_id.
+export function isTeacherVerified(
+  ref: Extract<StudyReference, { type: "teacher" }>,
+  verifiedRefs: VerifiedReference[]
+): boolean {
+  return verifiedRefs.some((v) => v.type === "teacher" && v.source_id === ref.source_id);
 }
