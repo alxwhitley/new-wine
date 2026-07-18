@@ -131,9 +131,26 @@ for a fix, all additive, none of the 4 clean surfaces touched.
   run against this panel.** That remains a genuinely open, unproven check —
   logged as a new open flag below, not closed by this session.
 
-SP2 Phases 1–9 are now all shipped. Remaining: Phase 10 (records correction
-per Standing Rule #12 — the PLAN.md updates Task 35/36 describe, not yet
-done) and a real VoiceOver/NVDA pass (net-new flag, not previously tracked).
+**Phase 10 (records correction) DONE, same session — commit `a7417eb`.**
+Task 35 (PLAN.md): appended the Phase 7/8/9 completion record to #40 (Steps
+1–5 of the task were already recorded by earlier sessions, verified against
+PLAN.md's live content rather than assumed — #41's supersession, the
+teacher-tap decision, the pin-system redesign, the Precept Austin deferral,
+and the Hebrew permission gate were all already present); added the two
+still-missing pieces — Step 6 (#33's STEPBible half marked closed, the
+openbible.info half stays open) and Step 7 (the SP track intro's "old
+/study page untouched" wording marked superseded by Phase 4 + Phase 6,
+with the same "behaviorally, not literally" distinction those two phases
+already proved live). Task 36 (this file): Open Flags 16/17 were already
+closed by the sessions that shipped Phase 1/3 — PLAN.md's own #40 entry
+already carries "closes Open Flag 17" inline, nothing further to do there;
+added Blocker #14 for the Hebrew permission gate, cross-referencing PLAN.md
+Open Decisions #11 per the task's explicit instruction.
+
+**SP2 is now fully done, all 10 phases.** The only two things this build
+leaves genuinely open are Blocker #13 (no real screen-reader pass) and
+Blocker #14 (Hebrew lexicon permission) — both real, both already logged,
+neither invented for this closing note.
 
 ---
 
@@ -207,6 +224,17 @@ screen reader has been used against this panel. Don't treat Phase 9 as
 having closed this — it closed the 5 gaps the structural/keyboard audit
 could find and prove; a real screen-reader listen could still surface
 things that audit can't (announcement phrasing, reading order, timing).
+
+**14. Hebrew lexicon permission gate — SP2 Study Panel excludes Hebrew
+entirely because of this, do not assume it's cleared.** The Hebrew brief
+lexicon (TBESH) is NOT covered by the same CC BY 4.0 grant that clears
+Greek (TBESG, TFLSJ) — its definitions are third-party (Abridged BDB,
+Online Bible) and need Online Bible's own permission before use in any
+project. Greek is unaffected; SP2's Interlinear/word-study rows already
+only ever render Greek, structurally (confirmed live, Phase 8). Full
+reasoning: PLAN.md Open Decisions #11. Gates any future Hebrew
+interlinear/word-study work specifically — do not build against TBESH
+until that permission is obtained.
 
 ---
 
