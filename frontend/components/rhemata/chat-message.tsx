@@ -6,7 +6,15 @@ import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Citation } from "@/lib/api";
-import { detectVerseReferences, isVerified, type StudyReference, type VerifiedReference } from "@/lib/study-reference";
+import {
+  detectVerseReferences,
+  isVerified,
+  detectTeacherReferences,
+  isTeacherVerified,
+  type StudyReference,
+  type VerifiedReference,
+  type CuratedTeacher,
+} from "@/lib/study-reference";
 import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
 
 interface ChatMessageProps {
@@ -17,13 +25,20 @@ interface ChatMessageProps {
   question?: string;
   accessToken?: string | null;
   onCitationClick?: (citation: Citation, index: number) => void;
-  onVerseClick?: (reference: StudyReference) => void;
+  /** question is only ever populated for a teacher click (the current
+   * turn's user question, for the panel's position-synthesis fetch) — verse
+   * clicks call this with a single argument, same as before. */
+  onVerseClick?: (reference: StudyReference, question?: string) => void;
   /** True only while this specific message is still streaming in. Verse
    * underlines fade in only once streaming finishes (spec: "never mid-stream"). */
   isStreaming?: boolean;
   /** SP1's verified pointers for this message. A detected verse candidate
    * only renders as an underline if it matches one of these by identity. */
   verifiedReferences?: VerifiedReference[];
+  /** SP4: the small, known curated-teacher list (GET /study/teachers),
+   * fetched once at the page level. A detected name only renders as an
+   * underline if it's in this list AND SP1 verified it for this message. */
+  curatedTeachers?: CuratedTeacher[];
 }
 
 function CitationPill({
@@ -66,6 +81,27 @@ function VerseReferenceSpan({
   );
 }
 
+function TeacherReferenceSpan({
+  reference,
+  question,
+  onClick,
+}: {
+  reference: Extract<StudyReference, { type: "teacher" }>;
+  question?: string;
+  onClick?: (reference: StudyReference, question?: string) => void;
+}) {
+  // Same visual treatment as VerseReferenceSpan — nothing in the design doc
+  // calls for teacher underlines to look different from verse underlines.
+  return (
+    <button
+      onClick={() => onClick?.(reference, question)}
+      className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer"
+    >
+      {reference.name}
+    </button>
+  );
+}
+
 /**
  * Splits a text node on BOTH citation markers ([1], [2]...) and detected
  * verse references in a single ordered pass, so the two interleave
@@ -75,9 +111,11 @@ function renderMessageText(
   text: string,
   citations: Citation[],
   onCitationClick?: (citation: Citation, index: number) => void,
-  onVerseClick?: (reference: StudyReference) => void,
+  onVerseClick?: (reference: StudyReference, question?: string) => void,
   detectVerses?: boolean,
-  verifiedReferences: VerifiedReference[] = []
+  verifiedReferences: VerifiedReference[] = [],
+  question?: string,
+  curatedTeachers: CuratedTeacher[] = []
 ): React.ReactNode[] {
   type Match = { start: number; end: number; render: () => React.ReactNode };
   const matches: Match[] = [];
@@ -112,6 +150,22 @@ function renderMessageText(
         end,
         render: () => (
           <VerseReferenceSpan key={`v-${start}`} reference={ref} onClick={onVerseClick} />
+        ),
+      });
+    }
+  }
+
+  if (detectVerses && curatedTeachers.length > 0) {
+    for (const ref of detectTeacherReferences(text, curatedTeachers)) {
+      if (!isTeacherVerified(ref, verifiedReferences)) continue;
+      const start = ref.index;
+      const end = start + ref.name.length;
+      if (matches.some((m) => start < m.end && end > m.start)) continue;
+      matches.push({
+        start,
+        end,
+        render: () => (
+          <TeacherReferenceSpan key={`tch-${start}`} reference={ref} question={question} onClick={onVerseClick} />
         ),
       });
     }
@@ -302,6 +356,7 @@ export function ChatMessage({
   onVerseClick,
   isStreaming = false,
   verifiedReferences = [],
+  curatedTeachers = [],
 }: ChatMessageProps) {
   if (role === "user") {
     return (
@@ -339,7 +394,7 @@ export function ChatMessage({
             ),
             p: ({ children }) => (
               <p className="text-sm text-foreground leading-relaxed mb-3">
-                {processChildren(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences)}
+                {processChildren(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences, question, curatedTeachers)}
               </p>
             ),
             strong: ({ children }) => (
@@ -359,7 +414,7 @@ export function ChatMessage({
               </ul>
             ),
             li: ({ children }) => (
-              <li>{processChildren(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences)}</li>
+              <li>{processChildren(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences, question, curatedTeachers)}</li>
             ),
           }}
         >
@@ -384,14 +439,16 @@ function processChildren(
   children: React.ReactNode,
   citations: Citation[],
   onCitationClick?: (citation: Citation, index: number) => void,
-  onVerseClick?: (reference: StudyReference) => void,
+  onVerseClick?: (reference: StudyReference, question?: string) => void,
   detectVerses = false,
-  verifiedReferences: VerifiedReference[] = []
+  verifiedReferences: VerifiedReference[] = [],
+  question?: string,
+  curatedTeachers: CuratedTeacher[] = []
 ): React.ReactNode {
   if (!children) return children;
 
   if (typeof children === "string") {
-    return renderMessageText(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences);
+    return renderMessageText(children, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences, question, curatedTeachers);
   }
 
   if (Array.isArray(children)) {
@@ -399,7 +456,7 @@ function processChildren(
       if (typeof child === "string") {
         return (
           <span key={i}>
-            {renderMessageText(child, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences)}
+            {renderMessageText(child, citations, onCitationClick, onVerseClick, detectVerses, verifiedReferences, question, curatedTeachers)}
           </span>
         );
       }
