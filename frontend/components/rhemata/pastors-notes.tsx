@@ -47,6 +47,7 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
 
   const [cards, setCards] = useState<PastorCard[]>([]);
   const [cardsLoading, setCardsLoading] = useState(false);
+  const [cardsError, setCardsError] = useState(false);
 
   // Add note form
   const [addOpen, setAddOpen] = useState(false);
@@ -68,9 +69,11 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
   useEffect(() => {
     if (!verseId) {
       setCards([]);
+      setCardsError(false);
       return;
     }
     setCardsLoading(true);
+    setCardsError(false);
     setAddOpen(false);
     setNewContent("");
     setAddError(null);
@@ -79,9 +82,15 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
 
     const headers: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
     fetch(`${API}/pastors-notes/cards?verse_id=${encodeURIComponent(verseId)}`, { headers })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("pastors-notes fetch failed");
+        return r.json();
+      })
       .then((data) => setCards(Array.isArray(data) ? data : []))
-      .catch(() => setCards([]))
+      .catch(() => {
+        setCards([]);
+        setCardsError(true);
+      })
       .finally(() => setCardsLoading(false));
   }, [verseId]);
 
@@ -236,6 +245,12 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
         <div className="space-y-3">
           <Skeleton className="h-24 w-full rounded-lg" />
           <Skeleton className="h-24 w-full rounded-lg" />
+        </div>
+      ) : cardsError ? (
+        <div className="rounded-lg border border-border bg-card p-6 text-center">
+          <p className="text-sm text-destructive">
+            Couldn&apos;t load notes — try again.
+          </p>
         </div>
       ) : cards.length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-6 text-center">

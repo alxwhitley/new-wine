@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 
-from app.auth import get_optional_user, require_contributor, require_admin_role
+from app.auth import get_optional_user, get_user_role, require_contributor, require_admin_role
 from app.constants import TAXONOMY_LIST, VALID_TAGS
 from app.db.supabase import get_supabase
 
