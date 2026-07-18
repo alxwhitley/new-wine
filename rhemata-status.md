@@ -34,9 +34,50 @@ this bug unfixed as "Alex's explicit call." That was wrong — the actual answer
 was to a narrower question about touching the backend in that specific moment,
 not a decision to leave the bug open. Corrected here; the bug is now fixed.
 
-Next: SP2 Phase 8 (Interlinear + lexicon word study, moved in from the
-dissolved SP3 — see PLAN.md #41; the "Next" section below predates that
-dissolution and still describes SP3 as a separate, not-yet-started track).
+**Phase 8 (Interlinear + lexicon word study, moved in from the dissolved SP3)
+shipped and live-verified on `rhemata.app`, same session.** Commit `9415f11`
+— Tasks 28–30 combined into one commit rather than three: the `AccordionRow`
+controlled-mode extension and lifting `interlinearOpen` up through
+`StudyPanel` to `page.tsx` serve both the row's mount and the width-borrowing
+together, and weren't cleanly separable after the fact without redoing
+already-correct, already-typechecked work.
+
+- **Interlinear row (Task 28):** `useInterlinear` + `InterlinearBlocks`
+  (both Phase 6 extractions), mounted first, before Commentaries. Live on
+  Romans 8:28: 18 real Greek tokens rendered, STEPBible/Tyndale House
+  attribution visible.
+- **Word-study view (Task 29):** tapping a token opens the panel's one
+  back-button surface — `WordDefinitionCard` + `useLexiconDefinition`,
+  object construction copied exactly from `study/page.tsx`'s own
+  interlinear-tap call site (`selectedToken ? {...} : selectedStrongs &&
+  lexiconEntry ? {...} : null`). Live: tapped a real token (Strong's
+  `G6063`), word-study view opened, Back button returned to the normal row
+  view with Interlinear still expanded. STEPBible attribution added to this
+  view directly (Phase 2's Task 4 had deferred the panel's copy here) —
+  deliberately not baked into `WordDefinitionCard` itself, keeping Phase 6's
+  file as Phase 6 left it.
+- **Width-borrowing (Task 30):** confirmed live both directions — 422px
+  (33vw clamp) collapsed, 640px (50vw clamp) while Interlinear is open,
+  automatic, no user toggle.
+- **Task 31 (grep):** zero `Translations`/`Cross-references` references
+  anywhere in the frontend.
+- **Task 32, live, not just structural:** a real, SP1-verified "Genesis
+  1:1" underline (from a real streamed chat answer, not the hardcoded dev
+  demo reference) opened the panel and showed the honest "No interlinear
+  data available for this verse" message — zero fake "coming soon" copy,
+  zero Greek tokens for an OT verse. Precept Austin / "From the Library"
+  confirmed absent both structurally (`WordDefinitionCard` has no such code
+  path — verified by reading its source, not inferred) and live (zero
+  matches after tapping a real Greek word).
+- **One judgment call made without a plan citation, flagged here rather than
+  silently decided:** the word-study view's header has only a Close button,
+  no Pin — pins are verse-scoped and still one tap away via Back, so nothing
+  is actually lost, just an extra tap. The plan's Task 29 doesn't specify
+  either way.
+
+SP2 Phases 1–8 are now all shipped. Remaining: Phase 9 (keyboard/screen-reader
+verification) and Phase 10 (records correction per Standing Rule #12 — the
+PLAN.md updates Task 35/36 describe, not yet done).
 
 ---
 
