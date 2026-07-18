@@ -3,7 +3,7 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-17 (read-only audit against the repo).
+Last verified: 2026-07-18 (SP4 pre-build data fix, DB writes verified live).
 
 ---
 
@@ -154,6 +154,49 @@ neither invented for this closing note.
 
 ---
 
+## SP4 pre-build data fix (session state, 2026-07-18)
+
+5 teachers (Bob Mumford, Ern Baxter, Charles Simpson, Don Basham, Oswald J.
+Smith) had no `sources` row and no `source_aliases` entry — all their
+documents carried the shared New Wine Magazine `source_id`
+(`72b2f583-d7f9-4361-be1c-6d5aebe59fac`). Derek Prince additionally had 5
+articles mis-attributed to the same magazine bucket despite having his own
+resolved source. Fixed via direct `psycopg2` transactions (one per teacher),
+each verified live: licensing columns (`license_status`, `visibility`,
+`permission_granted_at`, `permission_contact`, `permission_terms`) copied
+verbatim from the magazine row, alias resolution replicated
+`reference_verifier.py`'s exact path, identity counts matched, spot-checked
+chunks/embeddings unchanged. Independently re-verified against a fresh DB
+connection before this record was written, not just taken from the
+executor's own report.
+
+- Bob Mumford → new source `e2a4babd-c49f-46b2-940e-9771b95e695f`, 4 docs moved
+- Ern Baxter → new source `63bdb33a-f672-415e-a209-0dd12fdf29de`, 2 docs moved
+- Charles Simpson → new source `c39c4e62-59f3-4a51-9f86-6d1fbcdc6758`, 4 docs moved
+- Don Basham → new source `1870bc05-2583-4f88-a6c3-0f5bd31212b9`, 2 docs moved
+- Oswald J. Smith → new source `9baaf49f-f9cd-463c-af8b-88ed5b976eb5`, 1 doc moved
+- Derek Prince → 5 stray docs re-pointed to his existing source
+  `17be391b-d025-4178-8543-3e84da675c5d`, no new source/alias
+
+New Wine Magazine bucket: 33 → 15 documents. Total `documents` row count
+unchanged at 3,817 (no rows created or deleted — every write was a
+single-column `source_id` UPDATE). Full 9-teacher audit (identity count vs.
+name count) re-run after the fix: every alias resolves, every delta is 0.
+SP4 build (#42, teacher card content) is now unblocked on this front — no
+remaining hardcoded-bio teacher shares another entity's source_id.
+
+## Known Harness Bugs
+
+- **Executor loop, 2026-07-18 diagnostic.** Write-detection gate flagged an
+  already-fully-disclosed benign action (failed grep + scratchpad cleanup)
+  for 12 consecutive turns, alternating "1 of 9"/"2 of 9" flagged-item counts
+  with no change in actions between turns. Same class of issue as the
+  `WORK_TYPE`-marker prose-bridge noted as unfinished in PLAN.md #5.5. Needs
+  its own dedicated harness-fix session — do not bundle into SP4 or any
+  other build session.
+
+---
+
 ## Open blockers
 
 **1. Dead `~/Desktop/rhemata` path — 8 scripts.** CONFIRMED live.
@@ -291,7 +334,9 @@ until that permission is obtained.
    band (#16–20).
 
 SP track: SP2 done (Phases 1–9), SP3 dissolved 2026-07-15 (absorbed into SP2
-Phase 8, shipped `9415f11`). Next SP item is #42 (SP4, teacher card content).
+Phase 8, shipped `9415f11`). Next SP item is #42 (SP4, teacher card content) —
+its pre-build data-attribution blocker is now fixed (see "SP4 pre-build data
+fix" above), so #42 is the live next action with no remaining data blocker.
 #38 (SP0 mobile mockup) completion status unverified — confirm before assuming.
 
 #11/#12 are DONE (reuse path resolved 2026-07-13). The old "#11 → #12 → SP3"
