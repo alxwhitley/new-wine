@@ -21,7 +21,7 @@ import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
-import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference } from "@/lib/study-reference";
+import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference, type CuratedTeacher } from "@/lib/study-reference";
 import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
 import { useUserRole } from "@/hooks/useUserRole";
 
@@ -112,6 +112,29 @@ export default function Home() {
   const [studyPins, setStudyPins] = useState<
     Array<{ id: string; reference: Extract<StudyReference, { type: "verse" }> }>
   >([]);
+  // SP4: the curated teacher list (GET /study/teachers) — public, no auth,
+  // since guest users see teacher underlines too, same as verse underlines.
+  const [curatedTeachers, setCuratedTeachers] = useState<CuratedTeacher[]>([]);
+  // The current turn's user question, captured at teacher-underline-click
+  // time (see handleVerseClick below) — the panel's live position synthesis
+  // is scoped to "the user's current question," per the SP4 design doc.
+  const [teacherCardQuestion, setTeacherCardQuestion] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/teachers`)
+      .then((res) => (res.ok ? res.json() : { teachers: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        setCuratedTeachers(data.teachers ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCuratedTeachers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!accessToken) {
@@ -141,9 +164,10 @@ export default function Home() {
     };
   }, [accessToken]);
 
-  const handleVerseClick = useCallback((reference: StudyReference) => {
+  const handleVerseClick = useCallback((reference: StudyReference, question?: string) => {
     if (!isStudyPanelEnabled()) return; // defense in depth — kill switch off
     setStudyReference(reference);
+    setTeacherCardQuestion(question ?? "");
     setStudyPanelOpen(true);
   }, []);
 
@@ -480,6 +504,7 @@ export default function Home() {
                         onVerseClick={handleVerseClick}
                         isStreaming={isStreaming}
                         verifiedReferences={message.verifiedReferences}
+                        curatedTeachers={curatedTeachers}
                       />
                     );
                   })}
@@ -541,6 +566,7 @@ export default function Home() {
         role={userRole}
         userId={user?.id ?? null}
         onInterlinearOpenChange={setInterlinearWide}
+        teacherQuestion={teacherCardQuestion}
       />
 
       {/* Dev-only demonstration trigger — opens the Study Panel regardless of
