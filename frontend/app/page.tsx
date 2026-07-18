@@ -100,6 +100,10 @@ export default function Home() {
 
   // Inline Study Panel state (SP2 shell — docs/inline-study-panel-spec.md)
   const [studyPanelOpen, setStudyPanelOpen] = useState(false);
+  // SP2 Phase 8 (Task 30): mirrors StudyPanel's own interlinearOpen state so
+  // this page's width reservation can widen in step — must stay in sync with
+  // the panel's own width class (components/rhemata/study-panel.tsx).
+  const [interlinearWide, setInterlinearWide] = useState(false);
   const [studyReference, setStudyReference] = useState<StudyReference | null>(null);
   // SP2 Phase 5: global, account-level pins — fetched from and persisted to
   // /study/pins, not in-memory. `id` is the server row id (needed for
@@ -383,7 +387,11 @@ export default function Home() {
       <main
         className={cn(
           "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 transition-[margin-left,padding-right] duration-300 ease-in-out motion-reduce:transition-none",
-          studyPanelOpen ? "md:ml-0 md:pr-[clamp(380px,33vw,480px)]" : "md:ml-64",
+          studyPanelOpen
+            ? interlinearWide
+              ? "md:ml-0 md:pr-[clamp(480px,50vw,720px)]"
+              : "md:ml-0 md:pr-[clamp(380px,33vw,480px)]"
+            : "md:ml-64",
           inputFocused ? "pb-0" : "pb-14"
         )}
       >
@@ -532,6 +540,7 @@ export default function Home() {
         accessToken={accessToken}
         role={userRole}
         userId={user?.id ?? null}
+        onInterlinearOpenChange={setInterlinearWide}
       />
 
       {/* Dev-only demonstration trigger — opens the Study Panel regardless of

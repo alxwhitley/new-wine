@@ -16,6 +16,10 @@ import {
 import { AccordionRow } from "@/components/rhemata/accordion-row";
 import { CommentaryAccordionRow } from "@/components/rhemata/commentary-accordion-row";
 import { PastorsNotesSection } from "@/components/rhemata/pastors-notes";
+import { InterlinearBlocks } from "@/components/rhemata/interlinear-blocks";
+import { useInterlinear } from "@/hooks/useInterlinear";
+import { WordDefinitionCard, type WordDefinition } from "@/components/rhemata/word-definition-card";
+import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
 
 // ── Verse text fetch ─────────────────────────────────────────────────────────
 // Reuses the same `verses` table + verse_id shape already proven in
@@ -135,6 +139,31 @@ function useTeachersOnVerse(
   return { results, loading };
 }
 
+// ── Word study view (SP2 Phase 8) ───────────────────────────────────────────
+// The panel's one back-button surface — reached only by tapping a word in the
+// Interlinear row. Lexicon-only (WordDefinitionCard), unlike the standalone
+// page's InlineWordPanel: no Precept Austin excerpt, no "From the Library"
+// corpus section, by design.
+
+function WordStudyView({ definition, onBack }: { definition: WordDefinition | null; onBack: () => void }) {
+  return (
+    <div>
+      <button
+        onClick={onBack}
+        className="text-sm cursor-pointer hover:underline text-muted-foreground hover:text-foreground transition-colors"
+      >
+        &larr; Back
+      </button>
+      <div className="mt-4">
+        <WordDefinitionCard definition={definition} />
+      </div>
+      <p className="text-xs text-muted-foreground mt-6">
+        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
+      </p>
+    </div>
+  );
+}
+
 // ── Panel body (shared between desktop side panel and mobile sheet) ────────
 
 type PinToggleResult = "pinned" | "unpinned" | "cap_reached" | "guest_prompt";
@@ -147,6 +176,8 @@ function PanelBody({
   accessToken,
   role,
   userId,
+  interlinearOpen,
+  onInterlinearOpenChange,
 }: {
   reference: StudyReference;
   isPinned: boolean;
@@ -155,9 +186,12 @@ function PanelBody({
   accessToken?: string | null;
   role?: string | null;
   userId?: string | null;
+  interlinearOpen: boolean;
+  onInterlinearOpenChange: (open: boolean) => void;
 }) {
   const { data: verse, loading, error } = useVerseText(reference);
   const [showCapMessage, setShowCapMessage] = useState(false);
+  const [selectedStrongs, setSelectedStrongs] = useState<string | null>(null);
 
   async function handlePinClick() {
     const result = await onTogglePin();
@@ -167,11 +201,69 @@ function PanelBody({
     }
   }
   const isVerseRef = reference.type === "verse";
+  const verseIdStr = reference.type === "verse" ? verseId(reference) : null;
   const { results: teacherResults, loading: teachersLoading } = useTeachersOnVerse(
     reference.type === "verse" ? verse?.text ?? null : null,
-    reference.type === "verse" ? verseId(reference) : null,
+    verseIdStr,
     accessToken
   );
+
+  const { tokens, loading: tokensLoading, isNT } = useInterlinear(verseIdStr);
+
+  // A stale word selection from a previously-viewed verse would be actively
+  // wrong (matches nothing, or the wrong thing, in the new verse's tokens) —
+  // reset it whenever the reference changes. The Interlinear row's own
+  // open/closed state is left alone; that's a UI preference, not tied to
+  // verse identity.
+  useEffect(() => {
+    setSelectedStrongs(null);
+  }, [verseIdStr]);
+
+  const lexiconEntry = useLexiconDefinition(selectedStrongs, accessToken ?? null);
+  const selectedToken = selectedStrongs ? tokens.find((t) => t.strongs === selectedStrongs) ?? null : null;
+  const wordDefinition: WordDefinition | null = selectedToken
+    ? {
+        strongs: selectedToken.strongs,
+        word: selectedToken.greek,
+        transliteration: selectedToken.transliteration,
+        gloss: selectedToken.english,
+        lexiconDefinition: lexiconEntry?.lexiconDefinition ?? "",
+        meaning: lexiconEntry?.meaning ?? "",
+      }
+    : selectedStrongs && lexiconEntry
+    ? {
+        strongs: selectedStrongs,
+        word: selectedStrongs,
+        transliteration: "",
+        gloss: lexiconEntry.gloss,
+        lexiconDefinition: lexiconEntry.lexiconDefinition,
+        meaning: lexiconEntry.meaning,
+      }
+    : null;
+
+  if (selectedStrongs) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-4 shrink-0">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Verse</p>
+            <PanelPrimitive.Title className="mt-0.5 truncate text-xl font-medium tracking-wide text-foreground">
+              {referenceLabel(reference)}
+            </PanelPrimitive.Title>
+          </div>
+          <PanelPrimitive.Close asChild>
+            <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </button>
+          </PanelPrimitive.Close>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <WordStudyView definition={wordDefinition} onBack={() => setSelectedStrongs(null)} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -273,6 +365,15 @@ function PanelBody({
 
         {reference.type === "verse" && (
           <div className="mt-6">
+            <AccordionRow label="Interlinear" open={interlinearOpen} onOpenChange={onInterlinearOpenChange}>
+              <InterlinearBlocks
+                tokens={tokens}
+                selectedStrongs={selectedStrongs}
+                onSelect={setSelectedStrongs}
+                loading={tokensLoading}
+                isNT={isNT}
+              />
+            </AccordionRow>
             <AccordionRow label="Commentaries">
               <CommentaryAccordionRow
                 verseText={verse?.text ?? null}
@@ -316,10 +417,22 @@ interface StudyPanelProps {
   accessToken?: string | null;
   role?: string | null;
   userId?: string | null;
+  onInterlinearOpenChange?: (open: boolean) => void;
 }
 
-export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId }: StudyPanelProps) {
+export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId, onInterlinearOpenChange }: StudyPanelProps) {
   const isMobile = useIsMobile();
+  // SP2 Phase 8 (Task 30): lifted here, not just PanelBody, since the panel's
+  // own width class (below) needs it too — width follows need, automatically,
+  // no user-managed "wide mode". Left open across a verse switch deliberately
+  // (a UI preference, not tied to verse identity — see PanelBody's comment on
+  // why selectedStrongs, unlike this, DOES reset per verse).
+  const [interlinearOpen, setInterlinearOpen] = useState(false);
+
+  function handleInterlinearOpenChange(open: boolean) {
+    setInterlinearOpen(open);
+    onInterlinearOpenChange?.(open);
+  }
 
   if (!reference) return null;
 
@@ -349,7 +462,10 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             "data-[state=open]:animate-in data-[state=open]:duration-300",
             isMobile
               ? "inset-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
-              : "inset-y-0 right-0 w-[33vw] min-w-[380px] max-w-[480px] border-l border-border data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
+              : cn(
+                  "inset-y-0 right-0 border-l border-border data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+                  interlinearOpen ? "w-[50vw] min-w-[480px] max-w-[720px]" : "w-[33vw] min-w-[380px] max-w-[480px]"
+                )
           )}
         >
           {/* Mobile grab handle — visual affordance only; drag-to-dismiss is
@@ -372,6 +488,8 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             accessToken={accessToken}
             role={role}
             userId={userId}
+            interlinearOpen={interlinearOpen}
+            onInterlinearOpenChange={handleInterlinearOpenChange}
           />
         </PanelPrimitive.Content>
       </PanelPrimitive.Portal>
