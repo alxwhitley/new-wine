@@ -14,6 +14,7 @@ import {
   referenceKey,
 } from "@/lib/study-reference";
 import { AccordionRow } from "@/components/rhemata/accordion-row";
+import { CommentaryAccordionRow } from "@/components/rhemata/commentary-accordion-row";
 
 // ── Verse text fetch ─────────────────────────────────────────────────────────
 // Reuses the same `verses` table + verse_id shape already proven in
@@ -262,6 +263,18 @@ function PanelBody({
                 daily.
               </p>
             )}
+          </div>
+        )}
+
+        {reference.type === "verse" && (
+          <div className="mt-6">
+            <AccordionRow label="Commentaries">
+              <CommentaryAccordionRow
+                verseText={verse?.text ?? null}
+                verseIdStr={verseId(reference)}
+                accessToken={accessToken}
+              />
+            </AccordionRow>
           </div>
         )}
 
