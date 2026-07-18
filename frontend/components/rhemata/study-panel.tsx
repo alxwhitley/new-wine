@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Dialog as PanelPrimitive } from "radix-ui";
-import { ChevronDown, Pin, PinOff, X, GraduationCap } from "lucide-react";
+import { Pin, PinOff, X, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/lib/supabase";
@@ -13,6 +13,7 @@ import {
   referenceLabel,
   referenceKey,
 } from "@/lib/study-reference";
+import { AccordionRow } from "@/components/rhemata/accordion-row";
 
 // ── Verse text fetch ─────────────────────────────────────────────────────────
 // Reuses the same `verses` table + verse_id shape already proven in
@@ -130,38 +131,6 @@ function useTeachersOnVerse(
   }, [verseText, verseIdStr, accessToken]);
 
   return { results, loading };
-}
-
-// ── Tool row stub (Interlinear / Translations / Cross-references) ──────────
-// SP3 hard-gates the real content (lexicon word-level tagging + a licensed
-// word-level text source, neither confirmed yet). These rows are a real,
-// honest skeleton of the spec's structure — not functional, not disabled
-// silently either.
-
-function ToolRowStub({ label }: { label: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-border last:border-b-0">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between py-3 text-sm text-foreground hover:text-foreground/80 transition-colors cursor-pointer"
-      >
-        {label}
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform motion-reduce:transition-none",
-            open && "rotate-180"
-          )}
-        />
-      </button>
-      {open && (
-        <p className="pb-3 text-sm text-muted-foreground">
-          Coming soon — {label.toLowerCase()} needs the original-language corpus fully
-          tagged first.
-        </p>
-      )}
-    </div>
-  );
 }
 
 // ── Panel body (shared between desktop side panel and mobile sheet) ────────
@@ -295,12 +264,6 @@ function PanelBody({
             )}
           </div>
         )}
-
-        <div className="mt-6">
-          <ToolRowStub label="Interlinear" />
-          <ToolRowStub label="Translations" />
-          <ToolRowStub label="Cross-references" />
-        </div>
 
         <div className="mt-6 border-t border-border pt-4">
           <Link
