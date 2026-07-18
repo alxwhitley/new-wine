@@ -20,6 +20,7 @@ import { InterlinearBlocks } from "@/components/rhemata/interlinear-blocks";
 import { useInterlinear } from "@/hooks/useInterlinear";
 import { WordDefinitionCard, type WordDefinition } from "@/components/rhemata/word-definition-card";
 import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
+import { TeacherCard } from "@/components/rhemata/teacher-card";
 
 // ── Verse text fetch ─────────────────────────────────────────────────────────
 // Reuses the same `verses` table + verse_id shape already proven in
@@ -188,6 +189,7 @@ function PanelBody({
   userId,
   interlinearOpen,
   onInterlinearOpenChange,
+  teacherQuestion,
 }: {
   reference: StudyReference;
   isPinned: boolean;
@@ -198,6 +200,7 @@ function PanelBody({
   userId?: string | null;
   interlinearOpen: boolean;
   onInterlinearOpenChange: (open: boolean) => void;
+  teacherQuestion?: string;
 }) {
   const { data: verse, loading, error } = useVerseText(reference);
   const [showCapMessage, setShowCapMessage] = useState(false);
@@ -247,6 +250,15 @@ function PanelBody({
   useEffect(() => {
     setSelectedStrongs(null);
   }, [verseIdStr]);
+
+  // A teacher card never has an Interlinear row — collapse the width
+  // reservation if it was left open from a previously-viewed verse, so
+  // switching verse -> teacher doesn't leave the panel stuck at 50vw.
+  useEffect(() => {
+    if (reference.type !== "verse" && interlinearOpen) {
+      onInterlinearOpenChange(false);
+    }
+  }, [reference.type, interlinearOpen, onInterlinearOpenChange]);
 
   const lexiconEntry = useLexiconDefinition(selectedStrongs, accessToken ?? null);
   const selectedToken = selectedStrongs ? tokens.find((t) => t.strongs === selectedStrongs) ?? null : null;
@@ -360,10 +372,11 @@ function PanelBody({
             )}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Teacher cards (bio, works in the corpus, position on this topic) are a later
-            piece of this build — not wired up yet.
-          </p>
+          <TeacherCard
+            sourceId={reference.source_id}
+            question={teacherQuestion ?? ""}
+            accessToken={accessToken}
+          />
         )}
 
         {isVerseRef && (
@@ -451,9 +464,10 @@ interface StudyPanelProps {
   role?: string | null;
   userId?: string | null;
   onInterlinearOpenChange?: (open: boolean) => void;
+  teacherQuestion?: string;
 }
 
-export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId, onInterlinearOpenChange }: StudyPanelProps) {
+export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId, onInterlinearOpenChange, teacherQuestion }: StudyPanelProps) {
   const isMobile = useIsMobile();
   // SP2 Phase 8 (Task 30): lifted here, not just PanelBody, since the panel's
   // own width class (below) needs it too — width follows need, automatically,
@@ -551,6 +565,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             userId={userId}
             interlinearOpen={interlinearOpen}
             onInterlinearOpenChange={handleInterlinearOpenChange}
+            teacherQuestion={teacherQuestion}
           />
         </PanelPrimitive.Content>
       </PanelPrimitive.Portal>
