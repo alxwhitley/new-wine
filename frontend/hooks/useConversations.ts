@@ -84,12 +84,18 @@ export function useConversations(userId: string | undefined) {
   const loadMessages = useCallback(async (conversationId: string): Promise<Message[]> => {
     const { data } = await supabase
       .from("messages")
-      .select("role, content")
+      .select("id, role, content, citations, verified_references")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
 
     if (!data) return [];
-    return data.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    return data.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+      messageId: m.id,
+      citations: m.citations ?? undefined,
+      verifiedReferences: m.verified_references ?? undefined,
+    }));
   }, []);
 
   return { conversations, fetchConversations, addOrUpdate, deleteConversation, loadMessages };
