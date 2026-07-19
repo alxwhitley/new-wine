@@ -3,7 +3,28 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-18 (SP4 teacher cards built + partially live-verified).
+Last verified: 2026-07-19 (SP panel refinement Phase 1 — reference-persistence fix — shipped and live-verified).
+
+---
+
+## SP panel refinement — Phase 1: reference-persistence fix (session state, 2026-07-19)
+
+Shipped per `docs/superpowers/plans/2026-07-19-study-panel-refinement.md` (PLAN.md #42.5), following a grill-me interview session that resolved the "clicking does nothing" premise in code before any build work started.
+
+**Root cause, confirmed by direct code trace, not assumed:** `verified_references` (SP1's fail-quiet reference data) and `citations` were computed fresh every chat turn and attached only to that turn's SSE `meta` event (`chat.py:1026-1031`) — never written to the database. `_save_conversation` (`chat.py:445-479`) inserted only `id`, `conversation_id`, `role`, `content` per message; there is no backend `/conversations` endpoint at all — the frontend reads conversation history straight from Supabase (`useConversations.ts`), requesting only `role, content`. Consequence: every reopened conversation lost 100% of its verse/teacher underline clickability and citation pills, regardless of signed-in/guest state or reference type — not the signed-in/guest or verse/teacher distinction the inherited notes assumed. `message_id` turned out to already survive (it's the message row's own `id`); it just wasn't being selected on reload.
+
+**Shipped:** migration `066_messages_reference_data.sql` (nullable `messages.citations`, `messages.verified_references` jsonb columns, applied and verified on a fresh connection before commit); `chat.py`'s `_save_conversation` now persists both on the assistant row only (bundled per Alex's explicit call — citations had the identical bug for the identical reason); `useConversations.ts`'s `loadMessages` now selects `id, role, content, citations, verified_references` and maps them into `Message`'s existing optional fields. Underline's own visual treatment deliberately unchanged (Alex's explicit call — the "not looking tappable" complaint was very likely this same persistence bug, not a separate design issue).
+
+**Live-verified, real evidence (Playwright against `rhemata.app` production, disposable admin-created test account, deleted after — zero residual rows confirmed):**
+- Fresh answer to "What does Derek Prince teach about deliverance, based on Romans 8:28?": 4 real underlined spans rendered post-stream (Derek Prince, Romans 8:28 ×2, Joel 2:32); clicking one opened the panel correctly.
+- **The actual bug, proven fixed:** clicked "New Chat," then reselected the same conversation from the sidebar — the identical 4 underlines were still present and still genuinely opened the panel on click. This is the literal scenario that was broken before this fix.
+- Direct DB query on the same row: `citations` had 8 entries, `verified_references` had 3 (matching the 4 rendered spans — "Romans 8:28" occurs twice in text but resolves to one verified identity, reconciling exactly).
+- Guest (unauthenticated) chat streaming confirmed unaffected on production — guests never call `_save_conversation` (`chat.py`'s `if user_id:` branch), so this fix has zero guest-facing surface, confirmed live not just by code-reading.
+- Simulated a pre-migration row (nulled `citations`/`verified_references` directly in the DB on a real assistant message) and reloaded it live: zero underlines, plain answer text rendered normally, zero console/page errors. Confirms graceful degradation — this is NOT the same as the spec's "retrofitting old conversations" exclusion (which stays correctly out of scope), it's proof the new code path fails safe on old data shapes.
+
+**Process note:** executed in an isolated git worktree (`.worktrees/sp-panel-refinement-phase1`, branch `sp-panel-refinement-phase1`) per Alex's explicit choice this session (departure from this repo's usual direct-to-main convention), fast-forward-merged into `main` and pushed only after Alex confirmed that was the right way to reach a real deploy for live verification. Worktree removed after merge; branch fully merged, safe to delete.
+
+**Phase 2 (floating overlay, desktop only) is next** — explicitly gated on Alex's own SP4 sign-off (see below), not started this session.
 
 ---
 
