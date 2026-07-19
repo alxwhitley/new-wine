@@ -17,3 +17,6 @@ license-mapping/
 notion-sync/
 logs/
 *.log
+
+# Isolated git worktrees for session-scoped implementation work
+.worktrees/
