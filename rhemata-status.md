@@ -246,10 +246,12 @@ remaining hardcoded-bio teacher shares another entity's source_id.
 - **Executor loop, 2026-07-18 diagnostic.** Write-detection gate flagged an
   already-fully-disclosed benign action (failed grep + scratchpad cleanup)
   for 12 consecutive turns, alternating "1 of 9"/"2 of 9" flagged-item counts
-  with no change in actions between turns. Same class of issue as the
-  `WORK_TYPE`-marker prose-bridge noted as unfinished in PLAN.md #5.5. Needs
-  its own dedicated harness-fix session — do not bundle into SP4 or any
-  other build session.
+  with no change in actions between turns. Same general class of issue as
+  the `WORK_TYPE`-marker prose-bridge that PLAN.md #5.5 exit condition (a)
+  has since closed (commit `96bc3ff`, 2026-07-12) — this 2026-07-18 gap is a
+  distinct, unresolved issue, not that bridge reopened. Needs its own
+  dedicated harness-fix session — do not bundle into SP4 or any other build
+  session.
 
 ---
 
@@ -267,9 +269,11 @@ command reference in Admin → Corpus → Pipelines — the surface commands act
 get copied from. Separate from #1 and arguably higher-impact. Not previously
 documented anywhere.
 
-**3. `sources/` has no backup.** Gitignored, single remote, no backup script or
-config anywhere in the repo. Raw corpus exists only on this Mac. `recovery/`
-covers specific deleted rows, not the corpus.
+**3. `sources/` backup — DONE 2026-07-19.** Corpus + `ingest_queue.xlsx`
+backed up to Google Drive (PLAN.md #1). Restore not yet verified — do not
+assume a restore would work until tested. `recovery/` remains a separate,
+narrower backup of specific deleted rows only, not the corpus — the two are
+not the same thing.
 
 **4. `ingest_helloao.py` unconverted.** Own Supabase REST `.insert()` path, not
 routed through `shared_ingest`. Live API, resume-safe, genuinely blocks the 8
@@ -378,16 +382,16 @@ until that permission is obtained.
 
 ## Next
 
-1. **#1 — back up `sources/`.** Oldest untouched item on the plan; 15+ sessions
-   shipped around it. Only copy of the corpus, one machine, no backup. 5-minute
-   loss-prevention task. Do first.
-2. **#13 — route `ingest_helloao.py` through `shared_ingest`.** Sole remaining
+1. **#13 — route `ingest_helloao.py` through `shared_ingest`.** Sole remaining
    chokepoint conversion. Unblocks HelloAO commentary growth (#27) only, not
    corpus growth generally.
-3. **#14 remainder — folder renames** (`lexicon/`→`stepbible/`,
+2. **#14 remainder — folder renames** (`lexicon/`→`stepbible/`,
    `documents/`→`inbox/`) + drop `jewish_perspectives` table.
-4. **#15 — staging Supabase + backup/restore test.** Gates the core-serving
+3. **#15 — staging Supabase + backup/restore test.** Gates the core-serving
    band (#16–20).
+
+(#1 — `sources/` backup — DONE 2026-07-19, restore not yet verified; see Open
+blockers #3. Oldest item on the plan, no longer next.)
 
 SP track: SP2 done (Phases 1–9), SP3 dissolved 2026-07-15 (absorbed into SP2
 Phase 8, shipped `9415f11`). Next SP item is #42 (SP4, teacher card content) —

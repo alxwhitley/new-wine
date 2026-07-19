@@ -1,10 +1,10 @@
 Inline Study Panel — Full Context Summary
-For any Claude session picking this up cold. This is a future feature track for Rhemata, decision-complete as of July 2026, NOT yet scheduled or built. Read this in full before doing anything.
+For any Claude session picking this up cold. This is the original design spec for Rhemata's inline study panel, decision-complete as of July 2026 — now shipped as SP2 (see Status below). Read this in full for the design rationale before doing anything; for current build status and where the shipped version superseded this original spec, see PLAN.md #40 and rhemata-status.md.
 
 What this is
 Rhemata currently has two equal-weight surfaces: Chat (RAG Q&A) and Study Mode (interlinear, commentary, word study). This feature is an experiment in collapsing that split — chat stays the main surface, and a study panel slides in from the right when the user taps something in a chat answer, so the app never feels like it's navigating away from the conversation.
 This is additive, not a replacement. The existing Study page survives untouched as a fallback. If the experiment doesn't work, nothing is lost. Ships behind a flag; beta users see it (not just Alex).
-Status: Spec is decision-complete. Not scheduled. Explicitly sequenced to begin only after the current ingest chokepoint band (#5.5, #6–13) finishes, because the richest part of this feature (word-level original-language study) depends on ingest work that isn't done yet.
+Status: SHIPPED as SP2 — all 10 phases DONE, live-verified (2026-07-17; PLAN.md #40, rhemata-status.md). This line originally read "decision-complete, not scheduled" when the spec was written (July 2026, pre-build) — kept below verbatim as historical design rationale, not current status. Word-level original-language study (this doc's Phase 3) shipped too, absorbed into SP2 Phase 8. Mobile (this doc's Phase 6, tracked as PLAN.md's SP5) remains genuinely unscheduled.
 
 The core interaction
 Verse references ("Romans 8:26") and named teacher mentions ("Derek Prince") inside chat answers get a subtle visual treatment — a thin warm-colored underline, same text color as the rest of the sentence, that strengthens slightly on hover. Nothing shouts. Tap one, and:

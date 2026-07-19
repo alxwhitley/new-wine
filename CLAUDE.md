@@ -75,8 +75,6 @@ quality.
 - `frontend/components/admin/CommandBlock.tsx` hardcodes `/Users/alexwhitley`
   paths across every pipeline's command reference — the Admin → Corpus →
   Pipelines tab is the surface commands actually get copied from.
-- `sources/` has no backup. Gitignored, one remote, raw corpus exists only on
-  this Mac. (`recovery/` backs up specific deleted rows, not the corpus.)
 - `ingest_commentaries.py` and `ingest_helloao.py` are not routed through
   `shared_ingest`. Commentaries reads a hardcoded `/tmp` SQLite dump that no
   longer exists — retire-or-rebuild decision, not a pending conversion. HelloAO
