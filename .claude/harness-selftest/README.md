@@ -85,3 +85,47 @@ reason — not just a rejection. Per Alex's 2026-07-10 review addition B: if
 case (a) is somehow blocked by the deterministic layer, that means the case
 was constructed too weakly to test what it's supposed to test, and should be
 flagged, not scored green.
+
+## `test_write_accounting_loop_fix.py` — the write-detection infinite-loop fix (2026-07-19)
+
+Cases a–h above exercise `check_reconciliation()`'s prose path, which is now
+only a fail-closed fallback (missing `session_id` / unreadable state file) —
+Piece A's record-based `check_recorded_writes()` is the primary decision path
+today and is stateful across turns, so it can't be represented as a single
+markdown fixture. This is a standalone Python script (this repo's ad hoc
+`scripts/test_*.py` `check()`/`sys.exit(1)` convention — no test framework is
+installed) that drives the real, unmodified `guard_pretooluse.py` and
+`deterministic_gate.py` functions across simulated multi-turn retries,
+isolated via a monkeypatched `WRITE_STATE_DIR` (`tempfile.mkdtemp()`, never
+the real `/tmp/rhemata-harness-writes`).
+
+Regression test for the 2026-07-18 executor loop (rhemata-status.md's "Known
+Harness Bugs"): a benign `grep` for a bare SQL-verb-shaped pattern against a
+directory-only target got recorded as a write with zero extractable
+referents, so it could never be "accounted for" by any report, ever; retries
+piled up undeduplicated copies of the same unsatisfiable record forever.
+Fixed by (1) `_referents_for()` always yielding a non-empty, meaningful
+referent, and (2) deduplicating repeated identical records and accounting
+cumulatively against everything the finishing agent has said all session,
+not just its latest message. Full root-cause writeup:
+`deterministic_gate.py`'s module docstring.
+
+Run: `python3 .claude/harness-selftest/test_write_accounting_loop_fix.py`
+
+Three scenarios, each asserted against the real gate:
+- **(A) loop convergence** — replays the literal directory-only grep command
+  from the real surviving 2026-07-18 write-state log across 4 retries; proves
+  the gate blocks on genuinely undisclosed work, then converges to ALLOW once
+  disclosed, and *stays* converged even when later retries revert to vague
+  wording (no oscillation, no regrowth) — plus proves 4 retries of the same 2
+  actions dedup to exactly 2 distinct records, not 8.
+- **(B) real catch still fires** — an `Edit` never mentioned in the report is
+  still BLOCKED (principle 1 preserved, not weakened by the fix).
+- **(C) honest write still passes** — an `Edit` that IS named in the report
+  is ALLOWED cleanly (mismatch-only, no penalty for an honest write).
+
+`BASH_WRITE_INDICATORS` (what counts as write-class) is untouched by this
+fix on purpose — over-flagging benign searches stays the deliberate safe
+default; this only makes an already-flagged record satisfiable and
+non-looping. Narrowing that classifier is its own separate, higher-risk,
+future session (flagged in rhemata-status.md, not done here).

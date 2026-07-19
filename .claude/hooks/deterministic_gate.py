@@ -77,10 +77,46 @@ can't be resolved or read at all. Independently verifying claimed
 reconciliation NUMBERS against the database is explicitly out of scope here
 -- noted as adjacent, still open.
 
+Write-detection infinite-loop fix (2026-07-19, root-caused from the
+2026-07-18 diagnostic in rhemata-status.md's "Known Harness Bugs"): Piece
+A's per-write match-check had two compounding gaps. (1) _referents_for()
+could return an EMPTY list for a Bash command with no filename-shaped token
+(e.g. a directory-only grep target) -- _write_is_accounted_for() then
+returned False unconditionally, for ANY report text, forever; that specific
+record could never be satisfied. Fixed by also extracting words from
+quoted string content in the command (what a grep/SQL command is actually
+ABOUT, and the most natural thing an honest report paraphrases) and by
+broadening the path-token pattern to accept a bare directory reference; a
+last-resort hash-of-command-text referent guarantees the list is never
+empty, closing the "structurally unsatisfiable" case entirely. (2) the
+write-state log was read cumulatively-per-single-message on every
+SubagentStop, with retries appending fresh, undeduplicated copies of the
+same repeated action and accounting checked only against the CURRENT
+message -- so a record satisfied in one turn's wording went back to
+unaccounted the moment a later turn's message was worded differently, and a
+retry that re-ran the same benign action just piled up more of the same
+never-satisfiable record. Fixed by (a) deduplicating write_records by
+(tool_name, target-or-command) before accounting -- a retried identical
+action is one logical item, not N -- and (b) persisting each finishing
+agent's own report text (kind="assistant_message", agent_id-scoped, same
+file) and checking referents against the CONCATENATION of everything that
+agent has ever said this session, not just its latest message -- once
+named, a record stays satisfied even if a later retry's wording doesn't
+repeat it. Deliberately out of scope, per Alex's explicit sign-off: (3)
+BASH_WRITE_INDICATORS' bare-SQL-verb-word matching is UNCHANGED -- a benign
+grep for "ALTER TABLE" still gets recorded as a write, on purpose (the
+over-flagging is principle 5's deliberate safe direction); this fix only
+makes an already-flagged record satisfiable and non-looping, it does not
+reduce what gets flagged. Narrowing that classifier is its own future,
+higher-risk session. check_reconciliation()'s fail-closed fallback (missing
+session_id / unreadable state file) is also untouched. Test suite:
+.claude/harness-selftest/test_write_accounting_loop_fix.py.
+
 Exit 0 with a JSON {"decision":"block","reason":...} on stdout blocks the
 subagent from stopping. Exit 0 with no output (or {}) allows it.
 """
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -196,27 +232,49 @@ def check_reconciliation(message: str):
 # recorded write. Deliberately narrow to concrete referents (a filename, a
 # stem) -- no generic operation-word fallback, since a bare operation word
 # ("did some updates") is exactly the non-specific case that must NOT count
-# as accounting for a write. Matches a path-like or filename-like fragment;
-# falls back to the last whitespace-separated token in the record's text if
-# no such fragment exists (e.g. a bare "mkdir somedir" with no extension).
-_PATH_TOKEN = re.compile(r"[\w./-]+\.\w+|[\w-]+/[\w./-]+")
+# as accounting for a write. Matches a path-like or filename-like fragment,
+# OR a bare directory reference (a name immediately followed by "/", with
+# nothing after it -- e.g. "migrations/" in a directory-only grep target,
+# which the original filename-only pattern silently produced zero tokens
+# for; loop-fix, 2026-07-19, see module docstring).
+_PATH_TOKEN = re.compile(r"[\w./-]+\.\w+|[\w-]+/[\w./-]+|[\w-]{4,}/")
+
+# Loop-fix (2026-07-19): a command's quoted string content -- a grep
+# pattern, a SQL fragment -- is what the command is actually ABOUT, and the
+# most natural thing an honest report paraphrases ("searched for ALTER
+# TABLE mentions..."). Extracted as a second, independent referent source,
+# not a replacement for path-token extraction.
+_QUOTED_CONTENT = re.compile(r'"([^"]{4,})"|\'([^\']{4,})\'')
+_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]{3,}")
 
 
 def _referents_for(record: dict) -> list:
     text = record.get("target") or record.get("command") or ""
-    tokens = _PATH_TOKEN.findall(text)
-    if not tokens:
-        tokens = text.strip().split()[-1:]
     referents = []
-    for token in tokens:
-        base = os.path.basename(token.strip("'\""))
+
+    for token in _PATH_TOKEN.findall(text):
+        base = os.path.basename(token.strip("'\"").rstrip("/"))
         if not base:
             continue
         stem = base.rsplit(".", 1)[0] if "." in base else base
         for candidate in (base, stem):
             if len(candidate) >= 4:  # skip trivial/near-universal fragments
                 referents.append(candidate.lower())
-    return referents
+
+    for match in _QUOTED_CONTENT.finditer(text):
+        quoted = match.group(1) or match.group(2) or ""
+        referents.extend(w.lower() for w in _WORD.findall(quoted))
+
+    if referents:
+        return referents
+
+    # Loop-fix (2026-07-19), last resort: guarantees a non-empty list even
+    # for a command with neither a path-shaped token nor a quoted string
+    # (e.g. a bare `pwd`), so _write_is_accounted_for() can never return an
+    # unconditional False -- no record is structurally unsatisfiable. Not
+    # something an executor is expected to type verbatim; this path exists
+    # purely as a backstop, not as the intended satisfaction route.
+    return [hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]]
 
 
 def _write_is_accounted_for(record: dict, message: str) -> bool:
@@ -249,6 +307,58 @@ def record_claimed_but_unrecorded(payload: dict, message: str) -> None:
             "agent_id": payload.get("agent_id") or "unknown-agent",
             "agent_type": payload.get("agent_type"),
             "message_excerpt": message[:500],
+            "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        os.makedirs(WRITE_STATE_DIR, exist_ok=True)
+        path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+
+def _dedup_write_records(write_records: list) -> list:
+    """Loop-fix (2026-07-19): collapse repeated identical actions -- a
+    retry that re-runs the exact same command must not add a fresh item to
+    account for on every turn. Keyed on (tool_name, target-or-command);
+    first occurrence kept, order otherwise preserved. This does not change
+    what gets classified as a write (BASH_WRITE_INDICATORS is untouched)
+    -- only how many logical items the SAME real, already-flagged write
+    counts as when N retries re-run it."""
+    seen = set()
+    deduped = []
+    for r in write_records:
+        key = (r.get("tool_name"), r.get("target") or r.get("command"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(r)
+    return deduped
+
+
+def record_assistant_message(payload: dict, message: str) -> None:
+    """Loop-fix (2026-07-19): persists this finishing agent's own report
+    text (kind="assistant_message", same session-keyed file, same
+    agent_id scoping as every other record here -- principle 3 / bug #1's
+    per-agent scoping applies identically) so a LATER SubagentStop
+    evaluation in the same session can check disclosure cumulatively
+    across turns, not just the latest message. Without this, a record
+    named in one turn's wording went back to "unaccounted" the moment a
+    later retry's message was worded differently, even though nothing
+    about the underlying write changed -- the root cause of the
+    2026-07-18 executor loop's oscillating flagged-item count. Never
+    raises -- a recording failure must never change the gate's decision,
+    same contract as every other record_*() function in this file and in
+    guard_pretooluse.py."""
+    if not message:
+        return
+    try:
+        session_id = payload.get("session_id") or "unknown-session"
+        record = {
+            "kind": "assistant_message",
+            "session_id": session_id,
+            "agent_id": payload.get("agent_id") or "unknown-agent",
+            "message": message,
             "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
         os.makedirs(WRITE_STATE_DIR, exist_ok=True)
@@ -301,7 +411,15 @@ def check_recorded_writes(payload: dict):
     direction isn't a safety failure. check_reconciliation() remains wired
     only as a fail-closed default when the state file itself can't be
     resolved or read -- an unreadable state is not trustworthy ground
-    truth, a different and much rarer case than "ran but unverified"."""
+    truth, a different and much rarer case than "ran but unverified".
+
+    Loop-fix (2026-07-19): accounting now checks each write record against
+    the CUMULATIVE text of every message this finishing agent has ever
+    sent this session (persisted via record_assistant_message()), not just
+    this turn's message -- and write_records are deduplicated before that
+    check, so a retry re-running the same already-recorded action doesn't
+    add a fresh item to reconcile. See module docstring for the full
+    root-cause writeup."""
     session_id = payload.get("session_id")
     message = payload.get("last_assistant_message") or ""
 
@@ -309,6 +427,12 @@ def check_recorded_writes(payload: dict):
         # Can't even identify which state file belongs to this run --
         # don't trust a read we couldn't attempt. Fail closed to prose.
         return check_reconciliation(message)
+
+    # Loop-fix (2026-07-19): persist this turn's report BEFORE reading the
+    # log back, so it's already part of the cumulative disclosure text
+    # this same call evaluates against -- no separate "append current
+    # message" special-casing needed below.
+    record_assistant_message(payload, message)
 
     path = os.path.join(WRITE_STATE_DIR, f"{session_id}.jsonl")
     if not os.path.exists(path):
@@ -332,30 +456,45 @@ def check_recorded_writes(payload: dict):
     # via a probe (2026-07-12): the SubagentStop payload already carries the
     # finishing agent's own agent_id on every real decision, and every
     # written record already carries the same field (guard_pretooluse.py) --
-    # this is a pure filter, no new identity capture needed anywhere.
+    # this is a pure filter, no new identity capture needed anywhere. Loop-
+    # fix (2026-07-19): the same scoping applies to the new
+    # "assistant_message" records -- one agent's disclosures never satisfy
+    # another agent's records.
     agent_id = payload.get("agent_id")
     records = [r for r in records if r.get("agent_id") == agent_id]
-
-    if not records:
-        # No records belonging to THIS agent. Piece A (2026-07-13): a report
-        # can still SAY it made a write with nothing recorded to back it up
-        # -- over-claiming isn't a safety risk, but it shouldn't pass
-        # silently either. Log it visibly, then allow either way.
-        if WRITE_VOCAB_WORDS.search(message):
-            record_claimed_but_unrecorded(payload, message)
-        return None
 
     write_records = [r for r in records if "kind" not in r]
     script_records = [r for r in records if r.get("kind") == "script_invocation"]
 
+    if not write_records and not script_records:
+        # No write/script records belonging to THIS agent (only, at most,
+        # its own persisted messages). Piece A (2026-07-13): a report can
+        # still SAY it made a write with nothing recorded to back it up --
+        # over-claiming isn't a safety risk, but it shouldn't pass silently
+        # either. Log it visibly, then allow either way.
+        if WRITE_VOCAB_WORDS.search(message):
+            record_claimed_but_unrecorded(payload, message)
+        return None
+
     if write_records:
+        # Loop-fix (2026-07-19): dedup repeated identical actions first --
+        # a retried write is one logical item, not N.
+        deduped = _dedup_write_records(write_records)
+
+        # Loop-fix (2026-07-19): cumulative disclosure -- everything this
+        # agent has said this session, not just the current message. Once
+        # a record's referent is named in ANY turn, it stays satisfied.
+        disclosed_text = "\n".join(
+            r.get("message", "") for r in records if r.get("kind") == "assistant_message"
+        )
+
         # Piece A (2026-07-13): block ONLY on a provable mismatch -- a
         # recorded write this report does not account for in recognizable
         # terms. No WORK_TYPE label is read here at all; principle 2 (prose
         # is never the trusted signal) applies to this decision. Checked
         # per-write, not in aggregate: five writes with four accounted for
         # is still a block, naming the fifth.
-        unaccounted = [r for r in write_records if not _write_is_accounted_for(r, message)]
+        unaccounted = [r for r in deduped if not _write_is_accounted_for(r, disclosed_text)]
         if not unaccounted:
             return None
 
@@ -365,9 +504,10 @@ def check_recorded_writes(payload: dict):
         ]
         return (
             "Piece A (#5.5 exit condition (a)): guard_pretooluse.py's PreToolUse "
-            f"recorder observed {len(unaccounted)} of {len(write_records)} real "
-            "write-class tool call(s) this run that this report does not account "
-            "for in recognizable terms -- " + "; ".join(items) + ". Silent/"
+            f"recorder observed {len(unaccounted)} of {len(deduped)} distinct real "
+            "write-class tool call(s) this run that this report (and everything "
+            "you've said earlier this session) does not account for in "
+            "recognizable terms -- " + "; ".join(items) + ". Silent/"
             "undisclosed writes are the one thing this gate blocks on "
             "(principle 1: mismatch-only). Describe what was written -- the "
             "file, or a clearly-named target -- and resubmit. No particular "
