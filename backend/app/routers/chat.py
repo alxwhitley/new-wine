@@ -445,6 +445,7 @@ class ChatRequest(BaseModel):
 def _save_conversation(
     db, user_id: str, conversation_id: str, is_new: bool,
     question: str, answer: str, message_id: str,
+    citations: list, verified_references: list,
 ) -> None:
     """Save the exchange to Supabase. Accepts pre-generated IDs for background use."""
     try:
@@ -472,6 +473,8 @@ def _save_conversation(
                 "conversation_id": conversation_id,
                 "role": "assistant",
                 "content": answer,
+                "citations": citations,
+                "verified_references": verified_references,
             },
         ]).execute()
         logger.info("Messages insert result: %d row(s) for conversation %s", len(result.data) if result.data else 0, conversation_id)
@@ -1013,7 +1016,7 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
         if user_id:
             threading.Thread(
                 target=_save_conversation,
-                args=(db, user_id, conversation_id, is_new, request.question, answer, message_id),
+                args=(db, user_id, conversation_id, is_new, request.question, answer, message_id, citations, verified_references),
                 daemon=True,
             ).start()
             logger.info("Conversation save dispatched in background: %s", conversation_id)
