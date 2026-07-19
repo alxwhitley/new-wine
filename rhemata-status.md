@@ -243,15 +243,38 @@ remaining hardcoded-bio teacher shares another entity's source_id.
 
 ## Known Harness Bugs
 
-- **Executor loop, 2026-07-18 diagnostic.** Write-detection gate flagged an
-  already-fully-disclosed benign action (failed grep + scratchpad cleanup)
-  for 12 consecutive turns, alternating "1 of 9"/"2 of 9" flagged-item counts
-  with no change in actions between turns. Same general class of issue as
-  the `WORK_TYPE`-marker prose-bridge that PLAN.md #5.5 exit condition (a)
-  has since closed (commit `96bc3ff`, 2026-07-12) — this 2026-07-18 gap is a
-  distinct, unresolved issue, not that bridge reopened. Needs its own
-  dedicated harness-fix session — do not bundle into SP4 or any other build
-  session.
+- **Executor loop, 2026-07-18 diagnostic — FIXED 2026-07-19, commit
+  `d9ab1cc`.** Write-detection gate flagged an already-fully-disclosed
+  benign action (failed grep + scratchpad cleanup) for 12 consecutive
+  turns, alternating "1 of 9"/"2 of 9" flagged-item counts with no change
+  in actions between turns. Root cause, confirmed against the real
+  surviving 2026-07-18 write-state log: a benign grep for a bare
+  SQL-verb-shaped pattern against a directory-only target got recorded as
+  a write with zero extractable referents, so it could never be
+  "accounted for" by any report text, and retries piled up undeduplicated
+  copies of the same unsatisfiable record forever. Fixed by making
+  referent extraction always yield something meaningful (never empty) and
+  by checking disclosure cumulatively against everything the finishing
+  agent has said all session, deduped, instead of only the latest
+  message per turn. Proven via `.claude/harness-selftest/test_write_accounting_loop_fix.py`
+  (loop converges and stays converged; a genuine undisclosed write still
+  blocks; a genuine disclosed write still passes) — only this is claimed
+  fixed, nothing broader. **Does not alter #5.5** — exit condition (a)
+  stays closed exactly as PLAN.md records it; this session touched
+  neither of its two named bridges. **Does not touch**
+  `check_reconciliation()`'s fail-closed fallback (missing session_id /
+  unreadable state file) — left exactly as-is, the safe-direction default
+  for a different, narrower case.
+
+- **Future session flag: `BASH_WRITE_INDICATORS` still over-flags benign
+  searches on purpose.** A grep for a bare SQL-verb-shaped word (e.g.
+  "ALTER TABLE") still gets recorded as a write — the 2026-07-19 fix above
+  only made that already-flagged record satisfiable and non-looping, it
+  did not reduce what gets flagged; over-flagging remains the deliberate
+  safe direction (principle 5). Narrowing that classifier so harmless
+  searches stop being flagged at all is a separate, higher-risk decision
+  (it trades against the explicit "over-recording is safe" design intent)
+  — its own dedicated session, weighed on its own, not bundled here.
 
 ---
 
