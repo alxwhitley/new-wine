@@ -28,6 +28,68 @@ Shipped per `docs/superpowers/plans/2026-07-19-study-panel-refinement.md` (PLAN.
 
 ---
 
+## Records cleanup + harness write-detection loop fix (session state, 2026-07-19)
+
+Ran chronologically before the SP panel refinement session above (commits
+land 15:03–16:02 vs. that session's 17:57–18:44) — inserted here, not at the
+top, to keep this file's ordering true to when the work actually happened,
+not when it was logged.
+
+**Records-only cleanup — commit `b510b31`.** Reconciled three places PLAN.md
+contradicted itself or reality: `sources/` backup marked DONE 2026-07-19
+(Google Drive; restore explicitly flagged unverified — not tested), SP2 status
+in `docs/inline-study-panel-spec.md` corrected from "NOT yet scheduled or
+built" to reflect its actual shipped state, and harness `#5.5` exit condition
+(a) corrected from PLAN.md's stale "OPEN" to the CLOSED state confirmed by
+direct code read + `git log` (commit `96bc3ff`). No logic/DB changes.
+
+**Read-only PLAN.md-vs-live-DB audit — no file changes, findings unaddressed.**
+Compared every DB-checkable claim in PLAN.md against direct live queries.
+Most drift is honestly dated-and-labeled (chunk/doc/proposition totals aging
+since the 2026-07-14 refresh). Two live findings Alex hasn't acted on yet:
+(1) New Wine's "33 articles/9 issues" claim is now 15 docs/8 issues — matches
+the SP4 pre-build fix's own 33→15 number below, just never folded back into
+PLAN.md `#26`. (2) SermonIndex's "#34 still open" framing is *more* wrong
+than PLAN.md itself knows — Carter Conlon (`visibility='shown'`, unlicensed)
+now has 6 real ingested documents, contradicting the "only ingested speaker
+is hidden, structurally blocked" note under SP2 Phase 7. Propositions count
+also dropped 2,488→2,306 since the 07-14 refresh with no documented cause —
+worth a look. Full comparison table not persisted anywhere; re-run the audit
+if this matters before relying on any PLAN.md count.
+
+**Executor write-detection infinite loop — diagnosed then fixed, commits
+`d9ab1cc` (build) + `f1e5184` (records).** Root-caused the 2026-07-18 bug
+below by reading the real surviving `/tmp/rhemata-harness-writes` log from
+that incident: a benign grep for a bare SQL-verb-shaped pattern
+(`"ALTER TABLE..."`) against a directory-only target got recorded as a write
+with zero extractable referents, so it could never be "accounted for" by any
+report, ever; retries piled up undeduplicated copies of the same
+unsatisfiable record forever. Fixed in `deterministic_gate.py` only
+(`guard_pretooluse.py` and `check_reconciliation()`'s fallback both
+untouched, per explicit scope lock): referent extraction now always yields
+something meaningful, and accounting checks the cumulative, deduped text of
+everything the finishing agent has said all session, not just its latest
+message. Proven via a new `.claude/harness-selftest/test_write_accounting_loop_fix.py`
+against the real recorded incident command — loop converges and stays
+converged; a genuine undisclosed write still blocks; a genuine disclosed
+write still passes. `BASH_WRITE_INDICATORS` deliberately left over-flagging
+benign searches (the safe default) — narrowing it is flagged below as its
+own future session, not done here.
+
+**Left open, not done this session — flagged for whoever picks this up
+next:** `HARNESS.md`'s "Closed" section still doesn't list the loop fix
+above (`d9ab1cc`) — that's the durable home for it per HARNESS.md's own
+eviction rule; right now the only record is in this file, which gets
+reshuffled every session (see this section's own insertion above).
+`ARCHITECTURE.md`'s `## Database` table list is also stale — missing
+`jewish_perspectives` (still live, 2 rows, confirmed by the audit above),
+`study_pins` (SP2 Phase 5), `teacher_profiles` (SP4), and the new
+`messages.citations`/`messages.verified_references` columns from the panel
+refinement session above. Neither touched this session — Alex hadn't
+confirmed he wanted them done yet when this session closed.
+
+---
+
 ## SP4 — Teacher Cards (session state, 2026-07-18)
 
 Built per `docs/superpowers/plans/2026-07-18-sp4-teacher-cards.md` (11 tasks),
