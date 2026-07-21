@@ -3,7 +3,28 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-19 (SP panel refinement Phase 1 — reference-persistence fix — shipped and live-verified).
+Last verified: 2026-07-21 ("your teachers on this verse" panel section removed, build commit `3f68ddc`).
+
+---
+
+## SP2 — "Your teachers on this verse" removed (session state, 2026-07-21)
+
+**Removed, build commit `3f68ddc`, frontend-only diff (99 deletions, `frontend/components/rhemata/study-panel.tsx` only):** `useTeachersOnVerse`, `TeacherOnVerseResult`, `isVerseRef`, and the "Your teachers on this verse" render block. **Reason:** verse-anchored nearest-chunk matching (`source_kind_filter=sermon_transcript`) surfaced irrelevant excerpts under teacher names. Retired pending a possible theme-based approach via the SP4 teacher-card path instead, not replaced same-session.
+
+Preceded by a read-only removal-footprint audit (previous session) that traced the feature to commits `af5be46` (Task 9, backend filter param) and `8698e4a` (Task 11, the panel wiring), then classified every symbol it introduced as UNIQUE (safe to remove) or NOW-SHARED (must stay). That classification held with zero surprises during execution.
+
+**Intentionally preserved as shared infrastructure — zero backend changes this session:**
+- `/study/commentary` endpoint, `source_kind_filter` param, and both its conditional branches (`commentary` / `sermon_transcript`) — the sermon-results code path predates this feature entirely (`git log -S match_sermon_chunks_by_ref` traces it to `1375b3f`, well before `af5be46`); the standalone Study page's default (unfiltered) query depends on both branches running together, and `CommentaryAccordionRow` depends on the explicit `commentary` filter.
+- The `accessToken` prop chain (`app/page.tsx` → `StudyPanel` → `PanelBody`) — now feeds `TeacherCard`, `CommentaryAccordionRow`, `PastorsNotesSection`, and `useLexiconDefinition`.
+- `verseIdStr` — feeds `useInterlinear` and the `selectedStrongs`-reset effect; only the `useTeachersOnVerse` reference to it was removed.
+
+**Proof performed before commit:**
+- Zero-hit greps repo-wide for `useTeachersOnVerse`, `TeacherOnVerseResult`, `isVerseRef`, `teacherResults`, `teachersLoading` — confirmed clean.
+- `tsc --noEmit` clean; `next build` production build clean.
+- Live against local dev (`localhost:3000`, Playwright, guest session): verse card, Interlinear, Commentaries, Pastors' Notes, and pin-click (guest → Beta Access gate, not a crash) all render correctly; "Your teachers on this verse" text confirmed absent; a real Commentaries-row fetch was observed carrying `source_kind_filter=commentary` with **no accompanying `sermon_transcript` request** — direct proof the removed hook no longer fires, not just a code-reading inference. Standalone `/study` page loaded without error, same fail-quiet "No commentary found"/"Couldn't load notes" states as the panel (consistent with this environment's known local-dev-to-production CORS block, not a regression).
+- **Caveat, stated plainly:** local dev cannot reach the production backend for authenticated calls (CORS-blocked, a pre-existing constraint this project has hit before — see Phase 7/8/9 entries below, which all needed a real `rhemata.app` session to verify auth-gated behavior). This session's live checks are real but guest/local-only; a full authenticated production re-verification (real commentary/sermon results, Pastors' Notes content) has **not** been done post-removal and would need a push + a real signed-in session on `rhemata.app`, the same as prior SP2/SP4 sessions did.
+
+**Not touched:** SP4's curated `TeacherCard` path (`reference.type === "teacher"`) — a different feature, confirmed unrelated during the audit (disjoint code path, coincidentally similar name).
 
 ---
 
