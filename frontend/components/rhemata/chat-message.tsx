@@ -74,6 +74,7 @@ function VerseReferenceSpan({
   return (
     <button
       onClick={() => onClick?.(reference)}
+      data-study-trigger
       className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer"
     >
       {reference.raw}
@@ -95,6 +96,7 @@ function TeacherReferenceSpan({
   return (
     <button
       onClick={() => onClick?.(reference, question)}
+      data-study-trigger
       className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer"
     >
       {reference.name}

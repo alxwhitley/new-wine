@@ -380,14 +380,19 @@ export default function Home() {
           (kept in sync with study-panel.tsx's w-[33vw] min-w-[380px]
           max-w-[480px]) so the chat card actually resizes to "about
           two-thirds" per spec, instead of the panel silently overlapping
-          — and re-centering — content meant for the full-width card. */}
+          — and re-centering — content meant for the full-width card.
+          Phase 2 (floating overlay): the panel itself is now inset by
+          right-2 (0.5rem) instead of sitting flush against the screen
+          edge, so this reservation adds +1rem to every clamp bound
+          (right-2's own 0.5rem plus a matching 0.5rem visual gap) — a real
+          gap between the two floating cards, not an overlap. */}
       <main
         className={cn(
           "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 transition-[margin-left,padding-right] duration-300 ease-in-out motion-reduce:transition-none",
           studyPanelOpen
             ? interlinearWide
-              ? "md:ml-0 md:pr-[clamp(480px,50vw,720px)]"
-              : "md:ml-0 md:pr-[clamp(380px,33vw,480px)]"
+              ? "md:ml-0 md:pr-[clamp(496px,calc(50vw+1rem),736px)]"
+              : "md:ml-0 md:pr-[clamp(396px,calc(33vw+1rem),496px)]"
             : "md:ml-64",
           inputFocused ? "pb-0" : "pb-14"
         )}

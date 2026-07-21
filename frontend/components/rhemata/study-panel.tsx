@@ -174,21 +174,24 @@ function PanelBody({
 
   // A stale word selection from a previously-viewed verse would be actively
   // wrong (matches nothing, or the wrong thing, in the new verse's tokens) —
-  // reset it whenever the reference changes. The Interlinear row's own
-  // open/closed state is left alone; that's a UI preference, not tied to
-  // verse identity.
+  // reset it whenever the reference changes.
   useEffect(() => {
     setSelectedStrongs(null);
   }, [verseIdStr]);
 
-  // A teacher card never has an Interlinear row — collapse the width
-  // reservation if it was left open from a previously-viewed verse, so
-  // switching verse -> teacher doesn't leave the panel stuck at 50vw.
+  // Floating-overlay swap (Phase 2): a second underline click while the
+  // panel is already open updates `reference` in place — this component
+  // re-renders, it never unmounts. Reset to the default verse view on every
+  // genuine target change (Interlinear collapses, scroll returns to top) so
+  // a swap always lands where a fresh open would, per spec — this
+  // supersedes the old "leave Interlinear open across a verse switch"
+  // decision. targetKey is a content-identity string, not object identity:
+  // re-clicking the exact same target is correctly a no-op, not a reset.
+  const targetKey = referenceKey(reference);
   useEffect(() => {
-    if (reference.type !== "verse" && interlinearOpen) {
-      onInterlinearOpenChange(false);
-    }
-  }, [reference.type, interlinearOpen, onInterlinearOpenChange]);
+    onInterlinearOpenChange(false);
+    rowViewContainerRef.current?.scrollTo({ top: 0 });
+  }, [targetKey, onInterlinearOpenChange]);
 
   const lexiconEntry = useLexiconDefinition(selectedStrongs, accessToken ?? null);
   const selectedToken = selectedStrongs ? tokens.find((t) => t.strongs === selectedStrongs) ?? null : null;
@@ -278,65 +281,72 @@ function PanelBody({
 
       {/* Scrollable body */}
       <div ref={rowViewContainerRef} tabIndex={-1} className="flex-1 overflow-y-auto px-4 py-4">
-        {reference.type === "verse" ? (
-          <>
-            {loading && (
-              <div className="space-y-2 animate-pulse">
-                <div className="h-4 w-full rounded bg-border" />
-                <div className="h-4 w-5/6 rounded bg-border" />
-                <div className="h-4 w-2/3 rounded bg-border" />
-              </div>
-            )}
-            {!loading && verse && (
-              <>
-                <p className="font-serif text-lg leading-relaxed text-foreground">
-                  {verse.text}
+        {/* Keyed on the target's identity so a swap remounts this subtree —
+            a smooth fade rather than a jarring cut, and content-local state
+            here would reset for free too (none currently lives here; the
+            outer effect above handles Interlinear/scroll explicitly since
+            those are owned above this boundary). */}
+        <div key={targetKey} className="animate-in fade-in-0 duration-200 motion-reduce:animate-none">
+          {reference.type === "verse" ? (
+            <>
+              {loading && (
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-4 w-full rounded bg-border" />
+                  <div className="h-4 w-5/6 rounded bg-border" />
+                  <div className="h-4 w-2/3 rounded bg-border" />
+                </div>
+              )}
+              {!loading && verse && (
+                <>
+                  <p className="font-serif text-lg leading-relaxed text-foreground">
+                    {verse.text}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">{verse.translation}</p>
+                </>
+              )}
+              {!loading && !verse && error && (
+                <p className="text-sm text-muted-foreground">
+                  Verse text isn&apos;t available yet for this reference.
                 </p>
-                <p className="mt-2 text-xs text-muted-foreground">{verse.translation}</p>
-              </>
-            )}
-            {!loading && !verse && error && (
-              <p className="text-sm text-muted-foreground">
-                Verse text isn&apos;t available yet for this reference.
-              </p>
-            )}
-          </>
-        ) : (
-          <TeacherCard
-            sourceId={reference.source_id}
-            question={teacherQuestion ?? ""}
-            accessToken={accessToken}
-          />
-        )}
+              )}
+            </>
+          ) : (
+            <TeacherCard
+              sourceId={reference.source_id}
+              question={teacherQuestion ?? ""}
+              accessToken={accessToken}
+            />
+          )}
 
-        {reference.type === "verse" && (
-          <div className="mt-6">
-            <AccordionRow label="Interlinear" open={interlinearOpen} onOpenChange={onInterlinearOpenChange}>
-              <InterlinearBlocks
-                tokens={tokens}
-                selectedStrongs={selectedStrongs}
-                onSelect={setSelectedStrongs}
-                loading={tokensLoading}
-                isNT={isNT}
-              />
-            </AccordionRow>
-            <AccordionRow label="Commentaries">
-              <CommentaryAccordionRow
-                verseText={verse?.text ?? null}
-                verseIdStr={verseId(reference)}
-                accessToken={accessToken}
-              />
-            </AccordionRow>
-            <AccordionRow label="Pastors' Notes">
-              <PastorsNotesSection
-                verseId={verseId(reference)}
-                accessToken={accessToken ?? null}
-                role={role ?? null}
-                userId={userId ?? null}
-              />
-            </AccordionRow>
-          </div>
-        )}
+          {reference.type === "verse" && (
+            <div className="mt-6">
+              <AccordionRow label="Interlinear" open={interlinearOpen} onOpenChange={onInterlinearOpenChange}>
+                <InterlinearBlocks
+                  tokens={tokens}
+                  selectedStrongs={selectedStrongs}
+                  onSelect={setSelectedStrongs}
+                  loading={tokensLoading}
+                  isNT={isNT}
+                />
+              </AccordionRow>
+              <AccordionRow label="Commentaries">
+                <CommentaryAccordionRow
+                  verseText={verse?.text ?? null}
+                  verseIdStr={verseId(reference)}
+                  accessToken={accessToken}
+                />
+              </AccordionRow>
+              <AccordionRow label="Pastors' Notes">
+                <PastorsNotesSection
+                  verseId={verseId(reference)}
+                  accessToken={accessToken ?? null}
+                  role={role ?? null}
+                  userId={userId ?? null}
+                />
+              </AccordionRow>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -361,9 +371,8 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
   const isMobile = useIsMobile();
   // SP2 Phase 8 (Task 30): lifted here, not just PanelBody, since the panel's
   // own width class (below) needs it too — width follows need, automatically,
-  // no user-managed "wide mode". Left open across a verse switch deliberately
-  // (a UI preference, not tied to verse identity — see PanelBody's comment on
-  // why selectedStrongs, unlike this, DOES reset per verse).
+  // no user-managed "wide mode". Reset on every target swap now, verse ->
+  // verse included — see PanelBody's swap effect (Phase 2, floating overlay).
   const [interlinearOpen, setInterlinearOpen] = useState(false);
 
   // SP2 Phase 9 (Fix 2): this panel has no Dialog.Trigger — it's opened from
@@ -398,28 +407,50 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
     onInterlinearOpenChange?.(open);
   }
 
+  // Phase 2 (floating overlay): a click on a DIFFERENT verse/teacher
+  // underline while the panel is already open must swap content in place,
+  // not close-then-reopen — the underline lives outside Content, so Radix's
+  // default outside-pointerdown dismiss would otherwise fire first (racing
+  // the click's own handler, which updates `reference`). Suppressing the
+  // dismiss for marked triggers only lets that update land untouched;
+  // everything else outside the panel still closes it normally. No-op on
+  // mobile: the modal sheet covers the chat area, so no underline is
+  // reachable while it's open.
+  function handlePointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }>) {
+    const target = event.detail.originalEvent.target as HTMLElement | null;
+    if (target?.closest("[data-study-trigger]")) {
+      event.preventDefault();
+    }
+  }
+
   if (!reference) return null;
 
   const isPinned = pins.some((p) => referenceKey(p) === referenceKey(reference));
   const pinDisabled = !isPinned && pins.length >= 8;
 
   return (
-    <PanelPrimitive.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <PanelPrimitive.Root open={isOpen} modal={isMobile} onOpenChange={(open) => { if (!open) onClose(); }}>
       <PanelPrimitive.Portal>
-        {/* Desktop: transparent click-catcher — chat stays fully visible, per
-            spec ("chat keeps two-thirds and stays where it is"). Mobile: a
-            real dark scrim, since the sheet is a full takeover there and chat
-            is not visible underneath (spec, mobile section). */}
-        <PanelPrimitive.Overlay
-          className={cn(
-            "fixed inset-0 z-50",
-            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
-            "motion-reduce:animate-none",
-            isMobile ? "bg-black/50" : "bg-transparent"
-          )}
-        />
+        {/* Mobile only: real dark scrim, full-screen takeover, chat hidden
+            underneath (spec, mobile section — untouched by Phase 2). Desktop
+            floats over the chat with no scrim/overlay at all: the chat stays
+            fully visible AND interactive, and the rounded corners + shadow
+            on Content below are the only depth cues. Root's modal={isMobile}
+            (false on desktop) plus handlePointerDownOutside above are what
+            make that safe — no blocking layer is needed for outside-click-
+            to-close to keep working. */}
+        {isMobile && (
+          <PanelPrimitive.Overlay
+            className={cn(
+              "fixed inset-0 z-50 bg-black/50",
+              "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+              "motion-reduce:animate-none"
+            )}
+          />
+        )}
         <PanelPrimitive.Content
           onCloseAutoFocus={handleCloseAutoFocus}
+          onPointerDownOutside={handlePointerDownOutside}
           className={cn(
             "fixed z-50 flex flex-col bg-background shadow-lg outline-none",
             "transition ease-in-out motion-reduce:transition-none motion-reduce:animate-none",
@@ -428,7 +459,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             isMobile
               ? "inset-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
               : cn(
-                  "inset-y-0 right-0 border-l border-border data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+                  "inset-y-2 right-2 rounded-xl border border-border data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
                   interlinearOpen ? "w-[50vw] min-w-[480px] max-w-[720px]" : "w-[33vw] min-w-[380px] max-w-[480px]"
                 )
           )}
