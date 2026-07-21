@@ -3,7 +3,25 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-21 (panel chrome cleanup, build commit `65b36e2`).
+Last verified: 2026-07-21 (SP panel refinement Phase 2 — floating overlay — build commit `fe310e2`).
+
+---
+
+## SP panel refinement — Phase 2: floating overlay (session state, 2026-07-21)
+
+Shipped, build commit `fe310e2` — `frontend/app/page.tsx`, `frontend/components/rhemata/chat-message.tsx`, `frontend/components/rhemata/study-panel.tsx` only. Alex's SP4 sign-off (the gate this phase was waiting on) cleared before this session started. **Goes further than the original Phase 2 scope** (`docs/superpowers/plans/2026-07-19-study-panel-refinement.md`, Tasks 6-9), which was margin/rounding only — this session's explicit spec added non-modal desktop interaction and swap-in-place, superseding that plan's narrower Task 9 assumption (default Radix modal dismiss unmodified).
+
+**Desktop presentation:** the panel is a floating card — `inset-y-2 right-2 rounded-xl border border-border`, reusing the existing `shadow-lg` (all values already in use elsewhere in this codebase, per DESIGN.md's "no new shadows/radii/colors" rule and its own "popovers/sheets are the only lifted surfaces" carve-out) — instead of a docked column flush against the screen edge. `page.tsx`'s reserved-width clamps grew by `+1rem` per bound (`clamp(496px,calc(50vw+1rem),736px)` / `clamp(396px,calc(33vw+1rem),496px)`) so a real gap shows between the chat card and the panel, not an overlap.
+
+**Non-modal + swap-in-place:** `PanelPrimitive.Root` now takes `modal={isMobile}` — desktop is non-modal (Radix's documented `DialogContentNonModal` path, confirmed via `/radix-ui/primitives` docs and the installed `@radix-ui/react-dialog@1.1.16` type declarations before writing any code), and desktop renders no `Overlay` at all. Chat stays fully visible and interactive behind it. `VerseReferenceSpan`/`TeacherReferenceSpan` (`chat-message.tsx`) get a `data-study-trigger` marker; `Content`'s `onPointerDownOutside` checks for it via `event.detail.originalEvent.target.closest(...)` and calls `event.preventDefault()` only for those, letting a second underline click swap `reference` in place (page.tsx's `handleVerseClick` already did this unconditionally — no page.tsx change was needed there) instead of racing Radix's default dismiss into a close-then-reopen. Everything else outside the panel still closes it normally — no blocking layer anywhere (confirmed by grep and by reading the full diff).
+
+**Reset-on-swap:** `PanelBody` now collapses Interlinear and resets scroll to top on every genuine target-identity change (`referenceKey(reference)`, a content-identity string — re-clicking the same target is correctly a no-op), and fades the content subtree in via a `key`-forced remount. This supersedes the old "leave Interlinear open across a verse switch" decision from SP2 Phase 8.
+
+**Shared-model note for SP5:** the target/open/close state (`page.tsx`) and the swap-reset behavior (`PanelBody`) are presentation-agnostic and were already shared between mobile/desktop (single `<StudyPanel>`, branching only on `useIsMobile()`); only the modal/overlay/positioning pieces differ now. A future mobile bottom-sheet build can reuse both without touching this logic — the desktop side-slide and a future mobile bottom-rise are presentation layers over the same shared behavior.
+
+**Live-verified, real evidence (Playwright, local dev, route-interception test doubles for `/chat` and `/study/interlinear` only — same CORS-driven method as the two sessions above):** chat textarea stayed typeable while the panel was open; clicking a second, different verse underline while open swapped content to it in place (screenshot: same panel shell, new verse text, Interlinear auto-collapsed, no flicker/stack); scroll position confirmed reset to 0 after a swap; the X button closed the panel; clicking plain chat text (not a trigger) closed the panel; mobile (iPhone 13 emulation) confirmed **completely unaffected** — full-screen sheet, dark scrim, no rounded corners, no gap, chat hidden underneath, byte-for-byte the same presentation as before.
+
+**Caveat, stated plainly:** as with the two sessions above, this is local-dev verification against route-interception doubles, not a full authenticated pass against `rhemata.app`. That full production re-verification (still owed from the "your teachers on this verse" removal earlier this session too) has not been run yet.
 
 ---
 
