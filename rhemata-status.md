@@ -3,7 +3,21 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-21 ("your teachers on this verse" panel section removed, build commit `3f68ddc`).
+Last verified: 2026-07-21 (panel chrome cleanup, build commit `65b36e2`).
+
+---
+
+## SP2 — Panel chrome cleanup (session state, 2026-07-21)
+
+Three approved UI-only changes, build commit `65b36e2`, `frontend/app/page.tsx` + `frontend/components/rhemata/study-panel.tsx` only:
+
+1. **Removed the floating "Study preview" dev-trigger button and its Cmd/Ctrl+Shift+S shortcut** (`app/page.tsx`) — collided with the chat button and duplicated the panel's one real open path. The panel now opens **only** via a verse/teacher underline click. `NEXT_PUBLIC_STUDY_PANEL_ENABLED` and the underline click-path (`onVerseClick`/`onSelectPin` wiring into `handleVerseClick`) are untouched — confirmed by diff, not by inference.
+2. **Removed the "Open in Study" link** from the bottom of the panel (`study-panel.tsx`). The standalone `/study` page remains live and reachable by direct URL as the fallback — confirmed by direct navigation, untouched by this diff.
+3. **STEPBible/Tyndale House attribution (CC BY 4.0 license condition) retained, no restyling needed.** All four rendering surfaces — `InterlinearBlocks` (shared by the panel's Interlinear row and the standalone page), the panel's own `WordStudyView`, and the standalone page's `WordStudyPanel`/`InlineWordPanel` — already use `text-xs text-muted-foreground`, DESIGN.md's own documented low-prominence pattern (line 120, same class used for verse-number superscripts). No code changed on this point.
+
+**Live verification method, since local dev is CORS-blocked from the production backend for `/chat`, `/study/interlinear`, and `/study/lexicon` (the same pre-existing constraint noted in the "your teachers on this verse" removal above and in Phase 7/8/9's history):** used Playwright route interception as network-level test doubles for those three endpoints only (synthetic but shape-accurate SSE/JSON responses) — every other request (Commentaries, Pastors' Notes, pins) hit the real backend unmodified. This produced a **genuine click on a real verse-underline** (not the removed dev button) that opened the panel, expanded Interlinear with real-shaped tokens, and opened the word-study view — confirming the attribution renders correctly in both panel surfaces by direct observation, not class-name inspection. Pin click showed the expected guest Beta Access gate, no crash. Standalone `/study` loaded directly with no crash.
+
+**Not touched:** SP4's curated `TeacherCard` path, Commentaries, Pastors' Notes, pins, and all interlinear/lexicon *data* fetching — chrome only, per scope lock.
 
 ---
 
