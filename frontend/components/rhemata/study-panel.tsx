@@ -78,68 +78,6 @@ function useVerseText(ref: StudyReference | null): {
   return { data, loading, error };
 }
 
-// ── Teachers-on-verse fetch (SP2 Phase 4) ────────────────────────────────────
-// Replaces a previously hardcoded, unconditional "none of your teachers"
-// claim with a real, teacher-only query against /study/commentary
-// (source_kind_filter=sermon_transcript) — classical commentary authors
-// never surface here, which is the exact positioning failure this phase
-// exists to prevent. Panel-local fetch hook, not shared with the standalone
-// Study page, per the plan's design note.
-
-interface TeacherOnVerseResult {
-  document_id: string;
-  title: string;
-  author: string;
-  excerpt: string;
-}
-
-function useTeachersOnVerse(
-  verseText: string | null,
-  verseIdStr: string | null,
-  accessToken: string | null | undefined
-): { results: TeacherOnVerseResult[]; loading: boolean } {
-  const [results, setResults] = useState<TeacherOnVerseResult[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!verseText) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    const params = new URLSearchParams({
-      verse_text: verseText,
-      offset: "0",
-      source_kind_filter: "sermon_transcript",
-    });
-    if (verseIdStr) params.set("verse_id", verseIdStr);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/commentary?${params}`, {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("teachers-on-verse fetch failed");
-        return res.json();
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setResults(data.results ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setResults([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [verseText, verseIdStr, accessToken]);
-
-  return { results, loading };
-}
-
 // ── Word study view (SP2 Phase 8) ───────────────────────────────────────────
 // The panel's one back-button surface — reached only by tapping a word in the
 // Interlinear row. Lexicon-only (WordDefinitionCard), unlike the standalone
@@ -232,14 +170,7 @@ function PanelBody({
       setTimeout(() => setShowCapMessage(false), 2500);
     }
   }
-  const isVerseRef = reference.type === "verse";
   const verseIdStr = reference.type === "verse" ? verseId(reference) : null;
-  const { results: teacherResults, loading: teachersLoading } = useTeachersOnVerse(
-    reference.type === "verse" ? verse?.text ?? null : null,
-    verseIdStr,
-    accessToken
-  );
-
   const { tokens, loading: tokensLoading, isNT } = useInterlinear(verseIdStr);
 
   // A stale word selection from a previously-viewed verse would be actively
@@ -377,36 +308,6 @@ function PanelBody({
             question={teacherQuestion ?? ""}
             accessToken={accessToken}
           />
-        )}
-
-        {isVerseRef && (
-          <div className="mt-6">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-              Your teachers on this verse
-            </p>
-            {teachersLoading && (
-              <div className="space-y-2 animate-pulse">
-                <div className="h-4 w-full rounded bg-border" />
-                <div className="h-4 w-4/5 rounded bg-border" />
-              </div>
-            )}
-            {!teachersLoading && teacherResults.length > 0 && (
-              <div className="space-y-3">
-                {teacherResults.map((r) => (
-                  <div key={r.document_id}>
-                    <p className="text-sm font-medium text-foreground">{r.author}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{r.excerpt}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {!teachersLoading && teacherResults.length === 0 && (
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                None of your teachers address this verse directly yet. Content is added
-                daily.
-              </p>
-            )}
-          </div>
         )}
 
         {reference.type === "verse" && (
