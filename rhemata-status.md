@@ -4,6 +4,23 @@ Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
 Last verified: 2026-07-21 (SP panel refinement Phase 2 — floating overlay — build commit `fe310e2`).
+Records reconciled: 2026-07-21 (push ladder + SP4 sign-off closure — see the section directly below).
+
+---
+
+## Records reconciliation — push ladder + SP4 sign-off closure (session state, 2026-07-21)
+
+**Push ladder, verified against git, not assumed:** `git rev-parse main` and `git rev-parse origin/main` are identical (`5f2c125`) after an explicit `git fetch`; `git branch -vv` confirms `main` tracks `origin/main` with nothing ahead or behind. Every commit from this cycle — `3f68ddc` (teachers-on-verse removal), `ae7e583`, `65b36e2` (chrome cleanup), `916c883`, `fe310e2` (Phase 2 floating overlay), `5f2c125` — is already on `origin/main`. **This corrects an assumption otherwise carried into this reconciliation that the Phase 2 build might be unpushed/hard-stopped locally — it was not; nothing from this cycle is sitting local-only.**
+
+**SP4 sign-off, confirmed complete:** Alex signed in on `rhemata.app` and ran the full authenticated verification pass. All four checks passed: real card content for a signed-in user, the honest-empty state, nested back-return, and keyboard-only navigation. This closes SP4 teacher-card verification — the "NOT verified this session — needs Alex's own pass" framing in the 2026-07-18 SP4 entry below is superseded by this pass (closing note added there), not deleted.
+
+**This same pass also confirmed, live in production, the two same-day removals below:**
+- "Your teachers on this verse" is genuinely gone on `rhemata.app` — closes that section's own "full authenticated production re-verification... has not been done" caveat (closing note added there).
+- The dev-trigger button + shortcut and the "Open in Study" link are genuinely gone on `rhemata.app`, and STEPBible/Tyndale attribution still renders correctly — closes that section's equivalent gap (closing note added there).
+
+**Not closed by this pass — stays open:** the Phase 2 floating-overlay build (`fe310e2`) **shipped after** this sign-off pass and has only been verified against local-dev route-interception doubles (see that section's own caveat below, left as-is — still accurate). Its "shipped, build commit `fe310e2`" status is a different claim from "signed off" — don't conflate them. A hands-on authenticated `rhemata.app` pass on the overlay itself is still owed.
+
+**Forward:** SP5 (mobile bottom-sheet, roadmap #43) is next and reuses the overlay's shared open/swap/close model (`page.tsx` state + `PanelBody`'s swap-reset), built presentation-agnostic for exactly this reuse. Two long-standing items remain open, untouched by this session: no real screen-reader pass has ever been run (Open blockers #13), and the Hebrew lexicon permission gate from Online Bible has not been obtained (Open blockers #14).
 
 ---
 
@@ -37,6 +54,8 @@ Three approved UI-only changes, build commit `65b36e2`, `frontend/app/page.tsx` 
 
 **Not touched:** SP4's curated `TeacherCard` path, Commentaries, Pastors' Notes, pins, and all interlinear/lexicon *data* fetching — chrome only, per scope lock.
 
+**Production confirmation, 2026-07-21:** Alex's SP4 authenticated sign-off pass confirmed all three changes live on `rhemata.app` — dev-trigger button and shortcut gone, "Open in Study" link gone, STEPBible/Tyndale attribution still renders correctly. Full detail in the reconciliation entry at the top of this file.
+
 ---
 
 ## SP2 — "Your teachers on this verse" removed (session state, 2026-07-21)
@@ -55,6 +74,7 @@ Preceded by a read-only removal-footprint audit (previous session) that traced t
 - `tsc --noEmit` clean; `next build` production build clean.
 - Live against local dev (`localhost:3000`, Playwright, guest session): verse card, Interlinear, Commentaries, Pastors' Notes, and pin-click (guest → Beta Access gate, not a crash) all render correctly; "Your teachers on this verse" text confirmed absent; a real Commentaries-row fetch was observed carrying `source_kind_filter=commentary` with **no accompanying `sermon_transcript` request** — direct proof the removed hook no longer fires, not just a code-reading inference. Standalone `/study` page loaded without error, same fail-quiet "No commentary found"/"Couldn't load notes" states as the panel (consistent with this environment's known local-dev-to-production CORS block, not a regression).
 - **Caveat, stated plainly:** local dev cannot reach the production backend for authenticated calls (CORS-blocked, a pre-existing constraint this project has hit before — see Phase 7/8/9 entries below, which all needed a real `rhemata.app` session to verify auth-gated behavior). This session's live checks are real but guest/local-only; a full authenticated production re-verification (real commentary/sermon results, Pastors' Notes content) has **not** been done post-removal and would need a push + a real signed-in session on `rhemata.app`, the same as prior SP2/SP4 sessions did.
+  - **Closed 2026-07-21** — Alex's SP4 authenticated sign-off pass confirmed this removal live in production (the text is genuinely gone). Full detail in the reconciliation entry at the top of this file.
 
 **Not touched:** SP4's curated `TeacherCard` path (`reference.type === "teacher"`) — a different feature, confirmed unrelated during the audit (disjoint code path, coincidentally similar name).
 
@@ -196,6 +216,11 @@ authenticated off-topic question (Task 5's script validates the floor
 value itself against real scores, but not the full authenticated request
 path). None of these are new risks invented for this note — they're the
 literal gaps left by not being able to sign in.
+
+**Closed 2026-07-21** — Alex signed in and ran the full authenticated pass:
+real card content, the Interlinear-width-collapse behavior, the fail-quiet
+floor end-to-end, back-navigation, and keyboard-only nav all confirmed.
+Full detail in the reconciliation entry at the top of this file.
 
 ---
 
@@ -553,10 +578,14 @@ until that permission is obtained.
 blockers #3. Oldest item on the plan, no longer next.)
 
 SP track: SP2 done (Phases 1–9), SP3 dissolved 2026-07-15 (absorbed into SP2
-Phase 8, shipped `9415f11`). Next SP item is #42 (SP4, teacher card content) —
-its pre-build data-attribution blocker is now fixed (see "SP4 pre-build data
-fix" above), so #42 is the live next action with no remaining data blocker.
-#38 (SP0 mobile mockup) completion status unverified — confirm before assuming.
+Phase 8, shipped `9415f11`). SP4 (teacher card content) shipped 2026-07-18 and
+is now fully signed off (Alex's authenticated production pass, 2026-07-21 — all
+four checks passed; see the reconciliation entry at the top of this file). SP
+panel refinement (#42.5) is also done: Phase 1 (reference-persistence fix)
+shipped 2026-07-19; Phase 2 (floating overlay) shipped 2026-07-21 (`fe310e2`),
+built but not yet production-verified itself (see above). **Next SP item is #43
+(SP5, mobile bottom-sheet)**, which reuses the overlay's shared open/swap/close
+model. #38 (SP0 mobile mockup) completion status unverified — confirm before assuming.
 
 #11/#12 are DONE (reuse path resolved 2026-07-13). The old "#11 → #12 → SP3"
 chain no longer holds — all three links resolved.
