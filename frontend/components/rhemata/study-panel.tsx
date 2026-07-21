@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { Dialog as PanelPrimitive } from "radix-ui";
-import { Pin, PinOff, X, GraduationCap } from "lucide-react";
+import { Pin, PinOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/lib/supabase";
@@ -338,16 +337,6 @@ function PanelBody({
             </AccordionRow>
           </div>
         )}
-
-        <div className="mt-6 border-t border-border pt-4">
-          <Link
-            href="/study"
-            className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline transition-colors"
-          >
-            <GraduationCap className="h-3.5 w-3.5" />
-            Open in Study
-          </Link>
-        </div>
       </div>
     </div>
   );

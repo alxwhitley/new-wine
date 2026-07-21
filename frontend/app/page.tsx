@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Menu, FlaskConical } from "lucide-react";
+import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatFocus } from "@/contexts/chat-focus-context";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,19 +24,6 @@ import type { WeeklyLimitDetail } from "@/hooks/useChat";
 import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference, type CuratedTeacher } from "@/lib/study-reference";
 import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
 import { useUserRole } from "@/hooks/useUserRole";
-
-// Dev-only demo reference for the always-available trigger below — lets the
-// panel be opened regardless of chat content. Real triggers come from
-// tapping a detected verse reference inside an actual answer.
-const DEV_DEMO_REFERENCE: StudyReference = {
-  type: "verse",
-  raw: "Romans 8:28",
-  book: "Romans",
-  code: "ROM",
-  chapter: 8,
-  verseStart: 28,
-  verseEnd: null,
-};
 
 // SP2 Phase 5: a guest's pin attempt is stored here (verse identity only,
 // not the whole StudyReference) while they complete signup, then landed
@@ -273,20 +260,6 @@ export default function Home() {
     },
     [signUp],
   );
-
-  // Dev-only demonstration trigger — Cmd/Ctrl+Shift+S opens the panel
-  // regardless of chat content, so the shell is always demonstrable.
-  useEffect(() => {
-    if (!isStudyPanelEnabled()) return; // kill switch off — never register the listener
-    function onKeydown(e: globalThis.KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        handleVerseClick(DEV_DEMO_REFERENCE);
-      }
-    }
-    document.addEventListener("keydown", onKeydown);
-    return () => document.removeEventListener("keydown", onKeydown);
-  }, [handleVerseClick]);
 
   // Auto-scroll — only when user is already near the bottom
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -568,21 +541,6 @@ export default function Home() {
         onInterlinearOpenChange={setInterlinearWide}
         teacherQuestion={teacherCardQuestion}
       />
-
-      {/* Dev-only demonstration trigger — opens the Study Panel regardless of
-          chat content. Cmd/Ctrl+Shift+S does the same. Gated by the
-          NEXT_PUBLIC_STUDY_PANEL_ENABLED kill switch — absent from the DOM
-          entirely when the flag is off, not just disabled-looking. */}
-      {isStudyPanelEnabled() && (
-        <button
-          onClick={() => handleVerseClick(DEV_DEMO_REFERENCE)}
-          title="Open Study Panel (dev) — Cmd/Ctrl+Shift+S"
-          className="fixed bottom-20 right-4 z-30 flex items-center gap-1.5 rounded-full border border-border bg-popover px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground md:bottom-4"
-        >
-          <FlaskConical className="h-3.5 w-3.5" />
-          Study preview
-        </button>
-      )}
 
       {showGate && (
         <BetaGate
