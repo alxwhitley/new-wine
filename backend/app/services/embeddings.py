@@ -33,9 +33,8 @@ def embed_text(text: str) -> List[float]:
 
 def embed_batch(texts: List[str]) -> List[List[float]]:
     """Embed multiple texts in as few OpenAI calls as possible, sub-batched at
-    EMBED_BATCH_SIZE (matches the convention already used in
-    scripts/ingest_commentaries.py). Returns embeddings in the same order as
-    the input texts."""
+    EMBED_BATCH_SIZE. Returns embeddings in the same order as the input
+    texts."""
     if not texts:
         return []
     client = _get_client()

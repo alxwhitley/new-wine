@@ -68,7 +68,7 @@ DESTRUCTIVE_GIT = re.compile(
 # to fix it piecemeal mid-conversion; that's its own harness session.
 UNCONVERTED_INGEST_SCRIPTS = re.compile(
     r"\b(ingest_magazine\.py|ingest_lexicon\.py|"
-    r"ingest_commentaries\.py|ingest_helloao\.py)\b"
+    r"ingest_helloao\.py)\b"
 )
 
 DRY_RUN_FLAG = re.compile(r"--dry-run|--test\b")

@@ -350,44 +350,6 @@ export const CARDS: CorpusCard[] = [
       },
     ],
   },
-  {
-    id: "historicalchristianfaith",
-    name: "HistoricalChristianFaith Commentaries",
-    group: "Commentaries",
-    status: "Complete",
-    sourceKind: "commentary",
-    extraFilter:
-      "source_name ILIKE '%historicalchristianfaith%' OR source_name ILIKE '%historical christian%'",
-    description:
-      "Church fathers from HistoricalChristianFaith.com. Document count shown.",
-    commands: [
-      {
-        label: "Ingest All Night",
-        command:
-          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_commentaries.py > logs/commentaries_overnight.log 2>&1 &`,
-      },
-      {
-        label: "Ingest 2 Hour",
-        command:
-          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_commentaries.py > logs/commentaries_2hr.log 2>&1 &`,
-      },
-      {
-        label: "Dry Run",
-        command:
-          `cd ${REPO_ROOT} && python3 scripts/ingest_commentaries.py --dry-run`,
-      },
-      {
-        label: "Single Father Test",
-        command:
-          `cd ${REPO_ROOT} && python3 scripts/ingest_commentaries.py --father "Augustine"`,
-      },
-      {
-        label: "Monitor",
-        command:
-          `tail -f ${REPO_ROOT}/logs/commentaries_overnight.log`,
-      },
-    ],
-  },
 
   // ── Public Domain Books ──
   {

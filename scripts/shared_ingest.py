@@ -5,9 +5,9 @@ shared_ingest.py — shared document-writer chokepoint for Rhemata ingest script
 Owns the common resolve -> insert -> chunk -> embed -> propositions flow that
 every document-writing ingest script needs. Converted so far: ingest.py
 (and, transitively, youtube_ingest.py), ingest_magazine.py, and
-ingest_preceptaustin.py. ingest_lexicon.py, ingest_helloao.py, and
-ingest_commentaries.py call propositions.process_document() directly and do
-not go through this module yet.
+ingest_preceptaustin.py. ingest_lexicon.py and ingest_helloao.py call
+propositions.process_document() directly and do not go through this module
+yet.
 
 ingest_document() writes a document record, all of its chunks, and its
 propositions as ONE atomic unit: everything (chunking, embedding, and the

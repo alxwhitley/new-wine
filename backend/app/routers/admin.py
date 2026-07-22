@@ -182,8 +182,8 @@ async def update_document(doc_id: str, body: EditDocumentBody, request: Request,
                 f"{MAX_INGEST_CHUNKS}-chunk limit for in-request editing. At ~6 chunks/insert-batch "
                 f"and Railway's 300s hard request timeout, larger documents cannot complete this "
                 f"endpoint's embed+insert loop reliably. Re-ingest this document offline instead, "
-                f"following the batched psycopg2 pattern in scripts/ingest_lexicon.py or "
-                f"scripts/ingest_commentaries.py (direct DB connection, no request timeout)."
+                f"following the batched psycopg2 pattern in scripts/ingest_lexicon.py "
+                f"(direct DB connection, no request timeout)."
             ),
         )
 
