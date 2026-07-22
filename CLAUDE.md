@@ -70,10 +70,8 @@ quality.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- `ingest_commentaries.py` and `ingest_helloao.py` are not routed through
-  `shared_ingest`. Commentaries reads a hardcoded `/tmp` SQLite dump that no
-  longer exists — retire-or-rebuild decision, not a pending conversion. HelloAO
-  fetches a live API and is the real gap.
+- `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
+  API and is the real gap.
 - Some sources have no alias rows; re-ingesting their content sentinels
   silently. `ALIAS_MISS` is the grep-able breadcrumb.
 

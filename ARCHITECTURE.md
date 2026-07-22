@@ -106,7 +106,7 @@ all-or-nothing rewrite). Chunk inserts must NOT include `page_number` or
 
 Routed through `shared_ingest`: `ingest.py`, `ingest_magazine.py`,
 `ingest_preceptaustin.py`, `ingest_lexicon.py`. **Not routed:**
-`ingest_commentaries.py`, `ingest_helloao.py`.
+`ingest_helloao.py`.
 
 | Script | Purpose |
 |---|---|
@@ -117,7 +117,6 @@ Routed through `shared_ingest`: `ingest.py`, `ingest_magazine.py`,
 | `ingest_lexicon.py` | STEPBible TBESG/TBESH/TFLSJ; one-entry-one-chunk |
 | `ingest_lexicon_runner.py` | Batching/pacing driver over `ingest_lexicon`, checkpointed slices |
 | `ingest_preceptaustin.py` | Precept Austin word studies; cross-pipeline reuse-by-title |
-| `ingest_commentaries.py` | Reads `/tmp` SQLite dump (path dead); raw psycopg2 |
 | `ingest_helloao.py` | Live API fetch, resume-safe; own Supabase REST inserts |
 | `ingest_bible.py` / `ingest_interlinear.py` / `ingest_tahot.py` | verses table |
 | `extract_magazine.py` | 3-pass Gemini/Groq extraction |

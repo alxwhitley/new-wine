@@ -23,12 +23,11 @@ by guessing — you escalate it back in your report instead.
 - The same hook will deny `git commit`, `git push`, `git reset --hard`, and
   `git checkout --` regardless of context. You never commit. Report what you'd want
   committed and why; the orchestrator handles it after Alex says yes.
-- The same hook will deny running `ingest_magazine.py`, `ingest_preceptaustin.py`,
-  `ingest_lexicon.py`, `ingest_commentaries.py`, or `ingest_helloao.py` for anything
-  other than a `--dry-run`/`--test` invocation — these are frozen for new-source
-  ingests per PLAN.md Standing Rule 10 until the chokepoint conversion band (#6–13)
-  clears. If your task seems to require a real run through one of these, stop and
-  report that instead of finding a workaround.
+- The same hook will deny running `ingest_magazine.py`, `ingest_lexicon.py`, or
+  `ingest_helloao.py` for anything other than a `--dry-run`/`--test` invocation —
+  these are frozen for new-source ingests per PLAN.md Standing Rule 10 until the
+  chokepoint conversion band (#6–13) clears. If your task seems to require a real
+  run through one of these, stop and report that instead of finding a workaround.
 
 # Reporting rules — read before writing your final report
 

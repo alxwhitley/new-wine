@@ -60,12 +60,12 @@ Check the actual claim against the actual rule.
 
 - **Rule 10 (PLAN.md:34):** "Freeze new-source ingests through unconverted scripts
   during the chokepoint period (through #13) — each one widens the backfill." As of
-  this session, PLAN.md's roadmap (#8–13) is the authoritative list of unconverted
-  scripts — currently `ingest_magazine.py`, `ingest_preceptaustin.py`,
-  `ingest_lexicon.py`, `ingest_commentaries.py`, `ingest_helloao.py` (five scripts, not
-  the older four named in CLAUDE.md's propositions-per-script section — that section is
-  stale relative to the roadmap; treat PLAN.md as the current authority). A real
-  (non-dry-run, non-test) new-source ingest through any of these five is a rejection
+  this session, `guard_pretooluse.py`'s `UNCONVERTED_INGEST_SCRIPTS` regex is the
+  authoritative, mechanically-enforced list — currently `ingest_magazine.py`,
+  `ingest_lexicon.py`, `ingest_helloao.py` (three scripts; `ingest_preceptaustin.py`
+  was removed 2026-07-13 on its #9 conversion, `ingest_commentaries.py` was removed
+  2026-07-22 on its retirement — see rhemata-status.md Open blocker #5). A real
+  (non-dry-run, non-test) new-source ingest through any of these three is a rejection
   regardless of how it's justified.
 
 - **Migration 051 gotcha (CLAUDE.md:343):** "never put a semicolon inside a `--` SQL

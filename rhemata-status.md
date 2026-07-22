@@ -473,11 +473,18 @@ not the same thing.
 routed through `shared_ingest`. Live API, resume-safe, genuinely blocks the 8
 further HelloAO commentaries in PLAN.md #27. This is the real chokepoint gap.
 
-**5. `ingest_commentaries.py` — retire-or-rebuild decision, not a conversion.**
-Reads a hardcoded `/tmp` SQLite dump; path confirmed absent on this machine.
-Hard-shaped to one collection's schema, no scraping or generic-format
-capability. Converting it is likely busywork on a script that can no longer run.
-Needs a decision from Alex.
+**5. `ingest_commentaries.py` — RESOLVED 2026-07-22, retired.** Read a
+hardcoded `/tmp` SQLite dump that no longer exists; hard-shaped to one
+collection's schema, no scraping or generic-format capability. Script
+deleted, all dead references removed (commit `d4826dc`). **Framing:**
+HistoricalChristianFaith commentary GROWTH is DEFERRED, not cut — rebuildable
+from scratch later against a real source if Alex wants more from this
+collection. The 307 documents already ingested (Augustine, Chrysostom,
+Desert Fathers, Wesley, C.S. Lewis, etc. — under the `HistoricalChristianFaith
+Commentaries Database` source) are untouched, remain live in the corpus, and
+have no overlap with the HelloAO public-domain commentary set. See #15/#16
+below for two findings about those 307 documents that surfaced during the
+retirement audit and still need review.
 
 **6. Guest→account conversion unlinked.** Email-confirmation session handoff
 likely broken (cookie-vs-localStorage mismatch). Trace in `docs/audits/GUEST_AUTH_AUDIT.md`.
@@ -532,6 +539,26 @@ only ever render Greek, structurally (confirmed live, Phase 8). Full
 reasoning: PLAN.md Open Decisions #11. Gates any future Hebrew
 interlinear/word-study work specifically — do not build against TBESH
 until that permission is obtained.
+
+**15. Attribution-mode mismatch on the 307 HistoricalChristianFaith
+documents (found 2026-07-22, during `ingest_commentaries.py` retirement
+audit — not touched, logged for a future session).** The importer's insert
+set `citation_mode='citable'` on every row, but all 307 live rows are
+actually `silent_context` — named historical authors (Augustine, Chrysostom,
+Wesley, C.S. Lewis, etc.) currently serving as unattributed background
+rather than cited by name. Unclear whether this is intentional (same
+posture as other silent-context sources) or a bug that silently dropped
+attribution for named, identifiable authors — given attribution is core to
+Rhemata's positioning (CLAUDE.md invariant 7), this needs a real decision,
+not an assumption either way.
+
+**16. Possible copyright flag: C.S. Lewis document marked public_domain
+(found 2026-07-22, same audit as #15).** One of the 307 documents is
+attributed to C.S. Lewis (d. 1963), sitting under a source marked
+`license_status='public_domain'`, `visibility='shown'`. Lewis's death year
+makes public-domain status doubtful in most jurisdictions — this wants a
+fail-closed review (verify the actual copyright status of this specific
+text, or gate it) before treating it as safely servable at face value.
 
 ---
 
