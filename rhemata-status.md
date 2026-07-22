@@ -441,17 +441,27 @@ remaining hardcoded-bio teacher shares another entity's source_id.
 
 ## Open blockers
 
-**1. Dead `~/Desktop/rhemata` path — 8 scripts.** CONFIRMED live.
-`scrape_youtube.py` (4 lines), `clean_transcripts.py` (3 lines),
-`ingest_tahot.py:9`, `ingest.py:33` (`DOCS_FOLDER`), `generate_excerpts.py:5`,
-`extract_book_quotes.py:5`, `ingest_interlinear.py:6`,
-`test_excerpt_generation.py:6`. Repo moved to `/Users/alexwhitley/rhemata`
-2026-07-06.
+**1. Dead `~/Desktop/rhemata` path — 8 scripts — DONE 2026-07-22.**
+3 scripts (`scrape_youtube.py`, `clean_transcripts.py`, `ingest.py`'s
+`DOCS_FOLDER`) had it hardcoded as an actual runtime constant — now derived
+from the script's own file location at runtime (`Path(__file__).resolve()`
+or the equivalent `os.path` form), so a future repo move can't reintroduce
+this. The other 5 (`ingest_tahot.py`, `generate_excerpts.py`,
+`extract_book_quotes.py`, `ingest_interlinear.py`,
+`test_excerpt_generation.py`) already derived the real path correctly at
+runtime — the dead path only appeared in a docstring usage example, replaced
+with a relative "run from repo root" instruction. Verified live: each script
+runs clean (`--help` or module-level import) from repo root post-fix.
+Commit `5bdf720`.
 
-**2. `CommandBlock.tsx` hardcodes `/Users/alexwhitley`.** Every pipeline's
-command reference in Admin → Corpus → Pipelines — the surface commands actually
-get copied from. Separate from #1 and arguably higher-impact. Not previously
-documented anywhere.
+**2. `CommandBlock.tsx` hardcodes `/Users/alexwhitley` — DONE 2026-07-22.**
+The file itself no longer exists — it was refactored at some point into
+`frontend/components/admin/corpus-data.ts` (data) + `card-modal.tsx`
+(rendering), and this blocker's filename had gone stale along with the path
+it named. Fixed at the actual current location: 75 command strings in
+`corpus-data.ts` had the dead path baked in; centralized into one exported
+`REPO_ROOT` constant so a future move is a one-line change instead of a
+75-line find/replace. Commit `5bdf720`.
 
 **3. `sources/` backup — DONE 2026-07-19.** Corpus + `ingest_queue.xlsx`
 backed up to Google Drive (PLAN.md #1). Restore not yet verified — do not

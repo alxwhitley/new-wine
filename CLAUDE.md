@@ -70,11 +70,6 @@ quality.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- 8 scripts hardcode the dead `~/Desktop/rhemata` path. Repo lives at
-  `/Users/alexwhitley/rhemata`.
-- `frontend/components/admin/CommandBlock.tsx` hardcodes `/Users/alexwhitley`
-  paths across every pipeline's command reference — the Admin → Corpus →
-  Pipelines tab is the surface commands actually get copied from.
 - `ingest_commentaries.py` and `ingest_helloao.py` are not routed through
   `shared_ingest`. Commentaries reads a hardcoded `/tmp` SQLite dump that no
   longer exists — retire-or-rebuild decision, not a pending conversion. HelloAO
