@@ -227,6 +227,7 @@ SP2 Phases 1–9 are now all DONE. Phase 10 (records correction) is this update 
 
 **Deferred (not cut — revisit post-launch):**
 - **Discover surface** — parked this cycle. Routes/code dormant, don't rip out.
+- **Phone-triggered ingestion** — trigger pre-approved ingest scripts from phone via a job-queue + admin page; awake-Mac poller first, cloud runner later. Design-approved in concept, not scheduled. Full design: `docs/phone-triggered-ingestion.md`.
 
 **Killed:**
 - **Stream-side quote verification** — never to be built. Rule 11 makes it structurally unnecessary.
