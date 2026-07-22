@@ -13,9 +13,10 @@ import shutil
 from groq import Groq
 
 # ── Config ────────────────────────────────────────────────────────────────────
-ENV_PATH    = "/Users/alexwhitley/Desktop/rhemata/backend/app/.env"
-INPUT_DIR   = "/Users/alexwhitley/Desktop/rhemata/sources/youtube/raw"
-OUTPUT_DIR  = "/Users/alexwhitley/Desktop/rhemata/sources/youtube/cleaned"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH    = os.path.join(PROJECT_ROOT, "backend", "app", ".env")
+INPUT_DIR   = os.path.join(PROJECT_ROOT, "sources", "youtube", "raw")
+OUTPUT_DIR  = os.path.join(PROJECT_ROOT, "sources", "youtube", "cleaned")
 MODEL       = "llama-3.3-70b-versatile"
 SEPARATOR   = "---"
 

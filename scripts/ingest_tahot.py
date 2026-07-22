@@ -5,11 +5,10 @@ Ingest TAHOT (Hebrew OT) interlinear data into Supabase interlinear_words table.
 Downloads TAHOT files from STEPBible-Data GitHub if not cached, parses them,
 and inserts into the interlinear_words table with language='hebrew'.
 
-Usage:
-    cd /Users/alexwhitley/Desktop/rhemata
-    python3 ingest_tahot.py              # full ingestion (all OT books)
-    python3 ingest_tahot.py --test       # first 100 rows only
-    python3 ingest_tahot.py --book GEN   # single book
+Usage (run from repo root):
+    python3 scripts/ingest_tahot.py              # full ingestion (all OT books)
+    python3 scripts/ingest_tahot.py --test       # first 100 rows only
+    python3 scripts/ingest_tahot.py --book GEN   # single book
 """
 
 import argparse

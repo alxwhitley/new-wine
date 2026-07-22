@@ -2,11 +2,10 @@
 """
 Ingest TAGNT interlinear data into Supabase interlinear_words table.
 
-Usage:
-    cd /Users/alexwhitley/Desktop/rhemata
-    python3 ingest_interlinear.py              # full ingestion (all NT books)
-    python3 ingest_interlinear.py --test       # Matthew 1 only
-    python3 ingest_interlinear.py --book JHN   # single book
+Usage (run from repo root):
+    python3 scripts/ingest_interlinear.py              # full ingestion (all NT books)
+    python3 scripts/ingest_interlinear.py --test       # Matthew 1 only
+    python3 scripts/ingest_interlinear.py --book JHN   # single book
 """
 
 import argparse

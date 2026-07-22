@@ -2,8 +2,8 @@
 Test script: fetch Precept Austin logos/G3056 word study from Supabase,
 send to Claude Sonnet 4.5 for editing, print and save the result.
 
-Usage:
-    cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/test_excerpt_generation.py
+Usage (run from repo root):
+    python3 scripts/test_excerpt_generation.py
 """
 
 import sys

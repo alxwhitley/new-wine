@@ -1,5 +1,9 @@
 import type { CorpusCard, FutureTarget } from "./corpus-types";
 
+// Single source of truth for the repo path these commands assume when pasted
+// into a terminal. Update this one line if the repo ever moves.
+const REPO_ROOT = "/Users/alexwhitley/rhemata";
+
 export const GROUPS = [
   "Pipelines",
   "Sermons & Transcripts",
@@ -28,32 +32,32 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Extract All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/extract_magazine.py --time-limit 480 > logs/magazine_overnight.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/extract_magazine.py --time-limit 480 > logs/magazine_overnight.log 2>&1 &`,
       },
       {
         label: "Extract 2 Hour",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/extract_magazine.py --time-limit 120 > logs/magazine_2hr.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/extract_magazine.py --time-limit 120 > logs/magazine_2hr.log 2>&1 &`,
       },
       {
         label: "Extract Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/extract_magazine.py --max-issues 1",
+          `cd ${REPO_ROOT} && python3 scripts/extract_magazine.py --max-issues 1`,
       },
       {
         label: "Ingest All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/ingest_magazine.py > logs/ingest_magazine_overnight.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_magazine.py > logs/ingest_magazine_overnight.log 2>&1 &`,
       },
       {
         label: "Ingest Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_magazine.py",
+          `cd ${REPO_ROOT} && python3 scripts/ingest_magazine.py`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/magazine_overnight.log",
+          `tail -f ${REPO_ROOT}/logs/magazine_overnight.log`,
       },
     ],
   },
@@ -77,32 +81,32 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Full Pipeline All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup ./scripts/youtube_pipeline.sh > logs/youtube_overnight.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup ./scripts/youtube_pipeline.sh > logs/youtube_overnight.log 2>&1 &`,
       },
       {
         label: "Scrape Only",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/scrape_youtube.py",
+          `cd ${REPO_ROOT} && python3 scripts/scrape_youtube.py`,
       },
       {
         label: "Clean Only",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/clean_transcripts.py",
+          `cd ${REPO_ROOT} && python3 scripts/clean_transcripts.py`,
       },
       {
         label: "Whisper Only",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/whisper_transcribe.py",
+          `cd ${REPO_ROOT} && python3 scripts/whisper_transcribe.py`,
       },
       {
         label: "Ingest Only",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest.py",
+          `cd ${REPO_ROOT} && python3 scripts/ingest.py`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/youtube_overnight.log",
+          `tail -f ${REPO_ROOT}/logs/youtube_overnight.log`,
       },
     ],
   },
@@ -127,37 +131,37 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Scrape",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scrape_preceptaustin.py --language greek --fetch",
+          `cd ${REPO_ROOT} && python3 scrape_preceptaustin.py --language greek --fetch`,
       },
       {
         label: "Scrape Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scrape_preceptaustin.py --language greek --test",
+          `cd ${REPO_ROOT} && python3 scrape_preceptaustin.py --language greek --test`,
       },
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 ingest_preceptaustin.py --language greek > logs/precept_greek.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 ingest_preceptaustin.py --language greek > logs/precept_greek.log 2>&1 &`,
       },
       {
         label: "Generate Excerpts All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/generate_excerpts.py --time-limit 480 > logs/excerpts_overnight.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/generate_excerpts.py --time-limit 480 > logs/excerpts_overnight.log 2>&1 &`,
       },
       {
         label: "Generate Excerpts 2 Hour",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/generate_excerpts.py --time-limit 120 > logs/excerpts_2hr.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/generate_excerpts.py --time-limit 120 > logs/excerpts_2hr.log 2>&1 &`,
       },
       {
         label: "Generate Excerpts Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/generate_excerpts.py --test",
+          `cd ${REPO_ROOT} && python3 scripts/generate_excerpts.py --test`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/excerpts_overnight.log",
+          `tail -f ${REPO_ROOT}/logs/excerpts_overnight.log`,
       },
     ],
   },
@@ -180,27 +184,27 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Scrape All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scrape_preceptaustin.py --language hebrew --fetch > logs/hebrew_scrape.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scrape_preceptaustin.py --language hebrew --fetch > logs/hebrew_scrape.log 2>&1 &`,
       },
       {
         label: "Scrape Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scrape_preceptaustin.py --language hebrew --test",
+          `cd ${REPO_ROOT} && python3 scrape_preceptaustin.py --language hebrew --test`,
       },
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 ingest_preceptaustin.py --language hebrew > logs/hebrew_ingest.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 ingest_preceptaustin.py --language hebrew > logs/hebrew_ingest.log 2>&1 &`,
       },
       {
         label: "Generate Excerpts All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/generate_excerpts.py --time-limit 480 > logs/excerpts_overnight.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/generate_excerpts.py --time-limit 480 > logs/excerpts_overnight.log 2>&1 &`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/hebrew_scrape.log",
+          `tail -f ${REPO_ROOT}/logs/hebrew_scrape.log`,
       },
     ],
   },
@@ -222,17 +226,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Run Pipeline",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/scrape_individual_videos.py",
+          `cd ${REPO_ROOT} && python3 scripts/scrape_individual_videos.py`,
       },
       {
         label: "Run All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/scrape_individual_videos.py > logs/individual_videos.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/scrape_individual_videos.py > logs/individual_videos.log 2>&1 &`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/individual_videos.log",
+          `tail -f ${REPO_ROOT}/logs/individual_videos.log`,
       },
     ],
   },
@@ -251,17 +255,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Scrape",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/scrape_derek_prince.py",
+          `cd ${REPO_ROOT} && python3 scripts/scrape_derek_prince.py`,
       },
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest.py",
+          `cd ${REPO_ROOT} && python3 scripts/ingest.py`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/derek_prince_scrape.log",
+          `tail -f ${REPO_ROOT}/logs/derek_prince_scrape.log`,
       },
     ],
   },
@@ -279,17 +283,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/ingest_helloao.py --commentary matthew-henry > logs/helloao_henry.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_helloao.py --commentary matthew-henry > logs/helloao_henry.log 2>&1 &`,
       },
       {
         label: "Ingest Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_helloao.py --commentary matthew-henry --test",
+          `cd ${REPO_ROOT} && python3 scripts/ingest_helloao.py --commentary matthew-henry --test`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/helloao_henry.log",
+          `tail -f ${REPO_ROOT}/logs/helloao_henry.log`,
       },
     ],
   },
@@ -305,17 +309,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/ingest_helloao.py --commentary adam-clarke > logs/helloao_clarke.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_helloao.py --commentary adam-clarke > logs/helloao_clarke.log 2>&1 &`,
       },
       {
         label: "Ingest Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_helloao.py --commentary adam-clarke --test",
+          `cd ${REPO_ROOT} && python3 scripts/ingest_helloao.py --commentary adam-clarke --test`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/helloao_clarke.log",
+          `tail -f ${REPO_ROOT}/logs/helloao_clarke.log`,
       },
     ],
   },
@@ -332,17 +336,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/ingest_helloao.py --commentary jamieson > logs/helloao_jfb.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_helloao.py --commentary jamieson > logs/helloao_jfb.log 2>&1 &`,
       },
       {
         label: "Ingest Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_helloao.py --commentary jamieson --test",
+          `cd ${REPO_ROOT} && python3 scripts/ingest_helloao.py --commentary jamieson --test`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/helloao_jfb.log",
+          `tail -f ${REPO_ROOT}/logs/helloao_jfb.log`,
       },
     ],
   },
@@ -360,27 +364,27 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/ingest_commentaries.py > logs/commentaries_overnight.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_commentaries.py > logs/commentaries_overnight.log 2>&1 &`,
       },
       {
         label: "Ingest 2 Hour",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/ingest_commentaries.py > logs/commentaries_2hr.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/ingest_commentaries.py > logs/commentaries_2hr.log 2>&1 &`,
       },
       {
         label: "Dry Run",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_commentaries.py --dry-run",
+          `cd ${REPO_ROOT} && python3 scripts/ingest_commentaries.py --dry-run`,
       },
       {
         label: "Single Father Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest_commentaries.py --father \"Augustine\"",
+          `cd ${REPO_ROOT} && python3 scripts/ingest_commentaries.py --father "Augustine"`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/commentaries_overnight.log",
+          `tail -f ${REPO_ROOT}/logs/commentaries_overnight.log`,
       },
     ],
   },
@@ -503,17 +507,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Download",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/download_corpus_batch3.py",
+          `cd ${REPO_ROOT} && python3 scripts/download_corpus_batch3.py`,
       },
       {
         label: "Download Fixes Only",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/download_corpus_batch3.py --fixes",
+          `cd ${REPO_ROOT} && python3 scripts/download_corpus_batch3.py --fixes`,
       },
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/ingest.py",
+          `cd ${REPO_ROOT} && python3 scripts/ingest.py`,
       },
     ],
   },
@@ -533,17 +537,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TBESG",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TBESG`,
       },
       {
         label: "Delete + Re-ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TBESG --delete",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TBESG --delete`,
       },
       {
         label: "Sample Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TBESG --sample 10",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TBESG --sample 10`,
       },
     ],
   },
@@ -561,17 +565,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TBESH",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TBESH`,
       },
       {
         label: "Delete + Re-ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TBESH --delete",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TBESH --delete`,
       },
       {
         label: "Sample Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TBESH --sample 10",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TBESH --sample 10`,
       },
     ],
   },
@@ -589,17 +593,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TFLSJ",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TFLSJ`,
       },
       {
         label: "Delete + Re-ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TFLSJ --delete",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TFLSJ --delete`,
       },
       {
         label: "Sample Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_lexicon.py --lexicon TFLSJ --sample 10",
+          `cd ${REPO_ROOT} && python3 ingest_lexicon.py --lexicon TFLSJ --sample 10`,
       },
     ],
   },
@@ -614,12 +618,12 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_bible.py",
+          `cd ${REPO_ROOT} && python3 ingest_bible.py`,
       },
       {
         label: "Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_bible.py --test",
+          `cd ${REPO_ROOT} && python3 ingest_bible.py --test`,
       },
     ],
   },
@@ -636,17 +640,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_interlinear.py",
+          `cd ${REPO_ROOT} && python3 ingest_interlinear.py`,
       },
       {
         label: "Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_interlinear.py --test",
+          `cd ${REPO_ROOT} && python3 ingest_interlinear.py --test`,
       },
       {
         label: "Single Book",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_interlinear.py --book JHN",
+          `cd ${REPO_ROOT} && python3 ingest_interlinear.py --book JHN`,
       },
     ],
   },
@@ -663,22 +667,22 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Ingest",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_tahot.py",
+          `cd ${REPO_ROOT} && python3 ingest_tahot.py`,
       },
       {
         label: "Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_tahot.py --test",
+          `cd ${REPO_ROOT} && python3 ingest_tahot.py --test`,
       },
       {
         label: "Single Book",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 ingest_tahot.py --book GEN",
+          `cd ${REPO_ROOT} && python3 ingest_tahot.py --book GEN`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/tahot_ingest.log",
+          `tail -f ${REPO_ROOT}/logs/tahot_ingest.log`,
       },
     ],
   },
@@ -696,27 +700,27 @@ export const CARDS: CorpusCard[] = [
       {
         label: "All Night",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/generate_excerpts.py --time-limit 480 > logs/excerpts_overnight.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/generate_excerpts.py --time-limit 480 > logs/excerpts_overnight.log 2>&1 &`,
       },
       {
         label: "2 Hour",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && nohup python3 scripts/generate_excerpts.py --time-limit 120 > logs/excerpts_2hr.log 2>&1 &",
+          `cd ${REPO_ROOT} && nohup python3 scripts/generate_excerpts.py --time-limit 120 > logs/excerpts_2hr.log 2>&1 &`,
       },
       {
         label: "Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/generate_excerpts.py --test",
+          `cd ${REPO_ROOT} && python3 scripts/generate_excerpts.py --test`,
       },
       {
         label: "Quality Test",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/generate_excerpts.py --test-quality",
+          `cd ${REPO_ROOT} && python3 scripts/generate_excerpts.py --test-quality`,
       },
       {
         label: "Monitor",
         command:
-          "tail -f /Users/alexwhitley/Desktop/rhemata/logs/excerpts_overnight.log",
+          `tail -f ${REPO_ROOT}/logs/excerpts_overnight.log`,
       },
     ],
   },
@@ -734,17 +738,17 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Run",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 extract_bible_refs.py",
+          `cd ${REPO_ROOT} && python3 extract_bible_refs.py`,
       },
       {
         label: "Dry Run",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 extract_bible_refs.py --dry-run",
+          `cd ${REPO_ROOT} && python3 extract_bible_refs.py --dry-run`,
       },
       {
         label: "Force Re-process All",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 extract_bible_refs.py --force",
+          `cd ${REPO_ROOT} && python3 extract_bible_refs.py --force`,
       },
     ],
   },
@@ -760,7 +764,7 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Run",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_existing_articles.py",
+          `cd ${REPO_ROOT} && python3 scripts/tag_existing_articles.py`,
       },
     ],
   },
@@ -776,7 +780,7 @@ export const CARDS: CorpusCard[] = [
       {
         label: "Run",
         command:
-          "cd /Users/alexwhitley/Desktop/rhemata && python3 scripts/tag_sermons_transcripts.py",
+          `cd ${REPO_ROOT} && python3 scripts/tag_sermons_transcripts.py`,
       },
     ],
   },

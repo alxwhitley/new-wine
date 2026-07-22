@@ -20,9 +20,11 @@ import pdfplumber
 import docx
 
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / "backend" / "app" / ".env")
+
+sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 from app.services.chunker import chunk_text, token_len
 from bible_refs import extract_bible_references
 from source_resolver import resolve_source_id, print_resolution_table
@@ -30,7 +32,7 @@ import shared_ingest
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-DOCS_FOLDER = Path("/Users/alexwhitley/Desktop/rhemata/sources")
+DOCS_FOLDER = PROJECT_ROOT / "sources"
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md"}
 MAX_TAG_CHARS = 4000
 

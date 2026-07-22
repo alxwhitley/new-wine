@@ -26,10 +26,11 @@ import whisper
 from supabase import create_client
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-ENV_PATH         = Path("/Users/alexwhitley/Desktop/rhemata/backend/app/.env")
-TRACKER_PATH     = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/youtube_tracker.xlsx")
-OUTPUT_DIR       = Path("/Users/alexwhitley/Desktop/rhemata/sources/youtube/raw")
-COOKIES_PATH     = Path("/Users/alexwhitley/Desktop/rhemata/scripts/youtube_cookies.txt")
+PROJECT_ROOT     = Path(__file__).resolve().parent.parent
+ENV_PATH         = PROJECT_ROOT / "backend" / "app" / ".env"
+TRACKER_PATH     = PROJECT_ROOT / "sources" / "youtube" / "youtube_tracker.xlsx"
+OUTPUT_DIR       = PROJECT_ROOT / "sources" / "youtube" / "raw"
+COOKIES_PATH     = PROJECT_ROOT / "scripts" / "youtube_cookies.txt"
 WHISPER_MODEL    = "base"
 
 SKIP_TITLE_KEYWORDS = ["#shorts", "trailer", "promo", "highlights"]

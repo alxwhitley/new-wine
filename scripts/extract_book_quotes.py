@@ -1,8 +1,7 @@
 """
 Extract quotable passages from Andrew Murray books using Claude Haiku.
 
-Usage:
-    cd /Users/alexwhitley/Desktop/rhemata
+Usage (run from repo root):
     python3 scripts/extract_book_quotes.py
     python3 scripts/extract_book_quotes.py --dry-run
     python3 scripts/extract_book_quotes.py --limit 2

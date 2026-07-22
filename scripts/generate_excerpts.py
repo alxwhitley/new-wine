@@ -1,8 +1,7 @@
 """
 Batch generate edited word study articles from Precept Austin raw chunks.
 
-Usage:
-    cd /Users/alexwhitley/Desktop/rhemata
+Usage (run from repo root):
     python3 scripts/generate_excerpts.py                        # full batch (sonnet)
     python3 scripts/generate_excerpts.py --test                 # 5 docs, print only, no DB writes
     python3 scripts/generate_excerpts.py --test-quality --model haiku  # 3 docs with haiku for quality review
