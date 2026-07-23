@@ -29,6 +29,16 @@ interface PinDropdownProps {
 // pending-count convention in AdminModal.tsx (bg-primary pill, hidden at
 // zero) rather than inventing a new one. Icon, badge, and tooltip only —
 // zero change to pin behavior/storage/caps below.
+//
+// Bug fix, round 2 (found live via real DOM trace, 2026-07-22): marking
+// only the trigger button wasn't enough. When this dropdown closes after
+// a selection, focus doesn't jump straight from the selected item to the
+// trigger — it bounces through this DropdownMenuContent's own portal
+// container first (confirmed by tracing every focusin/focusout event live
+// against production: item -> DropdownMenuContent -> trigger). That
+// intermediate stop is outside the Study Panel's Content and wasn't
+// marked, so it dismissed the panel before focus ever reached the
+// trigger. DropdownMenuContent now carries the same marker.
 export function PinDropdown({ pins, isSignedIn, onSelectPin }: PinDropdownProps) {
   return (
     <DropdownMenu>
@@ -46,7 +56,7 @@ export function PinDropdown({ pins, isSignedIn, onSelectPin }: PinDropdownProps)
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" data-study-trigger className="w-64">
         {pins.length === 0 ? (
           <p className="px-2 py-1.5 text-sm text-muted-foreground">
             {isSignedIn ? "No pinned verses yet." : "Sign in to save verses."}
