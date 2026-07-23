@@ -20,6 +20,7 @@ export function MobileTabBar() {
   const { inputFocused } = useChatFocus();
 
   if (!isMobile) return null;
+  if (!isFullNavEnabled()) return null;
 
   const visibleTabs = TABS.filter((tab) => !tab.requiresFullNav || isFullNavEnabled());
 

@@ -23,6 +23,7 @@ import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
 import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference, type CuratedTeacher } from "@/lib/study-reference";
 import { isStudyPanelEnabled } from "@/lib/study-panel-flag";
+import { isFullNavEnabled } from "@/lib/chat-only-beta-flag";
 import { useUserRole } from "@/hooks/useUserRole";
 
 // SP2 Phase 5: a guest's pin attempt is stored here (verse identity only,
@@ -380,7 +381,10 @@ export default function Home() {
         className={cn(
           "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 md:ml-64 transition-[padding-right] duration-300 ease-in-out motion-reduce:transition-none",
           studyPanelOpen && "md:pr-[clamp(396px,calc(33vw+1rem),496px)]",
-          inputFocused ? "pb-0" : "pb-14"
+          // Chat-only beta: no tab bar to clear, so no keyboard-focus
+          // toggle needed — just the real bottom safe-area (Phase 4 makes
+          // env() non-zero). Flag on: unchanged, 56px reserved for the bar.
+          isFullNavEnabled() ? (inputFocused ? "pb-0" : "pb-14") : "pb-safe"
         )}
       >
         {/* The floating panel — bordered card on desktop, full-bleed on mobile */}
