@@ -416,6 +416,14 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
     document.querySelector<HTMLTextAreaElement>("textarea")?.focus();
   }
 
+  // Elements that open/manipulate the panel from outside its own Content
+  // (verse/teacher underlines, the pin-dropdown trigger) are marked
+  // data-study-trigger — interacting with them must never register as an
+  // "outside" dismiss, even though DOM-wise they live outside Content.
+  function isStudyTrigger(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement && !!target.closest("[data-study-trigger]");
+  }
+
   // Phase 2 (floating overlay): a click on a DIFFERENT verse/teacher
   // underline while the panel is already open must swap content in place,
   // not close-then-reopen — the underline lives outside Content, so Radix's
@@ -426,8 +434,25 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
   // mobile: the modal sheet covers the chat area, so no underline is
   // reachable while it's open.
   function handlePointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }>) {
-    const target = event.detail.originalEvent.target as HTMLElement | null;
-    if (target?.closest("[data-study-trigger]")) {
+    if (isStudyTrigger(event.detail.originalEvent.target)) {
+      event.preventDefault();
+    }
+  }
+
+  // Bug fix (found live, 2026-07-22): opening the panel from the pin
+  // dropdown (PinDropdown -> onSelectPin -> handleVerseClick) opened the
+  // panel and then immediately closed it again. Root cause: selecting a
+  // DropdownMenuItem closes that Radix DropdownMenu, which by default
+  // restores focus to ITS trigger (the pin button in the top bar) — an
+  // element outside this Content. Radix Dialog's default onFocusOutside
+  // treats focus landing outside Content as a dismiss signal, same as
+  // onPointerDownOutside above, and nothing here overrode it. Same fix,
+  // same marker: suppress it for data-study-trigger elements. The pin
+  // button itself carries the marker (pin-dropdown.tsx), not the dropdown
+  // items — the item that was clicked is already gone from the DOM by the
+  // time focus moves; it's the trigger regaining focus that matters here.
+  function handleFocusOutside(event: CustomEvent<{ originalEvent: FocusEvent }>) {
+    if (isStudyTrigger(event.detail.originalEvent.target)) {
       event.preventDefault();
     }
   }
@@ -460,6 +485,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
         <PanelPrimitive.Content
           onCloseAutoFocus={handleCloseAutoFocus}
           onPointerDownOutside={handlePointerDownOutside}
+          onFocusOutside={handleFocusOutside}
           className={cn(
             "fixed z-50 flex flex-col bg-background shadow-lg outline-none",
             "transition ease-in-out motion-reduce:transition-none motion-reduce:animate-none",

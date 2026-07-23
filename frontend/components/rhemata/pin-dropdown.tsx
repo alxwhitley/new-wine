@@ -35,6 +35,7 @@ export function PinDropdown({ pins, isSignedIn, onSelectPin }: PinDropdownProps)
       <DropdownMenuTrigger asChild>
         <button
           title={pins.length > 0 ? `${pins.length} pinned verse${pins.length === 1 ? "" : "s"}` : "Pinned verses"}
+          data-study-trigger
           className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Pin className="h-4 w-4" />
