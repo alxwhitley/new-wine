@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, memo } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
@@ -347,7 +347,27 @@ function FeedbackButtons({
   );
 }
 
-export function ChatMessage({
+// Memoized: react-markdown's own <Markdown> component re-creates its whole
+// processor and output from scratch on every render, unconditionally — it
+// does not check whether `children`/`components` changed (confirmed via
+// its source: createProcessor() runs fresh every call, no internal
+// memoization for the sync export). That means it remounts the DOM subtree
+// it renders, including any verse/teacher reference <button> nested in a
+// paragraph, every single time this component re-renders for ANY reason —
+// including an unrelated ancestor re-render (ChatFocusContext's
+// inputFocused toggling on the chat textarea's blur). If a click is
+// mid-flight on a reference button when that remount lands, the browser's
+// click gesture is tied to the now-destroyed node and never fires — the
+// Study Panel silently fails to open. Root-caused 2026-07-23. `memo` stops
+// this component from re-rendering at all when its own props haven't
+// changed, which is the only place this can actually be fixed — react-
+// markdown itself doesn't offer a memoized synchronous variant. Requires
+// every prop here to stay reference-stable across an unrelated parent
+// re-render for the shallow-compare to hold: onVerseClick and
+// onCitationClick must be useCallback in page.tsx (onCitationClick fixed
+// alongside this), citations/verifiedReferences/curatedTeachers must stay
+// the same array reference from message/state data, which they already do.
+export const ChatMessage = memo(function ChatMessage({
   role,
   content,
   citations = [],
@@ -431,7 +451,7 @@ export function ChatMessage({
       />
     </div>
   );
-}
+});
 
 /**
  * Walk through React children and replace [N] citation markers and detected

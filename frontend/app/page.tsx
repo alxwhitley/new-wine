@@ -330,11 +330,16 @@ export default function Home() {
     }
   }
 
-  function handleCitationClick(citation: Citation, index: number) {
+  // useCallback (not a plain function): ChatMessage's ReactMarkdown
+  // `components` map depends on this reference staying stable across
+  // unrelated re-renders — see chat-message.tsx's own comment on why an
+  // unstable dependency there causes react-markdown to remount message
+  // content, including mid-click on a verse/teacher reference button.
+  const handleCitationClick = useCallback((citation: Citation, index: number) => {
     setSelectedCitation(citation);
     setSelectedCitationIndex(index);
     setIsSourcePanelOpen(true);
-  }
+  }, []);
 
   function handleCloseSourcePanel() {
     setIsSourcePanelOpen(false);
