@@ -3,12 +3,32 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-23 (v4 propositions prompt sample checkpoint — see directly below).
-Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section two below the new one).
+Last verified: 2026-07-23 (v4 propositions prompt — three tuning passes, sample checkpoint only — see directly below).
+Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section three below the new one).
 
 ---
 
-## v4 propositions prompt — 5-teacher sample checkpoint, NOT a backfill decision (session state, 2026-07-23)
+## v4 propositions prompt — passes 2 & 3 (sentence structure, terminology rename), still NOT a backfill decision (session state, 2026-07-23)
+
+Two more tuning passes on top of the pass-1 checkpoint recorded below, run against the identical 15-document/5-teacher sample (clear-then-write per document each time, so each pass's numbers are a clean apples-to-apples overwrite of the same set — nothing outside it touched, Ravenhill untouched).
+
+**Pass 2 (commit `8f65f1c`) — sentence structure.** Manual review of pass 1's raw output found the likely cause of the short/inconsistent length: propositions were written as one run-on sentence chaining claims with repeated "and that... and that...". Added an explicit 2-4-sentence requirement plus a thin/run-on/well-formed contrast example. Result: grand mean word count barely moved (65.1 words vs pass 1's 62.2), but sentence structure genuinely improved for most documents (avg 2-3 sentences, matching the target). **Found a serious unplanned bug while reviewing pass 2's output: in 4 of the 15 documents (Prince, Deere ×2, Kreighbaum), the model's first proposition was a near-verbatim copy of the prompt's own concrete worked example** ("{Teacher} teaches that prayer matters more than preaching...") with only the speaker's name swapped in — fabricated content wrongly attributed to a real teacher, a direct four-corners violation.
+
+**Pass 3 (commit `5bc4916`) — terminology rename + leakage fix.** Alex's hypothesis: the word "proposition" carries a strong competing RAG-literature meaning (atomic/minimal/indivisible single-fact statement — Chen et al. 2023) that fights the 80-150-word, multi-sentence, voiced target. Renamed all model-facing prose to "teaching passage"/"passage" (the JSON output key `proposition_index` deliberately left untouched — structural, not prose, per instruction). Also fixed pass 2's leakage bug by replacing the concrete worked example with a bracketed structural template that has no real sentence left to copy.
+
+Result, reconciled directly against the DB (one document needed a manual retry — see below): **15 documents, 107 propositions, grand mean 70.7 words** — the best of the three passes, though still under the 80-150 floor. Per-teacher averages: Jack Deere 83.4 (now the strongest teacher, was weakest in pass 1), Doug Kreighbaum 75.9, Charles Simpson 66.9, Derek Prince 66.4, Daniel Kolenda 61.7. **Leakage bug: zero instances across all 15 documents** — confirmed fixed.
+
+**Operational finding, not prompt-quality: one genuine transient failure.** Derek Prince's "Deliverance And Demonology" hit a JSON parse error on the first pass-3 attempt (`Expecting ',' delimiter`) — a Groq generation glitch, not a systematic issue. Because `store_propositions()` only runs on a successful extraction, the failure silently left pass 2's *stale, leak-contaminated* propositions live in the table for that one document, masquerading as current data until caught by re-querying and cross-checking timestamps. A manual retry (same script, same doc) succeeded on the first attempt and produced clean pass-3 output. **This is worth carrying into the eventual full backfill (#17): a failed extraction currently leaves old data in place rather than either blocking or clearing it — fine for a hand-verified sample where the discrepancy gets caught, but worth deciding on purpose for an unattended batch run.**
+
+**New finding pass 3 surfaced: the run-on ban is not universally obeyed.** Two of the 15 documents reverted to full run-on structure despite the explicit ban — Daniel Kolenda's "Cessationism 5" is still built from literal "and that... and that..." chains (the exact banned pattern), and Doug Kreighbaum's "Leadership in the House of God" produces one 100-120-word sentence per passage using different connective tissue ("as seen in... where... and as described in...") to route around the letter of the rule while keeping its run-on spirit. The other 13 of 15 documents show genuine 2-4-sentence structure. **Net read: real improvement, not a full fix — the underlying tendency to chain rather than segment is suppressed most of the time, not eliminated.**
+
+**Voice and specifics — held up across all three passes, no regression from the rename.** Named-speaker attribution stays 100% (zero "the author" across all runs). Concrete names/numbers/citations (David Hume, Benjamin Warfield, Jack Deere's son, Charles Simpson's "seven practical steps") continue to survive paraphrase. Per-teacher voice stays distinct.
+
+**Not decided by this session:** whether v4 proceeds to full backfill (#17), gets a fourth tuning pass, or is discarded. Alex has not yet reviewed raw sample output himself.
+
+---
+
+## v4 propositions prompt — pass 1, 5-teacher sample checkpoint (session state, 2026-07-23)
 
 Ran `scripts/sample_v4_propositions_2026-07-23.py` (commit `07d53ee`) — a throwaway, standalone script, not a change to `propositions.py`/`shared_ingest.py`/`ingest.py` — against 15 documents across 5 teachers currently at zero propositions: **Derek Prince** (3 docs), **Daniel Kolenda** (3), **Jack Deere** (3), **Doug Kreighbaum** (3), **Charles Simpson** (3). Selected specifically for stylistic contrast from each other and from Ravenhill (already validated separately, 766 propositions live). Wrote real rows through the same `extract_propositions()`/`store_propositions()` every ingest script uses — reconciled directly against the DB post-run: 15/15 documents stored, 0 errors, 114 propositions, all 5 sources confirmed to have had zero propositions before this run.
 
