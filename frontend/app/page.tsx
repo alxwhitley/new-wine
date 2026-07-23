@@ -89,8 +89,12 @@ export default function Home() {
   const [studyPanelOpen, setStudyPanelOpen] = useState(false);
   // Mirrors StudyPanel's own interlinearOpen state so this page's width
   // reservation can widen in step — must stay in sync with the panel's own
-  // width class (components/rhemata/study-panel.tsx).
-  const [interlinearWide, setInterlinearWide] = useState(false);
+  // width class (components/rhemata/study-panel.tsx). Defaults true to match
+  // study-panel.tsx's own interlinearOpen default (Phase 2: Interlinear
+  // starts open) — otherwise the chat's reserved padding would briefly be
+  // sized for the narrow (33vw) panel while the panel itself renders wide
+  // (50vw) on the very first open of a session.
+  const [interlinearWide, setInterlinearWide] = useState(true);
   const [studyReference, setStudyReference] = useState<StudyReference | null>(null);
   // SP2 Phase 5: global, account-level pins — fetched from and persisted to
   // /study/pins, not in-memory. `id` is the server row id (needed for

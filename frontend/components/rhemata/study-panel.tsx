@@ -179,17 +179,28 @@ function PanelBody({
     setSelectedStrongs(null);
   }, [verseIdStr]);
 
-  // Floating-overlay swap (Phase 2): a second underline click while the
-  // panel is already open updates `reference` in place — this component
-  // re-renders, it never unmounts. Reset to the default verse view on every
-  // genuine target change (Interlinear collapses, scroll returns to top) so
-  // a swap always lands where a fresh open would, per spec — this
-  // supersedes the old "leave Interlinear open across a verse switch"
-  // decision. targetKey is a content-identity string, not object identity:
-  // re-clicking the exact same target is correctly a no-op, not a reset.
+  // Swap-in-place (Phase 2): a second underline click while the panel is
+  // already open updates `reference` in place — this component re-renders,
+  // it never unmounts (see handlePointerDownOutside below, which suppresses
+  // Radix's dismiss for exactly this case). Reset to the default verse view
+  // on every genuine target change (scroll returns to top) so a swap always
+  // lands where a fresh open would. targetKey is a content-identity string,
+  // not object identity: re-clicking the exact same target is correctly a
+  // no-op, not a reset. Commentaries/Pastors' Notes reset to closed for
+  // free via the keyed `key={targetKey}` wrapper below, which remounts
+  // their (uncontrolled) internal state — Interlinear's open state is
+  // lifted above that boundary, so it needs this explicit reset.
+  //
+  // Default open-state (decided): Interlinear starts OPEN, Commentaries and
+  // Pastors' Notes start closed — on a fresh open AND on every swap. This
+  // supersedes the old "Interlinear collapses" behavior from the floating-
+  // overlay build, which itself had superseded an even older "leave
+  // Interlinear open across a verse switch" decision. This effect also
+  // fires on PanelBody's initial mount (every fresh open), not just on
+  // targetKey changes, since useEffect always runs once after mount.
   const targetKey = referenceKey(reference);
   useEffect(() => {
-    onInterlinearOpenChange(false);
+    onInterlinearOpenChange(true);
     rowViewContainerRef.current?.scrollTo({ top: 0 });
   }, [targetKey, onInterlinearOpenChange]);
 
@@ -371,9 +382,11 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
   const isMobile = useIsMobile();
   // SP2 Phase 8 (Task 30): lifted here, not just PanelBody, since the panel's
   // own width class (below) needs it too — width follows need, automatically,
-  // no user-managed "wide mode". Reset on every target swap now, verse ->
-  // verse included — see PanelBody's swap effect (Phase 2, floating overlay).
-  const [interlinearOpen, setInterlinearOpen] = useState(false);
+  // no user-managed "wide mode". Defaults open (Phase 2 decision: Interlinear
+  // starts open) so there's no closed-then-open flash on the very first
+  // panel open of a session, before PanelBody's swap effect below can catch
+  // up — that effect re-asserts `true` on every open/swap after this.
+  const [interlinearOpen, setInterlinearOpen] = useState(true);
 
   // SP2 Phase 9 (Fix 2): this panel has no Dialog.Trigger — it's opened from
   // several different places (verse-underline clicks, the dev button, the
