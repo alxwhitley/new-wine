@@ -379,8 +379,16 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Footer — profile menu or sign-in */}
-      <div className="mt-auto pt-2 pb-4">
+      {/* Footer — profile menu or sign-in. Bottom clearance is unconditional
+          (both flag states): this content was clipped by the iOS home
+          indicator regardless of nav state, and additionally sits under
+          the tab bar when it's present. pb-4 stays the source of truth
+          on desktop — the mobile-scoped classes below only take effect
+          under 768px, see globals.css. */}
+      <div className={cn(
+        "mt-auto pt-2 pb-4",
+        isFullNavEnabled() ? "pb-drawer-footer-safe-tabbar" : "pb-drawer-footer-safe"
+      )}>
         {isLoggedIn ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
