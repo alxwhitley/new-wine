@@ -418,12 +418,12 @@ export default function Home() {
 
           {isEmpty ? (
             /* Empty state — centred, full remaining height */
-            <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6 overflow-hidden overscroll-none min-h-0">
+            <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-12 overflow-hidden overscroll-none min-h-0">
               <h2 suppressHydrationWarning className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg text-balance">
                 {greeting}
               </h2>
 
-              <div className="w-full max-w-3xl mt-8">
+              <div className="w-full max-w-2xl mt-8">
                 <ChatInput onSend={handleSend} disabled={chatLoading} streaming={chatLoading} />
               </div>
 
@@ -457,7 +457,7 @@ export default function Home() {
               <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
                 {/* Scroll fade: messages dissolve into background as they pass the top */}
                 <div className="pointer-events-none sticky top-0 z-10 h-14 md:h-8 bg-gradient-to-b from-background to-transparent" />
-                <div className="mx-auto max-w-3xl px-4 md:px-6 pt-4 md:pt-2 pb-8">
+                <div className="mx-auto max-w-2xl px-4 md:px-12 pt-4 md:pt-2 pb-8">
                   {messages.map((message, i) => {
                     const question = message.role === "assistant" && i > 0 && messages[i - 1].role === "user"
                       ? messages[i - 1].content
