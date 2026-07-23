@@ -3,8 +3,22 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-23 (Chat input: shine-border/holy-glow removed — see directly below).
-Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section three below the new one).
+Last verified: 2026-07-23 (v4 propositions prompt sample checkpoint — see directly below).
+Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section two below the new one).
+
+---
+
+## v4 propositions prompt — 5-teacher sample checkpoint, NOT a backfill decision (session state, 2026-07-23)
+
+Ran `scripts/sample_v4_propositions_2026-07-23.py` (commit `07d53ee`) — a throwaway, standalone script, not a change to `propositions.py`/`shared_ingest.py`/`ingest.py` — against 15 documents across 5 teachers currently at zero propositions: **Derek Prince** (3 docs), **Daniel Kolenda** (3), **Jack Deere** (3), **Doug Kreighbaum** (3), **Charles Simpson** (3). Selected specifically for stylistic contrast from each other and from Ravenhill (already validated separately, 766 propositions live). Wrote real rows through the same `extract_propositions()`/`store_propositions()` every ingest script uses — reconciled directly against the DB post-run: 15/15 documents stored, 0 errors, 114 propositions, all 5 sources confirmed to have had zero propositions before this run.
+
+**Named-speaker attribution and specifics-preservation — both hold up.** Zero instances of "the author" across all 114 propositions (grep-confirmed). Concrete names/numbers/scripture citations survive per teacher (e.g. Kolenda naming David Hume and Benjamin Warfield by name and characterizing their actual arguments; Deere's account of his son's death; Simpson's "seven practical steps"). Voice reads as genuinely distinct teacher-to-teacher — Kolenda combative/polemical, Deere testimonial, Kreighbaum textbook-structured, Simpson pastoral/relational, Prince systematic-doctrinal.
+
+**Length target (80-150 words) is NOT reliably met.** Grand mean across all 114 propositions: **~62 words** — below the low end of the stated target. Per-teacher averages: Prince 76, Simpson 65, Kolenda 57, Deere 58, Kreighbaum 55. One single document — Kreighbaum's "Ministry of God's Word: Speaking, Preaching and Teaching" — averaged **40.3 words**, matching the exact pre-retune defect the v4 prompt was built to fix.
+
+**New, narrower framing pattern, not caught by the original bug report.** All 114 propositions use an explicit attributive opener — "{Teacher} teaches/argues/explains/emphasizes/shares/warns/criticizes that..." or "According to {Teacher}..." (grep-confirmed, 0 exceptions). The v4 prompt explicitly permits dropping the attributive frame entirely for direct-voice statements (its own worked example: "Prayer matters more than preaching, because...") — that option was never exercised in this sample. Reads as a smaller, more varied version of the original "the author teaches that" problem, not a full fix of the underlying pattern.
+
+**Not decided by this session:** whether v4 proceeds to full backfill (#17), gets iterated again, or is discarded. Alex has not yet reviewed the raw sample output himself.
 
 ---
 
