@@ -390,11 +390,15 @@ export default function Home() {
         {/* The floating panel — bordered card on desktop, full-bleed on mobile */}
         <div className="relative flex flex-col flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
 
-          {/* Mobile floating menu button — replaces full-width bar on mobile */}
+          {/* Mobile floating menu button — replaces full-width bar on mobile.
+              LOAD-BEARING once the tab bar is gated off: this is the only
+              way to open the drawer on mobile. top-3 (0.75rem) shifted by
+              the real inset so it lands at the same visual position as
+              today instead of under the notch/status bar. */}
           <button
             aria-label="Open sidebar"
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden absolute top-3 left-3 z-30 h-11 w-11 flex items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"
+            className="md:hidden absolute top-[calc(0.75rem+env(safe-area-inset-top))] left-3 z-30 h-11 w-11 flex items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"
           >
             <Menu className="h-5 w-5" />
           </button>

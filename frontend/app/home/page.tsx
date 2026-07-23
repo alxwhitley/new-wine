@@ -356,7 +356,12 @@ export default function HomePage() {
     <div className="bg-background text-foreground min-h-screen font-sans antialiased overflow-x-hidden">
 
       {/* ── NAV ── */}
-      <nav className="fixed top-0 inset-x-0 z-50 h-14 flex items-center justify-between px-6 md:px-8 border-b border-border" style={{ background: "hsl(var(--background) / 0.9)", backdropFilter: "blur(14px)" }}>
+      {/* h-14 becomes the content box (via padding), not the outer box —
+          height/padding grow by the real inset so the logo/links/CTA sit
+          at the same visual position as today; only the translucent
+          background extends up under the notch/status bar. 3.5rem = h-14,
+          reused, not a new value. */}
+      <nav className="fixed top-0 inset-x-0 z-50 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] flex items-center justify-between px-6 md:px-8 border-b border-border" style={{ background: "hsl(var(--background) / 0.9)", backdropFilter: "blur(14px)" }}>
         <Link href="/" className="text-[1.1rem] font-semibold text-card-foreground no-underline hover:opacity-80 transition-opacity">
           Rhemata
         </Link>

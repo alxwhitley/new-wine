@@ -492,7 +492,12 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             "data-[state=closed]:animate-out data-[state=closed]:duration-300",
             "data-[state=open]:animate-in data-[state=open]:duration-300",
             isMobile
-              ? "inset-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
+              // LOAD-BEARING: the close control below is the only way out
+              // of this full-screen takeover. pt safe-area keeps it below
+              // the notch/status bar instead of shifting inset-0's whole
+              // box — mobile only, desktop's floating card never touches
+              // the top edge.
+              ? "inset-0 pt-[env(safe-area-inset-top)] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
               : cn(
                   // Floating card beside the chat (revised live, 2026-07-22):
                   // small gap on all sides (inset-y-2/right-2), never

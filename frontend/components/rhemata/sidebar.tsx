@@ -570,10 +570,13 @@ export function Sidebar({
         />
       )}
 
-      {/* Mobile drawer — slides in from the right */}
+      {/* Mobile drawer — slides in from the right. pt uses the larger of
+          the original 24px and the real inset (not additive) — identical
+          24px on devices where the inset is smaller or zero, grows only
+          on notched/Dynamic-Island devices where 24px wasn't enough. */}
       <aside
         className={cn(
-          "fixed right-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar px-4 pt-6 transition-transform duration-300 md:hidden",
+          "fixed right-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar px-4 pt-[max(1.5rem,env(safe-area-inset-top))] transition-transform duration-300 md:hidden",
           isOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
