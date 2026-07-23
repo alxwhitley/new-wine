@@ -33,7 +33,7 @@ export function InterlinearBlocks({
     return (
       <div className="mt-4">
         {label}
-        <div className="flex gap-3 overflow-x-auto py-1">
+        <div className="flex flex-wrap gap-3 py-1">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
             <div key={i} className="flex shrink-0 flex-col items-center gap-1">
               <Skeleton className="h-5 w-10" />
@@ -57,7 +57,12 @@ export function InterlinearBlocks({
   return (
     <div className="mt-4">
       {label}
-      <div className="flex gap-2 overflow-x-auto py-1">
+      {/* Wraps instead of horizontal-scrolling (Phase 3 of the panel
+          refinement): the panel's width is now fixed, so long verses must
+          grow downward, not sideways. Each word unit (Greek/gloss/Strong's,
+          stacked) keeps its own internal alignment via shrink-0 + flex-col;
+          gap-2 spaces both within a row and between wrapped rows. */}
+      <div className="flex flex-wrap gap-2 py-1">
         {tokens.map((token, i) => {
           const isSelected = selectedStrongs === token.strongs;
           return (

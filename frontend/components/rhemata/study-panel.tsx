@@ -374,18 +374,19 @@ interface StudyPanelProps {
   accessToken?: string | null;
   role?: string | null;
   userId?: string | null;
-  onInterlinearOpenChange?: (open: boolean) => void;
   teacherQuestion?: string;
 }
 
-export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId, onInterlinearOpenChange, teacherQuestion }: StudyPanelProps) {
+export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId, teacherQuestion }: StudyPanelProps) {
   const isMobile = useIsMobile();
-  // SP2 Phase 8 (Task 30): lifted here, not just PanelBody, since the panel's
-  // own width class (below) needs it too — width follows need, automatically,
-  // no user-managed "wide mode". Defaults open (Phase 2 decision: Interlinear
-  // starts open) so there's no closed-then-open flash on the very first
-  // panel open of a session, before PanelBody's swap effect below can catch
-  // up — that effect re-asserts `true` on every open/swap after this.
+  // Lifted here, not just PanelBody, so PanelBody's swap-reset effect can
+  // force it back open on a target change even if the user had manually
+  // closed it (Phase 2). No longer drives panel width (Phase 3: width is
+  // fixed regardless of section state) — purely accordion open/closed now.
+  // Defaults open (Phase 2 decision) so there's no closed-then-open flash
+  // on the very first panel open of a session, before PanelBody's swap
+  // effect below can catch up — that effect re-asserts `true` on every
+  // open/swap after this.
   const [interlinearOpen, setInterlinearOpen] = useState(true);
 
   // SP2 Phase 9 (Fix 2): this panel has no Dialog.Trigger — it's opened from
@@ -413,11 +414,6 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
       return;
     }
     document.querySelector<HTMLTextAreaElement>("textarea")?.focus();
-  }
-
-  function handleInterlinearOpenChange(open: boolean) {
-    setInterlinearOpen(open);
-    onInterlinearOpenChange?.(open);
   }
 
   // Phase 2 (floating overlay): a click on a DIFFERENT verse/teacher
@@ -482,7 +478,12 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
                   // read as one coordinated motion.
                   "inset-y-2 right-2 rounded-xl border border-border",
                   "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
-                  interlinearOpen ? "w-[50vw] min-w-[480px] max-w-[720px]" : "w-[33vw] min-w-[380px] max-w-[480px]"
+                  // Phase 3: fixed width, permanently — the old 50vw
+                  // Interlinear-open expansion is gone. This is the
+                  // pre-Interlinear-click closed-state width from before
+                  // Phase 3 (Phase 0 measurement), now the panel's only
+                  // width regardless of which sections are open.
+                  "w-[33vw] min-w-[380px] max-w-[480px]"
                 )
           )}
         >
@@ -507,7 +508,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             role={role}
             userId={userId}
             interlinearOpen={interlinearOpen}
-            onInterlinearOpenChange={handleInterlinearOpenChange}
+            onInterlinearOpenChange={setInterlinearOpen}
             teacherQuestion={teacherQuestion}
           />
         </PanelPrimitive.Content>
