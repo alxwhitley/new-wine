@@ -27,6 +27,7 @@ import {
 import { UsageRing } from "@/components/rhemata/usage-ring";
 import { AdminModal } from "@/components/admin/AdminModal";
 import { FooterNav } from "@/components/marketing/footer-nav";
+import { isFullNavEnabled } from "@/lib/chat-only-beta-flag";
 import type { Conversation } from "@/hooks/useConversations";
 import type { User } from "@supabase/supabase-js";
 
@@ -225,42 +226,48 @@ export function Sidebar({
         <span>New Chat</span>
       </Button>
 
-      {/* Nav Items — desktop only; mobile uses bottom tab bar */}
-      <nav className="hidden md:block space-y-0.5 mb-4">
-        <Link
-          href="/"
-          onClick={onClose}
-          className={cn(
-            "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            isChat && "bg-sidebar-accent text-sidebar-accent-foreground"
-          )}
-        >
-          <MessageSquare className="h-4 w-4" />
-          Chat
-        </Link>
-        <Link
-          href="/library"
-          onClick={onClose}
-          className={cn(
-            "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            isDiscover && "bg-sidebar-accent text-sidebar-accent-foreground"
-          )}
-        >
-          <Compass className="h-4 w-4" />
-          Discover
-        </Link>
-        <Link
-          href="/study"
-          onClick={onClose}
-          className={cn(
-            "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            isStudy && "bg-sidebar-accent text-sidebar-accent-foreground"
-          )}
-        >
-          <BookOpen className="h-4 w-4" />
-          Study
-        </Link>
-      </nav>
+      {/* Nav Items — desktop only; mobile uses bottom tab bar.
+          Chat-only beta: whole block gated on isFullNavEnabled(), Chat
+          link included — with Study/Discover hidden there's nowhere else
+          to navigate to, so a single always-active Chat link is dead
+          weight. Flag on restores all three exactly as before. */}
+      {isFullNavEnabled() && (
+        <nav className="hidden md:block space-y-0.5 mb-4">
+          <Link
+            href="/"
+            onClick={onClose}
+            className={cn(
+              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              isChat && "bg-sidebar-accent text-sidebar-accent-foreground"
+            )}
+          >
+            <MessageSquare className="h-4 w-4" />
+            Chat
+          </Link>
+          <Link
+            href="/library"
+            onClick={onClose}
+            className={cn(
+              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              isDiscover && "bg-sidebar-accent text-sidebar-accent-foreground"
+            )}
+          >
+            <Compass className="h-4 w-4" />
+            Discover
+          </Link>
+          <Link
+            href="/study"
+            onClick={onClose}
+            className={cn(
+              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              isStudy && "bg-sidebar-accent text-sidebar-accent-foreground"
+            )}
+          >
+            <BookOpen className="h-4 w-4" />
+            Study
+          </Link>
+        </nav>
+      )}
 
       {/* Conditional Content */}
       <div className="flex-1 overflow-y-auto -mx-2 px-2">

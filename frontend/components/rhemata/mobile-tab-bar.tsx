@@ -6,11 +6,12 @@ import { MessageSquare, BookOpen, Compass } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useChatFocus } from "@/contexts/chat-focus-context";
+import { isFullNavEnabled } from "@/lib/chat-only-beta-flag";
 
 const TABS = [
-  { href: "/study", label: "Study", icon: BookOpen },
+  { href: "/study", label: "Study", icon: BookOpen, requiresFullNav: true },
   { href: "/", label: "Chat", icon: MessageSquare, primary: true },
-  { href: "/library", label: "Discover", icon: Compass },
+  { href: "/library", label: "Discover", icon: Compass, requiresFullNav: true },
 ];
 
 export function MobileTabBar() {
@@ -20,13 +21,15 @@ export function MobileTabBar() {
 
   if (!isMobile) return null;
 
+  const visibleTabs = TABS.filter((tab) => !tab.requiresFullNav || isFullNavEnabled());
+
   return (
     <nav className={cn(
       "fixed bottom-0 left-0 right-0 z-50 flex md:hidden bg-sidebar border-t border-border pb-safe",
       "transition-transform duration-200 ease-in-out",
       inputFocused ? "translate-y-full" : "translate-y-0",
     )}>
-      {TABS.map(({ href, label, icon: Icon, primary }) => {
+      {visibleTabs.map(({ href, label, icon: Icon, primary }) => {
         const isActive =
           href === "/"
             ? pathname === "/" || pathname.startsWith("/chat")

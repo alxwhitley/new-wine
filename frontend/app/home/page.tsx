@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import BetaGate from "@/components/auth/BetaGate";
 import LoginModal from "@/components/auth/LoginModal";
 import { FooterNav } from "@/components/marketing/footer-nav";
+import { isFullNavEnabled } from "@/lib/chat-only-beta-flag";
 
 /* ── Inline-style color tokens (mockups only — page uses Tailwind classes) ── */
 const C = {
@@ -360,7 +361,7 @@ export default function HomePage() {
           Rhemata
         </Link>
         <ul className="hidden md:flex items-center gap-7 list-none m-0 p-0">
-          {([["About", "#"], ["Features", "#"], ["Study", "/study"]] as [string, string][]).map(([label, href]) => (
+          {([["About", "#"], ["Features", "#"], ...(isFullNavEnabled() ? [["Study", "/study"]] : [])] as [string, string][]).map(([label, href]) => (
             <li key={label}>
               <Link href={href} className="text-sm font-medium text-muted-foreground hover:text-card-foreground transition-colors no-underline">
                 {label}
@@ -510,9 +511,11 @@ export default function HomePage() {
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-5">
               And a human layer is coming. <strong className="text-card-foreground font-semibold">Vetted pastors and leaders will contribute devotional notes attached to the verse in front of you</strong> — real shepherds, present inside the study experience. Every note bylined, none of it AI-generated, and the bar for who contributes stays high.
             </p>
-            <Link href="/study" className="inline-flex items-center gap-1 text-sm font-semibold no-underline hover:opacity-80 transition-opacity" style={{ color: "hsl(var(--gold-light))" }}>
-              Explore Study →
-            </Link>
+            {isFullNavEnabled() && (
+              <Link href="/study" className="inline-flex items-center gap-1 text-sm font-semibold no-underline hover:opacity-80 transition-opacity" style={{ color: "hsl(var(--gold-light))" }}>
+                Explore Study →
+              </Link>
+            )}
           </div>
           <StudyMockup />
         </div>
