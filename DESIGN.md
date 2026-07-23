@@ -103,12 +103,6 @@
 
 ---
 
-## Signature Flourish — Shine Border (chat input only)
-
-The one decorative element: an animated warm-gradient border on the chat input. Gradient stops: `#e6a673, #d9915a, #cc7b41, #bf6629, #f0c99d`. 2px inset mask, `shimmer` keyframes (background-position 0%→100%→0% over 3s), opacity 0 at rest → 0.6 on hover → 0.8 on focus-within (2s shimmer). Active/streaming state adds `holy-glow` keyframes (layered rgba(230,166,115) box-shadows pulsing over 2s). Copy the `.shine-border` CSS from Lumen's globals.css verbatim. Use NOWHERE else.
-
----
-
 ## Rhemata Extension Rules (surfaces Lumen doesn't have)
 
 | Rhemata element | Token mapping |

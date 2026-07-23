@@ -3,8 +3,20 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-23 (Landing page footer: Product list now reflects available-now vs coming-soon — see directly below).
-Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section two below the new one).
+Last verified: 2026-07-23 (Chat input: shine-border/holy-glow removed — see directly below).
+Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section three below the new one).
+
+---
+
+## Chat input: shine-border/holy-glow removed (session state, 2026-07-23)
+
+Alex asked for the glowing gold border effect on the chat input removed, keeping the normal border. The effect was actually two stacked pieces (`frontend/app/globals.css`): an animated warm-gradient shimmer ring (`.shine-border::before`, ramping in on hover/focus-within) and a separate pulsing box-shadow halo (`holy-glow` keyframes, only while `streaming`). DESIGN.md documented both together as the product's one deliberate "Signature Flourish," so scope was confirmed with Alex before touching anything — **both removed entirely**, not just the streaming pulse, per his choice.
+
+**Changed:** `chat-input.tsx` — dropped the `shine-border`/`streaming` classes from the input container (now plain `rounded-2xl border border-border bg-card`), removed the now-unused `streaming` prop from `ChatInputProps` and the `cn` import. `page.tsx` — dropped `streaming={chatLoading}` at both call sites (empty-state and active-conversation input), since that was its only consumer. `globals.css` — deleted the `.shine-border`/`holy-glow`/`shimmer` rules and keyframes outright (grepped repo-wide first — confirmed zero other usages outside `.next` build cache). `DESIGN.md` — removed the now-inaccurate "Signature Flourish — Shine Border" section describing a feature that no longer exists, rather than leaving stale doc alongside the removal.
+
+**Verified live (Playwright, against the already-running local dev server on port 3000, not restarted):** at the real chat input (`/`, guest empty-state), computed `box-shadow` is `none` and there's no `::before` overlay at rest, on hover, and while focused (typing) — all three states identical: plain `1px solid` `border-border`-colored outline, no shimmer, no pulse. Screenshots at rest and focused confirm visually flat borders. `tsc --noEmit` clean. Pre-existing, unrelated lint findings in `page.tsx` (an unused `UsageRing` import, two `set-state-in-effect` warnings at lines 130/356) and a CORS console error against the production `/study/teachers` endpoint were confirmed via diff to be outside this change's two touched lines — not introduced here.
+
+**Reconciliation.** Four files touched: `frontend/components/rhemata/chat-input.tsx`, `frontend/app/page.tsx`, `frontend/app/globals.css`, `DESIGN.md`. One commit, per instruction.
 
 ---
 

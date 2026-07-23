@@ -438,7 +438,7 @@ export default function Home() {
               </h2>
 
               <div className="w-full max-w-2xl mt-8">
-                <ChatInput onSend={handleSend} disabled={chatLoading} streaming={chatLoading} />
+                <ChatInput onSend={handleSend} disabled={chatLoading} />
               </div>
 
               <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
@@ -526,7 +526,7 @@ export default function Home() {
               </div>
 
               {/* Fixed input area — stays at panel bottom */}
-              <ChatInput onSend={handleSend} disabled={chatLoading || !!weeklyLimitDetail} streaming={chatLoading} />
+              <ChatInput onSend={handleSend} disabled={chatLoading || !!weeklyLimitDetail} />
             </>
           )}
           </div>

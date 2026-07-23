@@ -3,16 +3,14 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useChatFocus } from "@/contexts/chat-focus-context";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
-  streaming?: boolean;
 }
 
-export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
+export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [input, setInput] = useState("");
   const { setInputFocused } = useChatFocus();
 
@@ -34,7 +32,7 @@ export function ChatInput({ onSend, disabled, streaming }: ChatInputProps) {
   return (
     <div className="shrink-0 bg-background px-4 md:px-12 pb-2 md:pb-6">
       <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
-        <div className={cn("flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-1.5 md:py-2 shine-border", streaming && "streaming")}>
+        <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-1.5 md:py-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
