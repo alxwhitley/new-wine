@@ -81,26 +81,50 @@ Output ONLY a JSON array, no preamble, no markdown fences:
 # "and that... and that..." constructions rather than as several well-formed
 # sentences -- a chained clause hits a natural stopping point earlier than a
 # real paragraph would, capping length artificially. The original "Complete"
-# worked example (kept below, now labeled "Thin") was itself a single long
+# worked example (originally labeled "Thin") was itself a single long
 # sentence plus a short second one, which plausibly reinforced the pattern
-# rather than correcting it. This revision adds an explicit sentence-count
+# rather than correcting it. This revision added an explicit sentence-count
 # instruction (2-4 well-formed sentences, one main idea per sentence) and
-# replaces that example with a three-way thin/run-on/well-formed contrast
+# replaced that example with a three-way thin/run-on/well-formed contrast
 # using the same content, so the model sees the fix is about restructuring,
-# not padding. Nothing else changed: attribution, specifics-preservation,
-# the four-corners rule, scripture-reference capture, no-3+-consecutive-
-# words, neutral voice, and JSON-only output are all untouched.
+# not padding.
+#
+# 2026-07-23 revision (5th change, terminology rename + example-leakage fix):
+# two more findings from re-running the same 15-doc sample against the
+# sentence-structure fix above. First, the requested experiment: the word
+# "proposition" carries a strong competing technical meaning in the RAG
+# literature (Chen et al. 2023, "Dense X Retrieval" -- an atomic, minimal,
+# indivisible single-fact statement), heavily represented in training data
+# and RAG-framework templates, and asking for "propositions" while also
+# demanding an 80-150-word, voiced, multi-sentence passage plausibly fights
+# that term's own gravity. All model-facing prose now says "teaching
+# passage"/"passage" instead of "proposition"/"propositional." The JSON
+# output key `proposition_index` is UNCHANGED -- that's a structural field
+# name store_propositions() parses, not conceptual framing, and this revision
+# is instruction-text-only per Alex's explicit scope. Second, an unplanned
+# but directly relevant bug found while re-reading that same 15-doc run: in
+# 4 of the 15 documents (3 different teachers -- Prince, Deere x2,
+# Kreighbaum), the model's first output was a near-verbatim copy of the
+# prompt's own concrete "Well-formed" worked example ("prayer matters more
+# than preaching..."), with only the speaker's name swapped in -- fabricated
+# content wrongly attributed to a real teacher, a direct four-corners
+# violation. The worked examples below are now bracketed structural
+# templates with no real sentence left to copy, explicitly labeled as such.
+# Nothing else changed: attribution (including the optional no-frame direct
+# statement), specifics-preservation, the four-corners rule, scripture-
+# reference capture, no-3+-consecutive-words, neutral voice, sentence-count
+# target, 80-150 word target, and JSON-only output are all untouched.
 EXTRACTION_PROMPT_V4 = """\
-You are extracting propositions from a single theological document for a research tool. A proposition is one self-contained teaching claim from the document, restated entirely in your own words — the claim itself, the grounding the speaker gives for it, and any qualification the speaker attaches to it, all in one proposition.
+You are writing teaching passages from a single theological document for a research tool. Each teaching passage captures one of {speaker}'s teaching points from the document, restated entirely in your own words, reading like {speaker}'s own teaching rather than a report about the document — the claim itself, the grounding {speaker} gives for it, and any qualification {speaker} attaches to it, all within that one passage.
 
 THE GOVERNING RULE — FOUR CORNERS. Use ONLY what is physically present in the document text provided. You are summarizing this one document, not teaching the topic. You may not add anything from your own knowledge — not a Bible reference, not an example, not a cross-reference, not a related verse, not background context. If it is not in the provided text, it does not exist for this task. When in doubt, leave it out.
 
 Applying that rule:
 
-Scripture references — capture every one the source gives, invent none it doesn't. If the document explicitly prints a reference (e.g. the text says "Hebrews 3:1" or "Mark 11:23"), and a proposition covers that teaching, that reference MUST appear in the proposition. At the same time: if the speaker quotes or alludes to a verse without naming it, restate the teaching but do NOT supply the reference, even if you recognize the verse. Two equal failures to avoid: dropping a reference the speaker printed, and adding one the speaker didn't. Capture what's there; invent nothing that isn't.
+Scripture references — capture every one the source gives, invent none it doesn't. If the document explicitly prints a reference (e.g. the text says "Hebrews 3:1" or "Mark 11:23"), and a teaching passage covers that teaching, that reference MUST appear in it. At the same time: if the speaker quotes or alludes to a verse without naming it, restate the teaching but do NOT supply the reference, even if you recognize the verse. Two equal failures to avoid: dropping a reference the speaker printed, and adding one the speaker didn't. Capture what's there; invent nothing that isn't.
 Examples and illustrations: Use only the examples the document actually contains. Never introduce an illustration, story, or analogy of your own.
 Claims: Represent only what the document asserts. Do not extend, infer, or theologize beyond it.
-Overstatement and walk-back: if the speaker overstates a claim and then qualifies, hedges, or walks it back within the same passage, both belong in the SAME proposition — the overstatement and its walk-back are one teaching move, not two separate propositions.
+Overstatement and walk-back: if the speaker overstates a claim and then qualifies, hedges, or walks it back within the same passage, both belong in the SAME teaching passage — the overstatement and its walk-back are one teaching move, not two separate passages.
 
 Paraphrase rules:
 
@@ -112,17 +136,19 @@ SPEAKER ATTRIBUTION. The speaker is {speaker}. Never write "the author." Either 
 
 PRESERVE THE SPECIFICS. Generalize the WORDING, not the CONTENT. Keep the concrete detail that gives the teaching its force: names, numbers, the specific illustration or story used, the actual shape of the argument (if the speaker reasons "because X, therefore Y," keep that shape — don't flatten it to a bare abstract claim). A paraphrase that keeps only the general idea and drops the specifics has lost the thing worth retrieving, even if every word is original.
 
-SENTENCE STRUCTURE — write 2-4 sentences, not one chained sentence. Each proposition should read as several distinct, well-formed sentences — never as a single sentence that chains multiple claims together with repeated "and that... and that..." constructions. If you notice yourself writing "and that" more than once in one sentence, stop and start a new sentence instead. Break at natural claim boundaries: each sentence carries one main idea (the claim, a piece of grounding, a specific detail, a qualification) rather than piling every piece onto one breathless sentence. This is not about cutting content — the same content reads as 2-4 clear sentences instead of one overloaded one.
+SENTENCE STRUCTURE — write 2-4 sentences, not one chained sentence. Each teaching passage should read as several distinct, well-formed sentences — never as a single sentence that chains multiple claims together with repeated "and that... and that..." constructions. If you notice yourself writing "and that" more than once in one sentence, stop and start a new sentence instead. Break at natural claim boundaries: each sentence carries one main idea (the claim, a piece of grounding, a specific detail, a qualification) rather than piling every piece onto one breathless sentence. This is not about cutting content — the same content reads as 2-4 clear sentences instead of one overloaded one.
 
-LENGTH AND COMPLETENESS. Target 80-150 words across those 2-4 sentences. A proposition this length has room for three things, and each one works better as its own sentence than as a clause bolted onto the last: the claim itself, the grounding or reasoning the speaker gives for it (why they say it, what it's based on), and any qualification, exception, or walk-back the speaker attaches. A 20-30 word proposition is almost always missing one of these three pieces — check what got left out before finalizing.
-  Thin (do not do this): "{speaker} teaches that prayer matters more than preaching."
-  Run-on (do not do this either — this is the more common failure): "{speaker} teaches that prayer matters more than preaching, and that this is because the disciples asked 'Lord, teach us to pray' rather than 'teach us to preach,' and that this is despite Jesus himself preaching the greatest sermon ever given, and that the point is standing before God on behalf of people outweighs standing before people on behalf of God."
-  Well-formed (do this instead): "{speaker} teaches that prayer matters more than preaching. The disciples asked Jesus to teach them to pray, not to preach — even though Jesus himself preached the greatest sermon ever given. The point, {speaker} argues, is that standing before God on behalf of people outweighs standing before people on behalf of God."
+LENGTH AND COMPLETENESS. Target 80-150 words across those 2-4 sentences. A teaching passage this length has room for three things, and each one works better as its own sentence than as a clause bolted onto the last: the claim itself, the grounding or reasoning the speaker gives for it (why they say it, what it's based on), and any qualification, exception, or walk-back the speaker attaches. A 20-30 word passage is almost always missing one of these three pieces — check what got left out before finalizing.
 
-Count and distinctness — fewer, fuller propositions is correct. Extract one proposition per genuinely distinct teaching point. There is NO target number. Short documents may yield three or four; long ones more. Do NOT increase the count to hit a length or count target — a document with few distinct points should yield few, fuller propositions, not more thin ones.
-If two points make substantially the same claim, MERGE them into one. Near-duplicate propositions are a failure.
+The pattern below is a STRUCTURAL TEMPLATE only. The bracketed parts are placeholders, not real content — never copy this template's own wording into your output; fill it with what {speaker} actually said in the source text.
+  Thin (do not do this): "{speaker} teaches that [the claim], full stop — nothing else."
+  Run-on (do not do this either — this is the more common failure): "{speaker} teaches that [the claim], and that [the grounding], and that [a specific detail], and that [the qualification]."
+  Well-formed (do this instead): "{speaker} teaches that [the claim]. [A sentence giving the grounding or reasoning, with a specific detail from the source]. [A closing sentence carrying the qualification, exception, or the speaker's own concluding line, when the source gives one]."
 
-Output ONLY a JSON array, no preamble, no markdown fences:
+Count and distinctness — fewer, fuller teaching passages is correct. Write one passage per genuinely distinct teaching point. There is NO target number. Short documents may yield three or four; long ones more. Do NOT increase the count to hit a length or count target — a document with few distinct points should yield few, fuller passages, not more thin ones.
+If two points make substantially the same claim, MERGE them into one. Near-duplicate passages are a failure.
+
+Output ONLY a JSON array of these teaching passages, no preamble, no markdown fences:
 [{{"proposition_index": 1, "content": "..."}}, {{"proposition_index": 2, "content": "..."}}]"""
 
 # ── Groq client (lazy) ────────────────────────────────────────────────────────
