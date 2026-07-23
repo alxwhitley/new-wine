@@ -48,10 +48,10 @@ Length: ~80–150 words each.
 Output ONLY a JSON array, no preamble, no markdown fences:
 [{"proposition_index": 1, "content": "..."}, {"proposition_index": 2, "content": "..."}]"""
 
-# ── v4 prompt (2026-07-16) ───────────────────────────────────────────────────
+# ── v4 prompt (2026-07-16, revised 2026-07-23) ────────────────────────────────
 # Added alongside EXTRACTION_PROMPT (v3), which is unchanged and remains the
 # default. Selected via extract_propositions(prompt_version="v4", speaker=...).
-# Three changes from v3, and only these three:
+# Original three changes from v3:
 #   1. Length: v3's length line was a bare, unexplained number ("~80-150 words
 #      each") sitting directly after count/dedup language ("do not pad" /
 #      "merge near-duplicates") that governs proposition COUNT, not length --
@@ -71,8 +71,25 @@ Output ONLY a JSON array, no preamble, no markdown fences:
 #      generalizing wording, so specifics get abstracted away along with the
 #      phrasing. v4 separates "generalize the wording" from "preserve the
 #      content" explicitly.
-# Everything else (four-corners rule, scripture-reference capture rules,
-# no-3+-consecutive-words, neutral voice, JSON-only output) is unchanged.
+#
+# 2026-07-23 revision (4th change, sentence structure): a 5-teacher/15-doc
+# sample test found #2 fixed outright (zero "the author" instances) but #1
+# only partially -- average landed at ~62 words against the 80-150 target,
+# one document relapsing to the pre-fix ~40 word average. Manual review of
+# the raw output found the likely cause: the model was writing each
+# proposition as a single run-on sentence chaining claims with repeated
+# "and that... and that..." constructions rather than as several well-formed
+# sentences -- a chained clause hits a natural stopping point earlier than a
+# real paragraph would, capping length artificially. The original "Complete"
+# worked example (kept below, now labeled "Thin") was itself a single long
+# sentence plus a short second one, which plausibly reinforced the pattern
+# rather than correcting it. This revision adds an explicit sentence-count
+# instruction (2-4 well-formed sentences, one main idea per sentence) and
+# replaces that example with a three-way thin/run-on/well-formed contrast
+# using the same content, so the model sees the fix is about restructuring,
+# not padding. Nothing else changed: attribution, specifics-preservation,
+# the four-corners rule, scripture-reference capture, no-3+-consecutive-
+# words, neutral voice, and JSON-only output are all untouched.
 EXTRACTION_PROMPT_V4 = """\
 You are extracting propositions from a single theological document for a research tool. A proposition is one self-contained teaching claim from the document, restated entirely in your own words — the claim itself, the grounding the speaker gives for it, and any qualification the speaker attaches to it, all in one proposition.
 
@@ -95,9 +112,12 @@ SPEAKER ATTRIBUTION. The speaker is {speaker}. Never write "the author." Either 
 
 PRESERVE THE SPECIFICS. Generalize the WORDING, not the CONTENT. Keep the concrete detail that gives the teaching its force: names, numbers, the specific illustration or story used, the actual shape of the argument (if the speaker reasons "because X, therefore Y," keep that shape — don't flatten it to a bare abstract claim). A paraphrase that keeps only the general idea and drops the specifics has lost the thing worth retrieving, even if every word is original.
 
-LENGTH AND COMPLETENESS. Each proposition should be a complete thought, not a single bare clause. Target 80-150 words. A proposition this length has room for three things: the claim itself, the grounding or reasoning the speaker gives for it (why they say it, what it's based on), and any qualification, exception, or walk-back the speaker attaches. A 20-30 word proposition is almost always missing one of these three pieces — check what got left out before finalizing.
+SENTENCE STRUCTURE — write 2-4 sentences, not one chained sentence. Each proposition should read as several distinct, well-formed sentences — never as a single sentence that chains multiple claims together with repeated "and that... and that..." constructions. If you notice yourself writing "and that" more than once in one sentence, stop and start a new sentence instead. Break at natural claim boundaries: each sentence carries one main idea (the claim, a piece of grounding, a specific detail, a qualification) rather than piling every piece onto one breathless sentence. This is not about cutting content — the same content reads as 2-4 clear sentences instead of one overloaded one.
+
+LENGTH AND COMPLETENESS. Target 80-150 words across those 2-4 sentences. A proposition this length has room for three things, and each one works better as its own sentence than as a clause bolted onto the last: the claim itself, the grounding or reasoning the speaker gives for it (why they say it, what it's based on), and any qualification, exception, or walk-back the speaker attaches. A 20-30 word proposition is almost always missing one of these three pieces — check what got left out before finalizing.
   Thin (do not do this): "{speaker} teaches that prayer matters more than preaching."
-  Complete (do this instead): "{speaker} teaches that prayer matters more than preaching, pointing to the disciples asking 'Lord, teach us to pray' rather than 'teach us to preach' — even though Jesus himself preached the greatest sermon ever given. The point: standing before God on behalf of people outweighs standing before people on behalf of God."
+  Run-on (do not do this either — this is the more common failure): "{speaker} teaches that prayer matters more than preaching, and that this is because the disciples asked 'Lord, teach us to pray' rather than 'teach us to preach,' and that this is despite Jesus himself preaching the greatest sermon ever given, and that the point is standing before God on behalf of people outweighs standing before people on behalf of God."
+  Well-formed (do this instead): "{speaker} teaches that prayer matters more than preaching. The disciples asked Jesus to teach them to pray, not to preach — even though Jesus himself preached the greatest sermon ever given. The point, {speaker} argues, is that standing before God on behalf of people outweighs standing before people on behalf of God."
 
 Count and distinctness — fewer, fuller propositions is correct. Extract one proposition per genuinely distinct teaching point. There is NO target number. Short documents may yield three or four; long ones more. Do NOT increase the count to hit a length or count target — a document with few distinct points should yield few, fuller propositions, not more thin ones.
 If two points make substantially the same claim, MERGE them into one. Near-duplicate propositions are a failure.
