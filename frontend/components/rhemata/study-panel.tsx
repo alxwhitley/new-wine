@@ -459,7 +459,15 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
             isMobile
               ? "inset-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
               : cn(
-                  "inset-y-2 right-2 rounded-xl border border-border data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+                  // Phase 1: true floating overlay. Never touches a screen
+                  // edge (small gap on all sides via inset-y-2/right-2); own
+                  // z-layer above the chat/sidebar, which never move in
+                  // response to this opening or closing. Background matches
+                  // the sidebar token (not the chat card) per the decided
+                  // spec; ~200ms slide, faster than mobile's 300ms sheet.
+                  "inset-y-2 right-2 rounded-xl border border-border bg-sidebar",
+                  "data-[state=closed]:duration-200 data-[state=open]:duration-200",
+                  "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
                   interlinearOpen ? "w-[50vw] min-w-[480px] max-w-[720px]" : "w-[33vw] min-w-[380px] max-w-[480px]"
                 )
           )}
