@@ -8,7 +8,7 @@
 
 **How this works:** Chat plans, judges, writes prompts. Claude Code executes. Alex decides. Sessions end at a **safe stopping point** — committed, stable, nothing load-bearing half-built — not at a clock time.
 
-**This cycle's product surfaces: Chat + Study only.** Discover is deferred (parked, not cut).
+**This cycle's product surfaces: Chat + Study only.** Discover is deferred (parked, not cut). **Correction 2026-07-23:** this cycle now ships as a chat-only beta — standalone Study's navigational entry points are hidden behind `NEXT_PUBLIC_FULL_NAV_ENABLED` (chat-only beta, gated build session, see `rhemata-status.md`'s top entry), reachable only via the in-chat study panel opened by tapping a verse/teacher reference. This is the first real arrival of the long-flagged "does standalone Study survive" checkpoint, logged as arrived, not as a decided outcome — nothing here formally retires the standalone page.
 
 ### Version history
 
