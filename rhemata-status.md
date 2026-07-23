@@ -3,8 +3,35 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-21 (SP panel refinement Phase 2 — floating overlay — build commit `fe310e2`).
-Records reconciled: 2026-07-21 (push ladder + SP4 sign-off closure — see the section directly below).
+Last verified: 2026-07-22 (Study Panel refinement v2, Phases 0-5 — see directly below). **Supersedes** the 2026-07-21 "floating overlay" entry's desktop-presentation claim — see that section's own superseding note.
+Records reconciled: 2026-07-21 (push ladder + SP4 sign-off closure — see the section below the new one).
+
+---
+
+## Study Panel refinement v2 — Phases 0-5 (session state, 2026-07-22)
+
+Five fully-specified UX refinements, executed as six numbered phases (0 = read-only audit, 1-5 = build, each its own commit with a live-check stop). **Push state as of this record: Phases 1-3 (`bb5cdc0`→`d2c31e1`→`c3659cd`→`a60cc22`) are on `origin/main`. Phases 4-5 (`23a845d`, `f1ee036`) are local-only, not yet pushed.**
+
+**Phase 0 audit — the fe310e2 discrepancy, resolved by explanation, not a bug fix.** Alex's live screen showed a split-view reflow (sidebar disappearing, chat narrowing) despite records saying "floating overlay" shipped 2026-07-21 (`fe310e2`). Direct code read found both things were true at once: `fe310e2` genuinely gave the panel `Content` element floating-card CSS (`inset-y-2 right-2 rounded-xl`, no scrim) — but `app/page.tsx` still actively collapsed the sidebar (`collapsed={studyPanelOpen}`) and reserved chat padding-right sized to the panel's width, **by design** — the commit's own message states it grew that reservation "so the chat card actually resizes to 'about two-thirds' per spec." Not half-landed, not a regression: `fe310e2` fully shipped what it intended (a floating-*styled* card that still reflows layout), satisfying an older "chat keeps two-thirds" spec goal that this session's Phase 1 set out to supersede.
+
+**Also re-checked and found already-correct, no bug:** the swap-in-place mechanism (shell never unmounts/re-slides on a target change, only content resets) was flagged going into this session as a possible "recorded shell re-slide" regression to fix. Direct code read of `fe310e2` and this file's own prior entry (below) found neither ever described shell re-sliding — `fe310e2`'s `handlePointerDownOutside` suppression of Radix's dismiss-on-outside-click for `data-study-trigger` elements was *always* genuine swap-in-place from the moment it shipped, and this file's existing "Reset-on-swap" note (below) already correctly described content-only reset (`key`-forced remount of the inner content div), not shell remounting. **Correction to the record is: there was nothing to correct here** — stated plainly rather than inventing a fix for a premise that didn't hold up.
+
+**Phase 1 → live design reversal (both pushed, both real commits, not a false start):**
+- Built as specified: a true floating overlay, zero layout shift ever (`bb5cdc0`) — sidebar's `collapsed` prop removed entirely, `main` permanently `md:ml-64`, panel background switched to `bg-sidebar`, desktop slide 300ms→200ms.
+- Alex reviewed live on `rhemata.app` and disliked it. New direction, decided live: sidebar still never collapses, but the chat card narrows via `padding-right` (not a true overlay) so the two read as side-by-side — reverses Phase 1's own "zero layout shift" acceptance criterion, by design (`d2c31e1`). Panel background reverted to `bg-background` (matches the chat card it now sits beside, not the sidebar); slide duration reverted to 300ms (matches `main`'s transition timing so both motions read as one).
+- **Net effect for anyone reading Phase 1's original spec text later: its "true overlay" geometry decision is superseded by `d2c31e1`. Its "sidebar never collapses" piece stands.**
+
+**Phase 2 (`c3659cd`, pushed) — Interlinear-open default state.** Dismiss-anywhere, sidebar-click-closes-and-navigates-in-one-click, and Escape-to-close all turned out to already be correct (Radix non-modal defaults, unoverridden) — zero code changed for those. The one real gap: `fe310e2`'s swap-reset effect closed Interlinear on every fresh open and swap; flipped to open by default (Commentaries/Pastors' Notes still default closed, via the existing `key`-remount). Also fixed both `interlinearOpen`'s and its `page.tsx` mirror's initial `useState` default to `true`, closing a first-open flash window.
+
+**Phase 3 (`a60cc22`, pushed) — fixed width, Interlinear wraps.** Panel width is now permanently `w-[33vw] min-w-[380px] max-w-[480px]` — the old 50vw Interlinear-open expansion is gone, along with all the plumbing (`interlinearWide`, the external `onInterlinearOpenChange` callback chain) that existed only to mirror it into `page.tsx`'s reservation. `InterlinearBlocks` switched from `overflow-x-auto` to `flex-wrap` (both the loading skeleton and the real token row) — applied universally, not desktop-gated, since it's shared with the standalone `/study` page and is a strict improvement on any width. STEPBible CC BY attribution line untouched.
+
+**Phase 4 (`23a845d`, NOT yet pushed) — section cards.** Interlinear/Commentaries/Pastors' Notes are now distinct `bg-popover` cards (`rounded-lg`, bordered, `space-y-3` gaps) instead of a flat `border-b` divider stack. `bg-popover` was chosen over `bg-card` specifically because DESIGN.md documents `--card` as deliberately flat/identical to `--background` ("no color elevation") — it would have produced zero visible separation; `--popover` is DESIGN.md's one token that's a genuinely lighter "lifted surface," already paired with `text-popover-foreground` by `DropdownMenuContent` elsewhere in this codebase. Visual restyle only — confirmed `CommentaryAccordionRow` (nested per-excerpt expand inside Commentaries results) is a separate implementation that doesn't import this component.
+
+**Phase 5 (`f1ee036`, NOT yet pushed) — pin icon family.** The pinned-verses collection trigger (top-bar dropdown) changed from a `Bookmark` glyph to the same outline `Pin` icon as the panel's own header pin-this action, plus a live count badge hidden at 0. Went straight to the badge option (no fallback needed) since Phase 0 confirmed `pins.length` was already read at the trigger's render site for its tooltip — zero new data plumbing. Badge styling (`bg-primary` pill, `h-4 min-w-4`, `text-[10px]`) matches `AdminModal.tsx`'s existing pending-count badge exactly, rather than inventing new values. The standalone `/study` page's own, unrelated `Bookmark` usage (a "save word study" feature) was confirmed out of scope and left untouched.
+
+**Mobile: untouched and deliberately out of scope this entire track**, per every phase's own instruction — tracked separately as PLAN.md #43 (SP5). Nothing here should be read as mobile progress.
+
+**Verification method and its real limits, stated plainly:** every phase was `tsc --noEmit`-clean and diff-reviewed before commit. Beyond that, verification was a local-dev Playwright smoke test confirming only the closed-panel baseline (sidebar at its fixed `x:0`/256px position, `main`'s margin/padding math, zero new console errors) — **opening the panel itself, and everything that depends on it (dismiss, Escape, swap, badge-count-updates-live), was never independently driven end-to-end this session.** Local dev cannot reach the production backend for real chat/verse data (CORS-blocked, the same pre-existing gap noted in every prior SP2 session below). Alex reviewed Phases 1 (both the original build and the live reversal) through 3 live on `rhemata.app` directly and confirmed each. **Phases 4 and 5 have not yet had any live check — they're also not yet pushed, so there's nothing live to check yet.**
 
 ---
 
@@ -25,6 +52,8 @@ Records reconciled: 2026-07-21 (push ladder + SP4 sign-off closure — see the s
 ---
 
 ## SP panel refinement — Phase 2: floating overlay (session state, 2026-07-21)
+
+**Superseded 2026-07-22 — read the new entry at the top of this file first.** "Desktop presentation" below is no longer current: `page.tsx` never stopped reflowing the sidebar/chat around this "floating" card (confirmed by direct code read, not a regression — this commit's own reservation-growing change was intentional), and the geometry itself was replaced twice more since (a true zero-reflow overlay, then a live reversal to side-by-side chat-narrowing). "Non-modal + swap-in-place" and "Reset-on-swap" below both held up under re-audit and are still accurate as descriptions of what shipped, except "Reset-on-swap" collapsing Interlinear on swap — Phase 2 of the 2026-07-22 session flipped that default to open. Kept below verbatim for provenance.
 
 Shipped, build commit `fe310e2` — `frontend/app/page.tsx`, `frontend/components/rhemata/chat-message.tsx`, `frontend/components/rhemata/study-panel.tsx` only. Alex's SP4 sign-off (the gate this phase was waiting on) cleared before this session started. **Goes further than the original Phase 2 scope** (`docs/superpowers/plans/2026-07-19-study-panel-refinement.md`, Tasks 6-9), which was margin/rounding only — this session's explicit spec added non-modal desktop interaction and swap-in-place, superseding that plan's narrower Task 9 assumption (default Radix modal dismiss unmodified).
 
