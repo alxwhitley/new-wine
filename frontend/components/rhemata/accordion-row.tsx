@@ -37,12 +37,19 @@ export function AccordionRow({
     }
   }
 
+  // Phase 4 (section cards, Option B): bg-popover is DESIGN.md's only
+  // "lifted surface" token lighter than the panel's bg-background (--card
+  // is deliberately flat/identical to --background per that file's Depth
+  // philosophy) — same bg-popover/text-popover-foreground pairing already
+  // used by DropdownMenuContent elsewhere in this codebase. Replaces the
+  // old flat border-b divider stack; vertical gaps between cards come from
+  // the parent's space-y-3 (study-panel.tsx), not from margins here.
   return (
-    <div className="border-b border-border last:border-b-0">
+    <div className="rounded-lg border border-border bg-popover">
       <button
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between py-3 text-sm text-foreground hover:text-foreground/80 transition-colors cursor-pointer"
+        className="flex w-full items-center justify-between px-4 py-3 text-sm text-popover-foreground hover:text-popover-foreground/80 transition-colors cursor-pointer"
       >
         {label}
         <ChevronDown
@@ -52,7 +59,7 @@ export function AccordionRow({
           )}
         />
       </button>
-      {open && <div className="pb-3">{children}</div>}
+      {open && <div className="px-4 pb-4">{children}</div>}
     </div>
   );
 }

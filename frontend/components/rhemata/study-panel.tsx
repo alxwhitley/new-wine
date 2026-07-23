@@ -330,7 +330,7 @@ function PanelBody({
           )}
 
           {reference.type === "verse" && (
-            <div className="mt-6">
+            <div className="mt-6 space-y-3">
               <AccordionRow label="Interlinear" open={interlinearOpen} onOpenChange={onInterlinearOpenChange}>
                 <InterlinearBlocks
                   tokens={tokens}
