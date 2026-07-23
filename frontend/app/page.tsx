@@ -87,6 +87,10 @@ export default function Home() {
 
   // Inline Study Panel state (SP2 shell — docs/inline-study-panel-spec.md)
   const [studyPanelOpen, setStudyPanelOpen] = useState(false);
+  // Mirrors StudyPanel's own interlinearOpen state so this page's width
+  // reservation can widen in step — must stay in sync with the panel's own
+  // width class (components/rhemata/study-panel.tsx).
+  const [interlinearWide, setInterlinearWide] = useState(false);
   const [studyReference, setStudyReference] = useState<StudyReference | null>(null);
   // SP2 Phase 5: global, account-level pins — fetched from and persisted to
   // /study/pins, not in-memory. `id` is the server row id (needed for
@@ -369,12 +373,19 @@ export default function Home() {
       />
 
       {/* Floating panel wrapper — inset on desktop, full-bleed on mobile.
-          Phase 1 (true overlay): the Study Panel floats over this content on
-          its own z-layer (see study-panel.tsx) — opening/closing it never
-          changes this element's size or position. No reservation, no reflow. */}
+          Side-by-side, not overlay (revised live, 2026-07-22): the sidebar
+          NEVER collapses (md:ml-64 is constant) — only the chat card itself
+          narrows, via padding-right sized to the Study Panel's own width
+          (kept in sync with study-panel.tsx's w-[33vw]/w-[50vw] classes), so
+          the panel reads as sliding in beside the chat rather than the
+          sidebar vanishing to make room for it. */}
       <main
         className={cn(
-          "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 md:ml-64 transition-[margin-left,padding-right] duration-300 ease-in-out motion-reduce:transition-none",
+          "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 md:ml-64 transition-[padding-right] duration-300 ease-in-out motion-reduce:transition-none",
+          studyPanelOpen &&
+            (interlinearWide
+              ? "md:pr-[clamp(496px,calc(50vw+1rem),736px)]"
+              : "md:pr-[clamp(396px,calc(33vw+1rem),496px)]"),
           inputFocused ? "pb-0" : "pb-14"
         )}
       >
@@ -524,6 +535,7 @@ export default function Home() {
         accessToken={accessToken}
         role={userRole}
         userId={user?.id ?? null}
+        onInterlinearOpenChange={setInterlinearWide}
         teacherQuestion={teacherCardQuestion}
       />
 
