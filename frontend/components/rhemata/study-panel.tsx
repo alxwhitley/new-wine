@@ -243,7 +243,13 @@ function PanelBody({
             </button>
           </PanelPrimitive.Close>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        {/* pb composes the existing 1rem with the real device inset (0 on
+            desktop, where this div is also shared — degrades to today's
+            plain py-4 there) rather than padding an outer static wrapper:
+            content that actually scrolls needs clearance IN the scrolled
+            region, so reaching max-scroll is what clears the indicator,
+            not just a shorter box. */}
+        <div className="flex-1 overflow-y-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <WordStudyView definition={wordDefinition} onBack={handleBackFromWordStudy} />
         </div>
       </div>
@@ -290,8 +296,15 @@ function PanelBody({
         </div>
       </div>
 
-      {/* Scrollable body */}
-      <div ref={rowViewContainerRef} tabIndex={-1} className="flex-1 overflow-y-auto px-4 py-4">
+      {/* Scrollable body. pb composes the existing 1rem with the real
+          device inset (0 on desktop, where this div is also shared —
+          degrades to today's plain py-4 there) rather than padding an
+          outer static wrapper: content that actually scrolls needs
+          clearance IN the scrolled region — reaching max-scroll (the
+          last accordion, at the end of a long Interlinear/Commentaries/
+          Pastors' Notes list) is what clears the indicator, not just a
+          shorter box. */}
+      <div ref={rowViewContainerRef} tabIndex={-1} className="flex-1 overflow-y-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {/* Keyed on the target's identity so a swap remounts this subtree —
             a smooth fade rather than a jarring cut, and content-local state
             here would reset for free too (none currently lives here; the
