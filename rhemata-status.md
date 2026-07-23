@@ -3,8 +3,22 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-23 (Mobile study panel: swipe-to-close + bottom safe-area, Phases 0-3 — see directly below).
-Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section below the new one).
+Last verified: 2026-07-23 (Landing page footer: Product list now reflects available-now vs coming-soon — see directly below).
+Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section two below the new one).
+
+---
+
+## Landing page footer: Product list now reflects available-now vs coming-soon, standalone Study retired from footer (session state, 2026-07-23)
+
+Resolves open question #3 logged in the "Chat-only beta" session entry further down this file ("The landing page footer's 'Product' link list still lists 'Study'/'Discover' as labels... copy decision, out of scope, per instruction") — that footer copy decision is now made.
+
+**Change, frontend-only, `frontend/app/home/page.tsx` (footer's "Product" `<ul>` only):** "Study" removed as a standalone footer item — permanently, not deferred; the in-chat Study Panel (verse cards, word study, teacher cards, Pastors' Notes) supersedes standalone Study, and no footer link points to a standalone Study route. "Chat" stays available-now, now carries a sub-line ("Study tools built into every conversation") communicating that Bible study tooling lives inside the chat experience, not a separate destination. "Pastors' Notes" stays available-now, grouped directly under Chat, now carries a sub-line ("A small, growing collection") — accurate about the current small note count without overselling or apologizing. "Discover" moved to a visually distinct coming-soon treatment: a non-link `<span>` (no href, not focusable, no hover state), muted color, with a small rounded-full "Coming soon" tag — reuses the same treatment already shipped at `weekly-limit-card.tsx`'s billing-disabled state rather than inventing a new pattern, and matches DESIGN.md's "pills/badges: rounded-md or rounded-full for tags only" rule.
+
+**Explicitly untouched, per instruction:** `NEXT_PUBLIC_FULL_NAV_ENABLED` and all navigation-gating/routing logic; the landing page's `MockSidebar` illustration (still shows Study/Discover, still stale — a separately logged, later design pass, not this one). Chat and Pastors' Notes both still link to `/` — the same pre-existing placeholder href noted (not fixed) in the Chat-only-beta entry further down; out of scope for this copy/markup-only change.
+
+**Verified live, real browser (Playwright, against the local dev server already running on port 3000 — not restarted):** at both 1440×900 and 390×844, the Product list renders exactly three items — Chat (+ sub-line), Pastors' Notes (+ sub-line), Discover (+ "Coming soon" tag) — no "Study" item, confirmed by reading the live DOM, not just the diff. Chat and Pastors' Notes confirmed as real `<a href="/">` elements with a working hover color transition (computed `color` genuinely changed on hover, not just a class name check). Discover confirmed as a `<span>` — zero `<a>` elements inside its `<li>`, not keyboard-focusable (`tabIndex` not ≥0) — so it cannot be clicked or tabbed to. Screenshots taken at both widths confirm no overflow or awkward wrapping.
+
+**Reconciliation.** One file touched: `frontend/app/home/page.tsx` (footer Product list only, confirmed by diff — no other line changed). One commit, bundling this status update with the code change per this session's own instruction — a deliberate exception to the usual separate build/records-commit pattern used elsewhere in this file.
 
 ---
 

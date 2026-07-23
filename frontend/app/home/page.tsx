@@ -595,12 +595,24 @@ export default function HomePage() {
           <div className="flex gap-14">
             <div>
               <h4 className="text-[.68rem] font-bold uppercase tracking-[.12em] mb-3.5" style={{ color: "hsl(var(--muted-foreground) / 0.7)" }}>Product</h4>
-              <ul className="space-y-2 list-none m-0 p-0">
-                {(["Chat", "Study", "Discover", "Pastors’ Notes"] as string[]).map((label) => (
+              <ul className="space-y-3 list-none m-0 p-0">
+                {([
+                  { label: "Chat", note: "Study tools built into every conversation" },
+                  { label: "Pastors’ Notes", note: "A small, growing collection" },
+                ] as const).map(({ label, note }) => (
                   <li key={label}>
                     <Link href="/" className="text-[.85rem] text-muted-foreground hover:text-card-foreground transition-colors no-underline">{label}</Link>
+                    <p className="text-[.72rem] mt-0.5 leading-snug" style={{ color: "hsl(var(--muted-foreground) / 0.6)" }}>{note}</p>
                   </li>
                 ))}
+                <li>
+                  <span className="text-[.85rem] inline-flex items-center gap-1.5 cursor-default select-none" style={{ color: "hsl(var(--muted-foreground) / 0.45)" }}>
+                    Discover
+                    <span className="text-[.6rem] font-semibold uppercase tracking-[.08em] border border-border rounded-full px-1.5 py-0.5" style={{ color: "hsl(var(--muted-foreground) / 0.7)" }}>
+                      Coming soon
+                    </span>
+                  </span>
+                </li>
               </ul>
             </div>
             <div>
