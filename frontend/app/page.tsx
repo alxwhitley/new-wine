@@ -56,6 +56,11 @@ export default function Home() {
   }
   const [weeklyLimitDetail, setWeeklyLimitDetail] = useState<WeeklyLimitDetail | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Geometry v3: StudyPanel's desktop Portal renders into this node instead
+  // of document.body — real DOM nesting inside the chat card. useState (not
+  // useRef) so the ref callback's assignment triggers a re-render, since
+  // StudyPanel needs the actual element, not a ref object, to pass to Portal.
+  const [desktopPanelContainer, setDesktopPanelContainer] = useState<HTMLDivElement | null>(null);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const {
     messages,
@@ -369,26 +374,30 @@ export default function Home() {
         onSignOut={signOut}
       />
 
-      {/* Floating panel wrapper — inset on desktop, full-bleed on mobile.
-          Side-by-side, not overlay: the sidebar NEVER collapses (md:ml-64
-          is constant) — only the chat card itself narrows, via padding-
-          right sized to the Study Panel's own fixed width (Phase 3: kept
-          in sync with study-panel.tsx's single w-[33vw] class — the panel
-          no longer has a wider Interlinear-open state to track), so the
-          panel reads as sliding in beside the chat rather than the
-          sidebar vanishing to make room for it. */}
+      {/* Chat card wrapper — inset on desktop, full-bleed on mobile. The
+          sidebar NEVER collapses (md:ml-64 is constant); the card's own
+          outer bounds never move either, panel open or closed (geometry
+          v3, replaces the old padding-right reservation) — only the split
+          INSIDE the card between chat region and panel slot changes. */}
       <main
         className={cn(
-          "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 md:ml-64 transition-[padding-right] duration-300 ease-in-out motion-reduce:transition-none",
-          studyPanelOpen && "md:pr-[clamp(396px,calc(33vw+1rem),496px)]",
+          "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 md:ml-64",
           // Chat-only beta: no tab bar to clear, so no keyboard-focus
           // toggle needed — just the real bottom safe-area (Phase 4 makes
           // env() non-zero). Flag on: unchanged, 56px reserved for the bar.
           isFullNavEnabled() ? (inputFocused ? "pb-0" : "pb-14") : "pb-safe"
         )}
       >
-        {/* The floating panel — bordered card on desktop, full-bleed on mobile */}
-        <div className="relative flex flex-col flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
+        {/* The chat card — bordered on desktop, full-bleed on mobile. Row on
+            desktop (chat region | panel slot side by side, sharing this
+            box's own rounded corners/border/overflow-hidden — the panel
+            gets no rounding/border/shadow of its own); column on mobile,
+            where the panel slot below never renders (hidden md:block) so
+            this is a single unchanged flex-column, byte-for-byte as before. */}
+        <div className="relative flex flex-col md:flex-row flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
+          {/* Chat region — was the card's own direct content; now its own
+              flex-column so it can sit beside the panel slot on desktop. */}
+          <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
 
           {/* Mobile floating menu button — replaces full-width bar on mobile.
               LOAD-BEARING once the tab bar is gated off: this is the only
@@ -515,6 +524,24 @@ export default function Home() {
               <ChatInput onSend={handleSend} disabled={chatLoading || !!weeklyLimitDetail} streaming={chatLoading} />
             </>
           )}
+          </div>
+
+          {/* Study panel slot — desktop only. Owns the width (clamp formula,
+              100% resolves against this row's own inner width per the
+              validated mockup), the single border-left separator, and the
+              300ms width transition; StudyPanel's Content (portaled in via
+              desktopPanelContainer below) just fills whatever width this
+              currently is with `w-full h-full`, so it tracks the transition
+              for free with no animation of its own to keep in sync. Closed
+              state drops the border too — a 0-width box with a border-left
+              still renders a stray 1px sliver otherwise. */}
+          <div
+            ref={setDesktopPanelContainer}
+            className={cn(
+              "hidden md:block shrink-0 min-w-0 min-h-0 overflow-hidden transition-[width] duration-300 ease-in-out",
+              studyPanelOpen ? "w-[clamp(340px,calc(100%-720px),440px)] border-l border-border" : "w-0"
+            )}
+          />
         </div>
       </main>
 
@@ -526,8 +553,13 @@ export default function Home() {
         onClose={handleCloseSourcePanel}
       />
 
-      {/* Inline Study Panel (SP2 shell) — outside the floating panel, same
-          reasoning as SourcePanel above. */}
+      {/* Inline Study Panel (SP2 shell) — declared here (outside the chat
+          card) same as SourcePanel above, but geometry v3's desktop branch
+          actually renders inside the card via desktopPanelContainer's
+          Portal redirect (see study-panel.tsx); this is a Radix Portal
+          component, so where it's declared in JSX never determined where
+          it painted anyway. Mobile still portals to document.body, as
+          always. */}
       <StudyPanel
         isOpen={studyPanelOpen}
         onClose={handleCloseStudyPanel}
@@ -538,6 +570,7 @@ export default function Home() {
         role={userRole}
         userId={user?.id ?? null}
         teacherQuestion={teacherCardQuestion}
+        desktopContainer={desktopPanelContainer}
       />
 
       {showGate && (

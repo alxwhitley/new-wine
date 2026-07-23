@@ -375,9 +375,16 @@ interface StudyPanelProps {
   role?: string | null;
   userId?: string | null;
   teacherQuestion?: string;
+  // Geometry v3 (nested-in-card): desktop's Portal renders into this DOM
+  // node (a slot inside the chat card, owned by page.tsx) instead of the
+  // Radix default (document.body) — real DOM nesting instead of a fixed-
+  // position overlay, so the card's own rounded corners/border/overflow-
+  // hidden apply to the panel for free. Mobile is untouched — Portal falls
+  // back to its default container when this is undefined/null or isMobile.
+  desktopContainer?: HTMLDivElement | null;
 }
 
-export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId, teacherQuestion }: StudyPanelProps) {
+export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, accessToken, role, userId, teacherQuestion, desktopContainer }: StudyPanelProps) {
   const isMobile = useIsMobile();
   // Lifted here, not just PanelBody, so PanelBody's swap-reset effect can
   // force it back open on a target change even if the user had manually
@@ -464,15 +471,14 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
 
   return (
     <PanelPrimitive.Root open={isOpen} modal={isMobile} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <PanelPrimitive.Portal>
+      <PanelPrimitive.Portal container={isMobile ? undefined : desktopContainer}>
         {/* Mobile only: real dark scrim, full-screen takeover, chat hidden
-            underneath (spec, mobile section — untouched by Phase 2). Desktop
-            floats over the chat with no scrim/overlay at all: the chat stays
-            fully visible AND interactive, and the rounded corners + shadow
-            on Content below are the only depth cues. Root's modal={isMobile}
-            (false on desktop) plus handlePointerDownOutside above are what
-            make that safe — no blocking layer is needed for outside-click-
-            to-close to keep working. */}
+            underneath (spec, mobile section — untouched by geometry v3).
+            Desktop renders no scrim/overlay at all: the chat stays fully
+            visible AND interactive. Root's modal={isMobile} (false on
+            desktop) plus handlePointerDownOutside above are what make that
+            safe — no blocking layer is needed for outside-click-to-close
+            to keep working. */}
         {isMobile && (
           <PanelPrimitive.Overlay
             className={cn(
@@ -487,7 +493,7 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
           onPointerDownOutside={handlePointerDownOutside}
           onFocusOutside={handleFocusOutside}
           className={cn(
-            "fixed z-50 flex flex-col bg-background shadow-lg outline-none",
+            "flex flex-col bg-background outline-none",
             "transition ease-in-out motion-reduce:transition-none motion-reduce:animate-none",
             "data-[state=closed]:animate-out data-[state=closed]:duration-300",
             "data-[state=open]:animate-in data-[state=open]:duration-300",
@@ -495,27 +501,22 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
               // LOAD-BEARING: the close control below is the only way out
               // of this full-screen takeover. pt safe-area keeps it below
               // the notch/status bar instead of shifting inset-0's whole
-              // box — mobile only, desktop's floating card never touches
+              // box — mobile only, desktop's nested panel never touches
               // the top edge.
-              ? "inset-0 pt-[env(safe-area-inset-top)] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
-              : cn(
-                  // Floating card beside the chat (revised live, 2026-07-22):
-                  // small gap on all sides (inset-y-2/right-2), never
-                  // touches a screen edge. Background matches the chat
-                  // card's own bg-background (not the sidebar) — the panel
-                  // reads as a sibling of the chat card, not a nav surface.
-                  // Same 300ms timing as page.tsx's padding-right shift on
-                  // `main`, so the panel's slide and the chat's narrowing
-                  // read as one coordinated motion.
-                  "inset-y-2 right-2 rounded-xl border border-border",
-                  "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
-                  // Phase 3: fixed width, permanently — the old 50vw
-                  // Interlinear-open expansion is gone. This is the
-                  // pre-Interlinear-click closed-state width from before
-                  // Phase 3 (Phase 0 measurement), now the panel's only
-                  // width regardless of which sections are open.
-                  "w-[33vw] min-w-[380px] max-w-[480px]"
-                )
+              ? "fixed inset-0 z-50 shadow-lg pt-[env(safe-area-inset-top)] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
+              // Geometry v3 (nested-in-card, replaces the floating card):
+              // Content now renders inside page.tsx's own slot div (via
+              // the Portal's container prop above), which owns the width
+              // (clamp formula) and the 300ms width transition and the
+              // single border-left — Content itself is a plain, normal-
+              // flow box that just fills that slot. No fixed positioning,
+              // no rounded corners/border/shadow of its own: the card's
+              // existing overflow-hidden + rounded-xl clips it for free,
+              // reading as one shared surface, not a second card. Slide-
+              // from-right no longer makes geometric sense once the slot
+              // itself is what's revealing the space, so this fades
+              // instead — same 300ms duration as everything else here.
+              : "relative h-full w-full min-h-0 data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}
         >
           {/* Mobile grab handle — visual affordance only; drag-to-dismiss is
