@@ -464,6 +464,53 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
     }
   }
 
+  // Swipe-to-close (mobile grab handle ONLY — not Content, not PanelBody,
+  // not the scrollable regions). Deliberately narrow, per roadmap #43's
+  // reduced scope: detect-and-close only, the sheet never follows the
+  // finger, no snap-back, no new motion. Reuses the exact same `onClose`
+  // every other close path already calls — not a parallel close mechanism.
+  // Pointer Events (not Touch Events) are used specifically because React
+  // marks touchstart/touchmove listeners passive by default, which would
+  // silently break preventDefault below; pointer events aren't subject to
+  // that. 44px threshold matches this codebase's existing min touch-target
+  // convention (min-h-[44px], used throughout) rather than a new number.
+  const swipeStartYRef = useRef<number | null>(null);
+  const SWIPE_CLOSE_THRESHOLD_PX = 44;
+
+  function handleHandlePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
+    swipeStartYRef.current = event.clientY;
+  }
+
+  function handleHandlePointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+    if (swipeStartYRef.current === null) return;
+    // Only suppresses incidental native touch behavior (page bounce, etc.)
+    // on this one small element while a drag is actively tracked — never
+    // touches click. A plain tap never reaches a meaningful move delta, so
+    // the existing tap-to-close (Radix's own Close onClick, untouched)
+    // keeps firing normally; nothing here calls preventDefault on pointer-
+    // down or stops propagation.
+    event.preventDefault();
+  }
+
+  function handleHandlePointerUp(event: React.PointerEvent<HTMLButtonElement>) {
+    const startY = swipeStartYRef.current;
+    swipeStartYRef.current = null;
+    if (startY === null) return;
+    const deltaY = event.clientY - startY;
+    // Downward past threshold only. Upward, or below threshold: no-op —
+    // no animation, no snap-back, no visual state change, exactly as
+    // specified. The sheet's own existing close animation (data-[state=
+    // closed]:slide-out-to-bottom, already motion-reduce-safe) plays from
+    // whichever path triggers `onClose` — this one included.
+    if (deltaY >= SWIPE_CLOSE_THRESHOLD_PX) {
+      onClose();
+    }
+  }
+
+  function handleHandlePointerCancel() {
+    swipeStartYRef.current = null;
+  }
+
   if (!reference) return null;
 
   const isPinned = pins.some((p) => referenceKey(p) === referenceKey(reference));
@@ -519,11 +566,22 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
               : "relative h-full w-full min-h-0 data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}
         >
-          {/* Mobile grab handle — visual affordance only; drag-to-dismiss is
-              a follow-up (no drag dependency in this project yet). Tap closes. */}
+          {/* Mobile grab handle — tap closes (Radix Close, untouched); a
+              downward swipe past threshold also closes, via the pointer
+              handlers below, reusing the same onClose. touch-none keeps
+              incidental native touch gestures off this one element while
+              a drag is in progress — scoped here only, PanelBody's own
+              scrollable regions are untouched and still scroll normally. */}
           {isMobile && (
             <PanelPrimitive.Close asChild>
-              <button className="flex shrink-0 items-center justify-center py-3" aria-label="Close">
+              <button
+                className="flex shrink-0 items-center justify-center py-3 touch-none"
+                aria-label="Close"
+                onPointerDown={handleHandlePointerDown}
+                onPointerMove={handleHandlePointerMove}
+                onPointerUp={handleHandlePointerUp}
+                onPointerCancel={handleHandlePointerCancel}
+              >
                 <span className="h-1 w-10 rounded-full bg-border" />
               </button>
             </PanelPrimitive.Close>
