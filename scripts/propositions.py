@@ -7,6 +7,7 @@ Austin locked out by name (see process_document). Non-fatal by contract: no
 public function raises.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -17,6 +18,16 @@ from typing import Callable, List, Optional
 from groq import Groq
 
 logger = logging.getLogger(__name__)
+
+# Single source of truth for both the model requested (recorded verbatim on
+# every stored row -- see store_propositions()'s model param) and the
+# default prompt_version every real ingest path uses (process_document()
+# never exposes prompt_version to its callers, so this constant is what
+# "v3" actually means there -- referencing it in both places means the
+# extraction call and its provenance stamp can never name two different
+# versions by accident).
+EXTRACTION_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_PROMPT_VERSION = "v3"
 
 # ── Prompt ────────────────────────────────────────────────────────────────────
 
@@ -178,11 +189,40 @@ class PropositionExtractionFailed(Exception):
     """
 
 
+def _select_prompt_template(prompt_version: str) -> str:
+    """Return the raw, unformatted instruction template for prompt_version --
+    the exact text before any speaker/content substitution is filled in.
+
+    This is the ONLY function that decides which template text a given
+    prompt_version sends, and both extract_propositions() and
+    prompt_fingerprint() go through it -- so if a future revision ever
+    branches the template on something else (content type, for instance),
+    that branch only needs to be added here once, and the fingerprint
+    automatically reflects it with no separate update anywhere else.
+    """
+    if prompt_version == "v4":
+        return EXTRACTION_PROMPT_V4
+    return EXTRACTION_PROMPT
+
+
+def prompt_fingerprint(prompt_version: str) -> str:
+    """SHA-256 hex digest of the exact instruction template text for
+    prompt_version, computed fresh from the literal constant every call --
+    never hand-maintained, so it cannot silently drift out of sync with the
+    real wording the way the prompt_version label itself already has (the
+    2026-07-23 sentence-structure and terminology-rename revisions both
+    kept the label "v4" while the actual template text changed twice).
+    Authoritative over the prompt_version label wherever the two disagree.
+    """
+    template = _select_prompt_template(prompt_version)
+    return hashlib.sha256(template.encode("utf-8")).hexdigest()
+
+
 def extract_propositions(
     text: str,
     doc_id: str = "",
     speaker: Optional[str] = None,
-    prompt_version: str = "v3",
+    prompt_version: str = DEFAULT_PROMPT_VERSION,
 ) -> List[dict]:
     """Send text to Groq and return parsed proposition list.
 
@@ -203,14 +243,14 @@ def extract_propositions(
     if prompt_version == "v4":
         if not speaker:
             raise ValueError("prompt_version='v4' requires a non-empty speaker name")
-        prompt = EXTRACTION_PROMPT_V4.format(speaker=speaker)
+        prompt = _select_prompt_template(prompt_version).format(speaker=speaker)
     else:
-        prompt = EXTRACTION_PROMPT
+        prompt = _select_prompt_template(prompt_version)
     try:
         client = _get_groq()
         msg = f"{prompt}\n\n---\n\n{text}"
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=EXTRACTION_MODEL,
             messages=[{"role": "user", "content": msg}],
             temperature=0.2,
             max_tokens=8192,
@@ -240,8 +280,21 @@ def store_propositions(
     document_id: str,
     propositions: List[dict],
     embed_fn: Callable[[str], List[float]],
+    prompt_version: Optional[str] = None,
+    fingerprint: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> int:
     """Clear existing propositions for document_id, then embed and insert new ones.
+
+    prompt_version / fingerprint / model: provenance stamped onto every row
+    this call inserts -- added 2026-07-23 so a future fabrication sweep is a
+    lookup instead of the manual text search and git archaeology the
+    2026-07-23 diagnostic required. All three are optional (None writes
+    NULL) so this signature doesn't force every caller to supply them, but
+    process_document() -- the only real caller -- always does. fingerprint
+    is the authoritative field when investigating; prompt_version is a
+    human-readable label only, kept for convenience, not trusted on its own
+    (see prompt_fingerprint()'s docstring for why).
 
     Commits the transaction. Returns count inserted.
     fts column is GENERATED ALWAYS AS STORED — not included in INSERT.
@@ -260,14 +313,18 @@ def store_propositions(
             embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
             cur.execute(
                 """INSERT INTO propositions
-                       (id, document_id, content, embedding, proposition_index)
-                   VALUES (%s, %s, %s, %s::vector, %s)""",
+                       (id, document_id, content, embedding, proposition_index,
+                        prompt_version, prompt_fingerprint, model)
+                   VALUES (%s, %s, %s, %s::vector, %s, %s, %s, %s)""",
                 (
                     str(uuid.uuid4()),
                     document_id,
                     content,
                     embedding_str,
                     prop_index,
+                    prompt_version,
+                    fingerprint,
+                    model,
                 ),
             )
             inserted += 1
@@ -311,6 +368,12 @@ def process_document(
     exception: Precept Austin never gets propositions — see
     PRECEPT_AUSTIN_SOURCE_ID above.
 
+    Every row a "stored:{n}" result writes is stamped with provenance
+    (which prompt version, its fingerprint, which model — see
+    store_propositions()) using DEFAULT_PROMPT_VERSION, since this function
+    never exposes prompt_version to its own callers and so always means
+    that version here.
+
     Never raises.
     """
     try:
@@ -325,7 +388,12 @@ def process_document(
         if not props:
             return "no_propositions"
 
-        count = store_propositions(conn, document_id, props, embed_fn)
+        count = store_propositions(
+            conn, document_id, props, embed_fn,
+            prompt_version=DEFAULT_PROMPT_VERSION,
+            fingerprint=prompt_fingerprint(DEFAULT_PROMPT_VERSION),
+            model=EXTRACTION_MODEL,
+        )
         return f"stored:{count}"
     except Exception as exc:
         logger.warning(
