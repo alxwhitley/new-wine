@@ -66,12 +66,32 @@ quality.
    runner treats them as terminators; the batch rolls back silently. Verify with
    `SELECT to_regclass('public.<table>')` on a FRESH connection.
 
+10. **Every proposition write must stamp provenance** (prompt version label,
+    a fingerprint of the exact instruction wording, model) — added 2026-07-23
+    after a leaked worked example required a manual text search across every
+    stored row plus git archaeology, because nothing recorded which prompt
+    produced what. The fingerprint is authoritative over the label when they
+    disagree — labels drift (this project's own "v4" label covered three
+    different actual wordings in one afternoon); a fingerprint computed fresh
+    from the literal text each time cannot. Any new proposition-writing path —
+    a new ingest script, the eventual full backfill, anything calling the
+    storage function directly rather than through the shared entry point —
+    must pass real values for all three. An unstamped write silently reopens
+    this hole.
+
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
+- The 2,413 propositions written before 2026-07-23 carry no real provenance —
+  marked `legacy_unknown` by design, not inferred from timestamps. A
+  2026-07-23 diagnostic built a reasonably strong circumstantial case for
+  what produced them (git history + a full-corpus text sweep for one known
+  leak), but that's evidence, not a stored fact. Treat any claim about which
+  prompt version produced a specific pre-07-23 row as unverified unless
+  re-checked by the same method.
 - Some sources have no alias rows; re-ingesting their content sentinels
   silently. `ALIAS_MISS` is the grep-able breadcrumb.
 

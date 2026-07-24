@@ -3,8 +3,30 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-23 (v4 propositions prompt — three tuning passes, sample checkpoint only — see directly below).
-Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section three below the new one).
+Last verified: 2026-07-23 (propositions provenance stamping — see directly below).
+Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section four below the new one).
+
+---
+
+## Propositions provenance stamping shipped (session state, 2026-07-23)
+
+Follows directly from the same day's backfill-scope diagnostic and fabrication sweep (recorded further below): that sweep found zero contamination in the live corpus, but only by manually searching text and reconstructing prompt history from git, because nothing recorded which prompt version or model produced any given row. This closes that gap going forward.
+
+**What's recorded now.** Every proposition written from this point on carries three new pieces of information: a human-chosen label for which named revision of the extraction instructions was used; a fingerprint — a short digital signature computed automatically from the exact, literal wording of those instructions at the moment of the call, never hand-typed; and which AI model answered the call. **The fingerprint is authoritative whenever it and the label disagree** — deliberately, because the label already proved unreliable within this same session: today's two tuning passes both kept calling themselves "v4" while the actual instruction wording changed twice. A future investigation should trust the fingerprint, not the label, when the two don't match.
+
+**Existing rows.** All 2,413 propositions written before this change now carry an explicit, clearly-named "unknown" marker — deliberately NOT a guess at which version actually produced them, even though today's earlier diagnostic built a reasonably strong circumstantial case for that (git history plus a corpus-wide text search). A guessed value would be worse than an honest blank, because the entire reason this field exists is to be trusted during a future investigation — and a field that sometimes contains a guess can't be trusted blindly. If a real answer is ever needed for a specific pre-existing row, the git-history/text-search method from today's diagnostic is still the way to get it — it's just not stored as a database fact.
+
+**Where this is wired.** Every real way a proposition gets written funnels through exactly one place in the code, so stamping that one place covers the entire live pipeline — the standalone document importer, the magazine importer, the Precept Austin importer, the lexicon importer, the YouTube pipeline, and the HelloAO commentary script (currently a no-op since its sources are public domain, but fully wired and will start writing real, stamped rows automatically the moment that changes). Confirmed by a full-codebase search before building anything — no admin button, API route, or database-level automation was ever found to generate a proposition outside this one path.
+
+**Standing expectation going forward:** any new way of writing propositions — a new ingest script, the eventual full backfill, or any code that calls the underlying storage function directly rather than through the shared entry point — must pass real values for all three fields. A write that skips this silently reopens the exact gap this closed. (This is now also recorded as a standing invariant in `CLAUDE.md`.)
+
+**Today's throwaway 5-teacher sample-test script (used for the three tuning-pass comparisons recorded below) was deleted rather than stamped**, per Alex's instruction — its purpose was already served, and there was no reason to carry it forward as a fifth thing to maintain.
+
+**Honesty note on how this was verified.** Rather than writing any real new proposition content to prove the mechanism works, verification used a synthetic insert-then-immediately-delete cycle through the real storage function, confirmed net-zero row change before and after. One thing worth flagging plainly: the document used for that throwaway test happened to be a Precept Austin document, picked automatically by a query that filtered for "no propositions yet" but didn't think to also exclude Precept Austin by name. Precept Austin is permanently locked out of real propositions by design — bypassing that lock wasn't the point of the test and the real lock (which lives one level up, in the normal write path, not in the raw storage function) was never touched or weakened, and the test row was fully deleted and confirmed gone. But a more careful first pick would have avoided a Precept Austin document entirely, and that's noted here rather than smoothed over.
+
+**Migration:** applied manually by Alex in the Supabase SQL Editor, per this project's standing practice — three new fields added to the table that stores propositions, all optional, so nothing existing was put at risk.
+
+**Open item, NOT addressed by this work — logged so it isn't mistaken for closed:** nothing in this system mechanically verifies that a stored proposition actually matches what its source document says. Today's sweep confirmed one specific, already-known bug (a leaked worked example) did not spread beyond the small test batch where it was first found — it did NOT establish that the corpus is free of other, unrelated fabrication. Worth being precise about why this matters here specifically: the one confirmed failure was real Leonard Ravenhill teaching, wrongly attributed by name to Derek Prince. A future safeguard that only checks "is this teacher's name one who was actually retrieved" would NOT have caught that — the name attached was a real, retrieved teacher's name, just the wrong one. Whatever mechanism eventually gets built to guard against this needs to check that a claim traces back to its OWN attributed teacher's material, not merely that the name belongs to someone in the batch.
 
 ---
 
