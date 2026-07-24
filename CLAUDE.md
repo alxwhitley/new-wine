@@ -94,6 +94,25 @@ quality.
   re-checked by the same method.
 - Some sources have no alias rows; re-ingesting their content sentinels
   silently. `ALIAS_MISS` is the grep-able breadcrumb.
+- **No cheap check exists for the demonstrated fabrication class: real,
+  accurate content correctly sourced from one named teacher, attached to a
+  different named teacher's document.** Tested 2026-07-24: a similarity-based
+  check (does a proposition's meaning match something in its own document)
+  was built, run corpus-wide, and rejected — confirmed-accurate propositions
+  routinely scored as extreme as or more extreme than the one known real
+  fabrication, so no cutoff separates them. A names/numbers/citations-present
+  check remains worth building but is blind to this exact failure by
+  construction — the known fabrication contains no checkable specifics at
+  all. Don't treat either check, if one gets built, as covering this failure
+  class without re-confirming against it directly.
+- **John Bevere's 219 documents are attributed by channel name only, no
+  per-video speaker check** — same mechanism already responsible for the
+  2026-07-16 Savchuk/Deere/Sam Storms/Bible Study Podcast cleanup. That
+  cleanup's own review covered Bevere too but only read each document's first
+  two chunks; a 2026-07-24 check found at least one still-live document
+  ("...w/ Rick Renner") the same review pattern should have caught and didn't.
+  Zero propositions written against Bevere material yet — resolve this before
+  backfilling any of it, not after.
 
 **Corpus counts are never documented here.** Query live — any static number rots
 within days and has already caused one round of false blockers.
