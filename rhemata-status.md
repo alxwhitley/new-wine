@@ -3,8 +3,20 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-24 (claim-to-source verification check: built, tested, rejected — see directly below).
-Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section five below the new one).
+Last verified: 2026-07-24 (Vlad Savchuk guest-speaker review — record checked precisely — see directly below).
+Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section six below the new one).
+
+---
+
+## Vlad Savchuk guest-speaker review — exact record checked, no separate incident found (session state, 2026-07-24)
+
+Read-only follow-up prompted by a recollection that Savchuk's channel had been checked and came back "less bad than feared." Went through git history, the saved deletion record, and the live ingest tracker specifically to confirm or refute that against what's actually written down, rather than trust the recollection.
+
+**The only check on record is the 2026-07-16 six-channel review** (the same one covering Bevere, recorded above) — no separate Savchuk-specific audit exists before or after it. That review ran against Savchuk's full original set of **143 documents**, not a pre-flagged subset, and removed **17**: **12 confirmed as an actual different person speaking** (several named directly in the saved record — e.g. a "John Ramirez," a "Heather Shod," a "Sarah" — credited in place of Savchuk), plus **5 marked unresolvable** and removed on that basis rather than kept.
+
+**No record of a larger "initial suspicion" that got revised down.** Searched specifically for that narrative — nothing in git history, no wording anywhere near Savchuk's name suggesting a bigger feared number that the actual check corrected. The saved conclusion is a flat, one-pass tally (quoted in full in the earlier session-state entry above), not a two-stage "suspected X, confirmed only Y" story. If the "less bad than feared" impression is accurate, it isn't written down anywhere in this project's history — most likely explanation, unconfirmed: in the same review, Sam Storms lost all 5 of its documents and "Bible Study Podcast" was removed entirely (source and all, no reliable single-host attribution at all) — Savchuk's 17-of-143 (~12%) reads as mild only by comparison to those two, not because anyone recorded expecting worse from him specifically.
+
+**Where it stands now: 126 Savchuk documents remain** (143 originals minus the 17 removed), **117 of them with propositions written, 1,053 propositions total.** That's the post-review survivor set, not unexamined leftovers — confirmed by direct comparison, zero of the 126 match any of the 17 removed URLs.
 
 ---
 
