@@ -50,10 +50,24 @@ Every INSERT and DELETE in this module uses parameterized queries (%s
 placeholders via psycopg2) -- no raw string interpolation of values, ever.
 This operates on live production data.
 
+Batch functions (delete_documents_cascade, restore_many): each covers N
+documents in ONE connection / ONE transaction, not N sequential
+single-document transactions -- a batch either fully commits or fully rolls
+back, so a failure on document 3 of 5 also undoes documents 1-2's work in
+the same call. restore_many() inserts table-major across the WHOLE batch
+(every snapshot's documents row, then every snapshot's chunks rows, etc.,
+following TABLE_ORDER) rather than document-major, and bumps the
+background_topics sequence once at the end for the whole batch instead of
+once per document. Both batch functions reuse the same per-table helpers
+(_insert_table_rows, _bump_background_topics_sequence, TABLE_ORDER, etc.)
+as the single-document versions -- no per-table logic is forked.
+
 CLI:
     python3 scripts/export_restore_document.py export <document_id> <output_path>
     python3 scripts/export_restore_document.py restore <snapshot_path>
     python3 scripts/export_restore_document.py delete <document_id>
+    python3 scripts/export_restore_document.py delete-batch <document_id> [<document_id> ...]
+    python3 scripts/export_restore_document.py restore-batch <snapshot_path> [<snapshot_path> ...]
 
 Created: 2026-07-24.
 """
@@ -390,6 +404,63 @@ def restore(snapshot_path):
     return counts
 
 
+def restore_many(snapshot_paths):
+    """Batch version of restore(): reads every snapshot in snapshot_paths and
+    inserts all rows for the entire batch inside ONE connection / ONE
+    transaction (not one transaction per snapshot). Insert order is
+    table-major across the WHOLE batch -- every snapshot's `documents` row
+    first, then every snapshot's `chunks` rows, then every snapshot's
+    `propositions` rows, and so on through TABLE_ORDER -- rather than
+    document-major (all of snapshot A's tables, then all of snapshot B's).
+    This is the same FK-safe table order restore() already uses for one
+    document, just extended across N so a partially-inserted batch never
+    leaves a child row pointing at a not-yet-inserted parent even
+    transiently. Reuses _insert_table_rows() and TABLE_ORDER unchanged --
+    no per-table insert logic is duplicated here.
+
+    background_topics.id sequence is bumped exactly once at the end, after
+    every snapshot's background_topics rows are inserted, if any document in
+    the batch had background_topics rows -- not once per document.
+
+    If any row in any snapshot fails to insert, the whole batch rolls back
+    completely and raises -- no partial completion for any document.
+    Returns {document_id: {table: rows_inserted}}, one entry per snapshot,
+    keyed by each snapshot's own _meta.document_id.
+    """
+    snapshots = []
+    for snapshot_path in snapshot_paths:
+        with open(snapshot_path) as f:
+            snapshot = json.load(f)
+        snapshots.append(snapshot)
+
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        counts = {snapshot["_meta"]["document_id"]: {} for snapshot in snapshots}
+        any_background_topics = False
+
+        for table in TABLE_ORDER:
+            for snapshot in snapshots:
+                document_id = snapshot["_meta"]["document_id"]
+                rows = snapshot["tables"].get(table, [])
+                inserted = _insert_table_rows(cur, table, rows)
+                counts[document_id][table] = inserted
+                if table == "background_topics" and inserted > 0:
+                    any_background_topics = True
+
+        if any_background_topics:
+            _bump_background_topics_sequence(cur)
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return counts
+
+
 # ── delete ────────────────────────────────────────────────────────────────
 
 def delete_document_cascade(document_id):
@@ -430,6 +501,57 @@ def delete_document_cascade(document_id):
     }
 
 
+def delete_documents_cascade(document_ids):
+    """Batch version of delete_document_cascade(): deletes every document in
+    document_ids inside ONE connection / ONE transaction (not one
+    transaction per document), in list order. For each document_id, runs
+    the exact same three steps delete_document_cascade() runs for one
+    document -- delete background_topics rows, delete removed_urls rows,
+    delete the documents row (which CASCADEs chunks/propositions/excerpts/
+    book_quotes and SET NULLs books/feedback) -- in that order, for the same
+    FK reasons documented on delete_document_cascade() and in the module
+    docstring's table-quirks notes.
+
+    Commits once, only if every document's deletes succeed. Rolls back the
+    ENTIRE batch on any single failure -- if document 3 of 5 fails,
+    documents 1-2's deletes are undone too, not left partially applied.
+
+    Returns {document_id: {"background_topics_deleted": n,
+    "removed_urls_deleted": n, "documents_deleted": n}}, same per-document
+    shape as delete_document_cascade()'s return value, one entry per
+    document_id.
+    """
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        results = {}
+
+        for document_id in document_ids:
+            cur.execute("DELETE FROM background_topics WHERE document_id = %s", (document_id,))
+            background_topics_deleted = cur.rowcount
+
+            cur.execute("DELETE FROM removed_urls WHERE document_id = %s", (document_id,))
+            removed_urls_deleted = cur.rowcount
+
+            cur.execute("DELETE FROM documents WHERE id = %s", (document_id,))
+            documents_deleted = cur.rowcount
+
+            results[document_id] = {
+                "background_topics_deleted": background_topics_deleted,
+                "removed_urls_deleted": removed_urls_deleted,
+                "documents_deleted": documents_deleted,
+            }
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return results
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────
 
 def main():
@@ -448,6 +570,16 @@ def main():
     p_delete = sub.add_parser("delete", help="Delete one document and its dependent rows")
     p_delete.add_argument("document_id")
 
+    p_delete_batch = sub.add_parser(
+        "delete-batch", help="Delete multiple documents and their dependent rows in ONE transaction"
+    )
+    p_delete_batch.add_argument("document_ids", nargs="+")
+
+    p_restore_batch = sub.add_parser(
+        "restore-batch", help="Restore multiple JSON snapshots into the live tables in ONE transaction"
+    )
+    p_restore_batch.add_argument("snapshot_paths", nargs="+")
+
     args = parser.parse_args()
 
     if args.command == "export":
@@ -459,6 +591,12 @@ def main():
     elif args.command == "delete":
         result = delete_document_cascade(args.document_id)
         print(json.dumps(result, indent=2))
+    elif args.command == "delete-batch":
+        result = delete_documents_cascade(args.document_ids)
+        print(json.dumps(result, indent=2))
+    elif args.command == "restore-batch":
+        counts = restore_many(args.snapshot_paths)
+        print(json.dumps(counts, indent=2))
     else:
         parser.print_help()
         sys.exit(1)
