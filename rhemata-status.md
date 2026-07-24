@@ -3,8 +3,35 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-24 (restore-tool hardening — books/feedback collision path + multi-document batch, both proven — see directly below).
-Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — see the section six below the new one).
+Last verified: 2026-07-24 (corpus quality measurement — two extraction-pipeline bugs found, worst-scoring list is repair not cull — see directly below).
+Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Corpus quality measurement: two extraction-pipeline bugs found, worst-list is repair not cull (session state, 2026-07-24)
+
+Read-only, countable-signal measurement (no LLM calls) of all 1,641 in-scope documents (every document except Precept Austin, which stays excluded by standing source-level policy) on three independent dimensions — attribution risk, signal density, text integrity — via new tooling: `scripts/score_corpus_quality.py` + `scripts/build_corpus_quality_report.py`, committed as code `fb3fe22`. Nothing was deleted, no visibility changed, no writes to any table. Full report: `docs/audits/corpus_quality_report_2026-07-24.md` / `docs/audits/corpus_quality_scores_2026-07-24.json`, committed as records in this same session once findings were reviewed (held back from the initial commit per this session's own instruction to review before recording).
+
+**Headline finding: the worst-scoring list is dominated by two extraction-pipeline bugs, not weak teaching content — this is a repair job, not a cull.** Of the 40 worst-scoring documents, only 5 are unexplained by a known caveat below; the rest trace to the two bugs plus one recorded methodology limitation.
+
+**Bug 1 — New Wine Magazine extraction leak.** 29 of 33 `magazine_article` documents (the entire ingested New Wine Magazine population) end their stored text with a leaked JSON/markdown code-fence artifact — literally `"\n}\n\`\`\`` or `"\n}` — from the Gemini/Groq extraction pipeline (`scripts/extract_magazine.py`). The artifact sits inside the LAST retrievable chunk of each document, the exact segment most likely to surface in a real answer attributed to a real teacher — a live product defect, not a cosmetic one. **167 raw PDFs sit untouched in `sources/magazine/01_to_extract/`, plus 5 already extracted and 9 already approved but not yet ingested (confirmed live this session, all three folder counts) — all downstream of or including the buggy extraction step.** Fix the pipeline before extracting or ingesting any of them, or they inherit the same defect.
+
+**Bug 2 — CCEL scrape leak.** At least 19 public-domain books end their stored text with a leaked CCEL website artifact — an ebook-store promo footer, or a bare "Index of Scripture References" page-number dump — from `scripts/scrape_ccel.py`/`download_ccel.py`. Not limited to the 13 documents resolving to the literal "Christian Classics Ethereal Library" source: also hits books correctly attributed to their real author — Andrew Murray (×4), E.M. Bounds (×4), Charles G. Finney (×2), John Wesley, Brother Lawrence, R.A. Torrey, An Unknown Christian — all scraped through the same pipeline regardless of which `source_id` they resolved to. Same defect location (last retrievable chunk) and same live-product implication as Bug 1. One more title (E.M. Bounds' *Power Through Prayer*) shows the same bare-trailing-page-number pattern; not separately confirmed as the same root cause.
+
+**One document has zero teaching content.** CLF Church's "Prophetic Equipping via Zoom" (102 words, 1 chunk) is a Zoom meeting link and passcode, nothing else. Flagged for deletion — will be the first live (non-drill) use of the export/restore/delete tooling proven in the two prior 2026-07-24 sessions (`scripts/export_restore_document.py`), not another drill.
+
+**Methodology limit found and recorded, not smoothed over.** The attribution-risk signal's "multi-voice channel" component (source has ≥3 distinct authors and <50% author/source-name match) cannot distinguish a correctly-credited anthology (CCEL, HistoricalChristianFaith, unresolved New Wine articles) from a channel with real uncredited co-speakers. 18 of the 40 worst-scoring documents are flagged only via this signal. **This does NOT resolve the open John Bevere 219-document guest-speaker question logged in the "Claim-to-source verification" entry below — that still needs a per-document read.** This tooling cannot substitute for that.
+
+**A scoring bug was found and fixed in-session, before any result was finalized.** The text-integrity signal's repeated-character-run check initially matched digit runs, firing on HistoricalChristianFaith's internal verse-reference codes (e.g. `revelation 5000001`) as if they were scan garbage, and used a raw count instead of a length-normalized rate, letting multi-million-word documents dominate purely by length. Both fixed (digits excluded from the pattern; rate-per-10k-chars with a length floor) before scoring ran for the numbers actually reported.
+
+**Open next steps, none started this session:**
+- Alex to read a sample of the best-scoring documents to confirm the ranking is trustworthy before acting on it further — NOT yet done.
+- Fix both extraction pipelines (`extract_magazine.py`, `scrape_ccel.py`) before re-running affected documents or ingesting any of the 167+5+9 queued New Wine issues.
+- Delete the CLF Church Zoom-link document — first live (non-drill) use of the restore tooling.
+- Restore tool: batch delete/restore combined with an attachment-bearing document (a document with real `books`/`feedback`/`excerpts` rows) remains unproven together — see the 2026-07-24 restore-tool-hardening entry below and PLAN.md #15. Run a first-ten-out-and-back drill before any real cull day, including the CLF Zoom-document deletion above.
+- One real user feedback row exists: `thumbs_down`, question "What is the baptism of the Holy Spirit?", `created_at` 2026-05-23 17:08 UTC, `source_document_id` NULL, no comment (confirmed live this session, full row re-queried). The `feedback` table has no review/resolution column at all — Roadmap #16 (feedback→flag-proposition path) is still unbuilt, so nothing in the schema or code has ever programmatically consumed this row. Whether Alex has read it personally is unknown; not claimed either way here.
+
+**Reconciliation.** Code commit `fb3fe22`: `scripts/score_corpus_quality.py`, `scripts/build_corpus_quality_report.py`. This entry plus `docs/audits/corpus_quality_report_2026-07-24.md` and `docs/audits/corpus_quality_scores_2026-07-24.json` committed as records only, in a separate commit, once findings were reviewed — per this session's own standing instruction to hold records back until then.
 
 ---
 
