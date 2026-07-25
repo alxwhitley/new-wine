@@ -78,7 +78,7 @@
 ```
 - Buttons/inputs: `rounded-md`. Cards/popovers: `rounded-lg` (via shadcn card). Pills/badges: `rounded-md` or `rounded-full` for tags only.
 - Shadows are whisper-subtle and layered — always `0 1px 3px hsl(0 0% 0% / 0.1)` base plus one offset layer. Buttons get `shadow` / `shadow-sm`. Cards on same-color backgrounds rely on `border` not shadow.
-- **Depth philosophy: flat.** Card bg == page bg in both themes. Separation comes from 1px borders and spacing, not fills or shadows. Popovers/sheets are the only lifted surfaces.
+- **Depth philosophy: flat.** Card bg == page bg in both themes. Separation comes from 1px borders and spacing, not fills or shadows. Lifted surfaces (`bg-popover`) are the only exception — popovers, sheets, and the chat prompt cluster (see Extension Rules). Cards stay flat.
 - Spacing rhythm: `gap-2` tight, `gap-4` standard. Reader content: `max-w-2xl` centered, `px-4 pt-4 pb-12 md:pt-8 md:pb-24`.
 - Scroll containers get a sticky top fade: `pointer-events-none sticky top-0 z-10 h-8 bg-gradient-to-b from-background to-transparent`.
 
@@ -116,6 +116,8 @@
 | Interlinear word blocks | `rounded-md border hover:bg-accent` with Tailwind, mono for Strong's |
 | Study tabs | shadcn Tabs component, default styling |
 | Library book cards | `border rounded-lg hover:bg-accent transition-colors` — flat, no shadow |
+| Chat prompt input (empty state + bottom bar) | `rounded-2xl border border-border bg-popover` — lifted fill + border = primary. `bg-popover`, not `bg-card` (card == background, so it would vanish) |
+| Suggestion chips (empty state) | `rounded-lg bg-popover text-muted-foreground hover:bg-accent hover:text-foreground` — lifted fill, no border, muted text = one tier below the input |
 | Sidebar | shadcn Sidebar primitives with the `--sidebar-*` tokens |
 | Gold "New Chat" CTA | Button default variant (keeps gold via --primary) |
 
