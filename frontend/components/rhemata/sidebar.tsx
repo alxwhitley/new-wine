@@ -5,10 +5,7 @@ import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loade
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -17,22 +14,6 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
 import { UsageRing } from "@/components/rhemata/usage-ring";
@@ -59,7 +40,6 @@ interface SidebarProps {
   onClose: () => void;
   onNewChat: () => void;
   onSignInClick: () => void;
-  onSignOut: () => void;
   // Chat
   conversations?: Conversation[];
   activeConversationId?: string | null;
@@ -92,7 +72,6 @@ export function Sidebar({
   onClose,
   onNewChat,
   onSignInClick,
-  onSignOut,
   conversations = [],
   activeConversationId,
   onSelectConversation,
@@ -108,10 +87,10 @@ export function Sidebar({
   const isDiscover = pathname === "/library";
   const isStudy = pathname.startsWith("/study");
 
-  // Role — shared hook with module-level cache; avoids duplicate fetches
-  const { role: userRole, displayName, updateDisplayName } = useUserRole(
-    isLoggedIn ? accessToken : null
-  );
+  // Role — shared hook with module-level cache; avoids duplicate fetches.
+  // Only displayName is used here now — role-conditional UI and account
+  // settings all live inside AdminModal's Profile tab.
+  const { displayName } = useUserRole(isLoggedIn ? accessToken : null);
 
   // Contributor request sheet
   const [contributorOpen, setContributorOpen] = useState(false);
@@ -119,18 +98,8 @@ export function Sidebar({
   const [requestStatus, setRequestStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [requestError, setRequestError] = useState<string | null>(null);
 
-  // Admin modal
+  // Admin modal — also hosts the Profile tab for every authenticated user
   const [adminOpen, setAdminOpen] = useState(false);
-
-  // Account dialog
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [editDisplayName, setEditDisplayName] = useState("");
-  const [settingsStatus, setSettingsStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
-
-  // Delete account request
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteStatus, setDeleteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -184,68 +153,6 @@ export function Sidebar({
     } catch {
       setRequestError("Something went wrong. Please try again.");
       setRequestStatus("error");
-    }
-  }
-
-  function handleOpenAccount() {
-    setEditDisplayName(displayName ?? "");
-    setSettingsStatus("idle");
-    setAccountOpen(true);
-  }
-
-  async function handleSaveDisplayName() {
-    if (!accessToken) return;
-    const trimmed = editDisplayName.trim();
-    if (!trimmed) return;
-    setSettingsStatus("loading");
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pastors-notes/me`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ display_name: trimmed }),
-      });
-      if (res.ok) {
-        updateDisplayName(trimmed);
-        setSettingsStatus("saved");
-      } else {
-        setSettingsStatus("error");
-      }
-    } catch {
-      setSettingsStatus("error");
-    }
-  }
-
-  function handleOpenDeleteConfirm() {
-    setDeleteStatus("idle");
-    setDeleteError(null);
-    setDeleteConfirmOpen(true);
-  }
-
-  async function handleDeleteRequest() {
-    if (!accessToken) return;
-    setDeleteStatus("loading");
-    setDeleteError(null);
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/account/delete-request`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (res.status === 400) {
-        const data = await res.json();
-        setDeleteError(data.detail ?? "You already have a pending deletion request.");
-        setDeleteStatus("error");
-      } else if (res.ok) {
-        setDeleteStatus("sent");
-      } else {
-        setDeleteError("Something went wrong. Please try again.");
-        setDeleteStatus("error");
-      }
-    } catch {
-      setDeleteError("Something went wrong. Please try again.");
-      setDeleteStatus("error");
     }
   }
 
@@ -438,7 +345,7 @@ export function Sidebar({
       )}>
         {isLoggedIn ? (
           <button
-            onClick={handleOpenAccount}
+            onClick={() => setAdminOpen(true)}
             className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent transition-colors text-left"
           >
             {weeklyUsage && (
@@ -518,185 +425,12 @@ export function Sidebar({
         </SheetContent>
       </Sheet>
 
-      {/* Admin modal */}
-      <AdminModal open={adminOpen} onOpenChange={setAdminOpen} />
-
-      {/* Account dialog */}
-      <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
-        <DialogContent className="flex flex-col gap-0 max-w-md">
-          <DialogHeader>
-            <DialogTitle>Your account</DialogTitle>
-            <DialogDescription>
-              Manage your identity, usage, and contributor status.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-5 px-6 pb-2">
-            {/* Identity */}
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs text-muted-foreground">Display name</p>
-                <Input
-                  value={editDisplayName}
-                  onChange={(e) => {
-                    setEditDisplayName(e.target.value);
-                    setSettingsStatus("idle");
-                  }}
-                  placeholder="Your name"
-                  maxLength={100}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs text-muted-foreground">Email</p>
-                <p className="text-sm text-foreground">{user?.email ?? ""}</p>
-              </div>
-              {settingsStatus === "saved" && (
-                <p className="text-xs text-muted-foreground">Saved.</p>
-              )}
-              {settingsStatus === "error" && (
-                <p className="text-xs text-destructive">Something went wrong. Please try again.</p>
-              )}
-              <Button
-                onClick={handleSaveDisplayName}
-                disabled={settingsStatus === "loading" || !editDisplayName.trim()}
-                size="sm"
-                className="self-start"
-              >
-                {settingsStatus === "loading" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Save name"
-                )}
-              </Button>
-            </div>
-
-            <Separator />
-
-            {/* Usage */}
-            {weeklyUsage && (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-xs text-muted-foreground">Usage</p>
-                  <p className="text-sm text-foreground">
-                    {weeklyUsage.used} of {weeklyUsage.limit} questions used this week
-                  </p>
-                </div>
-                <Separator />
-              </>
-            )}
-
-            {/* Contributor status */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs text-muted-foreground">Contributor status</p>
-              {userRole === "admin" && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">Admin</Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setAccountOpen(false);
-                      setAdminOpen(true);
-                    }}
-                  >
-                    Open admin panel
-                  </Button>
-                </div>
-              )}
-              {userRole === "contributor" && (
-                <Badge variant="secondary">Contributor</Badge>
-              )}
-              {userRole === "user" && (
-                <div className="flex flex-col gap-2 items-start">
-                  <p className="text-sm text-muted-foreground">
-                    Contribute pastoral notes readers can see alongside a passage.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setAccountOpen(false);
-                      handleOpenContributor();
-                    }}
-                  >
-                    Become a contributor
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Account actions */}
-            <div className="flex flex-col gap-2 items-start pb-4">
-              <p className="text-xs text-muted-foreground">Account</p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={onSignOut}>
-                  Sign out
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={handleOpenDeleteConfirm}
-                >
-                  Delete account
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete account confirm. Uses plain Buttons, not AlertDialogAction, for
-          the submit button -- Radix's AlertDialogAction/Cancel close the dialog
-          synchronously on click and don't wait for an async onClick to resolve,
-          which would close this before the "Request sent" state ever renders. */}
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          {deleteStatus === "sent" ? (
-            <>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Request sent</AlertDialogTitle>
-                <AlertDialogDescription>
-                  We&apos;ve logged your request. We&apos;ll follow up by email before anything is removed.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <Button onClick={() => setDeleteConfirmOpen(false)}>Done</Button>
-              </AlertDialogFooter>
-            </>
-          ) : (
-            <>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete your account?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This sends a request to remove your account and data — conversations, saved words, and any
-                  pastoral notes you&apos;ve contributed. We&apos;ll follow up by email to confirm before anything
-                  is deleted.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              {deleteStatus === "error" && deleteError && (
-                <p className="text-xs text-destructive mb-4">{deleteError}</p>
-              )}
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={deleteStatus === "loading"}>Cancel</AlertDialogCancel>
-                <Button
-                  variant="destructive"
-                  onClick={handleDeleteRequest}
-                  disabled={deleteStatus === "loading"}
-                >
-                  {deleteStatus === "loading" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Delete account"
-                  )}
-                </Button>
-              </AlertDialogFooter>
-            </>
-          )}
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Admin modal — also hosts Profile for every authenticated user */}
+      <AdminModal
+        open={adminOpen}
+        onOpenChange={setAdminOpen}
+        onOpenContributor={handleOpenContributor}
+      />
     </>
   );
 

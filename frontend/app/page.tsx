@@ -39,7 +39,7 @@ const SUGGESTIONS = [
 ];
 
 export default function Home() {
-  const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const { user, accessToken, signIn, signUp } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
   const [showLogin, setShowLogin] = useState(false);
   const [showGate, setShowGate] = useState(false);
@@ -376,7 +376,6 @@ export default function Home() {
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
         onSignInClick={() => { setLoginReason(undefined); openAuthGate("signup"); }}
-        onSignOut={signOut}
       />
 
       {/* Chat card wrapper — inset on desktop, full-bleed on mobile. The

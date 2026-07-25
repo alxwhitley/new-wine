@@ -13,12 +13,15 @@ import {
   Database,
   Copy,
   Check,
+  User as UserIcon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -30,6 +33,15 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import CorpusCardComponent from "@/components/admin/corpus-card";
 import CardModal from "@/components/admin/card-modal";
 import { CARDS, GROUPS, FUTURE_TARGETS } from "@/components/admin/corpus-data";
@@ -118,7 +130,7 @@ const FEEDBACK_TABS: { key: FeedbackTab; label: string }[] = [
   { key: "word_study", label: "Word Studies" },
 ];
 
-type TopTab = "corpus" | "feedback" | "contributors" | "notes-queue";
+type TopTab = "profile" | "corpus" | "feedback" | "contributors" | "notes-queue";
 type CorpusSubView = "documents" | "sources" | "pipelines";
 
 type NavTab = {
@@ -127,6 +139,10 @@ type NavTab = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
+// Always visible, regardless of role.
+const PROFILE_NAV_TAB: NavTab = { key: "profile", label: "Profile", icon: UserIcon };
+
+// Admin-only — only rendered in the nav when userRole === "admin".
 const NAV_TABS: NavTab[] = [
   { key: "corpus",       label: "Corpus",       icon: Database },
   { key: "feedback",     label: "Feedback",     icon: ThumbsUp },
@@ -262,24 +278,31 @@ function SkeletonRows() {
 interface AdminModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenContributor: () => void;
 }
 
-export function AdminModal({ open, onOpenChange }: AdminModalProps) {
-  const { accessToken, loading: authLoading } = useAuth();
-  const { role: userRole } = useUserRole(accessToken ?? null);
+export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModalProps) {
+  const { user, accessToken, loading: authLoading, signOut } = useAuth();
+  const { role: userRole, displayName, updateDisplayName } = useUserRole(accessToken ?? null);
 
-  // Derived: true only while modal is open and admin role is confirmed
-  const roleChecked = open && !authLoading && userRole === "admin";
-
-  // Close if role resolves to non-admin
-  useEffect(() => {
-    if (!open || authLoading || userRole === null) return;
-    if (userRole !== "admin") onOpenChange(false);
-  }, [open, authLoading, userRole, onOpenChange]);
+  // Derived: true once auth resolves for any authenticated user — this panel
+  // is no longer admin-only, it opens for everyone (Profile tab). Admin-only
+  // tabs and their data fetches stay gated on roleChecked below.
+  const panelReady = open && !authLoading;
+  const roleChecked = panelReady && userRole === "admin";
 
   // ── Navigation ─────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TopTab>("corpus");
+  const [activeTab, setActiveTab] = useState<TopTab>("profile");
   const [corpusSubView, setCorpusSubView] = useState<CorpusSubView>("documents");
+
+  // ── Profile ────────────────────────────────────────────────────
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [nameStatus, setNameStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
+  const [weeklyUsage, setWeeklyUsage] = useState<{ used: number; limit: number } | null>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ── Per-tab load flags ─────────────────────────────────────────
   const [contributorsLoaded, setContributorsLoaded] = useState(false);
@@ -378,6 +401,31 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
   }, [accessToken]);
 
   // ── Data fetches ───────────────────────────────────────────────
+
+  // Reset the display-name field only on the open-transition edge, not on
+  // every displayName change — otherwise a successful save (which updates
+  // displayName via updateDisplayName) would immediately wipe its own
+  // "Saved." feedback by re-running this effect.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setEditDisplayName(displayName ?? "");
+      setNameStatus("idle");
+    }
+    wasOpenRef.current = open;
+  }, [open, displayName]);
+
+  useEffect(() => {
+    if (!panelReady || !accessToken || activeTab !== "profile") return;
+    setUsageLoading(true);
+    fetch(`${API}/usage`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setWeeklyUsage({ used: data.used, limit: data.limit }))
+      .catch(() => setWeeklyUsage(null))
+      .finally(() => setUsageLoading(false));
+  }, [panelReady, accessToken, activeTab]);
 
   useEffect(() => {
     if (!roleChecked || !accessToken) return;
@@ -544,6 +592,62 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
     }
   }
 
+  async function handleSaveDisplayName() {
+    if (!accessToken) return;
+    const trimmed = editDisplayName.trim();
+    if (!trimmed) return;
+    setNameStatus("loading");
+    try {
+      const res = await fetch(`${API}/pastors-notes/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ display_name: trimmed }),
+      });
+      if (res.ok) {
+        updateDisplayName(trimmed);
+        setNameStatus("saved");
+      } else {
+        setNameStatus("error");
+      }
+    } catch {
+      setNameStatus("error");
+    }
+  }
+
+  function handleOpenDeleteConfirm() {
+    setDeleteStatus("idle");
+    setDeleteError(null);
+    setDeleteConfirmOpen(true);
+  }
+
+  async function handleDeleteRequest() {
+    if (!accessToken) return;
+    setDeleteStatus("loading");
+    setDeleteError(null);
+    try {
+      const res = await fetch(`${API}/account/delete-request`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.status === 400) {
+        const data = await res.json();
+        setDeleteError(data.detail ?? "You already have a pending deletion request.");
+        setDeleteStatus("error");
+      } else if (res.ok) {
+        setDeleteStatus("sent");
+      } else {
+        setDeleteError("Something went wrong. Please try again.");
+        setDeleteStatus("error");
+      }
+    } catch {
+      setDeleteError("Something went wrong. Please try again.");
+      setDeleteStatus("error");
+    }
+  }
+
   const handleApprove = useCallback(
     async (id: string) => {
       if (!accessToken) return;
@@ -682,26 +786,37 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
       <DialogContent
         className="flex flex-col max-w-5xl w-full h-[85vh] p-0 gap-0 overflow-hidden"
       >
-        <DialogTitle className="sr-only">Admin panel</DialogTitle>
+        <DialogTitle className="sr-only">Account</DialogTitle>
 
         {/* Loading / auth-check */}
-        {!roleChecked && (
+        {!panelReady && (
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
         {/* Two-column layout */}
-        {roleChecked && (
+        {panelReady && (
           <div className="flex flex-1 min-h-0 overflow-hidden">
 
             {/* Left nav */}
             <div className="w-[200px] shrink-0 bg-muted border-r border-border flex flex-col pt-6 pb-4 px-2">
               <p className="px-2 mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Admin
+                Account
               </p>
               <nav className="flex flex-col gap-0.5">
-                {NAV_TABS.map((tab) => (
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "w-full justify-start gap-2 text-sm font-medium",
+                    activeTab === "profile" && "bg-accent text-accent-foreground"
+                  )}
+                  onClick={() => setActiveTab("profile")}
+                >
+                  <PROFILE_NAV_TAB.icon className="h-4 w-4 shrink-0" />
+                  <span>{PROFILE_NAV_TAB.label}</span>
+                </Button>
+                {roleChecked && NAV_TABS.map((tab) => (
                   <Button
                     key={tab.key}
                     variant="ghost"
@@ -725,6 +840,129 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
 
             {/* Right pane */}
             <div className="flex-1 overflow-y-auto p-6">
+
+              {/* ── Profile ─────────────────────────────────────── */}
+              {activeTab === "profile" && (
+                <div role="tabpanel">
+                  <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Profile</h2>
+
+                  <div className="space-y-6 max-w-lg">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Identity
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex flex-col gap-1.5">
+                          <p className="text-xs text-muted-foreground">Display name</p>
+                          <Input
+                            value={editDisplayName}
+                            onChange={(e) => {
+                              setEditDisplayName(e.target.value);
+                              setNameStatus("idle");
+                            }}
+                            placeholder="Your name"
+                            maxLength={100}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <p className="text-xs text-muted-foreground">Email</p>
+                          <p className="text-sm text-foreground">{user?.email ?? ""}</p>
+                        </div>
+                        {nameStatus === "saved" && (
+                          <p className="text-xs text-muted-foreground">Saved.</p>
+                        )}
+                        {nameStatus === "error" && (
+                          <p className="text-xs text-destructive">Something went wrong. Please try again.</p>
+                        )}
+                        <Button
+                          onClick={handleSaveDisplayName}
+                          disabled={nameStatus === "loading" || !editDisplayName.trim()}
+                          size="sm"
+                        >
+                          {nameStatus === "loading" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Save name"
+                          )}
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Usage
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {usageLoading ? (
+                          <Skeleton className="h-4 w-48" />
+                        ) : weeklyUsage ? (
+                          <p className="text-sm text-foreground">
+                            {weeklyUsage.used} of {weeklyUsage.limit} questions used this week
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Usage unavailable.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Contributor status
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {userRole === "admin" && <Badge variant="secondary">Admin</Badge>}
+                        {userRole === "contributor" && <Badge variant="secondary">Contributor</Badge>}
+                        {userRole === "user" && (
+                          <div className="flex flex-col gap-2 items-start">
+                            <p className="text-sm text-muted-foreground">
+                              Contribute pastoral notes readers can see alongside a passage.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                onOpenChange(false);
+                                onOpenContributor();
+                              }}
+                            >
+                              Become a contributor
+                            </Button>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Account
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={signOut}>
+                            Sign out
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={handleOpenDeleteConfirm}
+                          >
+                            Delete account
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              )}
 
               {/* ── Feedback ───────────────────────────────────── */}
               {activeTab === "feedback" && (
@@ -1442,6 +1680,56 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
             </SheetFooter>
           </SheetContent>
         </Sheet>
+
+        {/* Delete account confirm. Uses plain Buttons, not AlertDialogAction, for
+            the submit button -- Radix's AlertDialogAction/Cancel close the dialog
+            synchronously on click and don't wait for an async onClick to resolve,
+            which would close this before the "Request sent" state ever renders. */}
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent>
+            {deleteStatus === "sent" ? (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Request sent</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    We&apos;ve logged your request. We&apos;ll follow up by email before anything is removed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <Button onClick={() => setDeleteConfirmOpen(false)}>Done</Button>
+                </AlertDialogFooter>
+              </>
+            ) : (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This sends a request to remove your account and data — conversations, saved words, and any
+                    pastoral notes you&apos;ve contributed. We&apos;ll follow up by email to confirm before anything
+                    is deleted.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                {deleteStatus === "error" && deleteError && (
+                  <p className="text-xs text-destructive mb-4">{deleteError}</p>
+                )}
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deleteStatus === "loading"}>Cancel</AlertDialogCancel>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteRequest}
+                    disabled={deleteStatus === "loading"}
+                  >
+                    {deleteStatus === "loading" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Delete account"
+                    )}
+                  </Button>
+                </AlertDialogFooter>
+              </>
+            )}
+          </AlertDialogContent>
+        </AlertDialog>
 
       </DialogContent>
     </Dialog>

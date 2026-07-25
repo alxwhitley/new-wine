@@ -754,7 +754,7 @@ function CommentarySection({
 // ── StudyPage ─────────────────────────────────────────────────────────────────
 
 export default function StudyPage() {
-  const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const { user, accessToken, signIn, signUp } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
   const [showLogin, setShowLogin] = useState(false);
   const [showGate, setShowGate] = useState(false);
@@ -1141,7 +1141,6 @@ export default function StudyPage() {
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}
         onSignInClick={() => openAuthGate("signup")}
-        onSignOut={signOut}
         savedWords={savedWords}
         selectedStrongs={selectedStrongs}
         onSelectSavedWord={handleSidebarSavedWordSelect}

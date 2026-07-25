@@ -203,7 +203,7 @@ type UnifiedResult =
   | { type: "book"; data: Book };
 
 export default function LibraryPage() {
-  const { user, accessToken, loading: authLoading, signIn, signUp, signOut } = useAuth();
+  const { user, accessToken, loading: authLoading, signIn, signUp } = useAuth();
   const { role } = useUserRole(accessToken);
   const isMobile = useIsMobile();
   const [showLogin, setShowLogin] = useState(false);
@@ -574,7 +574,6 @@ export default function LibraryPage() {
     onSelectConversation: (id: string) => { window.location.href = `/?c=${id}`; },
     onDeleteConversation: deleteConversation,
     onSignInClick: () => { setLoginReason(undefined); openAuthGate("signup"); },
-    onSignOut: signOut,
   };
 
   // ── Article reader view ────────────────────────────────────────────────────

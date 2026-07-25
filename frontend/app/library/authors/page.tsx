@@ -37,7 +37,7 @@ const AUTHORS = [
 ];
 
 export default function AuthorsPage() {
-  const { user, accessToken, signIn, signUp, signOut } = useAuth();
+  const { user, accessToken, signIn, signUp } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -58,7 +58,6 @@ export default function AuthorsPage() {
         onSelectConversation={(id) => { window.location.href = `/?c=${id}`; }}
         onDeleteConversation={deleteConversation}
         onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
-        onSignOut={signOut}
       />
 
       <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
