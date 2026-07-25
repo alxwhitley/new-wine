@@ -127,6 +127,11 @@ export function Sidebar({
   const [editDisplayName, setEditDisplayName] = useState("");
   const [settingsStatus, setSettingsStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
 
+  // Delete account request
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -210,6 +215,37 @@ export function Sidebar({
       }
     } catch {
       setSettingsStatus("error");
+    }
+  }
+
+  function handleOpenDeleteConfirm() {
+    setDeleteStatus("idle");
+    setDeleteError(null);
+    setDeleteConfirmOpen(true);
+  }
+
+  async function handleDeleteRequest() {
+    if (!accessToken) return;
+    setDeleteStatus("loading");
+    setDeleteError(null);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/account/delete-request`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.status === 400) {
+        const data = await res.json();
+        setDeleteError(data.detail ?? "You already have a pending deletion request.");
+        setDeleteStatus("error");
+      } else if (res.ok) {
+        setDeleteStatus("sent");
+      } else {
+        setDeleteError("Something went wrong. Please try again.");
+        setDeleteStatus("error");
+      }
+    } catch {
+      setDeleteError("Something went wrong. Please try again.");
+      setDeleteStatus("error");
     }
   }
 
@@ -594,13 +630,73 @@ export function Sidebar({
             {/* Account actions */}
             <div className="flex flex-col gap-2 items-start pb-4">
               <p className="text-xs text-muted-foreground">Account</p>
-              <Button variant="outline" size="sm" onClick={onSignOut}>
-                Sign out
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={onSignOut}>
+                  Sign out
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={handleOpenDeleteConfirm}
+                >
+                  Delete account
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete account confirm. Uses plain Buttons, not AlertDialogAction, for
+          the submit button -- Radix's AlertDialogAction/Cancel close the dialog
+          synchronously on click and don't wait for an async onClick to resolve,
+          which would close this before the "Request sent" state ever renders. */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          {deleteStatus === "sent" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Request sent</AlertDialogTitle>
+                <AlertDialogDescription>
+                  We&apos;ve logged your request. We&apos;ll follow up by email before anything is removed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <Button onClick={() => setDeleteConfirmOpen(false)}>Done</Button>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This sends a request to remove your account and data — conversations, saved words, and any
+                  pastoral notes you&apos;ve contributed. We&apos;ll follow up by email to confirm before anything
+                  is deleted.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {deleteStatus === "error" && deleteError && (
+                <p className="text-xs text-destructive mb-4">{deleteError}</p>
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteStatus === "loading"}>Cancel</AlertDialogCancel>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteRequest}
+                  disabled={deleteStatus === "loading"}
+                >
+                  {deleteStatus === "loading" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Delete account"
+                  )}
+                </Button>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 
