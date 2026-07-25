@@ -173,8 +173,9 @@ export function Sidebar({
 
       {/* New Chat CTA */}
       <Button
+        variant="ghost"
         onClick={handleNewChat}
-        className="w-full min-h-[44px] mb-4 gap-2"
+        className="w-full min-h-[44px] mb-4 gap-2 border border-border text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent"
       >
         <Plus className="h-4 w-4 shrink-0" />
         <span>New Chat</span>

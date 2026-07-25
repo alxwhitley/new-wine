@@ -120,7 +120,7 @@
 | Chat prompt input (empty state + bottom bar) | `rounded-2xl border border-border bg-popover` — lifted fill + border = primary. `bg-popover`, not `bg-card` (card == background, so it would vanish) |
 | Suggestion chips (empty state) | `rounded-lg bg-popover text-muted-foreground hover:bg-accent hover:text-foreground` — lifted fill, no border, muted text = one tier below the input |
 | Sidebar | shadcn Sidebar primitives with the `--sidebar-*` tokens |
-| Gold "New Chat" CTA | Button default variant (keeps gold via --primary) |
+| "New Chat" CTA | `ghost` variant + `border border-border text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground` — no gold, no fill at rest; hover matches the Chat/Discover/Study nav links below it |
 
 ## Migration Bans
 1. No hardcoded hex anywhere (`#1f1e1d`, `#262624`, `#d4b96a`, `#b49238` all dead — search and destroy)
