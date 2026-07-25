@@ -3,8 +3,22 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-25 (John Bevere YouTube corpus deleted — 220 documents, see directly below).
+Last verified: 2026-07-25 (session close — CLAUDE.md landmine correction + CLF Zoom-doc deletion, see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Session close: CLAUDE.md Bevere landmine removed, CLF Zoom document deleted (session state, 2026-07-25)
+
+Two small closes, both follow-on from the corpus quality measurement's open next-steps list (below) and this session's own Bevere deletion (directly below this entry).
+
+**`CLAUDE.md`'s Landmines section corrected, not just annotated.** The "John Bevere's 219 documents are attributed by channel name only" bullet is now factually false — the entire Bevere corpus (220 documents, all under that one channel-attribution mechanism) was deleted earlier this same session. Per this file's own eviction rule ("if a decision is superseded, delete it — do not stack a correction on top"), the bullet was removed outright rather than amended to say "resolved."
+
+**CLF Church's "Prophetic Equipping via Zoom" document deleted — the first live use of the single-document delete path** (`delete_document_cascade()`, distinct from the batch path `delete_documents_cascade()` used earlier this session for the 220 Bevere documents). Flagged in the 2026-07-24 corpus quality measurement as zero-teaching-content (102 words, 1 chunk, 0 propositions) — confirmed again this session by reading the live chunk content directly before deleting: the stored text is literally a meeting schedule, two Zoom URLs, and two passcodes, nothing else. Two other, unrelated CLF documents matched the same title search ("Prophetic Equipping with Pastor Paul Kidd & Tom Bedford," real teaching content, 10 chunks; "Prophet School: Prophetic Equipping Outline," a real table of contents, 1 chunk) — both explicitly confirmed NOT the target and confirmed still present after the delete. No recovery snapshot was taken for this one (unlike the Bevere batch): the deleted content had no teaching value to preserve. Verified by fresh re-query: target document and its chunk gone (0/0), both sibling documents still present (1/1 each), total corpus 3,597 → 3,596.
+
+**Corrects two stale "not yet done" markers in the 2026-07-24 corpus quality entry below:** "Alex to read a sample of the best-scoring documents" — done, in a separate chat-side session the same day (15 best-scoring documents read in full). "Delete the CLF Church Zoom-link document" — done, this entry.
+
+**Reconciliation.** No code changed. `CLAUDE.md` + this entry in `rhemata-status.md` + `PLAN.md` (small addendum to #15 noting real, non-drill use of both the single-document and batch delete paths) committed together as one records-only commit.
 
 ---
 
@@ -42,10 +56,10 @@ Read-only, countable-signal measurement (no LLM calls) of all 1,641 in-scope doc
 
 **A scoring bug was found and fixed in-session, before any result was finalized.** The text-integrity signal's repeated-character-run check initially matched digit runs, firing on HistoricalChristianFaith's internal verse-reference codes (e.g. `revelation 5000001`) as if they were scan garbage, and used a raw count instead of a length-normalized rate, letting multi-million-word documents dominate purely by length. Both fixed (digits excluded from the pattern; rate-per-10k-chars with a length floor) before scoring ran for the numbers actually reported.
 
-**Open next steps, none started this session:**
-- Alex to read a sample of the best-scoring documents to confirm the ranking is trustworthy before acting on it further — NOT yet done.
-- Fix both extraction pipelines (`extract_magazine.py`, `scrape_ccel.py`) before re-running affected documents or ingesting any of the 167+5+9 queued New Wine issues.
-- Delete the CLF Church Zoom-link document — first live (non-drill) use of the restore tooling.
+**Open next steps:**
+- Alex to read a sample of the best-scoring documents to confirm the ranking is trustworthy before acting on it further — **DONE, 2026-07-25** (15 best-scoring documents read in full, separate chat-side session).
+- Fix both extraction pipelines (`extract_magazine.py`, `scrape_ccel.py`) before re-running affected documents or ingesting any of the 167+5+9 queued New Wine issues. — still open.
+- Delete the CLF Church Zoom-link document — **DONE, 2026-07-25**, see the "Session close" entry above. Turned out not to be the first live (non-drill) use of the restore tooling as this line originally predicted — the 220-document Bevere deletion, same session, beat it to that distinction; this was the first use of the *single-document* delete path specifically.
 - Restore tool: batch delete/restore combined with an attachment-bearing document (a document with real `books`/`feedback`/`excerpts` rows) remains unproven together — see the 2026-07-24 restore-tool-hardening entry below and PLAN.md #15. Run a first-ten-out-and-back drill before any real cull day, including the CLF Zoom-document deletion above.
 - One real user feedback row exists: `thumbs_down`, question "What is the baptism of the Holy Spirit?", `created_at` 2026-05-23 17:08 UTC, `source_document_id` NULL, no comment (confirmed live this session, full row re-queried). The `feedback` table has no review/resolution column at all — Roadmap #16 (feedback→flag-proposition path) is still unbuilt, so nothing in the schema or code has ever programmatically consumed this row. Whether Alex has read it personally is unknown; not claimed either way here.
 

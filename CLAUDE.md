@@ -105,14 +105,6 @@ quality.
   construction — the known fabrication contains no checkable specifics at
   all. Don't treat either check, if one gets built, as covering this failure
   class without re-confirming against it directly.
-- **John Bevere's 219 documents are attributed by channel name only, no
-  per-video speaker check** — same mechanism already responsible for the
-  2026-07-16 Savchuk/Deere/Sam Storms/Bible Study Podcast cleanup. That
-  cleanup's own review covered Bevere too but only read each document's first
-  two chunks; a 2026-07-24 check found at least one still-live document
-  ("...w/ Rick Renner") the same review pattern should have caught and didn't.
-  Zero propositions written against Bevere material yet — resolve this before
-  backfilling any of it, not after.
 
 **Corpus counts are never documented here.** Query live — any static number rots
 within days and has already caused one round of false blockers.
