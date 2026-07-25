@@ -9,7 +9,7 @@ const LINKS = [
 
 export function FooterNav({ className }: { className?: string }) {
   return (
-    <nav className={cn("flex items-center gap-1.5 text-xs text-muted-foreground/70", className)}>
+    <nav className={cn("flex items-center justify-center gap-1.5 text-xs text-muted-foreground/70", className)}>
       {LINKS.map((link, i) => (
         <span key={link.href} className="flex items-center gap-1.5">
           {i > 0 && <span aria-hidden="true">|</span>}
