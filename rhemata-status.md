@@ -3,8 +3,94 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-25 (session close — corpus cleanup, PLAN.md #44, see directly below).
+Last verified: 2026-07-25 (session close — document work-group linking mechanism built, proven, and bulk-applied; PLAN.md #44, see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Document work-group linking — mechanism built, proven, and bulk-applied (session state, 2026-07-25)
+
+Full substantive detail (every group, every reason, every held-back item, the
+judgment call made) lives in `PLAN.md`'s #44 entry — this is the point-in-time
+pointer a fresh session needs before touching this corpus again, not a
+duplicate of the reasoning.
+
+**Mechanism:** `migrations/071_document_work_groups.sql` — two new tables,
+`document_work_groups` and `document_work_group_members`, additive only, no
+`ALTER` on `documents`/`propositions`, reversible. Commit `659c7cf`.
+
+**State as of tonight: 32 work-groups, 123 documents linked, zero deletes or
+merges on any existing row.**
+- Zac Poonen's "Sermon on the Mount" (11 documents — Part 10 was never
+  ingested, a real corpus gap, not an error) is linked and was the at-scale
+  proof: before, 11 independently-counted documents; after, one group, 102
+  combined statements reachable through it, every document and every
+  proposition unchanged.
+- One demo pair (Ravenhill "Something is Missing" clip + full sermon, 21
+  combined statements) from the prior session.
+- 30 more groups from tonight's bulk apply: 17 standalone Derek Prince
+  two-part/chapter series, "The Roman Pilgrimage" (20 parts), "Analysis of
+  Hebrews" (21 chapter documents), Zac Poonen's "Sixteen Lessons I Have
+  Learnt" (2), Derek Prince's Galatians "five deliverances" teaching as
+  **two separate works** (Recording A, 6 documents; Recording B, 5
+  documents — deliberately not merged into one), seven Leonard Ravenhill
+  clusters (Cost of Discipleship, What Is Your Life, Paul's Passion And
+  Preaching, Cry for Revival, A Man Of God, Pure Heart Pure Church,
+  Laodicean Church/Sins of Laodicea), and the New Wine Magazine duplicate.
+
+**Re-filing, separate from linking:** "Complete Salvation and How To Receive
+It - Part 2" moved from Smith Wigglesworth to Derek Prince — Alex's explicit
+ruling, confirmed by the document's own opening text and by Wigglesworth
+having no other documents in the corpus. Migration `072`, commit `4d05e04`.
+**The two "Complete Salvation" parts are deliberately NOT linked as one work**
+— linking waits until the re-filing is settled, per Alex's instruction.
+
+**Explicitly held back this session, none of it linked — still open:**
+- All weak-signal Ravenhill pairs flagged for a human listen-through (shared
+  illustrations/scripture across genuinely different sermons, not confirmed
+  duplicates).
+- The three "Cross" documents near the Galatians series (Cross in My Life
+  Parts 1–2, The Cross Obscured) — moderate confidence only.
+- "Paul's Passion And Preaching - Part 5" — shares the series title, content
+  does not overlap the rest of the group.
+- The "Pure Heart, Pure Church" weak third candidate ("(Sermon Quote) Is
+  Christ Really In You?").
+- Both "Complete Salvation" documents (re-filed, not linked).
+- The 29 Ravenhill clip/#shorts-titled documents that matched no other
+  document's content by this session's detection method — genuinely
+  unresolved, not settled as "no parent."
+
+**Two attribution questions surfaced, carried forward, not resolved:**
+1. "Time for the True Church to Rise" is a three-speaker recording (Leonard
+   Ravenhill, Alan Redpath, Paris Reidhead) attributed entirely to
+   Ravenhill's source identity.
+2. The Ravenhill clip "(clip) The Miracle of the New Birth" is correctly
+   linked by content into the "What Is Your Life" group, but its own title
+   is a phrase pulled from partway through that sermon's own text, not drawn
+   from any sermon actually called that — worth knowing if clip titles are
+   ever surfaced without their parent's context.
+
+**Harness routing-table gap — carried forward, not resolved.**
+`planner-reviewer.md` instructs the reviewer to read `CLAUDE.md`'s
+`## Session Routing` table to determine session type before anything else —
+no such table exists in `CLAUDE.md`. Surfaced twice this week (once by the
+planner-reviewer agent itself during the migration-071 review, once when
+Alex asked directly whether routing writes through the executor/
+planner-reviewer harness was a deliberate call). There is currently no
+written rule for when a session counts as a "harness session" — it's decided
+by in-context judgment each time, not a documented trigger. Not fixed this
+session (housekeeping-only, no code/doc-authoring scope). A future session
+should either write that table or decide it isn't needed.
+
+**Standing facts a fresh session should know before doing anything else:**
+- Working tree clean as of this entry (one unrelated untracked file
+  currently in `docs/audits/` — a separate corpus-source audit, not part of
+  this track, reported to Alex directly rather than logged here).
+- All linking/re-filing/records commits pushed to `origin/main`, confirmed
+  by direct comparison, not assumed.
+- No product code changed by any part of this track — only migrations 071/
+  072 (schema + one re-filing UPDATE), data (work-group rows), and records
+  (`PLAN.md`, this file).
 
 ---
 
