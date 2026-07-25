@@ -1,0 +1,1991 @@
+{
+  "_meta": {
+    "purpose": "Recovery manifest for John Bevere YouTube document deletion",
+    "target_identity": "author = 'John Bevere' AND source_id = canonical Bevere source",
+    "canonical_source_id": "755490fe-cf1d-4a54-bbb4-b67b72afb65f",
+    "canonical_source_name": "John Bevere",
+    "row_count": 220
+  },
+  "documents": [
+    {
+      "document_id": "80f6d3c1-d23a-446f-a154-fab79901726a",
+      "video_url": "https://www.youtube.com/watch?v=5-Qyd_BnE4s",
+      "title": "7 Reasons Why You're Still A Baby Christian",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 4,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "6302740a-4449-4746-a35c-ec1dd6496d84",
+      "video_url": "https://www.youtube.com/watch?v=Z9ZoSlu-z_M",
+      "title": "98% of Christians Miss This",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "35a54d25-cb08-4901-b1fa-c1309d902421",
+      "video_url": "https://www.youtube.com/watch?v=CvPL8Kv4QVo",
+      "title": "A Prophetic Warning from Jesus to the End Time Churches",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "6821090c-0ee8-4918-8b46-2edd8d2dca2a",
+      "video_url": "https://www.youtube.com/watch?v=hUEdLEDo21w",
+      "title": "Addressing the Tolerance of Unholy Behavior in Your Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "272b99f6-cf4a-4263-b7eb-8122bb5cc9b8",
+      "video_url": "https://www.youtube.com/watch?v=N5zolGpsyGc",
+      "title": "Are You Birthing an Ishmael?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 10,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "fa6e9f15-83c8-4363-ab6c-40151078f9b1",
+      "video_url": "https://www.youtube.com/watch?v=Iv83DZKi8bc",
+      "title": "Are You Using Your Gifts Wisely?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 16,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c38554ea-2d52-4dc9-bfc6-6510bae85287",
+      "video_url": "https://www.youtube.com/watch?v=7Fzwv6zFAKo",
+      "title": "Breaking Free From Father Wounds",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b09e31fd-2b9a-48dd-818b-1f340d9fd23d",
+      "video_url": "https://www.youtube.com/watch?v=FYmNoWQ7ozM",
+      "title": "Breaking Free from Sin",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "da2756c4-6b24-47b8-84e7-06927591472d",
+      "video_url": "https://www.youtube.com/watch?v=h4IScjpezzo",
+      "title": "Breaking the Chains: Stop Tolerating Sin Today",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2f13189e-9c8a-4d2e-9409-f302886ba916",
+      "video_url": "https://www.youtube.com/watch?v=Nqp-D32Rq94",
+      "title": "Come Close to God, and He Will Come Close to You",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d96f2390-3c48-49f1-ac56-2b34e04fcc83",
+      "video_url": "https://www.youtube.com/watch?v=Y3DBFQ-jiYg",
+      "title": "Confront Fear and Rediscover Your True Potential",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9530d46c-d1e5-49d3-99df-0d86c6f20d7a",
+      "video_url": "https://www.youtube.com/watch?v=EJWuTE9_DtU",
+      "title": "Dealing With Unfair Treatment",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "685a158a-c67d-4f12-8be4-627e4df1fd8e",
+      "video_url": "https://www.youtube.com/watch?v=10f6RauOlJI",
+      "title": "Debunking the Mystery of Speaking in Tongues",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4407205a-1cfc-4ddd-8dd8-90a5210ce9e4",
+      "video_url": "https://www.youtube.com/watch?v=ev7UtlF2dAE",
+      "title": "Defining Eternity",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "35bf40e4-7273-432f-a13b-5eb48d55c4a1",
+      "video_url": "https://www.youtube.com/watch?v=zf7n-UobhI0",
+      "title": "Desire and Power: A Journey to Intimacy with God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "73a85a61-7221-471f-885a-66cc37b2c105",
+      "video_url": "https://www.youtube.com/watch?v=jZMWK-Usmbg",
+      "title": "Did You Know That God Hates This?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2cf451f9-1ea2-4b03-81b5-cc6b9b86b523",
+      "video_url": "https://www.youtube.com/watch?v=X_FinwU8sTA",
+      "title": "Disconnected from God? Start Doing This.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "260ba76d-217e-4b6d-b38e-51b93c5c7a1b",
+      "video_url": "https://www.youtube.com/watch?v=SLGiBz0U9lo",
+      "title": "Discover How God's Love Conquers All Fear",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "30cfad63-ca48-4836-b01e-33a05c3c575f",
+      "video_url": "https://www.youtube.com/watch?v=vkUov9Dby9A",
+      "title": "Discover the Secret to Experiencing God's Presence",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "976a35b1-e7a0-41ce-bf36-e620ac017c4b",
+      "video_url": "https://www.youtube.com/watch?v=NQnoNDQwcgU",
+      "title": "Discover the True Desires of Your Heart",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f93932bb-d299-4215-8321-019c2fc905cc",
+      "video_url": "https://www.youtube.com/watch?v=JmBPijeW_Qk",
+      "title": "Discover Your True Authority and Triumph over Fear",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "04a42dd3-93e7-446b-b608-374b8b2a816a",
+      "video_url": "https://www.youtube.com/watch?v=FAnY3q_OvGc",
+      "title": "Discover Your True Calling",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "0adfb494-50ae-4b6a-a1ce-0210217c41bf",
+      "video_url": "https://www.youtube.com/watch?v=v02QH-ZOw0U",
+      "title": "Discover Your True Calling",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "69b360a2-54ab-49c8-8ed3-0b76052aef08",
+      "video_url": "https://www.youtube.com/watch?v=AMSFU9ccJso",
+      "title": "Discover Your True Value to God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "fb32a2c3-4e9e-474a-8d9e-96196890682c",
+      "video_url": "https://www.youtube.com/watch?v=UhNrt22djTQ",
+      "title": "Discussing the Big Issues That Are Not Found in the Bible",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "0991ba52-4e39-4be3-a663-5779f493ddf0",
+      "video_url": "https://www.youtube.com/watch?v=HSNfLuJKjmE",
+      "title": "Do You Feel Spiritually Stuck?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "42e595cc-15c3-4cc3-aabf-af0e4690d0ce",
+      "video_url": "https://www.youtube.com/watch?v=D5yTzC8Jxlc",
+      "title": "Do You Want to Be Close to Jesus?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ff54b268-7c3c-4011-a230-fba843019a4c",
+      "video_url": "https://www.youtube.com/watch?v=EikstJrB6SQ",
+      "title": "Do You Want to Multiply Your Blessings??",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a9e54bb1-bff5-4ef1-a563-147de5564dbd",
+      "video_url": "https://www.youtube.com/watch?v=61Xpad089aI",
+      "title": "Don't Be This Christian... \u2014 John Bevere",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 4
+    },
+    {
+      "document_id": "df910b22-edd5-40dd-99d9-d82733739111",
+      "video_url": "https://www.youtube.com/watch?v=1M-FQmitSBU",
+      "title": "Don\u2019t Fall For This Trick.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c7faba6b-6fbe-40c5-8c9d-eec311edc144",
+      "video_url": "https://www.youtube.com/watch?v=pxsrE_2qcS4",
+      "title": "Don't Let Your Destiny Destroy You",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "45bf7f3e-3e4d-4ca4-b6c7-edec3dd78edd",
+      "video_url": "https://www.youtube.com/watch?v=xm_1lxFO4ds",
+      "title": "Don't Miss Out: How to Claim Your Full Reward \u2014 John Bevere",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d3ab3636-574a-4866-95e2-c9144c9a9dd2",
+      "video_url": "https://www.youtube.com/watch?v=0enm6tDyryc",
+      "title": "Driven By Eternity [FULL SERMON] \u2014 John Bevere",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 20,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9d4e653f-de52-4f74-8a3b-cce570b1727d",
+      "video_url": "https://www.youtube.com/watch?v=yyZXXOo5QoY",
+      "title": "Embrace Your Unique Talents and Flourish",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 11,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "031d683a-2f91-4bb9-b190-e90039f6abf7",
+      "video_url": "https://www.youtube.com/watch?v=yyZXXOo5QoY",
+      "title": "Embrace Your Unique Talents and Flourish",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 11,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "83967c71-33ce-4cbf-bb69-aa229b78b808",
+      "video_url": "https://www.youtube.com/watch?v=PGw6EUJOCHg",
+      "title": "Escaping The Trap",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "dba1d296-56a5-401b-aafa-0f2d43cec0ec",
+      "video_url": "https://www.youtube.com/watch?v=4zpLVFsmh5A",
+      "title": "Escaping the TRAP of \"Casual Christianity\"",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 16,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "fd1f8c8d-5e09-4231-855a-ba088fdc711f",
+      "video_url": "https://www.youtube.com/watch?v=4zpLVFsmh5A",
+      "title": "Escaping the TRAP of \"Casual Christianity\"",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "dca40dcf-82cd-45bb-ae41-aa652f105146",
+      "video_url": "https://www.youtube.com/watch?v=hC5FHSY06Xk",
+      "title": "Escaping the Trap of Casual Christianity [FULL SERMON]",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e61e336c-0b62-4c04-954b-2bb947f97d4b",
+      "video_url": "https://www.youtube.com/watch?v=M0RGz5AgH1E",
+      "title": "Ever Wonder What You\u2019re Created to Do?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e7ccae7a-824f-45ed-8e2a-3aec26cc570f",
+      "video_url": "https://www.youtube.com/watch?v=tqx7qZiLwJU",
+      "title": "Evidence That Someone Is in Relationship with Jesus",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "94ce6014-bfa2-49ee-b279-5a788f3f7a1d",
+      "video_url": "https://www.youtube.com/watch?v=4TFt9JkZDT0",
+      "title": "Experience God's Awe",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 24,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "6083b57c-2fab-4ece-b754-b215b06e882b",
+      "video_url": "https://www.youtube.com/watch?v=4TFt9JkZDT0",
+      "title": "Experience God's Awe",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2395e5b1-e40e-4b90-b32f-def419ed4672",
+      "video_url": "https://www.youtube.com/watch?v=4gREY9drtPM",
+      "title": "Experience the Wisdom of 40 Years in One Book!",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "521bb072-a2b8-4d4d-ab7e-4f2840fe5963",
+      "video_url": "https://www.youtube.com/watch?v=3F9mjaQ7EoE",
+      "title": "Fearful of the 2024 Solar Eclipse? WATCH THIS!!",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "48db6eae-eb91-4644-8395-42b513aed4cb",
+      "video_url": "https://www.youtube.com/watch?v=ZzdRPRB0fbY",
+      "title": "Fearing God vs. Scared of God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "175b339c-418d-4eca-b3a1-760579327337",
+      "video_url": "https://www.youtube.com/watch?v=Vkk8UTR2yaU",
+      "title": "Forgiveness Isn\u2019t Always Easy",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d5aa07bc-e759-42d8-bb00-dede391f6bf1",
+      "video_url": "https://www.youtube.com/watch?v=WUKeSVCKG6o",
+      "title": "From Fearful to Fearless: The Power of Boldness",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f5d96e52-3160-40cb-aded-66d9cd74278c",
+      "video_url": "https://www.youtube.com/watch?v=nm3yST6wWew",
+      "title": "Frustrated by God's Silence?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 17,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "02d389d1-92f8-467d-8248-5a2e00321744",
+      "video_url": "https://www.youtube.com/watch?v=UHqGH9NH68c",
+      "title": "Getting Wisdom Is the Best Thing We Can Do",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b1d77c83-4d08-47d7-9f3b-8aeacd77bb00",
+      "video_url": "https://www.youtube.com/watch?v=UHqGH9NH68c",
+      "title": "Getting Wisdom Is the Best Thing We Can Do",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "8f7db156-ae46-4f4c-978e-3c949c05f413",
+      "video_url": "https://www.youtube.com/watch?v=ZjQGOHgjA7g",
+      "title": "God Has Made Your Calling beyond Your Natural Ability",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "cc2c1f02-04ab-405e-93da-055a675a17f7",
+      "video_url": "https://www.youtube.com/watch?v=ZjQGOHgjA7g",
+      "title": "God Has Made Your Calling beyond Your Natural Ability",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b70ce38a-4548-49be-9c8b-b35949a62be4",
+      "video_url": "https://www.youtube.com/watch?v=Q2p2aD7xe6M",
+      "title": "God Rewards Those Who Multiply",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a0710ed0-0cd7-4c8a-9bbb-3c6e689466e0",
+      "video_url": "https://www.youtube.com/watch?v=epWQJRzzHo0",
+      "title": "God\u2019s Approval or Man\u2019s Approval: The Ultimate Choice!",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f307e8c3-2d47-4174-9913-46ea663849de",
+      "video_url": "https://www.youtube.com/watch?v=34W-3JFWDyI",
+      "title": "Godly Leaders Make Mistakes Too",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f47d897f-c4f2-491a-8db4-dbc896329724",
+      "video_url": "https://www.youtube.com/watch?v=xkvpUXCArOE",
+      "title": "Hell Is for Real",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "619d8775-7b08-45a3-b65b-e0dd401e282e",
+      "video_url": "https://www.youtube.com/watch?v=gMgTOu6soBk",
+      "title": "Hidden from Parents, Not from God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "054790c0-cd65-469c-be08-7cb187f15818",
+      "video_url": "https://www.youtube.com/watch?v=ZzNUDx3b4bU",
+      "title": "Holiness Is a Doorway to Intimacy with God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 21,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "43167381-04e2-4ff8-a473-e9541adfebb2",
+      "video_url": "https://www.youtube.com/watch?v=0F2Zzc4sj_4",
+      "title": "How Are You Interpreting Scripture?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "dbc2ebc6-773f-4cb0-b442-54dd170a78d2",
+      "video_url": "https://www.youtube.com/watch?v=UZqbB_DDvec",
+      "title": "How to Discover Your Supernatural Gifts",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 11,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c1b2801f-0a2a-47c9-abe4-9eedd487378b",
+      "video_url": "https://www.youtube.com/watch?v=UZqbB_DDvec",
+      "title": "How to Discover Your Supernatural Gifts",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "aa50b40b-0dd5-4e65-a720-f9cac2902e67",
+      "video_url": "https://www.youtube.com/watch?v=i_zPoW6R4os",
+      "title": "How to Embrace Biblical Stewardship for a Fulfilling Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "5d3757bc-d520-49d2-9bee-03e6b6acf405",
+      "video_url": "https://www.youtube.com/watch?v=i_zPoW6R4os",
+      "title": "How to Embrace Biblical Stewardship for a Fulfilling Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2255f654-c4d4-448e-9a0d-02cfe70d5edb",
+      "video_url": "https://www.youtube.com/watch?v=u0rMp06qm-Y",
+      "title": "How to Identify and Overcome Intimidation",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "1b2f0344-c0c6-4f42-ab3a-0579885bdb78",
+      "video_url": "https://www.youtube.com/watch?v=pViaRoU6sb0",
+      "title": "How to Keep Your Conscience Clear",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ad2c4b45-c128-448c-b0a5-6f78cb5b4a8b",
+      "video_url": "https://www.youtube.com/watch?v=LBL9IhgzU6M",
+      "title": "How to Know If a Promise Is from God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 11,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "64b7b8c2-517a-45b7-9901-297c3043bff5",
+      "video_url": "https://www.youtube.com/watch?v=tO8Y5Iu744g",
+      "title": "How to Know If You're a TRUE Child of God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4348dfc1-232e-4a65-aae9-854a9e487ea6",
+      "video_url": "https://www.youtube.com/watch?v=hAhSF8N_qGQ",
+      "title": "How to Know If You\u2019re Actually Lukewarm",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "0a7aed80-e6e1-43bd-9818-553a72d1edc4",
+      "video_url": "https://www.youtube.com/watch?v=2T4QEIDEttA",
+      "title": "How to Know If You\u2019re Following the Real Jesus | John Bevere |",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "bdc5184a-2e97-479d-b4d6-1fee182187fa",
+      "video_url": "https://www.youtube.com/watch?v=wtyIy2RZ1vQ",
+      "title": "How to Maintain a Clear Conscience | John Bevere |",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "baf7956c-b1b0-4bf2-9c0d-5353dde7aae5",
+      "video_url": "https://www.youtube.com/watch?v=Z35n68o88ss",
+      "title": "How to Overcome Your Spiritual Dryness",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c62721ee-4cff-4511-a354-014e9656ee3f",
+      "video_url": "https://www.youtube.com/watch?v=9WX1wI10SGk",
+      "title": "How to Spot a False Teacher in 2024",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3d739e9b-41a5-419a-8843-b63cb3c339d6",
+      "video_url": "https://www.youtube.com/watch?v=9kz4bjDyl5k",
+      "title": "How Wilderness Seasons Reveal Your Calling",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b32ecc70-d387-4afd-b6fd-f327b9ff6453",
+      "video_url": "https://www.youtube.com/watch?v=zg32RI8HgrY",
+      "title": "How Your Life CHANGES Future Generations",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e4b2b922-cf2f-4bc2-a78c-ff127cf97dee",
+      "video_url": "https://www.youtube.com/watch?v=FlbMfXV-ImE",
+      "title": "I Am Starting a New Podcast Because of THIS Scary Stat",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3f1dc6a6-348b-4c8b-9e03-a8277d5fcaad",
+      "video_url": "https://www.youtube.com/watch?v=qknS3z84-iQ",
+      "title": "I Avoided Preaching This for 40 YEARS...",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ee1fe3d7-a934-4dce-a1ae-00a13c9b39f2",
+      "video_url": "https://www.youtube.com/watch?v=IdrehH_YIfU",
+      "title": "I Read This Bible Verse Every Morning",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "093e8e06-4f8a-427b-ba2b-e04e96c10206",
+      "video_url": "https://www.youtube.com/watch?v=_Wftf0iWReM",
+      "title": "I've Never Shared My Opinion on This",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 42,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b0617ccc-e9b8-499b-b4f7-e6e1d0075863",
+      "video_url": "https://www.youtube.com/watch?v=cHpPKRhjG6w",
+      "title": "If You Can\u2019t Hear God\u2019s Voice, This is For You",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 20,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "668dec9c-36f4-4f60-9a84-5d3d0155eb27",
+      "video_url": "https://www.youtube.com/watch?v=c8tevmvPGIM",
+      "title": "In What Areas of Life Do You Battle Fear?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "8d3d48e5-e240-48cc-a107-d583dba13f1d",
+      "video_url": "https://www.youtube.com/watch?v=ji5qkK_pbHs",
+      "title": "Indicators of Your Calling",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 10,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "605dcfe1-1bce-43e4-a131-bf8e40af1c33",
+      "video_url": "https://www.youtube.com/watch?v=ji5qkK_pbHs",
+      "title": "Indicators of Your Calling",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c032e7b0-0120-43fb-bbe7-2ea511ca66d0",
+      "video_url": "https://www.youtube.com/watch?v=zeNKaFa-RKU",
+      "title": "Intimacy with the Holy Spirit",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3c02384b-aeee-4ded-8617-e90ec2493955",
+      "video_url": "https://www.youtube.com/watch?v=ytN1Yke98tc",
+      "title": "Is God Trying to Make Your Spirit Strong?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "7a232bb8-06bd-4f45-8a45-481b89724faf",
+      "video_url": "https://www.youtube.com/watch?v=oC7DptbSOTQ",
+      "title": "Is God's Will Really Your First Priority?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9ed57755-cf48-4e39-85b0-ec86fbdaedd7",
+      "video_url": "https://www.youtube.com/watch?v=m5bOrtpFHGw",
+      "title": "Is That God Speaking? How to Hear God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 14,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "619e71a6-ae75-4619-8656-afb59f0e73e5",
+      "video_url": "https://www.youtube.com/watch?v=1Bp5yjB-EnM",
+      "title": "It's Never Too Late",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "55cb49d6-6e8e-4c59-a810-ad01b31f2a05",
+      "video_url": "https://www.youtube.com/watch?v=1Bp5yjB-EnM",
+      "title": "It's Never Too Late",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 5,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "8ec473af-2355-4c51-affc-128cfb1ab543",
+      "video_url": "https://www.youtube.com/watch?v=3CjiFuDCE_s",
+      "title": "Jesus Threatened to Shut This Church Down \u2013 Here\u2019s What Went Wrong",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 21,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f6a99846-9f46-4b41-86c7-88d69c2bcebf",
+      "video_url": "https://www.youtube.com/watch?v=kP7hXHjfsVo",
+      "title": "Jesus: The Greatest of All Time",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a2869474-a9ac-4413-9656-8ef336f3cc08",
+      "video_url": "https://www.youtube.com/watch?v=xJWJ5ifBJcg",
+      "title": "Jesus\u2019 Most Important End Times Warning",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "316cfa0b-2b52-42c6-a17b-e9377761c6ce",
+      "video_url": "https://www.youtube.com/watch?v=425DHrVlSSk",
+      "title": "Jesus' Most Misunderstood Parable",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 21,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c42cc010-9848-4e91-8e4b-155067bbe767",
+      "video_url": "https://www.youtube.com/watch?v=t9nSnxy1N8I",
+      "title": "Judgment Is Coming For Those Who Distort Scripture",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 16,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "0cd0899a-19a4-4657-9ae9-fd3c75889a9b",
+      "video_url": "https://www.youtube.com/watch?v=zN-icz0BAFc",
+      "title": "Keys for Powerful Prayer",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "25504b55-34f4-4366-b968-816fb582acbd",
+      "video_url": "https://www.youtube.com/watch?v=QJ1a6cYg_ug",
+      "title": "Leading a Church or Ministry? Don\u2019t Miss the Healthy Pastor Course!",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3458afa8-22ef-4588-b140-162e7a561cf3",
+      "video_url": "https://www.youtube.com/watch?v=VPnNN822Eh4",
+      "title": "Letting Go of Offense",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d61b8634-d80d-4fd7-ba75-34b8179a794d",
+      "video_url": "https://www.youtube.com/watch?v=72U1wssoXww",
+      "title": "Living a Life of Fear and Trembling",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f9a464ab-2b87-48a0-80e6-e1e2ecdafaa5",
+      "video_url": "https://www.youtube.com/watch?v=qrxu4MYpaRI",
+      "title": "Look Out: This Will Try to Derail Your Calling",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 11,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "5cd67739-2ae8-4eef-9917-ac92aeeaf54d",
+      "video_url": "https://www.youtube.com/watch?v=8h64Edr_o44",
+      "title": "Millions of Christians Are LEAVING Their Faith! Why?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 14,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2a1929ba-a554-42f0-8806-01cad9892c29",
+      "video_url": "https://www.youtube.com/watch?v=8h64Edr_o44",
+      "title": "Millions of Christians Are LEAVING Their Faith! Why?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ecc5d931-6942-4eda-81df-db046681dc5c",
+      "video_url": "https://www.youtube.com/watch?v=SPoz3EOUk84",
+      "title": "Most People NEVER Fulfill Their Calling \u2013 I'll Show You How",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 16,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "1f64dcaf-cec4-4d1e-a7b9-8a3a78b30fa6",
+      "video_url": "https://www.youtube.com/watch?v=ETcL5pqgqM4",
+      "title": "Multiply the Gifts in Your Life with John Bevere",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "fa73c89f-e207-49ca-a969-85e861a2aba3",
+      "video_url": "https://www.youtube.com/watch?v=ETcL5pqgqM4",
+      "title": "Multiply the Gifts in Your Life with John Bevere",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b30e261b-8d47-4fa5-9da2-c3125f68393c",
+      "video_url": "https://www.youtube.com/watch?v=TP1MqDr0dnY",
+      "title": "Near Death Experiences Prove This.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "614c2b71-f26b-4bd5-a87c-476442334890",
+      "video_url": "https://www.youtube.com/watch?v=e9DVU1c_KKI",
+      "title": "Obey Even If It\u2019s Painful | John Bevere |",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d90b3731-b9fb-4734-ab10-e2b23aa28c1a",
+      "video_url": "https://www.youtube.com/watch?v=blBwL-MUbcU",
+      "title": "Obey God to Completion | John Bevere |",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4df35060-2ea7-42ee-9181-1f7fe7739d51",
+      "video_url": "https://www.youtube.com/watch?v=7Lgh-fB93ZA",
+      "title": "One Aspect of Living Well Is Finishing Well",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "efc85119-1885-4a32-9c0a-4345ef166e9f",
+      "video_url": "https://www.youtube.com/watch?v=NY2hJQuLhRY",
+      "title": "Only ONE Thing Will Keep You Ready for His Return",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 21,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f5f4de34-87ba-4488-8259-ff943134005a",
+      "video_url": "https://www.youtube.com/watch?v=w-Mij7dV7zk",
+      "title": "Overcoming the Fear of Man",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "bb0fa362-6bcb-4230-8083-45d3e8f59fa9",
+      "video_url": "https://www.youtube.com/watch?v=Z9jmUaf-zpA",
+      "title": "Proof That God Still Speaks Today",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "7fc46dba-1e8d-4fe9-ba39-1e1689bc336d",
+      "video_url": "https://www.youtube.com/watch?v=wMCOnYpCqLU",
+      "title": "Pursue Jesus as Much as He Pursues You | John Bevere |",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "7ebf33e9-15df-49c1-b8a8-68c8245ceb9c",
+      "video_url": "https://www.youtube.com/watch?v=AMIMVTBwlvk",
+      "title": "Pursuing Holiness [FULL SERMON]",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "de7efa0c-f03a-45fb-b8f4-e8f85ff9c2e6",
+      "video_url": "https://www.youtube.com/watch?v=IVZoRBVry6M",
+      "title": "Realizing How Awesome God Is",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e613c0ce-8178-4ce8-a8c1-1b8f28f3dc1c",
+      "video_url": "https://www.youtube.com/watch?v=mQnYm2r0Rbo",
+      "title": "Reconciliation Takes Two",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "fa8cfaaa-9837-4931-9957-8051bbb08326",
+      "video_url": "https://www.youtube.com/watch?v=6q5g6-srjbU",
+      "title": "Redefining Ministry\u2014Answering God\u2019s Call in the Marketplace",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3d937a41-aaa6-4a88-86bd-bd284e8579fc",
+      "video_url": "https://www.youtube.com/watch?v=GKZPktr3SPo",
+      "title": "Rewards in Heaven Aren\u2019t All the Same.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 20,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9450ac8a-1c76-4ac0-a195-f09b033e6872",
+      "video_url": "https://www.youtube.com/watch?v=8TetBxZ95DY",
+      "title": "Satan Is Using Certain Preachers to Brainwash You",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 23,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c97b0505-b9e0-4071-9d69-1f9da68e13d6",
+      "video_url": "https://www.youtube.com/watch?v=zoeRRhcUHTw",
+      "title": "Seek to Serve, Not to Be Served",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "158c6b80-022d-4b21-9eda-49e950bd8b22",
+      "video_url": "https://www.youtube.com/watch?v=T_-jHs-FLA8",
+      "title": "Seeking Breakthrough? Watch This!",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 4,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "6cdeea7b-13b8-4198-b63c-ef141d64d1eb",
+      "video_url": "https://www.youtube.com/watch?v=FYQsc-bhYi4",
+      "title": "Strategic Ideas That Will Help You Multiply the Blessings in Your Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "6e3216c8-b8b2-460c-b7c6-6a06f5252bb7",
+      "video_url": "https://www.youtube.com/watch?v=FVpjv3ntdtw",
+      "title": "Strategies to Release Offenses",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 4,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9711ec43-b942-4714-a6e0-7e96b5a97ed9",
+      "video_url": "https://www.youtube.com/watch?v=fJrpamDKDRo",
+      "title": "Successful Living",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "516443b5-e153-4513-adf8-400de2744f2d",
+      "video_url": "https://www.youtube.com/watch?v=fJrpamDKDRo",
+      "title": "Successful Living",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "0aba6dca-2d09-4c88-8084-96ab6cec8322",
+      "video_url": "https://www.youtube.com/watch?v=z0uvJ0__JQQ",
+      "title": "Suffering Is a Privilege",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 49,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e0f2fc71-bc91-4812-899a-5f97df20a71e",
+      "video_url": "https://www.youtube.com/watch?v=8dSno9wMdoI",
+      "title": "Symptoms of Intimidation: How to Recognize and Overcome",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9a7e4341-da16-4bd8-b8c7-49667187c23f",
+      "video_url": "https://www.youtube.com/watch?v=1j_zWBKUSA0",
+      "title": "Take Your Mind Back! (and here's how)",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 21,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "00da8508-15a9-42d7-b535-5562246555e1",
+      "video_url": "https://www.youtube.com/watch?v=1j_zWBKUSA0",
+      "title": "Take Your Mind Back! (and here's how)",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 23,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "091c4d11-0b1c-4b4a-9237-50d2d11f05e7",
+      "video_url": "https://www.youtube.com/watch?v=ESdNu24due4",
+      "title": "The Ancient Wedding That Explains the End Times",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "8aa09aca-c837-4708-9755-420dde5a63dd",
+      "video_url": "https://www.youtube.com/watch?v=iw4QgHEi7s4",
+      "title": "The Antichrist, Nephilim & the State of the Church w/ Rick Renner",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 17,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "7a206193-716f-47c9-afcf-3e5744b77957",
+      "video_url": "https://www.youtube.com/watch?v=ghBsFhywK9A",
+      "title": "The Benefits of A Digital Fast (No One Regrets Doing This)",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2bac29ae-0f68-4f59-8f43-73c8b8f6dfb2",
+      "video_url": "https://www.youtube.com/watch?v=HLhWUWptV94",
+      "title": "The Bible Warns Us About the TIMING of Jesus\u2019 Return",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 17,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3f086e56-cded-4c69-a40e-99af2fd2f7b1",
+      "video_url": "https://www.youtube.com/watch?v=R3mDSjB_97M",
+      "title": "The Biggest Revival in History is About to Happen",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 17,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e6537cff-4285-4d3e-a438-3e7a8d9ed8b2",
+      "video_url": "https://www.youtube.com/watch?v=-G4BjtQSAws",
+      "title": "The Brain Block That\u2019s Killing Your Prayer Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "90a3db83-ba6b-43f2-957f-2b52ffccc171",
+      "video_url": "https://www.youtube.com/watch?v=I6IOctaXD2Y",
+      "title": "The DANGER of Neglecting Your Gifts",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "dc8439cf-469f-4755-8c8f-26fc27958602",
+      "video_url": "https://www.youtube.com/watch?v=I6IOctaXD2Y",
+      "title": "The DANGER of Neglecting Your Gifts",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d35a8785-af75-4f38-8233-110ad62d1e73",
+      "video_url": "https://www.youtube.com/watch?v=wWvxUUeRLQM",
+      "title": "The Devil's Latest Plan Is Digital.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9d83bc6d-a556-46bd-999b-676e1787a59b",
+      "video_url": "https://www.youtube.com/watch?v=AZfxC9tITSU",
+      "title": "The End of The World Won\u2019t Look How You Think It Will",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 20,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4cc3e218-f893-431d-afa4-47ea1f1efaa9",
+      "video_url": "https://www.youtube.com/watch?v=KCys8bsXZSU",
+      "title": "The End Times Timeline Nobody Taught You",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "9f1fd2a6-29aa-4b67-8d8f-591aa3bd518b",
+      "video_url": "https://www.youtube.com/watch?v=KCys8bsXZSU",
+      "title": "The End Times Timeline Nobody Taught You",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 48,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "038e5864-77ee-4def-9726-59d0d2a987fb",
+      "video_url": "https://www.youtube.com/watch?v=JQDfjLQ2RqI",
+      "title": "The Fear of the Lord Is My Treasure",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "22c522ad-bdbb-449b-b6df-958d9f98b22b",
+      "video_url": "https://www.youtube.com/watch?v=JQDfjLQ2RqI",
+      "title": "The Fear of the Lord Is My Treasure",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a11f9860-1368-46f5-b005-358e61d7cc43",
+      "video_url": "https://www.youtube.com/watch?v=VeYFRc9hJMU",
+      "title": "The Final Events Leading Up to The New Heavens and Earth",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 20,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "473648e9-a9f0-4f6e-a000-e01d963e662e",
+      "video_url": "https://www.youtube.com/watch?v=ucsl0u3bqU8",
+      "title": "The Greatest Compliment a Human Can Receive",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "91068a04-5730-414b-ba41-ce1e260887ff",
+      "video_url": "https://www.youtube.com/watch?v=qdEtw29BEDA",
+      "title": "The Greatest Lie About Christianity in America",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e81e1cb0-226e-484e-9883-1c943dc452e0",
+      "video_url": "https://www.youtube.com/watch?v=1yaYlI9e7wU",
+      "title": "The Invisible Sin That Destroys Intimacy with God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a0702514-f1f1-4a4f-a1a0-129bf23b2387",
+      "video_url": "https://www.youtube.com/watch?v=f98xiY_2YBk",
+      "title": "The Keys to Finishing Well in Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "950fb65d-0244-4293-a678-78a9acd19450",
+      "video_url": "https://www.youtube.com/watch?v=f98xiY_2YBk",
+      "title": "The Keys to Finishing Well in Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2839b7f2-5bb8-4c8d-ae03-eb69f4dd9180",
+      "video_url": "https://www.youtube.com/watch?v=0se92-QWb_s",
+      "title": "The Lie You\u2019ve Been Sold About Prosperity.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 16,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ec366a24-5a85-498f-8b38-5cabb28751b2",
+      "video_url": "https://www.youtube.com/watch?v=SDHRYuXuP6I",
+      "title": "The Man Who Will Fool The Entire World Is Alive Today.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b4c49756-4329-457d-82e4-620d8d7ac31d",
+      "video_url": "https://www.youtube.com/watch?v=vrWMaivsG6Q",
+      "title": "The Most Faithful Church in Revelation",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "99695180-80c1-4bc0-8f89-78ff0bddcada",
+      "video_url": "https://www.youtube.com/watch?v=h0IPx2Nh4es",
+      "title": "The Most Powerful Scripture for Believers",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b1150eec-5708-4208-b85e-1110a18d4e4f",
+      "video_url": "https://www.youtube.com/watch?v=h0IPx2Nh4es",
+      "title": "The Most Powerful Scripture for Believers",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "27b2d4a8-b83f-4550-91c4-cda727b5effd",
+      "video_url": "https://www.youtube.com/watch?v=0dSRPVDr2Tw",
+      "title": "The One Thing That Cuts You Off From Hearing God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "774e8721-fc8b-475f-87d6-d0abf358559e",
+      "video_url": "https://www.youtube.com/watch?v=yztHot230do",
+      "title": "The Paradox of Faith: Fear and Obedience to God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f7bfd57c-f7ea-4414-93a2-31db1b7d26fb",
+      "video_url": "https://www.youtube.com/watch?v=AIdt-HGeKkw",
+      "title": "The Power of Developing Your Gift with John Bevere",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 11,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "69383453-24c6-4950-9da2-450ec1a06639",
+      "video_url": "https://www.youtube.com/watch?v=AIdt-HGeKkw",
+      "title": "The Power of Developing Your Gift with John Bevere",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 5,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ba2edb2d-1c53-49ab-bee8-de0498dbf373",
+      "video_url": "https://www.youtube.com/watch?v=vvMCfdirQZc",
+      "title": "The Power of Reconciliation",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 16,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3c104b6d-1f5f-4e2c-9f90-d06e06502383",
+      "video_url": "https://www.youtube.com/watch?v=0Cct3PkKkvk",
+      "title": "The Power of Your Yes | John Bevere |",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "8fedca4a-b52e-4453-8795-7e7a05d188f7",
+      "video_url": "https://www.youtube.com/watch?v=eTxssPVwoEQ",
+      "title": "The Powerful Difference: Fear vs. Awe",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4f5197c7-3cf0-44e9-9264-b9e1395c31c7",
+      "video_url": "https://www.youtube.com/watch?v=QFklXqkEjvM",
+      "title": "The Process of Sanctification",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4be47c83-76bb-47ee-82e2-693e323bb342",
+      "video_url": "https://www.youtube.com/watch?v=-JpvtbXCJpw",
+      "title": "The Rapture Terrified Me Too Until I Read This",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 25,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "105836ab-0adc-483e-840a-841389fefb1e",
+      "video_url": "https://www.youtube.com/watch?v=XXYMEBf7SdE",
+      "title": "The Rapture Won't Happen How You Think",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 21,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "21454bbe-399d-4911-ae6d-d41a4bc961b6",
+      "video_url": "https://www.youtube.com/watch?v=f42YD2LQaLw",
+      "title": "The Real Reason Christians Are So Disliked",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "20924067-c5cb-4288-88be-281103f47b1b",
+      "video_url": "https://www.youtube.com/watch?v=E__HGnmseyM",
+      "title": "The REAL Reason Many Have Abandoned Their Faith",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "34aba81c-5958-458e-8ed4-292449365f2b",
+      "video_url": "https://www.youtube.com/watch?v=VAXtROuMKIo",
+      "title": "The Scariest Question You Can Ask",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "40dccb9f-e9f8-49fc-852c-a6dda60a7b2a",
+      "video_url": "https://www.youtube.com/watch?v=JA_8y539Vec",
+      "title": "The Second Coming of Jesus",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 36,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2530366f-2ec4-4b8d-8479-267e193b462f",
+      "video_url": "https://www.youtube.com/watch?v=WBHK85oI_jE",
+      "title": "The Secret to Breaking Sin's Grip on Your Life",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 17,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3305d1de-a370-4420-9f30-728b75b0fd41",
+      "video_url": "https://www.youtube.com/watch?v=FNjzgw63xgY",
+      "title": "The Secret to Elevating Your Thoughts, Intentions, and Actions",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "7afe8077-32dd-4555-b61c-a47379fb8cf6",
+      "video_url": "https://www.youtube.com/watch?v=jN4V8xkCyAU",
+      "title": "The SECRET to Knowing Jesus Deeper",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 21,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "44f4beff-d797-4ace-8d45-11afc07e747b",
+      "video_url": "https://www.youtube.com/watch?v=jN4V8xkCyAU",
+      "title": "The SECRET to Knowing Jesus Deeper",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "bd7940f0-dfc6-48a7-8d86-1f0ddf6342c5",
+      "video_url": "https://www.youtube.com/watch?v=fS-pZNuY3I4",
+      "title": "The Ultimate Test: Can You Obey Regardless of Circumstances?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "fe31763f-2b4f-4ae3-8615-14bfbac777cb",
+      "video_url": "https://www.youtube.com/watch?v=2mqJT6CF-h8",
+      "title": "The Untold Secret: Stop Going to the Wrong Places for Answers",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 5,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "42647513-a3eb-4f4b-97e1-aecea895d369",
+      "video_url": "https://www.youtube.com/watch?v=xe-_rT6Yu00",
+      "title": "There will be 3 Types of Christians On the day of Jesus' Return",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 17,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4e1b472e-1f74-4814-a33b-d71bff329802",
+      "video_url": "https://www.youtube.com/watch?v=zNaQ_piQk_A",
+      "title": "These End Times Timelines Are All Lining Up at Once",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 31,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "da924bb1-87ed-4c91-83fc-86d41e5b4619",
+      "video_url": "https://www.youtube.com/watch?v=ayNmStcdFNw",
+      "title": "This 40 Year Old Prophecy Came True",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a906287b-fcbf-417f-a597-f61a0cde1501",
+      "video_url": "https://www.youtube.com/watch?v=YXKn1Xt4a_8",
+      "title": "This happens when we SPEAK the Word of God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "bb41c7c8-79f6-4eb2-9f84-db6dc0f4cb7a",
+      "video_url": "https://www.youtube.com/watch?v=ghT9zXC3kyQ",
+      "title": "This is Blocking Your Connection with God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 20,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "b9b07a82-1f89-49dc-a70e-94420a96df51",
+      "video_url": "https://www.youtube.com/watch?v=qjj4nfOF3eU",
+      "title": "This Is How to Push through Resistance",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "459c5c63-cabd-422a-b51b-592825ae16b7",
+      "video_url": "https://www.youtube.com/watch?v=x8Gq9v3PJmo",
+      "title": "This Is Not True Worship",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f9f897f9-f751-4d3e-be2e-2e15b4de499f",
+      "video_url": "https://www.youtube.com/watch?v=GqnAFSpFFJo",
+      "title": "This Is REQUIRED to Be a Steward",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d82b7047-8088-4d58-90eb-326ed7753cdb",
+      "video_url": "https://www.youtube.com/watch?v=iuw5PJjYsgY",
+      "title": "This Is Vital to Sustaining a Life-Giving Relationship",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d667cc51-c94b-44b6-9cd5-cf955237290d",
+      "video_url": "https://www.youtube.com/watch?v=oY7EJKfSeY8",
+      "title": "This Is What Happens If You Don\u2019t Fear the Lord",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "220cf1cf-7c94-4446-bf53-1b58dee980d9",
+      "video_url": "https://www.youtube.com/watch?v=wIUgmNjj3Uw",
+      "title": "Tips to Overcoming Offense",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ca3ba492-5e46-4456-b06b-21f4077b834e",
+      "video_url": "https://www.youtube.com/watch?v=qNHrpbw1CIs",
+      "title": "Trapped in Offense",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 14,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "3baf5d08-ac48-4fec-9b43-03828c9ced8c",
+      "video_url": "https://www.youtube.com/watch?v=3zpxM6l3ozw",
+      "title": "Understanding God's Love",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 1,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f1619b10-8886-4969-b986-f95df3f182c8",
+      "video_url": "https://www.youtube.com/watch?v=e9RKVJah85s",
+      "title": "Understanding Life's True Value",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 3,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "dacb404b-9b24-4598-aa16-9253a7a74e67",
+      "video_url": "https://www.youtube.com/watch?v=NC_I3xI3zSE",
+      "title": "Unforgettable Encounter with God: Frozen in Awe",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "72790443-0468-47c6-986c-8021d3d67e20",
+      "video_url": "https://www.youtube.com/watch?v=tMwXCXR6_-s",
+      "title": "Unmasking Deception: The Key to Living in Truth",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "73eada47-7924-44ce-9351-d96c97b14766",
+      "video_url": "https://www.youtube.com/watch?v=671zP0p2SwU",
+      "title": "We Must Resist THIS Temptation",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4bf796fe-5ada-48f4-b191-847b62f17d2f",
+      "video_url": "https://www.youtube.com/watch?v=fj0qVPNE82o",
+      "title": "We Need to Talk About This",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 22,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a93da945-fd80-4583-9d83-e3fff1a80b18",
+      "video_url": "https://www.youtube.com/watch?v=IJND-7LBMaA",
+      "title": "What A Fallen Pastor Taught Me About Fame and Influence...",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 13,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "dd7c4efd-8cb8-41d4-91a5-dc3810a43783",
+      "video_url": "https://www.youtube.com/watch?v=IJND-7LBMaA",
+      "title": "What A Fallen Pastor Taught Me About Fame and Influence...",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f84cda87-58ab-4324-828d-d4849193d369",
+      "video_url": "https://www.youtube.com/watch?v=J6c3yLOol0M",
+      "title": "What Christians Don\u2019t Understand About the 2024 Election",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 5,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "5d1454f6-070f-47ec-82a8-41468f2d675c",
+      "video_url": "https://www.youtube.com/watch?v=M5M61ontbFc",
+      "title": "What Do You Want Your Legacy to Be?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 8,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "576c7c44-3f39-4858-a1c3-9ee3aa3b14d0",
+      "video_url": "https://www.youtube.com/watch?v=M5M61ontbFc",
+      "title": "What Do You Want Your Legacy to Be?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a24841a6-d1c2-43d0-aa2b-aec15181b74d",
+      "video_url": "https://www.youtube.com/watch?v=NpO9-x6eCqE",
+      "title": "What Happens RIGHT Before The Anti-Christ Shows Up?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "396784e4-f068-496e-9ec2-4771edf9ca7c",
+      "video_url": "https://www.youtube.com/watch?v=5jNG4goiYas",
+      "title": "What You Do Now Impacts Your Children",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "0a0430f3-b86a-4605-9342-7447b9fc095a",
+      "video_url": "https://www.youtube.com/watch?v=5jNG4goiYas",
+      "title": "What You Do Now Impacts Your Children",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a72af8f1-3c6a-4dd9-8c66-2591a7cafd34",
+      "video_url": "https://www.youtube.com/watch?v=s6tiXlAMhaQ",
+      "title": "When Humility Looks Like Arrogance",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 15,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "992818b0-6c8a-4d82-9800-7aa7941c197f",
+      "video_url": "https://www.youtube.com/watch?v=biAYkJCcYH4",
+      "title": "Why Does God HATE Sin? Watch This.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 7,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "721b7ebe-0c25-4ae5-9592-8ec6438626a5",
+      "video_url": "https://www.youtube.com/watch?v=biAYkJCcYH4",
+      "title": "Why Does God HATE Sin? Watch This.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "27048a11-90c7-4fe1-a668-fcb6d5efd52c",
+      "video_url": "https://www.youtube.com/watch?v=M-cWldrdYFc",
+      "title": "Why Some Christians Will Miss the Rapture",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "4c5f7c74-2355-47c5-95cb-18d6048056cf",
+      "video_url": "https://www.youtube.com/watch?v=TblO8v56H-E",
+      "title": "Why We've Lost Respect for God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "f0303edc-95fe-4b92-a87d-d9cb42450f26",
+      "video_url": "https://www.youtube.com/watch?v=RvQrMi9rDmw",
+      "title": "Why You Are Not Experiencing the Presence of God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 6,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d540ea1c-ecad-44d8-9454-5ca61886ddb6",
+      "video_url": "https://www.youtube.com/watch?v=RvQrMi9rDmw",
+      "title": "Why You Are Not Experiencing the Presence of God",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 5,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "2f64bcec-c964-4f09-b8e4-a9cfb84a7dac",
+      "video_url": "https://www.youtube.com/watch?v=LUVlx7C2qso",
+      "title": "Why You Can't Stop Sinning (and how to stop)",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 11,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "ed923517-2dd6-469f-aed7-03142f82a271",
+      "video_url": "https://www.youtube.com/watch?v=LUVlx7C2qso",
+      "title": "Why You Can't Stop Sinning (and how to stop)",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 9,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "d0e1313f-ac84-420a-8a34-8aedddbddeac",
+      "video_url": "https://www.youtube.com/watch?v=kmX5sS9iEJU",
+      "title": "Why You're in the Wilderness",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 4,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "e1f5280e-8b84-4dd4-9d42-53597577e283",
+      "video_url": "https://www.youtube.com/watch?v=vHFflZ27Meo",
+      "title": "Would You like to Be a Friend of God?",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "964d1f8e-1407-4c1f-a515-3f70453ca1f9",
+      "video_url": "https://www.youtube.com/watch?v=YhjIIRM_4a0",
+      "title": "You Can\u2019t Put New Wine in Old Wine Skins",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 12,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "27674101-94d9-4d6e-8980-bf04ed9f5376",
+      "video_url": "https://www.youtube.com/watch?v=lSEuYk_uVso",
+      "title": "You Have a Purpose",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 14,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "a63032ca-054b-40b7-9982-5caaae42bd87",
+      "video_url": "https://www.youtube.com/watch?v=QKEdW2axMOo",
+      "title": "You Need To Prepare For Jesus\u2019 Return",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 19,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "54447d34-bb73-48f4-bb1e-886d69c4dd1b",
+      "video_url": "https://www.youtube.com/watch?v=rEwES7dP_Hw",
+      "title": "You'll Wish Someone Told You This Sooner",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 36,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "60e4ee22-c1c7-4cb7-99d9-d41f32a76dfb",
+      "video_url": "https://www.youtube.com/watch?v=rEwES7dP_Hw",
+      "title": "You\u2019ll Wish Someone Told You This Sooner...",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "0f76102a-4f27-4515-b574-d94c39b1c3f4",
+      "video_url": "https://www.youtube.com/watch?v=v16PIDlr8Xo",
+      "title": "You're Being Set Up",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 34,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c8c18dc2-fa2e-4e3e-a77e-0a2788369593",
+      "video_url": "https://www.youtube.com/watch?v=v16PIDlr8Xo",
+      "title": "You\u2019re Being Set Up...",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 18,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "c920ef7c-aecd-43d1-b208-a1749d69fd1e",
+      "video_url": "https://www.youtube.com/watch?v=61x00hiVHIc",
+      "title": "You've Been Lied to About Hell.",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 17,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "15b0f3df-ea72-4795-a146-e173e3eef7b0",
+      "video_url": "https://www.youtube.com/watch?v=B_DQ2F7aa0c",
+      "title": "Your Relationship w/ God Is Boring (and this is why)",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 2,
+      "proposition_count": 0
+    },
+    {
+      "document_id": "705b5bad-dd3a-4b84-b8f3-534061557fae",
+      "video_url": "https://www.youtube.com/watch?v=1bTHri0Pgpk",
+      "title": "Your Spiritual Gifts Are Dormant (Here\u2019s How to Activate Them)",
+      "author": "John Bevere",
+      "source_name": "John Bevere",
+      "chunk_count": 14,
+      "proposition_count": 0
+    }
+  ]
+}
