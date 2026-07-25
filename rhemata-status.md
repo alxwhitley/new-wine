@@ -3,8 +3,14 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-25 (session close — account panel redesign, see directly below).
+Last verified: 2026-07-25 (session close — position-synthesizing layer architecture recorded in PLAN.md, see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Position-synthesizing layer architecture recorded — PLAN.md #44–49 (session state, 2026-07-25)
+
+Records-only session, second of the day. No product code touched. Read-only pass confirmed PLAN.md as the durable home (rhemata-status.md is session-state only) and found no contradiction with anything previously recorded. Full content lives in PLAN.md's new "Position-synthesizing layer" track (#44–49), the new Open Decisions #13, Ordering Call G, and the Quote track addendum — not duplicated here. One commit, records only.
 
 ---
 
