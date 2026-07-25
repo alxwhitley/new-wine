@@ -32,7 +32,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   return (
     <div className="shrink-0 bg-background px-4 md:px-12 pb-2 md:pb-6">
       <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
-        <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-1.5 md:py-2">
+        <div className="flex items-center gap-2 rounded-2xl border border-border bg-popover px-4 py-1.5 md:py-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
