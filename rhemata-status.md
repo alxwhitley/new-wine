@@ -3,8 +3,20 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-25 (session close — position-synthesizing layer architecture recorded in PLAN.md, see directly below).
+Last verified: 2026-07-25 (session close — sidebar New Chat CTA de-golded + footer nav centered, see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Sidebar polish: New Chat CTA de-golded, footer nav centered (session state, 2026-07-25)
+
+Two small, unrelated frontend-only fixes to `sidebar.tsx` and its footer, both requested directly by Alex, both scoped to exactly what he asked and nothing else.
+
+**New Chat CTA (`sidebar.tsx:175-182`, commit `a5cba16`).** Was the `Button` default variant — solid `--primary` gold, the same accent color used for citations and active-nav states, competing with the chat input for attention. Alex chose (via an explicit A/B question) to keep a bordered "still reads as a button" treatment rather than going fully flat: now `variant="ghost"` + `border border-border text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground` — no fill at rest, hover treatment copied verbatim from the Chat/Discover/Study nav links directly below it so it doesn't introduce a new interaction pattern. `DESIGN.md`'s Extension Rules table updated in the same commit (was documenting the old gold treatment as deliberate — corrected, not stacked on top, per this file's own eviction rule). Verified live via Playwright against the running dev server (port 3000): computed `background-color` confirmed `rgba(0,0,0,0)` at rest → `rgb(15,15,14)` on hover, matching `--sidebar-accent`'s token value exactly; border confirmed `rgb(62,62,56)`, matching `--border`.
+
+**Footer nav centered (`footer-nav.tsx`, commit `3487fa6`).** The "Home | Sources | Beliefs" row was left-aligned instead of centered under the sidebar. One class added — `justify-center` on the nav's flex container. Verified live via Playwright screenshot: row now centers, position (still bottom-anchored) and everything else unchanged.
+
+**Reconciliation.** Two commits, both already pushed to `origin/main`: `a5cba16` (`DESIGN.md` + `sidebar.tsx`), `3487fa6` (`footer-nav.tsx`). No backend/DB/roadmap changes — this entry plus the already-updated `DESIGN.md` are the only records from this session; `PLAN.md` untouched, nothing here changes any open decision or roadmap item.
 
 ---
 
