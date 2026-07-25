@@ -67,9 +67,13 @@ def get_anon_client():
 
 def get_real_user_id(service_db):
     # type: (object) -> str
-    """Resolve a genuine auth.users id for TEST_EMAIL via the admin API --
-    does not create a new user if one already exists for this email, and
-    never touches auth.users directly."""
+    """Resolve a genuine auth.users id for TEST_EMAIL via the admin API.
+    TEST_EMAIL is a real, already-registered account in this project, so
+    this reuses that existing auth.users row. Note: if TEST_EMAIL did NOT
+    already exist, generate_link(type="magiclink") would silently create
+    one -- do not point this script at a different Supabase project without
+    confirming TEST_EMAIL already exists there, or it will leave behind an
+    unconfirmed auth.users row this script never cleans up."""
     link = service_db.auth.admin.generate_link({"type": "magiclink", "email": TEST_EMAIL})
     return link.user.id
 
