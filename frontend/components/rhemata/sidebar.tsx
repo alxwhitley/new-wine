@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2, ChevronsUpDown } from "lucide-react";
+import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -15,15 +17,24 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { UsageRing } from "@/components/rhemata/usage-ring";
 import { AdminModal } from "@/components/admin/AdminModal";
 import { FooterNav } from "@/components/marketing/footer-nav";
@@ -111,8 +122,8 @@ export function Sidebar({
   // Admin modal
   const [adminOpen, setAdminOpen] = useState(false);
 
-  // Settings sheet
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Account dialog
+  const [accountOpen, setAccountOpen] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState("");
   const [settingsStatus, setSettingsStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
 
@@ -171,10 +182,10 @@ export function Sidebar({
     }
   }
 
-  function handleOpenSettings() {
+  function handleOpenAccount() {
     setEditDisplayName(displayName ?? "");
     setSettingsStatus("idle");
-    setSettingsOpen(true);
+    setAccountOpen(true);
   }
 
   async function handleSaveDisplayName() {
@@ -390,46 +401,23 @@ export function Sidebar({
         isFullNavEnabled() ? "pb-drawer-footer-safe-tabbar" : "pb-drawer-footer-safe"
       )}>
         {isLoggedIn ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent transition-colors text-left">
-                {weeklyUsage && (
-                  <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {displayName ?? user?.email ?? ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {user?.email ?? ""}
-                  </p>
-                </div>
-                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-56">
-              <DropdownMenuItem onSelect={handleOpenSettings}>
-                Profile
-              </DropdownMenuItem>
-              {userRole === "user" && (
-                <DropdownMenuItem onSelect={handleOpenContributor}>
-                  Become a contributor
-                </DropdownMenuItem>
-              )}
-              {userRole === "admin" && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => setAdminOpen(true)}>
-                    Admin panel
-                  </DropdownMenuItem>
-                </>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={onSignOut}>
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            onClick={handleOpenAccount}
+            className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent transition-colors text-left"
+          >
+            {weeklyUsage && (
+              <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {displayName ?? user?.email ?? ""}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {user?.email ?? ""}
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
         ) : (
           <Button size="sm" className="w-full" onClick={onSignInClick}>
             Become a test user
@@ -497,57 +485,122 @@ export function Sidebar({
       {/* Admin modal */}
       <AdminModal open={adminOpen} onOpenChange={setAdminOpen} />
 
-      {/* Settings sheet */}
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <SheetContent side="right" className="flex flex-col">
-          <SheetHeader>
-            <SheetTitle>Your profile</SheetTitle>
-            <SheetDescription>
-              Update your contributor display name.
-            </SheetDescription>
-          </SheetHeader>
+      {/* Account dialog */}
+      <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+        <DialogContent className="flex flex-col gap-0 max-w-md">
+          <DialogHeader>
+            <DialogTitle>Your account</DialogTitle>
+            <DialogDescription>
+              Manage your identity, usage, and contributor status.
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="flex-1 px-4 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-muted-foreground">Display name</p>
-              <Input
-                value={editDisplayName}
-                onChange={(e) => {
-                  setEditDisplayName(e.target.value);
-                  setSettingsStatus("idle");
-                }}
-                placeholder="Your name"
-                maxLength={100}
-              />
-            </div>
-            {userRole && (
-              <p className="text-xs text-muted-foreground">
-                Role: <span className="capitalize">{userRole}</span>
-              </p>
-            )}
-            {settingsStatus === "saved" && (
-              <p className="text-xs text-muted-foreground">Saved.</p>
-            )}
-            {settingsStatus === "error" && (
-              <p className="text-xs text-destructive">Something went wrong. Please try again.</p>
-            )}
-          </div>
-
-          <SheetFooter>
-            <Button
-              onClick={handleSaveDisplayName}
-              disabled={settingsStatus === "loading" || !editDisplayName.trim()}
-              className="w-full"
-            >
-              {settingsStatus === "loading" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Save"
+          <div className="flex flex-col gap-5 px-6 pb-2">
+            {/* Identity */}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs text-muted-foreground">Display name</p>
+                <Input
+                  value={editDisplayName}
+                  onChange={(e) => {
+                    setEditDisplayName(e.target.value);
+                    setSettingsStatus("idle");
+                  }}
+                  placeholder="Your name"
+                  maxLength={100}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs text-muted-foreground">Email</p>
+                <p className="text-sm text-foreground">{user?.email ?? ""}</p>
+              </div>
+              {settingsStatus === "saved" && (
+                <p className="text-xs text-muted-foreground">Saved.</p>
               )}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+              {settingsStatus === "error" && (
+                <p className="text-xs text-destructive">Something went wrong. Please try again.</p>
+              )}
+              <Button
+                onClick={handleSaveDisplayName}
+                disabled={settingsStatus === "loading" || !editDisplayName.trim()}
+                size="sm"
+                className="self-start"
+              >
+                {settingsStatus === "loading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Save name"
+                )}
+              </Button>
+            </div>
+
+            <Separator />
+
+            {/* Usage */}
+            {weeklyUsage && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs text-muted-foreground">Usage</p>
+                  <p className="text-sm text-foreground">
+                    {weeklyUsage.used} of {weeklyUsage.limit} questions used this week
+                  </p>
+                </div>
+                <Separator />
+              </>
+            )}
+
+            {/* Contributor status */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">Contributor status</p>
+              {userRole === "admin" && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">Admin</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAccountOpen(false);
+                      setAdminOpen(true);
+                    }}
+                  >
+                    Open admin panel
+                  </Button>
+                </div>
+              )}
+              {userRole === "contributor" && (
+                <Badge variant="secondary">Contributor</Badge>
+              )}
+              {userRole === "user" && (
+                <div className="flex flex-col gap-2 items-start">
+                  <p className="text-sm text-muted-foreground">
+                    Contribute pastoral notes readers can see alongside a passage.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAccountOpen(false);
+                      handleOpenContributor();
+                    }}
+                  >
+                    Become a contributor
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Account actions */}
+            <div className="flex flex-col gap-2 items-start pb-4">
+              <p className="text-xs text-muted-foreground">Account</p>
+              <Button variant="outline" size="sm" onClick={onSignOut}>
+                Sign out
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
