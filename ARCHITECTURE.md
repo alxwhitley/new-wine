@@ -30,7 +30,7 @@ Public marketing routes (no auth): `/home`, `/sources`, `/beliefs`. Latter two
 render from `docs/*.md`, linked via shared `FooterNav`.
 
 Backend routers: `chat`, `search`, `document`, `library`, `study`,
-`pastors_notes`, `usage`, `ingest`, `admin`, `feedback`.
+`pastors_notes`, `usage`, `ingest`, `admin`, `feedback`, `account`.
 
 ---
 
@@ -40,7 +40,7 @@ Tables: `documents`, `chunks`, `propositions`, `verses`, `saved_words`,
 `excerpts`, `guest_sessions`, `conversations`, `messages`, `interlinear_words`,
 `book_quotes`, `user_usage`, `sources`, `source_aliases`,
 `source_license_audit`, `app_settings`, `removed_urls`, `user_roles`,
-`contributor_requests`, `pastors_cards`.
+`contributor_requests`, `pastors_cards`, `deletion_requests`.
 
 **documents** — `source_type` (sermon|background|magazine_article|commentary|
 book|paper|other) · `source_kind` · `citation_mode` (citable|silent_context) ·
@@ -186,12 +186,30 @@ to `images.remotePatterns`.
 
 ---
 
-## Admin
+## Admin panel / account panel (merged 2026-07-25)
 
-Single `/admin`, role-gated via `user_roles`. One modal (`AdminModal.tsx`), 4
-tabs: **Corpus** (Documents / Sources / Pipelines), **Feedback**,
-**Contributors**, **Notes Queue**. Realtime uses a unique channel name per mount
-(`admin-realtime-${Date.now()}`).
+`AdminModal.tsx` is one modal opened directly from the sidebar footer identity
+button, for **every authenticated user** — not admin-only. Left nav: **Profile**
+(always visible — identity header with avatar/name/role badge/email, sign out
+anchored top-right, then Display name / Email / Weekly usage / Delete-account
+cards) first, then, only when `user_roles.role === 'admin'`: **Corpus**
+(Documents / Sources / Pipelines), **Feedback**, **Contributors** (includes the
+"Account Deletion Requests" card), **Notes Queue**. Gating moved from "does the
+modal open at all" (old behavior: closed itself for non-admins) to "which nav
+items render" — see `panelReady` (any authenticated user) vs `roleChecked`
+(admin only, gates the other four tabs' data fetches) in the component.
+Realtime uses a unique channel name per mount (`admin-realtime-${Date.now()}`).
+
+There is no separate account `Dialog` anymore. `sidebar.tsx`'s earlier "Your
+account" popup (built, shipped, then superseded the same day) was removed
+entirely; its content lives inside `AdminModal.tsx`'s Profile tab instead.
+
+**Delete account is a stub.** `POST /account/delete-request` only inserts a row
+into `deletion_requests` for manual admin follow-up (resolved from the
+Contributors tab's "Account Deletion Requests" card via
+`POST /account/delete-requests/{id}/resolve`) — it deletes nothing. No
+cascading deletion of `conversations`, `saved_words`, `pastors_cards`,
+`user_roles`, or the Supabase auth user exists anywhere in the codebase yet.
 
 **Rule: admin data fetches must surface errors — never silently render
 empty/zero.** A `.catch(() => setX([]))` hid a total backend 403 wall behind

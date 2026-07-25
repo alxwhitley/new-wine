@@ -105,6 +105,12 @@ quality.
   construction — the known fabrication contains no checkable specifics at
   all. Don't treat either check, if one gets built, as covering this failure
   class without re-confirming against it directly.
+- **Delete account is a stub, not real deletion.** `POST /account/delete-request`
+  only inserts a row into `deletion_requests` for manual admin follow-up
+  (Admin panel → Contributors → "Account Deletion Requests"). No cascading
+  deletion of `conversations`, `saved_words`, `pastors_cards`, `user_roles`,
+  or the Supabase auth user exists anywhere in the codebase. A submitted
+  request means nothing has been removed yet.
 
 **Corpus counts are never documented here.** Query live — any static number rots
 within days and has already caused one round of false blockers.

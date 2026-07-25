@@ -110,6 +110,7 @@
 | Inline citations | `text-primary underline-offset-4 hover:underline` (link variant) — drop the old #d4b96a highlight-pill treatment |
 | Citation source panel | Sheet component (shadcn), `bg-popover` |
 | Topic tag pills | Badge component: `bg-secondary text-secondary-foreground rounded-md text-xs` — no gold tinted backgrounds |
+| Role/status badge (Admin/Contributor, account panel identity header) | Badge component, `variant="outline"` + `bg-primary/15 text-primary border-primary/35` — distinct from topic tag pills above; a role indicator, not a content tag |
 | Search `<mark>` highlights | `text-primary font-semibold bg-transparent` |
 | Verse numbers (sup) | `text-xs text-muted-foreground` |
 | Active verse highlight | `bg-accent` |
