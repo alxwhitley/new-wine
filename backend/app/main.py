@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import chat, search, document, ingest, study, admin, feedback, library, pastors_notes, usage
+from app.routers import chat, search, document, ingest, study, admin, feedback, library, pastors_notes, usage, account
 
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])
@@ -34,6 +34,7 @@ app.include_router(feedback.router, prefix="/feedback", tags=["feedback"])
 app.include_router(library.router, prefix="/library", tags=["library"])
 app.include_router(pastors_notes.router, prefix="/pastors-notes", tags=["pastors-notes"])
 app.include_router(usage.router, prefix="/usage", tags=["usage"])
+app.include_router(account.router, prefix="/account", tags=["account"])
 
 @app.get("/")
 async def root():
