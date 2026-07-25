@@ -446,7 +446,7 @@ export default function Home() {
                   <button
                     key={s}
                     onClick={() => handleSend(s)}
-                    className="w-full min-h-[44px] text-left rounded-lg bg-popover px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="w-full min-h-[44px] text-left rounded-lg bg-popover px-4 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     {s}
                   </button>
