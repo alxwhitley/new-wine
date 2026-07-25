@@ -194,6 +194,19 @@ function fmtDate(iso: string) {
   });
 }
 
+function fmtResetDate(iso: string) {
+  // `iso` is a date-only string (e.g. "2026-07-27") representing the UTC
+  // reset day -- format in UTC explicitly, or a browser west of UTC renders
+  // it a day early (new Date("2026-07-27") is midnight UTC, and
+  // toLocaleDateString without a pinned timeZone renders in local time).
+  return new Date(iso).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 function formatVerseId(verseId: string): string {
   const parts = verseId.split(".");
   if (parts.length !== 3) return verseId;
@@ -298,7 +311,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
   // ── Profile ────────────────────────────────────────────────────
   const [editDisplayName, setEditDisplayName] = useState("");
   const [nameStatus, setNameStatus] = useState<"idle" | "loading" | "saved" | "error">("idle");
-  const [weeklyUsage, setWeeklyUsage] = useState<{ used: number; limit: number } | null>(null);
+  const [weeklyUsage, setWeeklyUsage] = useState<{ used: number; limit: number; resets: string } | null>(null);
   const [usageLoading, setUsageLoading] = useState(true);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteStatus, setDeleteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
@@ -422,7 +435,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => setWeeklyUsage({ used: data.used, limit: data.limit }))
+      .then((data) => setWeeklyUsage({ used: data.used, limit: data.limit, resets: data.resets }))
       .catch(() => setWeeklyUsage(null))
       .finally(() => setUsageLoading(false));
   }, [panelReady, accessToken, activeTab]);
@@ -844,85 +857,136 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
               {/* ── Profile ─────────────────────────────────────── */}
               {activeTab === "profile" && (
                 <div role="tabpanel">
-                  <h2 className="text-xl font-semibold text-foreground font-sans mb-6">Profile</h2>
-
-                  <div className="space-y-6 max-w-lg">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Identity
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="flex flex-col gap-1.5">
-                          <p className="text-xs text-muted-foreground">Display name</p>
-                          <Input
-                            value={editDisplayName}
-                            onChange={(e) => {
-                              setEditDisplayName(e.target.value);
-                              setNameStatus("idle");
-                            }}
-                            placeholder="Your name"
-                            maxLength={100}
-                          />
+                  <div className="max-w-lg">
+                    {/* Identity header */}
+                    <div className="flex items-start justify-between gap-4 pb-6">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-lg font-semibold">
+                          {(displayName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase()}
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                          <p className="text-xs text-muted-foreground">Email</p>
-                          <p className="text-sm text-foreground">{user?.email ?? ""}</p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-lg font-semibold text-foreground truncate">
+                              {displayName ?? user?.email ?? ""}
+                            </p>
+                            {userRole === "admin" && (
+                              <Badge variant="outline" className="bg-primary/15 text-primary border-primary/35">
+                                Admin
+                              </Badge>
+                            )}
+                            {userRole === "contributor" && (
+                              <Badge variant="outline" className="bg-primary/15 text-primary border-primary/35">
+                                Contributor
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground truncate">{user?.email ?? ""}</p>
                         </div>
-                        {nameStatus === "saved" && (
-                          <p className="text-xs text-muted-foreground">Saved.</p>
-                        )}
-                        {nameStatus === "error" && (
-                          <p className="text-xs text-destructive">Something went wrong. Please try again.</p>
-                        )}
-                        <Button
-                          onClick={handleSaveDisplayName}
-                          disabled={nameStatus === "loading" || !editDisplayName.trim()}
-                          size="sm"
-                        >
-                          {nameStatus === "loading" ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            "Save name"
-                          )}
-                        </Button>
-                      </CardContent>
-                    </Card>
+                      </div>
+                      <Button variant="outline" size="sm" className="shrink-0" onClick={signOut}>
+                        Sign out
+                      </Button>
+                    </div>
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Usage
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {usageLoading ? (
-                          <Skeleton className="h-4 w-48" />
-                        ) : weeklyUsage ? (
-                          <p className="text-sm text-foreground">
-                            {weeklyUsage.used} of {weeklyUsage.limit} questions used this week
+                    <div className="space-y-6">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base font-semibold text-foreground">
+                            Display name
+                          </CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            Shown on your published pastoral notes
                           </p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Usage unavailable.</p>
-                        )}
-                      </CardContent>
-                    </Card>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex gap-2">
+                            <Input
+                              value={editDisplayName}
+                              onChange={(e) => {
+                                setEditDisplayName(e.target.value);
+                                setNameStatus("idle");
+                              }}
+                              placeholder="Your name"
+                              maxLength={100}
+                              className="flex-1"
+                            />
+                            <Button
+                              onClick={handleSaveDisplayName}
+                              disabled={nameStatus === "loading" || !editDisplayName.trim()}
+                            >
+                              {nameStatus === "loading" ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
+                            </Button>
+                          </div>
+                          {nameStatus === "saved" && (
+                            <p className="text-xs text-muted-foreground mt-2">Saved.</p>
+                          )}
+                          {nameStatus === "error" && (
+                            <p className="text-xs text-destructive mt-2">Something went wrong. Please try again.</p>
+                          )}
+                        </CardContent>
+                      </Card>
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Contributor status
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {userRole === "admin" && <Badge variant="secondary">Admin</Badge>}
-                        {userRole === "contributor" && <Badge variant="secondary">Contributor</Badge>}
-                        {userRole === "user" && (
-                          <div className="flex flex-col gap-2 items-start">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base font-semibold text-foreground">Email</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-foreground">{user?.email ?? ""}</p>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base font-semibold text-foreground">
+                              Weekly usage
+                            </CardTitle>
+                            {weeklyUsage && (
+                              <p className="text-sm text-foreground">
+                                <span className="font-medium">{weeklyUsage.used}</span> of {weeklyUsage.limit}{" "}
+                                questions
+                              </p>
+                            )}
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          {usageLoading ? (
+                            <Skeleton className="h-4 w-full" />
+                          ) : weeklyUsage ? (
+                            <>
+                              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-primary"
+                                  style={{
+                                    width: `${Math.min(100, Math.round((weeklyUsage.used / weeklyUsage.limit) * 100))}%`,
+                                  }}
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Resets {fmtResetDate(weeklyUsage.resets)}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">Usage unavailable.</p>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {userRole === "user" && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base font-semibold text-foreground">
+                              Become a contributor
+                            </CardTitle>
                             <p className="text-sm text-muted-foreground">
                               Contribute pastoral notes readers can see alongside a passage.
                             </p>
+                          </CardHeader>
+                          <CardContent>
                             <Button
                               variant="outline"
                               size="sm"
@@ -931,35 +995,37 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
                                 onOpenContributor();
                               }}
                             >
-                              Become a contributor
+                              Apply
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      <Card className="border-destructive/30">
+                        <CardHeader>
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <CardTitle className="text-base font-semibold text-foreground">
+                                Delete account
+                              </CardTitle>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Sends a request to remove your account and data — conversations, saved words,
+                                and any pastoral notes you&apos;ve contributed. We&apos;ll follow up by email
+                                before anything is deleted.
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 text-destructive hover:text-destructive"
+                              onClick={handleOpenDeleteConfirm}
+                            >
+                              Delete account
                             </Button>
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Account
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={signOut}>
-                            Sign out
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={handleOpenDeleteConfirm}
-                          >
-                            Delete account
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardHeader>
+                      </Card>
+                    </div>
                   </div>
                 </div>
               )}
