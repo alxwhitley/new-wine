@@ -111,6 +111,18 @@ quality.
   deletion of `conversations`, `saved_words`, `pastors_cards`, `user_roles`,
   or the Supabase auth user exists anywhere in the codebase. A submitted
   request means nothing has been removed yet.
+- **YouTube ingestion has stopped — Alex's decision, 2026-07-25.** Do not run
+  `run_queue_triage.py` / `run_queue_ingest.py` or otherwise pull new YouTube
+  material without checking with Alex first. Vlad Savchuk and Zac Poonen — 61%
+  of the current propositions layer between them — both entered via this
+  route; a stale-looking ingest queue is a decision, not an oversight. See
+  `PLAN.md` #44 for the reason (duplicate clip/full-sermon content found the
+  same day).
+- **No mechanism exists anywhere in this schema to link two documents as one
+  work.** The standing "link, don't merge" policy for split-work groups and
+  duplicate clips (`PLAN.md` #44) has no table or column backing it yet —
+  confirmed by a direct schema check 2026-07-25. Don't assume a linked-work
+  concept is queryable; it has to be designed and built first.
 
 **Corpus counts are never documented here.** Query live — any static number rots
 within days and has already caused one round of false blockers.

@@ -3,8 +3,35 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-25 (session close — sidebar New Chat CTA de-golded + footer nav centered, see directly below).
+Last verified: 2026-07-25 (session close — corpus cleanup, PLAN.md #44, see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Corpus cleanup, PLAN.md #44 — three audits and two write sessions (session state, 2026-07-25)
+
+Five back-to-back sessions against the propositions/position-layer cleanup (`PLAN.md` #44), all same day. Full substantive detail lives in `PLAN.md`'s #44 entry, not duplicated here — this is the point-in-time pointer plus the facts a fresh session needs before touching this corpus again.
+
+**What's actually done, with commits:**
+- Library re-filing: 13 documents attributed to "Christian Classics Ethereal Library" (a distributor, not a person) resolved and re-filed onto their 8 real named authors; one of the 13 (Horace Bushnell's "Christian Nurture") deleted by Alex's explicit doctrinal ruling. Commits `fc9b0b8`, `3f0a957`.
+- Two CLF Church documents re-filed onto Doug Kreighbaum (named-teacher material they duplicate). Commit `fb233f7`.
+- Records of both sessions above, plus the reversal below, written into `PLAN.md` #44. Commits `e169ba7` (position-layer, unrelated track), `2caa210`.
+
+**What's found but NOT yet acted on:**
+- 27 split-work groups (not 23 as previously believed) — candidates only, nothing linked.
+- A Ravenhill clip/full-sermon duplication pattern across 66 documents / 44 pairs, live in the product (36 pairs carry statements on both sides). **Original plan to delete the clip-side statements was reversed the same day** after a direct measurement found ~70% of clip statements capture a point their matching full sermon's own statements never captured. Routed to the split-work linking session instead — nothing about these 66 documents has been touched.
+- A New Wine Magazine duplicate (two titles, ~95% the same text) — blocked, not resolved: **no mechanism exists anywhere in this schema to link two documents as one work**, confirmed by a direct schema check. Both copies untouched.
+- An Edwards "Religious Affections" / "Works, Volume One" anthology overlap — flagged only, not restructured.
+- 4 documents (one Wesley, one Murray, one Brother Lawrence, one more Wesley) carry foreign text glued onto their own ending from a source website's recommendation footer — 3 of the 4 name a different real author than the document's own. Not trimmed.
+- Derek Prince's true distinct-sermon count is 429, not his raw 492 — moves his projected post-backfill share from 77.6% to 75.1%. Does not change the concentration picture; that question is closed.
+
+**Standing facts a fresh session should know before doing anything else:**
+- **YouTube ingestion has stopped, Alex's decision.** Now also recorded in `CLAUDE.md`'s Landmines.
+- **No linked-work mechanism exists yet** — also now in `CLAUDE.md`'s Landmines, since it affects more than just this cleanup.
+- Total corpus document count: 3,595 (was 3,596 before today's one deletion).
+- Working tree clean, all commits above pushed to `origin/main` as of this entry.
+
+**Reconciliation.** No product code changed across any of today's sessions — only data (source re-filing, one deletion) plus records (`PLAN.md`, this file, `CLAUDE.md`). Full reasoning, all real numbers, and the coverage measurement behind the clip-deletion reversal are in `PLAN.md` #44 — read there before relying on a summary of a summary.
 
 ---
 
