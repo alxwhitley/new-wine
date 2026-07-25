@@ -73,6 +73,13 @@ interface PendingRequest {
   created_at: string;
 }
 
+interface DeletionRequest {
+  id: string;
+  user_id: string;
+  email: string;
+  created_at: string;
+}
+
 interface Contributor {
   user_id: string;
   display_name: string | null;
@@ -292,6 +299,10 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
   const [revokeTarget, setRevokeTarget] = useState<Contributor | null>(null);
   const [revokeRemoveCards, setRevokeRemoveCards] = useState(false);
   const [revokeLoading, setRevokeLoading] = useState(false);
+  const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
+  const [deletionRequestsLoaded, setDeletionRequestsLoaded] = useState(false);
+  const [deletionRequestsLoading, setDeletionRequestsLoading] = useState(true);
+  const [resolveIds, setResolveIds] = useState<Set<string>>(new Set());
 
   // ── Notes queue ────────────────────────────────────────────────
   const [pendingNotes, setPendingNotes] = useState<PendingNote[]>([]);
@@ -407,6 +418,16 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
       .catch(() => setContributors([]))
       .finally(() => setContributorsLoading(false));
   }, [roleChecked, accessToken, activeTab, contributorsLoaded]);
+
+  useEffect(() => {
+    if (!roleChecked || !accessToken || activeTab !== "contributors" || deletionRequestsLoaded) return;
+    setDeletionRequestsLoaded(true);
+    fetch(`${API}/account/delete-requests`, { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then((r) => r.json())
+      .then((data) => setDeletionRequests(Array.isArray(data) ? data : []))
+      .catch(() => setDeletionRequests([]))
+      .finally(() => setDeletionRequestsLoading(false));
+  }, [roleChecked, accessToken, activeTab, deletionRequestsLoaded]);
 
   useEffect(() => {
     if (!roleChecked || !accessToken || activeTab !== "corpus" || corpusLoaded) return;
@@ -558,6 +579,26 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
         }
       } finally {
         setActionIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+      }
+    },
+    [accessToken]
+  );
+
+  const handleResolveDeletion = useCallback(
+    async (id: string) => {
+      if (!accessToken) return;
+      setResolveIds((prev) => new Set(prev).add(id));
+      try {
+        const res = await fetch(`${API}/account/delete-requests/${id}/resolve`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (res.ok) {
+          setDeletionRequests((prev) => prev.filter((r) => r.id !== id));
+          showToast("Deletion request marked resolved.");
+        }
+      } finally {
+        setResolveIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
       }
     },
     [accessToken]
@@ -859,6 +900,53 @@ export function AdminModal({ open, onOpenChange }: AdminModalProps) {
                                   }}
                                 >
                                   Revoke access
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Account Deletion Requests
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {deletionRequestsLoading ? (
+                          <div className="space-y-3">
+                            <Skeleton className="h-16 w-full" />
+                          </div>
+                        ) : deletionRequests.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No pending deletion requests.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {deletionRequests.map((req) => (
+                              <div
+                                key={req.id}
+                                className="flex items-start justify-between gap-4 rounded-lg border border-border p-4"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground truncate">
+                                    {req.email || "—"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Requested {fmtDate(req.created_at)}
+                                  </p>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleResolveDeletion(req.id)}
+                                  disabled={resolveIds.has(req.id)}
+                                >
+                                  {resolveIds.has(req.id) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    "Mark resolved"
+                                  )}
                                 </Button>
                               </div>
                             ))}
