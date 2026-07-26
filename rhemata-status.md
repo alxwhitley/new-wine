@@ -3,8 +3,88 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-26 (session close — harness Session Routing table added to CLAUDE.md, see directly below).
+Last verified: 2026-07-26 (session close — closeness check (PLAN.md #45) built, floor derived, wired inert; see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Closeness check (PLAN.md #45) — wording gate built, floor derived, wired inert, generation still stopped (session state, 2026-07-26)
+
+Full derivation detail, every distribution, every sub-group, lives in this
+session's harness transcript and `scripts/closeness_check.py`'s own docstring
+— this is the point-in-time pointer a fresh session needs, not a duplicate.
+Ran on the harness (`executor`/`planner-reviewer`) per `CLAUDE.md`'s Session
+Routing table's repo-only-multi-step-build row — zero DB writes anywhere in
+the build.
+
+**What shipped:** `scripts/closeness_check.py` (trigram-containment +
+longest-run secondary signal + scripture/name/theology exemption),
+`scripts/validate_closeness_check.py` (the validation harness, reusable),
+wired pre-write into `scripts/propositions.py`'s `process_document()` as an
+optional, default-OFF gate — PASS proceeds to the normal insert,
+QUOTE_CANDIDATE/HOLD_TOO_LITTLE get withheld and written to gitignored
+`closeness_review/flagged_propositions.jsonl` with full provenance. Also
+new: `scripts/test_closeness_check_unit_proof.py`,
+`scripts/test_propositions_closeness_gate.py` (DB-free mock, asserts both
+the write path and the divert path), `scripts/demo_closeness_check_phase6.py`.
+
+**Floor derived fresh (not inherited from the honest-empty floor — different
+measurement, PLAN.md #48 already said it wouldn't transfer):**
+`CONTAINMENT_FLOOR=0.40`, `LONGEST_RUN_WORD_THRESHOLD=9`,
+`RESIDUAL_TOO_LITTLE_CUTOFF=8` — derived from ~65 real should-pass pairs (50
+Savchuk + 15 Ravenhill, separately) and ~20 should-flag points (a real-source
+mechanical edit ladder + 5 adversarial verbatim splices). All three
+explicitly provisional, pre-#46 human calibration — not a production line.
+
+**A real bug found and fixed mid-session, with two of its own design
+self-corrections along the way:** the scripture exemption originally masked
+only the citation ("Exodus 20:5"), not the quoted verse wording that follows
+— a rule-compliant scripture quote (explicitly permitted verbatim by the
+extraction prompt) was inflating containment as if it were copied teacher
+wording. Fixed via a live `verses`-table lookup + fuzzy order-preserving
+match with an explicit over-exemption guard (citation-anchored window,
+≥4-word anchor, density floor) — caught missing partial-verse quotes once,
+then caught over-absorbing stray coincidental words once, both fixed same
+session before the floor was finalized. Three residual limitations remain,
+disclosed in the module: translation mismatch (only WEB is stored in
+`verses`), no-citation-anchor quotes, and untested wide-range citations.
+
+**Two corrections to working assumptions made earlier this same session, not
+just additions:**
+1. **Real HOLD_TOO_LITTLE cases DO exist in the corpus** — a corpus-wide
+   scan of all 2,409 live propositions found 2 (residual 5 and 7 tokens,
+   both near-bare scripture citations), correcting the smaller 65-pair
+   validation sample's apparent "no real case exists." The end-to-end demo
+   therefore shows two real HOLD cases plus one Alex-authorized constructed
+   proof case (explicitly labeled as such) — not zero real plus one
+   constructed.
+2. **`recovery/` is tracked in git, not gitignored** — corrects an
+   assumption made mid-session (that it was already handled as local-only
+   like the new `closeness_review/` path). `recovery/`'s Bevere-derived
+   snapshot files are genuinely in git history today. Relevant to the still-
+   open "should `recovery/` be gitignored" question logged earlier in this
+   file — anyone reasoning from "recovery/ already handles this" is working
+   from a false premise; `closeness_review/` set the opposite (gitignored)
+   precedent for a reason (source-derived unlicensed statement text is a
+   worse fit for permanent git history than for the database it came from).
+
+**Statement generation remains stopped.** This session builds and proves
+the gate only — it does not resume generation, and the gate is wired inert
+(nothing currently supplies the params that activate it). Next required step
+is Alex's own Phase 2b calibration pass (PLAN.md #46) across three writing
+styles (aphorist/expositor/spoken-transcript) before any threshold here is
+treated as a production line. A transaction-ordering gap (flagged in code,
+not fixed) also needs a `shared_ingest.py` change before the gate is ever
+activated live.
+
+**Standing facts a fresh session should know before doing anything else:**
+- Two commits from this session: a build commit (`closeness_check.py`,
+  `validate_closeness_check.py`, `propositions.py` wiring, `.gitignore`, the
+  three test/demo scripts, `ARCHITECTURE.md`'s Scripts-table update) and
+  this records commit, kept separate per Rule 7.
+- No DB writes anywhere in this session, harness or otherwise — every corpus
+  read was SELECT-only.
+- `TEACHER_POSITION_SIMILARITY_FLOOR` untouched throughout.
 
 ---
 
