@@ -3,8 +3,70 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-25 (session close — document work-group linking mechanism built, proven, and bulk-applied; PLAN.md #44, see directly below).
+Last verified: 2026-07-26 (session close — harness Session Routing table added to CLAUDE.md, see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Harness routing gap closed — Session Routing table added to CLAUDE.md (session state, 2026-07-26)
+
+Closes the gap the 2026-07-25 linking session carried forward below ("Harness
+routing-table gap — carried forward, not resolved"): `planner-reviewer.md`
+has instructed the reviewer to read `CLAUDE.md`'s `## Session Routing` table
+since the harness was built, and no such table existed. Docs-only session,
+no code touched — routes itself under this file's own new **Docs/records-only
+→ Plain** row.
+
+**What was added:** `CLAUDE.md`, new `## Session Routing` section, placed
+directly after the intro/design-filter paragraph and before `## Invariants`
+— matching the reviewer's own stated load order ("Project Overview, Session
+Routing, Tech Stack…"). Five session types, each with an objective trigger
+condition (not judgment), an assigned path, and — for the one row that
+actually uses the harness (repo-only multi-step build) — explicit "also
+load"/"skip" guidance so the reviewer's load-order instruction has something
+real to read. `planner-reviewer.md` needed no edit: its existing reference
+to `## Session Routing` already matches the new section's exact heading.
+
+**Hard rule, now written down for the first time: any session that writes to
+the database runs on the plain script path, never the harness, no
+exceptions.** Reason on record in the table itself — the harness's write
+recorder is real ground truth for what it records, but
+`BASH_WRITE_INDICATORS` still deliberately over-flags benign Bash calls as
+writes (own future session, not scheduled), and a false-positive write flag
+costs more on a genuine DB-write session than on a repo-only one. Revisit
+trigger stated explicitly in the table: once that classifier is narrowed
+*and* a second clean DB-write harness session is deliberately run and
+reviewed — not before, not by default. The 2026-07-25 linking build
+(migration 071) going cleanly through the harness does not change this rule;
+the table says so directly, so a future session can't read that one success
+as license to loosen it.
+
+**Correction to a claim raised mid-session, verified before writing anything
+here:** a chat-side draft asserted the 2026-07-18 12-turn write-detection
+stall was still unresolved, citing a chat-side session-state document and
+"project memory" as agreeing. Neither exists in this repo or in this
+project's actual memory store — checked directly, zero hits. What the repo
+itself already recorded, correctly, in this file's own "Known Harness Bugs"
+section below: that stall was **fixed 2026-07-19, commit `d9ab1cc`**,
+proven by `.claude/harness-selftest/test_write_accounting_loop_fix.py`
+(loop convergence, a genuine undisclosed write still blocks, a genuine
+disclosed write still passes). That entry did not need correcting — it was
+already right. The chat-side document making the stale claim is being
+corrected on the chat side, not here; this repo was the accurate record
+throughout. The real, still-open residual item is narrower than "the stall":
+`BASH_WRITE_INDICATORS`' benign-Bash-call over-flagging, which the same
+Known Harness Bugs section already flags as its own future, unscheduled
+session — that framing carries forward unchanged into the new table's hard
+rule above.
+
+**Standing facts a fresh session should know before doing anything else:**
+- `CLAUDE.md`'s `## Session Routing` table is now the authoritative routing
+  decision for any session type — read it before choosing harness vs. plain
+  path, don't re-derive by judgment.
+- DB-write prohibition on the harness path stands, unchanged, with the
+  revisit trigger stated in the table itself.
+- No code changed this session — `CLAUDE.md` + this entry are the only
+  changes, committed together as one records-only commit.
 
 ---
 

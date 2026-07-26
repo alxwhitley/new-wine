@@ -13,6 +13,59 @@ quality.
 
 ---
 
+## Session Routing
+
+Determines which path a session's task runs on — not a judgment call. Read
+this table first, identify the session type from objective properties of the
+task (not vibes), then follow its assigned path. If a task doesn't cleanly
+fit one row, it's two sessions, not one hybrid session — split it.
+
+**Hard rule — no exceptions.** Any session that writes to the database, by
+any mechanism (a `psycopg2` script, a migration apply, an SQL Editor
+statement, a write RPC), runs on the plain script path. Never
+`executor`/`planner-reviewer`. This holds regardless of how cleanly a prior
+harness session went — the 2026-07-25 document-linking build (migration 071)
+was a clean harness result and does not change this rule. Reason: the
+harness's write recorder is real ground truth for what it *does* record
+(`guard_pretooluse.py`, record-primary since commit `96bc3ff`), but
+`BASH_WRITE_INDICATORS` still deliberately over-flags benign Bash calls as
+writes (documented, open — `rhemata-status.md`'s "Known Harness Bugs"). A
+false-positive write flag costs real data-risk turns on a genuine DB-write
+session in a way it doesn't on a repo-only session, where the worst case is
+an extra review cycle. (The 2026-07-18 12-turn stall this over-flagging
+behavior is related to was itself fixed 2026-07-19, commit `d9ab1cc` — the
+residual risk named here is the over-flagging pattern, not that closed bug.)
+**Revisit trigger:** once the over-flagging classifier is narrowed (its own
+dedicated session, flagged but not scheduled) and a second clean DB-write
+harness session is deliberately run and reviewed, this rule gets revisited —
+not before, and not by default.
+
+| Session type | Objective trigger criteria | Path | Also load | Skip | Reason |
+|---|---|---|---|---|---|
+| **Database write** | Any Bash-run script, migration apply, or SQL statement performs INSERT/UPDATE/DELETE/ALTER/schema DDL against Supabase — including via `psycopg2` or the SQL Editor. | **Plain script.** Never harness. | N/A — harness not used | N/A — harness not used | Hard rule above. |
+| **Read-only diagnostic / audit** | Zero `Edit`/`Write` calls, zero DB mutation — SELECT-only queries, file reads, greps, read-only script runs. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | No build-then-judge loop needed for a single read-only pass; harness review overhead buys nothing here. |
+| **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or multiple ordered steps (new feature, new script plus its own verification, a refactor) — zero DB writes anywhere in the session. | **Harness** (`executor`/`planner-reviewer`). | `HARNESS.md` (always, for harness sessions); `ARCHITECTURE.md` (near-universal for build work); `PRODUCT.md` + `DESIGN.md` only if the task touches UI; `POSITIONING.md` only if it touches copy. | `PRODUCT.md`/`DESIGN.md`/`POSITIONING.md` unless the task's own surface requires them. | This is what the harness exists for — multi-step work that benefits from a planning/review split. |
+| **Repo-only single-script / trivial edit** | A single mechanical edit or one-shot script, no multi-step build sequence — zero DB writes anywhere in the session. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | A planning/review loop is overhead a one-shot change doesn't need. |
+| **Docs/records-only** | Task's only output is a change to `CLAUDE.md` / `PLAN.md` / `POSITIONING.md` / `DESIGN.md` / `rhemata-status.md`. | **Plain — chat proposes, terminal commits**, per the Project Knowledge Read Contract's propose→commit rule. | N/A — harness not used | N/A — harness not used | Structurally enforced, not just preferred: `guard_pretooluse.py` denies `Edit`/`Write` on all five governed files for any subagent — the harness physically cannot do this work. |
+
+**Stall-risk mitigation for harness sessions (repo-only multi-step build
+row):** if a harness session shows the same flagged-item count across ≥3
+consecutive turns with no underlying action changing (the 2026-07-18 stall's
+signature), abort to the plain path immediately rather than keep retrying —
+and log the abort in `rhemata-status.md`'s Known Harness Bugs section with
+the turn count and the flagged item, even if you route around it rather than
+fixing it that session.
+
+**The upcoming closeness check (Phase 2, paraphrase wording gate) falls
+under Repo-only multi-step build → harness**, for the build-and-test work
+itself (new detection script, its own verification pass, no DB write). If a
+later session runs that check against real corpus data and writes
+flags/results back to the database, *that* session is a **Database write**
+session and moves to the plain path — same project, different session,
+different row, per the hard rule above.
+
+---
+
 ## Invariants — violating these reopens a closed hole
 
 1. **Python 3.9.** Use `Optional[str]`, never `str | None`. Railway locks 3.9 via
