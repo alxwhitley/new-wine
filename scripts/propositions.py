@@ -5,6 +5,34 @@ Called by ingest scripts after chunk insertion. Gate: extracts for licensed
 and unlicensed sources only (skips public_domain and owned), with Precept
 Austin locked out by name (see process_document). Non-fatal by contract: no
 public function raises.
+
+--------------------------------------------------------------------------
+Closeness-check gate (PLAN.md #45 Phase 5, 2026-07-26) — OPTIONAL, DEFAULT-OFF
+--------------------------------------------------------------------------
+process_document() accepts two new optional parameters, name_pattern and
+verse_lookup (both default None), that mirror closeness_check.classify()'s
+own signature. The gate is OFF unless name_pattern is explicitly supplied
+by the caller -- every real ingest path today (shared_ingest.py,
+ingest_helloao.py) passes neither, so behavior for every existing caller is
+BYTE-IDENTICAL to pre-Phase-5: same extraction call, same store_propositions
+call with the full unfiltered list, same "stored:{n}" return string, same
+never-raises contract. closeness_check is imported LAZILY, inside the
+gate-active branch only, so an off caller incurs zero import-time cost or
+side effect from that module either.
+
+When the gate IS active (name_pattern is not None), every extracted
+proposition is classified via closeness_check.classify(content, text,
+name_pattern, verse_lookup) -- `text` (the whole source document) doubles
+as the source_text classify() needs, since process_document already
+receives it. PASS items proceed to store_propositions() unchanged (that
+function itself is NOT modified -- it still just receives a list).
+QUOTE_CANDIDATE and HOLD_TOO_LITTLE items are withheld from the insert and
+appended instead to CLOSENESS_REVIEW_PATH (see _write_review_records) with
+full provenance. Every extracted proposition lands in exactly one bucket --
+see the assertion in process_document() below. The return value extends to
+"stored:{n}:flagged:{m}" so a statement is never silently lost between the
+two counts (only when the gate is active; an off caller still gets the
+plain "stored:{n}" it always got).
 """
 
 import hashlib
@@ -13,11 +41,47 @@ import logging
 import os
 import re
 import uuid
-from typing import Callable, List, Optional
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
 
 from groq import Groq
 
 logger = logging.getLogger(__name__)
+
+# ── Closeness-check review file (PLAN.md #45 Phase 5) ─────────────────────────
+# Gitignored, local-only holding area for QUOTE_CANDIDATE/HOLD_TOO_LITTLE
+# statements withheld from the DB by the gate above. NOT `recovery/` --
+# that directory's own existing convention is DB-restoration snapshots
+# (deletion backups etc.), a different kind of artifact; this is a
+# human-review queue for the closeness check. See .gitignore for the
+# matching `closeness_review/` entry.
+CLOSENESS_REVIEW_DIR = Path(__file__).resolve().parent.parent / "closeness_review"
+CLOSENESS_REVIEW_PATH = CLOSENESS_REVIEW_DIR / "flagged_propositions.jsonl"
+
+
+def _write_review_records(records: List[dict]) -> bool:
+    """Best-effort append of `records` (one JSON object per line, JSONL) to
+    CLOSENESS_REVIEW_PATH. Returns True on success, False on any failure --
+    NEVER raises past this function. A filesystem failure here must not be
+    indistinguishable from, and must not roll back, an already-successful,
+    already-committed store_propositions() call for this same document (see
+    process_document()'s TRANSACTION-ORDERING NOTE below) -- so a failure is
+    logged at ERROR with the full record payload (nothing silently lost from
+    the logs' perspective even if the file write itself fails) rather than
+    raised."""
+    try:
+        CLOSENESS_REVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        with open(CLOSENESS_REVIEW_PATH, "a", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return True
+    except Exception as exc:
+        logger.error(
+            "CLOSENESS_REVIEW_WRITE_FAIL path=%r n_records=%d error=%s records=%r",
+            str(CLOSENESS_REVIEW_PATH), len(records), exc, records,
+        )
+        return False
 
 # Single source of truth for both the model requested (recorded verbatim on
 # every stored row -- see store_propositions()'s model param) and the
@@ -347,15 +411,30 @@ def process_document(
     source_id: str,
     text: str,
     embed_fn: Callable[[str], List[float]],
+    name_pattern: Optional[re.Pattern] = None,
+    verse_lookup: Optional[Dict[str, str]] = None,
 ) -> str:
     """Top-level entry point for ingest scripts.
+
+    name_pattern / verse_lookup (PLAN.md #45 Phase 5, both default None):
+    OPTIONAL closeness-check gate, OFF unless name_pattern is supplied --
+    see this module's top-of-file docstring for the full design. No real
+    ingest path passes these yet; every existing caller's behavior is
+    unchanged.
 
     Returns one of:
       "skipped_licensed"        — source is public_domain/owned (or missing); nothing written
       "skipped_precept_austin"  — Precept Austin, locked out by name; nothing written
       "no_propositions"         — the model ran successfully and genuinely found nothing
                                    to extract. A completed result, not a failure.
-      "stored:{n}"              — n propositions written to DB
+      "stored:{n}"              — GATE OFF (name_pattern is None): n propositions written to
+                                   DB. Byte-identical to pre-Phase-5 behavior.
+      "stored:{n}:flagged:{m}"  — GATE ON (name_pattern supplied): n propositions (PASS
+                                   verdict) written to DB, m withheld and appended instead to
+                                   CLOSENESS_REVIEW_PATH (QUOTE_CANDIDATE/HOLD_TOO_LITTLE).
+                                   n + m always equals the number of propositions extract_
+                                   propositions() returned for this call -- every extracted
+                                   proposition lands in exactly one bucket, never neither.
       "error"                   — the extraction call itself failed (network, rate limit,
                                    timeout, unparseable response) or a later step (license
                                    lookup, storage) failed. Nothing was written; safe to
@@ -368,11 +447,12 @@ def process_document(
     exception: Precept Austin never gets propositions — see
     PRECEPT_AUSTIN_SOURCE_ID above.
 
-    Every row a "stored:{n}" result writes is stamped with provenance
-    (which prompt version, its fingerprint, which model — see
-    store_propositions()) using DEFAULT_PROMPT_VERSION, since this function
-    never exposes prompt_version to its own callers and so always means
-    that version here.
+    Every row this function writes (stored or later reviewed and approved)
+    is stamped with provenance (which prompt version, its fingerprint,
+    which model — see store_propositions()) using DEFAULT_PROMPT_VERSION,
+    since this function never exposes prompt_version to its own callers and
+    so always means that version here. Review-file records carry the exact
+    same three provenance values (CLAUDE.md Invariant 10).
 
     Never raises.
     """
@@ -388,13 +468,103 @@ def process_document(
         if not props:
             return "no_propositions"
 
-        count = store_propositions(
-            conn, document_id, props, embed_fn,
-            prompt_version=DEFAULT_PROMPT_VERSION,
-            fingerprint=prompt_fingerprint(DEFAULT_PROMPT_VERSION),
-            model=EXTRACTION_MODEL,
+        prompt_version = DEFAULT_PROMPT_VERSION
+        fingerprint = prompt_fingerprint(prompt_version)
+        model = EXTRACTION_MODEL
+
+        if name_pattern is None:
+            # GATE OFF -- byte-identical to pre-Phase-5 behavior. No import
+            # of closeness_check anywhere on this path (not even lazily),
+            # no classify() calls, no review file touched.
+            count = store_propositions(
+                conn, document_id, props, embed_fn,
+                prompt_version=prompt_version, fingerprint=fingerprint, model=model,
+            )
+            return f"stored:{count}"
+
+        # GATE ON. Lazy import — closeness_check (and its own DB-adjacent
+        # imports: app.constants, app.services.reference_verifier,
+        # source_resolver) is only ever loaded when a caller explicitly
+        # opts in by supplying name_pattern, so an off caller incurs zero
+        # import-time cost or side effect from this module.
+        import closeness_check as cc
+
+        pass_props: List[dict] = []
+        review_records: List[dict] = []
+        for prop in props:
+            content = prop["content"]
+            result = cc.classify(content, text, name_pattern, verse_lookup)
+            if result.verdict == cc.PASS:
+                pass_props.append(prop)
+            else:
+                review_records.append({
+                    "written_at": datetime.now(timezone.utc).isoformat(),
+                    "document_id": document_id,
+                    "proposition_index": prop.get("proposition_index"),
+                    "content": content,
+                    "verdict": result.verdict,
+                    "containment": result.containment,
+                    "longest_run_words": result.longest_run_words,
+                    "residual_tokens": result.residual_tokens,
+                    "prompt_version": prompt_version,
+                    "prompt_fingerprint": fingerprint,
+                    "model": model,
+                })
+
+        # Exhaustive-partition guard -- every extracted proposition must
+        # land in exactly one bucket, never neither and never both.
+        assert len(pass_props) + len(review_records) == len(props), (
+            "closeness-check partition dropped or duplicated a proposition"
         )
-        return f"stored:{count}"
+
+        stored_count = 0
+        if pass_props:
+            stored_count = store_propositions(
+                conn, document_id, pass_props, embed_fn,
+                prompt_version=prompt_version, fingerprint=fingerprint, model=model,
+            )
+        # else: nothing PASSED -- store_propositions() is never called, so
+        # this function does not commit here. This mirrors the existing
+        # "no_propositions"/"skipped_*" contract, where the CALLER's own
+        # later commit (see shared_ingest.ingest_document) is what actually
+        # lands document+chunks in that case. See the TRANSACTION-ORDERING
+        # NOTE just below for why this matters to the review-file write.
+
+        # TRANSACTION-ORDERING NOTE (design note only — the gate is inert
+        # this session, so nothing below is a LIVE bug yet, but it is a
+        # real, not-yet-closed gap that must be resolved before statement
+        # generation resumes): review-file entries are written HERE, AFTER
+        # the store_propositions() attempt above has already returned (or
+        # been skipped because pass_props was empty) — never before it and
+        # never interleaved with it. That ordering guarantees one thing: if
+        # store_propositions() itself raises, execution never reaches this
+        # point, so no review-file entry is ever written for a document_id
+        # whose propositions insert just failed (caught by the outer except
+        # below, which rolls back and returns "error", exactly as before).
+        #   What it does NOT guarantee: the document row and its chunks are
+        # inserted on this SAME shared connection by the CALLER
+        # (shared_ingest.ingest_document), BEFORE process_document() ever
+        # runs, and are only durably committed at one of two points --
+        # inside store_propositions() itself (the pass_props-nonempty
+        # branch, via its own conn.commit(), which commits document+chunks+
+        # propositions together since they share this connection), OR,
+        # when pass_props is empty, LATER, by the caller's own explicit
+        # commit after process_document() returns (mirroring exactly how
+        # "no_propositions" already behaves today). In that second case,
+        # this function writes review-file entries for a document_id that
+        # is still only PENDING on the connection at the moment of writing
+        # -- if the caller's later commit never happens (a crash, or an
+        # exception raised between this return and that commit), those
+        # review-file entries would reference a document_id that was never
+        # actually persisted: an orphaned entry. Not solved here — the real
+        # fix (e.g. moving the review-file write into the caller, after ITS
+        # own commit, or staging review records in memory and only
+        # flushing to disk once a commit is confirmed) is out of scope for
+        # this wiring-only step. Flagged here rather than silently wrong.
+        if review_records:
+            _write_review_records(review_records)
+
+        return f"stored:{stored_count}:flagged:{len(review_records)}"
     except Exception as exc:
         logger.warning(
             "PROPOSITION_PROCESS_FAIL doc=%r source=%r error=%s",

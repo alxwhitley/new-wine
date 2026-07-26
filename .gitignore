@@ -23,3 +23,9 @@ logs/
 
 # Subagent-driven-development scratch state (progress ledger, briefs, reports)
 .superpowers/
+
+# Closeness-check review queue (PLAN.md #45 Phase 5) — QUOTE_CANDIDATE/
+# HOLD_TOO_LITTLE statements withheld from the DB, local-only. Contains raw
+# extracted-statement text derived from copyrighted source material; a
+# worse fit for permanent git history than for the database it came from.
+closeness_review/
