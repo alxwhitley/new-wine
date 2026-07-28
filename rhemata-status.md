@@ -3,8 +3,149 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-26 (session close — closeness check (PLAN.md #45) built, floor derived, wired inert; see directly below).
+Last verified: 2026-07-28 (session close — common-religious-vocabulary exemption added to the closeness check; see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Common-religious-vocabulary exemption added to the closeness check (session state, 2026-07-28)
+
+Follows directly from Alex's Phase 2b calibration ruling on the prior
+session's 27-pair sample: shared Christian vocabulary is not any teacher's
+property and must not count as borrowed wording. This session adds that
+exemption. Ran on the harness (`executor`/`planner-reviewer`) per
+`CLAUDE.md`'s Session Routing table — zero DB writes anywhere in the build.
+
+**What shipped:** a corpus-derived list of 1,210 common religious/theological
+phrases (`scripts/data/common_religious_vocab.json`), a new fuzzy-matched
+`SENTINEL_VOCAB` exemption category in `scripts/closeness_check.py` (reuses
+the existing scripture-quote matcher's anchor+gap-tolerant-extend+density-floor
+discipline, factored into a shared `_anchor_extend_density_span` helper —
+proven byte-identical to the prior single-purpose code via diffed test
+output), wired through both `exempt_for_containment` and `exempt_for_run` in
+masking order **scripture → vocab → names → theology** (vocab must run before
+the word-level name/theology maskers, or they fragment a vocab phrase's own
+anchor words first — proven on the Ravenhill "God the Father, God the Son"
+stress case, with a reconstructed counter-example showing the rejected order
+genuinely fails). Also wired inert into `scripts/propositions.py`'s
+`process_document()` (optional, default-off, byte-identical when omitted —
+same pattern as the existing scripture/name params).
+
+**List derivation, in brief:** derived from real corpus source text
+(`chunks.content`, 1,419 in-scope documents / 48 teachers, Precept Austin
+excluded), not from general knowledge of Christian phrasing. A phrase
+qualified only if it appeared in ≥8 documents AND ≥5 distinct teachers
+(single-teacher dominance guard: any phrase where one teacher supplied >50%
+of occurrences was rejected — confirmed working on real Derek Prince-only
+phrases like "the truth of the matter is," 89% Prince, correctly excluded,
+and on the one source that bundles 307 real historical authors under one
+entity, "in the beginning was the word," 77% share, also correctly excluded).
+Of an initial 6,528 frequency-qualifying candidates, two further passes cut
+it to 1,210: a generic-English filter (removed non-theological common
+collocations) and a scripture-verse exclusion (removed phrases that are
+themselves literal Bible quotations, using the same live `verses`-table
+lookup the runtime scripture exemption already uses) — both explicitly
+Alex-directed, since the ask was specifically religious vocabulary, and
+specifically non-scripture (scripture already has its own dedicated,
+citation-anchored exemption; this list isn't meant to duplicate that job with
+a cruder mechanism).
+
+**Floor re-validated, holds unchanged.** Re-ran the same derivation
+methodology from the prior session (50 Savchuk + 15 Ravenhill should-pass, a
+mechanical R0/R1/R2 edit ladder + 5 adversarial splices as should-flag) with
+the vocab exemption active. `CONTAINMENT_FLOOR=0.40`,
+`LONGEST_RUN_WORD_THRESHOLD=9`, `RESIDUAL_TOO_LITTLE_CUTOFF=8` all still
+cleanly separate the two sets — no should-flag point flipped to PASS
+(no over-masking), no should-pass pair flipped to `HOLD_TOO_LITTLE` (the
+residual-shrinkage risk flagged at the start of this build never
+materialized). No constants changed.
+
+**Calibration proof — honest result: no positive evidence found that the
+exemption fixes what it was built to fix.** Ran all 27 pairs from the prior
+session's calibration sample through `classify()` on their full reconstructed
+source documents (not the sample markdown's ~440-word excerpts, which are too
+narrow a window for this position-independent metric), with and without the
+vocab exemption, to isolate its actual contribution. Of Alex's 5 named
+cases, **zero show a genuine vocab-exemption-credited pass** — every
+outcome traced to something else, verified directly rather than assumed:
+- Ravenhill "Secret to Revival" passes, but already passed before this
+  session's exemption existed — no credit due.
+- Ravenhill "Cry for Revival" and Savchuk "Death with Dignity" correctly
+  still flag (the required check that the exemption doesn't gut the gate).
+- Kreighbaum "Ministry of God's Word" does **not** pass, genuinely — verified
+  that even in the best possible case (every scripture-masking gap in that
+  document perfectly fixed), the remaining overlap from Kreighbaum's own
+  original commentary sentences alone still clears the flag threshold. This
+  is the gate correctly catching real near-verbatim reproduction of his own
+  writing, not a bug — but it means this calibration case doesn't demonstrate
+  the vocabulary exemption working as intended.
+- Prince "Deliverance And Demonology" (the probe/forceps case) flags — but
+  not because of probe/forceps. A different, unrelated sentence in the same
+  document (a 19-word near-verbatim reproduction of Prince's own commentary,
+  sitting next to a 1 Cor 9:26 citation) independently trips the flag.
+  Verified this isn't a scripture-exemption failure either — fixing that
+  specific gap changes nothing, since the driving words are Prince's own,
+  not scripture. The probe/forceps metaphor itself remains genuinely
+  uncaught, consistent with the accepted-gap principle below — this specific
+  pair just doesn't demonstrate it, because something else in the same
+  document also happens to be a near-copy.
+- The only 2 of 27 verdict changes anywhere in the whole sample (both
+  Ravenhill, QUOTE_CANDIDATE→PASS) are the vocab list accidentally masking
+  KJV-worded scripture — the exact out-of-scope behavior this exemption was
+  told to avoid, not evidence of it doing its intended job. Real cause: the
+  `verses` table stores only the WEB translation, so KJV phrasing (present
+  in some real teacher material) survives the scripture-exclusion filter
+  that built the vocab list and lands in it by mistake.
+
+**A second, independent instance of the same WEB-only gap was found live in
+the runtime scripture exemption itself** (not just the vocab list): Prince's
+"as one that beats the air" (1 Cor 9:26, KJV-flavored) doesn't match WEB's
+"not beating the air" closely enough to anchor-match — confirmed this
+doesn't change any verdict in this sample, but it's the same root limitation
+surfacing in two places now, not a new one. A real, separate, minor citation-
+detection bug was also found and confirmed (a missing space, e.g.
+"4:12For the word," breaks the citation scanner's word-boundary requirement)
+— disclosed, not fixed, and confirmed not to change any outcome in this
+sample either.
+
+**Methodology finding for #46:** the 27-pair sample's ~440-word excerpts,
+while adequate for the original build session's floor derivation, turned out
+to be an unreliable stand-in for full-document ground truth on close
+reading — `classify()` scores the entire reconstructed document, and this
+session found real flag-driving content that sat outside some excerpts'
+windows (though, importantly, verified NOT outside Alex's own excerpt for
+the Prince case — that content was in what he read; the mismatch was in the
+original session's assumption about *why* it flagged, not in what Alex saw).
+**#46's human calibration pass should judge from full reconstructed
+documents, not excerpts, to avoid this class of surprise.**
+
+**Accepted gap, restated honestly:** the mechanism has no distinctiveness
+signal (a corpus-wide rarity/distinctiveness signal was explicitly proposed
+and declined by Alex this session) — so a short, distinctive construction a
+teacher invented himself, appearing in isolation, produces neither high
+containment nor a long run and passes uncaught. Derek Prince's "probe" and
+"forceps" medical metaphor (`Deliverance And Demonology`) is the named
+worked example of this *kind* of construction — but the specific calibration
+pair does not itself demonstrate the gap, since that document also contains
+an unrelated near-verbatim reproduction that flags it anyway. Alex accepted
+this gap knowingly; it remains open and undesigned-around, by choice.
+
+**Statement generation remains stopped.** This session builds and measures
+only — no generation resumed, no DB writes anywhere, gate stays inert
+(nothing currently supplies the params that activate it).
+
+**Standing facts a fresh session should know before doing anything else:**
+- Two commits from this session: a build commit (`closeness_check.py`,
+  `propositions.py`, `validate_closeness_check.py`,
+  `test_closeness_check_unit_proof.py`, `scripts/data/common_religious_vocab.json`,
+  `ARCHITECTURE.md`) and this records commit, kept separate per Rule 7.
+- No DB writes anywhere in this session, harness or otherwise.
+- `TEACHER_POSITION_SIMILARITY_FLOOR` untouched throughout.
+- Alex's explicit decision on closing this session: ship the exemption
+  inert as built (it's safe and correctly implemented), document the
+  calibration gap honestly rather than hold the commit or re-derive a new
+  sample — real validation is #46's job, done properly against full
+  documents.
 
 ---
 
