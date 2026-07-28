@@ -3,8 +3,69 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-28 (session close — common-religious-vocabulary exemption added to the closeness check; see directly below).
+Last verified: 2026-07-28 (session close — closeness-check track (routing gap, Phase 2 build, vocabulary exemption) wrapped; see directly below).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Closeness-check track wrapped — routing gap, Phase 2 build, vocabulary exemption (session state, 2026-07-28)
+
+Three back-to-back sessions, 2026-07-26 through 2026-07-28, all in one
+continuous chat. Full substantive detail lives in each session's own entry
+below, not duplicated here — this is the point-in-time pointer a fresh
+session needs before touching any of this again.
+
+**1. Harness routing gap closed (2026-07-26).** `CLAUDE.md` gained a
+`## Session Routing` table — the reviewer's own instructions had pointed to
+this table since the harness was built, and it never existed. Hard rule
+written down: any session that writes to the database runs on the plain
+script path, never the harness, no exceptions. See "Harness routing gap
+closed" below.
+
+**2. Closeness check (PLAN.md #45) built (2026-07-26).** The paraphrase
+wording gate — trigram containment + longest-run secondary signal, scripture/
+name/theology exemptions, a floor derived fresh from real corpus material
+(`CONTAINMENT_FLOOR=0.40`, `LONGEST_RUN_WORD_THRESHOLD=9`,
+`RESIDUAL_TOO_LITTLE_CUTOFF=8`), wired pre-write and inert. See "Closeness
+check (PLAN.md #45)" below.
+
+**3. Common-religious-vocabulary exemption added (2026-07-28).** Per Alex's
+Phase 2b calibration ruling on a 27-pair sample. Corpus-derived 1,210-phrase
+list, dominance-guarded, non-scripture-scoped, wired in safely. **Honest
+result, the fact most worth carrying forward: the 27-pair calibration
+sample showed zero of Alex's 5 named cases getting a genuine
+vocab-exemption-credited pass** — every real outcome traced to something
+else (already-passing statements, genuine near-quote content the gate
+correctly still catches, or a WEB-only scripture-translation gap surfacing
+in two independent places). Shipped anyway, safe and provisional, per
+Alex's explicit call — real validation is #46's job. See
+"Common-religious-vocabulary exemption added" below.
+
+**Standing state, all three sessions:**
+- Statement generation remains stopped throughout. Nothing in this whole
+  track resumed it.
+- The closeness-check gate (scripture + name + theology + vocab exemptions,
+  trigram containment + longest-run signals) is fully built and wired, but
+  **inert** — `process_document()`'s gating params are never supplied by any
+  real caller yet. No live behavior changed anywhere in this track.
+- Zero database writes across all three sessions. Every DB touch was
+  SELECT-only.
+- `TEACHER_POSITION_SIMILARITY_FLOOR` never touched.
+- Six commits total, alternating build/records per Rule 7: `26105f4`
+  (routing table + gap closure), `1b7168f`/`1a9a403` (closeness-check
+  build/records), `33c6d60`/`a7a7bb4` (vocabulary-exemption build/records).
+  All pushed to `origin/main`.
+- **Real preconditions before the gate is ever turned on:** a transaction-
+  ordering gap needing a `shared_ingest.py` fix (flagged, not fixed); #46's
+  human calibration must run against full reconstructed documents, not
+  windowed excerpts (this track found the excerpts can omit the content
+  that actually drives a flag); the WEB-only scripture-translation gap
+  (KJV/other-translation quotes can survive both the vocab-list filter and
+  the runtime scripture exemption) is now concretely observed, not just
+  theoretical.
+- Working tree clean as of this entry (one unrelated, pre-existing
+  untracked file in `docs/audits/` — a separate corpus-source audit, not
+  part of this track).
 
 ---
 
