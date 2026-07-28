@@ -132,19 +132,46 @@ different row, per the hard rule above.
     must pass real values for all three. An unstamped write silently reopens
     this hole.
 
+11. **Scripture-reference grounding inside `extract_propositions()` must stay
+    unconditional — never make it opt-in.** Unlike the closeness-check gate
+    (`process_document()`'s `name_pattern`/`verse_lookup` params, default-off
+    by design), the reference-grounding strip (PLAN.md #45.5) has no
+    off-switch on purpose. A now-deleted one-off script
+    (`sample_v4_propositions_2026-07-23.py`) proved `extract_propositions()`/
+    `store_propositions()` are directly callable, bypassing
+    `process_document()`'s gates entirely — an opt-out parameter here would
+    reopen exactly the citation-fabrication hole this fix exists to close. If
+    a future caller genuinely can't tolerate it, that means the check belongs
+    somewhere else, not that it needs a bypass flag.
+
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
-- The 2,413 propositions written before 2026-07-23 carry no real provenance —
-  marked `legacy_unknown` by design, not inferred from timestamps. A
-  2026-07-23 diagnostic built a reasonably strong circumstantial case for
-  what produced them (git history + a full-corpus text sweep for one known
-  leak), but that's evidence, not a stored fact. Treat any claim about which
-  prompt version produced a specific pre-07-23 row as unverified unless
-  re-checked by the same method.
+- **No live proposition row has real provenance — confirmed corpus-wide
+  2026-07-28, not just for pre-07-23 rows as previously stated here.**
+  Provenance stamping (migration 067) has never fired on an actual write:
+  every write since it shipped, same as before, went through a since-deleted
+  one-off script that called `extract_propositions()`/`store_propositions()`
+  directly, bypassing the stamping call site inside `process_document()`
+  (see Invariant 11). A 2026-07-23 diagnostic built a reasonably strong
+  circumstantial case for what produced the pre-07-23 rows specifically (git
+  history + a full-corpus text sweep for one known leak), but that's
+  evidence, not a stored fact — and it doesn't extend to post-07-23 rows
+  either. Treat any claim about which prompt version produced ANY current
+  row as unverified unless re-checked by the same method (PLAN.md #45.5).
+- **A batch of live propositions carry a scripture reference flagged
+  UNGROUNDED by a 2026-07-28 corpus-wide, read-only scan** — local, gitignored
+  `reference_fabrication_review/corpus_findings.jsonl`, not in git, not in
+  the DB. These are human-review candidates, not confirmed fabrications: the
+  WEB-only translation gap (`verses` stores only the WEB translation) means a
+  genuinely-quoted verse in a different translation with no citation string
+  nearby can misread UNGROUNDED. Nothing in this list has been fixed,
+  deleted, or flagged in the database — fixing it is deliberately its own
+  future session. Full breakdown and disclosed limitations: PLAN.md #45.5 /
+  `rhemata-status.md`.
 - Some sources have no alias rows; re-ingesting their content sentinels
   silently. `ALIAS_MISS` is the grep-able breadcrumb.
 - **No cheap check exists for the demonstrated fabrication class: real,
