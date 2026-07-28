@@ -59,6 +59,15 @@ def parse_ref(ref: str):
     chapter = int(m.group(2))
     verse = int(m.group(3))
 
+    # Strip an ordinal suffix ("1st", "2nd", "3rd") glued directly onto the
+    # leading digit BEFORE the space-insertion step below. Without this,
+    # "1st samuel" normalizes to "1 st samuel" (space inserted after the
+    # bare digit, "st" left stuck to "samuel") which matches no BOOK_MAP key
+    # no matter how the map is widened. \b requires the suffix to end at a
+    # non-word boundary so this never fires inside "1thessalonians"/"2third"
+    # -style tokens where the letters "th"/"rd" are followed by more letters.
+    book_raw = re.sub(r'^(\d)(?:st|nd|rd|th)\b', r'\1', book_raw)
+
     # Normalize spacing for numbered books: "1 cor" -> "1 cor", "1cor" -> "1 cor"
     book_normalized = re.sub(r'^(\d)\s*', r'\1 ', book_raw).strip()
 

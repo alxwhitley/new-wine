@@ -126,6 +126,18 @@ def _parse_verse_or_range(ref: str) -> Optional[Tuple[str, int, int, Optional[in
     verse_start = int(m.group(3))
     verse_end = int(m.group(4)) if m.group(4) else None
 
+    # Strip an ordinal suffix ("1st", "2nd", "3rd") glued directly onto the
+    # leading digit BEFORE the space-insertion step below. Without this,
+    # "1st samuel" normalizes to "1 st samuel" (space inserted after the
+    # bare digit, "st" left stuck to "samuel") which matches no BOOK_MAP key
+    # no matter how the map is widened. \b requires the suffix to end at a
+    # non-word boundary so this never fires inside "1thessalonians"/"2third"
+    # -style tokens where the letters "th"/"rd" are followed by more letters.
+    # Kept independently in sync with app.routers.study.parse_ref's
+    # identical fix -- both sites do their own capture-then-normalize, this
+    # is not a shared call, so a future edit to one must be mirrored here.
+    book_raw = re.sub(r'^(\d)(?:st|nd|rd|th)\b', r'\1', book_raw)
+
     book_normalized = re.sub(r'^(\d)\s*', r'\1 ', book_raw).strip()
     abbrev = BOOK_MAP.get(book_normalized) or BOOK_MAP.get(book_normalized.rstrip('s'))
     if not abbrev:

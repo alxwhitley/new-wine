@@ -29,6 +29,7 @@ from app.services.reference_verifier import (
     find_occurrences,
     verify_references,
     verify_teacher_mention,
+    _parse_verse_or_range,
 )
 from app.services.source_resolver import normalize_alias_key
 
@@ -351,6 +352,73 @@ def main():
         "survives, the shorter nested name's overlapping occurrence is "
         "dropped",
         len(result_t5) == 1 and result_t5[0]["raw"] == "Amazing Grace Church",
+    )
+
+    # --- Ordinal/spelled-word/Roman-numeral book-name recognition ---
+    # Covers _parse_verse_or_range's normalization fix (the "1st samuel" ->
+    # "1 st samuel" mangling) plus the widened BOOK_MAP (spelled-word and
+    # Roman-numeral alias keys added to backend/app/constants.py). Each case
+    # below is verified against a real live verses-table row, not a fake db.
+    answer_text_9 = "As we see in 1st Samuel 3:13, the Lord called Samuel."
+    raw_output_9 = "<reference_mentions>\nVERSE: 1st Samuel 3:13\n</reference_mentions>"
+    result_9 = verify_references(answer_text_9, raw_output_9, db)
+    check(
+        "Ordinal form '1st Samuel 3:13' resolves (normalization fix)",
+        len(result_9) == 1 and result_9[0]["raw"] == "1st Samuel 3:13",
+    )
+
+    answer_text_10 = "First Samuel 3:13 records the Lord calling Samuel."
+    raw_output_10 = "<reference_mentions>\nVERSE: First Samuel 3:13\n</reference_mentions>"
+    result_10 = verify_references(answer_text_10, raw_output_10, db)
+    check(
+        "Spelled-word form 'First Samuel 3:13' resolves (widened BOOK_MAP)",
+        len(result_10) == 1 and result_10[0]["raw"] == "First Samuel 3:13",
+    )
+
+    answer_text_11 = "II Corinthians 5:21 speaks of becoming righteousness in Him."
+    raw_output_11 = "<reference_mentions>\nVERSE: II Corinthians 5:21\n</reference_mentions>"
+    result_11 = verify_references(answer_text_11, raw_output_11, db)
+    check(
+        "Roman-numeral form 'II Corinthians 5:21' resolves (widened BOOK_MAP)",
+        len(result_11) == 1 and result_11[0]["raw"] == "II Corinthians 5:21",
+    )
+
+    # Digit-form regression check, run alongside the new forms above.
+    answer_text_12 = "1 Samuel 3:13 records the Lord calling Samuel."
+    raw_output_12 = "<reference_mentions>\nVERSE: 1 Samuel 3:13\n</reference_mentions>"
+    result_12 = verify_references(answer_text_12, raw_output_12, db)
+    check(
+        "Pre-existing digit form '1 Samuel 3:13' still resolves (no regression)",
+        len(result_12) == 1 and result_12[0]["raw"] == "1 Samuel 3:13",
+    )
+
+    # --- Wrong-book boundary tests (mandatory) ---
+    # "1st John" must never resolve as the Gospel of John (JHN) -- prove by
+    # checking the real parsed abbrev directly, not just that *something*
+    # resolved.
+    parsed_b1 = _parse_verse_or_range("1st John 3:16")
+    check(
+        "Boundary: '1st John' resolves to 1JN, never JHN (Gospel of John)",
+        parsed_b1 is not None and parsed_b1[0] == "1JN" and parsed_b1[0] != "JHN",
+    )
+
+    parsed_b2 = _parse_verse_or_range("First Corinthians 13:4")
+    check(
+        "Boundary: 'First Corinthians' resolves to 1CO, never 2CO",
+        parsed_b2 is not None and parsed_b2[0] == "1CO" and parsed_b2[0] != "2CO",
+    )
+
+    parsed_b3 = _parse_verse_or_range("II Samuel 5:1")
+    check(
+        "Boundary: 'II Samuel' resolves to 2SA, never 1SA",
+        parsed_b3 is not None and parsed_b3[0] == "2SA" and parsed_b3[0] != "1SA",
+    )
+
+    parsed_b4 = _parse_verse_or_range("I Genesis 1:1")
+    check(
+        "Boundary: adversarial 'I Genesis' (numbered prefix on a book that "
+        "never takes one) never produces a false match",
+        parsed_b4 is None,
     )
 
     print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILURE(S): ' + ', '.join(failures)}")
