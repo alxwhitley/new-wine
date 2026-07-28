@@ -17,6 +17,7 @@ sources/          # gitignored — raw/cleaned/ingested per pipeline
   magazine/       # 01_to_extract → 02_extracted → 03_approved → 04_ingested → 05_archived
   documents/      # non-copyrighted (sermons, papers)
 scripts/          # all ingestion + maintenance
+  data/           # small committed reference data files (e.g. common_religious_vocab.json)
 migrations/       # SQL, run manually in Supabase SQL Editor
 recovery/         # deletion exports — NOT under sources/ (gitignored would drop them)
 docs/             # source markdown for static marketing pages
@@ -111,8 +112,8 @@ Routed through `shared_ingest`: `ingest.py`, `ingest_magazine.py`,
 | Script | Purpose |
 |---|---|
 | `source_resolver.py` | `normalize_alias_key`, `resolve_source_id`, sentinel + New Wine constants, `print_resolution_table` |
-| `propositions.py` | Extraction + storage. v3 prompt default; `EXTRACTION_PROMPT_V4` exists but is unwired — requires `prompt_version="v4"` explicitly. `process_document()` takes optional `name_pattern`/`verse_lookup` to activate the closeness-check pre-write gate (default off, byte-identical when omitted) |
-| `closeness_check.py` | Phase 2 wording gate (PLAN.md #45) — trigram containment + longest-run secondary signal + scripture/name/theology exemption. `classify()` returns PASS/QUOTE_CANDIDATE/HOLD_TOO_LITTLE. Constants provisional pre-#46 |
+| `propositions.py` | Extraction + storage. v3 prompt default; `EXTRACTION_PROMPT_V4` exists but is unwired — requires `prompt_version="v4"` explicitly. `process_document()` takes optional `name_pattern`/`verse_lookup`/`vocab_matcher` to activate the closeness-check pre-write gate (default off, byte-identical when omitted) |
+| `closeness_check.py` | Phase 2 wording gate (PLAN.md #45) — trigram containment + longest-run secondary signal + scripture/name/theology/vocab exemption. `classify()` returns PASS/QUOTE_CANDIDATE/HOLD_TOO_LITTLE. Constants provisional pre-#46. `build_vocab_matcher()` (Phase 6) compiles `scripts/data/common_religious_vocab.json`'s 1,210 corpus-derived common phrases into a reusable fuzzy matcher reusing `_find_quote_span`'s own anchor/gap/density algorithm and constants (via shared `_anchor_extend_density_span`); wired through `exempt_for_containment`/`exempt_for_run` in masking order scripture→vocab→names→theology (vocab must run before the word-level name/theology stoplists, or they can fragment a vocab phrase's own anchor words first) |
 | `validate_closeness_check.py` | Validation harness for the above — real-corpus should-pass sampling + mechanical edit-ladder should-flag construction |
 | `ingest.py` | Standalone PDF/docx/txt + auto-tagging; `skip_dedup` param |
 | `ingest_magazine.py` | From .md + frontmatter; bakes chunk-content headers |

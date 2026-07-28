@@ -243,6 +243,19 @@ The fix is deliberately a NORMALIZED, ORDER-PRESERVING FUZZY MATCH:
    shared theological word rarely produces a spurious matching trigram
    unless the surrounding words also match (in which case it's real copied
    phrasing) — so this stoplist is a minor correction, not load-bearing.
+3b. Common religious vocabulary (PLAN.md #45 Phase 6, 2026-07-28) — a
+   corpus-derived list of 1,210 cross-teacher stock phrases (6-13 words
+   each; see scripts/data/common_religious_vocab.json for full derivation
+   provenance), fuzzy/span-matched via build_vocab_matcher() +
+   VocabMatcher, OPTIONAL and OFF by default (vocab_matcher=None
+   everywhere). Reuses _find_quote_span's own anchor + gap-tolerant-extend
+   + span-density-floor algorithm and constants verbatim (via the shared
+   _anchor_extend_density_span helper) rather than a second, independently
+   tuned matcher. MASKING ORDER matters here specifically: this pass runs
+   BEFORE the theology/name word-level masking passes below, not after —
+   see exempt_for_containment()'s own docstring for the fragmentation risk
+   this order avoids (a theology-masked "god" can no longer match as part
+   of a vocab phrase's own anchor wording).
 4. Masking mechanism: every exempt span is replaced with a sentinel token
    that (a) cannot itself contribute a match — for the primary metric, any
    trigram containing ANY sentinel token is dropped from BOTH sets before
@@ -294,6 +307,7 @@ scripts/source_resolver.py and scripts/shared_ingest.py.
 """
 
 import difflib
+import json
 import re
 import sys
 import unicodedata
@@ -402,7 +416,8 @@ HOLD_TOO_LITTLE = "HOLD_TOO_LITTLE"
 SENTINEL_SCRIPTURE = "zzzexemptscripturezzz"
 SENTINEL_NAME = "zzzexemptnamezzz"
 SENTINEL_THEOLOGY = "zzzexempttheologyzzz"
-_SENTINELS = {SENTINEL_SCRIPTURE, SENTINEL_NAME, SENTINEL_THEOLOGY}
+SENTINEL_VOCAB = "zzzexemptvocabzzz"
+_SENTINELS = {SENTINEL_SCRIPTURE, SENTINEL_NAME, SENTINEL_THEOLOGY, SENTINEL_VOCAB}
 
 # ── Fixed theological vocabulary stoplist (38 terms/phrases) ──────────────────
 # Small and explicit by design (see module docstring #3). Latitude on exact
@@ -432,6 +447,97 @@ _FREE_TEXT_SCRIPTURE_RE = re.compile(
     r"\b(?:" + _BOOK_PATTERN + r")\.?\s+\d{1,3}:\d{1,3}(?:[-–—]\d{1,3})?\b",
     re.IGNORECASE,
 )
+
+
+# ── Common religious vocabulary exemption (PLAN.md #45 Phase 6) ───────────────
+# A corpus-derived list of 1,210 common cross-teacher religious/theological
+# phrases (see scripts/data/common_religious_vocab.json for full provenance:
+# derivation corpus of 1,419 in-scope documents / 48 teachers, Precept Austin
+# excluded; thresholds >=8 docs / >=5 teachers with a <=50% single-teacher
+# dominance guard; a scripture-exclusion pass removing identifiable Bible
+# text; derived 2026-07-28). These are stock phrasings shared across many
+# unrelated teachers (definitional lines, common exhortations, standard
+# theological turns of phrase) -- wording no single teacher owns, so a
+# paraphrase reproducing one of these phrases verbatim should not, on its
+# own, drive a false paraphrase-closeness flag any more than a shared
+# scripture citation or a shared teacher name should (categories 1 and 2
+# above).
+#
+# Matching is FUZZY and SPAN-BASED (like scripture, unlike the plain
+# word/regex-substitution masking used for names and the theology stoplist)
+# because these are multi-word phrases that can appear with minor real-world
+# variance (a dropped filler word, a different tense) the same way a
+# scripture quote can. It deliberately reuses _find_quote_span's own anchor +
+# gap-tolerant-extend + span-density-floor algorithm and its EXACT constants
+# (VERSE_QUOTE_ANCHOR_MIN_WORDS, VERSE_QUOTE_GAP_TOLERANCE,
+# VERSE_QUOTE_MIN_EXTEND_BLOCK_WORDS, VERSE_QUOTE_DENSITY_FLOOR) rather than
+# introducing a second, independently-tuned set of thresholds -- see
+# _anchor_extend_density_span() below, factored out of _find_quote_span
+# without changing that function's behavior (proved by the existing
+# scripture unit tests passing unchanged; see this module's test suite).
+
+DEFAULT_VOCAB_PATH = _THIS_DIR / "data" / "common_religious_vocab.json"
+
+# The inverted index below keys on 4-word runs (tuples of 4 tokens) drawn
+# from each listed phrase's own tokenize() output. 4 is not a new, separately
+# tuned constant -- it is VERSE_QUOTE_ANCHOR_MIN_WORDS itself, reused
+# directly: any span that could ever qualify as a match (its anchor block
+# must be >= VERSE_QUOTE_ANCHOR_MIN_WORDS words on its own) necessarily
+# contains at least one contiguous 4-word run from the phrase, so a 4-gram
+# index is a lossless (no false-negative-at-this-stage) precondition filter
+# for "could this location in the text contain a qualifying anchor for
+# phrase P" -- mirroring Dispatch A2's own scripture-matcher design note
+# ("a 4-gram inverted index over all verse texts locates candidate verses
+# sharing >=1 four-word run with each of the 6528 phrases -- necessary
+# precondition for an anchor >=4").
+_VOCAB_INDEX_GRAM_LEN = VERSE_QUOTE_ANCHOR_MIN_WORDS
+
+
+class VocabMatcher(NamedTuple):
+    """Compiled, reusable matcher structure -- built ONCE via
+    build_vocab_matcher() and reused across every classify() call in a run,
+    exactly like build_verse_lookup()'s dict or build_name_pattern()'s
+    compiled regex. phrase_token_lists[i] is phrase i's own tokenize()
+    output (a tuple, for hashability); inverted_index maps a 4-token tuple
+    to the set of phrase indices whose own tokens contain that exact 4-gram
+    somewhere."""
+    phrase_token_lists: Tuple[Tuple[str, ...], ...]
+    inverted_index: Dict[Tuple[str, ...], Set[int]]
+
+
+def build_vocab_matcher(path: Path = DEFAULT_VOCAB_PATH) -> Optional[VocabMatcher]:
+    """Reads scripts/data/common_religious_vocab.json (B-1's committed data
+    file) and compiles the fuzzy-matcher structure ONCE. Returns None if the
+    file has no phrases (masking becomes a no-op), mirroring
+    build_name_pattern()'s empty-set convention. Never reads the DB -- this
+    is a pure local-file read, unlike build_name_set()/build_verse_lookup().
+
+    NOTE: this is only the builder's own default arg. It is NOT auto-injected
+    into classify() -- classify()'s own vocab_matcher parameter defaults to
+    None, so a caller must explicitly build and pass a matcher to opt in,
+    exactly like name_pattern and verse_lookup today.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    phrase_token_lists: List[Tuple[str, ...]] = []
+    inverted_index: Dict[Tuple[str, ...], Set[int]] = {}
+    for entry in data.get("phrases", []):
+        phrase_text = entry["phrase"] if isinstance(entry, dict) else entry
+        tokens = tuple(tokenize(phrase_text))
+        if len(tokens) < _VOCAB_INDEX_GRAM_LEN:
+            continue  # can never clear the anchor floor on its own -- skip
+        idx = len(phrase_token_lists)
+        phrase_token_lists.append(tokens)
+        for j in range(len(tokens) - _VOCAB_INDEX_GRAM_LEN + 1):
+            gram = tokens[j : j + _VOCAB_INDEX_GRAM_LEN]
+            inverted_index.setdefault(gram, set()).add(idx)
+
+    if not phrase_token_lists:
+        return None
+    return VocabMatcher(
+        phrase_token_lists=tuple(phrase_token_lists), inverted_index=inverted_index,
+    )
 
 
 # ── DB read: live name set (Proper-names exemption, step 2) ───────────────────
@@ -582,6 +688,78 @@ def _tokenize_with_spans(sub_text: str, char_offset: int) -> List[Tuple[str, int
     return out
 
 
+def _anchor_extend_density_span(
+    words: List[str], reference_tokens: List[str],
+) -> Optional[Tuple[int, int, int]]:
+    """Shared core of the anchor + gap-tolerant-extend + span-density-floor
+    algorithm (see _find_quote_span's own docstring immediately below for
+    the full derivation, revision history, and the live cases that grounded
+    each constant -- this function is that algorithm's body, factored out
+    unchanged so it can be reused verbatim by both the scripture-wording
+    matcher (_find_quote_span) and the common-religious-vocabulary matcher
+    (_find_vocab_span, PLAN.md #45 Phase 6) without copy-paste drift between
+    the two. This factoring changes NOTHING about the algorithm itself --
+    every line below is moved, not edited, from _find_quote_span's own
+    per-window loop body; proved byte-identical by the existing scripture
+    unit tests (test_closeness_check_unit_proof.py Case 3,
+    validate_closeness_check.py's scripture-wording measurements) passing
+    unchanged after this refactor.
+
+    `words` is the CANDIDATE window's own ordered word-token list (order
+    preserved, no offsets); `reference_tokens` is the verse's (or vocab
+    phrase's) own ordered word-token list being searched for within it.
+
+    Returns (first_a, last_a, matched) -- the INCLUSIVE index range in
+    `words` bounding the matched span, and the total matched word count
+    within that span -- if a qualifying span is found (the single longest
+    matching block, i.e. the anchor, is >= VERSE_QUOTE_ANCHOR_MIN_WORDS on
+    its own, AND the final gap-tolerant-extended span's density is >=
+    VERSE_QUOTE_DENSITY_FLOOR), else None. Callers convert (first_a, last_a)
+    back to a character span using their own token-to-char mapping (see
+    _find_quote_span and _find_vocab_span)."""
+    sm = difflib.SequenceMatcher(None, words, reference_tokens, autojunk=False)
+    blocks = [b for b in sm.get_matching_blocks() if b.size > 0]
+    if not blocks:
+        return None
+
+    anchor_idx = max(range(len(blocks)), key=lambda i: blocks[i].size)
+    if blocks[anchor_idx].size < VERSE_QUOTE_ANCHOR_MIN_WORDS:
+        return None
+
+    included = {anchor_idx}
+    cur_start = blocks[anchor_idx].a
+    i = anchor_idx - 1
+    while i >= 0:
+        gap = cur_start - (blocks[i].a + blocks[i].size)
+        if gap <= VERSE_QUOTE_GAP_TOLERANCE and blocks[i].size >= VERSE_QUOTE_MIN_EXTEND_BLOCK_WORDS:
+            included.add(i)
+            cur_start = blocks[i].a
+            i -= 1
+        else:
+            break
+    cur_end = blocks[anchor_idx].a + blocks[anchor_idx].size
+    i = anchor_idx + 1
+    while i < len(blocks):
+        gap = blocks[i].a - cur_end
+        if gap <= VERSE_QUOTE_GAP_TOLERANCE and blocks[i].size >= VERSE_QUOTE_MIN_EXTEND_BLOCK_WORDS:
+            included.add(i)
+            cur_end = blocks[i].a + blocks[i].size
+            i += 1
+        else:
+            break
+
+    inc_blocks = [blocks[j] for j in sorted(included)]
+    matched = sum(b.size for b in inc_blocks)
+    first_a = inc_blocks[0].a
+    last_a = inc_blocks[-1].a + inc_blocks[-1].size - 1
+    span_len = last_a - first_a + 1
+    density = matched / span_len
+
+    if density >= VERSE_QUOTE_DENSITY_FLOOR:
+        return first_a, last_a, matched
+    return None
+
+
 def _find_quote_span(text: str, citation_start: int, citation_end: int, verse_text: str) -> Optional[Tuple[int, int]]:
     """Searches VERSE_QUOTE_WINDOW_CHARS on each side of a validated
     citation's own span for a run of the verse's own words (order-preserving,
@@ -660,45 +838,12 @@ def _find_quote_span(text: str, citation_start: int, citation_end: int, verse_te
         if not window_tokens:
             continue
         words = [t for t, _s, _e in window_tokens]
-        sm = difflib.SequenceMatcher(None, words, verse_tokens, autojunk=False)
-        blocks = [b for b in sm.get_matching_blocks() if b.size > 0]
-        if not blocks:
+        found = _anchor_extend_density_span(words, verse_tokens)
+        if found is None:
             continue
+        first_a, last_a, matched = found
 
-        anchor_idx = max(range(len(blocks)), key=lambda i: blocks[i].size)
-        if blocks[anchor_idx].size < VERSE_QUOTE_ANCHOR_MIN_WORDS:
-            continue
-
-        included = {anchor_idx}
-        cur_start = blocks[anchor_idx].a
-        i = anchor_idx - 1
-        while i >= 0:
-            gap = cur_start - (blocks[i].a + blocks[i].size)
-            if gap <= VERSE_QUOTE_GAP_TOLERANCE and blocks[i].size >= VERSE_QUOTE_MIN_EXTEND_BLOCK_WORDS:
-                included.add(i)
-                cur_start = blocks[i].a
-                i -= 1
-            else:
-                break
-        cur_end = blocks[anchor_idx].a + blocks[anchor_idx].size
-        i = anchor_idx + 1
-        while i < len(blocks):
-            gap = blocks[i].a - cur_end
-            if gap <= VERSE_QUOTE_GAP_TOLERANCE and blocks[i].size >= VERSE_QUOTE_MIN_EXTEND_BLOCK_WORDS:
-                included.add(i)
-                cur_end = blocks[i].a + blocks[i].size
-                i += 1
-            else:
-                break
-
-        inc_blocks = [blocks[j] for j in sorted(included)]
-        matched = sum(b.size for b in inc_blocks)
-        first_a = inc_blocks[0].a
-        last_a = inc_blocks[-1].a + inc_blocks[-1].size - 1
-        span_len = last_a - first_a + 1
-        density = matched / span_len
-
-        if density >= VERSE_QUOTE_DENSITY_FLOOR and matched > best_matched:
+        if matched > best_matched:
             span_start = window_tokens[first_a][1]
             span_end = window_tokens[last_a][2]
             best_matched = matched
@@ -772,6 +917,89 @@ def _mask_scripture(
     return _apply_masked_spans(text, spans_to_mask, token_factory)
 
 
+def _find_vocab_span(
+    text_tokens: List[Tuple[str, int, int]], hit_pos: int, phrase_tokens: Tuple[str, ...],
+) -> Optional[Tuple[int, int]]:
+    """Common-religious-vocabulary counterpart to _find_quote_span, reusing
+    _anchor_extend_density_span -- the SAME algorithm and the SAME constants
+    (VERSE_QUOTE_ANCHOR_MIN_WORDS, VERSE_QUOTE_GAP_TOLERANCE,
+    VERSE_QUOTE_MIN_EXTEND_BLOCK_WORDS, VERSE_QUOTE_DENSITY_FLOOR), never a
+    re-tuned copy -- against a LOCAL window of the scanned text's own
+    (word, char_start, char_end) token list. text_tokens is the WHOLE text,
+    already tokenized-with-spans once by _mask_vocab and passed in here.
+
+    Unlike _find_quote_span (which searches a citation-ANCHORED window,
+    because a validated scripture citation nearby is strong prior evidence a
+    real quote follows), a vocabulary phrase carries no such anchor point.
+    The only prior signal here is hit_pos: a text-token index where a
+    literal _VOCAB_INDEX_GRAM_LEN-word run shared with phrase_tokens was
+    already found via VocabMatcher's inverted index (see _mask_vocab). The
+    search window is centered on that confirmed hit and sized directly off
+    phrase_tokens' own length plus VERSE_QUOTE_GAP_TOLERANCE on each side --
+    not a new, separately tuned window constant: VERSE_QUOTE_GAP_TOLERANCE
+    is the same value the extend step itself already uses to decide how far
+    it will reach from the anchor, so sizing the window by exactly that much
+    beyond the phrase's own length is sufficient to contain anything the
+    extend step could legally absorb, and no more."""
+    n = len(text_tokens)
+    margin = len(phrase_tokens) + VERSE_QUOTE_GAP_TOLERANCE
+    lo = max(0, hit_pos - margin)
+    hi = min(n, hit_pos + _VOCAB_INDEX_GRAM_LEN + margin)
+    window = text_tokens[lo:hi]
+    if not window:
+        return None
+    words = [t for t, _s, _e in window]
+    found = _anchor_extend_density_span(words, list(phrase_tokens))
+    if found is None:
+        return None
+    first_a, last_a, _matched = found
+    return window[first_a][1], window[last_a][2]
+
+
+def _mask_vocab(
+    text: str, token_factory: Callable[[], str], vocab_matcher: Optional[VocabMatcher],
+) -> str:
+    """Scans the WHOLE text for any of the 1,210 common-religious-vocabulary
+    phrases (scripts/data/common_religious_vocab.json) via VocabMatcher's
+    inverted 4-gram index -- an inverted-index-over-the-whole-text approach,
+    mirroring how Dispatch A2 built its own standalone scripture matcher,
+    NOT a single-span call like _find_quote_span (which has a citation to
+    anchor a search window around; a vocabulary phrase doesn't). Defaults to
+    a no-op when vocab_matcher is None -- see build_vocab_matcher and
+    exempt_for_containment/exempt_for_run for how a caller opts in.
+
+    For every text-position _VOCAB_INDEX_GRAM_LEN-gram that appears in the
+    index, every candidate phrase sharing that exact gram is checked via
+    _find_vocab_span (same anchor + gap-tolerant-extend + density-floor
+    discipline and constants as _find_quote_span, via the shared
+    _anchor_extend_density_span helper -- see that function). Every
+    qualifying span across every candidate hit is collected and handed to
+    _apply_masked_spans, which already merges overlapping/touching spans
+    into one sentinel token each -- so overlapping hits (from different
+    phrases, or the same phrase confirmed at adjacent text positions)
+    collapse correctly rather than double-masking."""
+    if vocab_matcher is None:
+        return text
+    text_tokens = _tokenize_with_spans(text, 0)
+    if len(text_tokens) < _VOCAB_INDEX_GRAM_LEN:
+        return text
+    words = [t for t, _s, _e in text_tokens]
+
+    spans_to_mask: List[Tuple[int, int]] = []
+    for i in range(len(words) - _VOCAB_INDEX_GRAM_LEN + 1):
+        gram = tuple(words[i : i + _VOCAB_INDEX_GRAM_LEN])
+        phrase_indices = vocab_matcher.inverted_index.get(gram)
+        if not phrase_indices:
+            continue
+        for phrase_idx in phrase_indices:
+            phrase_tokens = vocab_matcher.phrase_token_lists[phrase_idx]
+            span = _find_vocab_span(text_tokens, i, phrase_tokens)
+            if span is not None:
+                spans_to_mask.append(span)
+
+    return _apply_masked_spans(text, spans_to_mask, token_factory)
+
+
 def _mask_names(text: str, name_pattern: Optional[re.Pattern], token_factory: Callable[[], str]) -> str:
     if name_pattern is None:
         return text
@@ -784,6 +1012,7 @@ def _mask_theology(text: str, token_factory: Callable[[], str]) -> str:
 
 def exempt_for_containment(
     text: str, name_pattern: Optional[re.Pattern], verse_lookup: Optional[Dict[str, str]] = None,
+    vocab_matcher: Optional[VocabMatcher] = None,
 ) -> str:
     """Exemption pass used by the primary trigram metric: one shared
     sentinel string per category, regardless of how many times or which
@@ -793,9 +1022,38 @@ def exempt_for_containment(
     create a spurious cross-document match. verse_lookup (see
     build_verse_lookup) enables the 2026-07-26 scripture-wording fix in
     _mask_scripture; defaults to None (citation-only masking, prior
-    behavior) for callers that haven't built one."""
+    behavior) for callers that haven't built one. vocab_matcher (see
+    build_vocab_matcher, PLAN.md #45 Phase 6) enables the common-religious-
+    vocabulary exemption in _mask_vocab; defaults to None (no-op) for
+    callers that haven't built one either.
+
+    MASKING ORDER -- deliberately scripture, THEN vocab, THEN names, THEN
+    theology (not the reverse, and not vocab last). Named risk this order
+    exists to close: _mask_theology replaces individual WORDS (e.g. "god")
+    with a sentinel via a plain regex substitution -- and several of those
+    same words are themselves ANCHOR words inside common-religious-
+    vocabulary phrases (e.g. "god the father god the son and" -- confirmed
+    live in the 1,210-phrase list, 8 docs/5 teachers). If theology masking
+    ran BEFORE vocab masking, it would fragment a vocab phrase's own anchor
+    words into sentinel tokens first, and the vocab fuzzy matcher (which
+    tokenizes and matches against the phrase's OWN literal words, never
+    against a sentinel placeholder) would then simply fail to find the
+    phrase at all -- a real discount silently lost to masking-order alone,
+    not a genuine absence of the phrase. Running vocab BEFORE theology (and
+    before names, for the same reason -- names masking is also a
+    plain-word/regex substitution that could, in principle, consume a word
+    a vocab phrase also needs) means the vocab matcher always sees the
+    least-mutated text available, so a listed phrase's own wording is intact
+    for it to find. Scripture runs first regardless, because it operates on
+    citation-anchored SPANS (not bare stoplist words) that essentially never
+    overlap a vocab phrase's own wording, so its position relative to vocab
+    doesn't carry the same fragmentation risk the theology/name stoplists
+    do. See test_closeness_check_unit_proof.py's vocab case for the
+    end-to-end proof this order actually discounts the intended phrasing
+    (masked-token-stream and containment/residual before vs. after)."""
     text = unicodedata.normalize("NFKC", text)
     text = _mask_scripture(text, _constant_factory(SENTINEL_SCRIPTURE), verse_lookup)
+    text = _mask_vocab(text, _constant_factory(SENTINEL_VOCAB), vocab_matcher)
     text = _mask_names(text, name_pattern, _constant_factory(SENTINEL_NAME))
     text = _mask_theology(text, _constant_factory(SENTINEL_THEOLOGY))
     return text
@@ -803,16 +1061,23 @@ def exempt_for_containment(
 
 def exempt_for_run(
     text: str, name_pattern: Optional[re.Pattern], side: str, verse_lookup: Optional[Dict[str, str]] = None,
+    vocab_matcher: Optional[VocabMatcher] = None,
 ) -> str:
     """Exemption pass used by the secondary longest-run signal: every
     masked occurrence gets a UNIQUE token (side-tagged so P-side and S-side
     sentinels can never equal each other either), so SequenceMatcher can
     never report a 'match' that is actually two different verses / two
-    different names / two different stoplist words that both happened to
-    get masked. verse_lookup threads through to _mask_scripture the same
-    way as exempt_for_containment (see there); defaults to None."""
+    different names / two different stoplist words / two different vocab
+    phrases that both happened to get masked. verse_lookup threads through
+    to _mask_scripture the same way as exempt_for_containment (see there);
+    defaults to None. vocab_matcher threads through to _mask_vocab the same
+    way; defaults to None. Masking order (scripture, vocab, names, theology)
+    is identical to exempt_for_containment -- see that function's docstring
+    for why (the theology/name-word-fragmentation risk applies equally
+    here)."""
     text = unicodedata.normalize("NFKC", text)
     text = _mask_scripture(text, _unique_factory(SENTINEL_SCRIPTURE, side), verse_lookup)
+    text = _mask_vocab(text, _unique_factory(SENTINEL_VOCAB, side), vocab_matcher)
     text = _mask_names(text, name_pattern, _unique_factory(SENTINEL_NAME, side))
     text = _mask_theology(text, _unique_factory(SENTINEL_THEOLOGY, side))
     return text
@@ -871,14 +1136,15 @@ def residual_token_count(tokens: List[str]) -> int:
 
 def longest_common_run(
     paraphrase_text: str, source_text: str, name_pattern: Optional[re.Pattern],
-    verse_lookup: Optional[Dict[str, str]] = None,
+    verse_lookup: Optional[Dict[str, str]] = None, vocab_matcher: Optional[VocabMatcher] = None,
 ) -> Tuple[int, Tuple[str, ...]]:
     """difflib.SequenceMatcher over residual WORD tokens (not characters).
     Uses exempt_for_run()'s per-occurrence-unique sentinels so exempted
     spans can never contribute to the reported run. verse_lookup threads
-    through to exempt_for_run the same way as elsewhere; defaults to None."""
-    p_text = exempt_for_run(paraphrase_text, name_pattern, "p", verse_lookup)
-    s_text = exempt_for_run(source_text, name_pattern, "s", verse_lookup)
+    through to exempt_for_run the same way as elsewhere; defaults to None.
+    vocab_matcher threads through the same way; defaults to None."""
+    p_text = exempt_for_run(paraphrase_text, name_pattern, "p", verse_lookup, vocab_matcher)
+    s_text = exempt_for_run(source_text, name_pattern, "s", verse_lookup, vocab_matcher)
     p_tokens = tokenize(p_text)
     s_tokens = tokenize(s_text)
 
@@ -901,20 +1167,26 @@ class ClosenessResult(NamedTuple):
 
 def classify(
     paraphrase_text: str, source_text: str, name_pattern: Optional[re.Pattern],
-    verse_lookup: Optional[Dict[str, str]] = None,
+    verse_lookup: Optional[Dict[str, str]] = None, vocab_matcher: Optional[VocabMatcher] = None,
 ) -> ClosenessResult:
     """verse_lookup (see build_verse_lookup) enables the 2026-07-26
     scripture-wording exemption fix; defaults to None for backward
     compatibility with call sites that haven't built one (citation-only
-    masking, the prior behavior)."""
-    p_masked = exempt_for_containment(paraphrase_text, name_pattern, verse_lookup)
-    s_masked = exempt_for_containment(source_text, name_pattern, verse_lookup)
+    masking, the prior behavior). vocab_matcher (see build_vocab_matcher,
+    PLAN.md #45 Phase 6) enables the common-religious-vocabulary exemption;
+    also defaults to None for the same backward-compatibility reason --
+    NOT auto-built or auto-injected here, a caller must explicitly build and
+    pass one to opt in."""
+    p_masked = exempt_for_containment(paraphrase_text, name_pattern, verse_lookup, vocab_matcher)
+    s_masked = exempt_for_containment(source_text, name_pattern, verse_lookup, vocab_matcher)
     p_tokens = tokenize(p_masked)
     s_tokens = tokenize(s_masked)
 
     residual = residual_token_count(p_tokens)
     containment, p_tri_count = containment_score(p_tokens, s_tokens)
-    run_len, run_tokens = longest_common_run(paraphrase_text, source_text, name_pattern, verse_lookup)
+    run_len, run_tokens = longest_common_run(
+        paraphrase_text, source_text, name_pattern, verse_lookup, vocab_matcher,
+    )
 
     # Two INDEPENDENT trip conditions for QUOTE_CANDIDATE (Phase 4, PLAN.md
     # #45, wired in after Step 2's re-run derived LONGEST_RUN_WORD_THRESHOLD

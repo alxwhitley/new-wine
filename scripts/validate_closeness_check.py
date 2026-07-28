@@ -245,7 +245,7 @@ def _quote_masking_fired(content: str, source_text: str, name_pattern, verse_loo
 def sample_should_pass(
     conn, teacher_name: str, doc_pool: List[Tuple[str, str]], target_n: int,
     max_per_doc: int, name_pattern, rng: random.Random, source_text_cache: Dict[str, str],
-    verse_lookup: Dict[str, str],
+    verse_lookup: Dict[str, str], vocab_matcher: Optional["cc.VocabMatcher"] = None,
 ) -> Tuple[List[Pair], Dict[str, int]]:
     """Bulk-fetches chunks+propositions ONCE for the whole doc_pool, then
     draws a seeded-shuffled sample of (doc, proposition) candidates until
@@ -255,7 +255,15 @@ def sample_should_pass(
     supplied, stored as .result, the bucket's primary/reported result) and
     once under the OLD (pre-fix, citation-only) exemption (verse_lookup=
     None, stored as .old_result) -- so Step 2's before/after scripture-
-    confound comparison has real per-item numbers, not an inference."""
+    confound comparison has real per-item numbers, not an inference.
+
+    vocab_matcher (PLAN.md #45 Phase 6, Dispatch C) threads into .result
+    ONLY (the reported/primary measurement) -- defaults to None, a
+    byte-identical no-op vs. this function's pre-Dispatch-C behavior (see
+    main()'s own --vocab CLI flag, off by default). .old_result deliberately
+    stays vocab-free regardless -- it is the Phase 4 pre-scripture-fix
+    historical baseline, unrelated to this session's vocab exemption, and
+    must not be disturbed by it."""
     doc_ids = [d for d, _ in doc_pool]
     chunks_by_doc = fetch_chunks_bulk(conn, doc_ids)
     props_by_doc = fetch_propositions_bulk(conn, doc_ids)
@@ -293,7 +301,7 @@ def sample_should_pass(
             counters["skipped_too_little"] += 1
             continue
         try:
-            result = cc.classify(content, source_text, name_pattern, verse_lookup)
+            result = cc.classify(content, source_text, name_pattern, verse_lookup, vocab_matcher)
             old_result = cc.classify(content, source_text, name_pattern, None)
             quote_fired = _quote_masking_fired(content, source_text, name_pattern, verse_lookup)
         except Exception as exc:  # noqa: BLE001 -- measurement harness, report don't crash
@@ -354,6 +362,7 @@ def apply_word_edits(words: List[str], target_rate: float) -> Tuple[List[str], i
 def find_substantial_span(
     raw_text: str, name_pattern, target_words: int, min_residual_fraction: float,
     verse_lookup: Dict[str, str], stride: int = 25,
+    vocab_matcher: Optional["cc.VocabMatcher"] = None,
 ) -> Optional[Tuple[str, int, float]]:
     """Scans raw_text (whitespace-split, ORIGINAL case/punctuation preserved
     -- this produces the actual verbatim text used in the flag bucket, not
@@ -361,7 +370,10 @@ def find_substantial_span(
     of target_words words whose residual-token fraction (post-exemption,
     NEW fixed exemption -- verse_lookup supplied) meets min_residual_fraction.
     Deterministic given fixed text/stride. Returns (span_text,
-    start_word_index, residual_fraction) or None."""
+    start_word_index, residual_fraction) or None.
+
+    vocab_matcher (PLAN.md #45 Phase 6, Dispatch C) defaults to None, a
+    byte-identical no-op vs. this function's pre-Dispatch-C behavior."""
     words = raw_text.split()
     n = len(words)
     if n < target_words:
@@ -369,7 +381,7 @@ def find_substantial_span(
     for start in range(0, n - target_words + 1, stride):
         span_words = words[start:start + target_words]
         span_text = " ".join(span_words)
-        masked = cc.exempt_for_containment(span_text, name_pattern, verse_lookup)
+        masked = cc.exempt_for_containment(span_text, name_pattern, verse_lookup, vocab_matcher)
         residual = cc.residual_token_count(cc.tokenize(masked))
         fraction = residual / float(target_words)
         if fraction >= min_residual_fraction:
@@ -380,11 +392,15 @@ def find_substantial_span(
 def build_should_flag_bucket(
     doc_pool: List[Tuple[str, str]], source_text_cache: Dict[str, str], name_pattern,
     target_spans: int, rng: random.Random, verse_lookup: Dict[str, str],
+    vocab_matcher: Optional["cc.VocabMatcher"] = None,
 ) -> Tuple[List[FlagItem], Dict[str, object]]:
     """Picks target_spans documents (seeded-shuffled, distinct from the
     should-pass sample where possible), finds one ~100-word substantial
     span per document, builds R0/R1/R2 for each, classifies all three under
-    the NEW (fixed) exemption."""
+    the NEW (fixed) exemption.
+
+    vocab_matcher (PLAN.md #45 Phase 6, Dispatch C) defaults to None, a
+    byte-identical no-op vs. this function's pre-Dispatch-C behavior."""
     pool = list(doc_pool)
     rng.shuffle(pool)
     items: List[FlagItem] = []
@@ -400,6 +416,7 @@ def build_should_flag_bucket(
             continue
         found = find_substantial_span(
             source_text, name_pattern, SPAN_TARGET_WORDS, SPAN_MIN_RESIDUAL_FRACTION, verse_lookup,
+            vocab_matcher=vocab_matcher,
         )
         if found is None:
             continue
@@ -408,17 +425,17 @@ def build_should_flag_bucket(
         span_label = "{0}::w{1}".format(doc_id, start_idx)
 
         r0_words = span_text.split()
-        r0_result = cc.classify(span_text, source_text, name_pattern, verse_lookup)
+        r0_result = cc.classify(span_text, source_text, name_pattern, verse_lookup, vocab_matcher)
         items.append(FlagItem("should_flag_R0", doc_id, span_label, span_text, r0_result))
 
         r1_words, r1_edits = apply_word_edits(r0_words, 0.15)
         r1_text = " ".join(r1_words)
-        r1_result = cc.classify(r1_text, source_text, name_pattern, verse_lookup)
+        r1_result = cc.classify(r1_text, source_text, name_pattern, verse_lookup, vocab_matcher)
         items.append(FlagItem("should_flag_R1", doc_id, span_label, r1_text, r1_result))
 
         r2_words, r2_edits = apply_word_edits(r0_words, 0.35)
         r2_text = " ".join(r2_words)
-        r2_result = cc.classify(r2_text, source_text, name_pattern, verse_lookup)
+        r2_result = cc.classify(r2_text, source_text, name_pattern, verse_lookup, vocab_matcher)
         items.append(FlagItem("should_flag_R2", doc_id, span_label, r2_text, r2_result))
 
         ladder_log.append({
@@ -434,14 +451,17 @@ def build_should_flag_bucket(
 
 def build_r_run_items(
     should_pass_pairs: List[Pair], source_text_cache: Dict[str, str], name_pattern,
-    target_n: int, verse_lookup: Dict[str, str],
+    target_n: int, verse_lookup: Dict[str, str], vocab_matcher: Optional["cc.VocabMatcher"] = None,
 ) -> Tuple[List[FlagItem], List[FlagItem]]:
     """Picks the N lowest-containment should-pass pairs (genuine, already-
     measured reword text -- no fresh LLM call; ranked by the NEW post-fix
     containment), splices one real ~14-word verbatim run from that SAME
     document's source text onto the end of the proposition text, and
     returns both the ORIGINAL (pre-splice) and the SPLICED item for direct
-    before/after comparison, both classified under the NEW exemption."""
+    before/after comparison, both classified under the NEW exemption.
+
+    vocab_matcher (PLAN.md #45 Phase 6, Dispatch C) defaults to None, a
+    byte-identical no-op vs. this function's pre-Dispatch-C behavior."""
     ranked = sorted(should_pass_pairs, key=lambda p: p.result.containment)
     originals: List[FlagItem] = []
     spliced: List[FlagItem] = []
@@ -452,6 +472,7 @@ def build_r_run_items(
         source_text = source_text_cache.get(pair.document_id, "")
         found = find_substantial_span(
             source_text, name_pattern, RUN_TARGET_WORDS, RUN_MIN_RESIDUAL_FRACTION, verse_lookup, stride=10,
+            vocab_matcher=vocab_matcher,
         )
         if found is None:
             continue
@@ -459,11 +480,11 @@ def build_r_run_items(
         n_taken += 1
         label = "{0}::prop{1}::runw{2}".format(pair.document_id, pair.proposition_id, start_idx)
 
-        orig_result = cc.classify(pair.proposition_content, source_text, name_pattern, verse_lookup)
+        orig_result = cc.classify(pair.proposition_content, source_text, name_pattern, verse_lookup, vocab_matcher)
         originals.append(FlagItem("R_run_original", pair.document_id, label, pair.proposition_content, orig_result))
 
         spliced_text = pair.proposition_content.rstrip(". ") + ". " + run_text + "."
-        spliced_result = cc.classify(spliced_text, source_text, name_pattern, verse_lookup)
+        spliced_result = cc.classify(spliced_text, source_text, name_pattern, verse_lookup, vocab_matcher)
         spliced.append(FlagItem("R_run_spliced", pair.document_id, label, spliced_text, spliced_result))
     return originals, spliced
 
@@ -537,6 +558,17 @@ def main() -> None:
         "--smoke", action="store_true",
         help="Tiny single-digit run (mechanics check) instead of the full Phase 2 batch.",
     )
+    parser.add_argument(
+        "--vocab", action="store_true",
+        help=(
+            "Dispatch C (PLAN.md #45 Phase 6): build the real common-religious-"
+            "vocabulary matcher (scripts/data/common_religious_vocab.json) and "
+            "thread it through every classify()/exempt_for_containment() call "
+            "in this run's should-pass and should-flag buckets. OFF by default "
+            "-- omitting this flag must reproduce this script's pre-Dispatch-C "
+            "output byte-for-byte (proved via diff, see Dispatch C report)."
+        ),
+    )
     args = parser.parse_args()
 
     if args.smoke:
@@ -574,6 +606,15 @@ def main() -> None:
     print("Live verse_lookup size (build_verse_lookup, full `verses` table): {0}".format(len(verse_lookup)))
     print("Live verses.translation breakdown (confirms WEB-only ground truth): {0}".format(verse_translations_check))
 
+    # Dispatch C (PLAN.md #45 Phase 6): vocab_matcher defaults to None (the
+    # pre-Dispatch-C no-op) unless --vocab is passed. This print is itself
+    # gated on vocab_matcher being built, so the default (off) run emits
+    # nothing new here -- required for the byte-identical-off proof.
+    vocab_matcher = cc.build_vocab_matcher() if args.vocab else None
+    if vocab_matcher is not None:
+        print("Vocab matcher: ON -- {0} phrases loaded from {1}".format(
+            len(vocab_matcher.phrase_token_lists), cc.DEFAULT_VOCAB_PATH))
+
     # ── Eligibility (live-confirmed, not trusted from any .md) ─────────────
     main_pool = fetch_eligible_docs(conn, MAIN_TEACHER)
     ravenhill_pool = fetch_eligible_docs(conn, AFORIST_TEACHER, exclude_title_ilike="%compilation%")
@@ -587,12 +628,12 @@ def main() -> None:
     main_pairs, main_counters = sample_should_pass(
         conn, MAIN_TEACHER, main_pool, target_main_n, max_per_doc=2,
         name_pattern=name_pattern, rng=rng, source_text_cache=source_text_cache,
-        verse_lookup=verse_lookup,
+        verse_lookup=verse_lookup, vocab_matcher=vocab_matcher,
     )
     ravenhill_pairs, ravenhill_counters = sample_should_pass(
         conn, AFORIST_TEACHER, ravenhill_pool, target_ravenhill_n, max_per_doc=1,
         name_pattern=name_pattern, rng=rng, source_text_cache=source_text_cache,
-        verse_lookup=verse_lookup,
+        verse_lookup=verse_lookup, vocab_matcher=vocab_matcher,
     )
 
     print("\n--- Should-pass sampling reconciliation ---")
@@ -650,6 +691,7 @@ def main() -> None:
     flag_pool = [d for d in main_pool if d[0] not in {p.document_id for p in main_pairs}]
     flag_items, flag_meta = build_should_flag_bucket(
         flag_pool, source_text_cache, name_pattern, target_flag_spans, rng, verse_lookup,
+        vocab_matcher=vocab_matcher,
     )
     print("\n--- Should-flag ladder construction ---")
     print("Docs scanned: {0}, docs used (found substantial span): {1}".format(
@@ -664,6 +706,7 @@ def main() -> None:
     # ── R-run adversarial items ─────────────────────────────────────────────
     r_run_orig, r_run_spliced = build_r_run_items(
         main_pairs, source_text_cache, name_pattern, target_run_items, verse_lookup,
+        vocab_matcher=vocab_matcher,
     )
     print("\n--- R-run adversarial items (genuine low-containment reword + spliced 12-14w verbatim run) ---")
     for orig, spl in zip(r_run_orig, r_run_spliced):

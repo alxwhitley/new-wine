@@ -13,8 +13,17 @@ SELECT against sources/source_aliases) so the "shared teacher name" case
 below is exercised against the real current name set, not a hardcoded
 substitute. No writes anywhere in this file.
 
+Cases 7-8 (PLAN.md #45 Phase 6, added 2026-07-28) prove the
+common-religious-vocabulary exemption (SENTINEL_VOCAB / VocabMatcher /
+build_vocab_matcher / _mask_vocab, wired through exempt_for_containment and
+exempt_for_run) -- DB-free, using a small subset of the real, committed
+scripts/data/common_religious_vocab.json phrase list (never a fabricated
+phrase list), written to a scratch temp file for build_vocab_matcher() to
+load.
+
 Run: python3 scripts/test_closeness_check_unit_proof.py
 """
+import json
 import os
 import sys
 from pathlib import Path
@@ -192,6 +201,111 @@ def main() -> None:
         f"expected QUOTE_CANDIDATE (via run_len, since containment alone is "
         f"below floor), got {r6.verdict}"
     )
+
+    # ── Case 7: common-religious-vocabulary DISCRIMINATION (PLAN.md #45
+    #    Phase 6) -- DB-free. Builds a SMALL matcher from a handful of the
+    #    real, committed 1,210-phrase list (never a fabricated phrase), via
+    #    the real loader build_vocab_matcher(), pointed at a scratch subset
+    #    file. Proves TWO things at once: (a) a text containing a known
+    #    stock phrase gets masked -- tokens become SENTINEL_VOCAB, and
+    #    containment/residual change MEASURABLY (here, enough to flip the
+    #    verdict itself, QUOTE_CANDIDATE -> PASS); (b) a text with a
+    #    distinctive, non-listed phrase is left completely untouched. ───────
+    real_vocab_path = PROJECT_ROOT / "scripts" / "data" / "common_religious_vocab.json"
+    with open(real_vocab_path, "r", encoding="utf-8") as f:
+        real_vocab_data = json.load(f)
+    by_phrase = {p["phrase"]: p for p in real_vocab_data["phrases"]}
+
+    STOCK_PHRASE = "he that hath my commandments and keepeth them he it is that loveth"
+    RAVENHILL_STRESS_PHRASE = "god the father god the son and"
+    assert STOCK_PHRASE in by_phrase, "expected stock phrase to be present in the real committed data file"
+    assert RAVENHILL_STRESS_PHRASE in by_phrase, "expected the Ravenhill stress phrase to be present in the real committed data file"
+
+    subset = [by_phrase[STOCK_PHRASE], by_phrase[RAVENHILL_STRESS_PHRASE]]
+    scratch_dir = Path(
+        "/private/tmp/claude-501/-Users-alexwhitley-rhemata/"
+        "089de4dc-bced-40ff-98c1-e156d293aed9/scratchpad"
+    )
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    tiny_vocab_path = scratch_dir / "tiny_vocab_for_unit_test.json"
+    with open(tiny_vocab_path, "w", encoding="utf-8") as f:
+        json.dump({"provenance": {"note": "small test subset of the real 1210-phrase list"}, "phrases": subset}, f)
+
+    vocab_matcher = cc.build_vocab_matcher(path=tiny_vocab_path)
+    assert vocab_matcher is not None
+    print(f"\n--- Case 7 setup: small vocab matcher built from {len(subset)} real phrases ---")
+
+    para_7 = (
+        STOCK_PHRASE
+        + ", and he also explained a completely different idea about managing household budgets wisely."
+    )
+    source_7 = (
+        STOCK_PHRASE
+        + ", according to an entirely separate teaching about caring for the poor in the local congregation."
+    )
+    r7_off = cc.classify(para_7, source_7, name_pattern)
+    r7_on = cc.classify(para_7, source_7, name_pattern, None, vocab_matcher)
+    print("--- Case 7a: stock phrase shared by P and S, vocab OFF vs ON ---")
+    print(f"  vocab OFF: containment={r7_off.containment:.4f} residual={r7_off.residual_tokens} "
+          f"longest_run={r7_off.longest_run_words} verdict={r7_off.verdict}")
+    print(f"  vocab ON : containment={r7_on.containment:.4f} residual={r7_on.residual_tokens} "
+          f"longest_run={r7_on.longest_run_words} verdict={r7_on.verdict}")
+    masked_p7_on = cc.exempt_for_containment(para_7, name_pattern, None, vocab_matcher)
+    print(f"  masked P (vocab ON) contains sentinel: {cc.SENTINEL_VOCAB in masked_p7_on}")
+    assert cc.SENTINEL_VOCAB in masked_p7_on, "expected the stock phrase to be masked with SENTINEL_VOCAB"
+    assert r7_on.containment < r7_off.containment, (
+        f"expected containment to drop with vocab masking on, got OFF={r7_off.containment} ON={r7_on.containment}"
+    )
+    assert r7_on.residual_tokens < r7_off.residual_tokens, (
+        f"expected residual_tokens to drop with vocab masking on, got OFF={r7_off.residual_tokens} ON={r7_on.residual_tokens}"
+    )
+    assert r7_off.verdict == cc.QUOTE_CANDIDATE, f"expected OFF verdict QUOTE_CANDIDATE, got {r7_off.verdict}"
+    assert r7_on.verdict == cc.PASS, f"expected ON verdict PASS (vocab masking should discount the shared stock phrase), got {r7_on.verdict}"
+
+    distinct_text_7 = (
+        "the committee reviewed quarterly logistics reports before adjusting "
+        "the shipping schedule for next month"
+    )
+    masked_distinct_7 = cc._mask_vocab(distinct_text_7, cc._constant_factory(cc.SENTINEL_VOCAB), vocab_matcher)
+    print(f"--- Case 7b: distinctive non-listed text left untouched: {masked_distinct_7 == distinct_text_7} ---")
+    assert masked_distinct_7 == distinct_text_7, "expected a text with no listed phrase to be left byte-identical by _mask_vocab"
+
+    # ── Case 8: masking-order interaction, end-to-end (PLAN.md #45 Phase 6,
+    #    B-5's named risk). _mask_theology masks single words (including
+    #    "God") that are also anchor words inside vocab phrases. Proves,
+    #    against the concrete Ravenhill "Secret to Revival" stress case
+    #    ("god the father god the son and", 8 docs/5 teachers), that (a) the
+    #    CHOSEN order (scripture, vocab, names, theology --
+    #    exempt_for_containment's actual order) correctly discounts the
+    #    phrase end-to-end under the FULL pipeline, and (b) the REJECTED
+    #    order (theology before vocab) would have silently fragmented the
+    #    phrase's anchor words into theology sentinels first, so the vocab
+    #    matcher (which matches against the phrase's own LITERAL words,
+    #    never a sentinel placeholder) would find nothing -- confirming the
+    #    named risk is real, not hypothetical. ─────────────────────────────
+    ravenhill_text = (
+        "how in God's name can you be indwelt by God the Father, "
+        "God the Son, and God the Holy Ghost"
+    )
+    print("\n--- Case 8: masking-order interaction (Ravenhill stress case) ---")
+    print(f"  raw text: {ravenhill_text!r}")
+
+    chosen_order_masked = cc.exempt_for_containment(ravenhill_text, name_pattern, None, vocab_matcher)
+    print(f"  CHOSEN order (scripture->vocab->names->theology) masked: {chosen_order_masked!r}")
+    assert cc.SENTINEL_VOCAB in chosen_order_masked, (
+        "expected the CHOSEN masking order to discount the Ravenhill phrase end-to-end via SENTINEL_VOCAB"
+    )
+
+    # Rejected order, reconstructed directly from the same private masking
+    # primitives (theology BEFORE vocab) to prove the risk is real.
+    rejected_order_masked = cc._mask_theology(ravenhill_text, cc._constant_factory(cc.SENTINEL_THEOLOGY))
+    rejected_order_masked = cc._mask_vocab(rejected_order_masked, cc._constant_factory(cc.SENTINEL_VOCAB), vocab_matcher)
+    print(f"  REJECTED order (theology->vocab) masked:                  {rejected_order_masked!r}")
+    assert cc.SENTINEL_VOCAB not in rejected_order_masked, (
+        "expected the REJECTED order to fail to fire the vocab match -- theology masking must have "
+        "already consumed the phrase's own 'god' anchor words, fragmenting it before vocab could match"
+    )
+    print("  Confirmed: CHOSEN order discounts the phrase end-to-end; REJECTED order silently fails to.")
 
     print("\nAll assertions passed.")
 

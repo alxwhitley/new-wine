@@ -33,6 +33,16 @@ see the assertion in process_document() below. The return value extends to
 "stored:{n}:flagged:{m}" so a statement is never silently lost between the
 two counts (only when the gate is active; an off caller still gets the
 plain "stored:{n}" it always got).
+
+process_document() also accepts a third optional parameter, vocab_matcher
+(PLAN.md #45 Phase 6, 2026-07-28, default None), mirroring
+closeness_check.classify()'s own vocab_matcher parameter (see
+closeness_check.build_vocab_matcher). It threads straight through to the
+classify() call the same inert way name_pattern/verse_lookup already do --
+supplying it has no effect unless the gate is already active (name_pattern
+supplied), and NOT supplying it (the default) leaves behavior byte-identical
+to before this parameter existed. Still no gate activation and no new
+default-on behavior: this is wiring only.
 """
 
 import hashlib
@@ -413,6 +423,7 @@ def process_document(
     embed_fn: Callable[[str], List[float]],
     name_pattern: Optional[re.Pattern] = None,
     verse_lookup: Optional[Dict[str, str]] = None,
+    vocab_matcher: Optional[object] = None,
 ) -> str:
     """Top-level entry point for ingest scripts.
 
@@ -421,6 +432,16 @@ def process_document(
     see this module's top-of-file docstring for the full design. No real
     ingest path passes these yet; every existing caller's behavior is
     unchanged.
+
+    vocab_matcher (PLAN.md #45 Phase 6, default None): OPTIONAL, inert
+    unless the gate is already active. Typed as Optional[object] rather
+    than closeness_check.VocabMatcher specifically, because this module
+    imports closeness_check LAZILY (only inside the gate-active branch
+    below) -- a module-level type import would defeat that lazy-import
+    contract for every off caller. Threads straight through to the
+    classify() call below exactly like name_pattern/verse_lookup; not
+    supplying it (the default) is byte-identical to this parameter not
+    existing at all.
 
     Returns one of:
       "skipped_licensed"        — source is public_domain/owned (or missing); nothing written
@@ -493,7 +514,7 @@ def process_document(
         review_records: List[dict] = []
         for prop in props:
             content = prop["content"]
-            result = cc.classify(content, text, name_pattern, verse_lookup)
+            result = cc.classify(content, text, name_pattern, verse_lookup, vocab_matcher)
             if result.verdict == cc.PASS:
                 pass_props.append(prop)
             else:
