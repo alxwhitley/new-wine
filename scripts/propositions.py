@@ -43,6 +43,38 @@ supplying it has no effect unless the gate is already active (name_pattern
 supplied), and NOT supplying it (the default) leaves behavior byte-identical
 to before this parameter existed. Still no gate activation and no new
 default-on behavior: this is wiring only.
+
+--------------------------------------------------------------------------
+Reference-grounding fix (PLAN.md #45, 2026-07-28) -- ALWAYS ON, NOT a gate
+--------------------------------------------------------------------------
+Unlike the closeness-check gate above (default-OFF, opt-in via name_pattern),
+this fix is unconditional and lives INSIDE extract_propositions() itself --
+not process_document() -- because a now-deleted one-off script proved
+extract_propositions()/store_propositions() are directly callable, bypassing
+process_document()'s gates entirely. A fix that only ran in process_document()
+would leave that exact bypass open; wiring it into extract_propositions()
+closes it for every caller, direct or gated, with no opt-out parameter.
+
+After the model's raw JSON response is parsed, every scripture reference
+found in each proposition's `content` (via reference_grounding.
+find_reference_spans()) is checked with reference_grounding.
+check_reference_grounded() against `text` (the source document already in
+scope). GROUNDED references are left untouched. UNGROUNDED/UNCERTAIN
+references have ONLY their own parsed-reference span removed from `content`
+(boundary-safe -- never a blind str.replace(), see
+_strip_ungrounded_references()) -- everything else in `content`, including
+surrounding prose, is left verbatim. No proposition is ever dropped by this
+step; every strip is logged to GROUNDING_REVIEW_PATH (see
+_write_grounding_review_records()), gitignored, same convention as
+CLOSENESS_REVIEW_PATH above.
+
+verse_lookup is never supplied here (extract_propositions() has no DB
+connection of its own to build one) -- so only check_reference_grounded()'s
+citation-string arm ever fires from this call site; its wording arm is
+reachable only by a caller that supplies verse_lookup directly to that
+function (e.g. this module's own test suite). This is a known, accepted
+scope boundary, not an oversight -- see reference_grounding.py's own
+docstring for the two-arm design.
 """
 
 import hashlib
@@ -53,9 +85,11 @@ import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from groq import Groq
+
+import reference_grounding as rg
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +126,145 @@ def _write_review_records(records: List[dict]) -> bool:
             str(CLOSENESS_REVIEW_PATH), len(records), exc, records,
         )
         return False
+
+
+# ── Reference-grounding review file (PLAN.md #45, 2026-07-28) ─────────────────
+# Gitignored, local-only holding area for every UNGROUNDED/UNCERTAIN scripture
+# reference stripped by extract_propositions() -- see this module's top-of-file
+# docstring "Reference-grounding fix" section. Same directory-per-concern
+# convention as CLOSENESS_REVIEW_DIR above (a separate path, not reused,
+# since this is a different check writing a different record shape) -- see
+# .gitignore for the matching `reference_grounding_review/` entry.
+GROUNDING_REVIEW_DIR = Path(__file__).resolve().parent.parent / "reference_grounding_review"
+GROUNDING_REVIEW_PATH = GROUNDING_REVIEW_DIR / "stripped_references.jsonl"
+
+
+def _write_grounding_review_records(records: List[dict]) -> bool:
+    """Best-effort append of `records` (one JSON object per line, JSONL) to
+    GROUNDING_REVIEW_PATH. Returns True on success, False on any failure --
+    NEVER raises past this function, mirroring _write_review_records()
+    above exactly (same rationale: a filesystem failure here must not be
+    indistinguishable from, and must not roll back, extraction that already
+    succeeded -- logged at ERROR with the full record payload instead of
+    raised)."""
+    try:
+        GROUNDING_REVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        with open(GROUNDING_REVIEW_PATH, "a", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return True
+    except Exception as exc:
+        logger.error(
+            "GROUNDING_REVIEW_WRITE_FAIL path=%r n_records=%d error=%s records=%r",
+            str(GROUNDING_REVIEW_PATH), len(records), exc, records,
+        )
+        return False
+
+
+def _remove_reference_span(text: str, start: int, end: int) -> str:
+    """Boundary-safe removal of exactly text[start:end] -- never a blind
+    str.replace(reference_string, ""), which would also corrupt an
+    unrelated, separately-occurring longer/prefixed reference elsewhere in
+    the string that happens to literally contain the removed reference's
+    own string (e.g. blind-replacing "Galatians 6:1" would also maim a
+    separate, later, GROUNDED "Galatians 6:14" into "4"). Only the exact
+    character span `find_reference_spans()` located is ever touched.
+
+    After removal, performs NARROW seam cleanup AT THE SEAM ONLY (never
+    elsewhere in the string): collapses a double space landing exactly at
+    the seam into one, and drops a stray space immediately before a comma
+    landing exactly at the seam (mechanical debris from the removal itself
+    -- e.g. "in Romans 8:28, where" -> "in , where" -> "in, where").
+    Deliberately does NOT touch adjacent connector words ("as stated in",
+    "citing", "per") or any punctuation not directly at the seam -- those
+    are surrounding text, out of bounds. Leaving "as stated in, where
+    Paul..." after a strip is an accepted, disclosed cosmetic gap, not
+    repaired further here."""
+    new_text = text[:start] + text[end:]
+    seam = start
+
+    # Collapse a double space landing exactly at the seam into one.
+    if new_text[seam - 1:seam] == " " and new_text[seam:seam + 1] == " ":
+        new_text = new_text[:seam] + new_text[seam + 1:]
+
+    # Drop a stray space immediately before a comma landing at the seam.
+    if new_text[seam:seam + 1] == "," and new_text[seam - 1:seam] == " ":
+        new_text = new_text[:seam - 1] + new_text[seam:]
+
+    return new_text
+
+
+def _strip_ungrounded_references(
+    content: str, source_text: str, document_id: str, proposition_index,
+) -> Tuple[str, List[dict], int, int, int, int]:
+    """Finds every scripture reference in `content`, checks each against
+    `source_text` via reference_grounding.check_reference_grounded()
+    (verse_lookup=None -- see module docstring), and removes only the
+    UNGROUNDED/UNCERTAIN ones' own spans (boundary-safe, see
+    _remove_reference_span()). GROUNDED references are left untouched.
+
+    Returns (new_content, review_records, n_found, n_grounded,
+    n_stripped_fabricated, n_stripped_uncertain) -- the four counts always
+    satisfy n_found == n_grounded + n_stripped_fabricated +
+    n_stripped_uncertain (asserted by the caller, extract_propositions()),
+    so a reference can never silently vanish from the accounting.
+
+    A per-reference exception (an unexpected failure inside
+    check_reference_grounded() itself) is caught locally and treated as
+    UNCERTAIN -- fails toward stripping, never toward silently leaving a
+    reference in place on an internal error, and never crashes the whole
+    extraction over one bad reference."""
+    spans = rg.find_reference_spans(content)
+    if not spans:
+        return content, [], 0, 0, 0, 0
+
+    to_strip: List[Tuple[int, int, str, str]] = []  # (start, end, raw, reason)
+    n_grounded = 0
+    for span in spans:
+        try:
+            result = rg.check_reference_grounded(span.raw, source_text, verse_lookup=None)
+            status = result.status
+        except Exception as exc:
+            logger.warning(
+                "REFERENCE_GROUNDING_CHECK_FAIL doc=%r ref=%r error=%s -- treating as UNCERTAIN",
+                document_id, span.raw, exc,
+            )
+            status = rg.UNCERTAIN
+
+        if status == rg.GROUNDED:
+            n_grounded += 1
+            continue
+        reason = "fabricated" if status == rg.UNGROUNDED else "uncertain"
+        to_strip.append((span.start, span.end, span.raw, reason))
+
+    if not to_strip:
+        return content, [], len(spans), n_grounded, 0, 0
+
+    new_content = content
+    review_records: List[dict] = []
+    n_fabricated = 0
+    n_uncertain = 0
+    # Descending start order: removing the rightmost span first never shifts
+    # the character offsets of spans still pending removal (all of which lie
+    # strictly to its left, per find_reference_spans()'s non-overlapping,
+    # ascending-order regex matches) -- see this function's own module-level
+    # docstring section and the boundary-safety unit test for the proof.
+    for start, end, raw, reason in sorted(to_strip, key=lambda t: t[0], reverse=True):
+        new_content = _remove_reference_span(new_content, start, end)
+        if reason == "fabricated":
+            n_fabricated += 1
+        else:
+            n_uncertain += 1
+        review_records.append({
+            "written_at": datetime.now(timezone.utc).isoformat(),
+            "document_id": document_id,
+            "proposition_index": proposition_index,
+            "reference": raw,
+            "reason": reason,
+        })
+
+    return new_content, review_records, len(spans), n_grounded, n_fabricated, n_uncertain
+
 
 # Single source of truth for both the model requested (recorded verbatim on
 # every stored row -- see store_propositions()'s model param) and the
@@ -313,6 +486,20 @@ def extract_propositions(
     PropositionExtractionFailed for everything else (network error, rate
     limit, timeout, a response that fails to parse as JSON): a failed call
     must never be indistinguishable from a legitimate empty one.
+
+    REFERENCE GROUNDING (PLAN.md #45, 2026-07-28, ALWAYS ON): before
+    returning, every scripture reference in every proposition's `content`
+    is checked against `text` via reference_grounding.check_reference_
+    grounded() and stripped if UNGROUNDED/UNCERTAIN -- see this module's
+    top-of-file docstring "Reference-grounding fix" section for the full
+    design. This runs unconditionally, with no parameter to disable it, on
+    every call to this function regardless of caller -- including a caller
+    that bypasses process_document() entirely, which is exactly the gap
+    this fix closes. No proposition is ever dropped by this step (only
+    reference substrings within a proposition's own content, never the
+    proposition itself); see _strip_ungrounded_references()'s own
+    docstring for the exhaustive found/grounded/stripped accounting this
+    guarantees.
     """
     if prompt_version == "v4":
         if not speaker:
@@ -332,10 +519,71 @@ def extract_propositions(
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except Exception as exc:
         logger.warning("PROPOSITION_EXTRACT_FAIL doc=%r error=%s", doc_id, exc)
         raise PropositionExtractionFailed(str(exc)) from exc
+
+    return _apply_reference_grounding(parsed, text, doc_id)
+
+
+def _apply_reference_grounding(propositions: List[dict], text: str, doc_id: str) -> List[dict]:
+    """Applies the always-on reference-grounding strip (see
+    extract_propositions()'s own docstring) to every proposition in
+    `propositions`, against source text `text`. Runs OUTSIDE
+    extract_propositions()'s own try/except that raises
+    PropositionExtractionFailed -- a bug here must never be reported as a
+    network/parse failure of the model call, which already completed
+    successfully by the time this runs.
+
+    Returns a NEW list, same length and same proposition_index values as
+    `propositions` -- only `content` is ever rewritten, and only to remove
+    stripped reference spans; no proposition is ever added or dropped here.
+    Asserts the exhaustive accounting (every reference found lands in
+    exactly one of grounded / stripped-fabricated / stripped-uncertain)
+    before returning."""
+    result: List[dict] = []
+    all_review_records: List[dict] = []
+    total_found = 0
+    total_grounded = 0
+    total_fabricated = 0
+    total_uncertain = 0
+
+    for prop in propositions:
+        content = prop.get("content", "")
+        prop_index = prop.get("proposition_index")
+        new_content, review_records, n_found, n_grounded, n_fab, n_unc = (
+            _strip_ungrounded_references(content, text, doc_id, prop_index)
+        )
+        total_found += n_found
+        total_grounded += n_grounded
+        total_fabricated += n_fab
+        total_uncertain += n_unc
+        all_review_records.extend(review_records)
+
+        new_prop = dict(prop)
+        new_prop["content"] = new_content
+        result.append(new_prop)
+
+    assert len(result) == len(propositions), (
+        "reference-grounding step must never add or drop a proposition"
+    )
+    assert total_found == total_grounded + total_fabricated + total_uncertain, (
+        "reference-grounding accounting failed to reconcile: found=%d != "
+        "grounded=%d + fabricated=%d + uncertain=%d" % (
+            total_found, total_grounded, total_fabricated, total_uncertain,
+        )
+    )
+
+    if all_review_records:
+        _write_grounding_review_records(all_review_records)
+
+    logger.info(
+        "REFERENCE_GROUNDING doc=%r found=%d grounded=%d stripped_fabricated=%d "
+        "stripped_uncertain=%d",
+        doc_id, total_found, total_grounded, total_fabricated, total_uncertain,
+    )
+    return result
 
 
 def get_license_status(conn, source_id: str) -> Optional[str]:

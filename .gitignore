@@ -29,3 +29,18 @@ logs/
 # extracted-statement text derived from copyrighted source material; a
 # worse fit for permanent git history than for the database it came from.
 closeness_review/
+
+# Reference-grounding review queue (PLAN.md #45, 2026-07-28) — every
+# UNGROUNDED/UNCERTAIN scripture reference stripped from a proposition's
+# content by extract_propositions(), local-only. Same rationale as
+# closeness_review/ above — a worse fit for permanent git history than for
+# the database it came from.
+reference_grounding_review/
+
+# Reference-fabrication corpus-detection review queue (PLAN.md #45,
+# 2026-07-28, Part 2 — scripts/detect_reference_fabrication.py). Every
+# UNGROUNDED/UNCERTAIN scripture reference found by a corpus-wide,
+# read-only detection pass over `propositions.content` against full
+# reconstructed source text, local-only. Same rationale as
+# closeness_review/ and reference_grounding_review/ above.
+reference_fabrication_review/
