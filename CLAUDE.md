@@ -133,16 +133,66 @@ different row, per the hard rule above.
     this hole.
 
 11. **Scripture-reference grounding inside `extract_propositions()` must stay
-    unconditional — never make it opt-in.** Unlike the closeness-check gate
-    (`process_document()`'s `name_pattern`/`verse_lookup` params, default-off
-    by design), the reference-grounding strip (PLAN.md #45.5) has no
-    off-switch on purpose. A now-deleted one-off script
+    unconditional — never make it opt-in — but its strip CRITERION was found
+    backwards and is now reversed.** A now-deleted one-off script
     (`sample_v4_propositions_2026-07-23.py`) proved `extract_propositions()`/
     `store_propositions()` are directly callable, bypassing
     `process_document()`'s gates entirely — an opt-out parameter here would
-    reopen exactly the citation-fabrication hole this fix exists to close. If
-    a future caller genuinely can't tolerate it, that means the check belongs
-    somewhere else, not that it needs a bypass flag.
+    reopen exactly the hole this fix exists to close, so the check stays
+    wired inside `extract_propositions()` itself, no bypass flag, regardless
+    of the correction below.
+
+    **The correction (2026-07-28 dry-run,
+    `docs/audits/reference_grounding_dry_run_2026-07-28.md`):** the original
+    design stripped a reference whenever it could NOT be confirmed
+    grounded — which also silently strips references the source genuinely
+    gives but the scanner just can't recognize (spoken forms, "chapter N"
+    named once with bare verse numbers after). A dry run against 20 real
+    documents, before this design was ever used on a live row, found this
+    backwards in practice: 85% of what it stripped (33/39) were genuine
+    references wrongly removed, running 25–67% loss per document on
+    verse-by-verse expository material — exactly Derek Prince's style, the
+    corpus's largest block. **No live proposition was ever affected**
+    (generation stopped 2026-07-25, before this fix landed 2026-07-28).
+    **Standing decision: a reference may only be removed when the source is
+    CONFIRMED NOT to contain it — never on mere failure to confirm.** Do not
+    run this filter against the backfill, or resume generation at all,
+    until it is re-wired to use the three-layer citation verifier
+    (`scripts/citation_verifier_layers.py`, PLAN.md #45.6) as its confirming
+    step — supplying the old failure-to-confirm criterion without that
+    verifier reopens the exact loss this correction closed.
+
+12. **Position generation must stay structurally source-blind.**
+    `scripts/positions.py::generate_position_text()` — the only function
+    that calls the LLM to write a position — takes only teacher name, topic,
+    and evidence-statement content (`propositions.content`). It has no
+    `document_id`/`source_id` parameter and opens no database connection, so
+    there is no argument through which source/chunk text could reach it.
+    This is enforced by the function's own signature, not by a prompt
+    instruction telling the model to ignore something it was handed. Any
+    future position-generation caller must preserve this — a caller that
+    "just needs a bit more context" and adds a chunk-text parameter reopens
+    the same live-answer leak the position layer exists to close.
+
+13. **Corpus-wide positions are refused twice, not once.**
+    `write_position()` raises before ever opening a transaction if
+    `kind != "teacher"`, AND `positions.kind` carries a
+    `CHECK (kind = 'teacher')` constraint (migration 073) that would reject
+    the insert even if that application gate were bypassed or forked.
+    Widening either requires a deliberate code change or migration, never a
+    runtime flag. Corpus-wide stays banned until the propositions backfill
+    (PLAN.md #49) completes — a corpus-wide position authored before then
+    would name whichever teachers already have statements as "the corpus"
+    and invert the day Derek Prince's ~429 documents land.
+
+14. **`positions.prompt_version`/`prompt_fingerprint`/`model` are `NOT NULL`
+    — keep this discipline for any future LLM-generated-content table.**
+    Unlike `propositions`' nullable provenance columns (the reason every one
+    of the 2,409 live propositions has NULL provenance today — see the
+    Landmines section), an unstamped `positions` write is impossible at the
+    schema level, not just discouraged by convention. Don't relax this for a
+    future table "just to unblock a migration" — nullable provenance is
+    exactly how Invariant 10's hole opened in the first place.
 
 ---
 
@@ -162,16 +212,50 @@ different row, per the hard rule above.
   evidence, not a stored fact — and it doesn't extend to post-07-23 rows
   either. Treat any claim about which prompt version produced ANY current
   row as unverified unless re-checked by the same method (PLAN.md #45.5).
-- **A batch of live propositions carry a scripture reference flagged
-  UNGROUNDED by a 2026-07-28 corpus-wide, read-only scan** — local, gitignored
-  `reference_fabrication_review/corpus_findings.jsonl`, not in git, not in
-  the DB. These are human-review candidates, not confirmed fabrications: the
-  WEB-only translation gap (`verses` stores only the WEB translation) means a
-  genuinely-quoted verse in a different translation with no citation string
-  nearby can misread UNGROUNDED. Nothing in this list has been fixed,
-  deleted, or flagged in the database — fixing it is deliberately its own
-  future session. Full breakdown and disclosed limitations: PLAN.md #45.5 /
-  `rhemata-status.md`.
+- **Citation-fabrication scale claims from 2026-07-28 are superseded — do
+  not cite the 72-reference/64-proposition baseline as ground truth
+  anywhere.** The scanner behind that figure
+  (`reference_grounding.find_reference_spans()`) only recognizes compact
+  "Book N:M" citations and is blind to spoken forms ("Hebrews chapter ten,
+  verse twenty-five") and to the dominant expository pattern where a book is
+  named once and later citations are verse-only — a manual check on 5/5
+  sampled "fabrications" found every one was a genuine reference the scanner
+  simply couldn't parse. Genuine citation fabrication now appears RARE: two
+  cases confirmed to date by direct full-source reading, from two
+  independent detection efforts — Carter Conlon's Matthew 7:21-23 addition
+  (2026-07-24, found via a since-rejected similarity-based misattribution
+  check) and Leonard Ravenhill's Philippians 4:8-9 citation (2026-07-28, a
+  real reference grafted onto the wrong point in the same sermon). A third,
+  structurally different case (Savchuk's "Devil's Voice" — an invented
+  scriptural-AUTHORITY claim with no actual chapter:verse to check) remains
+  confirmed but undetectable by any reference-grounding check by
+  construction — nothing to parse. A trustworthy corpus-wide number still
+  requires fixing the scanner's spoken-form gap (PLAN.md #45.6's Pattern-A
+  item) and re-running — not done. Local, gitignored
+  `reference_fabrication_review/corpus_findings.jsonl` holds the stale
+  72-item list; treat every entry in it as a review candidate, not a
+  confirmed problem. See also Invariant 11 — the strip mechanism this scan
+  fed was itself found to have a backwards default and must not run against
+  the backfill until re-wired.
+- **The book-name map exists as five independent hand-maintained copies
+  that will drift out of sync with each other over time.** A 2026-07-28
+  blast-radius survey (the BOOK_MAP ordinal/spelled/Roman-numeral fix,
+  commit `ee267d4`) found five separate maps and four live-serving
+  consumer sites (the mounted `/study/verse` endpoint, the reference
+  verifier on every live chat answer, the Study page's verse-search parser,
+  and the chat-answer scripture underliner). All four sites were fixed
+  together this pass, but the underlying multi-copy structure wasn't —
+  consolidating into one shared map is a parked future session, not
+  scheduled. Fixing a book-name bug at only one of the five copies will
+  silently leave the other four wrong.
+- **`study-reference.ts::detectVerseReferences` (the live chat-answer
+  scripture underliner) has a real, pre-existing false-match bug**,
+  confirmed live on unmodified `HEAD` 2026-07-28, unrelated to and not
+  caused by that session's BOOK_MAP work: it scans free prose for embedded
+  valid substrings, so `"I Genesis 1:1"` matches the embedded
+  `"Genesis 1:1"` and ignores the leading "I ". Backend sites don't share
+  this shape of bug (they parse one anchored, isolated string, not
+  free-scanned prose). Unowned, unfixed.
 - Some sources have no alias rows; re-ingesting their content sentinels
   silently. `ALIAS_MISS` is the grep-able breadcrumb.
 - **No cheap check exists for the demonstrated fabrication class: real,
@@ -232,6 +316,10 @@ within days and has already caused one round of false blockers.
 - Read output directly — never ask Alex to copy-paste terminal output.
 - Check actual files before assuming structure.
 - Never log planned work as done. Never claim build state you can't see.
+- **Any LLM run with meaningful per-item cost across the corpus** — surface
+  a cost estimate to Alex BEFORE running, design it to run once rather than
+  iterate live against the corpus, and treat $50 as a hard ceiling unless
+  Alex explicitly approves exceeding it.
 
 ---
 

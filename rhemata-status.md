@@ -3,215 +3,172 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-28 (session close — scripture-citation fabrication track: prevention fix + corpus-wide detection built, proven, run read-only; see directly below).
+Last verified: 2026-07-28 (records-consolidation session — folded the
+2026-07-24 through 2026-07-28 citation-accuracy sub-sessions into one clean
+entry per Alex's explicit instruction, replacing several stacked
+session-state entries below that were superseded rather than correcting them
+in place; recorded Phase 4 (position layer) as started).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
 
 ---
 
-## Scripture-citation fabrication — prevention fix + corpus-wide detection, both built and proven, generation still stopped (session state, 2026-07-28)
+## Citation-accuracy program consolidated; Phase 4 (position layer) started and decoupled from the backfill (records pass, 2026-07-28)
 
-Ran on the harness (`executor`/`planner-reviewer`) per `CLAUDE.md`'s Session
-Routing table's repo-only-multi-step-build row — zero DB writes anywhere in
-the build or the corpus run. Triggered by Alex's Phase 2b calibration pass
-surfacing citation fabrication independently of the closeness-check question
-(PLAN.md #45.5): statements citing Bible verses a teacher never actually
-named in the source.
+This entry replaces two prior session-state entries ("Retroactive re-check
+run; citation-scanner blind spot found; BOOK_MAP defect fixed and shipped"
+and "Scripture-citation fabrication — prevention fix + corpus-wide
+detection") that together spanned six sub-sessions across 2026-07-28 and
+ended mid-correction. Their substance is folded in here, corrected, not
+stacked on top — see PLAN.md's own eviction rule. Full technical detail for
+everything below lives in three audit reports, not repeated here:
+`docs/audits/statement_recheck_closeness_citation_2026-07-28.md`,
+`docs/audits/reference_grounding_dry_run_2026-07-28.md`, and
+`docs/audits/position_layer_phase4_build_2026-07-28.md`.
 
-**Root cause (Part 1 audit, read-only, before any fix): not a prompt gap.**
-`scripts/propositions.py`'s extraction prompt (both v3 and v4) has forbidden
-inventing scripture references since its very first commit — "invent none it
-doesn't... do NOT supply the reference, even if you recognize the verse."
-All three originally-named fabrication cases were generated after that rule
-existed, unchanged. This is a **model obedience failure**: the Groq
-extraction call sometimes violates a clear instruction anyway, and nothing
-downstream ever checked. A now-deleted one-off script
-(`sample_v4_propositions_2026-07-23.py`) also proved `extract_propositions()`/
-`store_propositions()` are directly callable, bypassing `process_document()`'s
-gates entirely — so the fix had to live inside `extract_propositions()`
-itself to be bypass-proof, not in the gated wrapper alone. Separately
-confirmed and disclosed, not fixed this session: **every one of the 2,409
-live `propositions` rows is `prompt_version='legacy_unknown'` with a NULL
-fingerprint and NULL model** — provenance stamping (migration 067) has never
-fired on a real write, because the only post-stamping writes used that same
-side-door script.
+**Where the citation-accuracy work landed, plainly:**
+- The retroactive re-check (PLAN.md #47) ran once, 2026-07-28, across all
+  2,409 live statements: 2,067 passed both checks, 59 flagged for citation,
+  0 for removal, 5 for manual review, 278 quote-candidates (parked, separate
+  track). The closeness-check half is sound. The citation-check half is not
+  — the scanner behind it only recognizes compact written citations and is
+  blind to spoken forms and to the dominant expository pattern (book named
+  once, verse-only citations after). Most of the 59, and most of the
+  original 72-reference "known fabrication" baseline that number traces
+  back to, are now believed to have been genuine references the scanner
+  simply couldn't parse. **Do not cite the 72-item baseline as ground truth
+  anywhere in the records — see CLAUDE.md's Landmines section.**
+- Genuine citation fabrication now appears RARE. Two cases confirmed to
+  date by direct full-source reading, from two independent detection
+  efforts: Carter Conlon's Matthew 7:21-23 addition (2026-07-24, found via a
+  since-rejected similarity-based misattribution check, see "Claim-to-source
+  verification check" below) and Leonard Ravenhill's Philippians 4:8-9
+  citation (2026-07-28, a real reference grafted onto the wrong point in the
+  same sermon). A third, structurally distinct case — Savchuk's "Devil's
+  Voice" invented scriptural-*authority* claim, no actual chapter:verse —
+  remains confirmed but undetectable by any reference-grounding check by
+  construction.
+- **The anti-fabrication filter wired into `extract_propositions()` was
+  found harmful before it ever ran against a live row, and its default is
+  now reversed.** The original design stripped a scripture reference
+  whenever it could NOT be confirmed grounded. A dry run against 20 real
+  documents (before this design was ever used on a live row) found 85% of
+  what it stripped (33/39) were genuine references wrongly removed, running
+  25–67% loss per document on verse-by-verse expository material — Derek
+  Prince's own style, the corpus's largest block. No live proposition was
+  ever affected (generation stopped 2026-07-25, before this fix landed
+  2026-07-28). **Standing decision: a reference may only be removed when the
+  source is CONFIRMED NOT to contain it, never on mere failure to confirm.**
+  Must not run against the backfill, or against resumed generation at all,
+  until re-wired to use the three-layer verifier as its confirming step.
+  Full detail: CLAUDE.md Invariant 11.
+- **The three-layer citation verifier is repurposed.** Built but parked
+  (Layer 1 patterns → Layer 2 document-wide book scope → Layer 3 LLM
+  reading pass; Layer 1's chapter-colon gap is unfixed —
+  `scripts/citation_verifier_layers.py`, still uncommitted). Its primary job
+  is no longer retroactive audit of old statements — it's now the
+  recognition/confirming engine the reversed anti-fabrication filter needs
+  ahead of the backfill. Retroactive sweep of the existing corpus is
+  demoted to a cheap, sampled, later pass.
+- **Book-name recognition fixed in the live product**, commit `ee267d4`
+  (not pushed): ordinal ("1st Samuel"), spelled-word ("First Samuel"), and
+  Roman-numeral ("I Samuel") forms now recognized at all four live-serving
+  sites; a normalization bug that mangled ordinal forms before lookup also
+  fixed. Two new open items came out of this fix, neither resolved this
+  session — see "Open items carried forward" below.
+- **Phase 4 (PLAN.md #48, position layer) is decoupled from the backfill
+  and has STARTED**, Alex's explicit approval: teacher-specific positions
+  built on the proven-clean statement set don't depend on backfill volume,
+  so #48 no longer waits for #47/#45.6 to fully close. Corpus-wide
+  positions remain banned until the backfill (#49) completes — unchanged.
+  Foundation shipped this same day, commit `5d6b428` — see the dedicated
+  entry directly below.
+- **Eligible-input set re-derived live, 2026-07-28: 2,069 pass-both
+  statements, not the report's 2,067.** The +2 is fully explained by the
+  BOOK_MAP fix (above) resolving two previously-false citation failures —
+  confirmed, not drift (the `uncertain` count is unchanged at 5, matching
+  the original report exactly). Re-derivable any time via
+  `scripts/eligible_statements.py`.
 
-**A mid-session correction to the investigation's own premise — the single
-most important fact to carry forward.** Verifying the three originally-named
-"confirmed" cases against full reconstructed source text (not the ~440-word
-excerpts Alex's calibration sample used) found:
-- **Ravenhill "Paul's Passion, Preaching, and Praying" (Philippians 4:8-9) —
-  confirmed real fabrication, but a specific shape.** The full sermon does
-  contain genuine Philippians 4:8 KJV wording read aloud by Ravenhill, but in
-  a completely unrelated passage. The fabricated proposition's actual theme
-  (purity/holiness as a witness) correctly traces to a different real
-  passage — Ravenhill's "without wax"/marble-statue illustration on
-  Philippians 1:10 — but the citation attached to it, "Philippians 4:8-9," is
-  wrong for that specific claim. A real reference, grafted onto the wrong
-  point.
-- **Savchuk "How to Know if They're The One God Sent You" (Genesis 24) — NOT
-  a fabrication.** The full 46,137-char source is explicitly structured as
-  "seven points... from a story of how Abraham found a wife for his son"
-  (Genesis 24, cited "Genesis 24:3 and 4" / "Genesis 24:14" explicitly).
-  Point six, verbatim: "meet the family before you make the decision... Don't
-  make a deep commitment without meeting their family" — an exact match to
-  the proposition. The excerpt the calibration sample used only showed a
-  different section (Matthew 19:12/celibacy) of this same long, multi-topic
-  sermon. **This is the same "excerpts are an unreliable stand-in for
-  full-document ground truth" gap the closeness-check calibration already
-  logged 2026-07-28 above — now confirmed to have produced a false positive
-  here too, not just a methodology risk.**
-- **Savchuk "How to Spot the Devil's Voice in Your Head" ("as stated in the
-  scripture") — real, but a structurally different fabrication class.**
-  Confirmed against the full source: Savchuk presents the threefold "accent"
-  framework as his own teaching, illustrated with the Genesis 3 "Has God
-  said?" example — never attributing that specific framework to scripture.
-  The proposition added that attribution. But there is no chapter:verse
-  anywhere in this claim — an invented *authority* claim, not an invented
-  *citation*. Structurally invisible to a reference-grounding check: there is
-  nothing to parse or test.
+**Open items carried forward, none silently dropped:**
+- **The 59 flagged and 5 manual-review statements are superseded findings
+  from a faulty instrument — formally UNRESOLVED, not live work.** They will
+  be re-judged cheaply once the citation verifier lands. Do not mistake
+  "the scanner that flagged these is now known unreliable" for "these are
+  now known fine" — neither has been re-checked against the corrected
+  scanner yet.
+- **ASR-garbled book names in source text** (e.g. a Galatians-context
+  document where a book name transcribed as "the plumbing") — a real
+  corpus-quality problem, disclosed during the 2026-07-28 transcript-phrasing
+  survey, out of scope for any check built so far. Own future session.
+- **Single-translation ceiling on verse-wording matching** — `verses` stores
+  only the WEB translation; a genuinely-quoted verse in KJV/NIV/other
+  wording, with no citation string nearby, can misread as ungrounded on the
+  wording arm. Recorded limitation, unsolved, affects both the closeness
+  check's scripture exemption and the citation-grounding check.
+- **Citation verifier remaining work:** Layer 1's chapter-colon gap fix
+  (`"Hebrews chapter 10:25"` with no literal "verse" token matches nothing),
+  re-derivation against the corrected book map, and Layer 3's LLM reading
+  pass (never run against real output) — which must be cost-sized under the
+  new standing LLM-cost rule (CLAUDE.md) before any run wider than a small
+  sample.
+- **Prior parked items, still parked, carried forward:** the two
+  HistoricalChristianFaith attribution mix-ups (`citation_mode` mismatch on
+  307 documents; a C.S. Lewis document marked `public_domain` with a
+  doubtful death-year basis — see Open blockers #15/#16 below); the
+  Ravenhill listen-through backlog (weak-signal clip/full-sermon pairs and
+  the near-Galatians "Cross" documents that need a human listen, not a
+  content-match heuristic — see PLAN.md #44); and the harness write-path
+  issue (`BASH_WRITE_INDICATORS` still deliberately over-flags benign Bash
+  calls as writes — see Known Harness Bugs below).
 
-Given this, Alex made two explicit decisions mid-session, both recorded here
-because they shape everything downstream: (1) Part 1's fix is a
-**post-generation grounding check inside `extract_propositions()` itself**
-(not a prompt rewrite, not `process_document()` alone), since root cause is
-obedience, not wording; (2) when a reference can't be grounded, **strip only
-the bare reference token from the proposition's content, nothing else** — not
-a whole-clause strip, not a whole-proposition drop — even after being shown
-the Ravenhill case has invented content riding alongside the citation
-(accepted as an out-of-scope residual gap, not something the stripper tries
-to solve); and (3) Part 2 detection scopes to **whole-document reference
-presence only**, explicitly declining to build a proximity/local-relevance
-heuristic — the Ravenhill case is an accepted, disclosed miss under this
-scoping, not a bug to chase.
+**New standing rule, added to CLAUDE.md this session:** any LLM run with
+meaningful per-item cost across the corpus requires a cost estimate
+surfaced to Alex before running, should be designed to run once, and has a
+$50 ceiling unless Alex explicitly approves exceeding it.
 
-**Part 1 — prevention, built and proven, inert until generation resumes.**
-New `scripts/reference_grounding.py`: a shared, source-agnostic predicate
-`check_reference_grounded(reference, source_text, verse_lookup=None)` →
-GROUNDED / UNGROUNDED / UNCERTAIN. Citation-string arm (always runs, reuses
-`reference_verifier._parse_verse_or_range`, imported not forked) plus an
-optional verse-wording arm (only when `verse_lookup` supplied, reuses
-`closeness_check`'s `_anchor_extend_density_span` fuzzy matcher verbatim —
-the same translation-variance machinery that already hit the WEB/KJV gap).
-Wired **always-on** (no opt-out parameter — a root-cause fix, not a gate)
-inside `extract_propositions()` itself, closing the bypass the deleted
-sampling script exploited. UNGROUNDED/UNCERTAIN references get their exact
-character span boundary-safe stripped from `content` (never a blind
-`str.replace`, which would corrupt a longer overlapping reference — proven on
-a real "Galatians 6:1" vs "Galatians 6:14" prefix-collision case), narrow
-seam cleanup only (collapsed double-space/orphaned comma directly at the
-seam), every other character of `content` left verbatim. No proposition is
-ever dropped — only reference substrings are ever removed. Every strip logged
-to gitignored `reference_grounding_review/stripped_references.jsonl`. Proven
-via (a) a predicate/stripper unit test against real reconstructed Ravenhill
-source text (genuine reference survives byte-identical; injected fabricated
-reference stripped; boundary-safety case proven; translation-variance case
-proven NOT falsely stripped) and (b) an integration test with a mocked Groq
-client proving the strip fires *inside* `extract_propositions()` itself, not
-just in the predicate in isolation. Existing propositions/closeness tests
-still pass. **Inert**: no real Groq extraction call ran this session;
-generation remains stopped.
+---
 
-**Part 2 — detection, built, run corpus-wide, read-only.** New
-`scripts/detect_reference_fabrication.py`: builds the live `verse_lookup`
-once (~31,098 WEB rows), bulk-fetches all propositions once, finds every
-reference in Python, reconstructs each in-scope document's full text from
-`chunks` exactly once (165 of 3,595 documents needed it), classifies every
-reference via the same unmodified `reference_grounding.py` predicate with
-`verse_lookup` supplied. UNGROUNDED/UNCERTAIN findings (never GROUNDED —
-not fabrication candidates) written to gitignored
-`reference_fabrication_review/corpus_findings.jsonl`, one record per finding
-(document/teacher/proposition content/reference/status/reason, for human
-review). **Zero DB writes anywhere in the run — every touch was a SELECT.
-No flag persisted to any table, no statement altered. The review file is the
-only output artifact, and it is local and gitignored, not committed.**
+## Position layer foundation shipped — Phase 4 opening session (session state, 2026-07-28)
 
-Dry-run first (Rule 2), against the five named documents, before the full
-pass: Genesis 24 → GROUNDED (correctly not flagged); Ravenhill's
-"Philippians 4:8-9" → GROUNDED via the wording arm (the accepted, disclosed
-miss, confirmed working exactly as scoped); Devil's Voice's proposition →
-zero references found at all (confirms this fabrication class is
-structurally invisible to the tool, as expected — no detector was built for
-it).
+Build + live database write session (new tables and new rows only — no
+existing row anywhere modified, verified by fresh query before and after:
+`documents` 3,595→3,595, `propositions` 2,409→2,409, `sources` 73→73). Ran
+on the plain/psycopg2 path per CLAUDE.md's Session Routing table, never the
+harness. Commit `5d6b428`. Full report:
+`docs/audits/position_layer_phase4_build_2026-07-28.md`.
 
-**Full corpus run, reference-level reconciliation (checked against the
-live review file, not console output alone):** attempted 787 / grounded 709
-/ ungrounded 72 / uncertain 6 / errored 0 / skipped 0 (709+72+6=787,
-reconciles; review file independently recounted at 78 lines = 72+6, matches).
+**Shipped:** `positions` + `position_evidence` tables (migration 073,
+verified on a fresh connection). `kind` is CHECK-locked to `'teacher'` —
+corpus-wide is refused twice, once by application code (`write_position()`
+raises before opening a transaction) and once by the DB constraint itself,
+per the standing ban until the backfill completes. `prompt_version`/
+`prompt_fingerprint`/`model` are `NOT NULL` from row one — an unstamped
+position write is impossible at the schema level, unlike `propositions`'
+nullable provenance columns. `scripts/positions.py::generate_position_text()`
+— the only function that calls the LLM — takes teacher name, topic, and
+evidence-statement content only; no document/chunk access is possible by
+its own signature, not by prompt instruction. An evidence-count floor of 5
+(provisional, reasoned from real Savchuk data, not a #46-style calibration)
+refuses to write a position below it — proven live, not just coded.
 
-**Proposition-level ("size of the problem" numbers, live query):** 2,409
-total propositions. 1,767 (73.3%) carry no scripture reference at all, out
-of scope for this check. 642 (26.7%) carry ≥1 parseable reference. Of those:
-573 clean (every reference grounded); 64 propositions (72 references, 46
-documents) carry ≥1 UNGROUNDED reference; 5 propositions (6 references, one
-Derek Prince document) carry ≥1 UNCERTAIN reference. UNGROUNDED by teacher:
-Vlad Savchuk 36, Zac Poonen 24, Leonard Ravenhill 8 (this includes 3 further
-UNGROUNDED references in the Ravenhill document beyond the already-known
-Phil 4:8-9 case, newly surfaced this run — Philippians 4:11-12, Romans 8:26,
-Philippians 3:10 — genuine review candidates not previously named), Jack
-Deere 2, Derek Prince 1, Doug Kreighbaum 1.
+**Proven on Vlad Savchuk** — richest eligible coverage (898 statements),
+verified by live query rather than the "likely Ravenhill" (699) assumption
+going in. 4 topics attempted: 3 written (deliverance/spiritual warfare,
+effective prayer, fasting — full text in the report), 1 correctly refused
+(infant baptism and the sacraments — 0 eligible evidence, no LLM call made).
+Every evidence proposition ID fresh-verified as both in the eligible
+2,069-set and belonging to the correct teacher, for all 45 evidence rows
+across the 3 written positions. Actual cost: ~$0.05–0.08 (4 embeddings + 3
+Claude Sonnet calls), reported to Alex before running, far under the $50
+ceiling.
 
-**Three disclosed limitations, none papered over — read the corpus numbers
-with these attached, not as clean truth:**
-1. **GROUNDED can mean "found somewhere in this document," not "correctly
-   supports this specific claim."** Whole-document scoping means a real
-   fabrication can resolve GROUNDED if the cited verse's wording/citation
-   exists anywhere else in a long document, unconnected to this specific
-   proposition — the Ravenhill Phil 4:8-9 case is the live proof. `propositions`
-   has no chunk/paragraph backreference (confirmed, Step A), so
-   passage-level grounding isn't architecturally possible without a bigger
-   redesign; not attempted this session, by Alex's explicit choice.
-2. **UNGROUNDED is "high-confidence candidate for human review," not
-   "confirmed fabrication."** The WEB-only translation gap (`verses` stores
-   only WEB, confirmed live, 31,098 rows) means a genuinely-quoted verse in a
-   divergent non-WEB translation with no citation string nearby can read
-   UNGROUNDED. None of the 64 flagged propositions should be auto-deleted or
-   auto-altered without a human read against the real source.
-3. **72 is a floor, not a ceiling, on the corpus's reference-fabrication
-   surface.** `find_reference_spans()` only catches parseable "Book
-   Chap:Verse" colon-form references — chapter-only, spelled-out, and
-   bare-attribution fabrications (the Devil's Voice class) are never counted
-   at all. Separately: a real, disclosed-not-fixed defect in
-   `check_reference_grounded()` — it doesn't apply the same
-   period-to-space normalization `find_reference_spans()` already does
-   before its own parse call, so dotted abbreviations ("1 Cor.", "Matt.")
-   always read UNCERTAIN rather than being evaluated. Verified structurally
-   (not just empirically) that this can only ever push a reference toward
-   UNCERTAIN, never mask a genuine UNGROUNDED — so the 72 figure is unaffected,
-   but all 6 of this run's UNCERTAIN findings trace to this one defect (all
-   one Derek Prince document, all independently confirmed GROUNDED once
-   normalized). One-line future fix named in PLAN.md #45.5, not built this
-   session (out of Part 2's scope — fixing Part 1's already-approved code
-   wasn't this step's job).
-
-**The two originally-"unconfirmed" cases — resolved by the detection tool
-itself, against full source text, not a manual read:**
-- Derek Prince, "Deliverance And Demonology" — confirmed clean. 16
-  references; 10 GROUNDED directly, 6 UNCERTAIN (the dotted-abbreviation
-  defect above), all 6 independently confirmed GROUNDED once normalized.
-  Zero UNGROUNDED.
-- Vlad Savchuk, "Millions of Christians Are Falling for This Trap of Satan"
-  — confirmed clean. 5 references, all GROUNDED directly. Zero findings in
-  either the dry run or the full run.
-
-**Standing facts a fresh session should know before doing anything else:**
-- Statement generation remains stopped throughout — no real Groq extraction
-  call ran anywhere in this session (Part 1's proof used a mocked client).
-- Zero database writes across the entire session, harness or otherwise.
-  Every DB touch was SELECT-only, both in the build/proof and the full
-  corpus run. **Nothing was flagged, altered, or deleted in the database —
-  `reference_fabrication_review/corpus_findings.jsonl` (gitignored, local
-  only, not committed) is the sole output artifact of Part 2.**
-  `reference_grounding_review/stripped_references.jsonl` (also gitignored)
-  is Part 1's own log path, populated only when generation actually runs —
-  empty as of this session's end, since generation stayed stopped.
-  `TEACHER_POSITION_SIMILARITY_FLOOR` untouched.
-- Fixing or deleting any of the 64 flagged propositions is explicitly its
-  own future session, once Alex has reviewed the review file — not
-  attempted, not implied, by anything in this session.
-- Two commits from this session, build separate from records per Rule 7:
-  a build commit (`reference_grounding.py`, `propositions.py` wiring,
-  `detect_reference_fabrication.py`, the two new test files, `.gitignore`)
-  and this records commit (`rhemata-status.md`, `PLAN.md`).
+**Not done, explicitly next:** more teachers (mechanical, not a redesign);
+floor calibration once more teachers' output exists to judge against; the
+serving-path cutover itself (nothing users see has changed — the live
+teacher-card synthesis in `study.py::get_teacher_card()` and the main chat
+answer path are both untouched); a review/approval pass on the 3 specific
+rows already written (all `status='draft'`, none read or approved by Alex
+yet).
 
 ---
 
