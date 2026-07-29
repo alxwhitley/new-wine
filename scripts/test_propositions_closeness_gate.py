@@ -7,6 +7,17 @@ closeness-check gate wired into propositions.process_document() (PLAN.md
 store_propositions()/process_document() (proposition_chunks, migration
 074).
 
+RETIRED (project owner decision, 2026-07-29): near-verbatim reuse of a
+teacher's own wording is now an accepted risk, not something to review or
+block — propositions.CLOSENESS_CHECK_RETIRED forces process_document()'s
+gate-off branch unconditionally, regardless of what any caller supplies
+for name_pattern/verse_lookup/vocab_matcher. The sections below that
+originally proved the gate-ACTIVE partition now instead prove the gate
+stays OFF and closeness_check.classify() is never invoked from
+process_document(), even when name_pattern/verse_lookup are explicitly
+supplied — see the classify() call-spy in main() below. This is the
+single clearest evidence that the retirement holds.
+
 DB-FREE. No psycopg2 connection is ever opened. `conn` and `embed_fn` are
 hand-built fakes (this repo's ad hoc scripts/test_*.py convention, no test
 framework installed — see test_closeness_check_unit_proof.py for the same
@@ -34,21 +45,26 @@ extension behavior (byte-encoding lookups included) to fake it faithfully
 for a helper class that has never needed that before.
 
 name_pattern IS supplied (via closeness_check.build_name_pattern() over a
-small hand-made set — a pure in-memory regex compile, no DB call) so the
-gate is genuinely ACTIVE for this test, not the off-by-default path.
+small hand-made set — a pure in-memory regex compile, no DB call) —
+specifically to prove the gate stays OFF even when a caller tries to
+activate it. Post-retirement this is "off no matter what," not merely
+"off by default."
 
-What this proves, both sides of the partition:
-  1. The PASS item reaches the (mocked) store_propositions() call — visible
-     via FakeCursor's recorded INSERT statements.
-  2. The QUOTE_CANDIDATE and HOLD_TOO_LITTLE items do NOT reach
-     store_propositions() (no INSERT recorded for their content), and DO
-     land in the review file, each carrying correct provenance
-     (prompt_version, prompt_fingerprint, model — CLAUDE.md Invariant 10)
-     plus document_id, verdict, and the three scores.
+What this proves, both sides of the (now-collapsed) partition:
+  1. All three hand-made propositions reach the (mocked) store_propositions()
+     call unfiltered — visible via FakeCursor's recorded INSERT statements —
+     even though name_pattern/verse_lookup were explicitly supplied.
+  2. closeness_check.classify() is never called at all from
+     process_document()'s path — proven via a call-spy, not merely inferred
+     from the return value (this file's own established convention, see the
+     extract_propositions() spy in Phase 3 below).
+  3. The review file is never written.
+  4. classify() called DIRECTLY (not through process_document()) is
+     unaffected and still works — closeness_check.py itself is untouched by
+     retirement, only process_document()'s wiring into it is.
 
 Run: python3 scripts/test_propositions_closeness_gate.py
 """
-import json
 import sys
 from pathlib import Path
 
@@ -180,6 +196,12 @@ def main() -> None:
     # Sanity-confirm each hand-made item's real classify() verdict BEFORE
     # routing it through process_document(), so the partition assertions
     # below are checking against a known-correct ground truth, not assumed.
+    # Retained unchanged after retirement: this calls closeness_check.classify()
+    # directly, not through process_document() -- it's a sanity-check of the
+    # classifier function itself (still fully functional, untouched by
+    # retirement), not a test of process_document()'s (now-retired) partition.
+    # See the classify() call-spy below for the actual proof that
+    # process_document() itself never reaches classify() anymore.
     r_pass = cc.classify(pass_content, doc_text, name_pattern, verse_lookup)
     r_quote = cc.classify(quote_content, doc_text, name_pattern, verse_lookup)
     r_hold = cc.classify(hold_content, doc_text, name_pattern, verse_lookup)
@@ -215,6 +237,19 @@ def main() -> None:
     props_mod.CLOSENESS_REVIEW_DIR = scratch_dir
     props_mod.CLOSENESS_REVIEW_PATH = scratch_review_path
 
+    # Call-spy on closeness_check.classify() -- proves process_document()
+    # never reaches it, rather than merely inferring that from the return
+    # value (this file's own established convention, see the
+    # extract_propositions() spy in Phase 3 below). Wraps the real function
+    # so it would still behave correctly if it WERE somehow called.
+    classify_calls = []
+    original_classify = cc.classify
+
+    def _classify_spy(*a, **kw):
+        classify_calls.append((a, kw))
+        return original_classify(*a, **kw)
+
+    cc.classify = _classify_spy
     try:
         conn = FakeConn(license_status="licensed")
         result = props_mod.process_document(
@@ -222,66 +257,54 @@ def main() -> None:
             name_pattern=name_pattern, verse_lookup=verse_lookup,
         )
     finally:
+        cc.classify = original_classify
         props_mod.extract_propositions = original_extract
         props_mod.CLOSENESS_REVIEW_DIR = original_review_dir
         props_mod.CLOSENESS_REVIEW_PATH = original_review_path
 
-    print("\n--- process_document() result ---")
+    print("\n--- process_document() result (gate retirement proof) ---")
     print("  result = {0!r}".format(result))
     print("  conn.committed = {0}".format(conn.committed))
     print("  conn.rolled_back = {0}".format(conn.rolled_back))
+    print("  closeness_check.classify() call count = {0}".format(len(classify_calls)))
 
-    assert result == "stored:1:flagged:2", (
-        "expected 'stored:1:flagged:2', got {0!r}".format(result)
+    assert classify_calls == [], (
+        "expected closeness_check.classify() to be called ZERO times from "
+        "process_document() now that CLOSENESS_CHECK_RETIRED makes the gate "
+        "permanently inert -- got {0} call(s), even though name_pattern was "
+        "explicitly supplied".format(len(classify_calls))
     )
-    assert not conn.rolled_back, "expected no rollback on a clean gate-active run"
-    assert conn.committed, "expected store_propositions() to have committed (1 PASS item)"
+    assert result == "stored:3", (
+        "expected 'stored:3' (gate retired, all 3 unfiltered), got {0!r}".format(result)
+    )
+    assert not conn.rolled_back, "expected no rollback on a clean run"
+    assert conn.committed, "expected store_propositions() to have committed (3 items, unfiltered)"
 
-    # ── Side 1 of the partition: the PASS item reached store_propositions() ──
+    # ── All three items reach store_propositions() unfiltered, even though
+    #    name_pattern/verse_lookup were explicitly supplied ─────────────────
     inserted = conn.inserted_contents()
-    print("\n--- Side 1: contents that reached the (mocked) store_propositions() INSERT ---")
+    print("\n--- Contents that reached the (mocked) store_propositions() INSERT ---")
     for c in inserted:
         print("  INSERTED: {0!r}".format(c))
-    assert inserted == [pass_content], (
-        "expected exactly [pass_content] to reach the INSERT, got {0!r}".format(inserted)
-    )
-    assert quote_content not in inserted, "QUOTE_CANDIDATE item must NOT reach store_propositions()"
-    assert hold_content not in inserted, "HOLD_TOO_LITTLE item must NOT reach store_propositions()"
-
-    # ── Side 2 of the partition: QUOTE_CANDIDATE + HOLD land in the review
-    #    file, each with correct provenance ─────────────────────────────────
-    assert scratch_review_path.exists(), "expected the review file to have been written"
-    review_lines = [
-        json.loads(line) for line in scratch_review_path.read_text().splitlines() if line.strip()
-    ]
-    print("\n--- Side 2: review-file records ({0}) ---".format(len(review_lines)))
-    for rec in review_lines:
-        print("  {0}".format(rec))
-
-    assert len(review_lines) == 2, "expected exactly 2 review-file records"
-    contents_reviewed = {r["content"] for r in review_lines}
-    assert contents_reviewed == {quote_content, hold_content}, (
-        "expected review file to contain exactly the QUOTE_CANDIDATE and "
-        "HOLD_TOO_LITTLE contents, got {0!r}".format(contents_reviewed)
+    assert inserted == [pass_content, quote_content, hold_content], (
+        "expected all three contents, unfiltered and in extraction order, "
+        "got {0!r}".format(inserted)
     )
 
-    expected_fingerprint = props_mod.prompt_fingerprint(props_mod.DEFAULT_PROMPT_VERSION)
-    for rec in review_lines:
-        assert rec["document_id"] == document_id
-        assert rec["prompt_version"] == props_mod.DEFAULT_PROMPT_VERSION
-        assert rec["prompt_fingerprint"] == expected_fingerprint
-        assert rec["model"] == props_mod.EXTRACTION_MODEL
-        assert rec["verdict"] in (cc.QUOTE_CANDIDATE, cc.HOLD_TOO_LITTLE)
-        assert "containment" in rec and "longest_run_words" in rec and "residual_tokens" in rec
-        assert "written_at" in rec and rec["written_at"]
+    # ── The review file is never written -- retirement means there is no
+    #    QUOTE_CANDIDATE/HOLD_TOO_LITTLE side to the (now-collapsed)
+    #    partition anymore ────────────────────────────────────────────────
+    assert not scratch_review_path.exists(), (
+        "expected the review file to NOT be written -- the gate is retired, "
+        "so there is no partition to record"
+    )
+    print("\n--- Review file: absent, as expected (gate retired) ---")
 
-        if rec["content"] == quote_content:
-            assert rec["verdict"] == cc.QUOTE_CANDIDATE
-        if rec["content"] == hold_content:
-            assert rec["verdict"] == cc.HOLD_TOO_LITTLE
-
-    # ── Confirm gate-OFF path stays byte-identical (no name_pattern) ────────
-    print("\n--- Gate-OFF control: same hand-made props, name_pattern=None ---")
+    # ── Confirm the (now behaviorally identical) path with name_pattern
+    #    omitted entirely still works the same way -- kept separate because
+    #    it exercises a distinct call shape (omitting the params vs.
+    #    supplying-but-ignored-per-retirement) ──────────────────────────────
+    print("\n--- Control: same hand-made props, name_pattern=None (name_pattern omitted entirely) ---")
     props_mod.extract_propositions = lambda text, doc_id="", **kw: hand_made_props
     try:
         conn_off = FakeConn(license_status="licensed")
@@ -299,17 +322,15 @@ def main() -> None:
     assert set(inserted_off) == {pass_content, quote_content, hold_content}, (
         "gate-off path must insert every extracted proposition, no partition"
     )
-    assert not scratch_review_path.read_text().count(quote_content) or True  # review file untouched by this second call
-    # Stronger check: review file's line count is unchanged by the gate-off call.
-    review_lines_after_off = [
-        line for line in scratch_review_path.read_text().splitlines() if line.strip()
-    ]
-    assert len(review_lines_after_off) == 2, (
-        "gate-off path must never touch the review file — expected still 2 lines, got {0}".format(
-            len(review_lines_after_off))
+    assert not scratch_review_path.exists(), (
+        "review file must still not exist after the omitted-name_pattern control call either"
     )
 
-    print("\nAll assertions passed. Both sides of the partition confirmed; gate-off control confirmed unchanged.")
+    print(
+        "\nAll assertions passed. Gate retirement confirmed: classify() never called even "
+        "with name_pattern explicitly supplied, all 3 items stored unfiltered, no review "
+        "file written; name_pattern-omitted control path confirmed identical."
+    )
 
     # ════════════════════════════════════════════════════════════════════
     # Phase 2b (bypass-proofing, PLAN.md #45, 2026-07-29): chunk_ids
@@ -455,12 +476,11 @@ def main() -> None:
           "{0} pairs for {1} propositions x {2} chunk ids".format(
               len(ev_pairs_ungated), len(real_prop_ids_ungated), len(test_chunk_ids)))
 
-    print("\n--- process_document(): chunk_ids threading, gated path (name_pattern active) ---")
-    # Redirect the review file to scratch again for this call -- the earlier
-    # try/finally already restored CLOSENESS_REVIEW_DIR/PATH to their real,
-    # non-scratch values, and this gated call produces QUOTE_CANDIDATE/
-    # HOLD_TOO_LITTLE review records that must not land in the real
-    # closeness_review/ directory.
+    print("\n--- process_document(): chunk_ids threading, name_pattern supplied but gate "
+          "retired (proves chunk_ids threading is unaffected by an attempted gate activation) ---")
+    # Redirect the review file to scratch again for this call -- defensively
+    # unnecessary now (retirement means no review file will be written
+    # regardless), but kept in case this decision is ever reversed.
     props_mod.CLOSENESS_REVIEW_DIR = scratch_dir
     props_mod.CLOSENESS_REVIEW_PATH = scratch_review_path
 
@@ -485,25 +505,33 @@ def main() -> None:
         props_mod.CLOSENESS_REVIEW_PATH = original_review_path
 
     print("  result_gated = {0!r}".format(result_gated))
-    assert result_gated == "stored:1:flagged:2", (
-        "expected exactly 1 PASS-verdict proposition stored and 2 flagged, got {0!r}".format(result_gated)
+    assert result_gated == "stored:3", (
+        "expected 'stored:3' (gate retired, all 3 unfiltered even with name_pattern supplied), "
+        "got {0!r}".format(result_gated)
     )
     real_prop_ids_gated = conn_gated.inserted_proposition_ids()
-    assert len(real_prop_ids_gated) == 1, (
-        "expected exactly 1 real proposition id on the gated path (the PASS item), got {0}".format(
+    assert len(real_prop_ids_gated) == 3, (
+        "expected 3 real proposition ids (all items, gate retired), got {0}".format(
             len(real_prop_ids_gated))
     )
     assert len(ev_calls_gated) == 1, (
-        "expected exactly one execute_values() call on the gated path (store_propositions() "
-        "fires once for the non-empty pass_props branch), got {0}".format(len(ev_calls_gated))
+        "expected exactly one execute_values() call (store_propositions() fires once for the "
+        "single unconditional store call), got {0}".format(len(ev_calls_gated))
     )
     _, ev_pairs_gated = ev_calls_gated[0]
     expected_pairs_gated = {(pid, cid) for pid in real_prop_ids_gated for cid in test_chunk_ids}
     assert set(ev_pairs_gated) == expected_pairs_gated, (
-        "gated path: chunk_ids did not reach store_propositions() correctly for the PASS item"
+        "chunk_ids did not reach store_propositions() correctly for all 3 items"
     )
-    print("  CONFIRMED: chunk_ids reached store_propositions() on the gated path for the PASS "
-          "item -- {0} pairs".format(len(ev_pairs_gated)))
+    assert len(ev_pairs_gated) == 3 * len(test_chunk_ids) == 9, (
+        "expected 3 propositions x 3 chunk ids = 9 pairs, got {0}".format(len(ev_pairs_gated))
+    )
+    assert not scratch_review_path.exists(), (
+        "review file must not be written even when name_pattern is supplied (gate retired)"
+    )
+    print("  CONFIRMED: chunk_ids reached store_propositions() for all 3 items even with "
+          "name_pattern supplied -- {0} pairs, no review file written (gate retired).".format(
+              len(ev_pairs_gated)))
 
     # ── 4. process_document(..., chunk_ids=None) [default, omitted
     #    entirely]: existing default behavior is unchanged. The gate-off

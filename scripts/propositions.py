@@ -45,6 +45,29 @@ to before this parameter existed. Still no gate activation and no new
 default-on behavior: this is wiring only.
 
 --------------------------------------------------------------------------
+Closeness-check gate RETIRED (project owner decision, 2026-07-29)
+--------------------------------------------------------------------------
+The gate described immediately above is now permanently disabled,
+regardless of what any caller supplies for name_pattern/verse_lookup/
+vocab_matcher. Decision: near-verbatim reuse of a teacher's own wording is
+an accepted risk going forward, not something to review or block. The
+retroactive 213-item review this gate's calibration was built to feed
+(PLAN.md #47) was closed without full completion for the same reason --
+see rhemata-status.md.
+
+Enforced by a single flag, CLOSENESS_CHECK_RETIRED (defined just above
+process_document() below), which widens process_document()'s existing
+`if name_pattern is None:` branch condition so it is now ALWAYS taken. This
+is deliberately NOT a deletion: the gate-active branch inside
+process_document() (the lazy closeness_check import, the classify() loop,
+the review-file write) and closeness_check.py itself remain fully intact,
+character-for-character, for a possible future reversal -- flip that one
+constant back to False. Every other direct importer of closeness_check
+(closeness_triage.py, validate_closeness_check.py, and the rest of the
+retroactive-triage tooling) is entirely unaffected, since this flag only
+gates process_document()'s own internal branch, not the module itself.
+
+--------------------------------------------------------------------------
 Reference-grounding fix (PLAN.md #45, 2026-07-28) -- ALWAYS ON, NOT a gate
 --------------------------------------------------------------------------
 Unlike the closeness-check gate above (default-OFF, opt-in via name_pattern),
@@ -974,6 +997,20 @@ PRECEPT_AUSTIN_SOURCE_ID = "698e0596-a9c6-4890-958d-9199f1b8f762"
 # any observed corpus behavior.
 MIN_SUBSTANTIVE_WORD_COUNT = 50
 
+# Closeness-check gate RETIRED -- project owner decision, 2026-07-29:
+# near-verbatim reuse of a teacher's own wording is an accepted risk, not
+# something to review or block. This bare True, with no per-call override
+# (no parameter, no env var, no kwarg), forces process_document()'s
+# `if name_pattern is None:` branch below to fire unconditionally --
+# nothing any caller supplies can reactivate the gate. Deliberately not a
+# deletion: the lazy `import closeness_check`, the classify() loop, and the
+# review-file write immediately below in process_document() all stay
+# exactly as they were, just permanently unreachable. To reverse this
+# decision later, flip this one flag back to False -- nothing else to
+# undo. See this module's top-of-file docstring, "Closeness-check gate
+# RETIRED", for the full context.
+CLOSENESS_CHECK_RETIRED = True
+
 
 def process_document(
     conn,
@@ -993,6 +1030,14 @@ def process_document(
     see this module's top-of-file docstring for the full design. No real
     ingest path passes these yet; every existing caller's behavior is
     unchanged.
+
+    RETIRED (project owner decision, 2026-07-29 -- see CLOSENESS_CHECK_RETIRED
+    above and this module's top-of-file docstring, "Closeness-check gate
+    RETIRED"): the gate below is now permanently disabled regardless of
+    what's supplied for name_pattern/verse_lookup/vocab_matcher -- every
+    caller now gets the "stored:{n}" shape below; "stored:{n}:flagged:{m}"
+    can no longer be produced. Not a deletion -- see that constant's own
+    comment for how to reverse this.
 
     vocab_matcher (PLAN.md #45 Phase 6, default None): OPTIONAL, inert
     unless the gate is already active. Typed as Optional[object] rather
@@ -1033,14 +1078,20 @@ def process_document(
       "no_propositions"         — the model ran successfully and genuinely found nothing
                                    to extract. A completed result, not a failure. Distinct
                                    from "too_thin_to_extract" -- the model WAS called here.
-      "stored:{n}"              — GATE OFF (name_pattern is None): n propositions written to
-                                   DB. Byte-identical to pre-Phase-5 behavior.
-      "stored:{n}:flagged:{m}"  — GATE ON (name_pattern supplied): n propositions (PASS
-                                   verdict) written to DB, m withheld and appended instead to
-                                   CLOSENESS_REVIEW_PATH (QUOTE_CANDIDATE/HOLD_TOO_LITTLE).
-                                   n + m always equals the number of propositions extract_
-                                   propositions() returned for this call -- every extracted
-                                   proposition lands in exactly one bucket, never neither.
+      "stored:{n}"              — n propositions written to DB, unfiltered. Byte-identical
+                                   to pre-Phase-5 behavior. Now fires UNCONDITIONALLY, not
+                                   only when name_pattern is None, because
+                                   CLOSENESS_CHECK_RETIRED forces this branch regardless of
+                                   caller input (see that constant above).
+      "stored:{n}:flagged:{m}"  — RETIRED, no longer producible (CLOSENESS_CHECK_RETIRED,
+                                   2026-07-29) — the branch that produced this return shape
+                                   still exists below, unreachable, kept for a possible
+                                   future reversal. Historical description, when it was
+                                   live: n propositions (PASS verdict) written to DB, m
+                                   withheld and appended instead to CLOSENESS_REVIEW_PATH
+                                   (QUOTE_CANDIDATE/HOLD_TOO_LITTLE), n + m always equal to
+                                   the number of propositions extract_propositions()
+                                   returned for that call.
       "error"                   — the extraction call itself failed (network, rate limit,
                                    timeout, unparseable response) or a later step (license
                                    lookup, storage) failed. Nothing was written; safe to
@@ -1090,10 +1141,13 @@ def process_document(
         fingerprint = prompt_fingerprint(prompt_version)
         model = EXTRACTION_MODEL
 
-        if name_pattern is None:
+        if name_pattern is None or CLOSENESS_CHECK_RETIRED:
             # GATE OFF -- byte-identical to pre-Phase-5 behavior. No import
             # of closeness_check anywhere on this path (not even lazily),
-            # no classify() calls, no review file touched.
+            # no classify() calls, no review file touched. Now fires
+            # unconditionally regardless of caller input: CLOSENESS_CHECK_RETIRED
+            # (project owner decision, 2026-07-29) means even a caller that
+            # explicitly supplies name_pattern still takes this branch.
             count = store_propositions(
                 conn, document_id, props, embed_fn,
                 prompt_version=prompt_version,

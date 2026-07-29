@@ -3,14 +3,15 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-29 (retroactive closeness-triage card generator's
-possessive-masking renderer bug fixed and committed locally, `3bfa3f3`, not
-yet pushed; full 213-item review-card set regenerated clean against live
-Supabase — 74 real-attention cards + 139 fast-pile items, zero
-highlight_failures, spot-checked directly against actual file output. The
-prior "generation blocked" entry below is corrected in place, not stacked —
-that session's DNS failure was environment-specific and did not recur this
-session).
+Last verified: 2026-07-29 (retroactive closeness-check review CLOSED
+without full completion — Alex's explicit decision to accept near-verbatim
+teacher-wording reuse as risk, not something to review or block. The
+closeness-check gate is now structurally retired in `propositions.py`
+(`CLOSENESS_CHECK_RETIRED = True`, not a deletion — see below). Teacher-level
+position gate (#47/#48) is unblocked via this explicit risk-acceptance;
+backfill (#49) is only partially unblocked — separate preconditions remain
+unresolved. The "generation completed" entry below is corrected in place,
+not stacked, to reflect this closure).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
 
 ---
@@ -25,7 +26,7 @@ Git-push-only session per CLAUDE.md's Session Routing table — no code changes,
 
 ---
 
-## Retroactive closeness-check triage: generation completed, renderer bug fixed (session state, 2026-07-29)
+## Retroactive closeness-check triage: CLOSED without full completion, gate retired (session state, 2026-07-29)
 
 Two sessions on this same track. **Session 1** built `scripts/closeness_triage.py`'s
 complete local-only workflow — generation from the authoritative JSONL;
@@ -88,12 +89,77 @@ survived untouched, per its existing merge-on-regenerate design).
 design flaw.** Live output exists locally at
 `closeness_review/retroactive_triage/` (gitignored): 139 fast-pile items
 across 7 batches, 74 real-attention cards, `decisions.json` ledger,
-`manifest.json`. Continuation for the actual human triage pass: paging and
-decision commands via `python3 scripts/closeness_triage.py --help`
-(`show-fast N`, `show-real [item]`, `decide-fast`, `decide-real`,
-`progress`). No item has been decided yet — this session generated,
-fixed, and verified the review materials; it did not triage any of the 213
-items.
+`manifest.json`.
+
+**Session 3 (this one) — Alex triaged all 139 fast-pile items, then closed
+the review before the 74-item real-attention queue was ever touched.**
+Across seven batches, recorded via the tested `decide-fast` code path (never
+hand-edited JSON): **115 cleared, 24 escalated** (word-count rule: near-verbatim
+run ≥12 words → escalate, unless the run was itself a direct scripture
+quotation or a quoted hymn/song line, in which case clear regardless of
+length). The 24 escalated items are correctly recorded in `decisions.json`
+(`decision: "send to real-attention pile"`) but were **never actually
+folded into the real-attention queue or given full review-card content** —
+a code change to do that (`generate()` producing `item_075.md` onward for
+escalated items, plus extending `decide-real`/`show-real` to recognize them)
+was designed but never implemented; this session pivoted to closing the
+review instead. **The 74 originally-flagged real-attention items were never
+reviewed at all — 0/74 decided, same as every prior session.**
+
+**Closure decision, Alex's explicit call:** near-verbatim reuse of a
+teacher's own exact wording is an accepted risk going forward, not
+something to review or block. The remaining, un-triaged 74 real-attention
+items and the 24 escalated-but-unexpanded items are **abandoned, not
+paused** — this review will not be completed. All 213 recorded decisions
+(115 clear / 24 escalate / 74 untouched) and the entire
+`closeness_review/` directory are left exactly as they are: historical
+record of what was actually reviewed, never touched or backfilled to look
+complete.
+
+**Gate retired, not deleted (`propositions.py`).** Added
+`CLOSENESS_CHECK_RETIRED = True`, a module-level constant with no per-call
+override, widening `process_document()`'s existing
+`if name_pattern is None:` branch to `if name_pattern is None or
+CLOSENESS_CHECK_RETIRED:` — this makes the `import closeness_check` /
+`classify()` loop permanently unreachable regardless of what any caller
+supplies, without deleting any of that code (reversible later by flipping
+the one flag back to `False`). **Verified this was already fully inert
+before this change** — read every real ingest call site
+(`shared_ingest.py`'s `ingest_document()`, which doesn't even have
+`name_pattern`/`verse_lookup`/`vocab_matcher` as parameters, plus
+`ingest_helloao.py`'s direct call) and confirmed none of them ever supplied
+these params, so production behavior is byte-identical before and after;
+this change is pure belt-and-suspenders against a future regression, not a
+fix for anything currently firing. Proven, not just asserted: updated
+`test_propositions_closeness_gate.py` with a `closeness_check.classify()`
+call-spy — even with a real `name_pattern` explicitly built and supplied,
+`classify()` is called **zero times** and the result is `"stored:3"`
+(all items, unfiltered), where the same call previously produced
+`"stored:1:flagged:2"`. Full suite re-run clean end to end.
+`closeness_check.py` itself is completely untouched — `classify()`,
+`build_name_pattern()`, etc. remain fully functional for
+`closeness_triage.py`/`validate_closeness_check.py`, independent of
+`propositions.py`'s (now-retired) wiring into them.
+
+**Position-layer gating, updated.** PLAN.md #47's own language — *"No
+position may be built from any teacher's evidence until that teacher's
+flagged items are resolved or explicitly risk-accepted"* — is satisfied by
+this decision: it **is** the explicit risk-acceptance that clause names.
+**Teacher-specific position building (#47/#48) is unblocked.** **Backfill
+(#49) is only partially unblocked** — the closeness-review-tied precondition
+is cleared, but #49 carries its own separate, still-open preconditions
+untouched by this decision: the anti-fabrication re-wiring has only been
+proven at n=1 document (not yet the ~429-document Derek Prince scale), and
+the license-gate/Precept-Austin lockout gaps disclosed in CLAUDE.md
+Invariant 11 remain open. Do not read this entry as "backfill ready to
+run" — it is not.
+
+**Not done this session, flagged as a follow-up, not silently left
+inconsistent:** PLAN.md's own #47/#48/#49 gating language (e.g. "the gate
+remains open," the teacher-risk-acceptance wording) still reads as it did
+before this decision — this session deliberately scoped to `propositions.py`
++ its test + this file only, per explicit instruction. A separate pass
+should reconcile PLAN.md's roadmap language with the closure recorded here.
 
 ---
 
