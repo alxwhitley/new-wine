@@ -119,18 +119,35 @@ different row, per the hard rule above.
    runner treats them as terminators; the batch rolls back silently. Verify with
    `SELECT to_regclass('public.<table>')` on a FRESH connection.
 
-10. **Every proposition write must stamp provenance** (prompt version label,
-    a fingerprint of the exact instruction wording, model) — added 2026-07-23
-    after a leaked worked example required a manual text search across every
-    stored row plus git archaeology, because nothing recorded which prompt
-    produced what. The fingerprint is authoritative over the label when they
-    disagree — labels drift (this project's own "v4" label covered three
-    different actual wordings in one afternoon); a fingerprint computed fresh
-    from the literal text each time cannot. Any new proposition-writing path —
-    a new ingest script, the eventual full backfill, anything calling the
-    storage function directly rather than through the shared entry point —
-    must pass real values for all three. An unstamped write silently reopens
-    this hole.
+10. **An unstamped proposition write is now structurally impossible, not
+    merely required.** Added 2026-07-23 as a convention (every proposition
+    write must stamp provenance — prompt version label, a fingerprint of the
+    exact instruction wording, model — after a leaked worked example required
+    a manual text search across every stored row plus git archaeology,
+    because nothing recorded which prompt produced what). That convention
+    was not enough: the now-deleted `sample_v4_propositions_2026-07-23.py`
+    called `store_propositions()` directly with none of the three supplied,
+    landing NULL rows — the confirmed reason every one of the 2,409
+    pre-2026-07-25 live propositions has NULL provenance (Landmines).
+    **Fixed 2026-07-29 (bypass-proofing build):** `store_propositions()` now
+    takes `prompt_version` as a REQUIRED parameter — omitting it is an
+    immediate `TypeError`, before any DB call happens, never a silent NULL
+    write. `fingerprint`/`model` are no longer caller-suppliable at all;
+    both are derived internally, deterministically, from `prompt_version`
+    (`prompt_fingerprint(prompt_version)` / `EXTRACTION_MODEL`) — the
+    fingerprint stays authoritative over the hand-maintained label when the
+    two disagree (labels drift; a value computed fresh from the literal
+    template text each time cannot), and there is now exactly one place in
+    the codebase that decides what gets stamped, not each caller separately
+    re-deriving (and potentially mismatching) it. **What remains unclosed,
+    disclosed not hidden:** the `propositions` table's provenance columns
+    are still NULLABLE at the schema level (unlike `positions`' `NOT NULL`
+    columns, Invariant 14) — this enforcement lives at the
+    `store_propositions()` function boundary, not a database constraint; a
+    caller executing raw SQL directly against the table still bypasses it
+    entirely. Any future proposition-writing path must call
+    `store_propositions()` itself — never reimplement the insert — to
+    inherit this guarantee.
 
 11. **Scripture-reference grounding inside `extract_propositions()` must stay
     unconditional — never make it opt-in — but its strip CRITERION was found
@@ -155,12 +172,33 @@ different row, per the hard rule above.
     corpus's largest block. **No live proposition was ever affected**
     (generation stopped 2026-07-25, before this fix landed 2026-07-28).
     **Standing decision: a reference may only be removed when the source is
-    CONFIRMED NOT to contain it — never on mere failure to confirm.** Do not
-    run this filter against the backfill, or resume generation at all,
-    until it is re-wired to use the three-layer citation verifier
-    (`scripts/citation_verifier_layers.py`, PLAN.md #45.6) as its confirming
-    step — supplying the old failure-to-confirm criterion without that
-    verifier reopens the exact loss this correction closed.
+    CONFIRMED NOT to contain it — never on mere failure to confirm.** This
+    session's own re-wiring precondition is now DONE (2026-07-29
+    bypass-proofing build): `extract_propositions()`'s strip step arbitrates
+    every UNGROUNDED/UNCERTAIN reference through the three-layer citation
+    verifier (`scripts/citation_verifier_layers.py`, live-tested 2026-07-29
+    against 42 real corpus items — 78.6% overturn rate, PLAN.md #45.7)
+    before stripping: confirmed-absent (arbiter denies) strips as before;
+    confirmed-present (arbiter overturns) is kept and logged as an overturn.
+    Supersedes the 2026-07-28 "strip on mere failure to confirm" posture
+    this invariant originally corrected — that posture is retired, not
+    revived. **One narrow, deliberate, disclosed exception:** if the arbiter
+    itself cannot run (a live call fails, or the reference genuinely can't
+    be parsed even after normalization), the reference still strips,
+    fail-safe — judged a lesser harm than a fabricated reference reaching
+    users, for this specific, now-rare case only. This is NOT the old
+    design revived: the old design stripped on ANY failure to confirm (the
+    common case, since no `verse_lookup` was ever available on this call
+    path) — the new exception fires only when the much stronger three-layer
+    check itself cannot run at all. Provenance is now structural (Invariant
+    10) and the allowed-reference-list upstream constraint plus this
+    arbitrated strip both live unconditionally inside `extract_propositions()`
+    itself — confirmed live, on the exact deleted-script call shape, to hold
+    even for a caller that skips `process_document()` entirely. **Still
+    unresolved before generation resumes or the backfill runs:** the license
+    gate and Precept-Austin lockout remain conventional (only inside
+    `process_document()`, not structural — a direct caller still skips
+    them), and PLAN.md #46's human calibration has not run. See PLAN.md #49.
 
 12. **Position generation must stay structurally source-blind.**
     `scripts/positions.py::generate_position_text()` — the only function

@@ -50,3 +50,10 @@ reference_fabrication_review/
 # citation_verifier_layers.py's Layer 3, including full proposition text.
 # Same rationale as the review queues above — local-only, not for git history.
 layer3_llm_reading_pass_review/
+
+# Generator bypass-proofing live-proof review (PLAN.md #45.8, 2026-07-30) —
+# Phase 5's live-run output: real extraction/arbitration results and
+# would-have-been storage payloads for the three-document proof, storage
+# itself always intercepted, never written. Same rationale as the review
+# queues above — local-only, not for git history.
+generator_live_proof_review/

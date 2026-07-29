@@ -3,10 +3,27 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-29 (Layer 3 live-run session — citation verifier's
-LLM reading pass run against a real model for the first time; the prior
-session's 38-flagged-item figure corrected to 42; zero DB writes).
+Last verified: 2026-07-30 (generator bypass-proofing build — allowed-list
+constraint, arbitrated stripping, structural provenance, permission to
+produce nothing, and a live proof on 3 real documents, storage disabled
+throughout).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Generator rebuilt for bypass-proof grounded extraction (session state, 2026-07-29/30)
+
+Mixed routing per CLAUDE.md's Session Routing table across five ordered phases — harness for repo-only build work (Phases 1, 2b, 3, 4), plain script path for the one additive schema migration (Phase 2a) and for the final live-proof pass (Phase 5, read-only diagnostic with live LLM calls, zero DB writes). Generation stayed STOPPED throughout every phase; zero propositions were stored anywhere in this session. Five build commits: `8d5b226`, `941c5cf`, `1bbeca7`, `8b9bbea`, `58f93f0`. Full detail: `PLAN.md` #45.8 (new); CLAUDE.md Invariants 10 and 11 rewritten to reflect the new structural state (both fully replaced, not stacked on top, per CLAUDE.md's own eviction rule); live-proof output: gitignored `generator_live_proof_review/phase5_live_proof_2026-07-30.jsonl`.
+
+**What changed, plainly:**
+- **Reference control, both directions (Phase 1).** Upstream: `extract_propositions()` now hands the model a closed, mechanically-derived list of references actually present in the source and tells it not to go beyond that list — unconditional, no opt-out, and proven not to change the tuned prompts' fingerprints. Downstream: an UNGROUNDED/UNCERTAIN reference is no longer stripped on sight — the live Layer 3 arbiter gets a real chance to overturn a false flag first (yesterday's evidence: 78.6% overturn rate). A real defect was caught at review and fixed: the arbiter's own parsing didn't handle dotted abbreviations ("1 Cor."), which could have false-stripped a genuine reference before the arbiter ever got to look at it properly.
+- **Passage back-links (Phase 2).** New `proposition_chunks` table (migration 074, additive, zero rows) — every future stored proposition will record which chunk(s) of its document it actually came from, honestly (the whole document's chunk set, since extraction never operates on less than that).
+- **Permission to produce nothing (Phase 3).** The extraction prompts now say plainly that zero output is correct for thin, non-substantive material — not a failure to paper over. A new mechanical floor (`MIN_SUBSTANTIVE_WORD_COUNT=50`, grounded in the real corpus's observed 61-word minimum) skips the model call entirely on genuinely degenerate input, at zero cost to anything that exists in the corpus today.
+- **Provenance made structural, not conventional (Phase 4).** The exact mechanism the deleted `sample_v4_propositions_2026-07-23.py` script used to land NULL-provenance rows is now closed: `store_propositions()` requires a prompt version or refuses outright (`TypeError`, not a silent NULL write), and no longer trusts a caller to supply the fingerprint/model correctly — it derives both itself. Proven against the deleted script's exact call shape, not just asserted.
+- **What's still open, named explicitly, not implied fixed:** the license gate and Precept-Austin lockout are still only inside `process_document()` — a caller that skips it, skips them too, same as before this session. Nothing can verify that stored content actually came from a real model call versus being hand-typed with an honest-looking label. The `propositions` table's provenance columns are still nullable at the schema level — enforcement is at the function boundary, not the database.
+- **Live proof, storage disabled (Phase 5, ~$0.063 real cost).** Ran the real, unmodified generator against Leonard Ravenhill (aphorist), Derek Prince (expositor), and Vlad Savchuk (spoken transcript), plus a deliberately thin synthetic input, with only the final storage call intercepted by a no-op that recorded what would have been written. Zero errors, zero contract failures. Live arbitration overturned every UNCERTAIN reference it was asked about in this sample. The thin case correctly produced zero output at zero cost. Confirmed after the run: database row counts for all three documents are unchanged — nothing was written, including to the new chunk-link table (still zero rows anywhere in the live database).
+
+**Not yet established:** any of this at the ~429-document long-form Derek Prince backfill scale (this session's one Prince document is representative in style, not in population size); #46's human calibration, which the backfill still needs regardless of how solid this generator rebuild is.
 
 ---
 
