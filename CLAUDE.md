@@ -165,7 +165,7 @@ different row, per the hard rule above.
 12. **Position generation must stay structurally source-blind.**
     `scripts/positions.py::generate_position_text()` — the only function
     that calls the LLM to write a position — takes only teacher name, topic,
-    and evidence-statement content (`propositions.content`). It has no
+    and evidence-proposition content (`propositions.content`). It has no
     `document_id`/`source_id` parameter and opens no database connection, so
     there is no argument through which source/chunk text could reach it.
     This is enforced by the function's own signature, not by a prompt
@@ -182,7 +182,7 @@ different row, per the hard rule above.
     Widening either requires a deliberate code change or migration, never a
     runtime flag. Corpus-wide stays banned until the propositions backfill
     (PLAN.md #49) completes — a corpus-wide position authored before then
-    would name whichever teachers already have statements as "the corpus"
+    would name whichever teachers already have propositions as "the corpus"
     and invert the day Derek Prince's ~429 documents land.
 
 14. **`positions.prompt_version`/`prompt_fingerprint`/`model` are `NOT NULL`

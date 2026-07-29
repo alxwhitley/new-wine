@@ -3,12 +3,78 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-28 (records-consolidation session — folded the
-2026-07-24 through 2026-07-28 citation-accuracy sub-sessions into one clean
-entry per Alex's explicit instruction, replacing several stacked
-session-state entries below that were superseded rather than correcting them
-in place; recorded Phase 4 (position layer) as started).
+Last verified: 2026-07-28 (read-only teacher-card investigation + records
+pass — terminology aligned to "proposition" corpus-wide, position-layer
+lifecycle and empty-state design settled, next Phase 4 slice identified).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Teacher-card investigation + terminology/position-layer records pass (session state, 2026-07-28)
+
+Read-only investigation, zero code touched, zero DB writes — routes under
+CLAUDE.md's Session Routing table as read-only diagnostic (investigation)
+plus docs/records-only (this write). Full settled-decision text lives in
+PLAN.md (Position-synthesizing layer section, Open Decisions #14–16); not
+repeated here beyond a pointer.
+
+**Teacher-card investigation (SP4), confirmed by direct code read, nothing
+changed:** the live "Position on this question" field is question-scoped
+(the frontend sends the prior turn's raw question text alongside the
+`source_id`), synthesized from raw `chunks.content` excerpts — not
+`propositions` rows — embedded verbatim into a live Anthropic call in
+`backend/app/routers/study.py::get_teacher_card()`, gated by the hardcoded
+`TEACHER_POSITION_SIMILARITY_FLOOR = 0.3` (the 0.508-on-topic/0.152-off-topic
+scores that justified this constant live only in this file and PLAN.md, not
+in code), and regenerated from scratch on every single open — no cache table,
+memoization, or SWR/React-Query layer anywhere in the path. This matches
+PLAN.md #48's existing description of the leak surface; no correction to
+prior records was needed.
+
+**Terminology settled: "proposition" is canonical, "statement" retired as
+drift.** The database (`propositions` table) is authoritative. Model-facing
+prompt prose deliberately keeps "teaching passage" instead of "proposition"
+(RAG-literature meaning fights the 80–150-word voiced target — see Pass 3,
+2026-07-23 below) — that naming is correct and unchanged. Swept CLAUDE.md (2
+instances) and PLAN.md (23 instances) for "statement" used as a synonym for
+the DB concept and corrected to "proposition"; this file corrected the same
+way (15 instances) — the 2026-07-28 citation-accuracy entry below no longer
+contradicts the rest of this file's own "proposition" usage. Left untouched
+throughout: real filenames (`docs/audits/statement_recheck_...`,
+`scripts/eligible_statements.py`), "SQL/executable statement" in the code
+sense, and passages describing what "proposition" means in the RAG
+literature or the writing style permitted by the extraction prompt — none of
+those are the drift this decision targets.
+
+**Position lifecycle settled:** positions generate on demand at question
+time, not ahead of time; every on-demand position persists once written,
+never discarded after serving; an ahead-of-time pass comes later, informed
+by real observed questions rather than a pre-invented topic list; permanent
+locking is reachable only for a teacher whose corpus is complete. Revisit
+trigger for the on-demand posture is unreviewed positions reaching real
+users — not cost, not latency.
+
+**Position empty-state design settled (four rules):** one empty message,
+always the same shape, corpus thinness never exposed; wording is about the
+library ("nothing found here on that topic"), never an assertion that the
+teacher never taught it; refuse in the asked-for teacher's own voice, then
+separately offer user-initiated crossover to who else addresses the topic —
+never automatic; on a near-miss, refuse the question but name what the
+teacher does address nearby, staying in his voice — never serve a
+hedged/caveated position, since a hedge is still an assertion. Full text in
+PLAN.md's Position-synthesizing layer section.
+
+**Next Phase 4 slice identified:** the serving path — positions replacing
+the live-synthesis answer flow, plus teacher-card migration off live
+source-text synthesis (confirmed still exactly as-is by this session's
+investigation above). Not more teachers — that stays mechanical, unscheduled
+work.
+
+**Left open, not settled this session** — PLAN.md Open Decisions #14–16:
+refresh trigger for a persisted position as evidence grows (leaning
+flag-on-growth-with-manual-approval, not decided); whether a rebuilt
+position replaces or versions the prior one; the eventual ahead-of-time
+topic list, deliberately not started.
 
 ---
 
@@ -27,7 +93,7 @@ everything below lives in three audit reports, not repeated here:
 
 **Where the citation-accuracy work landed, plainly:**
 - The retroactive re-check (PLAN.md #47) ran once, 2026-07-28, across all
-  2,409 live statements: 2,067 passed both checks, 59 flagged for citation,
+  2,409 live propositions: 2,067 passed both checks, 59 flagged for citation,
   0 for removal, 5 for manual review, 278 quote-candidates (parked, separate
   track). The closeness-check half is sound. The citation-check half is not
   — the scanner behind it only recognizes compact written citations and is
@@ -65,7 +131,7 @@ everything below lives in three audit reports, not repeated here:
   (Layer 1 patterns → Layer 2 document-wide book scope → Layer 3 LLM
   reading pass; Layer 1's chapter-colon gap is unfixed —
   `scripts/citation_verifier_layers.py`, still uncommitted). Its primary job
-  is no longer retroactive audit of old statements — it's now the
+  is no longer retroactive audit of old propositions — it's now the
   recognition/confirming engine the reversed anti-fabrication filter needs
   ahead of the backfill. Retroactive sweep of the existing corpus is
   demoted to a cheap, sampled, later pass.
@@ -77,20 +143,20 @@ everything below lives in three audit reports, not repeated here:
   session — see "Open items carried forward" below.
 - **Phase 4 (PLAN.md #48, position layer) is decoupled from the backfill
   and has STARTED**, Alex's explicit approval: teacher-specific positions
-  built on the proven-clean statement set don't depend on backfill volume,
+  built on the proven-clean proposition set don't depend on backfill volume,
   so #48 no longer waits for #47/#45.6 to fully close. Corpus-wide
   positions remain banned until the backfill (#49) completes — unchanged.
   Foundation shipped this same day, commit `5d6b428` — see the dedicated
   entry directly below.
 - **Eligible-input set re-derived live, 2026-07-28: 2,069 pass-both
-  statements, not the report's 2,067.** The +2 is fully explained by the
+  propositions, not the report's 2,067.** The +2 is fully explained by the
   BOOK_MAP fix (above) resolving two previously-false citation failures —
   confirmed, not drift (the `uncertain` count is unchanged at 5, matching
   the original report exactly). Re-derivable any time via
   `scripts/eligible_statements.py`.
 
 **Open items carried forward, none silently dropped:**
-- **The 59 flagged and 5 manual-review statements are superseded findings
+- **The 59 flagged and 5 manual-review propositions are superseded findings
   from a faulty instrument — formally UNRESOLVED, not live work.** They will
   be re-judged cheaply once the citation verifier lands. Do not mistake
   "the scanner that flagged these is now known unreliable" for "these are
@@ -146,12 +212,12 @@ per the standing ban until the backfill completes. `prompt_version`/
 position write is impossible at the schema level, unlike `propositions`'
 nullable provenance columns. `scripts/positions.py::generate_position_text()`
 — the only function that calls the LLM — takes teacher name, topic, and
-evidence-statement content only; no document/chunk access is possible by
+evidence-proposition content only; no document/chunk access is possible by
 its own signature, not by prompt instruction. An evidence-count floor of 5
 (provisional, reasoned from real Savchuk data, not a #46-style calibration)
 refuses to write a position below it — proven live, not just coded.
 
-**Proven on Vlad Savchuk** — richest eligible coverage (898 statements),
+**Proven on Vlad Savchuk** — richest eligible coverage (898 propositions),
 verified by live query rather than the "likely Ravenhill" (699) assumption
 going in. 4 topics attempted: 3 written (deliverance/spiritual warfare,
 effective prayer, fasting — full text in the report), 1 correctly refused
@@ -199,14 +265,14 @@ list, dominance-guarded, non-scripture-scoped, wired in safely. **Honest
 result, the fact most worth carrying forward: the 27-pair calibration
 sample showed zero of Alex's 5 named cases getting a genuine
 vocab-exemption-credited pass** — every real outcome traced to something
-else (already-passing statements, genuine near-quote content the gate
+else (already-passing propositions, genuine near-quote content the gate
 correctly still catches, or a WEB-only scripture-translation gap surfacing
 in two independent places). Shipped anyway, safe and provisional, per
 Alex's explicit call — real validation is #46's job. See
 "Common-religious-vocabulary exemption added" below.
 
 **Standing state, all three sessions:**
-- Statement generation remains stopped throughout. Nothing in this whole
+- Proposition generation remains stopped throughout. Nothing in this whole
   track resumed it.
 - The closeness-check gate (scripture + name + theology + vocab exemptions,
   trigram containment + longest-run signals) is fully built and wired, but
@@ -355,7 +421,7 @@ pair does not itself demonstrate the gap, since that document also contains
 an unrelated near-verbatim reproduction that flags it anyway. Alex accepted
 this gap knowingly; it remains open and undesigned-around, by choice.
 
-**Statement generation remains stopped.** This session builds and measures
+**Proposition generation remains stopped.** This session builds and measures
 only — no generation resumed, no DB writes anywhere, gate stays inert
 (nothing currently supplies the params that activate it).
 
@@ -431,10 +497,10 @@ just additions:**
    open "should `recovery/` be gitignored" question logged earlier in this
    file — anyone reasoning from "recovery/ already handles this" is working
    from a false premise; `closeness_review/` set the opposite (gitignored)
-   precedent for a reason (source-derived unlicensed statement text is a
+   precedent for a reason (source-derived unlicensed proposition text is a
    worse fit for permanent git history than for the database it came from).
 
-**Statement generation remains stopped.** This session builds and proves
+**Proposition generation remains stopped.** This session builds and proves
 the gate only — it does not resume generation, and the gate is wired inert
 (nothing currently supplies the params that activate it). Next required step
 is Alex's own Phase 2b calibration pass (PLAN.md #46) across three writing
@@ -532,10 +598,10 @@ merges on any existing row.**
 - Zac Poonen's "Sermon on the Mount" (11 documents — Part 10 was never
   ingested, a real corpus gap, not an error) is linked and was the at-scale
   proof: before, 11 independently-counted documents; after, one group, 102
-  combined statements reachable through it, every document and every
+  combined propositions reachable through it, every document and every
   proposition unchanged.
 - One demo pair (Ravenhill "Something is Missing" clip + full sermon, 21
-  combined statements) from the prior session.
+  combined propositions) from the prior session.
 - 30 more groups from tonight's bulk apply: 17 standalone Derek Prince
   two-part/chapter series, "The Roman Pilgrimage" (20 parts), "Analysis of
   Hebrews" (21 chapter documents), Zac Poonen's "Sixteen Lessons I Have
@@ -613,7 +679,7 @@ Five back-to-back sessions against the propositions/position-layer cleanup (`PLA
 
 **What's found but NOT yet acted on:**
 - 27 split-work groups (not 23 as previously believed) — candidates only, nothing linked.
-- A Ravenhill clip/full-sermon duplication pattern across 66 documents / 44 pairs, live in the product (36 pairs carry statements on both sides). **Original plan to delete the clip-side statements was reversed the same day** after a direct measurement found ~70% of clip statements capture a point their matching full sermon's own statements never captured. Routed to the split-work linking session instead — nothing about these 66 documents has been touched.
+- A Ravenhill clip/full-sermon duplication pattern across 66 documents / 44 pairs, live in the product (36 pairs carry propositions on both sides). **Original plan to delete the clip-side propositions was reversed the same day** after a direct measurement found ~70% of clip propositions capture a point their matching full sermon's own propositions never captured. Routed to the split-work linking session instead — nothing about these 66 documents has been touched.
 - A New Wine Magazine duplicate (two titles, ~95% the same text) — blocked, not resolved: **no mechanism exists anywhere in this schema to link two documents as one work**, confirmed by a direct schema check. Both copies untouched.
 - An Edwards "Religious Affections" / "Works, Volume One" anthology overlap — flagged only, not restructured.
 - 4 documents (one Wesley, one Murray, one Brother Lawrence, one more Wesley) carry foreign text glued onto their own ending from a source website's recommendation footer — 3 of the 4 name a different real author than the document's own. Not trimmed.
