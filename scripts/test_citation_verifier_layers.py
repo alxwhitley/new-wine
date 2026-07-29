@@ -300,6 +300,86 @@ def test_layer1_widened_forms():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Step 2b — Widened book-name forms (commit ee267d4): ordinal/spelled-word +
+# Roman-numeral recognition flows through Layer 1 end-to-end
+# ═══════════════════════════════════════════════════════════════════════════
+# Confirms citation_verifier_layers.py's own layer1_confirm()/
+# find_layer1_candidates() -- not just BOOK_MAP's dict membership -- resolve
+# the ordinal/spelled-word and Roman-numeral book forms commit ee267d4 added
+# to backend/app/constants.BOOK_MAP (34 new keys: 17 spelled-word like
+# "first samuel", 17 Roman-numeral like "i samuel"). NOTE: ee267d4's own
+# commit title says "ordinal/spelled-word/Roman-numeral" but the actual new
+# BOOK_MAP keys fall into exactly two categories -- spelled-word ordinal
+# ("first samuel", "second corinthians", "third john") and Roman-numeral
+# ("i samuel", "ii corinthians", "iii john") -- there is no separate
+# digit-ordinal-suffix book-name form (no "1st samuel"/"2nd corinthians" key
+# exists anywhere in the map). The cases below cover both real categories
+# across two different books (1 Samuel, 2 Corinthians, and 3 John -- the
+# only NT book with a "third"/"iii" form) rather than inventing a third
+# category that isn't actually in the map.
+#
+# Each case was independently confirmed, outside this test file, to resolve
+# to False if run against the pre-ee267d4 BOOK_MAP (git ee267d4~1) -- these
+# keys are genuinely new, not incidentally already-working forms.
+
+def test_widened_book_name_forms():
+    print("\n" + "=" * 78)
+    print("Step 2b: widened book-name forms (commit ee267d4) — "
+          "spelled-word ordinal + Roman-numeral")
+    print("=" * 78)
+
+    cases = [
+        (
+            "spelled-word ordinal book form — 'First Samuel' (new BOOK_MAP "
+            "key, PATTERN_A)",
+            "Turn with me to First Samuel chapter 3, verse 16, a well-known call story.",
+            "First Samuel 3:16",
+            ("1SA", 3, 16, None),
+            "pattern_a_forward",
+        ),
+        (
+            "Roman-numeral book form — 'I Samuel' (new BOOK_MAP key, PATTERN_A)",
+            "Let us read from I Samuel chapter 3, verse 16 together this morning.",
+            "I Samuel 3:16",
+            ("1SA", 3, 16, None),
+            "pattern_a_forward",
+        ),
+        (
+            "spelled-word ordinal book form — 'Second Corinthians' (new "
+            "BOOK_MAP key, PATTERN_B ordinal-chapter-of-book)",
+            "Consider the third chapter of Second Corinthians, verse 16, a well-known text.",
+            "Second Corinthians 3:16",
+            ("2CO", 3, 16, None),
+            "pattern_b_ordinal_chapter_of_book",
+        ),
+        (
+            "Roman-numeral book form — 'III John' (new BOOK_MAP key, only "
+            "NT book reaching a 'third'/'iii' form, PATTERN_A)",
+            "Turn with me to III John chapter 1, verse 4 for a moment.",
+            "III John 1:4",
+            ("3JN", 1, 4, None),
+            "pattern_a_forward",
+        ),
+    ]
+
+    for label, source_text, reference, expected_parsed, expected_source in cases:
+        confirmed = cvl.layer1_confirm(reference, source_text)
+        _check(f"{label}: {reference!r} confirms in {source_text!r}", confirmed)
+
+        candidates = cvl.find_layer1_candidates(source_text)
+        matching = [c for c in candidates if c.parsed == expected_parsed]
+        _check(
+            f"{label}: a candidate with parsed tuple {expected_parsed} was found",
+            len(matching) >= 1,
+        )
+        _check(
+            f"{label}: that candidate is tagged source={expected_source!r} "
+            "(proves it went through the actual pattern, not a coincidental match)",
+            any(c.source == expected_source for c in matching),
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Step 3 — Layer 2: document-wide book scope
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -596,6 +676,7 @@ def main():
 
     test_number_converter()
     test_layer1_widened_forms()
+    test_widened_book_name_forms()
     test_layer2_document_wide_scope()
     test_layer3_llm_gating_and_parsing()
     test_composition()
