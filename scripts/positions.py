@@ -53,16 +53,48 @@ calibrated the way CONTAINMENT_FLOOR/LONGEST_RUN_WORD_THRESHOLD were
 (PLAN.md #46-style human calibration against many teachers) -- it is a
 reasoned starting point from one teacher's real data, explicitly flagged as
 provisional, same posture PLAN.md #45's floors had before their own #46.
+Re-checked, not re-derived, by the 2026-07-28 calibration diagnostic below
+(38 real questions, 4 teachers, question-scoped gathering): raising this
+floor to 10 fixed none of the diagnostic's confirmed false passes -- each
+had far more than 10 loosely-related matches already -- while breaking a
+genuine answer. The floor is not the lever that controls whether gathered
+evidence actually answers the question; SIMILARITY_FLOOR is. Left at 5,
+unchanged, on that evidence.
 
-SIMILARITY_FLOOR = 0.4 for evidence retrieval is a SEPARATE, secondary
-parameter -- not the honest-empty floor itself, just the relevance cutoff
-used to gather candidates before the count floor is checked. Reused as a
-starting point from TEACHER_POSITION_SIMILARITY_FLOOR (study.py, = 0.3) is
+--------------------------------------------------------------------------
+SIMILARITY_FLOOR: 0.4 -> 0.45, 2026-07-28 calibration diagnostic
+--------------------------------------------------------------------------
+SIMILARITY_FLOOR is a SEPARATE, secondary parameter from MIN_EVIDENCE_COUNT
+-- not the honest-empty floor itself, just the relevance cutoff used to
+gather candidates before the count floor is checked. Reused as a starting
+point from TEACHER_POSITION_SIMILARITY_FLOOR (study.py, = 0.3) is
 deliberately NOT done here -- PLAN.md #48 already states that floor "was
-tuned for the current retrieval path and does not transfer." 0.4 was chosen
-fresh, empirically, for THIS retrieval shape (propositions, not chunks) --
-see the report for the floor-sweep data that grounded it. Still provisional,
-same caveat as MIN_EVIDENCE_COUNT above.
+tuned for the current retrieval path and does not transfer." Originally set
+to 0.4 (this module's opening Vlad Savchuk proof, above).
+
+Raised to 0.45 (2026-07-28, Alex's ruling on
+docs/audits/position_layer_calibration_diagnostic_2026-07-28.md) after a
+38-question, 4-teacher diagnostic run at question-scoped gathering --
+embedding a real question, not a short topic label, then measuring how much
+of a teacher's evidence clears each candidate bar -- found 0.4 let through 3
+confirmed false-pass fabrication cases (evidence that is topically related
+but does not actually address the question asked, e.g. general
+salvation/relationship material passing as an answer to a specific
+doctrinal question none of the three teachers tested actually addresses).
+0.45 fixes all 3 at the cost of 1 additional, already-borderline refusal.
+0.50 was also tested and rejected: it fixes every false pass in the
+diagnostic but also breaks 5 separate questions the teacher genuinely does
+answer well -- an unacceptable trade the other direction. See the report
+for the full per-question sweep.
+
+0.45 is a starting point, not a settled constant -- it is empirically
+derived from 38 constructed questions, not from real user traffic (there is
+none yet; the position layer does not serve users). The diagnostic itself
+found this bar cannot fully close the near-miss gap even at 0.45 (two
+Savchuk cases -- child custody, fasting for weight loss -- still clear it);
+see PLAN.md's position-layer section for why that residual has to be
+handled at the writing stage, not here. Revisit this value once real
+questions accumulate, per the diagnostic's own recommendation.
 
 --------------------------------------------------------------------------
 Provenance: NOT NULL from this table's first row
@@ -93,7 +125,7 @@ from app.services.llm_client import get_anthropic_client, get_guardrails_text  #
 PROMPT_VERSION = "position_v1"
 MODEL = "claude-sonnet-4-5"
 
-SIMILARITY_FLOOR = 0.4
+SIMILARITY_FLOOR = 0.45
 MAX_EVIDENCE = 15
 MIN_EVIDENCE_COUNT = 5
 
