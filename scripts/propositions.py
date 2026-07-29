@@ -438,8 +438,8 @@ Neutral voice. Never use charged language ("heretical," "demonic," "apostate") i
 
 Count and distinctness:
 
-Extract one proposition per genuinely distinct teaching point. There is NO target number. Short documents may yield three or four; long ones more. Do not pad.
-If two points make substantially the same claim, MERGE them into one. Near-duplicate propositions are a failure.
+Extract one teaching passage per genuinely distinct teaching point. There is NO target number and no minimum count. When the document contains a genuine, distinct teaching point, however brief, it must still be extracted as its own passage — a short passage that makes one real teaching claim still deserves to be pulled out. But when the document contains no genuine, distinct teaching point at all — administrative content, a bare fragment or title, a throwaway remark with nothing substantive to paraphrase — the correct, expected output is an empty array. Do not manufacture a teaching passage from padding, from restating a title, or from inflating a throwaway remark just to produce output.
+If two points make substantially the same claim, MERGE them into one. Near-duplicate passages are a failure.
 
 Length: ~80–150 words each.
 
@@ -543,7 +543,7 @@ The pattern below is a STRUCTURAL TEMPLATE only. The bracketed parts are placeho
   Run-on (do not do this either — this is the more common failure): "{speaker} teaches that [the claim], and that [the grounding], and that [a specific detail], and that [the qualification]."
   Well-formed (do this instead): "{speaker} teaches that [the claim]. [A sentence giving the grounding or reasoning, with a specific detail from the source]. [A closing sentence carrying the qualification, exception, or the speaker's own concluding line, when the source gives one]."
 
-Count and distinctness — fewer, fuller teaching passages is correct. Write one passage per genuinely distinct teaching point. There is NO target number. Short documents may yield three or four; long ones more. Do NOT increase the count to hit a length or count target — a document with few distinct points should yield few, fuller passages, not more thin ones.
+Count and distinctness — fewer, fuller teaching passages is correct. Write one passage per genuinely distinct teaching point. There is NO target number and no minimum count. Do NOT increase the count to hit a length or count target — a document with few distinct points should yield few, fuller passages, not more thin ones. When a genuine, distinct teaching point is present, however brief, it must still be written as its own passage — a short passage that makes one real teaching claim still deserves to be pulled out. But when the document contains no genuine, distinct teaching point at all — administrative content, a bare fragment or title, a throwaway remark with nothing substantive to paraphrase — the correct, expected output is an empty array. Do not manufacture a teaching passage from padding, from restating a title, or from inflating a throwaway remark just to produce output.
 If two points make substantially the same claim, MERGE them into one. Near-duplicate passages are a failure.
 
 Output ONLY a JSON array of these teaching passages, no preamble, no markdown fences:
@@ -930,6 +930,19 @@ def store_propositions(
 PRECEPT_AUSTIN_SOURCE_ID = "698e0596-a9c6-4890-958d-9199f1b8f762"
 
 
+# Real corpus evidence (2026-07-29, live-queried, 857 eligible documents): the
+# absolute minimum word count of any currently-eligible document is 61 words
+# (Leonard Ravenhill, "The Power of the Second Blessing in Faith"), and that
+# document legitimately produced 1 real teaching passage. Zero documents in
+# the corpus fall under 61, 50, 30, or 20 words. This floor sits comfortably
+# below that observed minimum (11-word margin) -- it has ZERO effect on any
+# real document that exists today; it exists purely as forward-looking
+# protection against a genuinely degenerate future input (a scraping
+# artifact, a title-only stub, a near-empty transcript), not as a change to
+# any observed corpus behavior.
+MIN_SUBSTANTIVE_WORD_COUNT = 50
+
+
 def process_document(
     conn,
     document_id: str,
@@ -973,8 +986,21 @@ def process_document(
     Returns one of:
       "skipped_licensed"        — source is public_domain/owned (or missing); nothing written
       "skipped_precept_austin"  — Precept Austin, locked out by name; nothing written
+      "too_thin_to_extract"     — (bypass-proofing Phase 3, PLAN.md #45, 2026-07-29) `text`
+                                   is under MIN_SUBSTANTIVE_WORD_COUNT words. The model is
+                                   NEVER called on this path -- distinct from "no_propositions"
+                                   below, where the model ran successfully and legitimately
+                                   found nothing. This check fires AFTER the Precept-Austin
+                                   and license-status gates above, so a thin-but-Precept-Austin
+                                   document still returns "skipped_precept_austin" (that gate
+                                   keeps priority) and a thin-but-public_domain/owned document
+                                   still returns "skipped_licensed" -- the floor only ever
+                                   fires for a document that would otherwise have proceeded to
+                                   extraction (a licensed/unlicensed, non-Precept-Austin
+                                   source). Nothing written either way.
       "no_propositions"         — the model ran successfully and genuinely found nothing
-                                   to extract. A completed result, not a failure.
+                                   to extract. A completed result, not a failure. Distinct
+                                   from "too_thin_to_extract" -- the model WAS called here.
       "stored:{n}"              — GATE OFF (name_pattern is None): n propositions written to
                                    DB. Byte-identical to pre-Phase-5 behavior.
       "stored:{n}:flagged:{m}"  — GATE ON (name_pattern supplied): n propositions (PASS
@@ -993,7 +1019,11 @@ def process_document(
     "public_domain" and "owned" (already safely servable as verbatim
     chunks), and skips a missing/unknown source_id (fail closed). One named
     exception: Precept Austin never gets propositions — see
-    PRECEPT_AUSTIN_SOURCE_ID above.
+    PRECEPT_AUSTIN_SOURCE_ID above. A word-count floor (see
+    MIN_SUBSTANTIVE_WORD_COUNT above) additionally skips documents too thin
+    to plausibly contain a genuine teaching point, checked after both gates
+    above and before any call to extract_propositions() -- see
+    "too_thin_to_extract" in the return-value list.
 
     Every row this function writes (stored or later reviewed and approved)
     is stamped with provenance (which prompt version, its fingerprint,
@@ -1011,6 +1041,14 @@ def process_document(
         license_status = get_license_status(conn, source_id)
         if license_status not in ("licensed", "unlicensed"):
             return "skipped_licensed"
+
+        word_count = len(text.split())
+        if word_count < MIN_SUBSTANTIVE_WORD_COUNT:
+            logger.info(
+                "PROPOSITION_TOO_THIN doc=%r word_count=%d threshold=%d",
+                document_id, word_count, MIN_SUBSTANTIVE_WORD_COUNT,
+            )
+            return "too_thin_to_extract"
 
         props = extract_propositions(text, doc_id=document_id)
         if not props:

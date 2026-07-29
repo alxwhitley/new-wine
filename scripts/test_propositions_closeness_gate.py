@@ -139,11 +139,25 @@ def main() -> None:
     source_id = "22222222-2222-2222-2222-222222222222"
 
     # One shared "source document" text that all three hand-made
-    # propositions below are classified against.
+    # propositions below are classified against. Padded to >=50 words
+    # (bypass-proofing Phase 3, PLAN.md #45, 2026-07-29 word-count floor --
+    # propositions.MIN_SUBSTANTIVE_WORD_COUNT) so process_document() below
+    # proceeds past the new floor check instead of short-circuiting to
+    # "too_thin_to_extract" before ever reaching the monkeypatched
+    # extract_propositions(). The padding sentence is deliberately unrelated
+    # filler (administrative record-keeping, no shared vocabulary with
+    # pass_content/quote_content/hold_content below) appended AFTER the
+    # original sentences -- it does not alter or remove any existing
+    # substring, so it cannot change any classify() containment/longest-run
+    # verdict against the original three hand-made propositions (confirmed
+    # empirically by this file's own ground-truth assertions just below,
+    # which are unchanged from before this padding was added).
     doc_text = (
         "The prophet declared that revival always begins with brokenness before God, "
         "not with strategy or method. This happened once at a large gathering many "
-        "years ago in a small town, remembered vividly by those present."
+        "years ago in a small town, remembered vividly by those present. "
+        "Attendance records from that season were later archived in a regional office "
+        "building for administrative purposes, unrelated to anything preached that week."
     )
 
     pass_content = (
@@ -525,6 +539,163 @@ def main() -> None:
         "\nPhase 2b assertions passed: chunk_ids cartesian product proven with real "
         "proposition ids (present and None/empty cases), and threading confirmed through "
         "both the ungated and gated process_document() paths, plus the default-omitted case."
+    )
+
+    # ════════════════════════════════════════════════════════════════════
+    # Phase 3 (bypass-proofing, PLAN.md #45, 2026-07-29): word-count floor
+    # (MIN_SUBSTANTIVE_WORD_COUNT / "too_thin_to_extract") coverage.
+    # ════════════════════════════════════════════════════════════════════
+    print("\n" + "=" * 78)
+    print("Phase 3: word-count floor (too_thin_to_extract) coverage")
+    print("=" * 78)
+
+    class _ExtractSpy:
+        """Call-counting stand-in for extract_propositions() -- proves the
+        model path was or was NOT reached, not merely that process_document()
+        returned without error (CLAUDE.md reporting rule: a clean exit is not
+        proof a specific step ran)."""
+        def __init__(self, return_value):
+            self.calls = 0
+            self._return_value = return_value
+
+        def __call__(self, text, doc_id="", **kw):
+            self.calls += 1
+            return self._return_value
+
+    # ── 1. Floor skips extraction, proven not just inferred: a genuinely
+    #    thin (10-word) document returns "too_thin_to_extract" AND the spy
+    #    shows extract_propositions() was called ZERO times. ───────────────
+    print("\n--- 10-word document: floor fires, extract_propositions() never called ---")
+    ten_word_text = "This is only a very short ten word document here."
+    assert len(ten_word_text.split()) == 10, (
+        "fixture must be exactly 10 words, got {0}".format(len(ten_word_text.split()))
+    )
+    spy_thin = _ExtractSpy(hand_made_props)
+    props_mod.extract_propositions = spy_thin
+    try:
+        conn_thin = FakeConn(license_status="licensed")
+        result_thin = props_mod.process_document(
+            conn_thin, document_id, source_id, ten_word_text, fake_embed_fn,
+        )
+    finally:
+        props_mod.extract_propositions = original_extract
+
+    print("  result_thin = {0!r}".format(result_thin))
+    print("  extract_propositions() call count = {0}".format(spy_thin.calls))
+    assert result_thin == "too_thin_to_extract", (
+        "expected 'too_thin_to_extract' for a 10-word document, got {0!r}".format(result_thin)
+    )
+    assert spy_thin.calls == 0, (
+        "extract_propositions() must NEVER be called when the floor fires, got {0} calls".format(
+            spy_thin.calls)
+    )
+    assert not conn_thin.committed and not conn_thin.rolled_back, (
+        "too_thin_to_extract must not touch the connection's commit/rollback state"
+    )
+    print("  CONFIRMED: floor fires, model never called, connection untouched.")
+
+    # ── 2. Boundary test: exactly 50 words proceeds to extraction; exactly
+    #    49 words does not. Strict less-than: MIN_SUBSTANTIVE_WORD_COUNT
+    #    (50) words itself proceeds; 49 is too thin. ────────────────────────
+    def _make_word_text(n):
+        """Builds a plain n-word string of distinct filler words -- content
+        doesn't matter here, only the word count."""
+        return " ".join("word{0}".format(i) for i in range(n))
+
+    text_50 = _make_word_text(50)
+    text_49 = _make_word_text(49)
+    assert len(text_50.split()) == 50
+    assert len(text_49.split()) == 49
+    assert props_mod.MIN_SUBSTANTIVE_WORD_COUNT == 50, (
+        "this boundary test assumes the floor constant is 50 -- got {0}".format(
+            props_mod.MIN_SUBSTANTIVE_WORD_COUNT)
+    )
+
+    print("\n--- Boundary: exactly 50 words -> proceeds to extraction ---")
+    spy_50 = _ExtractSpy(hand_made_props)
+    props_mod.extract_propositions = spy_50
+    try:
+        conn_50 = FakeConn(license_status="licensed")
+        result_50 = props_mod.process_document(
+            conn_50, document_id, source_id, text_50, fake_embed_fn,
+        )
+    finally:
+        props_mod.extract_propositions = original_extract
+    print("  result_50 = {0!r}, extract_propositions() calls = {1}".format(result_50, spy_50.calls))
+    assert spy_50.calls == 1, (
+        "exactly 50 words must proceed to extraction (strict less-than boundary), "
+        "got {0} calls".format(spy_50.calls)
+    )
+    assert result_50 == "stored:3", (
+        "expected 'stored:3' for the 50-word boundary case (gate off, 3 hand-made props), "
+        "got {0!r}".format(result_50)
+    )
+
+    print("\n--- Boundary: exactly 49 words -> too_thin_to_extract, extraction never called ---")
+    spy_49 = _ExtractSpy(hand_made_props)
+    props_mod.extract_propositions = spy_49
+    try:
+        conn_49 = FakeConn(license_status="licensed")
+        result_49 = props_mod.process_document(
+            conn_49, document_id, source_id, text_49, fake_embed_fn,
+        )
+    finally:
+        props_mod.extract_propositions = original_extract
+    print("  result_49 = {0!r}, extract_propositions() calls = {1}".format(result_49, spy_49.calls))
+    assert result_49 == "too_thin_to_extract", (
+        "expected 'too_thin_to_extract' for a 49-word document, got {0!r}".format(result_49)
+    )
+    assert spy_49.calls == 0, (
+        "49 words must be strictly below the floor -- extract_propositions() must not be "
+        "called, got {0} calls".format(spy_49.calls)
+    )
+    print("  CONFIRMED boundary is strict less-than: 50 words proceeds to extraction, 49 does not.")
+
+    # ── 3. Gate priority: a thin-but-Precept-Austin document still returns
+    #    "skipped_precept_austin" (that gate fires FIRST, before the floor
+    #    even runs), and a thin-but-public_domain document still returns
+    #    "skipped_licensed" (license gate fires before the floor too) --
+    #    extraction spy proves zero calls either way, and the RETURN VALUE
+    #    proves which specific gate actually fired. ─────────────────────────
+    print("\n--- Gate priority: thin (5-word) + Precept Austin -> 'skipped_precept_austin' ---")
+    five_word_text = "Too short to matter here."
+    assert len(five_word_text.split()) == 5
+    spy_pa = _ExtractSpy(hand_made_props)
+    props_mod.extract_propositions = spy_pa
+    try:
+        conn_pa = FakeConn(license_status="licensed")  # irrelevant -- PA gate fires before license lookup
+        result_pa = props_mod.process_document(
+            conn_pa, document_id, props_mod.PRECEPT_AUSTIN_SOURCE_ID, five_word_text, fake_embed_fn,
+        )
+    finally:
+        props_mod.extract_propositions = original_extract
+    print("  result_pa = {0!r}, extract_propositions() calls = {1}".format(result_pa, spy_pa.calls))
+    assert result_pa == "skipped_precept_austin", (
+        "Precept Austin gate must fire before the word-count floor, got {0!r}".format(result_pa)
+    )
+    assert spy_pa.calls == 0
+
+    print("\n--- Gate priority: thin (5-word) + public_domain source -> 'skipped_licensed' ---")
+    spy_pd = _ExtractSpy(hand_made_props)
+    props_mod.extract_propositions = spy_pd
+    try:
+        conn_pd = FakeConn(license_status="public_domain")
+        result_pd = props_mod.process_document(
+            conn_pd, document_id, source_id, five_word_text, fake_embed_fn,
+        )
+    finally:
+        props_mod.extract_propositions = original_extract
+    print("  result_pd = {0!r}, extract_propositions() calls = {1}".format(result_pd, spy_pd.calls))
+    assert result_pd == "skipped_licensed", (
+        "license-status gate must fire before the word-count floor, got {0!r}".format(result_pd)
+    )
+    assert spy_pd.calls == 0
+
+    print(
+        "\nPhase 3 assertions passed: word-count floor proven via extract_propositions() call-"
+        "count spy (not just inferred from a clean return), strict less-than boundary confirmed "
+        "(50 proceeds, 49 doesn't), and gate priority confirmed (Precept-Austin and license-"
+        "status gates both fire before the floor for an equally-thin document)."
     )
 
 

@@ -326,6 +326,104 @@ def test_build_allowed_reference_block() -> None:
     print("\nAll _build_allowed_reference_block() assertions passed.")
 
 
+def test_new_language_reaches_groq_message() -> None:
+    """Bypass-proofing Phase 3 (PLAN.md #45, 2026-07-29) coverage: proves the
+    new Count-and-distinctness wording -- empty-is-fine permission, the
+    genuine-however-brief-still-extract affirmation, "no minimum count", and
+    removal of the old implicit-floor "Short documents may yield three or
+    four" phrasing -- is present in BOTH prompt constants' literal text AND
+    actually reaches the real outgoing Groq message for both the v3 and v4
+    branches, not merely built and never sent. Also confirms
+    EXTRACTION_PROMPT_V4.format(speaker=...) still succeeds with no
+    exception (brace-safety requirement for this phase's edit). MOCKED Groq
+    client throughout -- no network call, matching this file's own
+    top-level convention; DB-free (the fixture source text here has zero
+    scripture references, so no arbitration call fires either)."""
+    print("\n" + "=" * 78)
+    print("test_new_language_reaches_groq_message() -- bypass-proofing Phase 3")
+    print("=" * 78)
+
+    # ── Literal content checks on the constants themselves. ─────────────────
+    for name, template in (("EXTRACTION_PROMPT (v3)", pm.EXTRACTION_PROMPT),
+                            ("EXTRACTION_PROMPT_V4 (v4)", pm.EXTRACTION_PROMPT_V4)):
+        assert "no minimum count" in template, (
+            "{0} must state there is no minimum count".format(name)
+        )
+        assert "empty array" in template, (
+            "{0} must explicitly permit an empty array as a correct result".format(name)
+        )
+        assert "Short documents may yield three or four" not in template, (
+            "{0} must not retain the old implicit-floor example-count phrasing".format(name)
+        )
+        assert "however brief" in template, (
+            "{0} must explicitly preserve the affirmative case for a genuine, "
+            "however-brief teaching point".format(name)
+        )
+    print("  OK: both constants contain the new empty-permission + no-minimum-count "
+          "language and no longer contain the old 'three or four' floor phrasing.")
+
+    # ── The two-statement distinction: "no genuine content -> empty" is a
+    #    SEPARATE explicit statement from "genuine content, however brief ->
+    #    still extract" -- not merely implied by one sentence doing both
+    #    jobs. Checked as two independently-locatable phrases. ──────────────
+    for name, template in (("EXTRACTION_PROMPT (v3)", pm.EXTRACTION_PROMPT),
+                            ("EXTRACTION_PROMPT_V4 (v4)", pm.EXTRACTION_PROMPT_V4)):
+        empty_case = "no genuine, distinct teaching point at all" in template
+        brief_case = "however brief, it must still be" in template
+        assert empty_case, "{0} must explicitly state the no-genuine-content -> empty case".format(name)
+        assert brief_case, (
+            "{0} must explicitly state the genuine-however-brief -> still-extract case".format(name)
+        )
+    print("  OK: both constants state the empty-case and the still-extract-if-genuine "
+          "case as two distinct, explicit statements.")
+
+    # ── v4 .format() safety: no stray single braces beyond {speaker}. ───────
+    formatted = pm.EXTRACTION_PROMPT_V4.format(speaker="Test Speaker")
+    assert "Test Speaker" in formatted
+    print("  OK: EXTRACTION_PROMPT_V4.format(speaker='Test Speaker') succeeded with no exception.")
+
+    # ── The new language must actually reach the real outgoing Groq message
+    #    -- v3 path. Fixture source text has NO scripture references, so no
+    #    arbitration call is triggered (matches this file's simpler-fixture
+    #    convention in test_build_allowed_reference_block() above). ─────────
+    plain_source_text = (
+        "This is a short plain source document with no scripture citations "
+        "in it at all, used only to confirm outgoing message content."
+    )
+    mock_json_v3 = json.dumps([{"proposition_index": 1, "content": "A harmless paraphrase."}])
+    fake_client_v3b = _FakeGroqClient(mock_json_v3)
+    original_get_groq_local = pm._get_groq
+    pm._get_groq = lambda: fake_client_v3b
+    try:
+        pm.extract_propositions(plain_source_text, doc_id="lang-check-v3")
+    finally:
+        pm._get_groq = original_get_groq_local
+    sent_v3b = fake_client_v3b.chat.completions.last_kwargs["messages"][0]["content"]
+    assert "no minimum count" in sent_v3b
+    assert "empty array" in sent_v3b
+    assert "however brief" in sent_v3b
+    print("  OK: new language present in the real outgoing v3 Groq message.")
+
+    # ── Same, v4 path. ───────────────────────────────────────────────────────
+    fake_client_v4b = _FakeGroqClient(mock_json_v3)
+    pm._get_groq = lambda: fake_client_v4b
+    try:
+        pm.extract_propositions(
+            plain_source_text, doc_id="lang-check-v4",
+            speaker="Test Speaker", prompt_version="v4",
+        )
+    finally:
+        pm._get_groq = original_get_groq_local
+    sent_v4b = fake_client_v4b.chat.completions.last_kwargs["messages"][0]["content"]
+    assert "no minimum count" in sent_v4b
+    assert "empty array" in sent_v4b
+    assert "however brief" in sent_v4b
+    print("  OK: new language present in the real outgoing v4 Groq message.")
+
+    print("\nAll test_new_language_reaches_groq_message() assertions passed.")
+
+
 if __name__ == "__main__":
     main()
     test_build_allowed_reference_block()
+    test_new_language_reaches_groq_message()
