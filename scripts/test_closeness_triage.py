@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import closeness_check as cc
 import closeness_triage as triage
 
 
@@ -86,6 +87,56 @@ class ClosenessTriageTests(unittest.TestCase):
         self.assertEqual(
             "needs shortening or rewording",
             triage.validate_decision("real_attention", "needs shortening or rewording"),
+        )
+
+    def test_theology_masking_possessive_breaks_masked_run_raw_run_fixes_it(self):
+        # Reproduces the real renderer bug: closeness_check.py's
+        # _mask_theology() does `_THEOLOGY_RE.sub(...)` where
+        # _THEOLOGY_RE = re.compile(r"\b(?:...THEOLOGY_TERMS...)\b", re.IGNORECASE).
+        # \b matches between a word char and an apostrophe, so "Bible" inside
+        # "Bible's" gets substituted on its own, leaving a dangling "'s" that
+        # tokenize()'s word regex ([a-z0-9]+(?:'[a-z]+)?) then retokenizes as
+        # a standalone one-letter token "s" -- a token that never exists as a
+        # literal token in the real, unmasked text (there "Bible's" tokenizes
+        # as ONE token, "bible's"). Passage and source share a contiguous run
+        # of real wording built around a "Bible's" possessive, shaped like the
+        # real bug.
+        passage = (
+            "Understanding the Bible's story and theme is essential for "
+            "every teacher today."
+        )
+        source = (
+            "Preachers often forget that Bible's story and theme is "
+            "essential for every teacher who wants depth."
+        )
+
+        # (a) Document the bug: classify()'s own masked run (the same
+        # run-finding path used for the classifier-integrity check in
+        # generate()) genuinely does not exist as a literal contiguous run in
+        # the real, unmasked text -- this proves the scenario actually
+        # exercises the bug, not one that happens to work fine.
+        run_length, run_tokens = cc.longest_common_run(passage, source, None)
+        self.assertEqual(9, run_length)
+        self.assertEqual("s", run_tokens[0])
+        with self.assertRaises(ValueError):
+            triage.highlight_token_run(passage, run_tokens)
+
+        # (b) Prove the fix: the new raw-run rendering path
+        # (compute_real_highlight_run, built on the existing
+        # raw_longest_run over RAW unmasked text) locates a real contiguous
+        # run containing the possessive and renders a highlight in both the
+        # passage and the source context, without raising.
+        raw_run = triage.compute_real_highlight_run(passage, source)
+        highlighted_passage = triage.highlight_token_run(passage, raw_run)
+        highlighted_context = triage.context_excerpt(source, raw_run, radius=650)
+
+        self.assertIn(
+            "**Bible's story and theme is essential for every teacher**",
+            highlighted_passage,
+        )
+        self.assertIn(
+            "**Bible's story and theme is essential for every teacher**",
+            highlighted_context,
         )
 
 

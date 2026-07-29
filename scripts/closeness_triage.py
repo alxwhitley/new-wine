@@ -318,9 +318,43 @@ def _fast_card(number: int, record: dict, source: str) -> str:
     return "\n".join(lines)
 
 
-def _real_card(number: int, record: dict, source: str, run_tokens: Sequence[str]) -> str:
-    passage = highlight_token_run(record["content"], run_tokens)
-    context = context_excerpt(source, run_tokens, radius=650)
+def compute_real_highlight_run(passage: str, source: str) -> Tuple[str, ...]:
+    """Computes the near-verbatim highlight run for a real-attention card from
+    RAW (unmasked) text via raw_longest_run — the same run-finding function
+    _fast_card already uses, reused rather than reimplemented.
+
+    This is deliberately SEPARATE from classify()'s own masked run
+    (cc.longest_common_run), which generate()'s loop uses ONLY for the
+    classifier-integrity check and must never feed into
+    highlight_token_run/context_excerpt: masking (e.g. _mask_theology's plain
+    word-regex substitution matching "Bible" inside "Bible's" — \\b matches
+    between a word char and an apostrophe — and leaving a dangling "'s" that
+    tokenize()'s [a-z0-9]+(?:'[a-z]+)? word regex then retokenizes as a
+    standalone one-letter "s" token) can produce a run that is a real match
+    in MASKED-token space but does not exist as a literal contiguous sequence
+    in the real, unmasked text — highlight_token_run would then raise
+    ValueError on a perfectly valid, correctly-classified item. See
+    test_closeness_triage.py for the reproduced bug case (the masked run
+    fails to locate; this raw run succeeds).
+
+    Raises ValueError if no run is found at all (raw_longest_run returned an
+    empty tuple), so callers can catch this alongside
+    highlight_token_run's/context_excerpt's own ValueError and treat both as
+    one rendering-failure case.
+    """
+    raw_run = raw_longest_run(passage, source)
+    if not raw_run:
+        raise ValueError("No raw verbatim run found between passage and source.")
+    return raw_run
+
+
+def _real_card(number: int, record: dict, source: str, raw_run: Sequence[str]) -> str:
+    """Renders a real-attention card. `raw_run` must be a RAW (unmasked)
+    token run from compute_real_highlight_run/raw_longest_run — never
+    classify()'s masked run_tokens (see compute_real_highlight_run's
+    docstring for why)."""
+    passage = highlight_token_run(record["content"], raw_run)
+    context = context_excerpt(source, raw_run, radius=650)
     lines = _card_header(number, record)
     lines.extend([
         "- Recorded signal: {0}; longest near-verbatim run: {1} words".format(
@@ -334,6 +368,49 @@ def _real_card(number: int, record: dict, source: str, run_tokens: Sequence[str]
         "**Source passage in context — same stretch highlighted**",
         "",
         "> " + context,
+        "",
+        "**Decision — choose one only:**",
+        "",
+        "- [ ] keep as-is",
+        "- [ ] needs shortening or rewording",
+        "- [ ] pull from library",
+        "",
+        "- Timestamp: `________________________`",
+        "- Reviewer note: `____________________________________________________________`",
+        "",
+        "_Decision recording only. This queue never edits or removes library content._",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def _real_card_highlight_failed(number: int, record: dict, reason: str) -> str:
+    """Fallback card for an item whose near-verbatim run (classified
+    correctly and recorded in the JSONL) could not be located as a literal
+    highlighted span in the raw text — see compute_real_highlight_run's
+    docstring. Built through the same _card_header helper as _real_card so it
+    still carries the `- Proposition ID:` line other tooling
+    (_resolve_card_id, show_real) depends on. States the failure honestly;
+    never fabricates or approximates a highlight, and never wraps unanchored
+    text in `**...**` as if a real run were found."""
+    lines = _card_header(number, record)
+    lines.extend([
+        "- Recorded signal: {0}; longest near-verbatim run: {1} words".format(
+            record["signal"], record["longest_run_words"]
+        ),
+        "",
+        "**Highlight rendering failed — the near-verbatim run could not be "
+        "located as a literal contiguous span in the source text.**",
+        "",
+        "No highlighted excerpt is shown for this item. Reason: {0}".format(reason),
+        "",
+        "The item's recorded verdict itself was still validated against a "
+        "fresh reconstruction before this rendering step ran; only the "
+        "highlight rendering failed, not the underlying classification.",
+        "",
+        "**Flagged passage — full text, no highlight available**",
+        "",
+        "> " + record["content"],
         "",
         "**Decision — choose one only:**",
         "",
@@ -406,8 +483,15 @@ def generate(results_path: Path, output_dir: Path) -> dict:
         "Use `python3 scripts/closeness_triage.py show-real` for the next undecided card.",
         "",
     ]
+    highlight_failures: List[dict] = []
     for number, record in enumerate(real_records, 1):
         source = source_texts[record["document_id"]]
+        # Classifier-integrity check -- reproduces the recorded JSONL's own
+        # verdict via the SAME masked-token path classify() used. Unwrapped,
+        # outside any try/except: a mismatch here means the recorded results
+        # can no longer be reproduced and generation must stop, not silently
+        # continue on stale/inconsistent calibration data. Never feed this
+        # masked run into rendering -- see compute_real_highlight_run below.
         run_length, run_tokens = cc.longest_common_run(
             record["content"], source, name_pattern, verse_lookup, vocab_matcher
         )
@@ -419,7 +503,26 @@ def generate(results_path: Path, output_dir: Path) -> dict:
                 )
             )
         filename = "item_{0:03d}.md".format(number)
-        _write_text(real_dir / filename, _real_card(number, record, source, run_tokens))
+        # Rendering path is separate from the integrity check above and uses
+        # RAW (unmasked) text, not the just-validated masked run_tokens --
+        # see compute_real_highlight_run's docstring for why the masked run
+        # can be un-renderable even for a correctly-classified item.
+        try:
+            raw_run = compute_real_highlight_run(record["content"], source)
+            card_text = _real_card(number, record, source, raw_run)
+        except ValueError as exc:
+            highlight_failures.append({
+                "proposition_id": record["proposition_id"],
+                "item_number": number,
+                "reason": str(exc),
+            })
+            print(
+                "HIGHLIGHT_FAILURE item {0:03d} ({1}): {2}".format(
+                    number, record["proposition_id"], exc
+                )
+            )
+            card_text = _real_card_highlight_failed(number, record, str(exc))
+        _write_text(real_dir / filename, card_text)
         real_index.append(
             "- Item {0:03d}: {1} — {2} (`{3}`)".format(
                 number, record["teacher"], record["document"], filename
@@ -447,6 +550,7 @@ def generate(results_path: Path, output_dir: Path) -> dict:
                 "BOTH": sum(1 for item in real if item["signal"] == "BOTH"),
             },
         },
+        "highlight_failures": highlight_failures,
         "corpus_access": "SELECT-only chunks/name aliases/WEB verses; no corpus writes",
         "decision_effect": "local record only; no auto-fixing or corpus action",
     }
