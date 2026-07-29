@@ -24,6 +24,17 @@ Reused, never forked (per this build's own scope contract)
   - app.services.reference_verifier._parse_verse_or_range  (imported)
   - reference_grounding.find_reference_spans / GROUNDED / UNGROUNDED /
     UNCERTAIN / check_reference_grounded                   (imported)
+  - reference_grounding.normalize_reference_text (imported, 2026-07-29 --
+    applied at every _parse_verse_or_range(reference...) call site in this
+    file that parses the reference-UNDER-TEST -- layer1_confirm(),
+    layer2_confirm(), verify_reference_grounded() -- same dot-to-space
+    normalization reference_grounding.check_reference_grounded() applies to
+    its own reference-under-test parse, reused rather than forked. Fixes a
+    real false-strip path: a genuine dotted reference (e.g. "1 Cor. 9:27")
+    that survives the upstream fix in propositions.py's primary check would
+    otherwise fail to parse HERE and short-circuit to "unparseable_
+    reference" before Layers 1-3 ever ran, then get wrongly STRIPPED by
+    propositions.py's arbitration_unavailable_unparseable fail-safe branch.)
   - propositions._get_groq / propositions.EXTRACTION_MODEL (imported, Layer 3)
 Every candidate this module's own widened scanner proposes is normalized to
 a canonical "Book C:V" or "Book C:V-E" string and re-validated through
@@ -455,8 +466,20 @@ def layer1_confirm(reference: str, source_text: str) -> bool:
     is the caller's job to have already checked; this function's own
     contract is purely "does this already-parseable reference have an
     exact-match candidate in source_text."
+
+    `reference` is dot-normalized via reference_grounding.normalize_
+    reference_text() (imported, never forked -- reused, module attribute
+    call via `rg.`) before parsing (2026-07-29 fix). Without this, a dotted
+    abbreviation the model wrote verbatim (e.g. "1 Cor. 9:27") would fail
+    _parse_verse_or_range() here even after reference_grounding.check_
+    reference_grounded()'s OWN copy of this same fix let it through to
+    arbitration in the first place -- silently short-circuiting straight to
+    "reference itself doesn't parse" before Layers 1-3 ever ran, and (via
+    propositions.py's arbitration_unavailable_unparseable fail-safe branch)
+    getting a genuine reference wrongly STRIPPED. This is the same defect
+    class Step 1 fixed one file upstream, applied here where it recurs.
     """
-    parsed = _parse_verse_or_range(reference.strip())
+    parsed = _parse_verse_or_range(rg.normalize_reference_text(reference))
     if parsed is None:
         return False
     for candidate in find_layer1_candidates(source_text):
@@ -554,8 +577,12 @@ def layer2_confirm(reference: str, source_text: str) -> Layer2Result:
     contract. `multi_book_document`/`distinct_book_count` describe
     `source_text` as a whole (how many distinct books it names anywhere),
     regardless of whether this call ends up confirmed -- always computed
-    from the same book-mention scan, never a separate pass."""
-    parsed = _parse_verse_or_range(reference.strip())
+    from the same book-mention scan, never a separate pass.
+
+    `reference` is dot-normalized via reference_grounding.normalize_
+    reference_text() before parsing, same fix and same rationale as
+    layer1_confirm()'s own docstring above (2026-07-29)."""
+    parsed = _parse_verse_or_range(rg.normalize_reference_text(reference))
     books_named = _books_named_in_document(source_text)
     distinct_book_count = len(books_named)
     multi_book_document = distinct_book_count > 1
@@ -679,8 +706,21 @@ def verify_reference_grounded(
     exception is if `call_layer3_llm` itself is monkeypatched to raise
     something other than LLMVerificationFailed, which is a test-authoring
     bug, not a case this function is designed to swallow.
+
+    `reference` is dot-normalized via reference_grounding.normalize_
+    reference_text() before this initial parse (2026-07-29 fix, PLAN.md
+    #45 Phase 1's bypass-proofing build) -- same transform reference_
+    grounding.check_reference_grounded() itself already applies, imported
+    and reused here rather than forked. Without this, a genuine reference
+    the model wrote in dotted form (e.g. "1 Cor. 9:27") would fail to parse
+    HERE even after already surviving the identical fix one call upstream
+    (propositions.py's primary check), short-circuiting straight to
+    "unparseable_reference" before Layers 1-3 ever ran -- and, via
+    propositions.py's arbitration_unavailable_unparseable fail-safe branch,
+    getting a genuine, verifiably-grounded reference wrongly STRIPPED. This
+    was found live -- not hypothetical -- by tracing exactly this path.
     """
-    parsed = _parse_verse_or_range(reference.strip())
+    parsed = _parse_verse_or_range(rg.normalize_reference_text(reference))
     if parsed is None:
         return VerificationResult(False, None, "unparseable_reference", False, 0)
 

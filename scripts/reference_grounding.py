@@ -174,6 +174,33 @@ class ReferenceSpan(NamedTuple):
     parsed: ParsedReference
 
 
+def normalize_reference_text(s: str) -> str:
+    """Dot-to-space normalization + whitespace collapse, applied identically
+    everywhere a raw reference-shaped substring is turned into the string
+    handed to _parse_verse_or_range(). ONE shared implementation, deliberately
+    NOT underscore-prefixed (unlike most of this module's other internal
+    helpers) because it is a genuine CROSS-MODULE contract, not a private
+    detail of this file alone: find_reference_spans() and check_reference_
+    grounded() here both use it, AND citation_verifier_layers.py's own
+    layer1_confirm()/layer2_confirm()/verify_reference_grounded() import and
+    call it directly on their own `reference`-under-test parses (2026-07-29,
+    same defect class found one file further downstream — see those
+    functions' own docstrings). CLAUDE.md Invariant 6 names the exact same
+    "never fork a normalization" discipline for normalize_alias_key() (also
+    public, also a cross-module contract, for the same reason); this is the
+    analogous precedent for reference-string normalization. Turns a dotted
+    abbreviation like "1 Cor. 9:27" into "1 Cor 9:27",
+    which _parse_verse_or_range()'s regex (no dot tolerance of its own) can
+    actually match — before this helper existed, find_reference_spans()
+    did this transform inline and every other parse site (check_reference_
+    grounded() here, and citation_verifier_layers.py's three parse sites)
+    did not do it at all, so a dotted reference handed directly to any of
+    them always failed to parse and returned an unparseable/UNCERTAIN
+    verdict regardless of whether it was actually grounded."""
+    s = re.sub(r"\.", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def find_reference_spans(text: str) -> List[ReferenceSpan]:
     """Scans `text` for every scripture-reference-shaped substring and
     returns only the ones that survive real parsing via
@@ -186,8 +213,7 @@ def find_reference_spans(text: str) -> List[ReferenceSpan]:
     candidate citation already present in source_text to compare against."""
     out: List[ReferenceSpan] = []
     for m in _REFERENCE_RE.finditer(text):
-        candidate = re.sub(r"\.", " ", m.group(0))
-        candidate = re.sub(r"\s+", " ", candidate).strip()
+        candidate = normalize_reference_text(m.group(0))
         parsed = _parse_verse_or_range(candidate)
         if parsed is None:
             continue
@@ -217,8 +243,20 @@ def check_reference_grounded(
     extract_propositions() to build one. Supplying it enables the wording
     arm too, for callers that have it available (e.g. this module's own
     test suite, or a future caller with a live connection).
+
+    `reference` is dot-normalized via normalize_reference_text() (the SAME
+    transform find_reference_spans() applies to every candidate it parses,
+    and the SAME transform citation_verifier_layers.py's own parse sites
+    now apply too — see that helper's own docstring) before parsing — a
+    dotted abbreviation like "1 Cor. 9:27" now parses and gets genuinely
+    evaluated instead of unconditionally falling through to UNCERTAIN/
+    "unparseable_reference" (2026-07-29 fix; PLAN.md #45.5's disclosed
+    dot-normalization defect). This only ever moves a verdict from
+    UNCERTAIN toward a real GROUNDED/UNGROUNDED evaluation — it cannot
+    create a path to a false GROUNDED, since grounding is still decided by
+    comparing PARSED tuples, never raw strings.
     """
-    parsed = _parse_verse_or_range(reference.strip())
+    parsed = _parse_verse_or_range(normalize_reference_text(reference))
     if parsed is None:
         # Not our job to judge a reference we can't even parse — a
         # different problem than "did the model fabricate a real-shaped

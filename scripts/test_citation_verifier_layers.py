@@ -669,6 +669,109 @@ def test_composition():
     _check("reason reports LLM disabled", result.reason == "not_confirmed_llm_disabled")
 
 
+def test_dot_normalization_regression():
+    """Regression proof for the 2026-07-29 fix: this module's OWN three
+    reference-under-test parse sites (layer1_confirm(), layer2_confirm(),
+    verify_reference_grounded()) previously called
+    `_parse_verse_or_range(reference.strip())` directly, with no dot
+    normalization -- a SEPARATE copy of the exact defect Step 1 fixed one
+    file upstream in reference_grounding.check_reference_grounded(). Found
+    live, not hypothetical: a genuine dotted reference (e.g. "1 Cor. 9:27")
+    that survives propositions.py's now-fixed primary check and reaches
+    arbitration would fail to parse HERE, short-circuit to
+    confirmed=False/reason="unparseable_reference" before Layers 1-3 ever
+    ran, and get wrongly STRIPPED via propositions.py's
+    arbitration_unavailable_unparseable fail-safe branch -- a false strip
+    of a genuine reference, exactly the loss class Invariant 11 exists to
+    prevent.
+
+    First proves the PRE-FIX defect was real (direct call to the same
+    un-normalized parse this module's own call sites used to make), then
+    proves the FIX: the same dotted reference now reaches Layer 1 (and,
+    separately, Layer 2) instead of short-circuiting."""
+    print("\n" + "=" * 78)
+    print("Step 6: dot-normalization regression (2026-07-29 fix)")
+    print("=" * 78)
+
+    # ── Prove the pre-fix defect was real: the raw, un-normalized parse
+    #    this module's three call sites used to make, called directly. ─────
+    print("\n  -- Pre-fix defect, proven directly --")
+    from app.services.reference_verifier import _parse_verse_or_range
+    _check(
+        "un-normalized _parse_verse_or_range('1 Cor. 9:27'.strip()) returns "
+        "None -- confirms the pre-fix short-circuit was real, not hypothetical",
+        _parse_verse_or_range("1 Cor. 9:27".strip()) is None,
+    )
+
+    # ── Layer 1: a dotted reference-under-test, checked against a source
+    #    that engages it via a WIDENED spoken form (not the compact form) --
+    #    proves the fix lives in the reference-under-test's own parse, not
+    #    merely in find_reference_spans()'s pre-existing dot handling on the
+    #    SOURCE side (which was already correct before this fix). ─────────
+    print("\n  -- Layer 1 confirms a dotted reference-under-test --")
+    spoken_source = (
+        "Paul talks about this in First Corinthians chapter 9 verse 27 "
+        "where he disciplines his body."
+    )
+    _check(
+        "layer1_confirm('1 Cor. 9:27', ...) confirms against a widened "
+        "spoken-form source (post-fix; pre-fix this returned False)",
+        cvl.layer1_confirm("1 Cor. 9:27", spoken_source),
+    )
+
+    # ── Layer 2: a dotted reference-under-test, checked against a source
+    #    where the book and the chapter/verse are named separately (Layer 1
+    #    alone cannot confirm; only reachable if the dotted reference
+    #    parses in the first place). ─────────────────────────────────────
+    print("\n  -- Layer 2 confirms a dotted reference-under-test --")
+    layer2_source = (
+        "Today we are studying the book of Romans, a wonderful epistle. "
+        "Later in our study, in chapter 8, verse 28, we find great comfort."
+    )
+    layer2_result = cvl.layer2_confirm("Rom. 8:28", layer2_source)
+    print(f"    layer2_confirm('Rom. 8:28', ...) -> {layer2_result}")
+    _check(
+        "layer2_confirm('Rom. 8:28', ...) confirms (post-fix; pre-fix "
+        "the un-normalized parse would have failed before Layer 2's own "
+        "book/chapter-verse scan ever ran)",
+        layer2_result.confirmed,
+    )
+
+    # ── Composition (the exact path propositions.py's arbiter call takes):
+    #    verify_reference_grounded() must reach Layer 1 and CONFIRM, not
+    #    short-circuit to "unparseable_reference". This is the precise
+    #    false-strip path the reviewer traced through propositions.py's
+    #    arbitration_unavailable_unparseable branch. ─────────────────────
+    print("\n  -- verify_reference_grounded() reaches Layer 1, does NOT "
+          "short-circuit to 'unparseable_reference' --")
+    result = cvl.verify_reference_grounded("1 Cor. 9:27", spoken_source, llm_enabled=False)
+    print(f"    result = {result}")
+    _check(
+        "dotted '1 Cor. 9:27' confirms via Layer 1 through the FULL "
+        "composition function -- the exact call propositions.py's "
+        "arbiter makes",
+        result.confirmed and result.layer == 1,
+    )
+    _check(
+        "reason is 'layer1_widened_scan_match', NOT 'unparseable_reference' "
+        "-- proves Layers 1-3 actually ran instead of short-circuiting",
+        result.reason == "layer1_widened_scan_match",
+    )
+
+    # ── Second dotted form ("Matt. 5:8"), compact form on the source side,
+    #    to prove the fix isn't narrowly tied to one book abbreviation or
+    #    one widened pattern. ─────────────────────────────────────────────
+    print("\n  -- Second dotted form, compact-form source ('Matt. 5:8') --")
+    compact_source_matt = "Jesus said in Matthew 5:8 that the pure in heart will see God."
+    result_matt = cvl.verify_reference_grounded("Matt. 5:8", compact_source_matt, llm_enabled=False)
+    print(f"    result = {result_matt}")
+    _check(
+        "dotted 'Matt. 5:8' confirms (via Layer 1's reused compact-form "
+        "scanner) instead of short-circuiting to 'unparseable_reference'",
+        result_matt.confirmed and result_matt.reason == "layer1_widened_scan_match",
+    )
+
+
 def main():
     print("#" * 78)
     print("test_citation_verifier_layers.py")
@@ -680,6 +783,7 @@ def main():
     test_layer2_document_wide_scope()
     test_layer3_llm_gating_and_parsing()
     test_composition()
+    test_dot_normalization_regression()
 
     print("\n" + "#" * 78)
     print("All assertions passed.")

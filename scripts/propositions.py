@@ -75,6 +75,28 @@ reachable only by a caller that supplies verse_lookup directly to that
 function (e.g. this module's own test suite). This is a known, accepted
 scope boundary, not an oversight -- see reference_grounding.py's own
 docstring for the two-arm design.
+
+--------------------------------------------------------------------------
+Bypass-proofing Phase 1 additions (PLAN.md #45 Phase 1, 2026-07-29)
+--------------------------------------------------------------------------
+Two additions on top of the always-on strip above, both still unconditional
+with no opt-out parameter:
+
+1. UPSTREAM: _build_allowed_reference_block() appends a CLOSED list of every
+   compact-form reference find_reference_spans() finds in `text` to the
+   outgoing model message, on both the v3 and v4 branches -- see that
+   function's own comment for the known asymmetry it accepts (spoken-form
+   references are invisible to it; the downstream arbiter below is the
+   backstop for those).
+
+2. DOWNSTREAM: an UNGROUNDED/UNCERTAIN reference is no longer stripped
+   immediately -- _strip_ungrounded_references() now sends it to
+   citation_verifier_layers.verify_reference_grounded() (the widened,
+   spoken-form-aware Layers 1-3 arbiter) first. A reference the arbiter
+   CONFIRMS is kept, not stripped, even though the primary (compact-form-
+   only) check here couldn't find it. See _strip_ungrounded_references()'s
+   own docstring for the full four-way outcome table and the StripResult
+   accounting shape this changed.
 """
 
 import hashlib
@@ -85,7 +107,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from groq import Groq
 
@@ -194,32 +216,107 @@ def _remove_reference_span(text: str, start: int, end: int) -> str:
     return new_text
 
 
+class StripResult(NamedTuple):
+    """Return shape for _strip_ungrounded_references(). Positionally
+    unpack-compatible with the pre-arbitration 6-tuple this replaces (every
+    field through n_stripped_uncertain is in the same order) PLUS one new
+    trailing field, n_kept_arbitration -- every existing 6-value unpack call
+    site needs exactly one more variable added, nothing reordered."""
+    new_content: str
+    review_records: List[dict]
+    n_found: int
+    n_grounded: int
+    n_stripped_fabricated: int
+    n_stripped_uncertain: int
+    n_kept_arbitration: int
+
+
 def _strip_ungrounded_references(
     content: str, source_text: str, document_id: str, proposition_index,
-) -> Tuple[str, List[dict], int, int, int, int]:
+) -> StripResult:
     """Finds every scripture reference in `content`, checks each against
     `source_text` via reference_grounding.check_reference_grounded()
-    (verse_lookup=None -- see module docstring), and removes only the
-    UNGROUNDED/UNCERTAIN ones' own spans (boundary-safe, see
-    _remove_reference_span()). GROUNDED references are left untouched.
+    (verse_lookup=None -- see module docstring). GROUNDED references are
+    left untouched.
 
-    Returns (new_content, review_records, n_found, n_grounded,
-    n_stripped_fabricated, n_stripped_uncertain) -- the four counts always
-    satisfy n_found == n_grounded + n_stripped_fabricated +
-    n_stripped_uncertain (asserted by the caller, extract_propositions()),
-    so a reference can never silently vanish from the accounting.
+    UNGROUNDED/UNCERTAIN references are NOT immediately stripped (PLAN.md
+    #45 Phase 1, 2026-07-29 arbitration build). Before stripping, each one
+    is sent to citation_verifier_layers.verify_reference_grounded() (the
+    widened, spoken-form-aware Layers 1-3 arbiter) as a second opinion --
+    the primary check here only recognizes compact "Book C:V" citation
+    forms, so a genuine spoken-form reference the primary check can't find
+    would otherwise be wrongly stripped. Four-way outcome:
 
-    A per-reference exception (an unexpected failure inside
-    check_reference_grounded() itself) is caught locally and treated as
-    UNCERTAIN -- fails toward stripping, never toward silently leaving a
-    reference in place on an internal error, and never crashes the whole
-    extraction over one bad reference."""
+      arbiter confirmed=True                          -> KEEP (not stripped)
+        review label "arbitration_overturned"
+      confirmed=False, reason starts "layer3_llm_call_failed"
+        -> STRIP (fail-safe), label "arbitration_unavailable"
+      confirmed=False, reason == "unparseable_reference"
+        -> STRIP (fail-safe), label "arbitration_unavailable_unparseable"
+      confirmed=False, any other reason (e.g. "layer3_llm_denied")
+        -> STRIP (existing boundary-safe removal, unchanged),
+           label "arbitration_agreed"
+
+    The two "_unavailable*" fail-safe branches are a disclosed, deliberate,
+    narrow exception to CLAUDE.md Invariant 11's general "never strip on
+    mere failure-to-confirm" posture -- scoped ONLY to "the arbiter itself
+    could not run/parse," never to the old, rejected "primary check simply
+    couldn't confirm" trigger Invariant 11 was written to close. Alex's own
+    task brief for this build: "A fabricated reference reaching users is
+    worse than a lost genuine one." This will be reflected explicitly in a
+    later records-update phase of this same project, not left silently
+    implicit here.
+
+    citation_verifier_layers is imported LAZILY, inside this function, on
+    every call that needs it -- NOT at this module's top level. Reason:
+    citation_verifier_layers.py itself already imports this module
+    (`propositions`) at ITS OWN top level (to reuse _get_groq()/
+    EXTRACTION_MODEL for its Layer 3 LLM call) -- a module-level import
+    here would be circular. Called as a bare module attribute
+    (`cvl.verify_reference_grounded(...)`), never bound via `from
+    citation_verifier_layers import verify_reference_grounded` -- a `from`
+    import captures the function object at import time and would not see a
+    test's later monkeypatch of the module's own attribute; calling through
+    the module object does (same monkeypatch precedent this file's own
+    `rg.check_reference_grounded` call already relies on for testability).
+
+    Returns a StripResult (new_content, review_records, n_found, n_grounded,
+    n_stripped_fabricated, n_stripped_uncertain, n_kept_arbitration) -- the
+    five right-hand counts always satisfy n_found == n_grounded +
+    n_stripped_fabricated + n_stripped_uncertain + n_kept_arbitration
+    (asserted by the caller, _apply_reference_grounding()), so a reference
+    can never silently vanish from the accounting -- an arbitration-kept
+    reference is neither "grounded by the primary check" nor "stripped"; it
+    has its own bucket.
+
+    review_records now carries an entry for EVERY reference that reached
+    arbitration (kept OR stripped, not stripped-only as before) -- each one
+    retains the ORIGINAL primary-check signal in "reason" ("fabricated" for
+    UNGROUNDED / "uncertain" for UNCERTAIN, unchanged from before
+    arbitration existed) AND adds "arbitration" (one of the four labels
+    above) plus "arbitration_reason" (the arbiter's own raw reason string,
+    for auditability) as new fields alongside it, never replacing it.
+
+    A per-reference exception inside check_reference_grounded() itself is
+    caught locally and treated as UNCERTAIN -- exactly as before -- and
+    that forced UNCERTAIN then goes through arbitration exactly like any
+    other UNCERTAIN, no special-cased fail-safe path for it specifically.
+    A per-reference exception raised unexpectedly by the ARBITER itself
+    (verify_reference_grounded is documented not to raise for ordinary
+    cases, but this does not trust that blindly) is caught the same way and
+    treated as "arbitration_unavailable" -> STRIP, same as a reported
+    layer3_llm_call_failed result."""
     spans = rg.find_reference_spans(content)
     if not spans:
-        return content, [], 0, 0, 0, 0
+        return StripResult(content, [], 0, 0, 0, 0, 0)
 
-    to_strip: List[Tuple[int, int, str, str]] = []  # (start, end, raw, reason)
     n_grounded = 0
+    n_fabricated = 0
+    n_uncertain = 0
+    n_kept_arbitration = 0
+    review_records: List[dict] = []
+    to_strip: List[Tuple[int, int, str]] = []  # (start, end, raw)
+
     for span in spans:
         try:
             result = rg.check_reference_grounded(span.raw, source_text, verse_lookup=None)
@@ -234,36 +331,78 @@ def _strip_ungrounded_references(
         if status == rg.GROUNDED:
             n_grounded += 1
             continue
-        reason = "fabricated" if status == rg.UNGROUNDED else "uncertain"
-        to_strip.append((span.start, span.end, span.raw, reason))
+
+        primary_reason = "fabricated" if status == rg.UNGROUNDED else "uncertain"
+
+        # Lazy, in-function import -- see this function's own docstring for
+        # why (circular-import avoidance + test-monkeypatch requirement).
+        import citation_verifier_layers as cvl
+
+        try:
+            arb = cvl.verify_reference_grounded(span.raw, source_text, llm_enabled=True)
+            arb_confirmed = arb.confirmed
+            arb_reason = arb.reason
+            arb_raised = False
+        except Exception as exc:
+            logger.warning(
+                "ARBITRATION_CALL_FAIL doc=%r ref=%r error=%s -- treating as "
+                "unavailable, stripping (fail-safe)",
+                document_id, span.raw, exc,
+            )
+            arb_confirmed = False
+            arb_reason = "arbitration_raised:{0}".format(exc)
+            arb_raised = True
+
+        if arb_confirmed:
+            arbitration_label = "arbitration_overturned"
+            n_kept_arbitration += 1
+        else:
+            # arb_raised (the arbiter FUNCTION itself raised, caught above)
+            # is checked FIRST and unconditionally maps to
+            # "arbitration_unavailable" -- it must never fall through to the
+            # string-prefix checks below, which only apply to a normally
+            # RETURNED VerificationResult's own `reason` field.
+            if arb_raised or arb_reason.startswith("layer3_llm_call_failed"):
+                arbitration_label = "arbitration_unavailable"
+            elif arb_reason == "unparseable_reference":
+                arbitration_label = "arbitration_unavailable_unparseable"
+            else:
+                arbitration_label = "arbitration_agreed"
+            to_strip.append((span.start, span.end, span.raw))
+            if primary_reason == "fabricated":
+                n_fabricated += 1
+            else:
+                n_uncertain += 1
+
+        review_records.append({
+            "written_at": datetime.now(timezone.utc).isoformat(),
+            "document_id": document_id,
+            "proposition_index": proposition_index,
+            "reference": span.raw,
+            "reason": primary_reason,
+            "arbitration": arbitration_label,
+            "arbitration_reason": arb_reason,
+        })
 
     if not to_strip:
-        return content, [], len(spans), n_grounded, 0, 0
+        return StripResult(
+            content, review_records, len(spans), n_grounded,
+            n_fabricated, n_uncertain, n_kept_arbitration,
+        )
 
     new_content = content
-    review_records: List[dict] = []
-    n_fabricated = 0
-    n_uncertain = 0
     # Descending start order: removing the rightmost span first never shifts
     # the character offsets of spans still pending removal (all of which lie
     # strictly to its left, per find_reference_spans()'s non-overlapping,
     # ascending-order regex matches) -- see this function's own module-level
     # docstring section and the boundary-safety unit test for the proof.
-    for start, end, raw, reason in sorted(to_strip, key=lambda t: t[0], reverse=True):
+    for start, end, _raw in sorted(to_strip, key=lambda t: t[0], reverse=True):
         new_content = _remove_reference_span(new_content, start, end)
-        if reason == "fabricated":
-            n_fabricated += 1
-        else:
-            n_uncertain += 1
-        review_records.append({
-            "written_at": datetime.now(timezone.utc).isoformat(),
-            "document_id": document_id,
-            "proposition_index": proposition_index,
-            "reference": raw,
-            "reason": reason,
-        })
 
-    return new_content, review_records, len(spans), n_grounded, n_fabricated, n_uncertain
+    return StripResult(
+        new_content, review_records, len(spans), n_grounded,
+        n_fabricated, n_uncertain, n_kept_arbitration,
+    )
 
 
 # Single source of truth for both the model requested (recorded verbatim on
@@ -409,6 +548,71 @@ If two points make substantially the same claim, MERGE them into one. Near-dupli
 Output ONLY a JSON array of these teaching passages, no preamble, no markdown fences:
 [{{"proposition_index": 1, "content": "..."}}, {{"proposition_index": 2, "content": "..."}}]"""
 
+# ── Allowed-reference-list prompt block (PLAN.md #45 Phase 1, 2026-07-29) ──────
+# Upstream constraint, complementing the downstream strip in
+# _strip_ungrounded_references() -- this narrows what the model is TOLD it
+# may cite in the first place; the strip below is what still catches it if
+# the model ignores this block anyway. Neither replaces the other. Wired
+# unconditionally into extract_propositions()'s outgoing message (see that
+# function) on BOTH the v3 and v4 branches, with no parameter to opt out --
+# same no-opt-out discipline as the always-on grounding strip.
+#
+# Known, accepted asymmetry (do not "fix" by widening the scanner here --
+# out of scope for this block): this list is built from rg.find_reference_
+# spans(), which only recognizes compact "Book C:V"/"Book C:V-E" citation
+# forms -- the same limitation find_reference_spans() carries everywhere
+# else in this codebase. A source that gives a reference only in spoken
+# form ("Hebrews chapter ten, verse twenty-five") will NOT appear in this
+# list, so the model is (incorrectly, from this block's narrow view) told
+# not to use it. This is deliberately tolerated: the downstream arbiter in
+# _strip_ungrounded_references() (citation_verifier_layers.py, Layers 1-3,
+# which DO recognize spoken forms) is the authoritative backstop that will
+# KEEP a genuine spoken-form reference this list omits, if the model prints
+# it anyway despite this block's instruction. This block only needs to be
+# right about what's confidently ALLOWED, not exhaustive about everything
+# a source actually contains.
+def _build_allowed_reference_block(text: str) -> str:
+    """Pure function -- no I/O, no LLM call, no DB. Reuses
+    rg.find_reference_spans(text) (imported, never forked) to locate every
+    compact-form scripture reference actually present in `text`, dedupes by
+    each span's PARSED tuple (so "Rom 8:28" and "Romans 8:28" collapse to
+    one entry, keeping whichever raw spelling was seen FIRST in `text` as
+    the display string), and renders a clearly delimited, explicitly CLOSED
+    list section for the extraction prompt. If `text` contains zero
+    recognizable references, the returned block says explicitly that the
+    output must contain no scripture reference at all -- not merely that
+    the list is empty."""
+    spans = rg.find_reference_spans(text)
+    seen: Dict[Tuple, str] = {}
+    for span in spans:
+        if span.parsed not in seen:
+            seen[span.parsed] = span.raw
+
+    if not seen:
+        return (
+            "\n\n---\n\n"
+            "ALLOWED SCRIPTURE REFERENCES (CLOSED LIST):\n"
+            "This document contains NO scripture references in a form this "
+            "check recognizes. Your output must not include ANY scripture "
+            "reference at all -- not one you recognize as real, not one you "
+            "believe the document implies. If you cannot state a teaching "
+            "without a reference, state it without one.\n"
+        )
+
+    lines = "\n".join("- {0}".format(raw) for raw in seen.values())
+    return (
+        "\n\n---\n\n"
+        "ALLOWED SCRIPTURE REFERENCES (CLOSED LIST):\n"
+        "The references below are the ONLY scripture references you may use "
+        "in your output. This list is CLOSED: you may not use any reference "
+        "beyond what is listed here, even one you recognize as a real, "
+        "correct citation the document doesn't happen to state. If a "
+        "teaching point has no reference in this list, state the teaching "
+        "without attaching one.\n"
+        "{0}\n".format(lines)
+    )
+
+
 # ── Groq client (lazy) ────────────────────────────────────────────────────────
 
 _groq_client: Optional[Groq] = None
@@ -509,7 +713,15 @@ def extract_propositions(
         prompt = _select_prompt_template(prompt_version)
     try:
         client = _get_groq()
-        msg = f"{prompt}\n\n---\n\n{text}"
+        # Allowed-reference-list block (PLAN.md #45 Phase 1, 2026-07-29) is
+        # appended unconditionally here -- this single line is downstream of
+        # the v3/v4 branch above, so it structurally covers BOTH prompt
+        # versions with no separate wiring and no opt-out parameter. It is
+        # concatenated as SEPARATE text after the tuned prompt constant, not
+        # injected into EXTRACTION_PROMPT/EXTRACTION_PROMPT_V4 themselves --
+        # those constants' literal text, and therefore prompt_fingerprint()'s
+        # digest of them, is unchanged by this addition.
+        msg = f"{prompt}\n\n---\n\n{text}" + _build_allowed_reference_block(text)
         resp = client.chat.completions.create(
             model=EXTRACTION_MODEL,
             messages=[{"role": "user", "content": msg}],
@@ -540,38 +752,43 @@ def _apply_reference_grounding(propositions: List[dict], text: str, doc_id: str)
     `propositions` -- only `content` is ever rewritten, and only to remove
     stripped reference spans; no proposition is ever added or dropped here.
     Asserts the exhaustive accounting (every reference found lands in
-    exactly one of grounded / stripped-fabricated / stripped-uncertain)
-    before returning."""
+    exactly one of grounded / stripped-fabricated / stripped-uncertain /
+    kept-via-arbitration -- PLAN.md #45 Phase 1, 2026-07-29 arbitration
+    build added the fourth bucket; see _strip_ungrounded_references()'s own
+    docstring for what each one means) before returning."""
     result: List[dict] = []
     all_review_records: List[dict] = []
     total_found = 0
     total_grounded = 0
     total_fabricated = 0
     total_uncertain = 0
+    total_kept_arbitration = 0
 
     for prop in propositions:
         content = prop.get("content", "")
         prop_index = prop.get("proposition_index")
-        new_content, review_records, n_found, n_grounded, n_fab, n_unc = (
-            _strip_ungrounded_references(content, text, doc_id, prop_index)
-        )
-        total_found += n_found
-        total_grounded += n_grounded
-        total_fabricated += n_fab
-        total_uncertain += n_unc
-        all_review_records.extend(review_records)
+        strip_result = _strip_ungrounded_references(content, text, doc_id, prop_index)
+        total_found += strip_result.n_found
+        total_grounded += strip_result.n_grounded
+        total_fabricated += strip_result.n_stripped_fabricated
+        total_uncertain += strip_result.n_stripped_uncertain
+        total_kept_arbitration += strip_result.n_kept_arbitration
+        all_review_records.extend(strip_result.review_records)
 
         new_prop = dict(prop)
-        new_prop["content"] = new_content
+        new_prop["content"] = strip_result.new_content
         result.append(new_prop)
 
     assert len(result) == len(propositions), (
         "reference-grounding step must never add or drop a proposition"
     )
-    assert total_found == total_grounded + total_fabricated + total_uncertain, (
+    assert total_found == (
+        total_grounded + total_fabricated + total_uncertain + total_kept_arbitration
+    ), (
         "reference-grounding accounting failed to reconcile: found=%d != "
-        "grounded=%d + fabricated=%d + uncertain=%d" % (
+        "grounded=%d + fabricated=%d + uncertain=%d + kept_arbitration=%d" % (
             total_found, total_grounded, total_fabricated, total_uncertain,
+            total_kept_arbitration,
         )
     )
 
@@ -580,8 +797,9 @@ def _apply_reference_grounding(propositions: List[dict], text: str, doc_id: str)
 
     logger.info(
         "REFERENCE_GROUNDING doc=%r found=%d grounded=%d stripped_fabricated=%d "
-        "stripped_uncertain=%d",
+        "stripped_uncertain=%d kept_arbitration=%d",
         doc_id, total_found, total_grounded, total_fabricated, total_uncertain,
+        total_kept_arbitration,
     )
     return result
 

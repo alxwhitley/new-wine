@@ -34,8 +34,10 @@ load_dotenv(PROJECT_ROOT / "backend" / "app" / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import propositions as pm  # noqa: E402
+import citation_verifier_layers as cvl  # noqa: E402
 
 RAVENHILL_DOC_ID = "c19ad18c-ea97-4841-8fa0-e60afc273521"
+ALLOWED_BLOCK_MARKER = "ALLOWED SCRIPTURE REFERENCES (CLOSED LIST)"
 
 
 def _db_params() -> dict:
@@ -95,9 +97,13 @@ class _FakeCompletions:
     def __init__(self, raw_json: str):
         self._raw_json = raw_json
         self.calls = 0
+        self.last_kwargs = None  # captures the real kwargs .create() was
+        # called with -- specifically `messages` -- so a test can assert
+        # what was actually SENT to the model, not just what came back.
 
     def create(self, **kwargs):
         self.calls += 1
+        self.last_kwargs = kwargs
         return _FakeResponse(self._raw_json)
 
 
@@ -150,9 +156,30 @@ def main() -> None:
     original_get_groq = pm._get_groq
     original_review_dir = pm.GROUNDING_REVIEW_DIR
     original_review_path = pm.GROUNDING_REVIEW_PATH
+    original_verify = cvl.verify_reference_grounded
     pm._get_groq = lambda: fake_client
     pm.GROUNDING_REVIEW_DIR = scratch_dir
     pm.GROUNDING_REVIEW_PATH = scratch_review_path
+
+    # "Philippians 4:8-9" (the injected fabricated reference) is UNCERTAIN at
+    # the primary check (verse_lookup=None on this real call path), so after
+    # PLAN.md #45 Phase 1's arbitration build (2026-07-29) it now reaches the
+    # arbiter before any strip decision. Pin it deterministically (confirmed=
+    # False, "layer3_llm_denied") so the strip still fires -- the exact
+    # pre-arbitration outcome this test already asserted below -- and no
+    # live Groq/network call fires for it (or for anything else: "Romans
+    # 8:28" is genuinely GROUNDED at the primary check and never reaches
+    # arbitration at all, so a call for it would hit this mock's own
+    # "unexpected reference" guard if that branch were ever wrongly taken).
+    arbitration_calls = []
+
+    def _fake_verify(reference, source_text, verse_lookup=None, llm_enabled=False):
+        arbitration_calls.append(reference)
+        if reference == "Philippians 4:8-9":
+            return cvl.VerificationResult(False, None, "layer3_llm_denied", False, 0)
+        raise AssertionError(f"unexpected arbitration call for {reference!r}")
+
+    cvl.verify_reference_grounded = _fake_verify
 
     try:
         result = pm.extract_propositions(source_text, doc_id=RAVENHILL_DOC_ID)
@@ -160,9 +187,28 @@ def main() -> None:
         pm._get_groq = original_get_groq
         pm.GROUNDING_REVIEW_DIR = original_review_dir
         pm.GROUNDING_REVIEW_PATH = original_review_path
+        cvl.verify_reference_grounded = original_verify
 
     print(f"\nMocked Groq .create() call count: {fake_client.chat.completions.calls}")
     assert fake_client.chat.completions.calls == 1, "expected exactly one mocked model call"
+    print(f"Arbitration calls: {arbitration_calls}")
+    assert arbitration_calls == ["Philippians 4:8-9"], (
+        "arbitration must be invoked exactly once, only for the UNCERTAIN reference"
+    )
+
+    # ── Proof 0 (Step 2, PLAN.md #45 Phase 1): the allowed-reference-list
+    #    block was actually SENT to the model as part of the real message,
+    #    not merely built and discarded. Reads the captured `messages`
+    #    kwarg the fake .create() call received -- this is the real call
+    #    site's own outgoing content, not a separate call to the builder. ──
+    sent_content = fake_client.chat.completions.last_kwargs["messages"][0]["content"]
+    assert ALLOWED_BLOCK_MARKER in sent_content, (
+        "allowed-reference-list block must be present in the v3 outgoing message"
+    )
+    assert "Romans 8:28" in sent_content, (
+        "the block must list a real reference actually printed in the source "
+        "document (Romans 8:28, per Case 1 of test_reference_grounding_unit_proof.py)"
+    )
 
     print("\n--- extract_propositions() result ---")
     for prop in result:
@@ -195,7 +241,8 @@ def main() -> None:
 
     # ── Proof 4: the strip was logged to the review file with correct
     #    provenance (document_id, proposition_index, the stripped
-    #    reference, a reason). ───────────────────────────────────────────
+    #    reference, a reason), AND now carries the arbitration label
+    #    alongside the original reason (PLAN.md #45 Phase 1). ─────────────
     assert scratch_review_path.exists(), "expected the grounding review file to have been written"
     review_lines = [
         json.loads(line) for line in scratch_review_path.read_text().splitlines() if line.strip()
@@ -209,11 +256,76 @@ def main() -> None:
     assert rec["proposition_index"] == 2
     assert rec["reference"] == "Philippians 4:8-9"
     assert rec["reason"] in ("fabricated", "uncertain")
+    assert rec["arbitration"] == "arbitration_agreed"
+    assert rec["arbitration_reason"] == "layer3_llm_denied"
+
+    # ── Proof 5 (Step 2, v4 branch): the allowed-reference-list block is
+    #    ALSO sent on the v4 (speaker-attributed) path -- a SEPARATE fake
+    #    client/call, single grounded-only proposition so this pass doesn't
+    #    need its own arbitration mock (nothing here is UNCERTAIN/
+    #    UNGROUNDED). Proves the block-wiring line is genuinely unconditional
+    #    across both branches, not just the v3 default. ────────────────────
+    v4_mock_response_json = json.dumps([
+        {"proposition_index": 1, "content": grounded_content},
+    ])
+    fake_client_v4 = _FakeGroqClient(v4_mock_response_json)
+    pm._get_groq = lambda: fake_client_v4
+    try:
+        result_v4 = pm.extract_propositions(
+            source_text, doc_id=RAVENHILL_DOC_ID,
+            speaker="Leonard Ravenhill", prompt_version="v4",
+        )
+    finally:
+        pm._get_groq = original_get_groq
+    assert fake_client_v4.chat.completions.calls == 1
+    sent_content_v4 = fake_client_v4.chat.completions.last_kwargs["messages"][0]["content"]
+    assert ALLOWED_BLOCK_MARKER in sent_content_v4, (
+        "allowed-reference-list block must ALSO be present in the v4 outgoing message"
+    )
+    assert "Romans 8:28" in sent_content_v4
+    assert len(result_v4) == 1 and result_v4[0]["content"] == grounded_content
 
     print("\n" + "=" * 78)
     print("All assertions passed -- grounding fires INSIDE extract_propositions() itself.")
     print("=" * 78)
 
 
+def test_build_allowed_reference_block() -> None:
+    """Pure-function proof for propositions._build_allowed_reference_block()
+    (Step 2) -- no DB, no Groq, synthetic text only. Run as part of this
+    file's own main() below, matching this repo's ad hoc test-file
+    convention (plain function calls, no pytest)."""
+    print("\n" + "=" * 78)
+    print("test_build_allowed_reference_block()")
+    print("=" * 78)
+
+    # ── Dedupe: "Rom 8:28" and "Romans 8:28" both parse to the identical
+    #    (abbrev, chapter, verse_start, verse_end) tuple via BOOK_MAP -- must
+    #    collapse to ONE entry, showing the FIRST-SEEN raw spelling. ───────
+    text_dupe = "As Rom 8:28 says, and later Romans 8:28 again, plus John 3:16."
+    block_dupe = pm._build_allowed_reference_block(text_dupe)
+    print(f"\n--- dedupe collapse ---\n{block_dupe}")
+    assert ALLOWED_BLOCK_MARKER in block_dupe
+    assert "- Rom 8:28" in block_dupe, "first-seen raw spelling ('Rom 8:28') must be shown"
+    assert "- Romans 8:28" not in block_dupe, (
+        "second-seen spelling of the SAME parsed reference must NOT appear as its own line"
+    )
+    assert "- John 3:16" in block_dupe
+    assert block_dupe.count("8:28") == 1, "the duplicate-parse reference must appear exactly once"
+
+    # ── Empty / reference-free input -> explicit "no references" text. ─────
+    text_empty = "This document contains no scripture citations of any kind."
+    block_empty = pm._build_allowed_reference_block(text_empty)
+    print(f"\n--- empty / reference-free ---\n{block_empty}")
+    assert ALLOWED_BLOCK_MARKER in block_empty
+    assert "must not include ANY scripture reference at all" in block_empty
+    assert not any(line.strip().startswith("- ") for line in block_empty.splitlines()), (
+        "empty case must not render any bullet-list reference line"
+    )
+
+    print("\nAll _build_allowed_reference_block() assertions passed.")
+
+
 if __name__ == "__main__":
     main()
+    test_build_allowed_reference_block()
