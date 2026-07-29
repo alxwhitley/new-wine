@@ -3,10 +3,63 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-29 (PLAN.md #47 calibrated corpus-wide closeness
-re-check — 2,409/2,409 live propositions reconciled, zero errors, zero DB
-writes; findings measured but deliberately not resolved).
+Last verified: 2026-07-29 (23 pending commits safety-checked and pushed live
+to `origin/main`, tip now `212eb3e`; retroactive closeness-triage
+infrastructure built and unit-tested in the same window, but card generation
+stayed blocked because read-only Supabase DNS is unavailable in this managed
+session and the local source archive does not contain most of the required
+source context).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## 23 pending commits safety-checked and pushed to origin/main (session state, 2026-07-29)
+
+Git-push-only session per CLAUDE.md's Session Routing table — no code changes, no database writes. Working tree confirmed clean before and after; `origin/main` confirmed 23 commits behind `HEAD`, 0 ahead, before pushing.
+
+**Pre-push safety check, read from the actual diffs rather than assumed:** (1) proposition/statement generation is still stopped — `propositions.py`'s closeness-gate branch is only reachable when a caller supplies `name_pattern`, no real caller (`shared_ingest.py`, `ingest_helloao.py`) does, and no cron/scheduled job anywhere in the repo triggers generation; (2) the closeness gate stays inert — this batch only moved its calibrated threshold (9→12 words, PLAN.md #46), which has no effect unless the gate is already active; (3) **one nuance, not silently assumed away:** the batch does touch four currently-serving files — `backend/app/routers/study.py` (mounted `/study/verse` endpoint), `backend/app/services/reference_verifier.py` (imported directly by `chat.py`, the live chat-answer citation verifier), `frontend/app/study/page.tsx`, and `frontend/lib/study-reference.ts` (the live chat-answer scripture underliner). The change is the BOOK_MAP ordinal-form widening already named in CLAUDE.md's Landmines (commit `ee267d4`) — purely additive (new alternate spellings like "1st Samuel"/"First Samuel"/"I Samuel" now recognized; nothing about forms that already matched changed). Flagged to Alex directly rather than pushed silently; Alex confirmed proceeding given the fix is deliberate, already-documented, and additive-only.
+
+**Pushed:** `origin/main` advanced `703a8cb..212eb3e` (23 commits). No migration was applied as a side effect of the push — `073_positions.sql`/`074_proposition_chunks.sql` are plain SQL files; `backend/railway.toml`'s deploy `startCommand` is `uvicorn app.main:app ...` with no migration step, confirmed by reading the file directly. Railway's auto-deploy from `main` will pick up this push.
+
+---
+
+## Retroactive closeness-check triage materials — infrastructure ready, generation blocked (session state, 2026-07-29)
+
+Repo-only build plus attempted SELECT-only generation; zero database writes and
+zero library-content changes. The recorded prior result file was used directly
+and the closeness classifier was not rerun. Its exact split is **137
+containment-only + 74 long-run + 2 too-little holds = 213**. The two holds are
+non-long-run cases and are routed to the binary fast queue, producing **139 fast
+items in seven balanced batches (20, 20, 20, 20, 20, 20, 19)** and **74
+real-attention items**, rather than arbitrarily moving five records to imitate
+the brief's approximate 142/71 estimate.
+
+`scripts/closeness_triage.py` now defines the complete local-only workflow:
+generation from the authoritative JSONL; compact fast cards; one-file-per-item
+real-attention cards with the calibrated near-verbatim run highlighted;
+chat-page commands; a persistent `decisions.json` ledger; closed decision
+vocabularies; automatic UTC timestamps; reviewer notes; and progress reporting.
+It has no corpus mutation path and no auto-fixing behavior. Regeneration
+preserves existing decisions. `scripts/test_closeness_triage.py` proves balanced
+batching, exact-run highlighting, context excerpts, closed decision options,
+and decision persistence (5/5 green).
+
+**Generation blocker:** the required source context is not present in the
+recorded JSONL. The script therefore opens only read-only/autocommit Postgres
+sessions to bulk-read chunks, names/aliases, and WEB verse text. This managed
+environment cannot resolve the Supabase pooler hostname; the attempt failed
+before any output directory or decision ledger was written. The local
+`sources/` archive was checked as a fallback but does not contain most of the
+flagged documents (including the bulk of the 100 Vlad Savchuk cases), so
+context-complete cards cannot be honestly generated from local files.
+
+**Continuation:** in a terminal with read access to Supabase, run
+`python3 scripts/closeness_triage.py generate`. The generator is fail-closed:
+it refuses any count other than 137/74/2/213 and refuses any real-attention
+card whose reconstructed calibrated run length differs from the recorded JSON.
+Successful output lands locally at
+`closeness_review/retroactive_triage/` (gitignored), with paging and decision
+commands documented by `python3 scripts/closeness_triage.py --help`.
 
 ---
 
