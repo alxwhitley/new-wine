@@ -57,3 +57,10 @@ layer3_llm_reading_pass_review/
 # itself always intercepted, never written. Same rationale as the review
 # queues above — local-only, not for git history.
 generator_live_proof_review/
+
+# PLAN.md #46 human-calibration judging set (2026-07-30) — contains
+# reconstructed full source passages from copyrighted third-party
+# transcripts, for Alex's own reading/judging pass. Same rationale as the
+# review queues above — a worse fit for permanent git history than for the
+# database it came from.
+calibration_review/

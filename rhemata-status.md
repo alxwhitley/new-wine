@@ -3,11 +3,23 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-30 (generator bypass-proofing build — allowed-list
-constraint, arbitrated stripping, structural provenance, permission to
-produce nothing, and a live proof on 3 real documents, storage disabled
-throughout).
+Last verified: 2026-07-30 (PLAN.md #46 human calibration closed out — Alex
+judged a 24-item blind set built from real full source documents, passed
+all 24, set the longest-verbatim-run line at 12 words; encoded into the
+closeness check the same session).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## PLAN.md #46 human calibration closed out (session state, 2026-07-30)
+
+Two sessions, both read-only/repo-only, zero DB writes throughout. Full detail: `PLAN.md` #46 (rewritten in place — the old "required, load-bearing, not yet run" framing is retired, not stacked on top). Build commit: `8f129c0`. Judging material: gitignored `calibration_review/` (blind file + hidden reference, not for permanent git history — copyrighted third-party transcript reconstructions).
+
+**Session 1 — built the blind judging set.** 24 items, 8 each for Vlad Savchuk (chosen over Zac Poonen: 1,053 propositions/117 documents vs 413/44 — live-queried, not assumed), Leonard Ravenhill, Derek Prince. 20 real (pulled from real stored propositions, full source documents reconstructed fresh from `chunks`, never a cached excerpt — confirmed before finishing), 4 constructed (the too-little-to-measure shape has only 2 real corpus examples anywhere, both Savchuk, so Ravenhill and Prince needed 2 constructed apiece, clearly labeled in the hidden reference only). Alex judged blind, no automated score or category hint shown.
+
+**Session 2 — Alex passed all 24 blind**, then ruled: shared vocabulary already doesn't count (existing exemption); short verbatim reuse is fine, only paragraph-scale copying is a violation; the line is a **longest verbatim run of 12 words, post-exemption** (was a provisional 9). The too-little-to-measure HOLD rule stays, Alex's explicit choice. Encoded same session: `LONGEST_RUN_WORD_THRESHOLD` 9→12. `CONTAINMENT_FLOOR` re-examined against both the calibration set and the real validation harness's R1 mechanical-ladder tier — found a genuine, quantified conflict (rescuing 3 calibration items needs floor >0.571; the real R1 tier flags 14/15 cases purely on containment in range [0.412, 0.563], which breaks if the floor moves that high) — held at 0.40 per the standing tie-break rule, with the 3 conflicting items (2 Ravenhill, 1 Prince) named as an accepted residual, not silently resolved. `RESIDUAL_TOO_LITTLE_CUTOFF` untouched, confirmed structurally independent (`classify()`'s residual gate fires first, unconditionally). A real regression was caught and fixed in the same pass: an existing unit test's hand-built verbatim-run string was exactly 11 words, one short of the new line — extended and re-verified. Mutation-tested both directions (reverting to 9 didn't fail the suite, since the fixed test case's run of 13 still clears 9; confirmed genuine dependency by mutating to 14 instead, which produced a real assertion failure) before landing on 12.
+
+**Also surfaced, not yet actioned:** three generator-quality findings from reading real generated passages during the blind pass — "the author" used instead of the teacher's real name (v3's live prompt allows this; v4 already fixed it but is unwired), comma-chained run-on sentences (Alex's own complaint), and vague/insight-free output from thin sources even above the existing word-count floor. All three are required reading for whoever runs the extraction-prompt session that must precede any generation restart — see PLAN.md #46's own entry for full detail. Also stated plainly there: this is a single 24-item blind sitting, with the fatigue/anchoring limits that implies — treat the new threshold as Alex-calibrated, not permanently fixed, and revisit once real generated output exists at backfill scale.
 
 ---
 
