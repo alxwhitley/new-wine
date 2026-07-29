@@ -821,22 +821,41 @@ def store_propositions(
     document_id: str,
     propositions: List[dict],
     embed_fn: Callable[[str], List[float]],
-    prompt_version: Optional[str] = None,
-    fingerprint: Optional[str] = None,
-    model: Optional[str] = None,
+    prompt_version: str,
     chunk_ids: Optional[List[str]] = None,
 ) -> int:
     """Clear existing propositions for document_id, then embed and insert new ones.
 
-    prompt_version / fingerprint / model: provenance stamped onto every row
-    this call inserts -- added 2026-07-23 so a future fabrication sweep is a
-    lookup instead of the manual text search and git archaeology the
-    2026-07-23 diagnostic required. All three are optional (None writes
-    NULL) so this signature doesn't force every caller to supply them, but
-    process_document() -- the only real caller -- always does. fingerprint
-    is the authoritative field when investigating; prompt_version is a
-    human-readable label only, kept for convenience, not trusted on its own
-    (see prompt_fingerprint()'s docstring for why).
+    prompt_version (bypass-proofing Phase 4, PLAN.md #45, 2026-07-29,
+    REQUIRED -- no default): an unstamped write is now IMPOSSIBLE, not
+    merely discouraged. Before this phase, prompt_version/fingerprint/model
+    were all optional-with-None-default -- a caller could omit all three
+    and land a silently-NULL-provenance row (see CLAUDE.md Invariant 10 and
+    the Landmines section: this is exactly how every live proposition row
+    ended up with NULL provenance, via the now-deleted
+    sample_v4_propositions_2026-07-23.py, which called this function with 4
+    bare positional args and nothing else). Omitting prompt_version now is a
+    Python TypeError at call-binding time -- before a single line of this
+    function's body runs, before the DELETE, before any DB call at all.
+
+    fingerprint and model are NO LONGER caller-suppliable at all -- they
+    were removed as parameters entirely. This function now derives them
+    itself, internally, from prompt_version every single call (see just
+    below), the same way process_document() always used to compute them
+    before passing them in. This closes a narrower but real gap the old
+    signature still had even when a caller DID pass all three: nothing
+    stopped a caller from passing a prompt_version of "v3" alongside a
+    fingerprint or model string that didn't actually match it (a typo, a
+    stale copy-paste, an honest mismake) -- the two were independently
+    caller-supplied and could silently disagree. Deriving them here from the
+    single stated prompt_version makes that kind of mismatch structurally
+    unrepresentable: there is only one value in the caller's control
+    (prompt_version), and fingerprint/model are always whatever that value
+    actually implies, every time, with no separate slot for a caller to get
+    wrong. fingerprint remains the authoritative field over prompt_version
+    when investigating a stored row (see prompt_fingerprint()'s docstring
+    for why) -- that authority relationship is unchanged, only how
+    fingerprint gets produced has moved.
 
     chunk_ids (bypass-proofing Phase 2b, PLAN.md #45, 2026-07-29, optional,
     default None): the full current chunk-id set for document_id (as
@@ -864,6 +883,19 @@ def store_propositions(
     Commits the transaction. Returns count inserted.
     fts column is GENERATED ALWAYS AS STORED — not included in INSERT.
     """
+    # Derived internally, every call, from the required prompt_version --
+    # never caller-suppliable (see docstring above). Computed before the
+    # DELETE/cursor block below on purpose: prompt_fingerprint() itself can
+    # raise (an unrecognized prompt_version still resolves to
+    # _select_prompt_template()'s v3 fallback today, so this is a defensive
+    # ordering choice, not a currently-reachable failure) -- if it ever did
+    # raise, this ordering guarantees that failure happens BEFORE the
+    # existing DELETE FROM propositions runs, never after, so a bad
+    # prompt_version can never wipe a document's existing rows and then
+    # fail before reinserting anything.
+    fingerprint = prompt_fingerprint(prompt_version)
+    model = EXTRACTION_MODEL
+
     with conn.cursor() as cur:
         cur.execute(
             "DELETE FROM propositions WHERE document_id = %s",
@@ -1064,7 +1096,7 @@ def process_document(
             # no classify() calls, no review file touched.
             count = store_propositions(
                 conn, document_id, props, embed_fn,
-                prompt_version=prompt_version, fingerprint=fingerprint, model=model,
+                prompt_version=prompt_version,
                 chunk_ids=chunk_ids,
             )
             return f"stored:{count}"
@@ -1108,7 +1140,7 @@ def process_document(
         if pass_props:
             stored_count = store_propositions(
                 conn, document_id, pass_props, embed_fn,
-                prompt_version=prompt_version, fingerprint=fingerprint, model=model,
+                prompt_version=prompt_version,
                 chunk_ids=chunk_ids,
             )
         # else: nothing PASSED -- store_propositions() is never called, so

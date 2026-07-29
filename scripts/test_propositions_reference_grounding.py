@@ -117,6 +117,52 @@ class _FakeGroqClient:
         self.chat = _FakeChat(raw_json)
 
 
+# ── Fake conn/cursor for the storage step only (bypass-proofing Phase 4/5,
+# PLAN.md #45, 2026-07-29) -- DB-free, mirroring
+# test_propositions_closeness_gate.py's own FakeConn/FakeCursor convention
+# (an `executed` audit list, no real cursor/connection). The ONLY real DB
+# touch anywhere in this file remains the pre-existing read-only
+# _reconstruct_document_text() SELECT above -- this class exists solely so
+# the new bypass-reconstruction test below can call store_propositions()
+# directly without ever opening a real write-capable connection. chunk_ids
+# is never exercised via this fake (stays at its function default in the
+# new test), so execute_values()/mogrify is never reached and this cursor
+# needs nothing beyond a plain .execute()/.executed list. ──────────────────
+
+class _StorageFakeCursor:
+    def __init__(self):
+        self.executed = []  # [(sql, params), ...] -- full audit trail
+
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+class _StorageFakeConn:
+    def __init__(self):
+        self._cursor = _StorageFakeCursor()
+        self.committed = False
+        self.rolled_back = False
+
+    def cursor(self):
+        return self._cursor
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+
+def _fake_embed_fn(text: str):
+    return [0.01, 0.02, 0.03]
+
+
 def main() -> None:
     print("=" * 78)
     print("test_propositions_reference_grounding.py")
@@ -423,7 +469,189 @@ def test_new_language_reaches_groq_message() -> None:
     print("\nAll test_new_language_reaches_groq_message() assertions passed.")
 
 
+def test_bypass_reconstruction_direct_call_shape() -> None:
+    """Bypass-proofing Phase 4/5 (PLAN.md #45, 2026-07-29) -- the core proof
+    for this phase. Reconstructs the historical bypass call shape end to
+    end: extract_propositions() called DIRECTLY, then store_propositions()
+    called DIRECTLY on that result -- process_document() never appears
+    anywhere in this path, mirroring the deleted
+    sample_v4_propositions_2026-07-23.py exactly (it called
+    store_propositions(conn, doc_id, props, embed_text): 4 bare positional
+    args, zero provenance, landing NULL rows -- see CLAUDE.md Invariant 10
+    / Landmines).
+
+    Proves, on this exact bypassed shape:
+      1. Phase 1's grounding+arbitration strip still fires -- a reference
+         the mocked arbiter DENIES is stripped from the returned content,
+         even though process_document() was never called.
+      2. Phase 1's allowed-reference-list block still reaches the real
+         outgoing model message unconditionally, on this same direct-call
+         path.
+      3. This phase's provenance requirement fires on the storage step:
+         omitting prompt_version raises TypeError with ZERO DB calls;
+         supplying it stores successfully with a fingerprint/model that
+         independently re-derives to the same values via
+         prompt_fingerprint()/EXTRACTION_MODEL.
+
+    The ONLY real DB touch anywhere in this function is the pre-existing
+    read-only chunk-text SELECT (_reconstruct_document_text(), the same
+    fixture-loading call this file's main() already uses) -- the storage
+    step below uses _StorageFakeConn/_StorageFakeCursor (DB-free, defined
+    above), never a real psycopg2 connection. chunk_ids is left at its
+    function default (not exercised here) so execute_values()/mogrify is
+    never reached, matching this file's and
+    test_propositions_closeness_gate.py's existing convention for
+    avoiding that complication in a test that isn't about chunk-linking.
+    """
+    print("\n" + "=" * 78)
+    print("test_bypass_reconstruction_direct_call_shape() -- bypass-proofing Phase 4/5")
+    print("=" * 78)
+
+    db_params = _db_params()
+    source_text = _reconstruct_document_text(db_params, RAVENHILL_DOC_ID)
+    print(f"\nReconstructed Ravenhill source text: {len(source_text)} chars (read-only fixture SELECT)")
+
+    fabricated_content = (
+        "Ravenhill also urges believers to dwell often on Philippians 4:8-9 "
+        "in their daily walk."
+    )
+    mock_response_json = json.dumps([
+        {"proposition_index": 1, "content": fabricated_content},
+    ])
+    fake_client = _FakeGroqClient(mock_response_json)
+
+    scratch_dir = Path(
+        "/private/tmp/claude-501/-Users-alexwhitley-rhemata/"
+        "947652e0-7a9a-4bf5-9c8c-badd1f72dc29/scratchpad"
+    )
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    scratch_review_path = scratch_dir / "test_bypass_reconstruction_review.jsonl"
+    if scratch_review_path.exists():
+        scratch_review_path.unlink()
+
+    original_get_groq = pm._get_groq
+    original_review_dir = pm.GROUNDING_REVIEW_DIR
+    original_review_path = pm.GROUNDING_REVIEW_PATH
+    original_verify = cvl.verify_reference_grounded
+    pm._get_groq = lambda: fake_client
+    pm.GROUNDING_REVIEW_DIR = scratch_dir
+    pm.GROUNDING_REVIEW_PATH = scratch_review_path
+
+    # "Philippians 4:8-9" is UNCERTAIN at the primary check on this real
+    # source text (verse_lookup=None), so it reaches arbitration -- pinned
+    # here to a deterministic DENIAL ("layer3_llm_denied", an ordinary
+    # disagreement, not one of the "_unavailable*" fail-safe branches) so
+    # the strip fires via the normal boundary-safe removal path. No live
+    # LLM/network call fires for arbitration either.
+    arbitration_calls = []
+
+    def _fake_verify_deny(reference, source_text, verse_lookup=None, llm_enabled=False):
+        arbitration_calls.append(reference)
+        if reference == "Philippians 4:8-9":
+            return cvl.VerificationResult(False, None, "layer3_llm_denied", False, 0)
+        raise AssertionError(f"unexpected arbitration call for {reference!r}")
+
+    cvl.verify_reference_grounded = _fake_verify_deny
+
+    # ── Step 1: extract_propositions() called DIRECTLY -- no
+    #    process_document() anywhere in this call path. ────────────────────
+    try:
+        extracted = pm.extract_propositions(source_text, doc_id=RAVENHILL_DOC_ID)
+    finally:
+        pm._get_groq = original_get_groq
+        pm.GROUNDING_REVIEW_DIR = original_review_dir
+        pm.GROUNDING_REVIEW_PATH = original_review_path
+        cvl.verify_reference_grounded = original_verify
+
+    print(f"\nMocked Groq .create() call count: {fake_client.chat.completions.calls}")
+    assert fake_client.chat.completions.calls == 1, "expected exactly one mocked model call"
+    print(f"Arbitration calls: {arbitration_calls}")
+    assert arbitration_calls == ["Philippians 4:8-9"], (
+        "arbitration must be invoked exactly once, only for the UNCERTAIN reference"
+    )
+
+    # (a) Proof the arbiter-denied reference is stripped from returned
+    #     content on this DIRECT-call path (no process_document() involved).
+    assert len(extracted) == 1, f"expected 1 proposition returned, got {len(extracted)}"
+    stripped_content = extracted[0]["content"]
+    print(f"Stripped content: {stripped_content!r}")
+    assert "Philippians 4:8-9" not in stripped_content, (
+        "the arbiter-denied reference must be stripped even on a direct "
+        "extract_propositions() call, bypassing process_document() entirely -- "
+        "Phase 1's strip must not depend on process_document() ever being called"
+    )
+
+    # (b) Proof the allowed-reference-list block reached the real outgoing
+    #     message on this same direct-call path.
+    sent_content = fake_client.chat.completions.last_kwargs["messages"][0]["content"]
+    assert ALLOWED_BLOCK_MARKER in sent_content, (
+        "the allowed-reference-list block must be present even on a direct "
+        "extract_propositions() call, bypassing process_document() entirely -- "
+        "Phase 1's upstream constraint must not depend on process_document() "
+        "ever being called"
+    )
+    print(
+        "CONFIRMED: Phase 1's grounding+arbitration strip AND allowed-reference-list "
+        "block both fire on a direct extract_propositions() call -- no process_document() "
+        "anywhere in this path."
+    )
+
+    # ── Step 2: store_propositions() called DIRECTLY on the extraction
+    #    result -- fake, DB-free connection, never the real DB. Mirrors the
+    #    deleted bypass script's exact 4-positional-arg shape. ─────────────
+    print("\n--- store_propositions() direct call, no prompt_version -> TypeError, zero DB calls ---")
+    conn_no_version = _StorageFakeConn()
+    raised = None
+    try:
+        # Exact 4-positional-arg call shape of the deleted bypass script:
+        # store_propositions(conn, doc_id, props, embed_fn) -- nothing else.
+        pm.store_propositions(conn_no_version, RAVENHILL_DOC_ID, extracted, _fake_embed_fn)
+    except TypeError as exc:
+        raised = exc
+    print(f"  raised: {raised!r}")
+    assert raised is not None, "expected a TypeError when prompt_version is omitted"
+    assert len(conn_no_version._cursor.executed) == 0, (
+        f"expected ZERO DB calls before the TypeError, got {len(conn_no_version._cursor.executed)}"
+    )
+    print("  CONFIRMED: TypeError raised at call-binding time, before any cursor.execute() call.")
+
+    print("\n--- store_propositions() direct call, prompt_version='v3' -> succeeds, correct provenance ---")
+    conn_with_version = _StorageFakeConn()
+    n_inserted = pm.store_propositions(
+        conn_with_version, RAVENHILL_DOC_ID, extracted, _fake_embed_fn,
+        prompt_version="v3",
+    )
+    assert n_inserted == 1, f"expected 1 proposition inserted, got {n_inserted}"
+    insert_calls = [
+        (sql, params) for sql, params in conn_with_version._cursor.executed
+        if "INSERT INTO propositions" in sql
+    ]
+    assert len(insert_calls) == 1, "expected exactly 1 INSERT INTO propositions call"
+    _, params = insert_calls[0]
+    expected_fp = pm.prompt_fingerprint("v3")
+    print(f"  params[5] (prompt_version) = {params[5]!r}")
+    print(f"  params[6] (fingerprint)    = {params[6]!r}")
+    print(f"  params[7] (model)          = {params[7]!r}")
+    assert params[5] == "v3"
+    assert params[6] == expected_fp, (
+        "stored fingerprint must equal prompt_fingerprint('v3') computed independently"
+    )
+    assert params[7] == pm.EXTRACTION_MODEL
+    print(
+        "  CONFIRMED: derived fingerprint/model match prompt_fingerprint('v3')/EXTRACTION_MODEL, "
+        "computed independently in this test."
+    )
+
+    print(
+        "\nAll test_bypass_reconstruction_direct_call_shape() assertions passed -- the historical "
+        "bypass call shape (direct extract_propositions() + direct store_propositions(), no "
+        "process_document() anywhere) still triggers Phase 1's two safeguards AND this phase's "
+        "provenance requirement."
+    )
+
+
 if __name__ == "__main__":
     main()
     test_build_allowed_reference_block()
     test_new_language_reaches_groq_message()
+    test_bypass_reconstruction_direct_call_shape()

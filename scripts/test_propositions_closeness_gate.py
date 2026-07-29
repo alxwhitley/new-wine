@@ -341,7 +341,7 @@ def main() -> None:
         conn_chunks = FakeConn(license_status="licensed")
         n_inserted = props_mod.store_propositions(
             conn_chunks, document_id, two_props, fake_embed_fn,
-            prompt_version="v3", fingerprint="fp-test", model="model-test",
+            prompt_version="v3",
             chunk_ids=test_chunk_ids,
         )
     finally:
@@ -389,14 +389,14 @@ def main() -> None:
         conn_no_chunks = FakeConn(license_status="licensed")
         n_inserted_none = props_mod.store_propositions(
             conn_no_chunks, document_id, two_props, fake_embed_fn,
-            prompt_version="v3", fingerprint="fp-test", model="model-test",
+            prompt_version="v3",
             chunk_ids=None,
         )
         # Also confirm an empty list behaves the same as None (both falsy).
         conn_empty_chunks = FakeConn(license_status="licensed")
         n_inserted_empty = props_mod.store_propositions(
             conn_empty_chunks, document_id, two_props, fake_embed_fn,
-            prompt_version="v3", fingerprint="fp-test", model="model-test",
+            prompt_version="v3",
             chunk_ids=[],
         )
     finally:
@@ -696,6 +696,210 @@ def main() -> None:
         "count spy (not just inferred from a clean return), strict less-than boundary confirmed "
         "(50 proceeds, 49 doesn't), and gate priority confirmed (Precept-Austin and license-"
         "status gates both fire before the floor for an equally-thin document)."
+    )
+
+    # ════════════════════════════════════════════════════════════════════
+    # Phase 4 (bypass-proofing, PLAN.md #45, 2026-07-29): provenance-
+    # stamping enforcement at store_propositions()'s own signature --
+    # prompt_version is now REQUIRED (no default), and fingerprint/model
+    # are no longer caller-suppliable at all -- derived internally from
+    # prompt_version every call (see propositions.py's store_propositions()
+    # docstring).
+    # ════════════════════════════════════════════════════════════════════
+    print("\n" + "=" * 78)
+    print("Phase 4: provenance-stamping enforcement (store_propositions() signature)")
+    print("=" * 78)
+
+    # ── 1. Omitting prompt_version -> TypeError, ZERO DB calls. Mirrors the
+    #    deleted sample_v4_propositions_2026-07-23.py's exact bypass shape:
+    #    store_propositions(conn, doc_id, props, embed_fn) -- 4 bare
+    #    positional args, nothing else. chunk_ids stays at its default
+    #    (None) so execute_values()/mogrify is never reached -- this test
+    #    only needs to prove the TypeError fires before ANY cursor
+    #    activity, not exercise the chunk-linking path. ─────────────────────
+    print("\n--- store_propositions() with no prompt_version -> TypeError, zero DB calls ---")
+    bypass_shape_props = [
+        {"proposition_index": 1, "content": "A hand-made teaching passage, no provenance supplied."},
+    ]
+    conn_bypass = FakeConn(license_status="licensed")
+    raised = None
+    try:
+        # Exact 4-positional-arg call shape of the deleted bypass script --
+        # no prompt_version, no fingerprint, no model, no chunk_ids.
+        props_mod.store_propositions(conn_bypass, document_id, bypass_shape_props, fake_embed_fn)
+    except TypeError as exc:
+        raised = exc
+    print("  raised: {0!r}".format(raised))
+    assert raised is not None, "expected a TypeError when prompt_version is omitted"
+    assert len(conn_bypass._cursor.executed) == 0, (
+        "expected ZERO DB calls before the TypeError -- got {0}".format(
+            len(conn_bypass._cursor.executed))
+    )
+    print("  CONFIRMED: TypeError raised at call-binding time, before any cursor.execute() call.")
+
+    # ── 2. prompt_version="v3" supplied, no fingerprint/model kwargs (they
+    #    no longer exist as parameters at all) -> succeeds, and the derived
+    #    fingerprint/model recorded in the INSERT match prompt_fingerprint()
+    #    computed independently in this test. ───────────────────────────────
+    print("\n--- store_propositions(prompt_version='v3'), derived fingerprint/model correctness ---")
+    conn_derived = FakeConn(license_status="licensed")
+    n_derived = props_mod.store_propositions(
+        conn_derived, document_id, bypass_shape_props, fake_embed_fn,
+        prompt_version="v3",
+    )
+    assert n_derived == 1
+    insert_calls = [
+        (sql, params) for sql, params in conn_derived._cursor.executed
+        if "INSERT INTO propositions" in sql
+    ]
+    assert len(insert_calls) == 1, "expected exactly 1 INSERT INTO propositions call"
+    _, params = insert_calls[0]
+    expected_fp_v3 = props_mod.prompt_fingerprint("v3")
+    print("  params[5] (prompt_version) = {0!r}".format(params[5]))
+    print("  params[6] (fingerprint)    = {0!r}".format(params[6]))
+    print("  params[7] (model)          = {0!r}".format(params[7]))
+    assert params[5] == "v3"
+    assert params[6] == expected_fp_v3
+    assert params[7] == props_mod.EXTRACTION_MODEL
+    print("  CONFIRMED: derived fingerprint/model match prompt_fingerprint('v3')/EXTRACTION_MODEL, "
+          "computed independently in this test.")
+
+    # ── 3. process_document() end-to-end: the real ungated call site
+    #    (DEFAULT_PROMPT_VERSION) produces the same independently-verifiable
+    #    match in the actual INSERT params. ─────────────────────────────────
+    print("\n--- process_document() end-to-end: ungated call site provenance ---")
+    props_mod.extract_propositions = lambda text, doc_id="", **kw: hand_made_props
+    try:
+        conn_e2e = FakeConn(license_status="licensed")
+        result_e2e = props_mod.process_document(
+            conn_e2e, document_id, source_id, doc_text, fake_embed_fn,
+        )
+    finally:
+        props_mod.extract_propositions = original_extract
+    print("  result_e2e = {0!r}".format(result_e2e))
+    assert result_e2e == "stored:3", (
+        "expected 'stored:3' for the end-to-end ungated provenance check, got {0!r}".format(result_e2e)
+    )
+    insert_calls_e2e = [
+        (sql, params) for sql, params in conn_e2e._cursor.executed
+        if "INSERT INTO propositions" in sql
+    ]
+    assert len(insert_calls_e2e) == 3, "expected 3 INSERT INTO propositions calls"
+    expected_fp_default = props_mod.prompt_fingerprint(props_mod.DEFAULT_PROMPT_VERSION)
+    for _, params in insert_calls_e2e:
+        assert params[5] == props_mod.DEFAULT_PROMPT_VERSION
+        assert params[6] == expected_fp_default
+        assert params[7] == props_mod.EXTRACTION_MODEL
+    print("  CONFIRMED: process_document()'s real ungated call site stamps params[6]/[7] == "
+          "prompt_fingerprint(DEFAULT_PROMPT_VERSION)/EXTRACTION_MODEL, computed independently.")
+
+    print(
+        "\nPhase 4 assertions passed: omitted prompt_version raises TypeError with zero DB calls; "
+        "supplied prompt_version derives correct fingerprint/model internally; process_document()'s "
+        "real call site stamps matching provenance end-to-end."
+    )
+
+    # ════════════════════════════════════════════════════════════════════
+    # Step 6 (bypass-proofing Phase 4 disclosure, PLAN.md #45, 2026-07-29):
+    # concrete demonstration of two gaps this phase does NOT close --
+    # disclosed, not remediated. Neither is fixed here; the point of this
+    # section is honest evidence, not remediation.
+    # ════════════════════════════════════════════════════════════════════
+    print("\n" + "=" * 78)
+    print("Step 6: disclosed-gap demonstrations (NOT fixed this phase)")
+    print("=" * 78)
+
+    # ── Gap 1: license-gate/Precept-Austin bypass is still real. Calling
+    #    store_propositions() DIRECTLY (never through process_document())
+    #    with a document_id that notionally belongs to a public_domain
+    #    source, with a fully valid prompt_version supplied, still inserts
+    #    -- because no license lookup exists anywhere on
+    #    store_propositions()'s own call path. get_license_status()/
+    #    PRECEPT_AUSTIN_SOURCE_ID checks live ONLY inside
+    #    process_document(), one function up; a caller that reaches storage
+    #    directly never passes through either check. ─────────────────────
+    print("\n--- Gap 1: license-gate/Precept-Austin bypass still real ---")
+    public_domain_document_id = "33333333-3333-3333-3333-333333333333"
+    gap_props = [
+        {"proposition_index": 1, "content": "A teaching passage notionally belonging to a public_domain source."},
+    ]
+    # license_status="public_domain" here is purely notional annotation --
+    # store_propositions() never calls get_license_status() at all, so this
+    # FakeConn's license_status is never even read on this call path. That
+    # absence of a read is itself the point being demonstrated.
+    conn_gap1 = FakeConn(license_status="public_domain")
+    n_gap1 = props_mod.store_propositions(
+        conn_gap1, public_domain_document_id, gap_props, fake_embed_fn,
+        prompt_version="v3",
+    )
+    print("  n_inserted = {0}".format(n_gap1))
+    assert n_gap1 == 1, (
+        "store_propositions() has no license check of its own -- it inserts "
+        "regardless of what license_status the document_id would resolve to "
+        "via process_document()'s gate"
+    )
+    insert_calls_gap1 = [
+        s for s, p in conn_gap1._cursor.executed if "INSERT INTO propositions" in s
+    ]
+    assert len(insert_calls_gap1) == 1
+    print(
+        "  CONFIRMED (disclosed, NOT fixed this phase): store_propositions() has no license "
+        "lookup on its own call path -- a caller reaching it directly (bypassing "
+        "process_document()'s get_license_status()/PRECEPT_AUSTIN_SOURCE_ID checks) inserts "
+        "successfully for a document_id that would have been skipped ('skipped_licensed' / "
+        "'skipped_precept_austin') had it gone through process_document() instead."
+    )
+
+    # ── Gap 2: authenticity of `propositions` content itself is still
+    #    unverifiable at this layer. Hand-construct content that never went
+    #    through ANY Groq call -- literal Python strings authored directly
+    #    in this test, not extracted from anything -- and call
+    #    store_propositions() with an HONESTLY-supplied prompt_version. It
+    #    inserts successfully, with a real, internally-consistent derived
+    #    fingerprint/model -- because store_propositions() can only verify
+    #    that fingerprint/model correctly DERIVE from the stated
+    #    prompt_version, never that the stated prompt_version (or any
+    #    prompt_version at all) actually produced this content. ───────────
+    print("\n--- Gap 2: hand-fabricated-content authenticity gap still real ---")
+    fabricated_props = [
+        {
+            "proposition_index": 1,
+            "content": (
+                "This exact sentence was typed directly into a test file by a person. "
+                "No Groq call, no model, no extraction pipeline of any kind produced it."
+            ),
+        },
+    ]
+    conn_gap2 = FakeConn(license_status="licensed")
+    n_gap2 = props_mod.store_propositions(
+        conn_gap2, document_id, fabricated_props, fake_embed_fn,
+        prompt_version="v3",  # honestly supplied -- the gap is NOT about lying about this value
+    )
+    print("  n_inserted = {0}".format(n_gap2))
+    assert n_gap2 == 1
+    insert_calls_gap2 = [
+        (s, p) for s, p in conn_gap2._cursor.executed if "INSERT INTO propositions" in s
+    ]
+    assert len(insert_calls_gap2) == 1
+    _, params_gap2 = insert_calls_gap2[0]
+    expected_fp_gap2 = props_mod.prompt_fingerprint("v3")
+    assert params_gap2[2] == fabricated_props[0]["content"], (
+        "the hand-fabricated content itself is stored verbatim, unexamined for authenticity"
+    )
+    assert params_gap2[6] == expected_fp_gap2
+    assert params_gap2[7] == props_mod.EXTRACTION_MODEL
+    print(
+        "  CONFIRMED (disclosed, NOT fixed this phase): hand-fabricated content, never produced "
+        "by any Groq call, inserts successfully with a real, internally-consistent derived "
+        "fingerprint/model -- store_propositions() can only verify that fingerprint/model "
+        "correctly DERIVE from the stated prompt_version, never that the stated prompt_version "
+        "(or anything at all) actually produced this content."
+    )
+
+    print(
+        "\nStep 6 disclosed-gap demonstrations complete: both gaps shown concretely via direct "
+        "store_propositions() calls, neither remediated (out of scope for this phase, per its "
+        "own build brief)."
     )
 
 
