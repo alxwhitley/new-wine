@@ -3,12 +3,14 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-29 (23 pending commits safety-checked and pushed live
-to `origin/main`, tip now `212eb3e`; retroactive closeness-triage
-infrastructure built and unit-tested in the same window, but card generation
-stayed blocked because read-only Supabase DNS is unavailable in this managed
-session and the local source archive does not contain most of the required
-source context).
+Last verified: 2026-07-29 (retroactive closeness-triage card generator's
+possessive-masking renderer bug fixed and committed locally, `3bfa3f3`, not
+yet pushed; full 213-item review-card set regenerated clean against live
+Supabase — 74 real-attention cards + 139 fast-pile items, zero
+highlight_failures, spot-checked directly against actual file output. The
+prior "generation blocked" entry below is corrected in place, not stacked —
+that session's DNS failure was environment-specific and did not recur this
+session).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
 
 ---
@@ -23,43 +25,75 @@ Git-push-only session per CLAUDE.md's Session Routing table — no code changes,
 
 ---
 
-## Retroactive closeness-check triage materials — infrastructure ready, generation blocked (session state, 2026-07-29)
+## Retroactive closeness-check triage: generation completed, renderer bug fixed (session state, 2026-07-29)
 
-Repo-only build plus attempted SELECT-only generation; zero database writes and
-zero library-content changes. The recorded prior result file was used directly
-and the closeness classifier was not rerun. Its exact split is **137
-containment-only + 74 long-run + 2 too-little holds = 213**. The two holds are
-non-long-run cases and are routed to the binary fast queue, producing **139 fast
-items in seven balanced batches (20, 20, 20, 20, 20, 20, 19)** and **74
-real-attention items**, rather than arbitrarily moving five records to imitate
-the brief's approximate 142/71 estimate.
+Two sessions on this same track. **Session 1** built `scripts/closeness_triage.py`'s
+complete local-only workflow — generation from the authoritative JSONL;
+compact fast cards; one-file-per-item real-attention cards with the
+calibrated near-verbatim run highlighted; chat-page commands; a persistent
+`decisions.json` ledger; closed decision vocabularies; automatic UTC
+timestamps; reviewer notes; progress reporting; no corpus mutation path, no
+auto-fixing — but a live Supabase DNS-resolution failure in that managed
+environment stopped card generation before any output existed. **Session 2**
+(this one, harness route — executor/planner-reviewer, zero DB writes, every
+Postgres touch a read-only/autocommit SELECT): Supabase was reachable this
+time; `generate` ran, crashed partway through the real-attention loop at
+item 15 of 74 on a real rendering bug (below), and after the fix, ran clean
+to completion. Its exact split is **137 containment-only + 74 long-run + 2
+too-little holds = 213**, unchanged from Session 1's analysis — the two
+holds route to the binary fast queue, producing **139 fast items in seven
+balanced batches (20, 20, 20, 20, 20, 20, 19)** and **74 real-attention
+items**.
 
-`scripts/closeness_triage.py` now defines the complete local-only workflow:
-generation from the authoritative JSONL; compact fast cards; one-file-per-item
-real-attention cards with the calibrated near-verbatim run highlighted;
-chat-page commands; a persistent `decisions.json` ledger; closed decision
-vocabularies; automatic UTC timestamps; reviewer notes; and progress reporting.
-It has no corpus mutation path and no auto-fixing behavior. Regeneration
-preserves existing decisions. `scripts/test_closeness_triage.py` proves balanced
-batching, exact-run highlighting, context excerpts, closed decision options,
-and decision persistence (5/5 green).
+**Renderer bug, root cause and fix (commit `3bfa3f3`, local, not yet
+pushed).** `closeness_check.py`'s `_mask_theology()` substitutes bare
+`THEOLOGY_TERMS` words (e.g. "God", "Bible") via a plain `\b`-bounded regex —
+`\b` matches between a word character and an apostrophe, so it also matches
+"Bible" inside "Bible's", leaving a dangling `'s` that `tokenize()`'s word
+regex then retokenizes as a standalone one-letter `"s"` token. `_real_card()`
+was searching for this masked token sequence verbatim in the real, UNMASKED
+source text — a sequence that never exists there (a real "Bible's" tokenizes
+as one token). Two of 74 real-attention items hit this exactly: item 15
+(`148864dd-0883-42c9-83a4-bb85dacc7c39`, Doug Kreighbaum, "Understanding the
+Bible's story and theme... God's family") and item 29
+(`b664f59e-89f8-48dc-826f-b156bb08dcee`, Leonard Ravenhill, "The Ark Of God" —
+"God's power... God's judgment"). Fix: a new `compute_real_highlight_run()`
+reuses the pre-existing, already-unmasked `raw_longest_run()` (the same
+function `_fast_card` already used) to find the highlight span in raw text
+instead of the masked run. The classifier-integrity check in `generate()`
+(comparing a fresh masked-run reconstruction against the recorded JSONL's
+`longest_run_words`) is untouched, unwrapped, still hard-raises on a
+mismatch — only the rendering path changed, per PLAN.md's closeness-check
+track staying classifier-frozen. Per-item highlight lookup is now wrapped in
+try/except: a genuine failure writes an honest "could not locate" card (no
+fabricated highlight, still carries the Proposition ID line so
+`decide-real`/`show-real` keep working) and logs to a `highlight_failures`
+list in the manifest, rather than crashing the whole batch. A regression
+test reproducing the exact masked-possessive `"s"`-token artifact was added
+to `test_closeness_triage.py` (6/6 green, up from 5/5).
 
-**Generation blocker:** the required source context is not present in the
-recorded JSONL. The script therefore opens only read-only/autocommit Postgres
-sessions to bulk-read chunks, names/aliases, and WEB verse text. This managed
-environment cannot resolve the Supabase pooler hostname; the attempt failed
-before any output directory or decision ledger was written. The local
-`sources/` archive was checked as a fallback but does not contain most of the
-flagged documents (including the bulk of the 100 Vlad Savchuk cases), so
-context-complete cards cannot be honestly generated from local files.
+**Generation completed clean, verified against actual file output — not
+exit code.** `manifest.json` shows `containment_only=137`,
+`real_attention.count=74`, `too_little_holds=2`, `flagged_total=213`,
+`fast_pile.batch_sizes=[20,20,20,20,20,20,19]` (139 total), and
+**`highlight_failures: []`** — zero rendering failures across all 74
+real-attention items. 74 `item_001.md`..`item_074.md` files confirmed on
+disk; item 15 and item 29 read directly and both show a real, coherent
+`**...**`-highlighted near-verbatim run present in both the flagged-passage
+and source-context sections. `decisions.json`'s shasum was identical before
+and after regeneration (the ledger — currently 0 decisions recorded —
+survived untouched, per its existing merge-on-regenerate design).
 
-**Continuation:** in a terminal with read access to Supabase, run
-`python3 scripts/closeness_triage.py generate`. The generator is fail-closed:
-it refuses any count other than 137/74/2/213 and refuses any real-attention
-card whose reconstructed calibrated run length differs from the recorded JSON.
-Successful output lands locally at
-`closeness_review/retroactive_triage/` (gitignored), with paging and decision
-commands documented by `python3 scripts/closeness_triage.py --help`.
+**Prior blocker cleared — was environment-specific to Session 1, not a
+design flaw.** Live output exists locally at
+`closeness_review/retroactive_triage/` (gitignored): 139 fast-pile items
+across 7 batches, 74 real-attention cards, `decisions.json` ledger,
+`manifest.json`. Continuation for the actual human triage pass: paging and
+decision commands via `python3 scripts/closeness_triage.py --help`
+(`show-fast N`, `show-real [item]`, `decide-fast`, `decide-real`,
+`progress`). No item has been decided yet — this session generated,
+fixed, and verified the review materials; it did not triage any of the 213
+items.
 
 ---
 
