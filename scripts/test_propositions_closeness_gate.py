@@ -2,7 +2,10 @@
 """
 test_propositions_closeness_gate.py — Phase 5 DB-free mock proof for the
 closeness-check gate wired into propositions.process_document() (PLAN.md
-#45 Phase 5).
+#45 Phase 5), extended in Phase 2b (bypass-proofing, PLAN.md #45,
+2026-07-29) with coverage for the new chunk_ids back-link parameter on
+store_propositions()/process_document() (proposition_chunks, migration
+074).
 
 DB-FREE. No psycopg2 connection is ever opened. `conn` and `embed_fn` are
 hand-built fakes (this repo's ad hoc scripts/test_*.py convention, no test
@@ -12,6 +15,23 @@ never called either: extract_propositions() is monkeypatched to return a
 hand-made list so this test exercises the REAL partition/store/review-file
 logic in process_document() against REAL closeness_check.classify() output,
 without touching the network or the database.
+
+Phase 2b addition: store_propositions()'s new bulk proposition_chunks
+insert calls psycopg2.extras.execute_values(), which requires a real
+cursor with a working .mogrify() (and, since the SQL passed here is a
+plain str rather than bytes, a `cur.connection.encoding` lookup too) --
+FakeCursor/FakeConn below have neither. Rather than build a faithful
+mogrify()/connection.encoding stub to satisfy psycopg2's real
+execute_values() internals, this file monkeypatches
+`propositions.execute_values` itself for the duration of each new test,
+capturing the (sql, argslist) it was called with directly. This is
+option (b) from this phase's own build brief -- chosen because it's a
+one-line substitution against a module-level name this codebase already
+relies on being monkeypatchable (propositions.py calls it as a bare
+module-global, never re-bound via `from ... import execute_values as x`
+inside a function), versus reverse-engineering enough of psycopg2's C
+extension behavior (byte-encoding lookups included) to fake it faithfully
+for a helper class that has never needed that before.
 
 name_pattern IS supplied (via closeness_check.build_name_pattern() over a
 small hand-made set — a pure in-memory regex compile, no DB call) so the
@@ -85,6 +105,17 @@ class FakeConn:
                 # content, embedding_str, prop_index, prompt_version,
                 # fingerprint, model) — content is index 2.
                 out.append(params[2])
+        return out
+
+    def inserted_proposition_ids(self):
+        """Every REAL proposition id (as generated inline by
+        store_propositions(), never a proxy/invented id) that reached an
+        INSERT INTO propositions — id is param index 0, per the same
+        param-order contract inserted_contents() above already relies on."""
+        out = []
+        for sql, params in self._cursor.executed:
+            if "INSERT INTO propositions" in sql:
+                out.append(params[0])
         return out
 
 
@@ -265,6 +296,236 @@ def main() -> None:
     )
 
     print("\nAll assertions passed. Both sides of the partition confirmed; gate-off control confirmed unchanged.")
+
+    # ════════════════════════════════════════════════════════════════════
+    # Phase 2b (bypass-proofing, PLAN.md #45, 2026-07-29): chunk_ids
+    # back-link coverage for store_propositions()/process_document().
+    # ════════════════════════════════════════════════════════════════════
+    print("\n" + "=" * 78)
+    print("Phase 2b: chunk_ids back-link coverage (proposition_chunks, migration 074)")
+    print("=" * 78)
+
+    original_execute_values = props_mod.execute_values
+
+    # ── 1. store_propositions(..., chunk_ids=[...]) with N=2 propositions:
+    #    prove exactly N*M pairs, using the REAL generated proposition ids
+    #    read back from the recorded INSERT INTO propositions params. ──────
+    print("\n--- store_propositions(): chunk_ids present, N=2 propositions ---")
+    two_props = [
+        {"proposition_index": 1, "content": "First stored teaching passage for the chunk-id back-link test."},
+        {"proposition_index": 2, "content": "Second stored teaching passage for the chunk-id back-link test."},
+    ]
+    test_chunk_ids = ["chunk-aaaa", "chunk-bbbb", "chunk-cccc"]
+
+    ev_calls_present = []
+
+    def fake_execute_values_present(cur, sql, argslist, template=None, page_size=100, fetch=False):
+        ev_calls_present.append((sql, list(argslist)))
+
+    props_mod.execute_values = fake_execute_values_present
+    try:
+        conn_chunks = FakeConn(license_status="licensed")
+        n_inserted = props_mod.store_propositions(
+            conn_chunks, document_id, two_props, fake_embed_fn,
+            prompt_version="v3", fingerprint="fp-test", model="model-test",
+            chunk_ids=test_chunk_ids,
+        )
+    finally:
+        props_mod.execute_values = original_execute_values
+
+    print("  n_inserted = {0}".format(n_inserted))
+    assert n_inserted == 2, "expected 2 propositions inserted, got {0}".format(n_inserted)
+
+    real_prop_ids = conn_chunks.inserted_proposition_ids()
+    print("  real proposition ids (from INSERT INTO propositions params): {0}".format(real_prop_ids))
+    assert len(real_prop_ids) == 2, "expected 2 real proposition ids captured, got {0}".format(len(real_prop_ids))
+    assert len(set(real_prop_ids)) == 2, "expected 2 DISTINCT proposition ids"
+
+    assert len(ev_calls_present) == 1, (
+        "expected exactly one execute_values() call for proposition_chunks, got {0}".format(
+            len(ev_calls_present))
+    )
+    ev_sql, ev_pairs = ev_calls_present[0]
+    assert "INSERT INTO proposition_chunks" in ev_sql, (
+        "expected the proposition_chunks INSERT statement, got sql={0!r}".format(ev_sql)
+    )
+    expected_pairs = {(pid, cid) for pid in real_prop_ids for cid in test_chunk_ids}
+    print("  pairs recorded: {0}".format(sorted(ev_pairs)))
+    assert set(ev_pairs) == expected_pairs, (
+        "expected the full cartesian product of {{real proposition ids}} x {{chunk_ids}}, "
+        "got {0!r} vs expected {1!r}".format(set(ev_pairs), expected_pairs)
+    )
+    assert len(ev_pairs) == len(two_props) * len(test_chunk_ids) == 6, (
+        "expected exactly N*M = 2*3 = 6 pairs, got {0}".format(len(ev_pairs))
+    )
+    print("  CONFIRMED: {0} pairs == cartesian product of {1} propositions x {2} chunk ids".format(
+        len(ev_pairs), len(two_props), len(test_chunk_ids)))
+
+    # ── 2. store_propositions(..., chunk_ids=None): prove ZERO
+    #    proposition_chunks inserts, and proposition inserts themselves are
+    #    otherwise unchanged. ─────────────────────────────────────────────
+    print("\n--- store_propositions(): chunk_ids=None ---")
+    ev_calls_none = []
+
+    def fake_execute_values_none(cur, sql, argslist, template=None, page_size=100, fetch=False):
+        ev_calls_none.append((sql, list(argslist)))
+
+    props_mod.execute_values = fake_execute_values_none
+    try:
+        conn_no_chunks = FakeConn(license_status="licensed")
+        n_inserted_none = props_mod.store_propositions(
+            conn_no_chunks, document_id, two_props, fake_embed_fn,
+            prompt_version="v3", fingerprint="fp-test", model="model-test",
+            chunk_ids=None,
+        )
+        # Also confirm an empty list behaves the same as None (both falsy).
+        conn_empty_chunks = FakeConn(license_status="licensed")
+        n_inserted_empty = props_mod.store_propositions(
+            conn_empty_chunks, document_id, two_props, fake_embed_fn,
+            prompt_version="v3", fingerprint="fp-test", model="model-test",
+            chunk_ids=[],
+        )
+    finally:
+        props_mod.execute_values = original_execute_values
+
+    print("  n_inserted (chunk_ids=None)  = {0}".format(n_inserted_none))
+    print("  n_inserted (chunk_ids=[])    = {0}".format(n_inserted_empty))
+    assert n_inserted_none == 2, "proposition inserts must be unchanged when chunk_ids=None"
+    assert n_inserted_empty == 2, "proposition inserts must be unchanged when chunk_ids=[]"
+    assert ev_calls_none == [], (
+        "expected ZERO execute_values() calls when chunk_ids is None/empty, got {0}".format(ev_calls_none)
+    )
+    real_prop_ids_none = conn_no_chunks.inserted_proposition_ids()
+    assert len(real_prop_ids_none) == 2, "proposition INSERT count must be unchanged by chunk_ids=None"
+    print("  CONFIRMED: zero proposition_chunks inserts; proposition inserts unchanged ({0} rows)".format(
+        len(real_prop_ids_none)))
+
+    # ── 3. process_document(..., chunk_ids=[...]): prove the identical
+    #    chunk_ids value reaches BOTH the ungated path and the gated
+    #    (name_pattern supplied) path. ───────────────────────────────────
+    print("\n--- process_document(): chunk_ids threading, ungated path ---")
+    ev_calls_ungated = []
+
+    def fake_execute_values_ungated(cur, sql, argslist, template=None, page_size=100, fetch=False):
+        ev_calls_ungated.append((sql, list(argslist)))
+
+    props_mod.extract_propositions = lambda text, doc_id="", **kw: hand_made_props
+    props_mod.execute_values = fake_execute_values_ungated
+    try:
+        conn_ungated = FakeConn(license_status="licensed")
+        result_ungated = props_mod.process_document(
+            conn_ungated, document_id, source_id, doc_text, fake_embed_fn,
+            chunk_ids=test_chunk_ids,
+        )  # name_pattern/verse_lookup omitted -- gate OFF, chunk_ids supplied
+    finally:
+        props_mod.extract_propositions = original_extract
+        props_mod.execute_values = original_execute_values
+
+    print("  result_ungated = {0!r}".format(result_ungated))
+    assert result_ungated == "stored:3", (
+        "ungated path with chunk_ids must still store all 3 extracted propositions unfiltered, "
+        "got {0!r}".format(result_ungated)
+    )
+    real_prop_ids_ungated = conn_ungated.inserted_proposition_ids()
+    assert len(real_prop_ids_ungated) == 3, "expected 3 real proposition ids on the ungated path"
+    assert len(ev_calls_ungated) == 1, (
+        "expected exactly one execute_values() call on the ungated path, got {0}".format(
+            len(ev_calls_ungated))
+    )
+    _, ev_pairs_ungated = ev_calls_ungated[0]
+    expected_pairs_ungated = {(pid, cid) for pid in real_prop_ids_ungated for cid in test_chunk_ids}
+    assert set(ev_pairs_ungated) == expected_pairs_ungated, (
+        "ungated path: chunk_ids did not reach store_propositions() correctly"
+    )
+    print("  CONFIRMED: chunk_ids reached store_propositions() on the ungated path -- "
+          "{0} pairs for {1} propositions x {2} chunk ids".format(
+              len(ev_pairs_ungated), len(real_prop_ids_ungated), len(test_chunk_ids)))
+
+    print("\n--- process_document(): chunk_ids threading, gated path (name_pattern active) ---")
+    # Redirect the review file to scratch again for this call -- the earlier
+    # try/finally already restored CLOSENESS_REVIEW_DIR/PATH to their real,
+    # non-scratch values, and this gated call produces QUOTE_CANDIDATE/
+    # HOLD_TOO_LITTLE review records that must not land in the real
+    # closeness_review/ directory.
+    props_mod.CLOSENESS_REVIEW_DIR = scratch_dir
+    props_mod.CLOSENESS_REVIEW_PATH = scratch_review_path
+
+    ev_calls_gated = []
+
+    def fake_execute_values_gated(cur, sql, argslist, template=None, page_size=100, fetch=False):
+        ev_calls_gated.append((sql, list(argslist)))
+
+    props_mod.extract_propositions = lambda text, doc_id="", **kw: hand_made_props
+    props_mod.execute_values = fake_execute_values_gated
+    try:
+        conn_gated = FakeConn(license_status="licensed")
+        result_gated = props_mod.process_document(
+            conn_gated, document_id, source_id, doc_text, fake_embed_fn,
+            name_pattern=name_pattern, verse_lookup=verse_lookup,
+            chunk_ids=test_chunk_ids,
+        )
+    finally:
+        props_mod.extract_propositions = original_extract
+        props_mod.execute_values = original_execute_values
+        props_mod.CLOSENESS_REVIEW_DIR = original_review_dir
+        props_mod.CLOSENESS_REVIEW_PATH = original_review_path
+
+    print("  result_gated = {0!r}".format(result_gated))
+    assert result_gated == "stored:1:flagged:2", (
+        "expected exactly 1 PASS-verdict proposition stored and 2 flagged, got {0!r}".format(result_gated)
+    )
+    real_prop_ids_gated = conn_gated.inserted_proposition_ids()
+    assert len(real_prop_ids_gated) == 1, (
+        "expected exactly 1 real proposition id on the gated path (the PASS item), got {0}".format(
+            len(real_prop_ids_gated))
+    )
+    assert len(ev_calls_gated) == 1, (
+        "expected exactly one execute_values() call on the gated path (store_propositions() "
+        "fires once for the non-empty pass_props branch), got {0}".format(len(ev_calls_gated))
+    )
+    _, ev_pairs_gated = ev_calls_gated[0]
+    expected_pairs_gated = {(pid, cid) for pid in real_prop_ids_gated for cid in test_chunk_ids}
+    assert set(ev_pairs_gated) == expected_pairs_gated, (
+        "gated path: chunk_ids did not reach store_propositions() correctly for the PASS item"
+    )
+    print("  CONFIRMED: chunk_ids reached store_propositions() on the gated path for the PASS "
+          "item -- {0} pairs".format(len(ev_pairs_gated)))
+
+    # ── 4. process_document(..., chunk_ids=None) [default, omitted
+    #    entirely]: existing default behavior is unchanged. The gate-off
+    #    control block above (result_off == "stored:3") already exercises
+    #    this call shape; this adds an explicit, direct proof that omitting
+    #    chunk_ids never reaches execute_values() at all -- not merely
+    #    that it happens to record zero pairs. ───────────────────────────
+    print("\n--- process_document(): chunk_ids omitted entirely (default) -- must never call execute_values() ---")
+
+    def fail_if_called(cur, sql, argslist, template=None, page_size=100, fetch=False):
+        raise AssertionError(
+            "execute_values() must NEVER be called when chunk_ids is omitted (default None)"
+        )
+
+    props_mod.extract_propositions = lambda text, doc_id="", **kw: hand_made_props
+    props_mod.execute_values = fail_if_called
+    try:
+        conn_default = FakeConn(license_status="licensed")
+        result_default = props_mod.process_document(
+            conn_default, document_id, source_id, doc_text, fake_embed_fn,
+        )  # chunk_ids omitted entirely -- must default to None, byte-identical to pre-Phase-2b
+    finally:
+        props_mod.extract_propositions = original_extract
+        props_mod.execute_values = original_execute_values
+
+    print("  result_default = {0!r}".format(result_default))
+    assert result_default == "stored:3", (
+        "default (chunk_ids omitted) behavior must be unchanged: got {0!r}".format(result_default)
+    )
+    print("  CONFIRMED: execute_values() was never called; default process_document() behavior unchanged.")
+
+    print(
+        "\nPhase 2b assertions passed: chunk_ids cartesian product proven with real "
+        "proposition ids (present and None/empty cases), and threading confirmed through "
+        "both the ungated and gated process_document() paths, plus the default-omitted case."
+    )
 
 
 if __name__ == "__main__":

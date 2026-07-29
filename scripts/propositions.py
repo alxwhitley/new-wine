@@ -110,6 +110,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from groq import Groq
+from psycopg2.extras import execute_values
 
 import reference_grounding as rg
 
@@ -823,6 +824,7 @@ def store_propositions(
     prompt_version: Optional[str] = None,
     fingerprint: Optional[str] = None,
     model: Optional[str] = None,
+    chunk_ids: Optional[List[str]] = None,
 ) -> int:
     """Clear existing propositions for document_id, then embed and insert new ones.
 
@@ -836,6 +838,29 @@ def store_propositions(
     human-readable label only, kept for convenience, not trusted on its own
     (see prompt_fingerprint()'s docstring for why).
 
+    chunk_ids (bypass-proofing Phase 2b, PLAN.md #45, 2026-07-29, optional,
+    default None): the full current chunk-id set for document_id (as
+    determined by the caller -- see shared_ingest.ingest_document()'s own
+    single-query fetch). When truthy, one (proposition_id, chunk_id) pair
+    is recorded in proposition_chunks for EVERY chunk id in this list,
+    against EVERY proposition stored in this call -- the cartesian product,
+    not a per-chunk assignment. This is the honest precision available:
+    extraction runs over the document's full reconstructed text, not a
+    single chunk, so a stored proposition's only truthful back-link is
+    "every chunk that made up the text this extraction call actually saw."
+    When chunk_ids is None or empty (the default -- every caller that
+    predates this parameter), zero proposition_chunks rows are written and
+    behavior is otherwise identical to before this parameter existed. The
+    proposition ids used are the REAL ids generated inline below, not
+    reconstructed after the fact. No existing pre-Phase-2b row is ever
+    touched, backfilled, or reinterpreted by this addition.
+
+    The existing `DELETE FROM propositions WHERE document_id = %s` above
+    needs no matching `DELETE FROM proposition_chunks` -- migration 074's
+    `proposition_id uuid NOT NULL REFERENCES propositions (id) ON DELETE
+    CASCADE` already removes any stale back-link rows automatically the
+    instant their parent proposition row is deleted.
+
     Commits the transaction. Returns count inserted.
     fts column is GENERATED ALWAYS AS STORED — not included in INSERT.
     """
@@ -846,18 +871,20 @@ def store_propositions(
         )
 
         inserted = 0
+        stored_prop_ids: List[str] = []
         for prop in propositions:
             content = prop["content"]
             prop_index = prop["proposition_index"]
             embedding = embed_fn(content)
             embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
+            prop_id = str(uuid.uuid4())
             cur.execute(
                 """INSERT INTO propositions
                        (id, document_id, content, embedding, proposition_index,
                         prompt_version, prompt_fingerprint, model)
                    VALUES (%s, %s, %s, %s::vector, %s, %s, %s, %s)""",
                 (
-                    str(uuid.uuid4()),
+                    prop_id,
                     document_id,
                     content,
                     embedding_str,
@@ -867,7 +894,29 @@ def store_propositions(
                     model,
                 ),
             )
+            stored_prop_ids.append(prop_id)
             inserted += 1
+
+        if chunk_ids:
+            # Cartesian product: every proposition stored in THIS call
+            # links to every chunk id THIS call was given -- see the
+            # chunk_ids parameter docstring above for why that's the
+            # honest precision, not an invented per-chunk assignment.
+            # Bulk execute_values(), mirroring shared_ingest._insert_
+            # chunks()'s own bulk-insert style -- avoids an N-times-M
+            # per-row round trip at book-scale documents.
+            pairs = [
+                (prop_id, chunk_id)
+                for prop_id in stored_prop_ids
+                for chunk_id in chunk_ids
+            ]
+            if pairs:
+                execute_values(
+                    cur,
+                    "INSERT INTO proposition_chunks (proposition_id, chunk_id) VALUES %s",
+                    pairs,
+                    template="(%s, %s)",
+                )
 
     conn.commit()
     return inserted
@@ -890,6 +939,7 @@ def process_document(
     name_pattern: Optional[re.Pattern] = None,
     verse_lookup: Optional[Dict[str, str]] = None,
     vocab_matcher: Optional[object] = None,
+    chunk_ids: Optional[List[str]] = None,
 ) -> str:
     """Top-level entry point for ingest scripts.
 
@@ -908,6 +958,17 @@ def process_document(
     classify() call below exactly like name_pattern/verse_lookup; not
     supplying it (the default) is byte-identical to this parameter not
     existing at all.
+
+    chunk_ids (bypass-proofing Phase 2b, PLAN.md #45, 2026-07-29, default
+    None): plain optional enrichment parameter, not a safety gate -- no
+    lazy-import coupling, no enforcement, no behavior change of its own.
+    Passed straight through, unchanged, to store_propositions() on BOTH
+    call sites below (the gate-off path and the gated pass_props branch)
+    so the document's current chunk-id set gets recorded as a back-link
+    for whichever propositions actually get stored on this call. Not
+    supplying it (the default) is byte-identical to this parameter not
+    existing at all -- same discipline as name_pattern/verse_lookup/
+    vocab_matcher above.
 
     Returns one of:
       "skipped_licensed"        — source is public_domain/owned (or missing); nothing written
@@ -966,6 +1027,7 @@ def process_document(
             count = store_propositions(
                 conn, document_id, props, embed_fn,
                 prompt_version=prompt_version, fingerprint=fingerprint, model=model,
+                chunk_ids=chunk_ids,
             )
             return f"stored:{count}"
 
@@ -1009,6 +1071,7 @@ def process_document(
             stored_count = store_propositions(
                 conn, document_id, pass_props, embed_fn,
                 prompt_version=prompt_version, fingerprint=fingerprint, model=model,
+                chunk_ids=chunk_ids,
             )
         # else: nothing PASSED -- store_propositions() is never called, so
         # this function does not commit here. This mirrors the existing

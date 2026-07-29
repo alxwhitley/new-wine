@@ -569,7 +569,37 @@ def ingest_document(
             print(f"  Inserting {len(new_chunks)} chunk(s)...")
             _insert_chunks(cur, doc_id, new_chunks, embeddings, content_fn, start_index=start_index)
 
-        prop_result = propositions.process_document(conn, doc_id, _resolved_id, body_text, embed_text)
+            # Bypass-proofing Phase 2b (PLAN.md #45, 2026-07-29): fetch the
+            # document's FULL current chunk-id set, on this same open
+            # connection/cursor, before any commit -- so
+            # propositions.process_document() can pass it down to
+            # store_propositions() for the proposition_chunks back-link
+            # (migration 074). One query is correct for all three paths
+            # this function supports:
+            #   - fresh insert: only this call's just-inserted chunks exist
+            #     under this doc_id, so the query returns exactly that set.
+            #   - redo (delete_and_reingest): the old document was deleted
+            #     under its OWN id above, and a full fresh chunk set was
+            #     just inserted under this NEW doc_id -- the query only
+            #     ever sees the new set.
+            #   - reuse/append: pre-existing chunks committed under this
+            #     same doc_id on a PRIOR call, plus this call's newly
+            #     appended tail, share this doc_id and are BOTH visible to
+            #     a query on this same connection even before this call's
+            #     own commit -- a transaction always sees its own
+            #     uncommitted writes, and the prior call's chunks are
+            #     already durably committed. Either way this query returns
+            #     the full, current, honest chunk set for the document.
+            print("  Fetching chunk ids for propositions back-link...")
+            cur.execute(
+                "SELECT id FROM chunks WHERE document_id = %s ORDER BY chunk_index",
+                (doc_id,),
+            )
+            chunk_ids = [str(row[0]) for row in cur.fetchall()]
+
+        prop_result = propositions.process_document(
+            conn, doc_id, _resolved_id, body_text, embed_text, chunk_ids=chunk_ids,
+        )
         print(f"  propositions: {prop_result}")
 
         if prop_result == "error":
