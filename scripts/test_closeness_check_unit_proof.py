@@ -157,18 +157,20 @@ def main() -> None:
     assert r5.verdict == cc.HOLD_TOO_LITTLE, f"expected HOLD_TOO_LITTLE, got {r5.verdict}"
 
     # ── Case 6: run_len-only QUOTE_CANDIDATE — the OR-wiring's own
-    #    regression case (Phase 4/5, PLAN.md #45). A genuine reword (low
-    #    containment on its own, well under CONTAINMENT_FLOOR) with a real
-    #    ~11-word verbatim run from the source spliced onto its end,
-    #    mirroring the corpus-scale R-run adversarial items validated in
-    #    validate_closeness_check.py's Step 2 re-run (containment stayed
-    #    0.20-0.29 there; longest_run jumped from 2-3 words pre-splice to
-    #    12-13 post-splice). This is a hand-made repeatable unit case for
-    #    the same shape, so the OR-wiring (containment >= FLOOR OR run_len
-    #    >= THRESHOLD) stays regression-protected without needing the live
-    #    corpus. Asserts the QUOTE_CANDIDATE verdict trips via the run_len
-    #    path SPECIFICALLY — containment must stay BELOW CONTAINMENT_FLOOR
-    #    on its own, so a verdict here can only be explained by run_len.
+    #    regression case (Phase 4/5, PLAN.md #45; run extended PLAN.md #46
+    #    to clear the human-calibrated 12-word threshold, see below). A
+    #    genuine reword (low containment on its own, well under
+    #    CONTAINMENT_FLOOR) with a real ~13-word verbatim run from the
+    #    source spliced onto its end, mirroring the corpus-scale R-run
+    #    adversarial items validated in validate_closeness_check.py's
+    #    Step 2 re-run (containment stayed 0.20-0.29 there; longest_run
+    #    jumped from 2-3 words pre-splice to 12-13 post-splice). This is a
+    #    hand-made repeatable unit case for the same shape, so the
+    #    OR-wiring (containment >= FLOOR OR run_len >= THRESHOLD) stays
+    #    regression-protected without needing the live corpus. Asserts the
+    #    QUOTE_CANDIDATE verdict trips via the run_len path SPECIFICALLY —
+    #    containment must stay BELOW CONTAINMENT_FLOOR on its own, so a
+    #    verdict here can only be explained by run_len.
     source_6 = (
         "The prophet declared that revival always begins with brokenness "
         "before God, not with strategy or method. He also explained that a "
@@ -180,7 +182,17 @@ def main() -> None:
         "themselves, not through clever planning, and that quiet devotion "
         "matters more than public performance."
     )
-    verbatim_run_6 = "guard the flock from wandering into dangerous and unfamiliar territory during"
+    # Extended PLAN.md #46 (12-word threshold, up from 9): the prior
+    # 11-word run no longer clears the new threshold on its own, so this
+    # is extended using contiguous words already present in source_6
+    # ("...territory during the long winter night.") to measure
+    # longest_run_words=13 (confirmed via a real classify() run against
+    # this exact text, not assumed from the literal word count) -- one
+    # word of margin above the 12-word floor. Re-measured containment
+    # after the extension stays well under CONTAINMENT_FLOOR (0.3235 <
+    # 0.40), so this is still a clean run_len-only proof, not a
+    # containment-assisted one.
+    verbatim_run_6 = "guard the flock from wandering into dangerous and unfamiliar territory during the long"
     spliced_6 = reword_6.rstrip(". ") + ". " + verbatim_run_6 + "."
 
     r6_before = _print_case("Case 6a: reword alone, BEFORE splice (control)", reword_6, source_6, name_pattern)

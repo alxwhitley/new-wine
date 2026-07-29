@@ -288,12 +288,21 @@ Three-verdict output contract — this module classifies, it does not act
                    auto-passes (PLAN.md #45's exemption companion rule).
 
 CONTAINMENT_FLOOR, RESIDUAL_TOO_LITTLE_CUTOFF, and LONGEST_RUN_WORD_
-THRESHOLD are FINALIZED (Phase 4) from validate_closeness_check.py's
+THRESHOLD were FINALIZED (Phase 4) from validate_closeness_check.py's
 corrected-exemption corpus-scale re-run — see that script's output and
 this module's own top-of-file constant comments for the derivation of
-each. "Finalized for this build" and "PRE-CALIBRATION PROVISIONAL per
-PLAN.md #46" hold at the same time: grounded in real numbers, not yet
-reviewed by a human, so not the last word.
+each. They have since been HUMAN-CALIBRATED (PLAN.md #46): Alex
+blind-judged a 24-item calibration set
+(calibration_review/hidden_reference_2026-07-30.md — 20 real corpus
+items + 4 constructed HOLD_TOO_LITTLE-shape items, no mechanism verdict
+shown before judgment), passed all 24, and ruled the longest verbatim
+run threshold at 12 words post-exemption — superseding the provisional
+9-word value this file carried through Phase 4. LONGEST_RUN_WORD_
+THRESHOLD changed to match; CONTAINMENT_FLOOR and RESIDUAL_TOO_LITTLE_
+CUTOFF were re-examined against the same 24-item set and held at their
+Phase 4 values — see each constant's own comment below for the specific
+finding. This is no longer "not yet reviewed by a human" — the review
+happened and this file reflects its outcome.
 
 --------------------------------------------------------------------------
 Constraints honored
@@ -331,52 +340,105 @@ from source_resolver import normalize_alias_key  # noqa: E402
 # ── Decision constants -- FINALIZED (Phase 4, PLAN.md #45) from the
 #    corrected-exemption corpus-scale re-run (validate_closeness_check.py,
 #    65 should-pass pairs + 15 R0/R1/R2 rungs + 5 R-run items, SEED
-#    20260726). "Finalized for this build" and "PRE-CALIBRATION PROVISIONAL
-#    per PLAN.md #46" are BOTH true at once, not a contradiction: finalized
-#    means every value below is grounded in real corpus numbers, not a
-#    guess; provisional means no human review of the resulting
-#    classifications has happened yet, so none of this is the last word. ──
+#    20260726), then HUMAN-CALIBRATED (PLAN.md #46): Alex blind-judged a
+#    24-item calibration set (calibration_review/hidden_reference_2026-07-30.md
+#    -- 20 real corpus items + 4 constructed HOLD_TOO_LITTLE-shape items),
+#    passed all 24, and ruled the longest verbatim run threshold at 12
+#    words post-exemption -- superseding this file's prior provisional 9.
+#    Each constant below states its own post-ruling status:
+#    LONGEST_RUN_WORD_THRESHOLD changed value; CONTAINMENT_FLOOR and
+#    RESIDUAL_TOO_LITTLE_CUTOFF were re-examined against the same 24-item
+#    set and held -- reviewed, not merely left untouched. ──
 
-CONTAINMENT_FLOOR = 0.40             # FINALIZED (Phase 4) / PRE-CALIBRATION PROVISIONAL
-# Derivation: at floor=0.40, should-flag R0 (verbatim, n=15) and R1 (~15%
-# word-edit splice, n=15) are BOTH caught 15/15 (R1's own minimum this run
-# was 0.412, comfortably above 0.40). Should-pass trip rate at this floor
-# is 6/65 (9.2%) -- every one of those 6 was hand-read against its full
-# source text and confirmed a GENUINE near-verbatim reproduction of real
-# source wording (teacher's own recurring definitional lines, a verbatim
-# third-party quote embedded in the source, etc.), not a coincidental false
-# positive -- zero false positives observed in the hand-reviewed high-end
-# sample (16 items, containment >=0.30) at this or any floor tested.
-# R2 (~35% word-edit splice) is NOT reliably caught by containment at any
-# reasonable floor (median 0.012) -- expected and accepted: at that edit
-# rate trigram containment cannot distinguish the splice from a genuine
-# paraphrase by construction; not this signal's job.
+CONTAINMENT_FLOOR = 0.40             # FINALIZED (Phase 4) -- REVIEWED AND HELD (PLAN.md #46)
+# Original Phase 4 derivation, unchanged: at floor=0.40, should-flag R0
+# (verbatim, n=15) and R1 (~15% word-edit splice, n=15) are BOTH caught
+# 15/15 (R1's own minimum this run was 0.412, comfortably above 0.40).
+# Should-pass trip rate at this floor is 6/65 (9.2%) -- every one of those
+# 6 was hand-read against its full source text and confirmed a GENUINE
+# near-verbatim reproduction of real source wording (teacher's own
+# recurring definitional lines, a verbatim third-party quote embedded in
+# the source, etc.), not a coincidental false positive -- zero false
+# positives observed in the hand-reviewed high-end sample (16 items,
+# containment >=0.30) at this or any floor tested. R2 (~35% word-edit
+# splice) is NOT reliably caught by containment at any reasonable floor
+# (median 0.012) -- expected and accepted: at that edit rate trigram
+# containment cannot distinguish the splice from a genuine paraphrase by
+# construction; not this signal's job.
+#
+# PLAN.md #46 re-examination (this session): re-ran the calibration
+# arithmetic fresh against the live 24-item blind-judged set (all 24
+# passed blind). Three real items flag as QUOTE_CANDIDATE on containment
+# alone, with no run-length justification under the new 12-word threshold
+# (longest_run_words well under 12 for all three), despite Alex's blind
+# PASS -- a genuine, disclosed conflict:
+#   - Leonard Ravenhill, "Cry for Revival"                    containment=0.4444, run=6
+#   - Leonard Ravenhill, "Laodicean Church"                   containment=0.5714, run=9
+#   - Derek Prince, "Deliverance And Demonology" (prop #3)    containment=0.4211, run=8
+# Rescuing ALL three requires raising the floor past the highest,
+# 0.5714. Checked against this session's fresh re-run of the R1
+# mechanical-ladder tier (15 items, ~15% word-edit rate): 14 of 15
+# currently flag correctly on containment, spanning 0.4118-0.5632 (the
+# 15th, containment 0.186, was already a PASS/miss at the OLD floor too --
+# unrelated to this question). 0.5632 is R1's own MEASURED MAXIMUM --
+# strictly below 0.5714, so any floor high enough to rescue all three
+# conflict items is high enough to flip every one of the 14 currently-
+# correct R1 items to PASS too, and R1's own run-length values (6-8 words)
+# sit nowhere near LONGEST_RUN_WORD_THRESHOLD=12, so run-length provides
+# no backstop for R1 either. No single floor value threads this needle.
+# Per the standing tie-break principle (preserve the validated mechanical
+# ladder over an unresolvable single-signal conflict), the floor HOLDS at
+# 0.40. The three items above are an accepted, disclosed residual --
+# named here, not silently resolved.
 
-RESIDUAL_TOO_LITTLE_CUTOFF = 8       # FINALIZED (Phase 4) / PRE-CALIBRATION PROVISIONAL, in residual tokens
-# Re-grounded against the finalized floor (was a free-standing guess
-# before): a residual of R tokens yields k = R-2 trigrams (contiguous
-# 3-token windows). A single COINCIDENTAL matching trigram then gives
-# containment = 1/k. At R=8, k=6, so one coincidental match = 1/6 = 0.167 --
-# comfortably under CONTAINMENT_FLOOR (0.40), not a bare-minimum fit: it
-# would take 3 of the residual's 6 trigrams (half) coincidentally matching
-# to cross 0.40 at all, a low-probability event for genuinely unrelated
-# text. (For contrast, the bare-minimum value where even ONE coincidental
-# match still stays under 0.40 is R=5, k=3, 1/3=0.333 -- technically
-# sufficient but with almost no safety margin; R=8 was kept for the wider
-# margin, not moved down to the bare minimum.)
+RESIDUAL_TOO_LITTLE_CUTOFF = 8       # FINALIZED (Phase 4) -- REVIEWED AND HELD (PLAN.md #46), in residual tokens
+# Original Phase 4 derivation, unchanged: a residual of R tokens yields
+# k = R-2 trigrams (contiguous 3-token windows). A single COINCIDENTAL
+# matching trigram then gives containment = 1/k. At R=8, k=6, so one
+# coincidental match = 1/6 = 0.167 -- comfortably under CONTAINMENT_FLOOR
+# (0.40), not a bare-minimum fit: it would take 3 of the residual's 6
+# trigrams (half) coincidentally matching to cross 0.40 at all, a
+# low-probability event for genuinely unrelated text. (For contrast, the
+# bare-minimum value where even ONE coincidental match still stays under
+# 0.40 is R=5, k=3, 1/3=0.333 -- technically sufficient but with almost no
+# safety margin; R=8 was kept for the wider margin, not moved down to the
+# bare minimum.)
+#
+# PLAN.md #46 re-examination (this session): untouched by the run-length
+# ruling by construction, not merely by choice -- classify() checks
+# `if residual < RESIDUAL_TOO_LITTLE_CUTOFF: verdict = HOLD_TOO_LITTLE`
+# FIRST and unconditionally, before CONTAINMENT_FLOOR or
+# LONGEST_RUN_WORD_THRESHOLD is even evaluated (see classify() below), so
+# nothing about the 9->12 run-length change could rescue or break a value
+# here. This session's fresh re-derivation confirms it directly: the
+# calibration set's 2 real HOLD_TOO_LITTLE items (residual_tokens 7 and 5,
+# both real Vlad Savchuk propositions) stay HOLD_TOO_LITTLE under both the
+# old (9) and new (12) run threshold, exactly as the residual-gate-fires-
+# first structure predicts. Reviewed against the same 24-item set as the
+# other two constants; held.
 
-LONGEST_RUN_WORD_THRESHOLD = 9       # FINALIZED (Phase 4) / PRE-CALIBRATION PROVISIONAL, in words
-# Derivation: R-run adversarial splices (5/5, this run) measured
-# longest_run 12-13 words after splicing (vs. 2-3 words for the same items'
-# genuine pre-splice content). Should-pass items NOT already caught by
-# CONTAINMENT_FLOOR span longest_run up to 16 -- but every should-pass item
-# with longest_run >=9 in that below-floor set was hand-confirmed as
-# already-flaggable content in its own right (an uncaught scripture
-# confound, or a genuine near-quote of source wording), not a clean
-# coincidental paraphrase -- so 9 introduces no new false positive in the
-# hand-reviewed sample while sitting with a full 3+ word margin below the
-# R-run splice floor (12) and a 6+ word margin above the undisputed-clean
-# ceiling (R-run's own pre-splice baseline, max 3 words).
+LONGEST_RUN_WORD_THRESHOLD = 12      # HUMAN-CALIBRATED (PLAN.md #46) -- supersedes Phase 4's provisional 9, in words
+# Alex blind-judged a 24-item calibration set
+# (calibration_review/hidden_reference_2026-07-30.md -- 20 real corpus
+# propositions + 4 constructed HOLD_TOO_LITTLE-shape items, no mechanism
+# verdict shown before judgment) and passed all 24. Alex's explicit
+# ruling: "longest verbatim run of 12 words, post-exemption" -- a
+# deliberate, considered supersession of the provisional 9 this file
+# carried through Phase 4, not a re-derivation from new adversarial
+# numbers (those are unchanged and still support 12 as comfortably inside
+# the true-positive splice floor: this session's own fresh re-run of the
+# 5 R-run adversarial items measured longest_run 12-13 words post-splice,
+# same as Phase 4 found, vs. 2-3 words pre-splice for the same genuine
+# content). Of the 20 real items in the calibration set, 5 measure
+# longest_run_words >= 12 (13, 18, 20, 21, and 19 words respectively) and
+# correctly flag as QUOTE_CANDIDATE under this threshold regardless of
+# containment -- no floor dependency. Alex passed all of them blind
+# anyway, at the ordinary-teacher-content register they were drawn from,
+# without objecting to the flag -- consistent with 12 being a real,
+# considered line, not a value chosen only to avoid false positives. See
+# CONTAINMENT_FLOOR's own comment above for the 3 items where this
+# threshold does NOT trip (run < 12) but containment does anyway -- a
+# disclosed residual, not resolved by this constant.
 
 # ── Scripture-wording exemption fix constants (2026-07-26, revised same day
 #    after a partial-verse-quote miss was caught by hand-verification -- see
