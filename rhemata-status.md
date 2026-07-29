@@ -3,10 +3,95 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-28 (read-only teacher-card investigation + records
-pass — terminology aligned to "proposition" corpus-wide, position-layer
-lifecycle and empty-state design settled, next Phase 4 slice identified).
+Last verified: 2026-07-28 (citation-verifier build session — Layer 1's
+chapter-colon gap fixed, BOOK_MAP source confirmed already-correct, Layer 3
+cost-estimated; no run performed). Also carries forward: read-only
+teacher-card investigation + records pass — terminology aligned to
+"proposition" corpus-wide, position-layer lifecycle and empty-state design
+settled, next Phase 4 slice identified.
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Citation verifier build session: Layer 1 gap fixed, BOOK_MAP confirmed, Layer 3 cost-estimated (session state, 2026-07-28)
+
+Repo-only multi-step build, harness route (`executor`/`planner-reviewer`)
+per CLAUDE.md's Session Routing table — zero DB writes anywhere in the
+build, SELECT-only reads used for real-corpus characterization and cost
+sampling. Three ordered tasks, three separate commits: `ff74a42`, `4d9b193`,
+`fd19bbe`. Full detail lives in the commits themselves and
+`docs/audits/layer3_llm_cost_estimate_2026-07-28.md` — this is the
+point-in-time pointer, not a duplicate.
+
+**Task 1 — Layer 1's chapter-colon gap, fixed (`ff74a42`).** The documented
+gap (PLAN.md #45.6: "Hebrews chapter 10:25" — a "chapter" keyword directly
+followed by a colon-form verse, no literal "verse" word — matched none of
+Layer 1's four existing patterns) was confirmed real and common against
+real corpus text before fixing: 22 documents read directly, 101 documents
+corpus-wide via SQL sweep, 38 with live propositions; reproduced live
+against real Vlad Savchuk source text. Fixed via one new pattern
+(`PATTERN_D`), reusing the existing book/number/gap fragments and the same
+`word_or_digit_to_int()` + `_parse_verse_or_range()` re-validation
+discipline as every pre-existing pattern — no bypass. Two related shapes
+were investigated and deliberately left unfixed, locked in as regression
+tests rather than left as assumptions: a "v."/"vs." verse-abbreviation
+alias (real corpus-wide, but never found paired with an explicit "chapter"
+keyword — every real instance is either a Roman-numeral chapter marker in
+disguise or has no structural marker at all) and a bare colon-form
+reference relying only on an earlier, non-adjacent chapter mention (no real
+instance found that isn't already covered by the existing compact-form
+scanner). Layer 2's bookless patterns carry the identical gap, left
+unfixed as a flagged follow-up — out of this task's scope. This same
+commit is also `scripts/citation_verifier_layers.py`'s first commit — it
+and its test suite were built in a prior session, reviewed and approved
+then, but never committed until now. Test suite: 75/75 assertions green.
+
+**Task 2 — book-map source, confirmed already-correct, no fix needed
+(`4d9b193`).** Checked whether the verifier reads a stale copy of the
+book-name map post-`ee267d4` (per the five-map Landmine below) — it
+doesn't. `citation_verifier_layers.py`'s `BOOK_MAP` is the same object as
+`backend/app/constants.BOOK_MAP` (confirmed by object identity, not just an
+import-line read), so it picked up `ee267d4`'s 34 new keys automatically.
+Added a regression test proving four of the widened forms (First Samuel, I
+Samuel, Second Corinthians, III John) resolve end-to-end through the real
+verifier functions, not just `BOOK_MAP` dict membership.
+
+**Task 3 — Layer 3 cost estimate produced, Layer 3 NOT run (`fd19bbe`,
+`docs/audits/layer3_llm_cost_estimate_2026-07-28.md`).** Two findings that
+correct stale figures rather than just producing a number: (1) re-checking
+the 59+5 flagged propositions (79 individual references,
+`docs/audits/statement_recheck_closeness_citation_2026-07-28.md`) against
+today's fixed Layer 1/2 shows only **38** references genuinely still need
+Layer 3, not the stale 64 — real cost **$0.20**. (2) The full-backfill
+document count itself was stale: live-queried today at **564**, not 810
+(2026-07-14, PLAN.md #17) or 781 (2026-07-24) — both predate the
+220-document Bevere deletion (2026-07-25 below), and the 781→564 delta
+reconciles almost exactly against that already-logged event. Projected via
+three rates re-derived live against the full 2,409-proposition corpus
+(propositions/document, reference-bearing rate, Layer 1/2 fail rate): ~364
+projected Layer 3 calls, ~$1.95 central estimate (up to ~$5.30
+stress-tested). Both scopes land far under the standing $50 ceiling
+(CLAUDE.md). Pricing used ($0.59/M input, $0.79/M output,
+`llama-3.3-70b-versatile`) confirmed directly from groq.com/pricing this
+session, not assumed. Tokenization used `tiktoken` `cl100k_base` as a
+disclosed Llama-tokenizer proxy, not exact.
+
+**Not resolved by this session, flagged for Alex:** Layer 3's accuracy is
+wiring-proven only — its test suite is 100% mocked, it has never been run
+against real Groq output. Whether to run the 38 real Scope-A candidates as
+a first, hand-checkable batch before any full-backfill-scale run is a
+product/risk decision, not a cost decision — the cost estimate doesn't
+resolve it either way.
+
+**Concurrent-session note, not a conflict:** this session's three commits
+(20:04–20:25) landed between the "Teacher-card investigation" records
+entry below (`0e0a28a`, 20:35) and a separate later run of position-layer
+calibration/threshold/backlog commits (`82aec74` through `4a5db2d`,
+23:41–23:46) — a different Claude Code session working the same repo in
+parallel. No file overlap: that session's work is position-layer
+calibration and terminology; this session's is the citation verifier.
+Terminology in this entry follows that session's "proposition" (not
+"statement") convention, reconciled before committing.
 
 ---
 
@@ -127,14 +212,16 @@ everything below lives in three audit reports, not repeated here:
   Must not run against the backfill, or against resumed generation at all,
   until re-wired to use the three-layer verifier as its confirming step.
   Full detail: CLAUDE.md Invariant 11.
-- **The three-layer citation verifier is repurposed.** Built but parked
-  (Layer 1 patterns → Layer 2 document-wide book scope → Layer 3 LLM
-  reading pass; Layer 1's chapter-colon gap is unfixed —
-  `scripts/citation_verifier_layers.py`, still uncommitted). Its primary job
-  is no longer retroactive audit of old propositions — it's now the
+- **The three-layer citation verifier is repurposed, and (2026-07-28 build
+  session) now committed with its chapter-colon gap fixed.** Layer 1
+  patterns → Layer 2 document-wide book scope → Layer 3 LLM reading pass —
+  `scripts/citation_verifier_layers.py`, committed `ff74a42`. Its primary
+  job is no longer retroactive audit of old propositions — it's now the
   recognition/confirming engine the reversed anti-fabrication filter needs
   ahead of the backfill. Retroactive sweep of the existing corpus is
-  demoted to a cheap, sampled, later pass.
+  demoted to a cheap, sampled, later pass. See the 2026-07-28 build-session
+  entry above this one for the fix, the BOOK_MAP confirmation, and the
+  Layer 3 cost estimate.
 - **Book-name recognition fixed in the live product**, commit `ee267d4`
   (not pushed): ordinal ("1st Samuel"), spelled-word ("First Samuel"), and
   Roman-numeral ("I Samuel") forms now recognized at all four live-serving
@@ -171,12 +258,14 @@ everything below lives in three audit reports, not repeated here:
   wording, with no citation string nearby, can misread as ungrounded on the
   wording arm. Recorded limitation, unsolved, affects both the closeness
   check's scripture exemption and the citation-grounding check.
-- **Citation verifier remaining work:** Layer 1's chapter-colon gap fix
-  (`"Hebrews chapter 10:25"` with no literal "verse" token matches nothing),
-  re-derivation against the corrected book map, and Layer 3's LLM reading
-  pass (never run against real output) — which must be cost-sized under the
-  new standing LLM-cost rule (CLAUDE.md) before any run wider than a small
-  sample.
+- **Citation verifier remaining work — DONE, 2026-07-28 build session (see
+  entry above this one), except the actual Layer 3 run.** Layer 1's
+  chapter-colon gap is fixed and committed (`ff74a42`); the verifier was
+  confirmed to already read the corrected book map, no fix needed
+  (`4d9b193`); Layer 3's LLM reading pass is now cost-sized
+  (`docs/audits/layer3_llm_cost_estimate_2026-07-28.md`, both scopes far
+  under the $50 ceiling) but **still never run against real output** —
+  that real run is Alex's call, not yet scheduled.
 - **Prior parked items, still parked, carried forward:** the two
   HistoricalChristianFaith attribution mix-ups (`citation_mode` mismatch on
   307 documents; a C.S. Lewis document marked `public_domain` with a

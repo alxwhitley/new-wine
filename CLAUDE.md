@@ -229,9 +229,15 @@ different row, per the hard rule above.
   structurally different case (Savchuk's "Devil's Voice" — an invented
   scriptural-AUTHORITY claim with no actual chapter:verse to check) remains
   confirmed but undetectable by any reference-grounding check by
-  construction — nothing to parse. A trustworthy corpus-wide number still
-  requires fixing the scanner's spoken-form gap (PLAN.md #45.6's Pattern-A
-  item) and re-running — not done. Local, gitignored
+  construction — nothing to parse. **The spoken-form gap named here is now
+  fixed (2026-07-28, `scripts/citation_verifier_layers.py`'s Layer 1,
+  commit `ff74a42`)** — but that fix lives in the repurposed
+  generation-time verifier (PLAN.md #45.6), not in
+  `reference_grounding.find_reference_spans()`, the scanner
+  `detect_reference_fabrication.py` actually used to produce the baseline
+  below. A trustworthy corpus-wide number still requires an actual
+  corpus-wide re-run using the fixed recognition — demoted to later work,
+  not scheduled (PLAN.md #45.6). Local, gitignored
   `reference_fabrication_review/corpus_findings.jsonl` holds the stale
   72-item list; treat every entry in it as a review candidate, not a
   confirmed problem. See also Invariant 11 — the strip mechanism this scan
