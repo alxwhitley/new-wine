@@ -3,11 +3,38 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-30 (PLAN.md #46 human calibration closed out — Alex
-judged a 24-item blind set built from real full source documents, passed
-all 24, set the longest-verbatim-run line at 12 words; encoded into the
-closeness check the same session).
+Last verified: 2026-07-29 (PLAN.md #47 calibrated corpus-wide closeness
+re-check — 2,409/2,409 live propositions reconciled, zero errors, zero DB
+writes; findings measured but deliberately not resolved).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## PLAN.md #47 calibrated closeness re-check reconciled; disposition still open (session state, 2026-07-29)
+
+Plain/direct read-only diagnostic per CLAUDE.md's routing table. Every database connection was readonly/autocommit and every statement was a SELECT; statement generation remained stopped. The classifier path was verified before the run to contain no model client, HTTP request, or completion call: this was deterministic local code plus one-time readonly name/alias and WEB-verse lookups, so inference cost was $0.00. No database row changed.
+
+**Ground truth and reconciliation.** Live count was re-queried at **2,409**, not trusted from the brief. All 2,409 rows were created no later than 2026-07-23, before the calibrated gate landed. The gate remains opt-in in code and no real-storage caller activated it; all live rows carry only the later-added `legacy_unknown` prompt-version marker, with null prompt fingerprints and null model fields. The calibrated thresholds read directly from `scripts/closeness_check.py` were: longest post-exemption run **12 words**, trigram containment floor **0.40**, and `HOLD_TOO_LITTLE` for **fewer than 8 residual tokens** (checked first and unconditionally). One bulk proposition+metadata query, one bulk chunks query, and one-time lookup queries fed the identical `classify()` function. Attempted arithmetic and the actual review file both reconcile: **2,409 = 2,196 PASS + 211 QUOTE_CANDIDATE + 2 HOLD_TOO_LITTLE + 0 errored**; the JSONL has 2,409 lines and 2,409 unique proposition IDs.
+
+**Signal split.** Of 211 quote candidates, **74 (35.1%) trip the strong 12-word-run signal**: 12 run-only and 62 both run and containment. The remaining **137 (64.9%) trip containment alone**, the softer signal Alex was skeptical of during calibration. The **2 HOLD_TOO_LITTLE** rows are the same Vlad Savchuk propositions found in the 2026-07-26 scan, from the same document, with residual counts 7 and 5; the full run found no additional thin cases.
+
+| Teacher | Total | PASS | QUOTE_CANDIDATE | HOLD | Flagged / total |
+|---|---:|---:|---:|---:|---:|
+| Carter Conlon | 43 | 38 | 5 | 0 | 11.6% |
+| Charles Simpson | 24 | 13 | 11 | 0 | 45.8% |
+| Daniel Kolenda | 17 | 12 | 5 | 0 | 29.4% |
+| Derek Prince | 21 | 18 | 3 | 0 | 14.3% |
+| Doug Kreighbaum | 31 | 19 | 12 | 0 | 38.7% |
+| Ern Baxter | 15 | 7 | 8 | 0 | 53.3% |
+| Jack Deere | 14 | 13 | 1 | 0 | 7.1% |
+| Leonard Ravenhill | 766 | 724 | 42 | 0 | 5.5% |
+| New Wine Magazine | 12 | 11 | 1 | 0 | 8.3% |
+| Vlad Savchuk | 1,053 | 953 | 98 | 2 | 9.5% |
+| Zac Poonen | 413 | 388 | 25 | 0 | 6.1% |
+
+These rates describe how the mechanical wording signals interact with each teacher's phrasing style, not teaching quality. The highest rates belong to very small teacher samples, where a few items move the percentage sharply; Ravenhill's large corpus flags at 5.5% under the calibrated line, contrary to the earlier expectation that his aphoristic register would necessarily produce the highest corpus-wide rate.
+
+Per-item findings are local-only at gitignored `closeness_review/calibrated_corpus_recheck_2026-07-29.jsonl`, one record per proposition with document, teacher, proposition ID/content, verdict, exact signal, measurements, and stored prompt-version/fingerprint/model provenance. **This session did not triage or decide any flagged item.** PLAN.md #47 is run and reconciled, not resolved. The 213-item flagged/held pile is bounded and human-reviewable, but large enough to require its own deliberate triage session before backfill/position-layer work can rely on it. **No position may be built from any teacher's evidence until that teacher's flagged items are resolved or explicitly risk-accepted; this gate remains open.**
 
 ---
 
