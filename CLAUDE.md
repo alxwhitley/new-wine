@@ -239,17 +239,24 @@ different row, per the hard rule above.
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
 - **No live proposition row has real provenance — confirmed corpus-wide
-  2026-07-28, not just for pre-07-23 rows as previously stated here.**
-  Provenance stamping (migration 067) has never fired on an actual write:
-  every write since it shipped, same as before, went through a since-deleted
-  one-off script that called `extract_propositions()`/`store_propositions()`
-  directly, bypassing the stamping call site inside `process_document()`
-  (see Invariant 11). A 2026-07-23 diagnostic built a reasonably strong
-  circumstantial case for what produced the pre-07-23 rows specifically (git
-  history + a full-corpus text sweep for one known leak), but that's
-  evidence, not a stored fact — and it doesn't extend to post-07-23 rows
-  either. Treat any claim about which prompt version produced ANY current
-  row as unverified unless re-checked by the same method (PLAN.md #45.5).
+  2026-07-28, not just for pre-07-23 rows as previously stated here. Still
+  true of every EXISTING row as of 2026-07-30 — generation has not resumed,
+  so nothing has re-run to fix this retroactively.** Provenance stamping
+  (migration 067) never fired on an actual write: every write since it
+  shipped, same as before, went through a since-deleted one-off script that
+  called `extract_propositions()`/`store_propositions()` directly, bypassing
+  the stamping call site inside `process_document()`. **The underlying
+  bypass mechanism itself is now closed (2026-07-30) — see Invariant 10** —
+  an unstamped write is structurally impossible on any future call through
+  `store_propositions()`, not merely discouraged. That fix has no effect on
+  rows already in the table; it only guarantees FUTURE writes are stamped
+  once generation resumes. A 2026-07-23 diagnostic built a reasonably
+  strong circumstantial case for what produced the pre-07-23 rows
+  specifically (git history + a full-corpus text sweep for one known
+  leak), but that's evidence, not a stored fact — and it doesn't extend to
+  post-07-23 rows either. Treat any claim about which prompt version
+  produced ANY current row as unverified unless re-checked by the same
+  method (PLAN.md #45.5).
 - **Citation-fabrication scale claims from 2026-07-28 are superseded — do
   not cite the 72-reference/64-proposition baseline as ground truth
   anywhere.** The scanner behind that figure
@@ -279,8 +286,9 @@ different row, per the hard rule above.
   `reference_fabrication_review/corpus_findings.jsonl` holds the stale
   72-item list; treat every entry in it as a review candidate, not a
   confirmed problem. See also Invariant 11 — the strip mechanism this scan
-  fed was itself found to have a backwards default and must not run against
-  the backfill until re-wired.
+  fed was itself found to have a backwards default; the re-wiring to a
+  confirming step is now DONE (2026-07-30), so this specific blocker on the
+  backfill is cleared, though other preconditions (PLAN.md #49) remain.
 - **The book-name map exists as five independent hand-maintained copies
   that will drift out of sync with each other over time.** A 2026-07-28
   blast-radius survey (the BOOK_MAP ordinal/spelled/Roman-numeral fix,
