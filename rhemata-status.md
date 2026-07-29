@@ -3,13 +3,26 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-28 (citation-verifier build session — Layer 1's
-chapter-colon gap fixed, BOOK_MAP source confirmed already-correct, Layer 3
-cost-estimated; no run performed). Also carries forward: read-only
-teacher-card investigation + records pass — terminology aligned to
-"proposition" corpus-wide, position-layer lifecycle and empty-state design
-settled, next Phase 4 slice identified.
+Last verified: 2026-07-29 (Layer 3 live-run session — citation verifier's
+LLM reading pass run against a real model for the first time; the prior
+session's 38-flagged-item figure corrected to 42; zero DB writes).
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Layer 3 citation verifier — first live run against a real model (session state, 2026-07-29)
+
+Read-only diagnostic per CLAUDE.md's Session Routing table — zero DB writes anywhere in this session, every DB touch a SELECT. Full detail: `docs/audits/layer3_live_run_2026-07-29.md`; per-item verdicts: gitignored `layer3_llm_reading_pass_review/layer3_live_run_2026-07-29.jsonl` (43 lines). Records updated: `PLAN.md` #45.7 (new), corrections inline at #45.6 and #47. Spend: $5.00 session ceiling authorised, actual **~$0.44** (8.8% used).
+
+**The 38-flagged-item figure from yesterday's cost estimate was an undercount — corrected to 42.** Yesterday's Scope A worked from a secondary markdown-table reconstruction that silently dropped 5 genuinely-flagged references (filed under the closeness check's quote-candidate bucket instead of "needs fixing") and included 9 already-fine context references that were never flagged at all. Re-running the current verifier directly against the real original baseline (`reference_fabrication_review/corpus_findings.jsonl`, 72 UNGROUNDED + 6 UNCERTAIN) gives the authoritative count: 30 of 78 now resolve automatically (Layer 1/2 fix), all 6 UNCERTAIN items are structurally blocked from ever reaching Layer 3 by the unrelated dotted-abbreviation parse gap, and **42 are the real Layer-3-reachable pool.**
+
+**Layer 3 run live for the first time ever, all 42 items plus 1 illustrative UNCERTAIN item.** Zero call errors, zero parse failures, zero ambiguous responses. **33 of 42 (78.6%) confirmed genuine engagement** — the model judges the automated `ungrounded` flag was wrong, the teacher did engage the passage (non-WEB/KJV wording, paraphrase, or a form outside Layers 1/2's patterns). **9 of 42 (21.4%) denied** — real remaining candidates.
+
+**Sharp, teacher-specific skew:** Leonard Ravenhill 7/8 denied (87.5% of his flagged items are genuine); Zac Poonen 0/19 denied (his flagged items are essentially all scanner false positives); Vlad Savchuk 2/12 denied.
+
+**A measured reliability caveat, not a blocker:** 2 of 42 items (4.8%) flipped verdict between the shipped boolean-only prompt and a diagnostic variant of the identical call that also asked for a one-line reason — same model, same temperature (0.0), same input. Real prompt-sensitivity, not sampling noise.
+
+**Not yet established:** accuracy on the long-form Derek Prince backfill register (#49) — this run's 42 items are all short-form material from the existing corpus. Full detail and the design implications: the audit doc above.
 
 ---
 

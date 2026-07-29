@@ -44,3 +44,9 @@ reference_grounding_review/
 # reconstructed source text, local-only. Same rationale as
 # closeness_review/ and reference_grounding_review/ above.
 reference_fabrication_review/
+
+# Layer 3 LLM reading-pass live-run review (PLAN.md #45.6, 2026-07-29) —
+# per-item model verdicts + reasons from the first-ever live run of
+# citation_verifier_layers.py's Layer 3, including full proposition text.
+# Same rationale as the review queues above — local-only, not for git history.
+layer3_llm_reading_pass_review/
