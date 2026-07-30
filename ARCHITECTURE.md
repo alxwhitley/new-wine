@@ -31,7 +31,7 @@ Public marketing routes (no auth): `/home`, `/sources`, `/beliefs`. Latter two
 render from `docs/*.md`, linked via shared `FooterNav`.
 
 Backend routers: `chat`, `search`, `document`, `library`, `study`,
-`pastors_notes`, `usage`, `ingest`, `admin`, `feedback`, `account`.
+`pastors_notes`, `usage`, `ingest`, `ingest_queue`, `admin`, `feedback`, `account`.
 
 ---
 
@@ -42,7 +42,7 @@ Tables: `documents`, `chunks`, `propositions`, `proposition_chunks`, `positions`
 `conversations`, `messages`, `interlinear_words`, `book_quotes`, `user_usage`,
 `sources`, `source_aliases`, `source_license_audit`, `app_settings`,
 `removed_urls`, `user_roles`, `contributor_requests`, `pastors_cards`,
-`deletion_requests`.
+`deletion_requests`, `source_ingest_queue`, `source_ingest_domain_memory`.
 
 **documents** — `source_type` (sermon|background|magazine_article|commentary|
 book|paper|other) · `source_kind` · `citation_mode` (citable|silent_context) ·
@@ -102,6 +102,24 @@ regardless of visibility. Never writes `sources.visibility`.
 
 **removed_urls** — blocklist written by `DELETE /admin/document/{id}`, checked by
 `youtube_ingest.py` before each ingest (non-fatal skip on hit).
+
+**source_ingest_queue** (migration 075) — admin-submitted candidate source
+URLs, table + admin UI only, no fetching/ingestion logic yet. `status`
+(waiting|running|done|failed|needs_attention), `cleared_to_run` boolean
+(future ingestion code must process ONLY `cleared_to_run=true` rows),
+`attribution_mode` (declared|per_item), `on_unknown_author` (flag|skip —
+never a value meaning "proceed unnamed"). `retain_original_text` is
+NULLABLE with no default — deliberately unset; treat NULL as "not yet
+decided," never as false (PLAN.md). RLS mirrors contributor_requests/
+deletion_requests (own-row read/insert + service-role full access); real
+access control is `require_admin_role` in `ingest_queue.py`, same as other
+admin endpoints. Admin UI: AdminModal.tsx's "Source Queue" tab
+(`SourceQueuePanel.tsx`) — submit form, Needs Attention list
+(assign-a-name/drop), Queue list with a per-row cleared-to-run toggle.
+
+**source_ingest_domain_memory** — one row per URL domain, remembers the
+last `attribute_to`/`attribution_mode` used for that domain so the submit
+form can prefill on URL blur. Service-role-only RLS (no owning user).
 
 ### Retrieval
 
@@ -229,11 +247,22 @@ button, for **every authenticated user** — not admin-only. Left nav: **Profile
 anchored top-right, then Display name / Email / Weekly usage / Delete-account
 cards) first, then, only when `user_roles.role === 'admin'`: **Corpus**
 (Documents / Sources / Pipelines), **Feedback**, **Contributors** (includes the
-"Account Deletion Requests" card), **Notes Queue**. Gating moved from "does the
-modal open at all" (old behavior: closed itself for non-admins) to "which nav
-items render" — see `panelReady` (any authenticated user) vs `roleChecked`
-(admin only, gates the other four tabs' data fetches) in the component.
-Realtime uses a unique channel name per mount (`admin-realtime-${Date.now()}`).
+"Account Deletion Requests" card), **Notes Queue**, **Source Queue** (submit
+form + Needs Attention + Queue list over `source_ingest_queue`, rendered by
+`SourceQueuePanel.tsx`). Gating moved from "does the modal open at all" (old
+behavior: closed itself for non-admins) to "which nav items render" — see
+`panelReady` (any authenticated user) vs `roleChecked` (admin only, gates the
+other five tabs' data fetches) in the component. Realtime uses a unique
+channel name per mount (`admin-realtime-${Date.now()}`).
+
+**Known gap, not introduced this build:** the left nav is a fixed 200px
+column with no mobile breakpoint — on a real phone-width viewport (~390px)
+it doesn't collapse to a drawer, squeezing every tab's content into a
+narrow remainder. Confirmed live via Playwright at a 390px viewport while
+building the Source Queue tab: no page-level horizontal overflow, but a
+two-button toggle row (e.g. "Web page"/"PDF") can still crowd within that
+squeezed width. Fixing the shell itself (nav collapsing responsively) is
+cross-cutting — affects all five tabs — and out of scope for this build.
 
 There is no separate account `Dialog` anymore. `sidebar.tsx`'s earlier "Your
 account" popup (built, shipped, then superseded the same day) was removed
