@@ -29,6 +29,28 @@ Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-bloc
 
 ---
 
+## Records-cleanup pass: Item 3/4 state corrected, Open Decision #20 held (session state, 2026-07-30, later same day)
+
+Docs/records-only session — read PLAN.md and this file fresh before writing, per this session's own instruction, rather than blind-applying a prepared list. Full detail lives in PLAN.md; this is the pointer plus one correction that belongs here because it directly concerns the section immediately below.
+
+**Correction, flagged rather than silently rewritten:** the section below ("Position layer Item 3 shipped; review repairs gate Item 4") states Item 4 must wait for three repairs from a post-commit review. That did not hold — **Item 4 (the standing premise-correction instruction) shipped anyway, commit `94b1ee7`,** directly after Item 3, without those three repairs confirmed landed first. The section below is left untouched (it may still represent real, valid follow-up work — that is not adjudicated here), but treat its "Item 4 remains open" framing as stale, not current. See PLAN.md's Item 3/Item 4 roadmap entries for the full reconciliation, including which of the three named repairs may already be partially addressed by a different mechanism (Item 4's premise-correction clause is a single shared constant substituted into both prompt templates, not hand-duplicated) and which are not confirmed to exist at all (the matcher boundary table, the regression-test suite).
+
+**Also for the record:** Item 3's tension-mode exception is a narrow, one-off carve-out for the Calvinism/predestination topic family only — not general "contested topic" infrastructure. No future session should assume a general mechanism for doctrinally-contested topics exists in this codebase.
+
+**Separately:** a fifth attempt at an automated output-stage verification guard (Open Decision #20) was built, tested, and held the same day — nothing shipped, `scripts/positions.py`/`scripts/generate_teacher_positions.py` are at clean HEAD. Full record in PLAN.md Open Decision #20; not duplicated here.
+
+---
+
+## Position layer Item 3 shipped; review repairs gate Item 4 (session state, 2026-07-30)
+
+Item 3's narrow Calvinism/predestination tension-mode exception is committed at `b9f9a45`. Matching topics use `TENSION_MODE_PROMPT` with `position_tension_v1`; ordinary topics keep `POSITION_PROMPT` with `position_v1`. The same selector drives generation and stored provenance. No database rows were written by this item or the review described here.
+
+A subsequent read-only adversarial review found three repairs required before Item 4 begins: deduplicate the two complete prompt templates so later standing instructions cannot drift between ordinary and tension modes; replace the tension prompt's “verbatim stated” exception with an evidence-level “explicitly states” rule because the generator sees already-paraphrased propositions, not verbatim source text; and add durable regression tests for selection, exact prompt parity/difference, and stored version/fingerprint. Matcher boundaries also remain deliberately unresolved rather than silently widened: bare “election” is intentionally excluded, while “predestined,” “predestinate,” “Calvin on election,” and hyphenated “unconditional-election” are currently excluded without an explicit accept/reject ruling.
+
+**Next position-layer step:** repair and test Item 3 as above, then implement Item 4's premise-correction standing instruction against the shared prompt structure. Do not add Item 4 to only one of the current duplicated templates.
+
+---
+
 ## Records-only session: no-oracle reframe + position-layer three-source design (session state, 2026-07-30)
 
 Docs/records-only session per CLAUDE.md's Session Routing table — chat proposed, terminal committed; zero code touched, zero DB writes. Writes: `CLAUDE.md`, `PLAN.md` (bumped to v5.3), `POSITIONING.md`. This entry is the pointer; full text lives in those files, not duplicated here.
