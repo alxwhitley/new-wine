@@ -6,7 +6,7 @@
 
 ## 1. One-liner
 
-**Rhemata is an AI-assisted Bible study tool that answers from real, named teachers in the Spirit-filled tradition — never from an averaged, anonymous AI voice — and always points you back to the humans behind the answers.**
+**Ask about a teacher, and you get that teacher — named, quoted, and linked to the source.**
 
 ---
 
@@ -92,7 +92,7 @@ The moat, stated plainly: **trust, expressed as a constraint.** Everything defen
 Every piece of copy should ladder to one of these four.
 
 1. **Real voices, not an averaged one.**
-   *"Every answer comes from a named teacher you can verify — never from an anonymous AI voice."*
+   *"Every teacher is named. Where they disagree, you see the disagreement — not a smoothed-over middle."*
 
 2. **Your tradition, taken seriously.**
    *"Rhemata doesn't flatten Spirit-filled conviction into generic Christianity, and it doesn't filter it down to something safe."*
@@ -161,4 +161,4 @@ Stated as rules. No exceptions without rewriting this document first.
 
 ## The 15-Second Version (read this to a skeptical pastor)
 
-"Rhemata is a Bible study tool for Spirit-filled believers, and it's built on one rule: it never answers in its own voice. Every answer comes from real, named teachers in our tradition — cited, checkable, and linked back to the source — and when someone needs a shepherd instead of a search result, it says so and points them to one. It's the opposite of asking ChatGPT about God: no averaged answers, no watered-down convictions, no machine pretending to be a mentor. The AI organizes the teaching. The teachers stay the teachers."
+"Rhemata is a Bible study tool for Spirit-filled believers, and it's built on one rule: Every answer is grounded in real teaching, and cited wherever possible. Every answer comes from real, named teachers in our tradition — cited, checkable, and linked back to the source — and when someone needs a shepherd instead of a search result, it says so and points them to one. It's the opposite of asking ChatGPT about God: no averaged answers, no watered-down convictions, no machine pretending to be a mentor. The AI organizes the teaching. The teachers stay the teachers."
