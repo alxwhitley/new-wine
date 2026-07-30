@@ -108,8 +108,8 @@ discouraged (contrast propositions.prompt_version, nullable, which is why
 every one of the 2,409 live propositions has NULL provenance today).
 
 There are now TWO instruction templates, not one: POSITION_PROMPT
-("position_v1") for ordinary topics, and TENSION_MODE_PROMPT
-("position_tension_v1") for the single, narrow, hard-coded Calvinism/
+("position_v2") for ordinary topics, and TENSION_MODE_PROMPT
+("position_tension_v2") for the single, narrow, hard-coded Calvinism/
 predestination exception (PLAN.md #48 item 3, 2026-07-30) -- see
 is_calvinism_predestination_topic() and _prompt_and_version_for_topic()
 below. Exactly one function, _prompt_and_version_for_topic(), decides both
@@ -122,6 +122,22 @@ POSITION_PROMPT's fingerprint, mislabeling every tension-mode row's
 provenance -- exactly what CLAUDE.md Invariant 10 exists to prevent). The
 fingerprint always tracks whichever template actually fired for that row,
 computed fresh from that template's literal text, never hand-maintained.
+
+Both templates were bumped v1 -> v2 (PLAN.md #48 item 4, 2026-07-30) to add
+a shared, standing premise-correction instruction: PREMISE_CORRECTION_CLAUSE,
+defined once and referenced by both templates via f-string substitution at
+module load time (never hand-duplicated separately in each), inserted as
+its own paragraph between the FOUR CORNERS paragraph and the "Write ONE
+position..." paragraph in both. It tells the model to name a gap plainly,
+woven into the substantive teaching rather than as a meta-preamble, when
+the gathered evidence complicates or contradicts an assumption built into
+the question as asked -- keyed explicitly on what the gathered statements
+show, never on "if the premise is false" in the abstract, to avoid making
+this a leakage vector for the model's own outside knowledge (Open Decision
+#20). The version bump reflects that the wording materially changed; three
+pre-existing "position_v1" rows from the 2026-07-28 opening proof remain in
+the table untouched -- nothing rewrites old rows -- so v2 also keeps new
+rows' provenance from being conflated with those three.
 """
 from __future__ import annotations
 
@@ -138,8 +154,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.embeddings import embed_text  # noqa: E402
 from app.services.llm_client import get_anthropic_client, get_guardrails_text  # noqa: E402
 
-PROMPT_VERSION = "position_v1"
-TENSION_MODE_PROMPT_VERSION = "position_tension_v1"
+PROMPT_VERSION = "position_v2"
+TENSION_MODE_PROMPT_VERSION = "position_tension_v2"
 MODEL = "claude-sonnet-4-5"
 
 SIMILARITY_FLOOR = 0.45
@@ -157,12 +173,43 @@ MIN_EVIDENCE_COUNT = 5
 # (chat.py's answer stream, study.py's live teacher-card synthesis) --
 # reused here, not forked, so a position is held to the same guardrail
 # standard as any other product surface that speaks in a teacher's voice.
-POSITION_PROMPT = """\
+
+# --------------------------------------------------------------------------
+# Premise-correction clause (PLAN.md #48 item 4, 2026-07-30)
+# --------------------------------------------------------------------------
+# Shared by BOTH POSITION_PROMPT and TENSION_MODE_PROMPT -- defined once,
+# referenced twice via f-string substitution at module load time, never
+# hand-duplicated as separate literal text in each template (a hand-
+# duplicated copy could silently drift out of sync between the two the way
+# the book-name map already has -- see CLAUDE.md Landmines). Keys
+# explicitly on "the gathered statements" (the evidence actually handed to
+# the model), never on "if the premise is false" in the abstract -- this is
+# what stops it from becoming a leakage vector: the model correcting a
+# premise from its own outside knowledge rather than from what the
+# evidence in front of it actually shows (the concern already on record as
+# Open Decision #20). The correction must be woven into the substantive
+# teaching -- Draft 7's own shape: stating the teacher's actual view, which
+# happens to correct the premise, as part of the teaching itself -- never a
+# meta-preamble ("this question assumes X, but ..."), which would directly
+# collide with both templates' existing "no preamble, no meta-commentary"
+# closing line.
+PREMISE_CORRECTION_CLAUSE = (
+    "If the gathered statements complicate, correct, or contradict an "
+    "assumption built into the question as asked, name that gap plainly "
+    "before teaching from what the statements actually say — do not "
+    "silently answer the assumption as if it were true, and do not "
+    "silently ignore it either."
+)
+
+
+POSITION_PROMPT = f"""\
 You are writing a stored position: a summary of what a named teacher teaches on one topic, for a Bible-study research tool used by curious lay believers in the Spirit-filled tradition.
 
 You will be given the teacher's name, a topic, and a set of already-paraphrased teaching statements extracted from that teacher's own material. These statements are your ONLY source of information about this teacher's teaching on this topic. You have no other knowledge of what this teacher has said, and you must not add anything beyond what the statements say.
 
 THE GOVERNING RULE — FOUR CORNERS. Use ONLY what is stated in the teaching statements you are given. Do not add scripture references, examples, or claims that are not in them. Do not draw on general theological knowledge to fill a gap. If the statements do not cover some angle of the topic, leave it out rather than infer it.
+
+{PREMISE_CORRECTION_CLAUSE}
 
 Write ONE position: a single coherent passage, roughly 100-200 words, stating what this teacher teaches about the given topic. Synthesize the distinct points across the statements into one connected picture — do not just concatenate them one after another, and do not just restate a single statement. Name the teacher at least once, naturally. Where the statements show a specific, memorable framing or a real qualification the teacher attaches, keep it — do not flatten a distinctive position into generic Christian consensus.
 
@@ -201,12 +248,14 @@ def _fingerprint(prompt_text: str) -> str:
 # except that one sentence is replaced with a standing rule to present
 # real tension as tension, not resolve it, unless the teacher has
 # genuinely, verbatim, taken an explicit position.
-TENSION_MODE_PROMPT = """\
+TENSION_MODE_PROMPT = f"""\
 You are writing a stored position: a summary of what a named teacher teaches on one topic, for a Bible-study research tool used by curious lay believers in the Spirit-filled tradition.
 
 You will be given the teacher's name, a topic, and a set of already-paraphrased teaching statements extracted from that teacher's own material. These statements are your ONLY source of information about this teacher's teaching on this topic. You have no other knowledge of what this teacher has said, and you must not add anything beyond what the statements say.
 
 THE GOVERNING RULE — FOUR CORNERS. Use ONLY what is stated in the teaching statements you are given. Do not add scripture references, examples, or claims that are not in them. Do not draw on general theological knowledge to fill a gap. If the statements do not cover some angle of the topic, leave it out rather than infer it.
+
+{PREMISE_CORRECTION_CLAUSE}
 
 Write ONE position: a single coherent passage, roughly 100-200 words, stating what this teacher teaches about the given topic. Present what the teacher actually said, including any real tension between sovereignty/foreknowledge and free will, without resolving it into a side the teacher didn't take — unless the teacher has verbatim stated an explicit position, in which case state that position. Do not just restate a single statement. Name the teacher at least once, naturally. Where the statements show a specific, memorable framing or a real qualification the teacher attaches, keep it — do not flatten a distinctive position into generic Christian consensus.
 
