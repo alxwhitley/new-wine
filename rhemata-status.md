@@ -29,6 +29,29 @@ Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-bloc
 
 ---
 
+## Records-only session: no-oracle reframe + position-layer three-source design (session state, 2026-07-30)
+
+Docs/records-only session per CLAUDE.md's Session Routing table — chat proposed, terminal committed; zero code touched, zero DB writes. Writes: `CLAUDE.md`, `PLAN.md` (bumped to v5.3), `POSITIONING.md`. This entry is the pointer; full text lives in those files, not duplicated here.
+
+**Decisions recorded, all Alex's explicit calls from this session:**
+- **No-oracle rule reframed, not deleted.** Was absolute ("Rhemata never speaks except to attribute a named teacher"); now a strong default with two sanctioned own-voice exceptions. `POSITIONING.md` Section 5 ("Not an oracle"), Section 9 (Chat guardrail), and Section 10 (Guardrail 2) updated to state the exceptions explicitly. Guardrail 1 ("never speaks as God, for God, or about what God is 'saying'") stays untouched and absolute — the reframe is about attribution, not about claiming revelation.
+- **Position Papers — new sanctioned house-voice category.** Hand-authored by Alex, scripture-backed, one per charismatic pillar. Served `silent_context` — unattributed, uncited, not labeled to the user as a "Position Paper." The two pre-existing example files (`sources/documents/baptism_of_the_holy_spirit.md`, `sources/documents/speaking_in_tongues.md`) are the canonical tone/structure/depth model. **Scope capped deliberately:** charismatic pillars only; core Christian-basics topics (Trinity, salvation, nature of scripture) are explicitly out of scope — teacher citation already covers them. Authoring the remaining pillars is unscheduled future work.
+- **Machine-generated live fallback may also speak in its own voice**, but every such answer must carry the disclaimer "Rhemata can make mistakes. Please let us know if you see any." — Position Papers never carry it.
+- **Position-synthesizing layer (PLAN.md track PL) reframed from two answer sources to three:** (a) Position Papers, (b) teacher/corpus positions (unchanged design), (c) machine-generated fallback (own voice + disclaimer). New build dependency added to #48: the fallback must log/tag each answer's topic, feeding a future real-usage-driven queue for which topic gets a Position Paper next — no topics pre-named, per the existing Open Decision #16 posture.
+- **2026-07-29 closeness-check retirement reconciled into PLAN.md.** That decision (gate retired in code via `CLOSENESS_CHECK_RETIRED = True`; retroactive triage of the 213 flagged/held items abandoned as accepted risk after only the 139-item fast pile was triaged) had previously been recorded only in this file's "Retroactive closeness-check triage" entry below — PLAN.md's #45–#47 language still read as if the review were open. Now reconciled: #45 marked retired with a full note, #46 marked moot-for-production, #47's header/closing updated to point at the retirement rather than "findings NOT RESOLVED." The "Ingestion policy, effective 2026-07-25" paragraph (which gated new-ingest propositions on #45 existing) is marked superseded — #45 was retired rather than turned on, and fresh ingests generate propositions via the v3.1 path same as the backfill.
+- **CLAUDE.md Invariant 13 updated.** The backfill precondition for corpus-wide positions ("a decision not yet made") is now judged SATISFIED — Alex's explicit call, given 850/857 documents backfilled and the 7 remaining failures understood (known JSON-escaping bug + book-length extraction gap, PLAN.md #17). This does NOT make corpus-wide positions buildable today: the `positions.kind` CHECK constraint, the application-level refusal, and Open Decision #13 (scope-boundary ownership) are all still in place/open.
+- **Backfill milestone confirmed complete, this session's numbers matched against PLAN.md #17/#49 and the prior 2026-07-30 entries below:** 850/857 eligible documents have propositions, 5,357 new rows via v3.1, 7 unprocessed (5 JSON-escaping, 2 book-length).
+- **Stale ~781 backfill-target figure — checked, already corrected.** Live-grepped every root `.md` file: the only two files mentioning "781" are `PLAN.md` (line ~288, already annotated "stale, predates the Bevere deletion") and this file (the two entries below dated 2026-07-28/30, already annotated as corrected to 564, plus one historical mention inside the 2026-07-25 Bevere-risk finding further below, left as-is since it accurately describes the count *at the moment that finding was made*, before the deletion). No uncorrected/uncaveated "781" exists anywhere in the durable records as of this session.
+
+**Flagged for Alex, not resolved this session — three literal customer-facing copy strings still state the old absolute claim and were deliberately NOT rewritten unilaterally:**
+1. `POSITIONING.md` Section 1 (the one-liner): "...never from an averaged, anonymous AI voice..."
+2. `POSITIONING.md` Section 7, Messaging Pillar 1: "Every answer comes from a named teacher you can verify — never from an anonymous AI voice."
+3. `POSITIONING.md`'s "15-Second Version": "it never answers in its own voice."
+
+All three now overstate the rule now that Position Papers and the disclaimed machine fallback exist. Section 5/9/10 (the governing rules) were reframed directly since they're product rules, not ad copy — these three are the literal external-facing lines, and picking new wording that stays punchy without re-opening the oracle framing is a copy decision, not a records one.
+
+---
+
 ## Full propositions backfill run — 508/515 documents, corpus-wide 850/857 (session state, 2026-07-30)
 
 Plain-script/DB-write path throughout, per CLAUDE.md's Session Routing

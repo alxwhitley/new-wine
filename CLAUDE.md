@@ -228,16 +228,21 @@ different row, per the hard rule above.
     `CHECK (kind = 'teacher')` constraint (migration 073) that would reject
     the insert even if that application gate were bypassed or forked.
     Widening either requires a deliberate code change or migration, never a
-    runtime flag. **Corpus-wide stays banned until the propositions backfill
-    (PLAN.md #49) is judged done, a decision not yet made.** The backfill
-    ran 2026-07-30 (850/857 eligible documents now have propositions,
+    runtime flag. **The backfill precondition is now SATISFIED — Alex's
+    explicit call, made 2026-07-30 (records session), superseding this
+    invariant's prior "not yet made" framing.** The backfill (PLAN.md #49)
+    ran 2026-07-30: 850/857 eligible documents now have propositions,
     including 477 of Derek Prince's — the exact event this invariant
-    originally named as the trigger to watch for) but 7 documents remain
-    unprocessed and the backfill's own extraction path has a newly-found
-    gap (book-length documents, PLAN.md #17). Whether that's close enough
-    to "complete" to lift this ban is Alex's call, not decided by this
-    invariant or by the run itself — do not treat the numbers landing as
-    the ban having lifted.
+    originally named as the trigger to watch for. 7 documents remain
+    unprocessed (5 a known JSON-escaping defect, 2 a newly-found
+    book-length extraction gap, PLAN.md #17); Alex judged that close
+    enough to lift the gate rather than wait for 857/857. **This satisfies
+    the backfill precondition only — it does not itself make corpus-wide
+    positions buildable.** Both structural refusals above are untouched (no
+    code or migration change has landed), and Open Decision #13 in PLAN.md
+    (who owns the teacher-vs-corpus scope-boundary judgment call) is still
+    unresolved. Widening either is its own deliberate future session, not a
+    consequence of this entry.
 
 14. **`positions.prompt_version`/`prompt_fingerprint`/`model` are `NOT NULL`
     — keep this discipline for any future LLM-generated-content table.**

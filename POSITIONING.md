@@ -59,7 +59,7 @@ The tool serves the teacher. Never the reverse.
 
 This section is a decision filter. If a feature makes Rhemata more like any item on this list, kill it.
 
-- **Not an oracle.** Rhemata never speaks as if it hears from God, never offers "a word," never frames output as revelation or leading. It reports what named teachers have taught. Full stop.
+- **Not an oracle.** Rhemata never speaks as if it hears from God, never offers "a word," never frames output as revelation or leading — that line is absolute, no exceptions. Reporting what named teachers have taught is the strong default, not an absolute: Rhemata may speak in its own voice in two sanctioned cases only — hand-authored Position Papers on the charismatic pillars (unattributed, no disclaimer) and machine-generated fallback answers (own voice permitted, always disclaimed). Neither is revelation or a personal word; both stay grounded in Scripture and the vetted corpus. Full design: PLAN.md's Position-synthesizing layer (track PL).
 - **Not a replacement pastor.** No spiritual counsel in its own voice. When a question is pastoral rather than informational, the answer points to a human, not deeper into the app.
 - **Not "ChatGPT with a Bible."** General AI answers from everything and everyone, averaged. Rhemata answers *only* from a vetted, named corpus. Constraint is the product.
 - **Not a source of new revelation.** Nothing Rhemata generates carries authority. Authority lives with the named voices and, above them, the text itself.
@@ -124,7 +124,7 @@ Rhemata sounds like a well-read friend from your church who takes both the Word 
 
 ## 9. How Each Surface Expresses the Thesis
 
-**Chat.** The front door. Retrieval with citations — every answer built from the corpus, every claim attributed to its named voice, links out to the original teaching. *Guardrail:* Chat answers in a reporting voice ("Prince taught X; Bevere frames it as Y"), never an authoritative first-person theological voice. When the corpus is thin or the question is pastoral, Chat says so and points to a human rather than improvising. AI-paraphrased material is always framed as summary of a named teacher, never presented as the teacher's own words.
+**Chat.** The front door. Retrieval with citations — every answer built from the corpus, every claim attributed to its named voice, links out to the original teaching. *Guardrail:* Chat answers in a reporting voice ("Prince taught X; Bevere frames it as Y") by default, never an authoritative first-person theological voice — except in two sanctioned cases: a hand-authored Position Paper (silent_context, no disclaimer, charismatic pillars only) or a machine-generated fallback answer (own voice permitted, always carries "Rhemata can make mistakes. Please let us know if you see any."). When the corpus is thin or the question is pastoral, Chat says so and points to a human rather than improvising. AI-paraphrased material drawn from the corpus is always framed as summary of a named teacher, never presented as the teacher's own words.
 
 **Study Mode.** The deep room. Greek/Hebrew interlinear plus historical and patristic commentary — the place the Discerning Student goes when a Chat answer opens a door. *Guardrail:* Study Mode presents texts, tools, and named commentary; it does not editorialize conclusions. The interlinear shows what the words are; the named voices say what they mean; Rhemata itself stays out of the pulpit.
 
@@ -141,7 +141,7 @@ Rhemata sounds like a well-read friend from your church who takes both the Word 
 Stated as rules. No exceptions without rewriting this document first.
 
 1. **Rhemata never speaks as God, for God, or about what God is "saying" to a user.**
-2. **Every theological claim is attributed to a named source.** No anonymous synthesis presented as teaching.
+2. **Every theological claim is attributed to a named source — the strong default, not an absolute.** Two sanctioned exceptions only: hand-authored Position Papers (charismatic pillars, silent_context, no disclaimer) and machine-generated fallback answers (own voice permitted, disclaimer required). No other anonymous synthesis is presented as teaching. Full design: PLAN.md's Position-synthesizing layer (track PL).
 3. **AI-generated paraphrase is always labeled as summary — never presented as a teacher's own words.** Answers paraphrase and cite named sources; they do not quote freely today. (Verified-verbatim quoting — machine-checked, character-for-character, before serving — is a planned, gated future capability; not live yet.)
 4. **Unvetted and unlicensed content is never served.** Fail closed, always.
 5. **No feature ships whose success metric is keeping users away from human teachers.** Time-in-app is not a north star.
