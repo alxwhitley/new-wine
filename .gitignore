@@ -72,3 +72,10 @@ calibration_review/
 # database itself is the durable record. Same rationale as the review
 # queues above — local-only, not for git history.
 backfill_run_review/
+
+# PLAN.md #46 position-layer calibration batch (2026-07-30) — draft position
+# text generated via the real gather_evidence()/generate_position_text()
+# path, for Alex's blind-judging pass. Nothing here is stored to the
+# positions/position_evidence tables. Same rationale as the review queues
+# above — local-only, not for git history.
+position_calibration_review/
