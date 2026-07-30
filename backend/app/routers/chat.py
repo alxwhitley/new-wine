@@ -23,6 +23,7 @@ from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.llm_client import get_anthropic_client, get_guardrails_text
+from app.services.position_papers import generate_position_paper_answer, match_position_paper
 
 
 def is_word_study_query(question: str) -> bool:
@@ -560,6 +561,58 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
             raise HTTPException(status_code=503, detail="metering_unavailable")
 
     try:
+
+        # Position-paper interception: if the question semantically matches
+        # the baptism-of-the-Holy-Spirit position paper, answer directly in
+        # Rhemata's own voice from that paper (no citation, no teacher
+        # attribution), bypassing the normal teacher-citation retrieval and
+        # generation pipeline entirely. Scoped to exactly this one paper —
+        # see position_papers.py's module docstring for why this must not
+        # become a generic "serve any silent_context document" mechanism.
+        # On no-match, matched_paper_key is None and everything below runs
+        # completely unchanged, exactly as before this interception existed.
+        matched_paper_key = match_position_paper(request.question)
+        if matched_paper_key:
+            def generate_position_paper():
+                answer_parts = []  # type: List[str]
+                for event in generate_position_paper_answer(request.question, request.messages):
+                    yield event
+                    if event.startswith("data: "):
+                        try:
+                            payload = json.loads(event[len("data: "):].rstrip("\n"))
+                        except (ValueError, TypeError):
+                            continue
+                        if isinstance(payload, dict) and "token" in payload:
+                            answer_parts.append(payload["token"])
+                answer = "".join(answer_parts).strip()
+
+                conversation_id = request.conversation_id or str(uuid.uuid4())
+                message_id = str(uuid.uuid4())
+                is_new = request.conversation_id is None
+                if user_id:
+                    threading.Thread(
+                        target=_save_conversation,
+                        args=(db, user_id, conversation_id, is_new, request.question, answer, message_id, [], []),
+                        daemon=True,
+                    ).start()
+                    logger.info("Conversation save dispatched in background (position-paper path): %s", conversation_id)
+                else:
+                    conversation_id = None
+                    message_id = None
+                    logger.debug("Skipping conversation save — no authenticated user (position-paper path)")
+
+                meta = {
+                    "citations": [],
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "verified_references": [],
+                }
+                if user_usage_meta:
+                    meta["usage"] = user_usage_meta
+                yield _sse(json.dumps(meta))
+                yield _sse("[DONE]")
+
+            return StreamingResponse(generate_position_paper(), media_type="text/event-stream")
 
         # Step 0: Get source filter settings
         filters = get_disabled_filters()
