@@ -106,6 +106,22 @@ fingerprint()), and model. The positions table (migration 073) makes all
 three NOT NULL -- an unstamped write is impossible here, not just
 discouraged (contrast propositions.prompt_version, nullable, which is why
 every one of the 2,409 live propositions has NULL provenance today).
+
+There are now TWO instruction templates, not one: POSITION_PROMPT
+("position_v1") for ordinary topics, and TENSION_MODE_PROMPT
+("position_tension_v1") for the single, narrow, hard-coded Calvinism/
+predestination exception (PLAN.md #48 item 3, 2026-07-30) -- see
+is_calvinism_predestination_topic() and _prompt_and_version_for_topic()
+below. Exactly one function, _prompt_and_version_for_topic(), decides both
+which prompt gets sent to the model AND which version label / fingerprint
+gets stamped on the written row -- generate_position_text() and
+write_position() both call it rather than each independently deciding, so
+the two can never disagree (the class of bug this guards against: a call
+silently generating with TENSION_MODE_PROMPT while the write stamps
+POSITION_PROMPT's fingerprint, mislabeling every tension-mode row's
+provenance -- exactly what CLAUDE.md Invariant 10 exists to prevent). The
+fingerprint always tracks whichever template actually fired for that row,
+computed fresh from that template's literal text, never hand-maintained.
 """
 from __future__ import annotations
 
@@ -113,7 +129,7 @@ import hashlib
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -123,6 +139,7 @@ from app.services.embeddings import embed_text  # noqa: E402
 from app.services.llm_client import get_anthropic_client, get_guardrails_text  # noqa: E402
 
 PROMPT_VERSION = "position_v1"
+TENSION_MODE_PROMPT_VERSION = "position_tension_v1"
 MODEL = "claude-sonnet-4-5"
 
 SIMILARITY_FLOOR = 0.45
@@ -158,6 +175,72 @@ Output ONLY the position text — no preamble, no headers, no meta-commentary ab
 
 def prompt_fingerprint() -> str:
     return hashlib.sha256(POSITION_PROMPT.encode("utf-8")).hexdigest()
+
+
+def _fingerprint(prompt_text: str) -> str:
+    """SHA-256 of a literal template's own text. Same convention as
+    prompt_fingerprint()/propositions.prompt_fingerprint() -- fingerprints
+    the raw template, never a hand-maintained label -- factored out so
+    _prompt_and_version_for_topic() is the one place that decides, for
+    either branch, both which text is sent and what gets fingerprinted."""
+    return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+
+
+# --------------------------------------------------------------------------
+# Tension-mode exception (PLAN.md #48 item 3, 2026-07-30)
+# --------------------------------------------------------------------------
+# POSITION_PROMPT's "Write ONE position... Synthesize the distinct points...
+# into one connected picture" instruction pushes toward resolution -- fine
+# for most topics, but for Calvinism/predestination-adjacent topics it was
+# confirmed (Draft 15, "predestination and unconditional election in the
+# Calvinist sense" against Derek Prince's real evidence) to manufacture a
+# one-sided resolution the teacher's own statements do not actually assert:
+# "Prince resolves the tension between predestination and free will by
+# appealing to..." -- stitching real statements into an over-resolved
+# conclusion. TENSION_MODE_PROMPT below is identical to POSITION_PROMPT
+# except that one sentence is replaced with a standing rule to present
+# real tension as tension, not resolve it, unless the teacher has
+# genuinely, verbatim, taken an explicit position.
+TENSION_MODE_PROMPT = """\
+You are writing a stored position: a summary of what a named teacher teaches on one topic, for a Bible-study research tool used by curious lay believers in the Spirit-filled tradition.
+
+You will be given the teacher's name, a topic, and a set of already-paraphrased teaching statements extracted from that teacher's own material. These statements are your ONLY source of information about this teacher's teaching on this topic. You have no other knowledge of what this teacher has said, and you must not add anything beyond what the statements say.
+
+THE GOVERNING RULE — FOUR CORNERS. Use ONLY what is stated in the teaching statements you are given. Do not add scripture references, examples, or claims that are not in them. Do not draw on general theological knowledge to fill a gap. If the statements do not cover some angle of the topic, leave it out rather than infer it.
+
+Write ONE position: a single coherent passage, roughly 100-200 words, stating what this teacher teaches about the given topic. Present what the teacher actually said, including any real tension between sovereignty/foreknowledge and free will, without resolving it into a side the teacher didn't take — unless the teacher has verbatim stated an explicit position, in which case state that position. Do not just restate a single statement. Name the teacher at least once, naturally. Where the statements show a specific, memorable framing or a real qualification the teacher attaches, keep it — do not flatten a distinctive position into generic Christian consensus.
+
+Paraphrase. Do not quote the statements verbatim at length — restate them in connected prose, the same way the statements themselves already paraphrase their own source. A short (under roughly five word) precise phrase is fine only where it is genuinely how the teacher put a point in the evidence given to you.
+
+This position represents the one named teacher only. Do not hedge as though other viewpoints exist unless the statements themselves show this teacher addressing a counter-view.
+
+Output ONLY the position text — no preamble, no headers, no meta-commentary about the statements or the task."""
+
+
+def is_calvinism_predestination_topic(topic: str) -> bool:
+    """Case-insensitive substring match for the single, narrow tension-mode
+    trigger. Deliberately NOT bare "election" -- that would over-trigger on
+    generic "chosen by God" questions unrelated to the specific Calvinist
+    doctrine."""
+    t = topic.lower()
+    triggers = (
+        "calvinis",  # Calvinist / Calvinism / Calvinistic
+        "predestination",
+        "unconditional election",
+        "double predestination",
+    )
+    return any(trigger in t for trigger in triggers)
+
+
+def _prompt_and_version_for_topic(topic: str) -> Tuple[str, str]:
+    """The ONE place that decides both which prompt gets sent to the model
+    and what gets stamped as this row's provenance -- generate_position_
+    text() and write_position() both call this rather than each separately
+    re-deriving the same decision, so the two can never disagree (CLAUDE.md
+    Invariant 10's principle, applied here)."""
+    if is_calvinism_predestination_topic(topic):
+        return TENSION_MODE_PROMPT, TENSION_MODE_PROMPT_VERSION
+    return POSITION_PROMPT, PROMPT_VERSION
 
 
 def db_params() -> dict:
@@ -235,7 +318,14 @@ def generate_position_text(teacher_name: str, topic: str, evidence: List[Dict]) 
     connection and imports nothing capable of reading `chunks` or
     `documents`; there is no parameter through which source/chunk text
     could reach it. Raises PositionGenerationFailed on any call error, so a
-    failed call is never indistinguishable from a legitimate result."""
+    failed call is never indistinguishable from a legitimate result.
+
+    Which instruction template is sent (POSITION_PROMPT vs.
+    TENSION_MODE_PROMPT) is decided ONLY by _prompt_and_version_for_topic(
+    topic) -- the same selector write_position() uses to decide what gets
+    stamped, so generation and provenance can never disagree (see module
+    docstring)."""
+    system_prompt, _ = _prompt_and_version_for_topic(topic)
     evidence_block = "\n".join(f"- {e['content']}" for e in evidence)
     user_message = f"Teacher: {teacher_name}\n\nTopic: {topic}\n\nTeaching statements:\n{evidence_block}"
     try:
@@ -244,7 +334,7 @@ def generate_position_text(teacher_name: str, topic: str, evidence: List[Dict]) 
             model=MODEL,
             max_tokens=500,
             system=[
-                {"type": "text", "text": POSITION_PROMPT},
+                {"type": "text", "text": system_prompt},
                 {"type": "text", "text": get_guardrails_text()},
             ],
             messages=[{"role": "user", "content": user_message}],
@@ -317,6 +407,14 @@ def write_position(
             "error": str(exc),
         }
 
+    # Stamp provenance from the SAME selector generate_position_text() used
+    # to decide which prompt was actually sent -- never the hard-coded
+    # PROMPT_VERSION/prompt_fingerprint() pair, which only ever describes
+    # POSITION_PROMPT and would mislabel every tension-mode row (CLAUDE.md
+    # Invariant 10).
+    prompt_text, stamped_prompt_version = _prompt_and_version_for_topic(topic)
+    stamped_fingerprint = _fingerprint(prompt_text)
+
     import psycopg2
 
     conn = psycopg2.connect(**params)
@@ -330,7 +428,7 @@ def write_position(
             VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s)
             RETURNING id::text, created_at
             """,
-            (kind, source_id, topic, content, PROMPT_VERSION, prompt_fingerprint(), MODEL),
+            (kind, source_id, topic, content, stamped_prompt_version, stamped_fingerprint, MODEL),
         )
         position_id, created_at = cur.fetchone()
         for e in evidence:
