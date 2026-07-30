@@ -597,8 +597,32 @@ def ingest_document(
             )
             chunk_ids = [str(row[0]) for row in cur.fetchall()]
 
+            # Named-teacher fix (2026-07-30, PLAN.md #46 follow-up):
+            # resolve the best available real name for prompt attribution.
+            # Prefer the caller-supplied author/source_name params (cheap,
+            # no extra query) -- but those are only populated on the
+            # resolve_from path; a caller using the pre-resolved source_id
+            # override above can leave both None even though _resolved_id
+            # names a real, populated sources row. Same connection/cursor,
+            # before commit, so this adds one cheap lookup only in that
+            # gap case.
+            speaker = author or source_name
+            if not speaker:
+                cur.execute("SELECT name FROM sources WHERE id = %s", (_resolved_id,))
+                row = cur.fetchone()
+                speaker = row[0] if row else None
+
+        # Opt this real call site into prompt_version="v3.1" (isolated
+        # naming fix only -- see propositions.EXTRACTION_PROMPT_V3_1's own
+        # comment). If `speaker` is still empty here (no author, no
+        # source_name, no sources.name -- not expected for any real
+        # licensed/unlicensed source, but not specially guarded against),
+        # process_document()'s own extract call raises ValueError
+        # internally, caught by its outer except and returned as "error",
+        # same as any other extraction failure.
         prop_result = propositions.process_document(
             conn, doc_id, _resolved_id, body_text, embed_text, chunk_ids=chunk_ids,
+            speaker=speaker, prompt_version="v3.1",
         )
         print(f"  propositions: {prop_result}")
 

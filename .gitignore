@@ -64,3 +64,11 @@ generator_live_proof_review/
 # review queues above — a worse fit for permanent git history than for the
 # database it came from.
 calibration_review/
+
+# Full propositions backfill run log (PLAN.md #17/#49, 2026-07-30) —
+# incremental per-document JSONL checkpoint for the v3.1-prompt full
+# backfill run (scripts/run_full_backfill.py). Contains generated
+# proposition content for crash-recovery/resumability purposes only; the
+# database itself is the durable record. Same rationale as the review
+# queues above — local-only, not for git history.
+backfill_run_review/

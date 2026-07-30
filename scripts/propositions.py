@@ -469,6 +469,70 @@ Length: ~80–150 words each.
 Output ONLY a JSON array, no preamble, no markdown fences:
 [{"proposition_index": 1, "content": "..."}, {"proposition_index": 2, "content": "..."}]"""
 
+# ── v3.1 prompt (2026-07-30) — ISOLATED naming fix only ───────────────────────
+# Alex's explicit decision: fix the "the author" defect (measured at 84% of
+# 222 propositions in the 25-doc backfill proving batch, same session) WITHOUT
+# adopting v4's bundled length/sentence-structure/voice retuning. v4 already
+# diagnosed and solved the naming problem (see v4's own change #2 below,
+# "Attribution") -- this constant is EXACTLY EXTRACTION_PROMPT (v3) with ONLY
+# that one mechanism grafted in, nothing else touched.
+#
+# Mechanism, precisely: (a) the model is told the speaker's real name via a
+# new {speaker} format placeholder (mirroring v4's own mechanism -- extract_
+# propositions() must be called with a non-empty speaker for this version,
+# exactly like v4 already requires); (b) every place v3's prompt referred
+# generically to "the author" (8 occurrences across 4 lines: the scripture-
+# reference bullet x3, the paraphrase-rules "reuse the author's phrasing"
+# bullet x1, the worked micro-example x2, the attribution bullet x2) is
+# replaced with {speaker}; (c) the attribution bullet gains one explicit
+# negative instruction, "never 'the author'" (v4's own proven phrasing for
+# this), since leaving the OLD bullet's wording (which explicitly modeled
+# "the author teaches..." as correct) unchanged would directly contradict a
+# same-sentence instruction not to write that -- the worked example at (b)
+# needed the identical fix for the identical reason (it modeled "The author
+# defines..." as the CORRECT restructured form).
+#
+# Everything else is BYTE-IDENTICAL to EXTRACTION_PROMPT: the opening framing
+# sentence, the FOUR CORNERS rule, the examples/illustrations and claims
+# bullets, "Neutral voice...", the ENTIRE "Count and distinctness" section,
+# and "Length: ~80-150 words each." (v3's original single-line length
+# guidance, not v4's expanded section+worked-example -- the thing this
+# change is explicitly NOT adopting). Only the trailing JSON-array line's
+# literal braces are escaped ({{ }}) for .format() mechanics -- the text
+# itself is unchanged. Selected via extract_propositions(prompt_version=
+# "v3.1", speaker=...); process_document() only uses it when a caller
+# explicitly supplies prompt_version="v3.1" (or "v4") -- DEFAULT_PROMPT_
+# VERSION stays "v3", so every existing caller/test that doesn't opt in is
+# byte-identical to before this change (same discipline as name_pattern/
+# verse_lookup/vocab_matcher/chunk_ids above).
+EXTRACTION_PROMPT_V3_1 = """\
+You are extracting propositions from a single theological document for a research tool. A proposition is one self-contained teaching claim from the document, restated entirely in your own words.
+
+THE GOVERNING RULE — FOUR CORNERS. Use ONLY what is physically present in the document text provided. You are summarizing this one document, not teaching the topic. You may not add anything from your own knowledge — not a Bible reference, not an example, not a cross-reference, not a related verse, not background context. If it is not in the provided text, it does not exist for this task. When in doubt, leave it out.
+
+Applying that rule:
+
+Scripture references — capture every one the source gives, invent none it doesn't. If the document explicitly prints a reference (e.g. the text says "Hebrews 3:1" or "Mark 11:23"), and a proposition covers that teaching, that reference MUST appear in the proposition. At the same time: if {speaker} quotes or alludes to a verse without naming it, restate the teaching but do NOT supply the reference, even if you recognize the verse. Two equal failures to avoid: dropping a reference {speaker} printed, and adding one {speaker} didn't. Capture what's there; invent nothing that isn't.
+Examples and illustrations: Use only the examples the document actually contains. Never introduce an illustration, story, or analogy of your own.
+Claims: Represent only what the document asserts. Do not extend, infer, or theologize beyond it.
+
+Paraphrase rules:
+
+Full rewrite in your own words. Never reuse {speaker}'s distinctive phrasing or sentence structure. Never reproduce three or more consecutive words from the source (quoted scripture excepted — scripture wording may stand). If a restatement starts mirroring the original, rebuild it from scratch.
+This applies even to short, simple, or definitional sentences — those are the easiest to copy by accident. For example, if {speaker} writes "A disciple is simply a follower of Christ," do not reuse that clause; restructure the idea, e.g. "{speaker} defines discipleship plainly — following Christ, not attaining a special status." Only quoted scripture wording may stand unchanged.
+Attribute naturally by name ("{speaker} teaches…") — never "the author" — but only to what {speaker} actually said.
+Neutral voice. Never use charged language ("heretical," "demonic," "apostate") in your own voice even if the source does.
+
+Count and distinctness:
+
+Extract one teaching passage per genuinely distinct teaching point. There is NO target number and no minimum count. When the document contains a genuine, distinct teaching point, however brief, it must still be extracted as its own passage — a short passage that makes one real teaching claim still deserves to be pulled out. But when the document contains no genuine, distinct teaching point at all — administrative content, a bare fragment or title, a throwaway remark with nothing substantive to paraphrase — the correct, expected output is an empty array. Do not manufacture a teaching passage from padding, from restating a title, or from inflating a throwaway remark just to produce output.
+If two points make substantially the same claim, MERGE them into one. Near-duplicate passages are a failure.
+
+Length: ~80–150 words each.
+
+Output ONLY a JSON array, no preamble, no markdown fences:
+[{{"proposition_index": 1, "content": "..."}}, {{"proposition_index": 2, "content": "..."}}]"""
+
 # ── v4 prompt (2026-07-16, revised 2026-07-23) ────────────────────────────────
 # Added alongside EXTRACTION_PROMPT (v3), which is unchanged and remains the
 # default. Selected via extract_propositions(prompt_version="v4", speaker=...).
@@ -677,6 +741,8 @@ def _select_prompt_template(prompt_version: str) -> str:
     """
     if prompt_version == "v4":
         return EXTRACTION_PROMPT_V4
+    if prompt_version == "v3.1":
+        return EXTRACTION_PROMPT_V3_1
     return EXTRACTION_PROMPT
 
 
@@ -703,11 +769,14 @@ def extract_propositions(
 
     prompt_version: "v3" (default) uses EXTRACTION_PROMPT unchanged -- every
     existing caller (process_document, all ingest scripts) is unaffected.
-    "v4" uses EXTRACTION_PROMPT_V4 (fuller length, named-speaker attribution,
+    "v3.1" uses EXTRACTION_PROMPT_V3_1 -- v3's exact wording with ONLY the
+    named-teacher mechanism grafted in (see that constant's own comment) --
+    and, like "v4", REQUIRES a non-empty `speaker`. "v4" uses
+    EXTRACTION_PROMPT_V4 (fuller length, named-speaker attribution,
     specifics-preserving voice -- see that constant's comment for the full
-    diff against v3) and REQUIRES a non-empty `speaker`; raises ValueError
-    rather than silently falling back to "the author"-style prose if one
-    isn't given.
+    diff against v3) and also REQUIRES a non-empty `speaker`. Both raise
+    ValueError rather than silently falling back to "the author"-style
+    prose if one isn't given.
 
     Returns [] ONLY for a genuine empty result -- the model was called
     successfully and found nothing worth extracting. Raises
@@ -729,9 +798,11 @@ def extract_propositions(
     docstring for the exhaustive found/grounded/stripped accounting this
     guarantees.
     """
-    if prompt_version == "v4":
+    if prompt_version in ("v3.1", "v4"):
         if not speaker:
-            raise ValueError("prompt_version='v4' requires a non-empty speaker name")
+            raise ValueError(
+                f"prompt_version={prompt_version!r} requires a non-empty speaker name"
+            )
         prompt = _select_prompt_template(prompt_version).format(speaker=speaker)
     else:
         prompt = _select_prompt_template(prompt_version)
@@ -1022,8 +1093,23 @@ def process_document(
     verse_lookup: Optional[Dict[str, str]] = None,
     vocab_matcher: Optional[object] = None,
     chunk_ids: Optional[List[str]] = None,
+    speaker: Optional[str] = None,
+    prompt_version: Optional[str] = None,
 ) -> str:
     """Top-level entry point for ingest scripts.
+
+    speaker / prompt_version (named-teacher fix, 2026-07-30, both default
+    None): OPTIONAL, same discipline as every other parameter below --
+    byte-identical to before this change when omitted. `prompt_version`
+    None means "use DEFAULT_PROMPT_VERSION" ("v3", unchanged) exactly as
+    before this parameter existed; a caller opts into the naming fix by
+    passing prompt_version="v3.1" (isolated fix only) or "v4" (the fuller
+    bundled retune) AND a non-empty `speaker` -- extract_propositions()
+    raises ValueError if a speaker-requiring version is selected without
+    one, caught by this function's own outer except like any other
+    extraction failure (never raises past this function). No caller is
+    forced to supply either: every existing call site that passes neither
+    continues to get "v3", exactly as always.
 
     name_pattern / verse_lookup (PLAN.md #45 Phase 5, both default None):
     OPTIONAL closeness-check gate, OFF unless name_pattern is supplied --
@@ -1133,11 +1219,13 @@ def process_document(
             )
             return "too_thin_to_extract"
 
-        props = extract_propositions(text, doc_id=document_id)
+        prompt_version = prompt_version or DEFAULT_PROMPT_VERSION
+        props = extract_propositions(
+            text, doc_id=document_id, speaker=speaker, prompt_version=prompt_version,
+        )
         if not props:
             return "no_propositions"
 
-        prompt_version = DEFAULT_PROMPT_VERSION
         fingerprint = prompt_fingerprint(prompt_version)
         model = EXTRACTION_MODEL
 
