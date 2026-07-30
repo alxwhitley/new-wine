@@ -194,11 +194,21 @@ different row, per the hard rule above.
     10) and the allowed-reference-list upstream constraint plus this
     arbitrated strip both live unconditionally inside `extract_propositions()`
     itself — confirmed live, on the exact deleted-script call shape, to hold
-    even for a caller that skips `process_document()` entirely. **Still
-    unresolved before generation resumes or the backfill runs:** the license
-    gate and Precept-Austin lockout remain conventional (only inside
-    `process_document()`, not structural — a direct caller still skips
-    them), and PLAN.md #46's human calibration has not run. See PLAN.md #49.
+    even for a caller that skips `process_document()` entirely.
+    **Generation has now resumed and the backfill has run (2026-07-30,
+    corrects this invariant's own earlier "still unresolved before
+    generation resumes" framing — that precondition language predated the
+    run, it is not still open).** PLAN.md #46's human calibration ran and
+    closed 2026-07-30, before the run. The full backfill (PLAN.md #17/#49)
+    processed 515 documents, 508 succeeded — see rhemata-status.md for the
+    complete accounting. **What remains genuinely unresolved, unchanged by
+    that run:** the license gate and Precept-Austin lockout are still only
+    inside `process_document()`, not structural — a direct caller still
+    skips them. **What the run newly surfaced, not previously known:**
+    book-length documents (`source_type='book'`) structurally break the
+    current single-call, `max_tokens=8192` extraction design — 2 of the 7
+    still-failing documents from the backfill are this class, not the
+    known JSON-escaping defect the other 5 share. See PLAN.md #17.
 
 12. **Position generation must stay structurally source-blind.**
     `scripts/positions.py::generate_position_text()` — the only function
@@ -218,19 +228,28 @@ different row, per the hard rule above.
     `CHECK (kind = 'teacher')` constraint (migration 073) that would reject
     the insert even if that application gate were bypassed or forked.
     Widening either requires a deliberate code change or migration, never a
-    runtime flag. Corpus-wide stays banned until the propositions backfill
-    (PLAN.md #49) completes — a corpus-wide position authored before then
-    would name whichever teachers already have propositions as "the corpus"
-    and invert the day Derek Prince's ~429 documents land.
+    runtime flag. **Corpus-wide stays banned until the propositions backfill
+    (PLAN.md #49) is judged done, a decision not yet made.** The backfill
+    ran 2026-07-30 (850/857 eligible documents now have propositions,
+    including 477 of Derek Prince's — the exact event this invariant
+    originally named as the trigger to watch for) but 7 documents remain
+    unprocessed and the backfill's own extraction path has a newly-found
+    gap (book-length documents, PLAN.md #17). Whether that's close enough
+    to "complete" to lift this ban is Alex's call, not decided by this
+    invariant or by the run itself — do not treat the numbers landing as
+    the ban having lifted.
 
 14. **`positions.prompt_version`/`prompt_fingerprint`/`model` are `NOT NULL`
     — keep this discipline for any future LLM-generated-content table.**
-    Unlike `propositions`' nullable provenance columns (the reason every one
-    of the 2,409 live propositions has NULL provenance today — see the
-    Landmines section), an unstamped `positions` write is impossible at the
-    schema level, not just discouraged by convention. Don't relax this for a
-    future table "just to unblock a migration" — nullable provenance is
-    exactly how Invariant 10's hole opened in the first place.
+    Unlike `propositions`' nullable provenance columns (the reason a fixed
+    set of 2,409 legacy propositions has NULL provenance permanently — see
+    the Landmines section; every proposition written since 2026-07-29's
+    bypass-proofing build, 5,814 and counting as of 2026-07-30, is
+    correctly stamped `v3`/`v3.1` and not part of this gap), an unstamped
+    `positions` write is impossible at the schema level, not just
+    discouraged by convention. Don't relax this for a future table "just to
+    unblock a migration" — nullable provenance is exactly how Invariant
+    10's hole opened in the first place.
 
 ---
 
@@ -238,25 +257,33 @@ different row, per the hard rule above.
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
-- **No live proposition row has real provenance — confirmed corpus-wide
-  2026-07-28, not just for pre-07-23 rows as previously stated here. Still
-  true of every EXISTING row as of 2026-07-30 — generation has not resumed,
-  so nothing has re-run to fix this retroactively.** Provenance stamping
-  (migration 067) never fired on an actual write: every write since it
-  shipped, same as before, went through a since-deleted one-off script that
-  called `extract_propositions()`/`store_propositions()` directly, bypassing
-  the stamping call site inside `process_document()`. **The underlying
-  bypass mechanism itself is now closed (2026-07-30) — see Invariant 10** —
-  an unstamped write is structurally impossible on any future call through
-  `store_propositions()`, not merely discouraged. That fix has no effect on
-  rows already in the table; it only guarantees FUTURE writes are stamped
-  once generation resumes. A 2026-07-23 diagnostic built a reasonably
-  strong circumstantial case for what produced the pre-07-23 rows
-  specifically (git history + a full-corpus text sweep for one known
-  leak), but that's evidence, not a stored fact — and it doesn't extend to
-  post-07-23 rows either. Treat any claim about which prompt version
-  produced ANY current row as unverified unless re-checked by the same
-  method (PLAN.md #45.5).
+- **Corrected 2026-07-30 — no longer true of the majority of the corpus.**
+  A fixed set of **2,409 legacy propositions (created no later than
+  2026-07-23) have NULL provenance permanently** — confirmed corpus-wide
+  2026-07-28, via the same bypass mechanism described below, and this
+  specific set of rows will never retroactively gain provenance (nothing
+  rewrites old rows). **But generation resumed and the backfill ran
+  2026-07-30**, using the now-closed bypass-proofing (Invariant 10): 5,814
+  propositions written since (222 `v3`, 5,592 `v3.1`) all carry correct,
+  verified `prompt_version`/`prompt_fingerprint`/`model` — confirmed by
+  direct query, not assumed. Provenance stamping (migration 067) never
+  fired on an actual write until this session: every write before
+  2026-07-30, including all 2,409 legacy rows, went through a since-deleted
+  one-off script that called `extract_propositions()`/`store_propositions()`
+  directly, bypassing the stamping call site inside `process_document()`.
+  The underlying bypass mechanism itself is now closed (2026-07-30) — see
+  Invariant 10 — an unstamped write is structurally impossible on any
+  future call through `store_propositions()`, not merely discouraged. That
+  fix has no effect on the 2,409 rows already in the table before it
+  landed; it only guarantees writes from 2026-07-29 onward are stamped. A
+  2026-07-23 diagnostic built a reasonably strong circumstantial case for
+  what produced the pre-07-23 rows specifically (git history + a
+  full-corpus text sweep for one known leak), but that's evidence, not a
+  stored fact for those rows. Treat any claim about which prompt version
+  produced any row dated before 2026-07-29 as unverified unless re-checked
+  by the same method (PLAN.md #45.5) — this caveat does NOT extend to the
+  `v3`/`v3.1` rows written 2026-07-30, which carry real, queried-not-
+  inferred provenance.
 - **Citation-fabrication scale claims from 2026-07-28 are superseded — do
   not cite the 72-reference/64-proposition baseline as ground truth
   anywhere.** The scanner behind that figure

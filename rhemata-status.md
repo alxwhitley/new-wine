@@ -3,16 +3,280 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-29 (retroactive closeness-check review CLOSED
-without full completion — Alex's explicit decision to accept near-verbatim
-teacher-wording reuse as risk, not something to review or block. The
-closeness-check gate is now structurally retired in `propositions.py`
-(`CLOSENESS_CHECK_RETIRED = True`, not a deletion — see below). Teacher-level
-position gate (#47/#48) is unblocked via this explicit risk-acceptance;
-backfill (#49) is only partially unblocked — separate preconditions remain
-unresolved. The "generation completed" entry below is corrected in place,
-not stacked, to reflect this closure).
+Last verified: 2026-07-30 (**generation resumed and the propositions
+backfill actually ran this session — corrects the 2026-07-29 header's own
+"generation has not resumed" framing, which is now stale, not wrong-when-
+written.** Three ordered pieces, all plain-script/DB-write path per
+CLAUDE.md's Session Routing table: (1) a 25-doc proving batch on the
+unmodified v3 prompt, measuring the "the author" defect at real scale for
+the first time (90.1% of propositions, corrected word-boundary count); (2)
+an isolated named-teacher fix (`EXTRACTION_PROMPT_V3_1`) — v3's exact
+wording with only the naming mechanism grafted in, proven on a second
+25-doc batch to drop that rate to 0.0% with no length/structure drift; (3)
+the full remaining-corpus run on that proven v3.1 path, 515 documents, 508
+succeeded. **Corpus-wide as of this session: 850/857 eligible documents now
+have propositions (was ~343/857 at the start of today), 5,592 of those
+propositions stamped `v3.1`, 222 stamped `v3`, 2,409 legacy rows still
+`legacy_unknown` (untouched, unaffected) — so CLAUDE.md's Landmines line "no
+live proposition row has real provenance" is now corrected in place, not
+still true.** 7 documents remain unprocessed — 5 hit an already-known
+JSON-escaping model quirk (confirmed pre-existing in v3 too, not caused by
+this session's prompt change), 2 are a newly-discovered gap: book-length
+documents (`source_type='book'`, 90K/140K words) structurally break the
+current single-call, `max_tokens=8192` extraction design. Full detail
+below and PLAN.md #17/#49.)
 Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-blocks-panel bug — logged as a bullet inside the "Study Panel geometry v3" section below, not its own heading. Previously pointed to this by a numeric offset ("six below the new one") that silently went stale the moment a new entry was prepended above it — fixed to a name-based reference instead of re-guessing a new number that would just rot the same way next session).
+
+---
+
+## Full propositions backfill run — 508/515 documents, corpus-wide 850/857 (session state, 2026-07-30)
+
+Plain-script/DB-write path throughout, per CLAUDE.md's Session Routing
+table's hard rule (any DB write, harness never used). Three pieces in one
+continuous session; each is its own dated sub-entry below, newest first.
+`scripts/backfill_propositions.py` and `scripts/run_full_backfill.py` are
+new, committed; `scripts/propositions.py`/`scripts/shared_ingest.py` carry
+the actual prompt/wiring change (next sub-entry). Zero code touched in this
+top entry — this is the full-scale run only.
+
+**Live-queried, not assumed: 515 documents were the real remaining backfill
+set** (zero propositions, `license_status` licensed/unlicensed, not Precept
+Austin) at run time — re-derived fresh, not reused from an earlier day's
+stale count. Ran via `scripts/run_full_backfill.py`: sequential (no
+concurrency, matching every other ingest script in this repo), one document
+at a time, on the v3.1 named-teacher path. Crash-safety was load-bearing,
+not theoretical: every result is appended to a gitignored JSONL log
+(`backfill_run_review/full_backfill_log.jsonl`) immediately, fsync'd, and a
+background-task monitoring hiccup mid-run (the wait-loop watching the
+process got killed independently of the process itself — see below) proved
+the design's real value, not just its intent.
+
+**Result, verified against `propositions` table row counts directly, not
+the script's own printed summary:** 508 of 515 documents got propositions —
+**5,357 new rows**, range **3–40 per document**, mean **10.5**. Script-
+reported counts vs actual DB counts: **0 mismatches** across all 515.
+Every one of the 5,357 rows carries `prompt_version='v3.1'`, a correct
+fingerprint, `model='llama-3.3-70b-versatile'` — 0 exceptions. Zero
+documents produced a legitimate empty result (`no_propositions`/
+`too_thin_to_extract`) — every document that succeeded had real extractable
+content, unlike some earlier proving-batch runs.
+
+**Cost: $4.19 actual**, computed from real word volume observed during the
+run (4.61M input words, 217K output words of generated propositions) at the
+confirmed Groq rates ($0.59/M in, $0.79/M out) — close to the $4.50–5
+pre-run estimate, disclosed to Alex before the run started per CLAUDE.md's
+per-item-cost rule. Comfortably under the $50 ceiling.
+
+**7 documents still fail after one retry pass each — two distinct causes,
+not conflated:**
+- **5 are the already-known JSON-escaping defect**, root-caused in the
+  prior sub-entry below: the model occasionally emits an unescaped quote
+  inside a nested scripture quotation, breaking strict `json.loads()`
+  parsing. All five are normal length (5.8K–12K words), same
+  `"Expecting ',' delimiter"` signature: Daniel Kolenda "Cessationism 9
+  (The Pagan Origins)", Derek Prince "Mary: The Pattern Mother", Derek
+  Prince "Seven Ways To Keep Your Deliverance", Derek Prince "Who Are The
+  Israel Of God?", and Vlad Savchuk "God Decides When. Not You." — the
+  same document that failed identically, deterministically, in the prior
+  sub-entry's proving batch; confirmed again here as still deterministic at
+  `temperature=0.2` (identical failure on the retry, not intermittent).
+- **2 are a genuinely new finding, never exercised by either proving
+  batch (max ~11.8K words tested there): book-length documents.** Bosworth
+  "Christ the Healer" (90,842 words, 256 chunks) and Doug Kreighbaum
+  "Manual Systematic Theology" (139,659 words, 423 chunks) — both
+  legitimately `source_type='book'`, confirmed by direct query, not a
+  mis-filed/duplicated-content data error. Kreighbaum's failed with a hard
+  Groq 400 ("Please reduce the length of the messages or completion");
+  Bosworth's failed with malformed trailing JSON, almost certainly the same
+  underlying cause. **Root cause: `extract_propositions()` sends the
+  entire reconstructed document in ONE call with `max_tokens=8192` output —
+  structurally incompatible with book-scale source text.** Not fixed this
+  session (flagged, not remediated) — a real gap for any future book-heavy
+  ingestion or backfill pass, needs a chunked/multi-call extraction
+  redesign for `source_type='book'` specifically before those are retried.
+
+**Corpus-wide state, live-queried:** of 857 total eligible documents
+(licensed/unlicensed, not Precept Austin), **850 now have propositions, 7
+do not** — exactly the 7 named above, nothing else. `propositions.
+prompt_version` breakdown corpus-wide: `v3.1: 5592` (5,357 from this run +
+235 from the prior sub-entry's proving batch — exact arithmetic match, no
+double-counting), `v3: 222` (the first proving batch, untouched), `
+legacy_unknown: 2409` (pre-session corpus, untouched, unaffected by any of
+today's writes).
+
+**Verified untouched, not merely assumed:** `store_propositions()`'s
+clear-then-insert only ever fired against documents that had zero
+propositions rows before this session touched them (by construction of the
+selection query), so its `DELETE` was a no-op for every one of the 515 —
+confirmed by the exact `v3: 222`/`legacy_unknown: 2409` counts holding
+steady from before this run to after. Serving backend (`backend/app/`)
+grepped directly for imports of `propositions.py`/`shared_ingest.py`: zero
+matches — untouched, unreachable from any live request path.
+
+**Operational note, not a data problem:** mid-run, the background wait-loop
+I was using to monitor completion (a separate polling process, not the
+backfill itself) was killed independently once, without explanation
+available from this environment. The actual backfill process, launched
+detached (`nohup`+disown) from that monitor, was completely unaffected and
+continued correctly — confirmed by re-checking the live process and its
+JSONL log, which was still actively appending. Re-established a second
+monitor and the run completed cleanly. Documented here since it's a real
+observed harness/environment behavior, not because it affected any output.
+
+**Not done this session, explicitly left open:** the 7 still-failing
+documents; a fix for the book-scale extraction gap; whether to retry the 5
+known-bug documents again (their content is genuinely lost until either
+retried again — non-deterministic for 4 of the 5 — or the JSON-parsing
+robustness gap itself gets fixed). PLAN.md #17/#49 updated to reflect this
+state.
+
+---
+
+## Named-teacher fix isolated and proven; "the author" defect closed for future generation (session state, 2026-07-30)
+
+Mixed routing, both plain-script/DB-write path (no harness): the prompt/
+code change itself was a small, carefully-scoped edit verified against the
+existing test suite before any live call; the proving batch was a real
+25-document DB-write run, same as the entry below it.
+
+**Problem, measured at real scale for the first time in the prior sub-entry
+below:** the live v3 extraction prompt's `"Attribute naturally (\"the
+author teaches…\")"` line causes the model to write generic "the author"
+instead of the real teacher's name — corrected count (word-boundary,
+excludes "authority" false-matches): **90.1%** of 222 propositions in that
+batch, not the initial rough 84% estimate.
+
+**Fix, deliberately narrow — Alex's explicit instruction: isolate ONLY the
+naming mechanism, not v4's bundled length/structure/voice retuning.**
+New `EXTRACTION_PROMPT_V3_1` constant in `scripts/propositions.py`: v3's
+exact wording, with a `{speaker}` placeholder replacing all 8 generic
+"the author" references (verified by direct text diff, not assumed), plus
+one added negative instruction ("never 'the author'") since the old
+worked-example and attribution bullet both explicitly modeled the wrong
+form — leaving those unchanged would have directly contradicted the new
+rule. **Byte-identical to v3, verified programmatically:** the opening
+framing sentence, the FOUR CORNERS rule, examples/claims bullets, "Neutral
+voice," the entire "Count and distinctness" section, and — the
+specifically-protected line — `"Length: ~80–150 words each."`, not v4's
+expanded length section.
+
+**Wired as opt-in, not a default swap — zero regression risk by
+construction, not just by testing.** `process_document()`/
+`extract_propositions()` gained new optional `speaker`/`prompt_version`
+params, both `None` by default; `DEFAULT_PROMPT_VERSION` stays `"v3"`
+untouched, so every pre-existing caller/test that doesn't pass these params
+is byte-identical to before. Confirmed, not assumed: all 3 existing test
+files that import `propositions.py`
+(`test_propositions_closeness_gate.py`, `test_propositions_reference_
+grounding.py`, `test_reference_grounding_unit_proof.py`) re-run clean, 0
+regressions — including the one test that specifically asserts
+`process_document()`'s stamped provenance matches `DEFAULT_PROMPT_VERSION`
+exactly, which only stays true because that constant was deliberately left
+unchanged. The real production call site (`shared_ingest.py`'s
+`ingest_document()`) now explicitly opts in: `prompt_version="v3.1"` +
+a resolved speaker name (prefers `author`, falls back to `source_name`,
+falls back to a live `sources.name` lookup for the pre-resolved-`source_id`
+caller path that can leave both empty) — so future fresh ingests get the
+fix automatically, not just this session's backfill.
+
+**Proof: a second, non-overlapping 25-document batch** (the first batch's
+25 already have real stored propositions; re-running them would have
+cleared and replaced that data via `store_propositions()`'s clear-then-
+insert, which Alex's instruction explicitly ruled out — so a fresh,
+same-methodology 25 was drawn instead and the substitution was disclosed,
+not silent). Same teacher plan as the first batch (15 Prince/3 Savchuk/3
+Kolenda/2 Ravenhill/1 Kreighbaum/1 Poonen) for an apples-to-apples
+comparison.
+
+- **"The author" rate: 0.0% (0/235)**, word-boundary-corrected (excludes
+  "authority" false matches) — down from the corrected 90.1% v3 baseline
+  (83.8% specifically at the start of a proposition). Not a partial
+  improvement — the mechanism closed the gap completely in this sample.
+- **Length: 38.8 words average, vs. 38.4 in the v3 baseline batch** — no
+  meaningful shift, confirming the isolation held (this was Alex's
+  explicit stop-and-report condition if it had drifted).
+- 24/25 documents stored propositions (235 total, range 4–16/doc). 1
+  error: Vlad Savchuk "God Decides When. Not You." — root-caused live, not
+  just logged: a nested, unescaped quote around an Ecclesiastes 3:1
+  quotation breaks `json.loads()`. **Confirmed deterministic** (identical
+  malformed output across 4 separate live calls at `temperature=0.2`) **and
+  confirmed pre-existing** — the same document, run through the unmodified
+  v3 prompt with no speaker, produces the identical break. Not caused by
+  this session's change; not fixed this session (out of scope, a JSON-
+  parsing robustness gap, not a prompt-wording issue).
+- 5 random samples pulled with full source passages, reviewed directly:
+  names render naturally ("Derek Prince teaches...", "Vlad Savchuk
+  teaches...", one no-attribution-frame form), content stays specific and
+  well-anchored to source in 4/5 (the 5th merges two teaching points from
+  different parts of a long document — a locator-script limitation in
+  reviewing it, not necessarily a flaw in the proposition itself).
+
+**Not yet established, flagged for whoever runs the next slice:** accuracy/
+character of v3.1 output specifically at book-length scale — the very next
+session (the full-backfill entry above this one) is what surfaced that gap,
+so it's now closed-the-loop, not open. See that entry.
+
+---
+
+## First backfill proving batch — v3 baseline, "the author" defect measured at scale (session state, 2026-07-30)
+
+Plain-script/DB-write path, per CLAUDE.md's Session Routing table's hard
+rule. First scaled run of the generation path since generation stopped
+2026-07-25 — a proving batch, not the full run, by explicit instruction.
+
+**Correction to the session brief's own framing, caught before selecting
+anything:** the backfill set is **564 documents live**, not the brief's
+"~781", and **contains zero Bevere documents** — Bevere's 220 documents
+were deleted 2026-07-25 (already recorded below); 781 was the stale
+pre-deletion count. Derek Prince is 492 of the 564 (87%) — any future batch
+skews Prince-heavy almost no matter how it's drawn.
+
+**Selection: 25 documents, 6 teachers** (15 Derek Prince spanning 372–
+11,368 words — deliberately including the long-form/book-adjacent range,
+since PLAN.md #17 flagged extraction as unproven there; 3 Vlad Savchuk; 3
+Daniel Kolenda; 2 Leonard Ravenhill; 1 Doug Kreighbaum; 1 Zac Poonen). Ran
+on the live, unmodified v3 prompt (no code change this sub-session).
+
+**Result, reconciled against the `propositions` table directly:** 222
+propositions across 25 documents, range 4–15, mean 8.9. Every "stored:N"
+matched the DB row count exactly. All 222 stamped `prompt_version='v3'`,
+correct fingerprint, `model='llama-3.3-70b-versatile'`. Zero documents
+produced a legitimate empty result. **Cost: ~$0.15–0.20**, well under the
+$50 ceiling, disclosed before running.
+
+**1 of 25 errored on the first pass** (Daniel Kolenda "Cessationism 8 (More
+Calvinist Than Calvin)") — a Groq JSON-parse failure, confirmed transient
+via isolated reproduction (`finish_reason: stop`, not a truncation;
+succeeded cleanly on retry, unlike the deterministic case found in the next
+sub-session). Retried once through the real path: stored 13. 25/25 have
+propositions after the retry.
+
+**The load-bearing finding: 84% of the 222 propositions open with "The
+author" instead of the teacher's real name** — a known, already-documented
+v3 defect (PLAN.md #46: "'the author' used instead of the teacher's real
+name — v3's live prompt allows this; v4 already fixed it but is unwired"),
+but this is the first time it was measured at real scale, and 84% is high
+enough to directly undercut the product's "named teacher, not generic
+authority" positioning. This measurement is what triggered the isolated-fix
+session immediately above. Secondary finding: average proposition length
+38 words — below even the previously-measured-deficient v3 average (~62–70
+words, PLAN.md #46) and well under the 80–150 word design target, same
+root cause (v3's length-guidance placement, PLAN.md #46's own diagnosis).
+
+Reference-grounding: 18 scripture references flagged UNCERTAIN across the
+batch, **all 18 overturned by Layer-3 arbitration and kept** (0 stripped as
+fabricated) — good in that nothing looked fabricated, but this batch never
+exercised the confirmed-absent strip path either way.
+
+**5 random samples pulled with full source passages, reviewed directly.**
+Three anchored solidly. One (Daniel Kolenda, a specific countable claim —
+"over 20 references to tongues... only one connects them to human
+languages") wasn't confirmed or refuted by the excerpt shown — a class of
+claim the automated reference-grounding check doesn't cover (it verifies
+chapter:verse citations, not prose claims about scripture content). One
+(Leonard Ravenhill) — the locator script picked the wrong chunk in a
+29-chunk document; a limitation of the quick word-overlap matcher used for
+review, not evidence of a bad proposition.
 
 ---
 

@@ -144,7 +144,44 @@ Remaining piece — the completeness-aware skip-check — is deliberately NOT sc
 
 **First real (non-drill) production use, 2026-07-25.** Both delete paths have now been used live, not just drilled: `delete_documents_cascade()` removed all 220 John Bevere YouTube documents in one transaction (staged in a slice-of-10 then the remaining 210, independently re-verified by fresh query after each), and `delete_document_cascade()` separately removed one CLF Church document (zero-teaching-content Zoom-link page). The still-remaining gap named above (batch + attachment-bearing documents together) was not exercised by either — neither real deletion involved a document with `books`/`feedback`/`excerpts` rows. Full record: `rhemata-status.md`'s 2026-07-25 entries.
 **16. Feedback→flag-proposition path + dry-run backfill on one genre** (T2·5 prep). *Stop: subset verified + reconciled.*
-**17. Full propositions backfill** (T2·5) — **810** unlicensed docs excl. PA as of 2026-07-14 (corrected then from the original "2,980" — see Ground Truth section above; that figure wrongly counted PA's 2,176 permanently-excluded docs as backlog); transaction-safe; hard reconciliation count. **810 is stale — re-derived live 2026-07-28 (Layer 3 cost-estimate session, `docs/audits/layer3_llm_cost_estimate_2026-07-28.md`) using the identical definition: 564.** The −246 delta is almost entirely the 220-document John Bevere corpus deletion (2026-07-25) plus ordinary ingestion drift, not a data error — see that report and rhemata-status.md's Bevere-deletion entry. Treat 564 as current; re-derive live again before #49 actually runs, since ingestion continues. **First time long-form books hit the extractor — spot-check book output quality before trusting the batch (extraction unproven on long-form).** Quotes do NOT ride this (they run whole-corpus at #25). *Stop: reconciled + book quality eyeballed.*
+**17. Full propositions backfill** (T2·5) — **RAN 2026-07-30, largely
+complete, not fully closed.** Three ordered pieces same session (full
+detail: rhemata-status.md's three 2026-07-30 backfill entries): a 25-doc
+v3 proving batch measured the "the author" defect at 90.1% (corrected
+count); an isolated named-teacher fix (`v3.1`, PLAN.md's own #46 follow-up)
+was built, wired opt-in (zero regression to existing callers/tests), and
+proven on a second 25-doc batch (0.0% "the author" rate, length unchanged
+~38 words); the full remaining set then ran on that proven path. **Live
+count at run time was 515, not the last-recorded 564 — reconciles via the
+50 documents the two proving batches had already processed, not drift.**
+**Result: 508/515 succeeded (5,357 new propositions, range 3–40/doc, mean
+10.5, $4.19 actual cost). Corpus-wide: 850/857 eligible documents now have
+propositions.** *Book quality eyeballed, as this item's own stop condition
+required — see the two novel findings below, not a clean pass.*
+
+**7 documents remain unprocessed after one retry pass each — two distinct
+causes:** (a) **5 hit an already-known, pre-existing JSON-escaping model
+defect** (a nested, unescaped scripture quotation breaks `json.loads()`;
+confirmed present in unmodified v3 too, unrelated to the naming fix; one of
+the five is deterministic at `temperature=0.2`, the other four merely
+didn't clear on this particular retry). (b) **2 are a genuinely new
+finding this run surfaced for the first time: book-length documents**
+(`source_type='book'`, 90K and 140K words) structurally break the current
+single-call, `max_tokens=8192` extraction design — neither proving batch
+(max ~11.8K words) ever exercised this scale. **Not fixed — flagged.** A
+real prerequisite for any FUTURE book-heavy ingestion or backfill retry:
+`extract_propositions()` needs a chunked/multi-call design for
+`source_type='book'` before those are attempted again, and the 5
+JSON-escaping failures need either a repaired parser (repair malformed
+JSON / re-prompt to escape quotes) or continued manual retries.
+**Not decided by this run: whether 850/857 counts as "done" for the
+position-layer gate this item feeds (PLAN.md's own Position-synthesizing
+section, "Corpus-wide positions are banned until #49 completes") — see
+CLAUDE.md Invariant 13, updated 2026-07-30 to say this explicitly rather
+than assume it.** *Stop: reconciled (done) + book quality eyeballed
+(done, and it surfaced the book-scale gap above) — item is NOT fully
+closed while 7 documents remain and the "is this done enough" gate
+decision is unmade.*
 **18. Serving-rule build** (T2·6) — propositions into `match_chunks`/`search_chunks_fts` + 5 RPCs, dedup, two pools fused; staging; one test-licensed source; 20–30 queries. *Mid-point stop after RPCs wired + gate-tested.*
 **19. Perplexity-style source links** (T3·5). *Stop: citations link to source cards.*
 **20. Serving experience** (T2·7) — prompt rewrite → citation UI/source cards → reader "study notes" view (design pass first) → library Full-text/synthesis indicator → ~50-query QA. *Each sub-step its own stop.*
@@ -158,7 +195,7 @@ Serves cited answers from reviewed, stored positions instead of live per-questio
 - Corpus positions record how much each named contributor supplied — a count derived from evidence, not a stored opinion — so a five-name list doesn't read as consensus when one teacher supplied most of the substance.
 - Scope is versioned, not fixed: a teacher position must be able to widen to corpus scope as evidence arrives, without a from-scratch rewrite. Record-shape requirement for the first position written, not a later migration.
 - Divergence rule: where named contributors materially disagree, the position presents the disagreement — never averages past it. Averaging past a real theological difference is the oracle failure wearing attribution as a costume.
-- Corpus-wide positions are banned until #49 (backfill) completes. Any authored before then would name Savchuk/Ravenhill/Poonen as "the corpus" and invert the day Derek Prince's 492 documents land. Teacher positions only until then.
+- Corpus-wide positions are banned until #49 (backfill) is judged done — a decision, not an automatic trip at some document count. #49 ran 2026-07-30 (850/857 eligible documents now have propositions, including 477 of Derek Prince's — the event this line originally named as the trigger to watch for), but 7 documents remain unprocessed and the run surfaced a new extraction gap at book scale (#17). Whether that's "done" for this gate is Alex's unmade call, not settled by the run itself — see CLAUDE.md Invariant 13. Teacher positions only until it's explicitly decided.
 - Fallback answer (served when no approved position exists — the majority of questions at launch): propositions only, no original source text in the writing step. Accepted consequence: answers may read thinner than source-derived ones — treated as a proposition-quality problem (over-compression), never a reason to readmit source text.
 - **Lifecycle, settled 2026-07-28: positions are generated on demand at question time, not written ahead of time.** Every on-demand position is persisted once written, not discarded after serving — the next identical question is served from the stored row, not regenerated. An ahead-of-time generation pass (pre-writing positions for an invented topic list) comes later, informed by observed real questions rather than a guessed-upfront list. Permanent locking of a position (no further rebuild, ever) is only reachable for a teacher whose corpus is complete — no further material expected for that teacher. **Revisit trigger for the on-demand posture: unreviewed positions reaching real users, not cost or latency.**
 - **Empty-state design, settled 2026-07-28 — four rules, permanent:**
