@@ -563,19 +563,21 @@ async def chat(request: ChatRequest, http_request: Request, user_id: Optional[st
     try:
 
         # Position-paper interception: if the question semantically matches
-        # the baptism-of-the-Holy-Spirit position paper, answer directly in
-        # Rhemata's own voice from that paper (no citation, no teacher
-        # attribution), bypassing the normal teacher-citation retrieval and
-        # generation pipeline entirely. Scoped to exactly this one paper —
-        # see position_papers.py's module docstring for why this must not
+        # one of the registered position-paper pillars (a small, closed,
+        # code-defined registry in position_papers.py — currently
+        # baptism_holy_spirit and speaking_in_tongues), answer directly in
+        # Rhemata's own voice from that pillar's paper (no citation, no
+        # teacher attribution), bypassing the normal teacher-citation
+        # retrieval and generation pipeline entirely. See
+        # position_papers.py's module docstring for why this must not
         # become a generic "serve any silent_context document" mechanism.
-        # On no-match, matched_paper_key is None and everything below runs
+        # On no-match, matched_pillar_key is None and everything below runs
         # completely unchanged, exactly as before this interception existed.
-        matched_paper_key = match_position_paper(request.question)
-        if matched_paper_key:
+        matched_pillar_key = match_position_paper(request.question)
+        if matched_pillar_key:
             def generate_position_paper():
                 answer_parts = []  # type: List[str]
-                for event in generate_position_paper_answer(request.question, request.messages):
+                for event in generate_position_paper_answer(matched_pillar_key, request.question, request.messages):
                     yield event
                     if event.startswith("data: "):
                         try:
