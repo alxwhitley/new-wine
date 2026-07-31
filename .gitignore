@@ -79,3 +79,12 @@ backfill_run_review/
 # positions/position_evidence tables. Same rationale as the review queues
 # above — local-only, not for git history.
 position_calibration_review/
+
+# Book-chapter live-proof review (2026-07-31) — real Run A/Run B proposition
+# output, reconciliation dicts, grounding/arbitration evidence, and
+# redundancy-check results for the Andrew Murray "The True Vine" chapter-
+# scoped extraction proof (scripts/propositions.py's split_book_into_
+# chapters()/_extract_and_store_book_chapters()/process_book_document()).
+# Storage was always intercepted this session, never written. Same
+# rationale as the review queues above — local-only, not for git history.
+book_chapter_live_proof_review/

@@ -127,6 +127,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -917,8 +918,24 @@ def store_propositions(
     embed_fn: Callable[[str], List[float]],
     prompt_version: str,
     chunk_ids: Optional[List[str]] = None,
+    clear_existing: bool = True,
 ) -> int:
     """Clear existing propositions for document_id, then embed and insert new ones.
+
+    clear_existing (book-chapter build, additive, trailing
+    keyword-only-in-practice parameter, default True): when True --
+    every existing caller, since this is the default -- behavior is
+    BYTE-IDENTICAL to before this parameter existed: the
+    `DELETE FROM propositions WHERE document_id = %s` below runs as the
+    first statement, exactly as always. When False, that DELETE is skipped
+    entirely; everything else (the embed loop, the INSERT, the
+    proposition_chunks cartesian-product insert, the final commit) runs
+    unchanged. This exists for _extract_and_store_book_chapters() below,
+    which issues its OWN single, document-level DELETE once before its
+    chapter loop (never once per chapter) and then calls this function once
+    per chapter with clear_existing=False, so a later chapter's store call
+    never wipes an earlier chapter's just-stored rows for the same
+    document_id.
 
     prompt_version (bypass-proofing Phase 4, PLAN.md #45, 2026-07-29,
     REQUIRED -- no default): an unstamped write is now IMPOSSIBLE, not
@@ -991,10 +1008,11 @@ def store_propositions(
     model = EXTRACTION_MODEL
 
     with conn.cursor() as cur:
-        cur.execute(
-            "DELETE FROM propositions WHERE document_id = %s",
-            (document_id,),
-        )
+        if clear_existing:
+            cur.execute(
+                "DELETE FROM propositions WHERE document_id = %s",
+                (document_id,),
+            )
 
         inserted = 0
         stored_prop_ids: List[str] = []
@@ -1067,6 +1085,241 @@ PRECEPT_AUSTIN_SOURCE_ID = "698e0596-a9c6-4890-958d-9199f1b8f762"
 # artifact, a title-only stub, a near-empty transcript), not as a change to
 # any observed corpus behavior.
 MIN_SUBSTANTIVE_WORD_COUNT = 50
+
+# ── Front/back-matter detection (book-chapter build, correction pass) ─────────
+# CORRECTION TO A PRIOR MISCLASSIFICATION: an earlier report described the
+# 543-word span split_book_into_chapters() detects as "preface_pre_boundary"
+# content for The True Vine as "the preface" and treated it as fine to leave
+# as-is. That was WRONG. Re-investigation found that span is actually CCEL
+# bibliographic metadata (Author(s)/Title/Publisher/Description/Subjects
+# fields) immediately followed by a Table of Contents -- labeled with the
+# BOOK'S OWN TITLE (via _label_from_context(), which just reads the first
+# non-blank line), not "Preface" at all. The REAL Preface is a SEPARATE,
+# later, genuinely-labeled 196-word span ("Preface\nPreface\nPREFACE\n...")
+# containing real Andrew Murray prose ("I have felt drawn to try to write
+# what young Christians might easily apprehend...") -- it produced 4 real
+# propositions in the original live-proof run and MUST stay classified as
+# content. These two spans are easy to conflate (both are near the front of
+# the book, both are front-matter-ADJACENT) and the whole design below
+# depends on telling them apart correctly -- a label-keyword check ALONE
+# cannot do it, since the CCEL-metadata span isn't labeled with any
+# front-matter keyword at all (it's labeled with the book's own title); only
+# its CONTENT SHAPE (CCEL field lines, then a dense table of contents)
+# reveals what it actually is. This is exactly why is_front_back_matter()
+# below has two independent signals (label AND shape), not just one.
+#
+# Thresholds below were empirically validated during the planning step
+# against 10 real public-domain books already in the corpus (this build's
+# own regression tests re-confirm a subset directly, read-only, against live
+# chunk data -- see test_propositions_book_chapters.py). A previously-tried
+# generic "Capitalized Word Then Colon" shape heuristic was explicitly
+# REJECTED during planning: it false-positived on real long chapters (e.g.
+# Absolute Surrender's "The Fruit of the Spirit is Love" and "Kept by the
+# Power of God" chapters, Bounds' "8. Examples of Praying Men") -- do not
+# reintroduce anything like it.
+FRONT_BACK_MATTER_DIGIT_RATIO = 0.10      # real content spans measured <=0.043; index/locator spans measured 0.10-0.95
+CCEL_METADATA_FIELD_MIN = 2               # real content spans measured 0-1 distinct CCEL fields; metadata spans measured >=3
+FRONT_BACK_MATTER_MIN_SHAPE_WORDS = 30    # below this the digit-ratio signal is noise; tiny spans already fall to the existing thin-check
+
+_MATTER_LABEL_EXACT = {
+    "title page", "contents", "table of contents", "copyright", "colophon",
+    "bibliography", "acknowledgments", "acknowledgements", "dedication",
+    "errata", "half title", "indexes",
+}
+_MATTER_LABEL_PREFIX = (
+    "index", "about the author", "about this book", "about the electronic",
+    "subject index", "scripture index",
+)
+# PROTECTED labels short-circuit is_front_back_matter() to (False, "")
+# BEFORE any shape check ever runs -- see that function's own docstring for
+# why this ordering is the false-positive guard the whole design leans on
+# (the real 196-word Preface's own content shape is never even examined).
+_MATTER_LABEL_PROTECT = {
+    "preface", "introduction", "foreword", "prologue", "epilogue",
+    "afterword", "conclusion", "appendix",
+}
+_CCEL_FIELD_RE = re.compile(
+    r'(?im)^\s*(author\(s\)|title|publisher|description|subjects?|'
+    r'language|rights|source|lc call no|lc subjects)\s*:'
+)
+
+_LEADING_MATTER_NUMBER_RE = re.compile(r'^(?:\d+|[ivxlcdm]+)[.):\-]?\s+', re.IGNORECASE)
+_TRAILING_CONTINUATION_RE = re.compile(r'\s*\(untitled continuation\)\s*$')
+_ROMAN_NUMERAL_TOKEN_RE = re.compile(r'^[ivxlcdm]+$', re.IGNORECASE)
+_LOCATOR_TOKEN_RE = re.compile(r'^\d+:\d+(?:-\d+)?$')
+
+
+def _normalize_matter_label(label: str) -> str:
+    """Lowercases `label`; strips a leading number/roman-numeral +
+    separator if present (e.g. "8. Examples of Praying Men" ->
+    "examples of praying men", so numbered-chapter conventions from other
+    books don't defeat the keyword checks below); strips a trailing
+    "(untitled continuation)"-style suffix if present (the exact suffix
+    split_book_into_chapters()'s own oversized-stretch fallback appends,
+    e.g. "Some Chapter (untitled continuation)" -> "some chapter", so a
+    size-fallback continuation of a real chapter is judged by the SAME
+    label as its parent, never treated as a separate, unlabeled span);
+    collapses internal whitespace; strips. The leading-number strip
+    requires a roman-numeral candidate to be a WHOLE token composed only of
+    i/v/x/l/c/d/m characters followed by a real separator -- this is what
+    keeps it from ever matching an ordinary word (e.g. "Indexes" begins
+    with "i" but "n" immediately follows with no separator in between, so
+    nothing is stripped)."""
+    s = label.lower()
+    s = _LEADING_MATTER_NUMBER_RE.sub("", s)
+    s = _TRAILING_CONTINUATION_RE.sub("", s)
+    s = " ".join(s.split())
+    return s.strip()
+
+
+def _distinct_ccel_fields(text: str) -> set:
+    """The set of distinct CCEL bibliographic field names (lowercased)
+    _CCEL_FIELD_RE matches at the start of a line in `text` -- e.g. a CCEL
+    header block containing "Author(s): Murray, Andrew\\nPublisher: ...\\n
+    Description: ...\\nSubjects: The Bible" yields {"author(s)",
+    "publisher", "description", "subjects"}, size 4. A real teaching
+    chapter essentially never opens multiple lines with these exact
+    bibliographic field labels, which is what makes this such a strong,
+    low-noise signal for "this span is a CCEL metadata block", independent
+    of what it happens to be labeled."""
+    return {m.group(1).lower() for m in _CCEL_FIELD_RE.finditer(text)}
+
+
+def _digit_token_ratio(text: str) -> float:
+    """Fraction of `text`'s whitespace-split tokens that are a bare
+    integer (a page number), a roman numeral (a page-footer convention
+    this corpus's own front matter uses -- e.g. "ii", "iii"), or a
+    verse/page locator shape like "15:1" or "92:13-14" (the dominant token
+    shape inside a scripture index's own body, per the real True Vine
+    "Index of Scripture References"/"Index of Scripture Commentary" spans
+    this was checked against). A token's own trailing comma/period/
+    semicolon is tolerated (stripped before testing) since real index
+    listings often separate locators that way. Returns 0.0 if `text` has
+    no tokens at all -- never divides by zero."""
+    tokens = text.split()
+    if not tokens:
+        return 0.0
+    n_digitish = 0
+    for tok in tokens:
+        stripped = tok.strip(",.;")
+        if not stripped:
+            continue
+        if stripped.isdigit():
+            n_digitish += 1
+        elif _ROMAN_NUMERAL_TOKEN_RE.match(stripped):
+            n_digitish += 1
+        elif _LOCATOR_TOKEN_RE.match(stripped):
+            n_digitish += 1
+    return n_digitish / len(tokens)
+
+
+def _label_is_front_back_matter(label: str) -> bool:
+    """Label-only front/back-matter signal. A PROTECTED label
+    (preface/introduction/foreword/prologue/epilogue/afterword/
+    conclusion/appendix) returns False immediately -- this check runs
+    BEFORE the exact/prefix keyword checks below, so a book whose real
+    front-matter convention happens to literally use one of those words
+    (e.g. a book with a real "Introduction" chapter) is never label-matched
+    as matter. Otherwise: an EXACT normalized match against
+    _MATTER_LABEL_EXACT, or a first-word match against {"index", "indexes",
+    "contents"} (covers "Index of Scripture References" etc., whose full
+    normalized label isn't itself in the exact set but starts with a
+    matter-indicating word), or a normalized-label prefix match against
+    _MATTER_LABEL_PREFIX (covers "About the Author", "Subject Index", "About
+    the Electronic Edition"-shaped labels) all return True."""
+    n = _normalize_matter_label(label)
+    first = n.split()[0] if n else ""
+    if first in _MATTER_LABEL_PROTECT:
+        return False
+    if n in _MATTER_LABEL_EXACT or first in {"index", "indexes", "contents"}:
+        return True
+    return any(n.startswith(p) for p in _MATTER_LABEL_PREFIX)
+
+
+def _shape_is_front_back_matter(text: str) -> bool:
+    """Content-SHAPE front/back-matter signal, used when the label alone
+    doesn't already say so -- this is what catches a span like The True
+    Vine's own 543-word CCEL-metadata-plus-Table-of-Contents block, which
+    is labeled with the book's own title (via _label_from_context()), not
+    any matter keyword. Two independent shape tests, either one sufficient:
+    (1) CCEL_METADATA_FIELD_MIN or more distinct CCEL bibliographic field
+    lines (see _distinct_ccel_fields()); (2) at least
+    FRONT_BACK_MATTER_MIN_SHAPE_WORDS words AND a digit/roman-numeral/
+    locator token ratio (see _digit_token_ratio()) at or above
+    FRONT_BACK_MATTER_DIGIT_RATIO -- the word-count floor exists because
+    the digit-ratio signal is noise on a tiny span (a 5-word fragment that
+    happens to be "1 2 3" is not meaningfully "shaped like an index"; a
+    genuinely tiny span already falls to the pre-existing
+    MIN_SUBSTANTIVE_WORD_COUNT thin-check regardless of this function)."""
+    if len(_distinct_ccel_fields(text)) >= CCEL_METADATA_FIELD_MIN:
+        return True
+    if (
+        len(text.split()) >= FRONT_BACK_MATTER_MIN_SHAPE_WORDS
+        and _digit_token_ratio(text) >= FRONT_BACK_MATTER_DIGIT_RATIO
+    ):
+        return True
+    return False
+
+
+def is_front_back_matter(label: str, text: str) -> Tuple[bool, str]:
+    """Is (label, text) -- one chapter/sub-unit's own parent_label and
+    text, as produced by split_book_into_chapters()/
+    _apply_word_ceiling_fallback() -- front or back matter that should
+    never reach extract_propositions() at all? Returns (is_matter,
+    reason), reason one of "label" (a matter-indicating label, checked
+    first and cheapest), "ccel_metadata" (>=CCEL_METADATA_FIELD_MIN
+    distinct CCEL field lines), "digit_locator" (word-count + digit-ratio
+    shape), or "" (not matter).
+
+    A PROTECTED label (see _MATTER_LABEL_PROTECT) ALWAYS returns (False,
+    "") without ever examining shape at all -- this is the false-positive
+    guard the whole design depends on: The True Vine's real 196-word
+    Preface span (label exactly "Preface") short-circuits here and is
+    NEVER run through _shape_is_front_back_matter(), so it does not matter
+    whether that span's own prose happens to contain a few numbers.
+
+    IMPLEMENTATION NOTE (bug caught by this build's own regression test,
+    fixed here rather than silently worked around): the planning step's own
+    given pseudocode for this function was `if _label_is_front_back_matter
+    (label): return True, "label"` followed unconditionally by the shape
+    check -- but _label_is_front_back_matter() returning False for a
+    protected label only means the LABEL signal didn't fire; nothing in
+    that pseudocode actually stops execution from falling through to
+    _shape_is_front_back_matter() afterward for that same protected label.
+    That directly contradicts this same docstring's own stated guarantee
+    ("ALWAYS returns (False, '') without ever examining shape") -- and a
+    synthetic regression test built specifically to prove the guarantee
+    (a "Preface"-labeled span with deliberately metadata-shaped content)
+    caught the contradiction immediately: it returned (True,
+    "ccel_metadata") instead of (False, ""). Fixed by checking protection
+    explicitly, HERE, before either signal runs -- see the first three
+    lines of this function's body below, which duplicate
+    _label_is_front_back_matter()'s own normalize+first-word logic
+    (cheap, pure string ops) rather than changing that helper's own `->
+    bool` signature (kept exactly as specified) to smuggle a third state
+    through it.
+
+    Absent a label match, shape is checked. Absent BOTH a label match and a
+    shape match, the default is (False, "") -- an ambiguous or genuinely
+    novel front-matter convention this design doesn't recognize is treated
+    as CONTENT, never silently dropped; a false negative here just means an
+    extraction call runs on a section that turns out administrative, which
+    extract_propositions()'s own "empty array is a valid, expected result"
+    instruction already handles gracefully. A false POSITIVE (silently
+    losing real content) is the failure mode this function is built to
+    avoid, not a false negative."""
+    n = _normalize_matter_label(label)
+    first = n.split()[0] if n else ""
+    if first in _MATTER_LABEL_PROTECT:
+        return False, ""
+    if _label_is_front_back_matter(label):
+        return True, "label"
+    if _shape_is_front_back_matter(text):
+        if len(_distinct_ccel_fields(text)) >= CCEL_METADATA_FIELD_MIN:
+            return True, "ccel_metadata"
+        return True, "digit_locator"
+    return False, ""
+
 
 # Closeness-check gate RETIRED -- project owner decision, 2026-07-29:
 # near-verbatim reuse of a teacher's own wording is an accepted risk, not
@@ -1337,3 +1590,888 @@ def process_document(
         except Exception:
             pass
         return "error"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Book-length document handling (chapter-scoped, multi-call extraction)
+# ═══════════════════════════════════════════════════════════════════════════
+# Chapter-scoped proposition-extraction path for book-length documents
+# (source_type='book') -- implementation + regression tests only, this
+# build. First real-data proof target: Andrew Murray's "The True Vine" (id
+# 6daf6671-e386-4103-998e-1fb42914300b), run in a LATER, SEPARATE step (no
+# live Groq call against the real book happens anywhere in this build).
+#
+# WHY THIS EXISTS: process_document()/extract_propositions() send the
+# WHOLE reconstructed document text to Groq in a single call
+# (max_tokens=8192). A book-length document can blow past what a single
+# call can safely both send (context) and receive (output) -- CLAUDE.md
+# Invariant 11 already names this as a newly-surfaced, unresolved gap
+# (2 of the 7 still-failing documents from the 2026-07-30 backfill are
+# this class). This section splits a book into its real chapters FIRST
+# (structure, not size, drives the split -- see split_book_into_chapters()
+# below), then calls the SAME, UNMODIFIED extract_propositions() once per
+# chapter -- process_document() itself is untouched by this build.
+#
+# Two new entry points, mirroring this module's existing gated/gate-free
+# distinction (process_document() vs. extract_propositions()/
+# store_propositions() themselves being directly callable -- see this
+# module's own top-of-file docstring):
+#   process_book_document()             -- gated, production entry point.
+#   _extract_and_store_book_chapters()  -- gate-free inner worker, the one
+#                                          a later live-proof step calls
+#                                          DIRECTLY on the True Vine PD
+#                                          book, deliberately bypassing the
+#                                          gate -- a disclosed, scoped
+#                                          bypass, same shape this module's
+#                                          own docstring already describes
+#                                          for extract_propositions()/
+#                                          store_propositions() being
+#                                          directly callable.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Chapter-boundary detection ────────────────────────────────────────────────
+
+_CURLY_QUOTE_MAP = {
+    "‘": "'",   # LEFT SINGLE QUOTATION MARK
+    "’": "'",   # RIGHT SINGLE QUOTATION MARK
+    "“": '"',   # LEFT DOUBLE QUOTATION MARK
+    "”": '"',   # RIGHT DOUBLE QUOTATION MARK
+}
+
+
+def _normalize_line(s: str) -> str:
+    """Unicode NFKC-normalizes `s`, maps curly quotes/apostrophes to their
+    straight ASCII equivalents, collapses internal whitespace, and strips.
+    This is what lets a title-case chapter-heading line using a straight
+    apostrophe ("Christ's Friendship: Its Origin") compare equal to its own
+    repeated occurrence, even though the real source text's own ALL-CAPS
+    third line for that same title ("CHRIST'S FRIENDSHIP: ITS ORIGIN")
+    uses a CURLY apostrophe there instead -- confirmed present in the real
+    corpus. That third line is confirmatory only per this module's own
+    design brief; _find_title_repeat_boundaries() below never compares
+    against it, only against the first two (identically-typeset) repeats."""
+    s = unicodedata.normalize("NFKC", s)
+    for curly, straight in _CURLY_QUOTE_MAP.items():
+        s = s.replace(curly, straight)
+    return " ".join(s.split()).strip()
+
+
+class ChapterSpan(NamedTuple):
+    """One detected chapter (or front-matter/back-matter section -- this
+    module's boundary detection is generic, not chapter-name-aware) in a
+    reconstructed book document.
+
+    label         -- the raw matched title text (or a context-derived
+                      label for the pre-first-boundary span).
+    char_start,
+    char_end      -- this span's [start, end) character offsets in the
+                      SAME reconstructed string ordered_chunks were joined
+                      into (see _build_chunk_offset_map()).
+    text          -- text[char_start:char_end], stored directly so callers
+                      never need to re-slice the full reconstructed string.
+    chunk_ids     -- every chunk_id whose own [char_start, char_end) span
+                      overlaps this chapter's span. A boundary-straddling
+                      chunk legitimately belongs to BOTH neighboring
+                      chapters -- this is correct, not a bug.
+    split_method  -- "title_repeat_boundary" (a real "title repeated
+                      verbatim twice" marker started this span),
+                      "preface_pre_boundary" (this span is whatever
+                      preceded the FIRST detected boundary -- front matter,
+                      titled from context, not necessarily a literal
+                      "Preface"), or "size_fallback" (no title-repeat
+                      marker was found for an abnormally long stretch --
+                      see LONG_STRETCH_WORD_THRESHOLD -- so this span was
+                      produced by word-count-based splitting instead,
+                      never silently treated as one giant chapter)."""
+    label: str
+    char_start: int
+    char_end: int
+    text: str
+    chunk_ids: List[str]
+    split_method: str
+
+
+def _build_chunk_offset_map(
+    ordered_chunks: List[Tuple[str, str]],
+) -> Tuple[str, List[Tuple[str, int, int]]]:
+    """Joins chunk contents with "\\n" into one reconstructed string (the
+    SAME join convention this module's own test suite already uses to
+    reconstruct document text from chunks -- see e.g.
+    test_propositions_reference_grounding.py's _reconstruct_document_text()
+    -- and the same convention shared_ingest.py relies on for
+    process_document()'s own single-call `text` argument), and builds a
+    parallel offset map recording each chunk_id's own [char_start, char_end)
+    span in that EXACT string -- same join, so offsets line up exactly.
+    Pure function: no DB, no LLM, no network."""
+    parts: List[str] = []
+    offset_map: List[Tuple[str, int, int]] = []
+    pos = 0
+    for chunk_id, content in ordered_chunks:
+        start = pos
+        end = start + len(content)
+        offset_map.append((chunk_id, start, end))
+        parts.append(content)
+        pos = end + 1  # +1 for the "\n" separator "\n".join() below inserts
+    text = "\n".join(parts)
+    return text, offset_map
+
+
+def _chunk_ids_overlapping(
+    offset_map: List[Tuple[str, int, int]], start: int, end: int,
+) -> List[str]:
+    """Every chunk_id in offset_map whose own [c_start, c_end) span
+    overlaps [start, end) -- standard half-open-interval overlap test (a
+    chunk that only touches the boundary at one exact point does not
+    count), so a chunk genuinely straddling a chapter boundary correctly
+    appears in both neighboring chapters' lists."""
+    return [
+        chunk_id for chunk_id, c_start, c_end in offset_map
+        if c_start < end and c_end > start
+    ]
+
+
+def _find_title_repeat_boundaries(text: str) -> List[Tuple[int, str]]:
+    """Line-scans `text` for the "title repeated verbatim twice" boundary
+    signal: a boundary starts at line i where _normalize_line(line[i]) ==
+    _normalize_line(line[i+1]) and both are non-empty. The ALL-CAPS third
+    line this pattern is usually followed by (and the scripture-reference
+    line after THAT) are confirmatory only in the real source text -- never
+    required to match here, and not even inspected by this function.
+
+    Returns a list of (char_start_of_line_i, raw_label) tuples, in
+    ascending offset order, where raw_label is line[i] itself (stripped) --
+    title-case text, not the ALL-CAPS repeat. Matching is NON-OVERLAPPING:
+    once a pair (i, i+1) is consumed as a boundary, scanning resumes at
+    i+2, never re-matching line i+1 against line i+2 -- so a run of 3
+    identical lines (observed in the real corpus, a page-break duplication
+    artifact) yields exactly ONE boundary from that run, never two
+    overlapping ones."""
+    lines = text.split("\n")
+    line_offsets: List[int] = []
+    pos = 0
+    for line in lines:
+        line_offsets.append(pos)
+        pos += len(line) + 1  # +1 for the "\n" this split() consumed
+
+    boundaries: List[Tuple[int, str]] = []
+    i = 0
+    n = len(lines)
+    while i < n - 1:
+        a = _normalize_line(lines[i])
+        b = _normalize_line(lines[i + 1])
+        if a and a == b:
+            boundaries.append((line_offsets[i], lines[i].strip()))
+            i += 2
+        else:
+            i += 1
+    return boundaries
+
+
+def _label_from_context(pre_text: str) -> str:
+    """Best-effort label for the span preceding the FIRST detected
+    boundary -- there is no repeated-title marker to read a label from (by
+    definition), so this falls back to the first non-blank line of the
+    span itself, truncated to a sane length. Never raises; returns a
+    generic fallback if pre_text is somehow entirely blank (should not
+    happen in practice -- this function's one caller,
+    split_book_into_chapters(), only calls it with an already
+    `.strip()`-truthy pre_text)."""
+    for line in pre_text.split("\n"):
+        stripped = line.strip()
+        if stripped:
+            return stripped[:80]
+    return "Front matter"
+
+
+# Real corpus evidence (2026-07-31, live-queried, read-only): the longest
+# real True Vine chapter is 1143 words (per this build's own dry-run
+# reconstruction of all 31 chapters + Preface). This threshold sits well
+# above that observed real maximum -- comfortably larger than any genuine
+# single chapter in the one book this design has been checked against, so
+# it should not fire on real, well-structured chapter text -- while still
+# being small enough to catch a synthetic no-marker stretch quickly in
+# tests. Not derived from a formal cross-corpus analysis (no second
+# book-length document has been run through this path yet); revisit if a
+# future book's real chapters legitimately run this long.
+LONG_STRETCH_WORD_THRESHOLD = 3000
+
+_PARAGRAPH_SPLIT_RE = re.compile(r"\n[ \t]*\n+")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+_WORD_RE = re.compile(r"\S+")
+
+
+def _paragraph_spans(text: str) -> List[Tuple[int, int]]:
+    """(start, end) char spans for each non-empty, blank-line-delimited
+    paragraph in `text`, in order. A run of one or more blank lines (a
+    line containing only whitespace) is the delimiter; the delimiter text
+    itself belongs to no paragraph. Used only by _split_text_by_size()'s
+    own paragraph-first sub-split step."""
+    spans: List[Tuple[int, int]] = []
+    pos = 0
+    for m in _PARAGRAPH_SPLIT_RE.finditer(text):
+        piece = text[pos:m.start()]
+        if piece.strip():
+            spans.append((pos, m.start()))
+        pos = m.end()
+    piece = text[pos:]
+    if piece.strip():
+        spans.append((pos, len(text)))
+    return spans
+
+
+def _sentence_spans(text: str) -> List[Tuple[int, int]]:
+    """(start, end) char spans for each non-empty sentence in `text` (split
+    on whitespace immediately following ./!/? -- a simple heuristic, not a
+    real sentence tokenizer, sufficient for this fallback's own purpose:
+    finding a defensible smaller unit than "one whole paragraph" when a
+    single paragraph alone exceeds a word ceiling). Used only by
+    _split_text_by_size()'s own sentence-level sub-split step."""
+    spans: List[Tuple[int, int]] = []
+    pos = 0
+    for m in _SENTENCE_SPLIT_RE.finditer(text):
+        piece = text[pos:m.start()]
+        if piece.strip():
+            spans.append((pos, m.start()))
+        pos = m.end()
+    piece = text[pos:]
+    if piece.strip():
+        spans.append((pos, len(text)))
+    return spans
+
+
+def _hard_word_split_spans(text: str, ceiling_words: int) -> List[Tuple[int, int]]:
+    """LAST-RESORT (start, end) char spans, each containing up to
+    ceiling_words whitespace-delimited words -- used only by
+    _split_text_by_size() when a SINGLE sentence alone still exceeds the
+    ceiling. Explicitly flagged by the caller's own returned method label
+    ("hard_word_split"), never silent."""
+    words = list(_WORD_RE.finditer(text))
+    spans: List[Tuple[int, int]] = []
+    i = 0
+    while i < len(words):
+        batch = words[i:i + ceiling_words]
+        spans.append((batch[0].start(), batch[-1].end()))
+        i += ceiling_words
+    return spans
+
+
+def _batch_spans(
+    text: str,
+    spans: List[Tuple[int, int]],
+    ceiling_words: int,
+    method_label: str,
+    oversized_fn: Callable[[str, int, int, int], List[Tuple[int, int, str, str]]],
+) -> List[Tuple[int, int, str, str]]:
+    """Shared batching primitive used at every granularity level of
+    _split_text_by_size() (paragraph, then sentence, then hard word-split
+    as the terminal level). Batches consecutive (start, end) spans from
+    `spans` (already sorted, non-overlapping, in original document order)
+    together into as few pieces as possible without any piece exceeding
+    ceiling_words words, and WITHOUT ever splitting a single span across
+    two pieces. A single span whose OWN word count exceeds ceiling_words is
+    never batched with anything -- it is instead handed to
+    oversized_fn(text, start, end, ceiling_words), which returns its own
+    list of (start, end, sub_text, method) results for that one span,
+    spliced into the returned list in that span's own place (letting the
+    recursion continue at a finer granularity for THAT span only, while
+    ordinary batching still applies to every other span at this level)."""
+    result: List[Tuple[int, int, str, str]] = []
+    batch_start: Optional[int] = None
+    batch_end: Optional[int] = None
+    batch_words = 0
+
+    def _flush():
+        nonlocal batch_start, batch_end, batch_words
+        if batch_start is not None:
+            result.append((batch_start, batch_end, text[batch_start:batch_end], method_label))
+        batch_start, batch_end, batch_words = None, None, 0
+
+    for s_start, s_end in spans:
+        s_text = text[s_start:s_end]
+        s_words = len(s_text.split())
+
+        if s_words > ceiling_words:
+            _flush()
+            result.extend(oversized_fn(text, s_start, s_end, ceiling_words))
+            continue
+
+        if batch_start is None:
+            batch_start, batch_end, batch_words = s_start, s_end, s_words
+        elif batch_words + s_words <= ceiling_words:
+            batch_end = s_end
+            batch_words += s_words
+        else:
+            _flush()
+            batch_start, batch_end, batch_words = s_start, s_end, s_words
+
+    _flush()
+    return result
+
+
+def _split_by_hard_word(
+    text: str, start: int, end: int, ceiling_words: int,
+) -> List[Tuple[int, int, str, str]]:
+    """Terminal fallback: a single sentence (start, end) that itself
+    exceeds ceiling_words is hard-word-split, explicitly flagged
+    "hard_word_split". Each produced piece already respects ceiling_words
+    by construction (see _hard_word_split_spans()), so no further batching
+    is needed at this level."""
+    sub_text = text[start:end]
+    return [
+        (start + w_start, start + w_end, sub_text[w_start:w_end], "hard_word_split")
+        for w_start, w_end in _hard_word_split_spans(sub_text, ceiling_words)
+    ]
+
+
+def _split_by_sentence(
+    text: str, start: int, end: int, ceiling_words: int,
+) -> List[Tuple[int, int, str, str]]:
+    """A single paragraph (start, end) that itself exceeds ceiling_words is
+    sub-split at sentence boundaries, with consecutive sentences BATCHED
+    together up to ceiling_words (same batching discipline as the
+    paragraph level in _split_text_by_size() -- never one output piece per
+    sentence unconditionally). A single sentence that itself still exceeds
+    ceiling_words falls to _split_by_hard_word()."""
+    sub_text = text[start:end]
+    local_spans = _sentence_spans(sub_text)
+    if not local_spans:
+        local_spans = [(0, len(sub_text))]
+    abs_spans = [(start + s, start + e) for s, e in local_spans]
+    return _batch_spans(text, abs_spans, ceiling_words, "sentence", _split_by_hard_word)
+
+
+def _split_text_by_size(
+    text: str, ceiling_words: int,
+) -> List[Tuple[int, int, str, str]]:
+    """Splits `text` into consecutive pieces, none exceeding ceiling_words
+    words if avoidable: paragraph boundaries first (blank-line-delimited,
+    consecutive whole paragraphs BATCHED together up to the ceiling, never
+    splitting a single paragraph in half); if a SINGLE paragraph alone
+    exceeds ceiling_words, that paragraph is instead sub-split at sentence
+    boundaries (consecutive sentences batched the same way); if a SINGLE
+    sentence alone exceeds ceiling_words, an explicitly-flagged hard
+    word-split is the last resort. Batching applies at every level -- this
+    is never "one output piece per paragraph/sentence unconditionally",
+    only ever splitting further when a single unit at the current
+    granularity is itself too large to batch with anything.
+
+    Returns a list of (local_start, local_end, sub_text, method) tuples,
+    offsets LOCAL to `text` itself (0-based -- the caller adds its own base
+    offset if it needs an absolute position). method is one of "paragraph",
+    "sentence", "hard_word_split" -- or, if `text`'s total word count is
+    already <= ceiling_words, a single-item list with method
+    "no_split_needed" (defensive; every real caller of this function only
+    calls it after already confirming the ceiling is exceeded, but this
+    function does not assume that of every possible caller).
+
+    Pure function: no DB, no LLM, no network."""
+    if len(text.split()) <= ceiling_words:
+        return [(0, len(text), text, "no_split_needed")]
+
+    paragraphs = _paragraph_spans(text)
+    if not paragraphs and text.strip():
+        paragraphs = [(0, len(text))]
+
+    return _batch_spans(text, paragraphs, ceiling_words, "paragraph", _split_by_sentence)
+
+
+# ── Optional TOC-based missing-chapter cross-check ─────────────────────────────
+# Refinement, not a requirement: best-effort parse of a "Contents"/table-of-
+# contents section, if one is present, used only to report which of ITS
+# listed titles were never found among the boundaries this module's own
+# line-scan detected. Never raises; returns [] (no cross-check performed)
+# on anything it can't confidently parse, rather than guessing.
+
+_TOC_LINE_RE = re.compile(r"^(.*\S)\s+(\d+)\.*$")
+_ROMAN_NUMERAL_RE = re.compile(r"^[ivxlcdm]+$", re.IGNORECASE)
+
+
+def _extract_expected_chapter_titles(text: str) -> List[str]:
+    """Scans for a line that normalizes to exactly "Contents" within the
+    first 400 lines of `text`, then reads subsequent "<title> <page
+    number>" lines as long as each page number strictly increases over the
+    last one accepted -- a real table of contents always lists ascending
+    page numbers, so this is what lets this scan stop cleanly at the real
+    end of the Contents section rather than wandering into an unrelated
+    later run of text that happens to also end in digits (confirmed
+    necessary against the real True Vine source, whose own front matter
+    contains a partial, corrupted repeat of one Contents line immediately
+    after the genuine section -- the non-increasing page number on that
+    corrupted line is exactly what stops this scan before it's reached).
+    A bare roman-numeral page-footer line (e.g. "ii") is also rejected
+    outright as a title candidate. Returns [] if no Contents header is
+    found, or if nothing parses. Never raises past this function."""
+    try:
+        lines = text.split("\n")
+        toc_start = None
+        for i, line in enumerate(lines[:400]):
+            if _normalize_line(line) == "Contents":
+                toc_start = i + 1
+                break
+        if toc_start is None:
+            return []
+
+        titles: List[str] = []
+        last_page = -1
+        for line in lines[toc_start:toc_start + 200]:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            m = _TOC_LINE_RE.match(stripped)
+            if not m:
+                if titles:
+                    break
+                continue
+            title_part = m.group(1).strip()
+            if _ROMAN_NUMERAL_RE.match(title_part):
+                if titles:
+                    break
+                continue
+            page_num = int(m.group(2))
+            if page_num <= last_page:
+                break
+            last_page = page_num
+            titles.append(_normalize_line(title_part))
+        return titles
+    except Exception:
+        return []
+
+
+def _find_missing_expected_titles(text: str, chapters: List[ChapterSpan]) -> List[str]:
+    """Cross-checks _extract_expected_chapter_titles()'s parse (if any)
+    against the labels this module's own boundary detection actually
+    found. Returns the (normalized) expected titles that never matched any
+    detected chapter label -- [] if no Contents section was found at all
+    (nothing to cross-check against), NOT the same claim as "nothing is
+    missing". Purely diagnostic; split_book_into_chapters() never treats a
+    non-empty result here as an error."""
+    expected = _extract_expected_chapter_titles(text)
+    if not expected:
+        return []
+    detected = {_normalize_line(c.label) for c in chapters}
+    return [t for t in expected if t not in detected]
+
+
+def split_book_into_chapters(
+    ordered_chunks: List[Tuple[str, str]],
+) -> Tuple[List[ChapterSpan], List[str]]:
+    """Splits a book-length document's chunks into chapter-scoped
+    ChapterSpans, using STRUCTURE (a repeated-title marker), not raw size,
+    as the primary split signal -- see ChapterSpan's own docstring for the
+    full algorithm.
+
+    ordered_chunks: (chunk_id, content) tuples in chunk_index order.
+
+    Returns (chapters, missing_expected_titles):
+      chapters                 -- List[ChapterSpan], in document order.
+      missing_expected_titles  -- best-effort TOC cross-check (see
+                                   _find_missing_expected_titles()) -- a
+                                   diagnostic list, always [] if no
+                                   Contents section could be parsed at all,
+                                   never a claim that emptiness here means
+                                   nothing was missed.
+
+    Pure function: no DB, no LLM, no network -- callers supply
+    ordered_chunks themselves (a single bulk SELECT, not fetched here)."""
+    text, offset_map = _build_chunk_offset_map(ordered_chunks)
+    boundaries = _find_title_repeat_boundaries(text)
+
+    chapters: List[ChapterSpan] = []
+
+    if not boundaries:
+        # No title-repeat marker found ANYWHERE -- the whole document is
+        # one long, entirely unmarked stretch. Size-fallback the entire
+        # text rather than silently treating it as one giant "chapter".
+        for s, e, sub_text, _method in _split_text_by_size(text, LONG_STRETCH_WORD_THRESHOLD):
+            chapters.append(ChapterSpan(
+                label="Untitled section",
+                char_start=s, char_end=e, text=sub_text,
+                chunk_ids=_chunk_ids_overlapping(offset_map, s, e),
+                split_method="size_fallback",
+            ))
+        return chapters, []
+
+    # Content preceding the FIRST detected boundary is its own span --
+    # front matter in practice (title page, copyright notice, table of
+    # contents), labeled from context, not assumed to be a literal
+    # "Preface" (a real "Preface" boundary, if the source has one, is its
+    # own separately-detected span below, same as every other chapter).
+    first_start = boundaries[0][0]
+    if first_start > 0:
+        pre_text = text[0:first_start]
+        if pre_text.strip():
+            chapters.append(ChapterSpan(
+                label=_label_from_context(pre_text),
+                char_start=0, char_end=first_start, text=pre_text,
+                chunk_ids=_chunk_ids_overlapping(offset_map, 0, first_start),
+                split_method="preface_pre_boundary",
+            ))
+
+    for idx, (b_start, raw_label) in enumerate(boundaries):
+        b_end = boundaries[idx + 1][0] if idx + 1 < len(boundaries) else len(text)
+        span_text = text[b_start:b_end]
+        word_count = len(span_text.split())
+
+        if word_count > LONG_STRETCH_WORD_THRESHOLD:
+            # This stretch, starting from a REAL detected boundary, is
+            # abnormally long -- almost certainly containing more than one
+            # real chapter this scan's marker just didn't catch (a
+            # different heading shape, or a genuinely marker-less
+            # section). Size-fallback-split THIS stretch only -- never
+            # silently absorbed as one oversized "chapter".
+            for s, e, sub_text, _method in _split_text_by_size(span_text, LONG_STRETCH_WORD_THRESHOLD):
+                abs_s, abs_e = b_start + s, b_start + e
+                chapters.append(ChapterSpan(
+                    label="{0} (untitled continuation)".format(raw_label),
+                    char_start=abs_s, char_end=abs_e, text=sub_text,
+                    chunk_ids=_chunk_ids_overlapping(offset_map, abs_s, abs_e),
+                    split_method="size_fallback",
+                ))
+        else:
+            chapters.append(ChapterSpan(
+                label=raw_label,
+                char_start=b_start, char_end=b_end, text=span_text,
+                chunk_ids=_chunk_ids_overlapping(offset_map, b_start, b_end),
+                split_method="title_repeat_boundary",
+            ))
+
+    missing_expected_titles = _find_missing_expected_titles(text, chapters)
+    return chapters, missing_expected_titles
+
+
+# ── Sub-split-if-still-too-large fallback (SAFE_CHAPTER_WORD_CEILING) ──────────
+
+# max_tokens=8192 ≈ 6000-6300 output words; conservative low end of a
+# 4x-density-hypothesis safe-input-ceiling range.
+SAFE_CHAPTER_WORD_CEILING = 6000
+
+
+class ChapterSubUnit(NamedTuple):
+    """One sub-unit of a ChapterSpan, after applying the
+    SAFE_CHAPTER_WORD_CEILING fallback (see _apply_word_ceiling_fallback()).
+    For a chapter at or under the ceiling, this is a 1:1 passthrough
+    (method="single_unit"). For an over-ceiling chapter, there are multiple
+    sub-units per parent chapter -- EVERY one still carries the PARENT
+    chapter's own chunk_ids, never recomputed per sub-unit (chapter
+    granularity, not further subdivided: sub-splitting here is a
+    token/API-limit accommodation, not a genuine structural boundary, so
+    the honest back-link is still "the whole parent chapter's chunks",
+    identical across every sub-unit)."""
+    parent_label: str
+    text: str
+    method: str  # "single_unit" | "paragraph" | "sentence" | "hard_word_split"
+    chunk_ids: List[str]
+
+
+def _apply_word_ceiling_fallback(chapters: List[ChapterSpan]) -> List[ChapterSubUnit]:
+    """Applies SAFE_CHAPTER_WORD_CEILING to every ChapterSpan in `chapters`,
+    in order. A chapter at or under the ceiling passes through unchanged as
+    a single ChapterSubUnit. An over-ceiling chapter is sub-split via
+    _split_text_by_size() (paragraph -> sentence -> hard word-split) into
+    multiple ChapterSubUnits, each sharing the SAME parent chunk_ids.
+
+    Expected to be INERT for The True Vine (real chapters run 719-1143
+    words, per this build's own dry-run reconstruction -- far under the
+    6000-word ceiling); exercised for real only by this module's own
+    synthetic oversized-chapter regression test."""
+    result: List[ChapterSubUnit] = []
+    for ch in chapters:
+        word_count = len(ch.text.split())
+        if word_count <= SAFE_CHAPTER_WORD_CEILING:
+            result.append(ChapterSubUnit(ch.label, ch.text, "single_unit", ch.chunk_ids))
+            continue
+        for _s, _e, sub_text, method in _split_text_by_size(ch.text, SAFE_CHAPTER_WORD_CEILING):
+            result.append(ChapterSubUnit(ch.label, sub_text, method, ch.chunk_ids))
+    return result
+
+
+# ── Scripture-focus marker -- NOT BUILT, reported instead ──────────────────────
+#
+# Per this build's own mandatory pre-check (2026-07-31, live, READ-ONLY): 3
+# real True Vine chapters ("The Vine" [ch. 1, 766 words], "Abide" [790
+# words], "Christ's Friendship: Its Origin" [830 words]) were reconstructed
+# via a real read-only DB connection and each run through
+# reference_grounding.find_reference_spans(). Result: ZERO spans in ALL
+# THREE chapters (average 0.0 spans/chapter, against a required >=3/chapter
+# bar to proceed). Root cause confirmed by direct inspection of the
+# reconstructed text: The True Vine cites scripture almost exclusively in
+# DOTTED form ("John 15.1", "John 15.5", "Colossians 1.26,27" ...),
+# essentially never in the colon form ("John 15:1") find_reference_spans()'s
+# own scanning regex requires to recognize a candidate in the first place --
+# exactly the known landmine CLAUDE.md already names ("colon-only scanner
+# blind to True Vine's dotted 'John 15.1' references"), now confirmed
+# empirically against this specific book rather than assumed. Per this
+# build's own explicit instruction: do NOT build a fancier detector to
+# compensate -- the trivial marker mechanism does not reliably capture
+# scripture-focus for this book, reported, not built further. No
+# scripture_focus field, code, table, column, endpoint, or classification
+# logic of any kind exists anywhere in this module as a result.
+
+
+# ── Entry points ────────────────────────────────────────────────────────────────
+
+def process_book_document(
+    conn,
+    document_id: str,
+    source_id: str,
+    ordered_chunks: List[Tuple[str, str]],
+    embed_fn: Callable[[str], List[float]],
+    speaker: Optional[str] = None,
+    prompt_version: Optional[str] = None,
+) -> dict:
+    """Production, GATED entry point for book-length (source_type='book')
+    proposition extraction -- the book-length counterpart to
+    process_document(). Runs the SAME gate order as process_document()'s
+    own top, before delegating to the gate-free inner worker,
+    _extract_and_store_book_chapters():
+
+      1. Precept Austin short-circuit (PRECEPT_AUSTIN_SOURCE_ID) --
+         returns {"status": "skipped_precept_austin"} immediately.
+      2. get_license_status()/license-status gate -- a source that is not
+         "licensed" or "unlicensed" (public_domain, owned, or unknown/
+         missing) returns {"status": "skipped_licensed"} immediately.
+         NEVER CALLED ON THE TRUE VINE PD BOOK IN PRODUCTION -- its source
+         is public_domain, so a real call through THIS function (not the
+         later live-proof step's own deliberate, disclosed bypass straight
+         to _extract_and_store_book_chapters()) always returns
+         skipped_licensed for it; see this module's own regression test
+         for a real-gate, fake-conn proof of exactly that.
+
+    On a licensed/unlicensed source, delegates to
+    _extract_and_store_book_chapters() and returns its reconciliation dict
+    with one key added, "status": "processed" (never overwriting any of
+    that dict's own keys -- see that function's own docstring for the full
+    shape).
+
+    Return shape (a dict, always -- richer than process_document()'s bare
+    string, since a book run has per-chapter reconciliation to report):
+      {"status": "skipped_precept_austin"}
+      {"status": "skipped_licensed"}
+      {"status": "processed", "chapters_attempted": int,
+       "chapters_stored": int, "chapters_empty": int,
+       "chapters_errored": int, "chapters_skipped_thin": int,
+       "chapters_skipped_front_matter": int,
+       "propositions_stored": int, "per_chapter": [...]}
+
+    Gate checks failing outright (e.g. a genuine DB error from
+    get_license_status()) propagate as an ordinary exception here, exactly
+    like process_document()'s own get_license_status() call would in
+    isolation -- this function adds no additional try/except of its own at
+    the gate-check layer. _extract_and_store_book_chapters()'s own inner
+    loop is separately non-fatal per-chapter by design (one bad chapter
+    never aborts the run) -- see that function's own docstring."""
+    if source_id == PRECEPT_AUSTIN_SOURCE_ID:
+        return {"status": "skipped_precept_austin"}
+
+    license_status = get_license_status(conn, source_id)
+    if license_status not in ("licensed", "unlicensed"):
+        return {"status": "skipped_licensed"}
+
+    result = _extract_and_store_book_chapters(
+        conn, document_id, ordered_chunks, embed_fn,
+        speaker=speaker,
+        prompt_version=prompt_version or DEFAULT_PROMPT_VERSION,
+    )
+    merged = {"status": "processed"}
+    merged.update(result)
+    return merged
+
+
+def _extract_and_store_book_chapters(
+    conn,
+    document_id: str,
+    ordered_chunks: List[Tuple[str, str]],
+    embed_fn: Callable[[str], List[float]],
+    speaker: Optional[str],
+    prompt_version: str,
+    store_fn: Callable = store_propositions,
+) -> dict:
+    """GATE-FREE inner worker -- no Precept-Austin/license-status check of
+    its own (see process_book_document() for the gated entry point). This
+    is the function a later, separate live-proof step calls DIRECTLY on
+    the True Vine public_domain book, a disclosed, scoped bypass of
+    process_book_document()'s own gate -- the same shape this module's own
+    top-of-file docstring already describes for extract_propositions()/
+    store_propositions() themselves being directly callable.
+
+    Steps:
+      1. split_book_into_chapters(ordered_chunks) -- structure-first
+         chapter detection. The returned missing_expected_titles
+         diagnostic is logged (INFO) but not acted on further here.
+      2. _apply_word_ceiling_fallback() -- sub-splits any chapter over
+         SAFE_CHAPTER_WORD_CEILING (expected inert for The True Vine).
+      3. Exactly ONE `DELETE FROM propositions WHERE document_id = %s`,
+         issued HERE, before the chapter loop -- not delegated to
+         store_fn/clear_existing (each per-chapter store_fn call below
+         passes clear_existing=False for exactly this reason: one
+         document-level clear, never one per chapter). This DELETE shares
+         this call's own `conn` and is only durably committed once some
+         later store_fn() call reaches its own conn.commit() (store_fn is
+         store_propositions() by default, which always commits) -- if
+         EVERY sub-unit ends up empty/errored/skipped_thin (store_fn never
+         called at all), this DELETE is issued but left uncommitted on
+         this connection, exactly mirroring process_document()'s own
+         documented TRANSACTION-ORDERING behavior for its "nothing PASSED"
+         case: the caller's own later commit (or lack of one) decides
+         whether it lands.
+      4. A running proposition_index counter, continuous across chapters
+         (never reset per chapter) -- avoids a (document_id,
+         proposition_index) collision class this repo has already been
+         burned by.
+      5. For each sub-unit, in order:
+           - word-count check against MIN_SUBSTANTIVE_WORD_COUNT: under
+             the floor -> bucketed "skipped_thin", NO model call.
+           - else: extract_propositions(sub_unit.text, doc_id=document_id,
+             speaker=speaker, prompt_version=prompt_version) -- UNMODIFIED,
+             reused as-is (this is what gives per-chapter reference-
+             grounding/allowed-reference-list scope for free).
+               * PropositionExtractionFailed -> bucketed "errored", NEVER
+                 aborts the remaining chapters.
+               * [] (genuine empty result) -> bucketed "empty".
+               * non-empty -> proposition_index values renumbered via the
+                 running counter, then store_fn(conn, document_id,
+                 renumbered_props, embed_fn, prompt_version=prompt_version,
+                 chunk_ids=sub_unit.chunk_ids, clear_existing=False) ->
+                 bucketed "stored".
+
+    Returns a reconciliation dict:
+      {"chapters_attempted": int, "chapters_stored": int,
+       "chapters_empty": int, "chapters_errored": int,
+       "chapters_skipped_thin": int, "chapters_skipped_front_matter": int,
+       "propositions_stored": int,
+       "per_chapter": [{"label": str, "split_method": str,
+                        "word_count": int, "outcome": str,
+                        "n_propositions": int, ...}, ...]}
+    ("matter_reason": str is additionally present ONLY on a per_chapter
+    entry whose "outcome" is "skipped_front_matter" -- see
+    is_front_back_matter()'s own docstring for the possible values.)
+    Buckets always reconcile: chapters_attempted == chapters_stored +
+    chapters_empty + chapters_errored + chapters_skipped_thin +
+    chapters_skipped_front_matter (asserted below before returning).
+
+    FRONT/BACK-MATTER FILTER (correction pass): each sub-unit is checked
+    via is_front_back_matter(unit.parent_label, unit.text) BEFORE the
+    MIN_SUBSTANTIVE_WORD_COUNT thin-check below -- a matter-classified
+    span (a CCEL bibliographic-metadata-plus-Table-of-Contents block, a
+    Title Page, an Indexes/scripture-index span, etc.) is bucketed
+    "skipped_front_matter" and NEVER reaches extract_propositions() at
+    all, regardless of its own word count. See is_front_back_matter()'s
+    own docstring (defined near MIN_SUBSTANTIVE_WORD_COUNT above) for the
+    full label/shape decision and its protected-label false-positive
+    guard -- a genuine "Preface"/"Introduction"/etc. span is NEVER
+    shape-checked and always proceeds past this filter unfiltered."""
+    chapters, missing_expected_titles = split_book_into_chapters(ordered_chunks)
+    if missing_expected_titles:
+        logger.info(
+            "BOOK_CHAPTER_SPLIT_MISSING_TITLES doc=%r missing=%r",
+            document_id, missing_expected_titles,
+        )
+    sub_units = _apply_word_ceiling_fallback(chapters)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM propositions WHERE document_id = %s",
+            (document_id,),
+        )
+
+    proposition_index = 1
+    n_stored_chapters = 0
+    n_empty_chapters = 0
+    n_errored_chapters = 0
+    n_skipped_thin_chapters = 0
+    n_skipped_front_matter_chapters = 0
+    n_propositions_stored = 0
+    per_chapter: List[dict] = []
+
+    for unit in sub_units:
+        word_count = len(unit.text.split())
+
+        matter, matter_reason = is_front_back_matter(unit.parent_label, unit.text)
+        if matter:
+            n_skipped_front_matter_chapters += 1
+            per_chapter.append({
+                "label": unit.parent_label, "split_method": unit.method,
+                "word_count": word_count, "outcome": "skipped_front_matter",
+                "matter_reason": matter_reason, "n_propositions": 0,
+            })
+            continue
+
+        if word_count < MIN_SUBSTANTIVE_WORD_COUNT:
+            n_skipped_thin_chapters += 1
+            per_chapter.append({
+                "label": unit.parent_label, "split_method": unit.method,
+                "word_count": word_count, "outcome": "skipped_thin",
+                "n_propositions": 0,
+            })
+            continue
+
+        try:
+            props = extract_propositions(
+                unit.text, doc_id=document_id, speaker=speaker,
+                prompt_version=prompt_version,
+            )
+        except PropositionExtractionFailed as exc:
+            logger.warning(
+                "BOOK_CHAPTER_EXTRACT_FAIL doc=%r label=%r error=%s",
+                document_id, unit.parent_label, exc,
+            )
+            n_errored_chapters += 1
+            per_chapter.append({
+                "label": unit.parent_label, "split_method": unit.method,
+                "word_count": word_count, "outcome": "errored",
+                "n_propositions": 0,
+            })
+            continue
+
+        if not props:
+            n_empty_chapters += 1
+            per_chapter.append({
+                "label": unit.parent_label, "split_method": unit.method,
+                "word_count": word_count, "outcome": "empty",
+                "n_propositions": 0,
+            })
+            continue
+
+        renumbered_props: List[dict] = []
+        for prop in props:
+            new_prop = dict(prop)
+            new_prop["proposition_index"] = proposition_index
+            renumbered_props.append(new_prop)
+            proposition_index += 1
+
+        n_stored_this_chapter = store_fn(
+            conn, document_id, renumbered_props, embed_fn,
+            prompt_version=prompt_version,
+            chunk_ids=unit.chunk_ids,
+            clear_existing=False,
+        )
+        n_stored_chapters += 1
+        n_propositions_stored += n_stored_this_chapter
+        per_chapter.append({
+            "label": unit.parent_label, "split_method": unit.method,
+            "word_count": word_count, "outcome": "stored",
+            "n_propositions": n_stored_this_chapter,
+        })
+
+    chapters_attempted = len(sub_units)
+    assert chapters_attempted == (
+        n_stored_chapters + n_empty_chapters + n_errored_chapters
+        + n_skipped_thin_chapters + n_skipped_front_matter_chapters
+    ), (
+        "book-chapter bucket accounting failed to reconcile: attempted=%d != "
+        "stored=%d + empty=%d + errored=%d + skipped_thin=%d + skipped_front_matter=%d" % (
+            chapters_attempted, n_stored_chapters, n_empty_chapters,
+            n_errored_chapters, n_skipped_thin_chapters, n_skipped_front_matter_chapters,
+        )
+    )
+
+    return {
+        "chapters_attempted": chapters_attempted,
+        "chapters_stored": n_stored_chapters,
+        "chapters_empty": n_empty_chapters,
+        "chapters_errored": n_errored_chapters,
+        "chapters_skipped_thin": n_skipped_thin_chapters,
+        "chapters_skipped_front_matter": n_skipped_front_matter_chapters,
+        "propositions_stored": n_propositions_stored,
+        "per_chapter": per_chapter,
+    }
