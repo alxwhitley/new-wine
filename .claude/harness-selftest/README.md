@@ -118,14 +118,69 @@ Three scenarios, each asserted against the real gate:
   the gate blocks on genuinely undisclosed work, then converges to ALLOW once
   disclosed, and *stays* converged even when later retries revert to vague
   wording (no oscillation, no regrowth) — plus proves 4 retries of the same 2
-  actions dedup to exactly 2 distinct records, not 8.
+  actions dedup to a stable count, not unbounded growth. **Updated
+  2026-07-31:** that count was originally 2 distinct records; after
+  `test_sql_verb_narrowing.py`'s classifier narrowing (below) the grep
+  command itself no longer registers as a write, so the same 4 retries now
+  dedup to exactly 1 (the genuinely-write `rm` command only) — still
+  disproving unbounded growth (not 4), just against the corrected baseline.
 - **(B) real catch still fires** — an `Edit` never mentioned in the report is
   still BLOCKED (principle 1 preserved, not weakened by the fix).
 - **(C) honest write still passes** — an `Edit` that IS named in the report
   is ALLOWED cleanly (mismatch-only, no penalty for an honest write).
 
-`BASH_WRITE_INDICATORS` (what counts as write-class) is untouched by this
-fix on purpose — over-flagging benign searches stays the deliberate safe
-default; this only makes an already-flagged record satisfiable and
-non-looping. Narrowing that classifier is its own separate, higher-risk,
-future session (flagged in rhemata-status.md, not done here).
+`BASH_WRITE_INDICATORS` (what counts as write-class) was untouched by this
+2026-07-19 fix on purpose — over-flagging benign searches stayed the
+deliberate safe default; that fix only made an already-flagged record
+satisfiable and non-looping. Narrowing that classifier was named here as
+its own separate, higher-risk, future session (flagged in
+rhemata-status.md, not done in this entry) — see
+`test_sql_verb_narrowing.py` below for that session, now done (2026-07-31).
+
+## `test_sql_verb_narrowing.py` — the BASH_WRITE_INDICATORS SQL-verb narrowing (2026-07-31)
+
+The classifier narrowing named above, deferred at the time as "its own
+separate, higher-risk, future session." `guard_pretooluse.py`'s
+`BASH_WRITE_INDICATORS` regex flagged ANY Bash command merely CONTAINING a
+bare SQL-verb-shaped word (INSERT/UPDATE/DELETE/UPSERT/ALTER/DROP/MERGE/
+CREATE), including pure text search/display commands that touch no
+database at all — e.g. the real 2026-07-18 incident's
+`grep -rl "ALTER TABLE ..." migrations/`, the same command
+`test_write_accounting_loop_fix.py`'s `scenario_a()` replays.
+
+Narrowed by splitting the regex into `BASH_WRITE_INDICATORS_ALWAYS` (shell
+redirection, file-mutating commands, sed -i — untouched, still deliberately
+over-inclusive) and `BASH_WRITE_INDICATORS_SQL_VERBS` (the SQL verbs alone,
+now suppressed by `_is_read_only_text_pipeline()` when the ENTIRE command
+is confidently a chain of pure text-search/display commands —
+`grep/egrep/fgrep/rg/cat/head/tail/less/more/wc/sort/uniq/echo` — with no
+command substitution, process substitution, or backgrounding anywhere in
+it; any of those fails closed and the command stays flagged). No
+DB-write-capable command (psql, python3, tee, xargs, sed, etc) is in the
+allowlist, so this cannot mask a genuine write.
+
+Same ad hoc `check()`/`sys.exit(1)` convention, driving the real
+`guard_pretooluse.py` module (imported, not reimplemented) both at the
+`is_write_class()` level and through the real PreToolUse path (a
+monkeypatched `tempfile.mkdtemp()` state dir, same as every other suite
+here). Three scenarios:
+- **(A) historical incident narrowed** — the literal 2026-07-18 grep
+  command no longer registers as a write, proven via an actual state-file
+  read (zero records), not just a bare function-call assertion.
+- **(B) zero regression on true positives** — a genuine `psql ... -c
+  "ALTER TABLE ..."` execution, a known write-capable script invocation, a
+  redirection+SQL-verb mixed case, a command-substitution edge case, and an
+  `rm`-chained case are all still flagged exactly as before.
+- **(C) an additional benign case**, structurally distinct from (A) — a
+  `cat | grep` file-content pipeline and a `;`-chained pure-grep command —
+  proving the narrowing isn't a one-off fit to the historical command.
+
+This session also corrected `test_write_accounting_loop_fix.py`'s check A5:
+its dedup-count expectation (previously 2) had baked in the pre-narrowing
+bug as if it were correct behavior (the historical grep command
+contributing a second phantom write record alongside the genuinely-write
+`rm_cmd`). Now that the grep call correctly produces zero records, A5
+expects 1 — A1-A4 (the actual loop-convergence/cumulative-disclosure proof)
+are untouched.
+
+Run: `python3 .claude/harness-selftest/test_sql_verb_narrowing.py`

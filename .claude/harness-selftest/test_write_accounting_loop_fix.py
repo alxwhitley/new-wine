@@ -20,6 +20,21 @@ log (read-only reference, never modified), through a monkeypatched
 WRITE_STATE_DIR pointed at a fresh tempfile.mkdtemp() -- the real
 /tmp/rhemata-harness-writes directory is never touched by this suite.
 
+2026-07-31 update (see .claude/harness-selftest/test_sql_verb_narrowing.py
+and guard_pretooluse.py's own 2026-07-31 module-docstring entry): the
+BASH_WRITE_INDICATORS gap named above -- a benign grep matching a bare
+SQL-verb-shaped word getting recorded as a write -- was itself narrowed
+that session, specifically for pure text-search/display commands like the
+grep_cmd used in scenario_a() below. That means grep_cmd no longer
+produces a write record at all; only the accompanying rm_cmd does. Before
+that narrowing, scenario_a()'s check A5 asserted that 4 retries of "the
+same 2 actions" deduped to 2 distinct write records -- an assumption that
+depended on grep_cmd itself being write-class, which was exactly the bug
+the narrowing session fixed. A5 now expects 1 (rm_cmd only). This does not
+touch or weaken what A1-A4 prove about loop convergence, cumulative
+disclosure, or dedup mechanics -- those checks and the underlying gate
+logic are unaffected by the 2026-07-31 narrowing.
+
 Manual check()/sys.exit(1) pattern, matching this repo's existing ad hoc
 scripts/test_*.py convention (no test framework is installed).
 
@@ -156,15 +171,28 @@ def scenario_a():
           turn4 is None, detail=str(turn4))
 
     # Prove no unbounded growth: count how many DISTINCT write records the
-    # gate is reasoning about after 4 retries of the *same two* actions --
-    # must be 2 (deduped), not 8 (one pair per retry).
+    # gate is reasoning about after 4 retries of the *same two* actions.
+    #
+    # 2026-07-31 update: after that session's SQL-verb narrowing (see
+    # test_sql_verb_narrowing.py), grep_cmd above is a pure text-search
+    # command and correctly produces ZERO write records on its own -- only
+    # rm_cmd is genuinely write-class. So 4 retries of grep_cmd+rm_cmd now
+    # produce 4 raw write records total (rm_cmd only, once per retry),
+    # deduping to exactly 1 distinct write record -- not 8 raw / 2 deduped,
+    # which was this check's expectation before the narrowing (when the
+    # phantom-recorded grep call counted as a second distinct write
+    # action, the exact bug that narrowing session fixed). Still proves
+    # the same thing this check always existed to prove: no unbounded
+    # growth across retries of the same action.
     with open(os.path.join(scratch, f"{session_id}.jsonl")) as f:
         records = [json.loads(l) for l in f if l.strip()]
     write_records = [r for r in records if r.get("agent_id") == agent_id and "kind" not in r]
     deduped = gate._dedup_write_records(write_records)
     print(f"  raw write records logged: {len(write_records)}  |  deduped distinct actions: {len(deduped)}")
-    check("A5: 4 retries of the same 2 actions dedup to exactly 2 distinct write records",
-          len(deduped) == 2, detail=f"got {len(deduped)}")
+    check("A5: 4 retries of grep_cmd+rm_cmd dedup to exactly 1 distinct write "
+          "record (rm_cmd only -- the narrowed grep_cmd is correctly not "
+          "write-class as of 2026-07-31)",
+          len(deduped) == 1, detail=f"got {len(deduped)}")
 
     shutil.rmtree(scratch, ignore_errors=True)
 

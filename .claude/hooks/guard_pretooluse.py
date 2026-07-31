@@ -39,11 +39,32 @@ in English prose or in a file path will over-record too) -- deliberately
 biased toward over-recording, since piece 1 only feeds a downstream gate
 (piece 2), and over-recording is the safe direction of error here, not a
 silent one.
+
+2026-07-31 update: the SQL-verb alternative inside BASH_WRITE_INDICATORS (now
+split into BASH_WRITE_INDICATORS_ALWAYS and BASH_WRITE_INDICATORS_SQL_VERBS,
+see that pair's comment block for detail) is narrowed -- a bare SQL-verb-
+shaped word (INSERT/UPDATE/DELETE/UPSERT/ALTER/DROP/MERGE/CREATE) no longer
+flags a write when the ENTIRE command is confidently a chain of pure
+text-search/display commands (grep/egrep/fgrep/rg/cat/head/tail/less/more/
+wc/sort/uniq/echo -- see READ_ONLY_TEXT_COMMANDS) with no command
+substitution, process substitution, or backgrounding anywhere in it; any of
+those fails closed and the command stays flagged, same as before. This
+closes rhemata-status.md's "Known Harness Bugs" last entry -- the real
+2026-07-18 `grep ... "ALTER TABLE ..."` incident that fed the SubagentStop
+write-accounting loop bug (deterministic_gate.py's fix for that loop
+explicitly left this exact classifier narrowing out of scope, for "its own
+future, higher-risk session" -- this is that session). Everything else is
+UNTOUCHED and deliberately stays exactly as over-inclusive as before:
+BASH_WRITE_INDICATORS_ALWAYS' shell-redirection, file-mutating-command
+(rm/mv/cp/touch/mkdir/tee/dd/truncate/chmod/chown), and sed -i matches are
+not narrowed by anything in this update -- principle 5 (fallible, not
+adversarial; broad detection is the safe default) still governs those.
 """
 import datetime
 import json
 import os
 import re
+import shlex
 import sys
 
 GOVERNED_FILES = {
@@ -77,16 +98,112 @@ DRY_RUN_FLAG = re.compile(r"--dry-run|--test\b")
 # see module docstring for known gaps (can't see inside a script; over-fires
 # on some non-writes like bare `2>&1`). Not reused from elsewhere because
 # nothing else in this file is a general-purpose write classifier.
-BASH_WRITE_INDICATORS = re.compile(
+#
+# 2026-07-31 narrowing (rhemata-status.md "Known Harness Bugs", last entry):
+# the single combined regex this used to be over-flagged any Bash command
+# that merely CONTAINED an SQL-verb-shaped bare word (INSERT/UPDATE/DELETE/
+# UPSERT/ALTER/DROP/MERGE/CREATE) -- including pure text search/display
+# commands that touch no database at all (e.g.
+# `grep -rl "ALTER TABLE ..." migrations/`, the real 2026-07-18 incident
+# referenced above and in deterministic_gate.py's loop-fix comment). Split
+# into two pieces so ONLY the SQL-verb alternative can ever be narrowed, and
+# only when the ENTIRE command is confidently a chain of pure
+# text-search/display commands (see READ_ONLY_TEXT_COMMANDS /
+# _is_read_only_text_pipeline below) with no command substitution, process
+# substitution, or backgrounding anywhere in it -- any of those fails closed
+# (stays flagged). Everything else -- shell redirection, the file-mutating
+# command list, sed -i -- is UNTOUCHED and deliberately stays exactly as
+# over-inclusive as before; principle 5 (fallible, not adversarial -- broad
+# detection is the safe default) still governs those.
+BASH_WRITE_INDICATORS_ALWAYS = re.compile(
     r">>?(?!=)(?!&\d)(?!\s*/dev/null)"  # shell redirection to a real target --
     # excludes fd duplication (2>&1) and /dev/null, both confirmed
     # false-positive sources in the 2026-07-11 garble diagnosis; still
     # catches genuine file writes like "> out.txt" or "2> err.log"
     r"|\b(?:rm|mv|cp|touch|mkdir|tee|dd|truncate|chmod|chown)\b"  # file-mutating commands
-    r"|\bsed\b[^|;&\n]*-i\b"  # sed -i (in-place edit)
-    r"|\b(?:INSERT|UPDATE|DELETE|UPSERT|ALTER|DROP|MERGE|CREATE)\b",  # SQL mutation verbs
+    r"|\bsed\b[^|;&\n]*-i\b",  # sed -i (in-place edit)
     re.IGNORECASE,
 )
+
+BASH_WRITE_INDICATORS_SQL_VERBS = re.compile(
+    r"\b(?:INSERT|UPDATE|DELETE|UPSERT|ALTER|DROP|MERGE|CREATE)\b",  # SQL mutation verbs
+    re.IGNORECASE,
+)
+
+# Kept as the union of both pieces above, for reference/back-compat only --
+# other files' comments/docstrings mention this name (deterministic_gate.py,
+# rhemata-status.md, CLAUDE.md, the harness-selftest README). Confirmed by
+# grep (2026-07-31) that nothing in this codebase calls BASH_WRITE_INDICATORS
+# itself; is_write_class() below uses the two pieces separately.
+BASH_WRITE_INDICATORS = re.compile(
+    BASH_WRITE_INDICATORS_ALWAYS.pattern + "|" + BASH_WRITE_INDICATORS_SQL_VERBS.pattern,
+    re.IGNORECASE,
+)
+
+# 2026-07-31 narrowing continued: a short allowlist of commands that only
+# ever display or search text -- none of them can execute SQL or shell code
+# found in their own arguments, so a bare SQL-verb-shaped word appearing
+# inside a command from this list (a grep search pattern, a displayed
+# file's contents, etc) is not itself evidence of a database write.
+READ_ONLY_TEXT_COMMANDS = {
+    "grep", "egrep", "fgrep", "rg", "cat", "head", "tail", "less", "more",
+    "wc", "sort", "uniq", "echo",
+}
+
+
+def _is_read_only_text_pipeline(command: str) -> bool:
+    """True only when every stage of `command` invokes a command from
+    READ_ONLY_TEXT_COMMANDS -- tools that display or search text and can
+    never themselves execute SQL or shell code from their arguments. Used
+    ONLY to narrow BASH_WRITE_INDICATORS_SQL_VERBS' bare-word match (a grep
+    pattern or displayed file content containing "ALTER"/"DROP"/etc is not
+    a database write) -- BASH_WRITE_INDICATORS_ALWAYS is never narrowed by
+    this function and stays exactly as over-inclusive as before.
+
+    Shell-quote-aware: uses shlex with punctuation_chars=True so a `|`
+    inside a quoted grep pattern (e.g. the real 2026-07-18 incident's
+    "ALTER TABLE sources\\|ALTER TABLE source_aliases" command) is not
+    mistaken for a pipeline separator -- verified live against that exact
+    string before this was written.
+
+    Fails closed (returns False, i.e. stays flagged) on anything not
+    confidently parseable as pure text-display/search: command
+    substitution ($(...) or backticks), process substitution (<(...)/>(...)),
+    backgrounding (&), or a command string shlex can't tokenize cleanly
+    (unbalanced quotes etc). This is deliberate -- principle 5 (fallible,
+    not adversarial; broad detection is the safe default) means an
+    ambiguous case stays flagged, not narrowed."""
+    if "$(" in command or "`" in command or "<(" in command or ">(" in command:
+        return False
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return False
+
+    stages = [[]]
+    for tok in tokens:
+        if tok in ("|", ";", "&&", "||"):
+            stages.append([])
+        elif tok == "&":
+            return False
+        else:
+            stages[-1].append(tok)
+    stages = [s for s in stages if s]
+    if not stages:
+        return False
+
+    for stage in stages:
+        idx = 0
+        while idx < len(stage) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", stage[idx]):
+            idx += 1
+        if idx >= len(stage):
+            return False
+        cmd_name = os.path.basename(stage[idx])
+        if cmd_name not in READ_ONLY_TEXT_COMMANDS:
+            return False
+    return True
 
 # Outside the repo entirely (not .claude/-relative) -- this is live-run-only
 # state, consumed once at the same subagent's SubagentStop, not durable
@@ -237,14 +354,24 @@ def check_rule_10_freeze(command: str):
 
 def is_write_class(tool_name: str, tool_input: dict) -> bool:
     """Session #5.5 Phase 3 piece 1: single source of truth for "is this
-    call a write." Edit/Write are always write-class by definition; Bash is
-    write-class iff BASH_WRITE_INDICATORS matches its command. See module
-    docstring and BASH_WRITE_INDICATORS' comment for known gaps."""
+    call a write." Edit/Write are always write-class by definition. Bash is
+    write-class iff BASH_WRITE_INDICATORS_ALWAYS matches (the always-flag
+    set -- shell redirection, file-mutating commands, sed -i -- untouched by
+    the 2026-07-31 narrowing, still deliberately over-inclusive), OR
+    BASH_WRITE_INDICATORS_SQL_VERBS matches AND the command is NOT a pure
+    read-only text-search/display pipeline per _is_read_only_text_pipeline()
+    (2026-07-31 narrowing -- see that function's docstring and the comment
+    block above BASH_WRITE_INDICATORS_ALWAYS for exactly what changed and
+    what stayed the same). See module docstring for remaining known gaps."""
     if tool_name in ("Edit", "Write"):
         return True
     if tool_name == "Bash":
         command = tool_input.get("command", "") or ""
-        return bool(BASH_WRITE_INDICATORS.search(command))
+        if BASH_WRITE_INDICATORS_ALWAYS.search(command):
+            return True
+        if BASH_WRITE_INDICATORS_SQL_VERBS.search(command):
+            return not _is_read_only_text_pipeline(command)
+        return False
     return False
 
 
