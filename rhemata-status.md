@@ -29,6 +29,23 @@ Records reconciled: 2026-07-23 (fix commit `0e2f32c` for the textarea-focus-bloc
 
 ---
 
+## Two read-only diagnostics: historical-commentary attribution/copyright audit, book-extraction truncation check (session state, 2026-07-31)
+
+Two independent read-only sessions, zero DB writes, zero code changes — plain/direct terminal path per CLAUDE.md's Session Routing table. This entry is the pointer; full evidence for item 1 lives in the audit file below, and for item 2 in this session's own chat transcript (no file was written for it, per that task's own explicit instruction).
+
+**1. Historical commentary attribution/copyright audit — full report: `docs/audits/historical_commentary_attribution_and_copyright_audit_2026-07-31.md`.** Re-opens Open blockers #15/#16 below (both updated in place, not superseded — the underlying questions are still genuinely unresolved).
+
+- **citation_mode:** confirmed fresh via live query — all 307 HistoricalChristianFaith documents currently have `citation_mode='silent_context'`, matching #15's own original wording below (re-read carefully, #15 already stated the live value as silent_context, not citable — the framing this audit's task brief used, "DB says citable but behaves silent," does not match #15's actual text and does not match today's live state either). Root cause of the code/DB mismatch traced: the now-deleted `ingest_commentaries.py` importer hardcoded `citation_mode='citable'` at insert time, in every version across its full git history, confirmed by reading the deleted file at each commit. **No migration, commit, or script anywhere in this repo performs the correction to `silent_context`** — searched migrations/*.sql, `git log -S`, and the `documents` table itself (no `updated_at` column to date it). Someone corrected this, correctly, outside the migration convention, with no audit trail. Not urgent, but the gap itself — an undocumented direct DB change — is worth knowing about.
+- **New finding, not previously known:** license_status/visibility live on the `sources` table only — one row for this entire 307-document collection (`license_status='public_domain'`, `visibility='shown'`), with no per-document or per-author override anywhere in the schema. Three authors in this set are not safely public domain under a life-plus-70 baseline: **C.S. Lewis** (d. 1963, protected to ~2033), **J.R.R. Tolkien** (d. 1973, protected to ~2043), and **Douglas Wilson** (living author, b. 1953) — all three currently sit under the same blanket `public_domain`/`shown` record as every ancient/medieval author in the set. G.K. Chesterton (d. 1936) and J.B. Lightfoot (d. 1889) were also individually checked and already clear life-plus-70.
+- **New finding:** Study Mode's commentary browsing panel (`backend/app/routers/study.py`, confirmed by its own code comment) structurally ignores `citation_mode` and always displays the author name for `source_kind='commentary'` results — confirmed rendered in the frontend too (`commentary-accordion-row.tsx:62`). This is the one path where the citation_mode correction above provides no protection at all, by design.
+- **Not resolved by this session** (read-only, no DB/code changes): five open questions are logged in the audit file for Alex — the per-source-only license model, whether to pull the three flagged authors from retrieval now (the existing `source_toggles` "Historical Commentaries" switch is one immediate lever, already confirmed `enabled=True`), scope of further author verification, whether to trace the undocumented citation_mode change further, and a minor "Adamnan"/"Adamnán of Iona" duplicate-author cleanup.
+
+**2. Book-length extraction truncation check — no file written, per that task's explicit instruction; findings recorded here instead.** Follow-up to PLAN.md #17's open book-length gap (2 of the item's 7 unprocessed documents from the 2026-07-30 backfill). Question: do book-length documents show a broader, silent under-extraction pattern beyond the two known hard failures?
+
+**Confirmed: no.** 46 of 53 `source_type='book'` documents (including all 10 of Andrew Murray's) are `license_status='public_domain'` or `owned` — the propositions gate skips these entirely by design, so their 0-proposition counts are expected behavior, not evidence of any bug. The only population the gate ever attempts is the 6 `unlicensed` books. Of those: the 2 known failures (Bosworth "Christ the Healer," 90,842 words; Kreighbaum "Manual Systematic Theology," 139,659 words) are confirmed clean total errors in the real backfill log (`backfill_run_review/full_backfill_log.jsonl`) — `result: "error"` on both first attempt and retry, zero stored either time, not a partial/truncated success. The other 4 (Kreighbaum's "Essentials For New Disciples"/"Maturing in God"/"Ministry of God's Word," and the anonymous "Foundation Stones for New Believers") succeeded with genuine full-document coverage: their propositions-per-1000-words (0.65–1.47) sit at or near the median for unlicensed non-book documents (1.32, IQR 0.98–2.49, n=3025); the top 10 corpus-wide proposition counts show a smooth natural decline (40, 36, 30, 27, 25, 24...) with no ceiling-clustering signature; and — the strongest evidence — reading the actual proposition text against each book's own structure shows the LAST proposition in all three checked books topically matches the book's own final ~1% of content (e.g. "Foundation Stones for New Believers"'s last proposition, about eternity, matches its literal last chunk's Ecclesiastes 3:11 citation). **No re-extraction of any existing book is warranted.** The risk surface for PLAN.md #17's book-length gap remains exactly the 2 already-known documents, unchanged in scope — see PLAN.md #17 for the corresponding update.
+
+---
+
 ## Records-cleanup pass: Item 3/4 state corrected, Open Decision #20 held (session state, 2026-07-30, later same day)
 
 Docs/records-only session — read PLAN.md and this file fresh before writing, per this session's own instruction, rather than blind-applying a prepared list. Full detail lives in PLAN.md; this is the pointer plus one correction that belongs here because it directly concerns the section immediately below.
@@ -2272,23 +2289,43 @@ until that permission is obtained.
 
 **15. Attribution-mode mismatch on the 307 HistoricalChristianFaith
 documents (found 2026-07-22, during `ingest_commentaries.py` retirement
-audit — not touched, logged for a future session).** The importer's insert
-set `citation_mode='citable'` on every row, but all 307 live rows are
-actually `silent_context` — named historical authors (Augustine, Chrysostom,
-Wesley, C.S. Lewis, etc.) currently serving as unattributed background
-rather than cited by name. Unclear whether this is intentional (same
-posture as other silent-context sources) or a bug that silently dropped
-attribution for named, identifiable authors — given attribution is core to
-Rhemata's positioning (CLAUDE.md invariant 7), this needs a real decision,
-not an assumption either way.
+audit) — RE-CHECKED 2026-07-31, still open, decision needed.** The
+importer's insert set `citation_mode='citable'` on every row (confirmed via
+the deleted script's full git history), but all 307 live rows are, and
+remain today, `silent_context` — named historical authors (Augustine,
+Chrysostom, Wesley, C.S. Lewis, etc.) served as unattributed background
+rather than cited by name in the main chat path. Still unclear whether the
+correction to `silent_context` was intentional (matching the design intent
+for `source_kind='commentary'`, stated directly in `study.py`'s own code
+comment) or accidental — no migration, commit, or script anywhere records
+who made the change or when. Full re-investigation, plus two new findings
+(license_status is source-level only and covers three not-safely-PD
+authors; Study Mode always shows author names regardless of citation_mode):
+`docs/audits/historical_commentary_attribution_and_copyright_audit_2026-07-31.md`.
+Given attribution is core to Rhemata's positioning (CLAUDE.md invariant 7),
+this still needs a real decision from Alex, not an assumption either way —
+see that audit's five open questions.
 
-**16. Possible copyright flag: C.S. Lewis document marked public_domain
-(found 2026-07-22, same audit as #15).** One of the 307 documents is
-attributed to C.S. Lewis (d. 1963), sitting under a source marked
-`license_status='public_domain'`, `visibility='shown'`. Lewis's death year
-makes public-domain status doubtful in most jurisdictions — this wants a
-fail-closed review (verify the actual copyright status of this specific
-text, or gate it) before treating it as safely servable at face value.
+**16. Copyright flag on the HistoricalChristianFaith source — EXPANDED
+2026-07-31, still open.** Originally flagged 2026-07-22 for one document
+(C.S. Lewis, d. 1963) sitting under a source marked
+`license_status='public_domain'`, `visibility='shown'`. **Re-checked
+2026-07-31 against the full 307-author roster: two more authors have the
+same problem** — J.R.R. Tolkien (d. 1973) and Douglas Wilson (a living
+author) — all three under the identical blanket `public_domain`/`shown`
+source record as every ancient/medieval author in the set, because
+license_status lives on the `sources` table only, with no per-document or
+per-author override anywhere in the schema. G.K. Chesterton and J.B.
+Lightfoot were also checked and already safely clear life-plus-70. Full
+detail, sources cited:
+`docs/audits/historical_commentary_attribution_and_copyright_audit_2026-07-31.md`.
+Still wants the same fail-closed review named in the original finding —
+verify actual copyright status or gate these three specifically — before
+treating them as safely servable at face value. An existing admin-side
+lever already exists if Alex wants an immediate interim mitigation: the
+`source_toggles` row for `source_kind='commentary'` ("Historical
+Commentaries") can pull the whole source from retrieval with one click;
+confirmed currently `enabled=True` (not pulled).
 
 ---
 
