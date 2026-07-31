@@ -2133,15 +2133,39 @@ remaining hardcoded-bio teacher shares another entity's source_id.
   unreadable state file) — left exactly as-is, the safe-direction default
   for a different, narrower case.
 
-- **Future session flag: `BASH_WRITE_INDICATORS` still over-flags benign
-  searches on purpose.** A grep for a bare SQL-verb-shaped word (e.g.
-  "ALTER TABLE") still gets recorded as a write — the 2026-07-19 fix above
-  only made that already-flagged record satisfiable and non-looping, it
-  did not reduce what gets flagged; over-flagging remains the deliberate
-  safe direction (principle 5). Narrowing that classifier so harmless
-  searches stop being flagged at all is a separate, higher-risk decision
-  (it trades against the explicit "over-recording is safe" design intent)
-  — its own dedicated session, weighed on its own, not bundled here.
+- **`BASH_WRITE_INDICATORS`' SQL-verb over-flagging — NARROWED 2026-07-31,
+  commit `569d412`.** A grep for a bare SQL-verb-shaped word (e.g. "ALTER
+  TABLE") used to get recorded as a write regardless of context — the
+  2026-07-19 fix above only made that already-flagged record satisfiable
+  and non-looping, it did not reduce what got flagged. This session split
+  `BASH_WRITE_INDICATORS` (`.claude/hooks/guard_pretooluse.py`) into an
+  untouched `BASH_WRITE_INDICATORS_ALWAYS` set (shell redirection,
+  file-mutating commands, sed -i — still deliberately over-inclusive,
+  principle 5 unchanged there) and a `BASH_WRITE_INDICATORS_SQL_VERBS` set
+  now suppressed only when the entire command is a shell-quote-aware-parsed
+  chain of pure text-search/display commands (grep/egrep/fgrep/rg/cat/head/
+  tail/less/more/wc/sort/uniq/echo) with no command substitution, process
+  substitution, or backgrounding anywhere in it — any of those fails
+  closed and the command stays flagged, same as before. No DB-write-capable
+  command (psql, python3, tee, xargs, sed, etc) is in the allowlist, so
+  this cannot mask a genuine write. Proven by
+  `.claude/harness-selftest/test_sql_verb_narrowing.py`: the real
+  2026-07-18 incident's grep command no longer gets recorded as a write;
+  five true-positive cases (a real psql `ALTER TABLE` execution, a known
+  write-script invocation, a redirection+SQL-verb mixed case, a
+  command-substitution edge case, an `rm`-chained case) still flag exactly
+  as before; two additional benign cases (a `cat | grep` file-content
+  pipeline, a `;`-chained pure-grep pair) also narrow correctly.
+  `test_write_accounting_loop_fix.py`'s check A5 was corrected in the same
+  commit — its dedup-count expectation (2) had baked the pre-narrowing
+  bug's phantom write record into what it treated as correct behavior; now
+  1, with A1-A4 (the actual loop-convergence/cumulative-disclosure proof)
+  unchanged. This closes the "future session, not bundled here" flag this
+  entry used to name — CLAUDE.md's Session Routing hard rule and its
+  DB-write-prohibition revisit trigger are untouched by this session on
+  purpose; narrowing this classifier was only one of that rule's two named
+  revisit conditions, and the other (a second clean DB-write harness
+  session, deliberately run and reviewed) remains separately open.
 
 ---
 
