@@ -1783,17 +1783,22 @@ def _label_from_context(pre_text: str) -> str:
     return "Front matter"
 
 
-# Real corpus evidence (2026-07-31, live-queried, read-only): the longest
-# real True Vine chapter is 1143 words (per this build's own dry-run
-# reconstruction of all 31 chapters + Preface). This threshold sits well
-# above that observed real maximum -- comfortably larger than any genuine
-# single chapter in the one book this design has been checked against, so
-# it should not fire on real, well-structured chapter text -- while still
-# being small enough to catch a synthetic no-marker stretch quickly in
-# tests. Not derived from a formal cross-corpus analysis (no second
-# book-length document has been run through this path yet); revisit if a
-# future book's real chapters legitimately run this long.
-LONG_STRETCH_WORD_THRESHOLD = 3000
+# Raised from 3000 to 6000 (2026-07-31, isolated one-constant change) to
+# match the real per-call extraction ceiling, SAFE_CHAPTER_WORD_CEILING
+# (defined later in this module) -- a detected chapter under that real
+# ceiling is sent to extract_propositions() WHOLE, rather than needlessly
+# fragmented into disconnected "(untitled continuation)" size_fallback
+# pieces at a lower, unrelated threshold. (Deliberately not written as
+# "= SAFE_CHAPTER_WORD_CEILING" -- a plain value match is the minimal,
+# clearest edit; the two constants stay independently defined, not
+# coupled, so a future change to one does not silently retune the other.)
+# Original rationale, still true at the new value: the longest real True
+# Vine chapter is 1143 words (2026-07-31 dry-run reconstruction of all 31
+# chapters + Preface) -- comfortably under 6000 either way, so this change
+# has no effect on that book (confirmed directly, not assumed -- see this
+# module's own numeral-detection test suite's cross-check against both
+# True Vine and Power Through Prayer's already-reported span counts).
+LONG_STRETCH_WORD_THRESHOLD = 6000
 
 _PARAGRAPH_SPLIT_RE = re.compile(r"\n[ \t]*\n+")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
