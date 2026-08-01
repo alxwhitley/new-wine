@@ -85,10 +85,7 @@ later session makes deliberately).
    a code fix, flagged not made.*
 10. **Tongues is a house position, not a debate** (Alex's ruling, 1 Aug): not
     required as initial evidence of Spirit baptism, but reasonably expected for
-    all. The neutrality list shrinks by one. ⚠ *Conflict flag: the live system
-    prompt still lists "whether tongues is the required initial evidence of
-    Spirit baptism" as an in-house debate — Phase 1 items 1.4/1.5 make the code
-    match this ruling.*
+    all. The neutrality list shrinks by one.
 11. **Healing mechanics, prophetic accountability, and apostolic authority stay
     debates** — presented with named teachers on both sides. Alex has no settled
     view and will let the corpus inform it over time. Caveat on record: what the

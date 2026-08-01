@@ -17,6 +17,52 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Phase 1.4 closed — normal answer path no longer treats
+tongues-as-initial-evidence as a debate (2026-08-01, repo-only, plain/direct
+terminal session, zero DB writes; build commit `813ae7b`, this records commit
+separate).** The position-paper router was hardened for Alex's 1 Aug tongues
+ruling in `01ca912` (items 1.5-1.7); this closes the OTHER code path — the
+normal-answer system prompt (`backend/app/system_prompt.txt`), the sole
+remaining site (confirmed by a repo-wide sweep) that still listed "whether
+tongues is the required initial evidence of Spirit baptism" among the in-house
+debates. Two edits: **(1)** removed that item from the in-house debate list —
+the three genuine debates (healing mechanics, prophetic accountability,
+apostolic authority) plus sanctification/eschatology remain; **(2)** rewrote
+the tongues settled-conviction bullet to state the house position —
+normal/expected accompanying sign, NOT required initial evidence, absence does
+not disqualify — worded to match the shipped tongues position paper
+(`sources/documents/speaking_in_tongues.md`) so the normal path and the
+position-paper path say the same thing. The guardrails text
+(`theological_guardrails.txt`) carried no debate list and was untouched;
+background-topic injection is DB-driven and injects the same house-position
+paper text, not a debate list. **Proven via the normal answer path**
+(`generate_real_answer`-shaped runner: real retrieval + real
+`ANSWER_SYSTEM_BLOCKS` + `claude-sonnet-4-5`, direct calls that bypass the
+`/chat` position-paper interception, so it exercises the normal path
+specifically — and note the canonical tongues question is intercepted by the
+position-paper path through the live endpoint, so testing the normal path for
+it *requires* this direct call). Same 4 questions and retrieval, before vs.
+after the edit: BEFORE, the tongues question answered as a staged two-position
+debate ("This is a genuine in-house debate... teachers differ", Michael Brown
+vs. Derek Prince, "come to your own conviction"); AFTER, it answers as the
+house position ("No — speaking in tongues is not required as initial
+evidence... its absence does not disqualify... normal and expected
+experience"), no debate framing, and it reframes the same two teachers as
+supporting the house position. The three genuine debate topics still present as
+debates in both runs (apostolic + prophetic name teachers on multiple sides;
+healing presents the range but names no individuals in either run — a
+thin-citable-corpus retrieval artifact identical before and after, not a prompt
+effect). **Cross-path consistency checked:** tongues = house position, and the
+three debates = debates, now agree between the normal path and the
+position-paper router (`STANDING_DEBATE_CONTRASTS` = exactly those three,
+tongues never among them). **CLAUDE.md decision #10's conflict flag cleared** —
+the flag named only the normal-path system prompt, its condition is now false,
+so it was removed per the eviction rule (the settled decision itself retained).
+The session's before/after runner lived in the scratchpad (not committed); the
+repo's own `sp1_answer_harness.py` is stale (imports a renamed `_get_anthropic`
+that no longer exists in `chat.py`) and was left untouched — the runner inlined
+the current-symbol equivalent rather than modify a committed helper.
+
 **Phase 1.5/1.6/1.7 fixed — position-paper router no longer over-matches
 (2026-08-01, repo-only, harness session — executor + planner-reviewer;
 build commit `01ca912`, this records commit separate).** Pulled forward on
@@ -75,7 +121,8 @@ session:** CLAUDE.md's Invariant/decision #10 conflict flag (the live
 *normal-path* system prompt/guardrails text still lists "whether tongues is
 the required initial evidence" as an in-house debate) is a different code
 path (`chat.py`'s system prompt, not the position-paper router) and a
-different piece of Phase 1 item 1.4 — untouched, still open.
+different piece of Phase 1 item 1.4 — **since closed** by the Phase 1.4
+session above (build commit `813ae7b`; CLAUDE.md decision #10 flag cleared).
 
 **Phase 0 §7a token-exhaustion degradation fixed — no scratchpad, no answer
 truncation on `/chat` (2026-08-01, repo-only, plain/direct terminal session,
@@ -387,11 +434,11 @@ milestone, not the immediate next slice.
    latency baseline before trusting it). Position-paper over-matching — the
    tongues-paper neutrality breach (1.5), the teacher-question hijack (1.6), the
    wrong-doctrine routing (1.7) — **done 2026-08-01** (see Current state above).
-   Next: reverse hidden-by-default + inventory (1.3); the remaining piece of the
-   doctrinal ruling (1.4) — the *normal-path* system prompt/guardrails text still
-   lists tongues-as-initial-evidence as an in-house debate (CLAUDE.md decision
-   #10's conflict flag), a different code path from the position-paper router
-   items 1.5-1.7 just fixed. See PLAN.md.
+   The normal-path doctrinal fix (1.4) — the system prompt listed
+   tongues-as-initial-evidence as an in-house debate — is **done 2026-08-01**
+   (build commit `813ae7b`; CLAUDE.md decision #10's conflict flag cleared; see
+   Current state above). Next: reverse hidden-by-default + inventory (1.3). See
+   PLAN.md.
 3. **Position layer — reframed to POST-LAUNCH (PLAN.md #48).** The plan's call:
    launch on the current answer path; make the source-blind position path the
    next milestone after launch, not a launch blocker. The serving path is built
