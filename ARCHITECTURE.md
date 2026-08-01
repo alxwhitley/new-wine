@@ -151,6 +151,20 @@ top 30 with `SOURCE_KIND_FUSION_WEIGHTS` (commentary ×0.6, book ×0.8, lexicon
 Chunking: magazine — tiktoken cl100k_base, 550 tokens, 80 overlap. Standalone —
 recursive character, 1000 chars, 200 overlap. Lexicon — one entry, one chunk.
 
+### Answer generation
+
+`chat.py` `generate()` streams `claude-sonnet-4-5` (`max_tokens=3000`, raised from
+1500 on 2026-08-01, commit `0ab9c60`, Phase 0 §7a) and emits ONLY the `<answer>`
+block; the `<thinking>`/`<research_analysis>` prefix is discarded, never streamed.
+**Hard guarantee (Phase 0 §7a): internal reasoning can never reach the user.** If
+the generation ends with no `<answer>` block (budget exhausted inside the hidden
+blocks), the fallback serves a fixed clean message — it emits `raw_full` only when
+that raw output contains NO reasoning tags (a benign plain-prose answer). If
+`<answer>` opened but hit the ceiling before `</answer>` (`stop_reason ==
+max_tokens`), one clean cutoff sentence is appended. SP1 `verify_references`
+(reference_verifier.py) then confirms the model's `<reference_mentions>` against
+real data before any study-panel links are surfaced.
+
 ---
 
 ## Position papers (house-voice answer path)

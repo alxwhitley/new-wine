@@ -105,9 +105,18 @@ the cap costs more only for answers that previously truncated (they now complete
 and are unaffected) — blended ~+$0.003/answer. Only `chat.py` has this
 `<answer>`-extraction + raw-fallback shape; `position_papers.py` (2048) and
 `study.py` (400) stream plain prose with no hidden blocks and were correctly left
-untouched. **Not pushed** (push deploys backend to Railway — separate decision).
-The position-paper over-matching (Phase 0 §7b, plan items 1.5–1.7) is a separate
-concurrent session — not touched here.
+untouched. **Pushed to Railway 2026-08-01** (Alex's call): `git push origin main`
+sent this fix (`0ab9c60`) plus the day's committed backlog through `6e48b9e` (10
+commits). The only other `backend/app/` runtime change in that push is the Phase
+1.1/1.2 concurrency fix (`9fdf8d2`) — both `/chat` fixes are now live-deploying;
+the position-layer commits in the same push touch only `scripts/`+`migrations/`
+(dormant, not imported by the backend; migrations 076/077 already applied to the
+live DB, so no schema drift). Railway auto-deploys from `main`; **build health not
+confirmed from this session** — the Railway CLI is present but unauthenticated
+(`railway login` needed to poll). First time this fix runs against the real
+endpoint (it was proven offline against a verbatim reproduction). The
+position-paper over-matching (Phase 0 §7b, plan items 1.5–1.7) was a separate
+concurrent session, **since landed** — see the entry above; not touched here.
 
 **Phase 1.1 + 1.2 fixed — request queuing and connection handling
 (2026-08-01, repo-only, plain/direct terminal session — two one-line-scale
@@ -359,12 +368,20 @@ Reprioritized 2026-08-01 by the adopted build plan (PLAN.md active phase
 sequence). Phase 0/1 lead; the position-layer cutover is now a post-launch
 milestone, not the immediate next slice.
 
-1. **Phase 0 — measurement (read-only, per the adopted plan).** Actual
-   fabrication rate with the corrected recognition; run-to-run variance on
-   repeated questions; false-positive rate of the two prototype deterministic
-   checks (Phase 2's teacher-name and numbers checks); live-answer latency
-   baseline. Sizes everything after it; input to Open Decision #20. See PLAN.md's
-   active phase sequence.
+1. **Phase 0 — measurement (read-only) — DONE 2026-08-01.**
+   `docs/audits/phase0_measurement_2026-08-01.md`. Key results: corrected
+   scripture-fabrication rate ~0% (the stale 72-reference number was a
+   compact-scanner artifact); teacher-attribution fabrication real but low
+   (1/26 baseline, incl. the dangerous verified-link `in_corpus_not_retrieved`
+   class — A.W. Tozer passed the SP1 verifier via a nested Precept-Austin quote);
+   fabrication is intermittent (3/12 questions flipped across 4 runs, 0/12
+   consistent) so single-run rates understate exposure; teacher-name check
+   prototype 0% false positives (125 attributions), numbers/absolutes check 100%
+   false positives (unusable as prototyped); latency baseline flagged STALE
+   (predates 9fdf8d2, local single-request) — **re-run from Railway is an open
+   follow-up.** Two unplanned findings were pulled forward and both fixed the same
+   day: §7a token-exhaustion (entry above, deployed) and §7b position-paper
+   over-matching (entry above). Input to Open Decision #20 (still HELD).
 2. **Phase 1 — stop the live contradictions.** Request queuing (1.1) + connection
    handling (1.2) **done 2026-08-01** (see Current state above — re-run Phase 0's
    latency baseline before trusting it). Position-paper over-matching — the
