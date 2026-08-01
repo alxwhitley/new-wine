@@ -17,6 +17,57 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Phase 1.1 + 1.2 fixed — request queuing and connection handling
+(2026-08-01, repo-only, plain/direct terminal session — two one-line-scale
+edits, not a harness build).** Root cause of 1.1 (concurrent requests
+serializing): `chat()` in `backend/app/routers/chat.py` was declared
+`async def` but its entire body is synchronous blocking I/O (Supabase REST
+calls, Groq query expansion, OpenAI embeddings, Cohere rerank, Anthropic
+streaming) with zero `await` anywhere — Starlette only offloads *sync*
+(`def`) endpoints to its worker thread pool, so the async-but-blocking
+handler monopolized the single event loop thread and every other request
+queued behind whichever request was currently running. Fix: dropped `async`
+from the signature (`def chat(...)`), letting FastAPI run each request via
+`run_in_threadpool` (anyio default capacity 40) — genuine concurrency, no
+`await` needed anywhere since nothing in the call chain was ever actually
+async. Root cause of 1.2 (compounding connection-handling issue):
+`get_supabase()` in `backend/app/db/supabase.py` called `create_client(url,
+key)` fresh on every single invocation (72 call sites codebase-wide) — a
+brand-new Supabase `Client` (its own auth/postgrest/realtime sub-clients,
+each with its own `httpx` connection pool) constructed per call, with no
+connection reuse across requests. Once 1.1 legitimately unlocked
+concurrency, this meant many concurrent requests would each independently
+pay fresh TCP+TLS setup simultaneously — exactly the compounding described
+in the build plan. Fix: made `get_supabase()` a module-level cached
+singleton (matching the existing `_ai`/`_cohere_client`/`_anthropic_client`
+lazy-singleton pattern already used elsewhere in this codebase); confirmed
+no per-request auth/session state is ever mutated on the shared client
+(grepped for `.auth.`/`session`/header mutation — none found), so sharing
+one instance across concurrent request threads is safe.
+**Verified with real before/after timing** (harness: real `chat.router`
+served by a real `uvicorn` instance; only the external network calls —
+Supabase client construction, Groq, OpenAI embeddings — were swapped for
+deterministic `time.sleep()`-based stand-ins so the exact blocking
+mechanism under test is preserved without needing live API keys; process
+caches pre-warmed before the timed burst so results reflect steady-state
+per-request cost, not one-time cold-cache cost). 6 concurrent requests to
+`/chat`: **before** — 3.317s total wall clock, every request individually
+~3.315s (fully serialized) and 6 separate `create_client()` calls; **after**
+— 0.554s total wall clock, every request individually ~0.551s (genuinely
+concurrent) and 0 additional `create_client()` calls (singleton reused).
+~6x wall-clock improvement for 6 concurrent requests, matching the
+predicted mechanism exactly. **Flagged, not fixed this session:** this same
+`async def` + fully-synchronous-body pattern exists in essentially every
+other router in the backend (admin.py, study.py, library.py, search.py,
+etc.) — this session touched only `chat.py` (the answer endpoint) and
+`db/supabase.py` (shared connection layer), per the session's explicit
+scope. **Prompt A's live-answer latency baseline (Phase 0 measurement) is
+now stale and must be re-run after this fix** — any measurement taken
+before this session would have been measuring artificially serialized
+request handling and would not reflect true post-fix concurrent-load
+latency. Commit: build commit for the two code files; this file is the
+separate records commit, per the standing two-commits-per-session pattern.
+
 **Build plan adopted (2026-08-01) — accuracy / anti-fabrication sequence, Phases
 0–3; now the front-of-queue priority.** Written from four adversarial architecture
 audits (Claude + Codex, two rounds each, the last two with live DB access, which
@@ -223,10 +274,11 @@ milestone, not the immediate next slice.
    baseline. Sizes everything after it; input to Open Decision #20. See PLAN.md's
    active phase sequence.
 2. **Phase 1 — stop the live contradictions.** Request queuing (1.1) + connection
-   handling (1.2) first; reverse hidden-by-default + inventory (1.3); the
-   doctrinal ruling before router work (1.4); the tongues-paper neutrality breach
-   (1.5); the teacher-question hijack (1.6); the wrong-doctrine routing (1.7).
-   See PLAN.md.
+   handling (1.2) **done 2026-08-01** (see Current state above — re-run Phase 0's
+   latency baseline before trusting it). Next: reverse hidden-by-default +
+   inventory (1.3); the doctrinal ruling before router work (1.4); the
+   tongues-paper neutrality breach (1.5); the teacher-question hijack (1.6); the
+   wrong-doctrine routing (1.7). See PLAN.md.
 3. **Position layer — reframed to POST-LAUNCH (PLAN.md #48).** The plan's call:
    launch on the current answer path; make the source-blind position path the
    next milestone after launch, not a launch blocker. The serving path is built
