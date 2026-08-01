@@ -9,6 +9,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.llm_client import get_anthropic_client
+from app.services.source_resolver import normalize_alias_key
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,109 @@ TONGUES_CONTRAST_BAPTISM = (
 # with margin (smallest: TP2 itself, at +0.0475 above the new threshold).
 TONGUES_MATCH_THRESHOLD = 0.3631
 
+# ── Additional contrast anchors — found live, 2026-08-01 (Phase 0 measurement
+# pass, docs/audits/phase0_measurement_2026-08-01.md §7b) ──────────────────
+# Two genuine anchor-vocabulary contamination cases, each fixed the SAME way
+# the two 2026-07-31 bug fixes above were fixed: a new, disclosed, targeted
+# contrast anchor — never by editing a positive anchor's own wording (that
+# would shift every question's pos_sim, not just the contaminating one).
+
+# baptism_holy_spirit's own anchor description contains the word "salvation"
+# (it defines Spirit baptism as "separate from and subsequent to salvation"),
+# which pulled in topically-unrelated eternal-security questions ("Can a
+# believer lose their salvation?") purely on shared vocabulary. Verified live
+# (real OpenAI embeddings, 2026-08-01): two phrasings of that exact question
+# scored pos_sim 0.3401/0.3500 against baptism — barely above
+# BAPTISM_MATCH_THRESHOLD (0.3262) and, against only the OLD contrast set,
+# margins of +0.0519/+0.0889 — nowhere near as confident as a genuine
+# baptism match (the thinnest genuine margin found, P1, is +0.0113, but P1's
+# raw pos_sim is 0.4503, well above the salvation questions' 0.34-0.35
+# cluster). Adding this contrast anchor pushes both salvation phrasings to a
+# comfortably negative margin (-0.39 / -0.35) while leaving P1 and every
+# other genuine baptism match unaffected (confirmed: P1's margin is
+# untouched at 0.0113 because this anchor does not score higher than P1's
+# existing max contrast for that question).
+BAPTISM_CONTRAST_SALVATION = (
+    "Whether a believer can lose their salvation, and the permanence and "
+    "security of salvation itself — a distinct question of soteriology and "
+    "eternal security, not the baptism of the Holy Spirit as a separate "
+    "empowering work subsequent to being saved."
+)
+
+# speaking_in_tongues' anchor description includes "private prayer language
+# for personal communion with God" — generic enough to pull in questions
+# about hearing God's voice, personal guidance, and everyday spiritual
+# communion generally, none of which are about tongues specifically.
+# Verified live (real OpenAI embeddings, 2026-08-01): "How do I hear God's
+# voice in daily life?" scored pos_sim 0.3665 against tongues — barely above
+# TONGUES_MATCH_THRESHOLD (0.3631) and, against only the old contrast set, a
+# thin +0.0220 margin. Two sibling general-topic questions ("What does it
+# mean to fear the Lord?", "What is intercession and how do I practice it?")
+# were also checked and also over-matched before this anchor was added.
+# Adding it pushes all three to a comfortably negative margin.
+TONGUES_CONTRAST_COMMUNION = (
+    "Hearing God's voice, personal guidance, and everyday spiritual "
+    "communion with God through prayer, Scripture, and the inner witness of "
+    "the Spirit — a broad Christian-life topic distinct from the specific "
+    "supernatural gift of speaking in an unlearned tongue."
+)
+
+# ── Standing debate-topic contrasts — SHARED across every pillar, current
+# and future (Alex's ruling, 2026-08-01, pulled forward from Phase 1 items
+# 1.5-1.7 per the Phase 0 report): healing mechanics, prophetic
+# accountability, and apostolic authority remain live debates, presented
+# with named teachers on both sides — never settled Rhemata teaching. This
+# is exactly the structural fix Phase 0's finding called for: adding a new
+# pillar's own contrast anchors previously did nothing to protect a SIBLING
+# pillar or any FUTURE pillar from over-matching one of these three topics —
+# each pillar's contrast_anchors list only ever defended that one pillar.
+# These three anchors are merged into every pillar's contrast_sim at score
+# time (see _pillar_scores below) rather than copy-pasted into each pillar's
+# own contrast_anchors — a future pillar registered in PILLARS inherits this
+# protection automatically, with no new code and nothing to remember.
+HEALING_MECHANICS_DEBATE = (
+    "The mechanics of physical healing — whether healing is guaranteed in "
+    "the atonement for every believer today, why some who pray in faith are "
+    "healed and others are not, and how faith operates in receiving "
+    "healing. Teachers hold differing views on this; it is a live debate, "
+    "not settled house teaching."
+)
+PROPHETIC_ACCOUNTABILITY_DEBATE = (
+    "How a prophetic word should be tested, weighed, and held accountable "
+    "in the church, and the boundaries of prophetic authority and "
+    "correction. Teachers hold differing views on this; it is a live "
+    "debate, not settled house teaching."
+)
+APOSTOLIC_AUTHORITY_DEBATE = (
+    "The nature and boundaries of apostolic authority today, whether the "
+    "office of apostle continues, and how apostolic ministry should be "
+    "exercised and held accountable. Teachers hold differing views on "
+    "this; it is a live debate, not settled house teaching."
+)
+STANDING_DEBATE_CONTRASTS = [
+    HEALING_MECHANICS_DEBATE,
+    PROPHETIC_ACCOUNTABILITY_DEBATE,
+    APOSTOLIC_AUTHORITY_DEBATE,
+]
+
+# Minimum required margin between a pillar's pos_sim and its (pillar-owned +
+# shared standing-debate) contrast_sim to qualify — replaces a bare `>`
+# comparison, which let a razor-thin, unstable margin (found live: the
+# salvation question above routed on a margin under 0.002 difference
+# between two phrasings of the identical question, before the contrast
+# anchor above was added) confidently commit to an uncited house-voice
+# answer. Calibrated against two real, live-measured floors, not picked in
+# isolation: the smallest margin found among GENUINE matches is P1's
+# +0.0113 (baptism, unchanged since 2026-07-31 calibration — see
+# BAPTISM_MATCH_THRESHOLD's neighboring comment); every contaminated
+# false-positive margin measured 2026-08-01, after the two new contrast
+# anchors above already do most of the work, is comfortably negative.
+# 0.008 sits with real buffer below the genuine floor (0.0113) without
+# needing to be pushed flush against it — a defense-in-depth backstop for
+# future thin-margin cases the anchors above don't happen to cover, not the
+# primary mechanism for any of the cases fixed this pass.
+MIN_QUALIFY_MARGIN = 0.008
+
 # ── The registry ─────────────────────────────────────────────────────────
 # Every per-pillar behavior this module needs is expressed here as data —
 # no `if pillar_key == ...` branch exists anywhere below this point. If a
@@ -162,7 +266,7 @@ PILLARS = [
         "pillar_key": "baptism_holy_spirit",
         "document_id": "a3884084-46f8-40be-929f-e34cb63ba8ac",
         "positive_anchors": [BAPTISM_ANCHOR_TITLE, BAPTISM_ANCHOR_DESCRIPTION],
-        "contrast_anchors": [BAPTISM_CONTRAST_WATER, BAPTISM_CONTRAST_GIFTS_GENERAL, BAPTISM_CONTRAST_PROPHECY],
+        "contrast_anchors": [BAPTISM_CONTRAST_WATER, BAPTISM_CONTRAST_GIFTS_GENERAL, BAPTISM_CONTRAST_PROPHECY, BAPTISM_CONTRAST_SALVATION],
         "match_threshold": BAPTISM_MATCH_THRESHOLD,
         "voice_topic_name": "the baptism of the Holy Spirit",
         "tie_break_priority": 0,
@@ -171,7 +275,7 @@ PILLARS = [
         "pillar_key": "speaking_in_tongues",
         "document_id": "b884a5e1-d786-452f-8bf8-454bca0ab129",
         "positive_anchors": [TONGUES_ANCHOR_TITLE, TONGUES_ANCHOR_DESCRIPTION],
-        "contrast_anchors": [TONGUES_CONTRAST_GIFTS, TONGUES_CONTRAST_PROPHECY, TONGUES_CONTRAST_BAPTISM],
+        "contrast_anchors": [TONGUES_CONTRAST_GIFTS, TONGUES_CONTRAST_PROPHECY, TONGUES_CONTRAST_BAPTISM, TONGUES_CONTRAST_COMMUNION],
         "match_threshold": TONGUES_MATCH_THRESHOLD,
         "voice_topic_name": "speaking in tongues",
         "tie_break_priority": 1,
@@ -217,6 +321,32 @@ def _cosine(a: List[float], b: List[float]) -> float:
 # flat set of module globals). ────────────────────────────────────────────
 _anchor_cache = {}  # type: Dict[str, dict]
 
+# Standing debate-topic contrast embeddings — embedded ONCE for the whole
+# process (identical for every pillar), never per-pillar. Kept separate
+# from _anchor_cache (which is keyed per pillar) since these are shared,
+# not pillar-owned.
+_standing_debate_vecs = None  # type: Optional[List[List[float]]]
+
+
+def _ensure_standing_debate_contrasts():
+    # type: () -> List[List[float]]
+    global _standing_debate_vecs
+    if _standing_debate_vecs is not None:
+        return _standing_debate_vecs
+    try:
+        _standing_debate_vecs = [embed_text(c) for c in STANDING_DEBATE_CONTRASTS]
+        logger.info(
+            "Standing debate-topic contrasts embedded and cached: %d anchors",
+            len(_standing_debate_vecs),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to embed standing debate-topic contrasts — falling back "
+            "to per-pillar contrasts only"
+        )
+        return []
+    return _standing_debate_vecs
+
 
 def _ensure_anchors(pillar: dict) -> None:
     key = pillar["pillar_key"]
@@ -243,46 +373,185 @@ def _pillar_scores(pillar: dict, q_vec: List[float]) -> Optional[Tuple[float, fl
     """Return (pos_sim, contrast_sim) for one pillar against an already-
     embedded question vector, or None if this pillar's anchors aren't
     available this call. pos_sim is the max similarity across all of this
-    pillar's positive anchors; contrast_sim is the max across all of its
-    contrast anchors (beating the max is equivalent to beating every one
-    individually)."""
+    pillar's positive anchors; contrast_sim is the max similarity across
+    this pillar's OWN contrast anchors AND the shared
+    STANDING_DEBATE_CONTRASTS (beating the max is equivalent to beating
+    every one individually)."""
     _ensure_anchors(pillar)
     cached = _anchor_cache.get(pillar["pillar_key"])
     if not cached or not cached.get("loaded"):
         return None
     pos_sim = max(_cosine(q_vec, v) for v in cached["positive_vecs"])
-    contrast_sim = max(_cosine(q_vec, v) for v in cached["contrast_vecs"])
+    all_contrast_vecs = cached["contrast_vecs"] + _ensure_standing_debate_contrasts()
+    contrast_sim = max(_cosine(q_vec, v) for v in all_contrast_vecs)
     return pos_sim, contrast_sim
+
+
+# ── Highest-priority gates — evaluated BEFORE any embedding similarity is
+# computed, and BEFORE match_position_paper's own qualification logic runs
+# at all (Alex's ruling, Phase 1 items 1.5-1.7). Both are deterministic: no
+# embedding math can override either. This is the fix for the root
+# fragility Phase 0 found, not a per-symptom patch — every future pillar
+# calls the SAME match_position_paper() entry point, so both gates apply
+# automatically without the next pillar's author needing to remember them.
+
+_teacher_aliases_cache = None  # type: Optional[set]
+_teacher_aliases_load_failed = False
+
+
+def _ensure_teacher_aliases() -> None:
+    """Lazy-load + cache every known source_aliases.alias_key once per
+    process (read-only SELECT, same caching discipline as _ensure_body /
+    _ensure_anchors above). 98 rows as of 2026-08-01 — small enough to hold
+    in memory whole, same pattern chat.py's own match_background_topics()
+    already uses for background-topic aliases.
+
+    On load failure, does NOT cache an empty set — that would make
+    _mentions_named_teacher return False for every question, silently
+    disabling the veto (fail OPEN onto a misattribution risk, CLAUDE.md
+    ranked failure mode 2). Instead sets _teacher_aliases_load_failed, so
+    _mentions_named_teacher fails CLOSED: every question is treated as if
+    it might name a teacher until this is fixed, deferring to the normal
+    teacher-citation path rather than risking an uncited house-voice
+    answer with a real teacher erased.
+    """
+    global _teacher_aliases_cache, _teacher_aliases_load_failed
+    if _teacher_aliases_cache is not None or _teacher_aliases_load_failed:
+        return
+    try:
+        db = get_supabase()
+        result = db.table("source_aliases").select("alias_key").execute()
+        _teacher_aliases_cache = {
+            r["alias_key"] for r in (result.data or []) if r.get("alias_key")
+        }
+        logger.info(
+            "Loaded %d source aliases for position-paper teacher-name gate",
+            len(_teacher_aliases_cache),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to load source_aliases — position-paper teacher-name "
+            "gate fails CLOSED for this process (every question is treated "
+            "as if it might name a teacher, so nothing is intercepted by a "
+            "position paper until this is fixed, rather than failing open "
+            "onto a misattribution risk)"
+        )
+        _teacher_aliases_load_failed = True
+
+
+def _mentions_named_teacher(question: str) -> bool:
+    """Return True if `question` names any known corpus teacher/source
+    alias. Highest-priority gate (Phase 1 item 1.6): a question naming a
+    specific teacher must never be intercepted by a position paper and
+    answered in Rhemata's own uncited voice with that teacher absent
+    entirely — confirmed live on two teachers (Derek Prince, Zac Poonen)
+    against speaking_in_tongues, 2026-08-01.
+
+    Reuses the canonical alias_key normalization
+    (app.services.source_resolver.normalize_alias_key — Invariant 6, never
+    forked) and substring-matches the question against every known alias,
+    the same pattern chat.py's own match_background_topics() already uses
+    for background-topic aliases. Uses a bare substring test, not a regex
+    word-boundary match, since alias_key rows are themselves normalized
+    (lowercase, whitespace-collapsed) multi-word names/phrases (minimum
+    length 6 chars, e.g. "derek prince", "zac poonen") — the same
+    false-positive risk profile already accepted for background topics.
+
+    Fails CLOSED, not open: if source_aliases can't be loaded
+    (_teacher_aliases_load_failed), returns True unconditionally — every
+    question is treated as if it might name a teacher, so
+    match_position_paper defers to the normal teacher-citation path rather
+    than risk answering a genuinely teacher-named question in uncited
+    house voice with the teacher erased (CLAUDE.md ranked failure mode 2 —
+    worse than the minor cost of one request not getting the faster
+    house-voice answer).
+    """
+    _ensure_teacher_aliases()
+    if _teacher_aliases_load_failed:
+        return True
+    q = normalize_alias_key(question)
+    return any(alias in q for alias in _teacher_aliases_cache)
+
+
+_RETRIEVAL_INTENT_RE = re.compile(
+    r"\bwhich\s+teachers?\b"
+    r"|\bwhat\s+(?:do|does)\s+.{0,40}?\bteachers?\b"
+    r"|\bwho\s+teaches?\b"
+    r"|\bteachers?\s+(?:say|teach|believe|think)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_retrieval_intent(question: str) -> bool:
+    """Return True if `question` is asking FOR teacher citations/attribution
+    ("which teachers...", "what do teachers say...", "who teaches...")
+    rather than a topical question a house-voice paper could answer. A
+    position paper names no teachers by design (see the voice system
+    prompt below) — intercepting a retrieval-intent question would silently
+    answer a citation request with zero citations. Phase 1 items 1.6/1.7 —
+    the T4 ("Which teachers in the library teach on speaking in tongues?")
+    and H3 ("What do charismatic teachers say about...") symptoms.
+
+    Deliberately phrase-general (any pillar, any topic), not keyed to
+    "tongues" or "healing" specifically — a structural fix, not a
+    per-topic exclusion.
+    """
+    return bool(_RETRIEVAL_INTENT_RE.search(question))
 
 
 def match_position_paper(question: str) -> Optional[str]:
     """Return the pillar_key of whichever registered pillar `question`
-    semantically matches, or None if it matches none.
+    semantically matches, or None if it matches none or is gated out.
 
-    Embeds the question ONCE regardless of how many pillars are registered
-    (N+1 discipline) and reuses that single vector against every pillar's
-    cached anchors.
+    Priority order (Alex's ruling, 2026-08-01, Phase 1 items 1.5-1.7 — the
+    fix for Phase 0's confirmed, deterministic over-matching):
 
-    Per-pillar qualification (unchanged from the original single-pillar
-    design, just applied per pillar now): a pillar qualifies if BOTH
-      (a) pos_sim (max similarity across its positive anchors) clears its
-          own match_threshold, AND
-      (b) pos_sim is GREATER than contrast_sim (max similarity across its
-          own contrast anchors).
-    This stays fully semantic per pillar: no phrase blocklist, no
-    hardcoded topic-name string matching anywhere in this function.
+      0. HIGHEST PRIORITY, evaluated first, before any embedding call: if
+         `question` names a specific corpus teacher
+         (_mentions_named_teacher) or is shaped as a request for teacher
+         citations (_is_retrieval_intent), return None immediately. No
+         pillar's embedding similarity can override this — a position
+         paper names no teachers, so either case would silently strip the
+         citations/attribution the question asked for.
 
-    Cross-pillar arbitration (Alex's decision, 2026-07-30 — see
-    TIE_BREAK_EPSILON above for the full justification): among all
-    qualifying pillars, the one with the HIGHEST pos_sim wins — UNLESS the
-    top-scoring pillars are within TIE_BREAK_EPSILON of the leader's
-    pos_sim, in which case the tie is broken by tie_break_priority instead
-    (lowest number wins; baptism_holy_spirit is priority 0, so it wins any
-    near-tie against a lower-priority pillar regardless of which one
-    nominally scored higher). This never falls back to dict/list iteration
-    order — every path through this function's decision is keyed on either
-    pos_sim or an explicit, data-driven tie_break_priority field.
+      1. Embed the question ONCE regardless of how many pillars are
+         registered (N+1 discipline) and reuse that single vector against
+         every pillar's cached anchors.
+
+      2. Per-pillar qualification: a pillar qualifies if BOTH
+           (a) pos_sim (max similarity across its positive anchors) clears
+               its own match_threshold, AND
+           (b) pos_sim clears contrast_sim (max similarity across this
+               pillar's OWN contrast anchors AND the shared
+               STANDING_DEBATE_CONTRASTS — healing mechanics, prophetic
+               accountability, apostolic authority, per Alex's ruling that
+               these stay debates on every pillar, present and future) by
+               at least MIN_QUALIFY_MARGIN — not a bare `>`. A razor-thin
+               margin (found live: under 0.002 between two phrasings of the
+               same salvation question) no longer qualifies; on genuinely
+               ambiguous ground, this defaults to NOT intercepting rather
+               than confidently committing to an uncited house-voice
+               answer.
+         This stays fully semantic per pillar: no phrase blocklist, no
+         hardcoded topic-name string matching anywhere in this scoring step
+         (the two gates in step 0 are the only phrase/name-based logic in
+         this whole function, and they gate ALL pillars uniformly, not one
+         pillar's topic).
+
+      3. Cross-pillar arbitration (Alex's decision, 2026-07-30 — see
+         TIE_BREAK_EPSILON above for the full justification): among all
+         qualifying pillars, the one with the HIGHEST pos_sim wins — UNLESS
+         the top-scoring pillars are within TIE_BREAK_EPSILON of the
+         leader's pos_sim, in which case the tie is broken by
+         tie_break_priority instead (lowest number wins; baptism_holy_spirit
+         is priority 0). This never falls back to dict/list iteration order
+         — every path through this function's decision is keyed on pos_sim,
+         MIN_QUALIFY_MARGIN, or an explicit, data-driven tie_break_priority
+         field.
     """
+    if _mentions_named_teacher(question) or _is_retrieval_intent(question):
+        return None
+
     q_vec = embed_text(question)
 
     qualifying = []  # type: List[Tuple[dict, float]]
@@ -291,7 +560,7 @@ def match_position_paper(question: str) -> Optional[str]:
         if scores is None:
             continue
         pos_sim, contrast_sim = scores
-        if pos_sim >= pillar["match_threshold"] and pos_sim > contrast_sim:
+        if pos_sim >= pillar["match_threshold"] and (pos_sim - contrast_sim) >= MIN_QUALIFY_MARGIN:
             qualifying.append((pillar, pos_sim))
 
     if not qualifying:
