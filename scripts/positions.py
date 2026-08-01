@@ -21,18 +21,26 @@ from `propositions` (never `chunks`) and hands generate_position_text()
 nothing but that table's own `content` column.
 
 --------------------------------------------------------------------------
-Corpus-wide positions: refused twice, not once
+Two scopes ('teacher' | 'corpus'): still double-locked
 --------------------------------------------------------------------------
-Alex's standing ruling (2026-07-28): corpus-wide positions are banned until
-the propositions backfill (#49) completes -- a corpus-wide position authored
-today would name whichever teachers happen to already have statements as
-"the corpus" and invert the day Derek Prince's ~429 documents land. This is
-enforced twice: write_position() raises ValueError before ever opening a
-transaction if kind != "teacher" (this module's own gate), AND the
-`positions` table's CHECK (kind = 'teacher') constraint (migration 073)
-would reject the INSERT even if this module's own gate were bypassed or
-forked. Widening either requires a deliberate code change / migration, not
-a runtime flag.
+Corpus-wide positions were BANNED until 2026-08-01, then UNBANNED on Alex's
+explicit decision that day (the #49 backfill -- 850/857 eligible documents,
+incl. 477 of Derek Prince's -- satisfied the precondition CLAUDE.md
+Invariant 13 named; the original ban existed because a corpus-wide position
+authored before Prince's material landed would have named whichever teachers
+happened to already have statements as "the corpus" and inverted the day his
+documents were processed). A position's scope is now one of exactly two
+values, and that set is still enforced twice, not once: write_position()
+raises ValueError before ever opening a transaction if kind is not in
+('teacher','corpus') (this module's own gate), AND the `positions` table's
+CHECK (kind IN ('teacher','corpus')) constraint (migration 076, widened from
+073's teacher-only lock) would reject the INSERT even if this module's own
+gate were bypassed or forked. Widening to a THIRD scope requires a
+deliberate code change AND a migration, never a runtime flag -- both locks
+have to agree. A teacher position names exactly one source (source_id NOT
+NULL); a corpus position names none (source_id NULL) and derives its
+contributing teachers from its evidence -- enforced by migration 076's
+scope/source coupling CHECK.
 
 --------------------------------------------------------------------------
 Honest-empty: the evidence-count floor
@@ -511,13 +519,17 @@ def write_position(
     `position_evidence` in ONE transaction (evidence rows and the position
     row must never exist independently of each other) and returns the
     written row's id."""
-    if kind != "teacher":
+    if kind not in ("teacher", "corpus"):
         raise ValueError(
-            f"write_position: kind={kind!r} is not permitted -- corpus-wide "
-            "positions are banned per Alex's 2026-07-28 ruling (PLAN.md "
-            "#48) until the propositions backfill (#49) completes. This "
-            "check exists in addition to the DB's own CHECK (kind = "
-            "'teacher') constraint, not instead of it."
+            f"write_position: kind={kind!r} is not permitted -- a position is "
+            "scoped to exactly 'teacher' or 'corpus'. Corpus-wide positions "
+            "were unbanned on Alex's explicit 2026-08-01 decision (PLAN.md "
+            "#48), after the #49 backfill (850/857 eligible documents, incl. "
+            "477 Derek Prince) satisfied the precondition CLAUDE.md Invariant "
+            "13 named. This application check is a SECOND, independent lock in "
+            "addition to the DB's own CHECK (kind IN ('teacher','corpus')) "
+            "constraint (migration 076), never instead of it -- widening to a "
+            "third scope requires deliberately changing BOTH."
         )
 
     if len(evidence) < min_evidence_count:
