@@ -185,12 +185,24 @@ harness session — remains open. Proofs:
 
 ## Next
 
-1. **Blocker #4 — route `ingest_helloao.py` through `shared_ingest`.** Sole
+1. **Position layer — next slice (PLAN.md #48, follows the 2026-08-01 serving
+   path).** The serving path is built and proven standalone but NOT wired into
+   chat. Next: (a) **materialize eligibility** — the pass-both set is CPU-bound
+   to compute whole-corpus (~15+ min) and cannot run at question time; the
+   serving path uses a lazy checker as a stopgap, but the live cutover needs a
+   stored/refreshed-at-ingest eligibility signal first; (b) wire `serve_position`
+   into the live chat answer path + migrate `get_teacher_card()` off live
+   source-text synthesis (still the standing leak); (c) calibrate the still-
+   provisional floors (evidence-count 5 / similarity 0.45 / dominance 0.60);
+   (d) a draft-rows review/approval UI (also the sequenced home for the Open
+   Decision #20 side-by-side verification). The 3 draft positions written this
+   session await that review.
+2. **Blocker #4 — route `ingest_helloao.py` through `shared_ingest`.** Sole
    remaining chokepoint conversion; unblocks HelloAO commentary growth
    (PLAN.md #27) only, not corpus growth generally.
-2. **Folder renames** (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop
+3. **Folder renames** (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop
    the orphaned `jewish_perspectives` table.
-3. **Staging Supabase + backup/restore test.** The `sources/` backup exists
+4. **Staging Supabase + backup/restore test.** The `sources/` backup exists
    (2026-07-19) but a restore has never been verified — do not assume it works
    until tested.
 
