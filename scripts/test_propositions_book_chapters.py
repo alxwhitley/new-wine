@@ -1473,6 +1473,81 @@ def test_matter_digit_ratio_fix():
           "and True Vine's index spans (unaffected regression check).")
 
 
+def test_matter_byline_over_broad_content_lines():
+    print("\n" + "=" * 78)
+    print("18. Byline detector over-broadness guard (regression for CLAUDE.md Landmine): "
+          "genuine content lines opening 'By ...' are NOT flagged as front matter")
+    print("=" * 78)
+
+    # DB-FREE: pure synthetic strings -- this exercises _has_third_party_byline
+    # /is_front_back_matter's string logic only, no real book needed.
+    #
+    # The documented risk (CLAUDE.md Landmines, "_has_third_party_byline is
+    # over-broad and unproven beyond one book"): _BYLINE_RE is ^\s*by\s+(.+?)\s*$,
+    # so ANY short line-start "By <phrase>" whose words don't overlap the author's
+    # name fires -- including a genuine theological line like "By faith alone" or
+    # "By the grace of God", NOT only a real person-credit. The guard that
+    # protects real prose is the <=12-word cap inside _has_third_party_byline (a
+    # real byline is always short): a genuine content SENTENCE opening with one of
+    # these phrases runs well past 12 words and is never treated as a byline at
+    # all. This test locks that guard in, using the exact two phrases the Landmine
+    # names -- the negative case that previously had no committed regression.
+    author = "Andrew Murray"
+
+    content_lines = [
+        # 20 words -- opens "By faith alone", the Landmine's own example.
+        ("By faith alone are we justified before God, apart from any works of the "
+         "law or merit of our own doing."),
+        # 24 words -- opens "By the grace of God" (1 Cor 15:10-shaped content).
+        ("By the grace of God I am what I am, and his grace toward me was not in "
+         "vain, but I labored even more than they all."),
+    ]
+    for line in content_lines:
+        assert len(line.split()) > 12, "fixture must exceed the 12-word byline cap to prove the guard"
+        fired = pm._has_third_party_byline(line, author)
+        print(f"  {len(line.split()):2d}w  _has_third_party_byline = {fired!r}  | {line[:50]}...")
+        assert fired is False, (
+            f"a genuine >12-word content line opening 'By ...' must NOT be flagged as a "
+            f"third-party byline, got fired={fired} for: {line!r}"
+        )
+
+    # Full end-to-end: such a line, under an ordinary (non-matter) chapter label,
+    # classifies as content -- (False, "") -- not front/back matter.
+    span_text = (
+        "The Life of Faith\n"
+        "The Life of Faith\n"
+        "THE LIFE OF FAITH\n"
+        + content_lines[0] + "\n"
+        + content_lines[1] + "\n"
+        "This is genuine teaching content, long enough to clear the thin-word-count "
+        "floor and never intended as any kind of front or back matter.\n"
+    )
+    matter, reason = pm.is_front_back_matter("The Life of Faith", span_text, author=author)
+    print(f"  end-to-end is_front_back_matter -> matter={matter} reason={reason!r}")
+    assert (matter, reason) == (False, ""), (
+        f"expected a content span opening with 'By faith alone ...' / 'By the grace of God ...' "
+        f"to be content, got {(matter, reason)}"
+    )
+
+    # Characterization of the KNOWN, still-open limitation (same CLAUDE.md
+    # Landmine): a BARE short "By <phrase>" line (<=12 words) DOES still fire
+    # today. Asserted deliberately so that if the detector is ever hardened
+    # (e.g. requiring the credited phrase to look like a personal name), this
+    # assertion fails and forces a synchronized update to the Landmine -- it is
+    # NOT an endorsement of the current behavior.
+    for bare in ("By faith alone", "By the grace of God"):
+        fires = pm._has_third_party_byline(bare, author)
+        print(f"  KNOWN-LIMITATION  bare {bare!r} still fires? {fires}")
+        assert fires is True, (
+            f"characterization drift: bare {bare!r} no longer fires -- the byline detector "
+            f"appears to have been hardened; update CLAUDE.md's over-broad-byline Landmine to match"
+        )
+
+    print("\nPASSED: 18. Genuine content lines opening 'By faith alone ...' / 'By the grace of "
+          "God ...' are content, not front matter; the bare-short-line over-broadness is pinned "
+          "as a known, documented limitation.")
+
+
 if __name__ == "__main__":
     test_clear_existing_default_and_false()
     test_extract_and_store_book_chapters_buckets()
@@ -1490,6 +1565,7 @@ if __name__ == "__main__":
     test_matter_byline_detector()
     test_matter_apparatus_labels()
     test_matter_digit_ratio_fix()
+    test_matter_byline_over_broad_content_lines()
     print("\n" + "=" * 78)
     print("ALL test_propositions_book_chapters.py ASSERTIONS PASSED")
     print("=" * 78)
