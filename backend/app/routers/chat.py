@@ -926,6 +926,8 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
         # Stream from Anthropic Claude, extracting only <answer> content (Change 4: singleton)
         raw_full = []
         answer_parts = []
+        stop_reason = None  # captured from the message_delta event; drives the
+                            # budget-exhaustion handling below (Phase 0 §7a fix).
         in_answer = False
         answer_closed = False  # SP1: once True, never re-enter in_answer — protects
                                 # against a stray "<answer>" substring appearing in
@@ -957,7 +959,17 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             client = get_anthropic_client()
             stream = client.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=1500,
+                # Phase 0 §7a: at 1500 the hidden <thinking>/<research_analysis>
+                # blocks exhausted the budget before <answer> completed on ~27% of
+                # long-context answers (measured), starving or blocking the visible
+                # answer. 3000 gives headroom for reasoning + a full answer + the
+                # <reference_mentions> block even in the worst measured case
+                # (~1340-token thinking). Cost note: this raises per-answer cost ONLY
+                # for answers that previously truncated (they now run to completion,
+                # ~+700 output tokens ≈ +$0.01 each at Sonnet output pricing); answers
+                # that already completed under 1500 stop naturally at </answer> and
+                # generate no more, so they are unaffected.
+                max_tokens=3000,
                 system=ANSWER_SYSTEM_BLOCKS,
                 messages=history,
                 stream=True,
@@ -972,6 +984,13 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
                             getattr(usage, "cache_read_input_tokens", 0) or 0,
                             getattr(usage, "input_tokens", 0),
                         )
+                    continue
+                if event.type == "message_delta":
+                    # Carries the final stop_reason ("end_turn" | "max_tokens" | ...).
+                    # Needed to tell a budget-cut generation from a clean finish below.
+                    sr = getattr(getattr(event, "delta", None), "stop_reason", None)
+                    if sr:
+                        stop_reason = sr
                     continue
                 if event.type == "content_block_delta" and hasattr(event.delta, "text"):
                     text = event.delta.text
@@ -1032,24 +1051,60 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             yield _sse("[DONE]")
             return
 
-        # If stream ended mid-answer, flush remaining buffer
+        # If stream ended mid-answer, flush remaining buffer. This is real answer
+        # content only — the in_answer gate above guarantees pre-<answer> reasoning
+        # is never emitted here — so it is always safe to stream. With max_tokens
+        # raised above this is rare.
         if in_answer and buffer:
             answer_parts.append(buffer)
             yield _sse(json.dumps({"token": buffer}))
             buffer = ""
 
-        # If we never found <answer> tags, the full raw output is the answer.
-        # SP1: strip anything from a stray <reference_mentions> tag onward first —
-        # a malformed generation could otherwise leak that block into what the
-        # user reads (Global Constraint: answer text must be byte-for-byte
-        # unaffected by anything added for the new block, even on malformed output).
+        # Truncation safety net (Phase 0 §7a): the <answer> opened but the token
+        # ceiling was hit before </answer>. The streamed text is a real, incomplete
+        # answer (never reasoning), so we keep it and add ONE clean honest sentence
+        # so the user isn't left mid-thought. Gated on stop_reason == "max_tokens"
+        # so a model that simply finished without emitting </answer> (end_turn) is
+        # NOT mislabelled as truncated. With the raised budget this should not fire
+        # for normal answers; it is a backstop, not the primary fix.
+        if in_answer and not answer_closed and stop_reason == "max_tokens":
+            note = ("\n\n_(This answer was cut off before it finished — ask a follow-up "
+                    "to continue.)_")
+            answer_parts.append(note)
+            yield _sse(json.dumps({"token": note}))
+            logger.warning("Answer hit the token ceiling mid-<answer> — appended cutoff note")
+
+        # HARD GUARANTEE (Phase 0 §7a): internal reasoning must NEVER reach the user.
+        # answer_parts is empty only when no <answer> block was ever emitted — which,
+        # given the mandated <thinking>/<research_analysis>/<answer> structure, means
+        # the budget was exhausted inside the hidden reasoning blocks. The previous
+        # code streamed raw_full here, leaking that scratchpad verbatim to the user
+        # (the "no-answer-block" failure the Phase 0 report measured on H2). Never do
+        # that: if the raw output carries any reasoning tag, it IS scratchpad — serve
+        # a clean honest fallback instead, regardless of the token budget. Only a raw
+        # output with NO reasoning tags at all (a plain-prose answer that ignored the
+        # XML format — nothing internal to leak) is emitted as-is, preserving the
+        # original graceful path for that benign case.
         if not answer_parts:
-            raw_text = "".join(raw_full).strip()
-            ref_tag_pos = raw_text.find("<reference_mentions>")
-            if ref_tag_pos != -1:
-                raw_text = raw_text[:ref_tag_pos].strip()
-            answer_parts.append(raw_text)
-            yield _sse(json.dumps({"token": raw_text}))
+            raw_text = "".join(raw_full)
+            has_reasoning = ("<thinking>" in raw_text) or ("<research_analysis>" in raw_text)
+            if has_reasoning or not raw_text.strip():
+                logger.warning(
+                    "No <answer> block produced (stop_reason=%s, %d raw chars) — serving "
+                    "clean fallback, suppressing reasoning scratchpad",
+                    stop_reason, len(raw_text),
+                )
+                fallback = ("I wasn't able to finish composing a complete answer to that. "
+                            "Please try again, or narrow the question a little.")
+                answer_parts.append(fallback)
+                yield _sse(json.dumps({"token": fallback}))
+            else:
+                clean = raw_text.strip()
+                ref_tag_pos = clean.find("<reference_mentions>")
+                if ref_tag_pos != -1:
+                    clean = clean[:ref_tag_pos].strip()
+                answer_parts.append(clean)
+                yield _sse(json.dumps({"token": clean}))
 
         answer = "".join(answer_parts).strip()
         raw_output = "".join(raw_full)
