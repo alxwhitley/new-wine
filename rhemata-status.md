@@ -3,8 +3,162 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-31 (chapter-scoped book extraction session — see the
-entry immediately below).
+Last verified: 2026-08-01 (live-DB corrections + Wesley's Journal real
+write — see the entry immediately below).
+
+---
+
+## Live-DB corrections (Translator's Note misattribution, missing "VII. Saturday") + Wesley's Journal real write (session state, 2026-08-01)
+
+Continuation of the 2026-07-31 chapter-scoped-extraction session below —
+this session picked up its two disclosed-but-unresolved items (the
+byline/apparatus/digit-ratio fix sitting uncommitted; the two live
+imperfections it found in already-written books) and closed both, then
+used the corrected pipeline for a new real write. Three ordered pieces,
+routed per CLAUDE.md's Session Routing table: read-only diagnostic
+(plain/direct terminal) → DB corrections + fix commit (plain-script/
+DB-write, hard rule, harness never used) → Wesley's Journal real write
+(same DB-write path). All DB claims below are from fresh, independent
+queries run *after* each write, on a separate connection from the one
+that performed the write — not the writing script's own self-report.
+
+**Piece 1 — fix (a)/(b) committed, `8e251c8`.** The third-party-byline
+detector (`_has_third_party_byline()`), the `_MATTER_LABEL_APPARATUS`
+exact-match label set, and the tightened `_digit_token_ratio()`
+roman-numeral arm — all built and proven against real Wesley/True Vine
+fixtures in the prior 2026-07-31 session, sitting uncommitted — are now
+committed. `_roman_to_int()`/`_int_to_roman()` (fix (b)'s own dependency,
+originally introduced alongside the still-unwired numeral-heading
+detector) were relocated earlier in the file, next to their real caller,
+rather than committed in their original location — this was necessary,
+not cosmetic: committing the file as originally structured would have
+either duplicated these two functions or left fix (b) referencing
+undefined names, since the numeral-heading detector itself (Piece 4 of
+the 2026-07-31 entry — `_select_numeral_chain()`,
+`_detect_numeral_heading_sequence()`, `detect_book_chapters()`, etc.)
+stays deliberately uncommitted, unchanged, zero production callers,
+exactly as that session decided. Verified by diffing the relocated
+working tree against the original uncommitted version with comments
+stripped: byte-identical apart from the move. Both `test_propositions_book_chapters.py`
+(committed alongside, includes a fix for a `LONG_STRETCH_WORD_THRESHOLD`
+assertion left stale by the already-committed `b4ab601`) and the separate,
+still-uncommitted `test_propositions_book_numeral_detection.py` pass in
+full against the post-commit working tree.
+
+**Piece 2 — "The New Life" (Andrew Murray): Translator's Note
+misattribution corrected, 411 → 408 propositions.** Diagnostic: split the
+live document fresh via `split_book_into_chapters()` and confirmed
+`is_front_back_matter("Translator's Note", text, author="Andrew Murray")`
+now returns `(True, "editorial_apparatus")`. Its 3 `chunk_ids` were
+joined against live `propositions`/`proposition_chunks` — 13 candidates
+came back, not 3, because one boundary chunk is shared with the
+following "Preface" chapter (chunk-linking is a per-extraction-call
+cartesian product, so a shared chunk pulls in the neighbor's rows too).
+Disambiguated per-candidate by fetching each one's own FULL chunk set:
+propositions at `proposition_index` 1–3 link *only* to Translator's Note
+chunks (content directly matches the note's own text — "reading a
+chapter... every Sabbath evening" etc.); indices 4–13 link to all 6 of
+Preface's chunks and their content directly matches real, genuine Murray
+Preface prose ("I have confined myself... The first is the Word of
+God..."), confirmed by reading the actual Preface span. Deleted exactly
+the 3 ids (`52bb4190-e7ed-4213-97e5-89c6035a033f`,
+`9887240b-0cd8-4235-94ec-517a30547577`,
+`30453763-a478-4907-83f3-183ce92208ef`) — `proposition_chunks` rows
+cascade-deleted automatically (migration 074's `ON DELETE CASCADE`).
+Independently re-verified on a fresh connection: count is 408, the 3 ids
+are gone, 0 orphaned `proposition_chunks` rows, the 10 genuine Preface
+rows (spot-checked indices 4 and 13) are untouched, and the remaining
+`proposition_index` sequence is a clean 4..411 (408 rows, no gaps other
+than the 3 removed).
+
+**Piece 3 — "The Lord's Table" (Andrew Murray): missing "VII. Saturday"
+added, 148 → 149 propositions.** Diagnostic: the real "VII. Saturday"
+span (57 words — the title-repeat marker produces two spans here, 57w
+and a 9w trailing stub; only the 57w one clears `MIN_SUBSTANTIVE_WORD_COUNT`)
+now classifies `is_front_back_matter() -> (False, "")` under the fixed
+digit-ratio arm (previously misfired on the repeated uppercase "VII" +
+page-number tokens). Confirmed genuinely absent from the live DB: the 11
+propositions sharing a boundary chunk with either "VII. Saturday" span
+all disambiguate, by the same full-chunk-set method as Piece 2, to the
+neighboring "VI. Friday Morning: Faith" (5 rows) and "Saturday Morning:
+Self-Surrender" (6 rows) chapters — zero rows are strictly linked to
+"VII. Saturday"'s own chunks. Extracted via `extract_propositions()` on
+just that 57-word span (`speaker="Andrew Murray"`, `prompt_version="v3.1"`,
+matching every existing row's own provenance) — 1 proposition returned,
+stored via `store_propositions(..., clear_existing=False)` at
+`proposition_index=149` with `chunk_ids` set to the span's own two
+chunks. Independently re-verified on a fresh connection: count is 149,
+the new row's `prompt_version`/chunk links are correct, and the full
+`proposition_index` sequence is an unbroken 1..149.
+
+**Piece 4 — John Wesley's "The Journal of John Wesley": first real
+write, storage ENABLED, 1,249 propositions, $0.3698.** Public-domain
+source (CCEL) — `process_book_document()`'s own license gate would skip
+it, so this called the gate-free `_extract_and_store_book_chapters()`
+directly, the same disclosed, scoped bypass already used and documented
+for every other public-domain book write (the 2026-07-31 entry's Piece
+3). Reconciliation: 381 chapters attempted, 362 stored, 4 empty, 4
+errored, 1 skipped_thin, 10 skipped_front_matter, 1,249 propositions
+stored (reconciliation bucket-sum asserted internally, matches the
+module's own invariant). The 4 errored chapters ("Life on Board,"
+"Remarkable Service at Gwennap," "Beaten by the Mob," "Field-preaching
+Expedient") are genuine content chapters hit by the pre-existing,
+occasionally-deterministic JSON-escaping defect (ARCHITECTURE.md,
+present in v3 and v3.1 alike, unrelated to and not fixed by this
+session's work) — not a new regression; the 2026-07-31 storage-disabled
+dry run hit 2 different chapters with the same underlying defect, not 4,
+consistent with "occasionally-deterministic."
+
+Independently re-verified on a fresh connection (re-deriving chapter
+structure itself via `split_book_into_chapters()`, not trusting the
+run's own returned reconciliation):
+- Live count: 1,249, all with `prompt_version="v3.1"`, all with
+  `>=1 proposition_chunks` link, 0 rows with any NULL provenance field.
+- All 5 target front-matter sections independently confirmed to have
+  **zero** propositions strictly linked to their own (non-boundary-shared)
+  chunks: `EDITOR'S NOTE` (`editorial_apparatus`), `INTRODUCTION`
+  (`third_party_byline`), `AN APPRECIATION OF JOHN WESLEY'S JOURNAL`
+  (`third_party_byline`), `BIOGRAPHICAL SKETCH` (`editorial_apparatus`),
+  `WESLEY'S LAST HOURS` (`third_party_byline`) — matching the prior
+  session's storage-disabled proof exactly, now confirmed on a real write.
+- Both previously-lost genuine diary entries ("Wesley's Defenders,"
+  "Wesley Discusses Old Sermons") now have real, on-topic propositions —
+  content directly matches each entry's own real subject matter (a mob-
+  violence episode and the loyalty of Wesley's companions during it; a
+  reflection on his seventy-fifth birthday and on why his sermon-writing
+  hadn't changed over forty years, respectively) — not spot-checked
+  against exact calendar dates, which this session did not verify.
+- Cost: 372 real Groq calls, 538,086 input / 66,245 output tokens,
+  $0.3698 (tiktoken cl100k_base on the real captured text of every call)
+  — essentially identical to the prior session's dry-run estimate
+  ($0.3698 there too), as expected since both ran the same prompt against
+  the same text. Well under the $50 per-run approval threshold.
+- Density: 1,249 propositions / ~197,500 words ≈ 6.3 per 1,000 words —
+  far above the whole-document single-call baseline (~1.3/1,000 median,
+  per the 2026-07-31 truncation-check entry below), consistent with
+  Piece 1 of the 2026-07-31 entry's own finding that chapter-scoped
+  extraction produces "dramatically richer output" than a single
+  whole-book call.
+
+**No git commit exists for Piece 4's real write itself** — matches this
+repo's own established convention for DB-write-only sessions (neither
+the 2026-07-30 508-document backfill nor the 2026-07-31 6-book real write
+has a corresponding commit; the database is the durable record, this
+entry is the pointer). The full run/verification JSON record is at
+gitignored `book_chapter_live_proof_review/wesley_journal_real_write.json`
+(companion to the prior session's storage-disabled
+`wesley_journal_live_proof_v2.json`) — local-only, not for git history,
+same rationale as every other proof-review directory in `.gitignore`.
+
+**State of the repo at session close:** one commit landed (`8e251c8`),
+from a confirmed-working build (full `test_propositions_book_chapters.py`
+suite passing against the exact committed file). The numeral-heading
+detector (Piece 4 of the 2026-07-31 entry below) is untouched and remains
+uncommitted, zero production callers — this session neither wired it nor
+changed its logic, only relocated two small helper functions it also
+happens to depend on. CLAUDE.md's Landmines section is updated in place
+(not silently deleted) to mark the two live imperfections and the byline
+detector's commit status as corrected, pointing back to this entry.
 
 ---
 

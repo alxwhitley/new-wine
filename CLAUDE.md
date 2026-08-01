@@ -374,35 +374,61 @@ different row, per the hard rule above.
 - **Book-length extraction now has a real, committed path — but it only
   reliably covers 8 of the corpus's 53 book documents.** `split_book_into_chapters()`/
   `_extract_and_store_book_chapters()`/`is_front_back_matter()` (commits
-  `d7c46f5`/`b4ab601`) chapter-scope extraction for books whose real
-  chapters repeat their own title — proven live on 6 public-domain books,
-  now real propositions. A second detector for the other 45 (roman-numeral
-  or bare "Chapter N" headings) exists in the working tree but is
-  **deliberately uncommitted and has zero production callers** — it found
-  a confident-wrong-answer failure mode twice (fixed once, a second
-  mechanism found no clean fix) and is not safe to wire in without per-book
-  verification. Do not assume `detect_book_chapters()` is live just because
-  it exists in `propositions.py` — check for actual callers. See PLAN.md
-  #50 and Open Decision #21.
-- **Two book documents already have live propositions with small, known,
-  uncorrected defects (found 2026-07-31, fixed in code for future
-  extractions, not retroactively repaired).** "The New Life" (Andrew
-  Murray) has a translator's note misattributed to Murray among its 411
-  live propositions. "The Lord's Table" (Andrew Murray) is missing one
-  real ~57-word entry ("VII. Saturday") that a since-fixed bug wrongly
-  excluded before the book was written. See PLAN.md Open Decision #22 —
-  whether either is worth a supplemental re-extraction is undecided.
+  `d7c46f5`/`b4ab601`, plus the byline/apparatus/digit-ratio correction
+  pass `8e251c8` below) chapter-scope extraction for books whose real
+  chapters repeat their own title — proven live on 7 public-domain books
+  (the original 6, plus John Wesley's "The Journal of John Wesley" —
+  1,249 propositions, real write, 2026-08-01), now real propositions. A
+  second detector for the other 45 (roman-numeral or bare "Chapter N"
+  headings) exists in the working tree but is **deliberately uncommitted
+  and has zero production callers** — it found a confident-wrong-answer
+  failure mode twice (fixed once, a second mechanism found no clean fix)
+  and is not safe to wire in without per-book verification. Do not assume
+  `detect_book_chapters()` is live just because it exists in
+  `propositions.py` — check for actual callers. See PLAN.md #50 and Open
+  Decision #21.
+- **CORRECTED 2026-08-01 — no longer an open decision.** The two live
+  imperfections below (originally found 2026-07-31) are now fixed at the
+  data level, not just in code: commit `8e251c8` shipped the byline/
+  apparatus/digit-ratio fixes described in the entry below this one, and a
+  same-session DB-write pass used them to correct both books directly,
+  independently re-verified against a fresh connection (not the
+  correction script's own self-report). "The New Life": the 3 specific
+  propositions (of 411) that came from the Translator's Note were
+  identified via `proposition_chunks` chunk-linkage (disambiguated from
+  10 genuinely-Murray Preface propositions that merely shared one
+  boundary chunk) and deleted — 411 → 408 live propositions. "The Lord's
+  Table": "VII. Saturday" (57 real words, confirmed to have zero existing
+  propositions, same disambiguation method) was extracted and stored as
+  proposition_index 149 — 148 → 149 live propositions. See
+  `rhemata-status.md`'s "Live-DB corrections + Wesley's Journal real
+  write" entry for the full evidentiary detail. PLAN.md Open Decision #22
+  should be closed to match — original text left below for the historical
+  record, not because it's still open:
+  - Two book documents already have live propositions with small, known,
+    uncorrected defects (found 2026-07-31, fixed in code for future
+    extractions, not retroactively repaired). "The New Life" (Andrew
+    Murray) has a translator's note misattributed to Murray among its 411
+    live propositions. "The Lord's Table" (Andrew Murray) is missing one
+    real ~57-word entry ("VII. Saturday") that a since-fixed bug wrongly
+    excluded before the book was written.
 - **The third-party-attribution byline detector built to fix the Wesley
-  misattribution bug is over-broad, uncommitted, and unproven beyond one
-  book.** `_has_third_party_byline()` fires on any short line-start "By
-  [phrase]" that shares no words with the document's known author — NOT
-  specifically a named-person credit. Confirmed it would also fire on "By
-  faith alone" or "By the grace of God." No false positive occurred on the
-  one book tested (Wesley's "Journal"), but a genuine content span opening
-  with a short "By..." epigraph or hymn line would be wrongly excluded by
-  this exact mechanism. Do not extend this to more books without hardening
-  it first (e.g. requiring the credited phrase to look like a capitalized
-  personal name).
+  misattribution bug is over-broad and unproven beyond one book — still
+  true after committing.** `_has_third_party_byline()` (now committed,
+  `8e251c8`, 2026-08-01 — no longer sitting uncommitted as this entry
+  originally said) fires on any short line-start "By [phrase]" that
+  shares no words with the document's known author — NOT specifically a
+  named-person credit. Confirmed it would also fire on "By faith alone"
+  or "By the grace of God." No false positive occurred on the one book
+  tested (Wesley's "Journal," now proven twice: the original storage-
+  disabled dry run, and the real storage-enabled write, 1,249
+  propositions, 2026-08-01 — 3 of its front-matter exclusions fire via
+  this exact detector, independently re-confirmed against the live DB via
+  `proposition_chunks`), but a genuine content span opening with a short
+  "By..." epigraph or hymn line would be wrongly excluded by this exact
+  mechanism. Do not extend this to more books without hardening it first
+  (e.g. requiring the credited phrase to look like a capitalized personal
+  name).
 
 **Corpus counts are never documented here.** Query live — any static number rots
 within days and has already caused one round of false blockers.
