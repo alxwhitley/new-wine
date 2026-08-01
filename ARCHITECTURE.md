@@ -141,6 +141,51 @@ recursive character, 1000 chars, 200 overlap. Lexicon — one entry, one chunk.
 
 ---
 
+## Position papers (house-voice answer path)
+
+`backend/app/services/position_papers.py` — a small, CLOSED, code-defined
+registry (`PILLARS`) of Alex's own first-party owned "house position papers,"
+answered in Rhemata's own voice: no citation, no teacher attribution, no
+"Rhemata can make mistakes" disclaimer. This is answer-source (a) of the
+three-source position design (PLAN.md #48). **Two pillars are live —
+`baptism_holy_spirit` and `speaking_in_tongues`;** the remaining charismatic
+pillars are future work (drafts sit in `docs/position_papers/`, not yet
+registered).
+
+Wired into the `chat` router: `chat.py` imports `match_position_paper` /
+`generate_position_paper_answer` and, before any retrieval, calls
+`match_position_paper(question)`. On a match it streams the house-voice answer
+and **bypasses the normal teacher-citation retrieval + generation entirely**;
+on no-match it is a complete no-op and the normal pipeline runs unchanged.
+
+- Matching is fully semantic: the question is embedded once (OpenAI), scored
+  per pillar as max-similarity against that pillar's positive anchors vs. its
+  contrast anchors, gated by a per-pillar `match_threshold` AND
+  pos_sim > contrast_sim, with cross-pillar ties broken by an explicit
+  `tie_break_priority` (never list/dict order). No phrase blocklist, no
+  hardcoded topic strings.
+- The answer body is loaded from the `chunks` table by the pillar's
+  `document_id` (read-only SELECT, cached per process) and fed to a dedicated
+  streaming `claude-sonnet-4-5` call under a house-voice system prompt —
+  **deliberately NOT** `chat.py`'s cited-retrieval `ANSWER_SYSTEM_BLOCKS`, and
+  with no `<answer>` XML wrapper.
+- Scope guard (module docstring): this must never become a generic "serve any
+  `silent_context` document" mechanism — that would be a license-gate bypass.
+  A new pillar is safe only because it must be Alex's own owned content added
+  deliberately to `PILLARS` in code, never from a DB table or a runtime flag.
+
+Public surface: `match_position_paper(question) -> Optional[str]`,
+`generate_position_paper_answer(pillar_key, question, messages) -> Iterator[str]`
+(SSE stream), `get_paper_body(pillar_key) -> Optional[str]`.
+
+**Naming caution — "position" spans three unrelated things** (see CLAUDE.md
+Invariant 12's note): (a) the `positions` teacher-layer table + `positions.py`
+(source-blind by signature), (b) this house-voice `position_papers.py` feature
+(deliberately reads document/chunk text — not a violation of (a)'s invariant),
+(c) the `docs/position_papers/` draft folder.
+
+---
+
 ## Scripts
 
 **Shared writer:** `shared_ingest.py::ingest_document()` — resolve → insert →

@@ -222,6 +222,20 @@ different row, per the hard rule above.
     "just needs a bit more context" and adds a chunk-text parameter reopens
     the same live-answer leak the position layer exists to close.
 
+    **Naming caution — "position" now names three unrelated things; this
+    invariant governs only (a).** (a) The teacher-layer `positions` table +
+    `positions.py::generate_position_text()` — the source-blind mechanism
+    described above. (b) `backend/app/services/position_papers.py` — the
+    shipped house-voice "position papers" feature (baptism/tongues pillars,
+    wired into `chat.py`), which by deliberate design DOES read a paper's
+    own document/chunk text (`get_paper_body()` reads `chunks`) to answer in
+    Rhemata's own voice from Alex's own first-party owned content. That is a
+    different, legitimate mechanism — **NOT a violation of this invariant,
+    which does not apply to it.** (c) `docs/position_papers/` — draft papers
+    for pillars not yet shipped. Do not read (b)'s chunk-reading as breaking
+    (a)'s source-blindness; they are separate code paths with separate
+    rules. See ARCHITECTURE.md, "Position papers (house-voice answer path)."
+
 13. **Corpus-wide positions are refused twice, not once.**
     `write_position()` raises before ever opening a transaction if
     `kind != "teacher"`, AND `positions.kind` carries a
