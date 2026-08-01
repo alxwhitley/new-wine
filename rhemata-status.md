@@ -17,6 +17,66 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Phase 1.5/1.6/1.7 fixed — position-paper router no longer over-matches
+(2026-08-01, repo-only, harness session — executor + planner-reviewer;
+build commit `01ca912`, this records commit separate).** Pulled forward on
+Alex's ruling, same day as the Phase 0 measurement pass that confirmed it
+live (`docs/audits/phase0_measurement_2026-08-01.md` §7b). Three confirmed
+symptoms, one root cause: `match_position_paper()` in
+`backend/app/services/position_papers.py` intercepted questions it
+shouldn't have — a healing/faith question and a "hearing God's voice"
+question hijacked into the `speaking_in_tongues` pillar; teacher-named
+questions (verified live on Derek Prince and Zac Poonen) intercepted before
+the system registered a teacher was named, erasing the teacher entirely;
+"can a believer lose their salvation" answered as settled
+baptism-of-the-Spirit teaching on a margin under two thousandths between
+two phrasings of the same question. **Fixed structurally, not per-symptom**
+(the report's own finding was that adding the tongues pillar had silently
+broken baptism's routing on three other topics previously — per-pillar
+patches don't generalize): two deterministic hard-veto gates
+(`_mentions_named_teacher`, `_is_retrieval_intent`) run before any
+embedding call and can't be overridden by a pillar's score; a shared
+`STANDING_DEBATE_CONTRASTS` list (healing mechanics, prophetic
+accountability, apostolic authority — Alex's 1 Aug ruling that these stay
+live debates, never settled house teaching) is merged into *every* pillar's
+contrast score at match time, not copied per pillar, so a third future
+pillar inherits the protection with zero new code; two targeted contrast
+anchors (`BAPTISM_CONTRAST_SALVATION`, `TONGUES_CONTRAST_COMMUNION`) close
+two genuine anchor-vocabulary contamination cases the same way two prior
+2026-07-31 fixes in this file were done (a new contrast anchor, never an
+edit to a positive anchor's wording); `MIN_QUALIFY_MARGIN = 0.008` replaces
+a bare `pos_sim > contrast_sim` check, calibrated between the real
+documented legitimate floor (+0.0113) and the contamination margins found
+live. **A planner-reviewer pass caught and this commit includes the fix
+for a real bug the first implementation had:** `_mentions_named_teacher`
+originally failed *open* on a `source_aliases` load failure (silently
+disabling the teacher-name veto — CLAUDE.md ranked failure mode 2, worse
+than a generic answer); now fails *closed* (every question treated as if
+it might name a teacher, deferring to the normal citation path), verified
+directly under a simulated load failure. The reviewer also flagged that
+the three debate-topic test cases passed for an unrelated reason (raw
+similarity already below threshold) and didn't prove
+`STANDING_DEBATE_CONTRASTS` was wired in at all — a direct mechanism check
+was added (`scripts/test_position_paper_routing.py`) confirming it's the
+binding, highest-scoring contrast for the healing probe, not dead code.
+**Verified live** (real OpenAI embeddings, not simulated): all three
+reported hijacks (H3, G2, T4), three teacher-named questions across two
+teachers and both pillars, both salvation phrasings, and all three debate
+probes on both pillars now correctly return no interception; T1-T3 and the
+known thinnest legitimate case (P1, baptism) still route correctly.
+15/15 in `scripts/test_position_paper_routing.py`. **Scope:** only the two
+shipped pillars were hardened, per the session's own instruction — nothing
+was built for the six unfiled drafts in `docs/position_papers/`.
+`chat.py` needed no change (`match_position_paper`'s call site is
+unchanged; confirmed its diff against this session's start is empty — the
+only other `chat.py` changes on `main` today are the separate, already-
+committed Phase 0 §7a session below, not this one). **Not closed by this
+session:** CLAUDE.md's Invariant/decision #10 conflict flag (the live
+*normal-path* system prompt/guardrails text still lists "whether tongues is
+the required initial evidence" as an in-house debate) is a different code
+path (`chat.py`'s system prompt, not the position-paper router) and a
+different piece of Phase 1 item 1.4 — untouched, still open.
+
 **Phase 0 §7a token-exhaustion degradation fixed — no scratchpad, no answer
 truncation on `/chat` (2026-08-01, repo-only, plain/direct terminal session,
 zero DB writes; build commit `0ab9c60`, this records commit separate).** Pulled
@@ -307,10 +367,14 @@ milestone, not the immediate next slice.
    active phase sequence.
 2. **Phase 1 — stop the live contradictions.** Request queuing (1.1) + connection
    handling (1.2) **done 2026-08-01** (see Current state above — re-run Phase 0's
-   latency baseline before trusting it). Next: reverse hidden-by-default +
-   inventory (1.3); the doctrinal ruling before router work (1.4); the
-   tongues-paper neutrality breach (1.5); the teacher-question hijack (1.6); the
-   wrong-doctrine routing (1.7). See PLAN.md.
+   latency baseline before trusting it). Position-paper over-matching — the
+   tongues-paper neutrality breach (1.5), the teacher-question hijack (1.6), the
+   wrong-doctrine routing (1.7) — **done 2026-08-01** (see Current state above).
+   Next: reverse hidden-by-default + inventory (1.3); the remaining piece of the
+   doctrinal ruling (1.4) — the *normal-path* system prompt/guardrails text still
+   lists tongues-as-initial-evidence as an in-house debate (CLAUDE.md decision
+   #10's conflict flag), a different code path from the position-paper router
+   items 1.5-1.7 just fixed. See PLAN.md.
 3. **Position layer — reframed to POST-LAUNCH (PLAN.md #48).** The plan's call:
    launch on the current answer path; make the source-blind position path the
    next milestone after launch, not a launch blocker. The serving path is built
