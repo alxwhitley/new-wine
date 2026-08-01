@@ -3,7 +3,176 @@
 Point-in-time state only. Overwritten each session. Never durable truth.
 Corpus counts are not recorded here — query live.
 
-Last verified: 2026-07-30 (**generation resumed and the propositions
+Last verified: 2026-07-31 (chapter-scoped book extraction session — see the
+entry immediately below).
+
+---
+
+## Chapter-scoped book extraction: built, proven, first real write (session state, 2026-07-31, several sessions same day)
+
+Continuation of the two 2026-07-31 read-only diagnostics below (book-length
+extraction truncation check + the corpus-wide chapter-detection scan they
+led to). Mixed routing per CLAUDE.md's Session Routing table across five
+ordered pieces: harness for the two repo-only builds; plain-script/DB-write
+for the one real write; plain/direct terminal for the three read-only
+diagnostics/proofs. Full evidentiary trail (per-agent reports, artifact
+JSONL files, real query output) lives in this session's own transcript and
+in gitignored `book_chapter_live_proof_review/*.json` — this entry is the
+pointer plus the decisions, not a re-derivation of the evidence.
+
+**Piece 1 — chapter-scoped extraction + front/back-matter classifier,
+SHIPPED, commit `d7c46f5`.** New `propositions.py` functions
+(`split_book_into_chapters()`, `_extract_and_store_book_chapters()`,
+`process_book_document()`, `is_front_back_matter()`) give book-length
+documents a structure-first, multi-call extraction path instead of the old
+single-call-per-document design — the fix for the book-length gap PLAN.md
+#17 named unresolved. `process_document()` and `store_propositions()`'s
+default path are unchanged (`store_propositions()` gained one additive
+`clear_existing` parameter, default preserves prior behavior exactly).
+Front/back-matter spans (title pages, indexes, CCEL metadata blocks) are
+classified and skipped BEFORE the model is ever called, not filtered after.
+Live-proven, storage disabled throughout proving, on Andrew Murray's "The
+True Vine" and E.M. Bounds' "Power Through Prayer": chapter-scoped
+extraction produced dramatically richer output than the old whole-book
+call on the same book (True Vine: 169 propositions across 31 real chapters
+vs. 14 propositions from a single whole-book call that read as a
+compressed verse-by-verse gloss of John 15, not an extraction of Murray's
+actual arguments).
+
+**Piece 2 — `LONG_STRETCH_WORD_THRESHOLD` 3000→6000, SHIPPED, commit
+`b4ab601`.** Isolated one-constant fix: detected chapters between 3,000
+and 6,000 words were being needlessly re-split into disconnected
+"(untitled continuation)" fragments even though the real per-call
+extraction ceiling (`SAFE_CHAPTER_WORD_CEILING`) is 6,000. Verified live
+against 32 real chapters across 4 books that no longer fragment, and that
+True Vine/Power Through Prayer's own proven span counts (38/22) are
+unaffected (neither book has a chapter over 3,000 words).
+
+**Piece 3 — first real write: 6 public-domain books, storage ENABLED.**
+Andrew Murray's "The New Life" (411 propositions), "Waiting On God!" (176),
+"The True Vine" (165), "The Lord's Table" (148); Brother Lawrence's "The
+Practice of the Presence of God" (121); E.M. Bounds' "Power Through Prayer"
+(131) — **1,152 propositions total, real cost $0.35, zero errors.**
+Reconciliation for all 6 books reconciles exactly
+(attempted = stored + front_matter + thin + empty + errored, no
+exceptions) and was independently re-verified against the live DB on a
+fresh connection, not taken from the extraction function's own return
+values. Confirmed zero writes to any document outside the 6 named, and
+zero writes to the two explicitly excluded books ("The Two Covenants" —
+known pre-existing bug, see below; "The Journal of John Wesley" — proven
+separately, see Piece 5). Every one of the 1,152 rows carries correct
+`prompt_version='v3.1'`/fingerprint/model provenance.
+
+**Piece 4 — numeral-heading chapter detector: BUILT, REVIEWED, NOT WIRED,
+still uncommitted — deliberate decision, not an oversight.** A second
+detection strategy (`detect_book_chapters()`, `_detect_numeral_heading_sequence()`)
+was built to cover books whose chapters don't repeat their own titles
+(roman-numeral headings like Andrew Murray's "The Master's Indwelling," or
+bare "Chapter N" headings) — the old repeated-title-only detector cleanly
+handles only 8 of the corpus's 53 book documents (15%). Went through three
+full fix-and-reverify cycles: the first design produced a confident-wrong
+answer on Doug Kreighbaum's "Manual Systematic Theology" (a 5-point
+scripture-chapter outline mistaken for the book's real structure, covering
+2.5% of the book) — fixed via a document-span-floor guard. The fix's own
+re-verification then found a SECOND, different confident-wrong-answer
+mechanism the guard doesn't catch: Charles Finney's "Lectures on Revivals
+of Religion" chains together Finney's own scattered rhetorical outline
+markers across most of the book's width (spanFrac ~97%, passing every
+guard) instead of finding the real 22 "Lecture N" headings, which neither
+detector pattern recognizes. **Decision: ship only the safe repeated-title
+detector (already in Piece 1) + Piece 2's threshold fix to production; do
+NOT wire the numeral detector.** Confirmed separately and importantly:
+`detect_book_chapters()` currently has ZERO non-test callers anywhere in
+the repo — the numeral-detector build has had no effect on any book ever
+actually processed, so nothing is at risk from these findings today. If
+picked up again, the honest fix is per-book TOC verification before
+trusting a result, not another internal confidence guard — two rounds of
+narrow guard-patching each produced a new regression elsewhere (Torrey,
+Bounds' "Purpose in Prayer") without closing the underlying gap. Also
+found (informational, not a defect this thread is scoped to fix): all 4
+Jonathan Edwards/Owen/Wesley-Sermons/Ryle-scale "never-repeats-title"
+books remain entirely unaddressed by either detector; a real, pre-existing
+`split_book_into_chapters()` bug silently merges Andrew Murray's "The Two
+Covenants"' real Chapter I into its Introduction (unrelated to the numeral
+work, not touched, not fixed — this is why "The Two Covenants" is
+excluded from every real write and every proof this session).
+
+**Piece 5 — Wesley's "Journal" (197,501 words, the largest book tested):
+storage-disabled proof found a real attribution-integrity defect,
+FIXED (byline detector + digit-ratio fix), re-proven, still
+uncommitted.** Structural proof was strong (373 real, coherent,
+editor-titled excerpts, none near the extraction ceiling — max span 3,914
+words). But this CCEL edition wraps the journal in genuine third-party
+essays (an editor's note, a biographical sketch, an introduction "by the
+Rev. Hugh Price Hughes," and "An Appreciation of John Wesley's Journal" by
+Augustine Birrell) that the existing front/back-matter classifier didn't
+catch — all 4 went to extraction and produced propositions stamped "John
+Wesley teaches..." for content that was demonstrably the editor's/Hughes's/
+Birrell's own words, verified against the real source text. **Fixed**: a
+new byline detector (`_has_third_party_byline()` — a short line-start "by
+[Name]" whose name shares no token with the document's known author) plus
+an exact-match editorial-apparatus label set, checked before the existing
+classifier's protections. Re-run confirmed all 4 sections now correctly
+excluded before the model is ever called (instrumented proof, not just a
+relabeled bucket), plus a bonus 5th genuine catch ("WESLEY'S LAST HOURS,"
+opens "BY ONE WHO WAS PRESENT," a real anonymous eyewitness account, not
+Wesley's own writing). **A real, disclosed limitation, not hardened this
+session:** the byline detector's mechanism is broader than "recognize a
+named person" — it fires on any short "By [phrase]" line that doesn't
+share words with the author, confirmed it would also fire on "By faith
+alone" or "By the grace of God." No false positive occurred on Wesley, but
+this is unproven beyond the one book tested — a genuine content span
+opening with a short "By..." epigraph or hymn line is a real, live risk
+for the next book, not hardened here. A separate, real digit-ratio bug was
+also fixed in the same pass (the "is this an index page" heuristic was
+miscounting the pronoun "I" and words like "did" as roman numerals,
+wrongly excluding two genuine short Wesley diary entries) — both now
+correctly produce real propositions on re-run.
+
+**Two real, already-live imperfections surfaced by re-running the fixed
+classifier against every book that already has real propositions (10
+books checked, not just the 6 written this session — 4 more from an
+earlier Doug Kreighbaum/Covenant Harvest backfill also carry live
+propositions). Neither is fixed this session — Alex's call whether either
+is worth a small supplemental re-extraction:**
+- **"The New Life" (411 live propositions) contains a misattribution.** A
+  670-word Translator's Note — genuinely someone else writing about Murray
+  in the third person ("its honoured author") — was extracted and stored
+  as if it were Andrew Murray's own teaching, before this session's byline
+  fix existed. A handful of the 411 live propositions are affected.
+- **"The Lord's Table" (148 live propositions) is missing real content.**
+  "VII. Saturday" (~57 words of genuine Murray devotional text) was wrongly
+  excluded by the pre-fix digit-ratio bug before the book was written for
+  real; it never reached the model, so no propositions exist for it.
+
+**Corpus-wide detection coverage, for context on how far this reaches.**
+Only 8 of 53 book documents detect cleanly via the safe, production
+repeated-title detector alone (15%). The (unwired) numeral detector's own
+corpus scan found it would raise that to 21-23/53 if ever wired and
+trusted — but the same scan is what surfaced the Kreighbaum and Finney
+confident-wrong cases, so that number is explicitly NOT a "ready" count.
+28 books already have real, live propositions or were proven this session
+(the 6 written + True Vine, which was among them, + Power Through Prayer +
+Wesley's dry-run-only proof); the rest of the corpus's public-domain books
+remain untouched, gated behind the still-open detector-hardening and
+per-book-verification questions above.
+
+**State of the repo at session close:** two commits landed (`d7c46f5`,
+`b4ab601`), both isolated, both from confirmed-working builds. Everything
+else — the byline detector, the digit-ratio fix, the numeral-heading
+detector — sits uncommitted in the working tree, reviewed and proven but
+deliberately held for Alex's decision on next steps (harden-and-wire the
+numeral detector vs. leave it as a documented-but-inert capability;
+whether to correct the two live-DB imperfections above; which further
+books, if any, get a real write next). Zero DB writes occurred anywhere in
+this session outside Piece 3's 6 named books, confirmed independently at
+every step.
+
+---
+
+## Full propositions backfill (licensed/unlicensed corpus) — generation resumed (session state, 2026-07-30)
+
+(**generation resumed and the propositions
 backfill actually ran this session — corrects the 2026-07-29 header's own
 "generation has not resumed" framing, which is now stale, not wrong-when-
 written.** Three ordered pieces, all plain-script/DB-write path per
