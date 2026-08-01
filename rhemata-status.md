@@ -17,6 +17,38 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Phase 0 §7a token-exhaustion degradation fixed — no scratchpad, no answer
+truncation on `/chat` (2026-08-01, repo-only, plain/direct terminal session,
+zero DB writes; build commit `0ab9c60`, this records commit separate).** Pulled
+forward ahead of the rest of Phase 1 on Alex's ruling. The Phase 0 measurement
+(`docs/audits/phase0_measurement_2026-08-01.md` §7a) found ~27% of long-context
+normal-path answers exhausted the 1500 `max_tokens` budget *inside* the hidden
+`<thinking>`/`<research_analysis>` blocks before `<answer>` completed — measured:
+`<thinking>` alone consumed up to ~1340 tokens (87% of budget), so the visible
+answer was starved, not the cause. Two failure modes reached users: a mid-sentence
+truncation, and — worse — raw reasoning scratchpad (no `<answer>` block; the old
+`if not answer_parts:` fallback streamed `raw_full` verbatim). Three changes in
+`chat.py` `generate()`: **(1) hard guarantee** — the no-`<answer>` fallback never
+emits raw model output again; if the raw output carries any reasoning tag it IS
+scratchpad → serve a clean honest fallback, regardless of budget (structural, not
+probabilistic); **(2)** `max_tokens` 1500 → 3000 (headroom for reasoning + a full
+answer + `<reference_mentions>`); **(3)** capture `stop_reason` and append one
+clean cutoff sentence if `<answer>` opened but hit the ceiling before `</answer>`
+(gated on `stop_reason == max_tokens` so a normal `end_turn` is never
+mislabelled). **Proven** offline against a verbatim reproduction of the fixed
+streaming logic (SELECT-only): (A) all 7 Phase 0 degraded questions forced to
+exhaust at `max_tokens=180` → model produced scratchpad but **0/7 leaked**, all
+served the clean fallback; (B) all 7 re-run at 3000, twice each → **14/14 render a
+complete clean `<answer>`** (`stop_reason=end_turn`), 0 leaks. **Cost:** raising
+the cap costs more only for answers that previously truncated (they now complete,
+~+700 output tokens ≈ +$0.01 each; already-clean answers stop naturally under 1500
+and are unaffected) — blended ~+$0.003/answer. Only `chat.py` has this
+`<answer>`-extraction + raw-fallback shape; `position_papers.py` (2048) and
+`study.py` (400) stream plain prose with no hidden blocks and were correctly left
+untouched. **Not pushed** (push deploys backend to Railway — separate decision).
+The position-paper over-matching (Phase 0 §7b, plan items 1.5–1.7) is a separate
+concurrent session — not touched here.
+
 **Phase 1.1 + 1.2 fixed — request queuing and connection handling
 (2026-08-01, repo-only, plain/direct terminal session — two one-line-scale
 edits, not a harness build).** Root cause of 1.1 (concurrent requests
