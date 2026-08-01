@@ -13,6 +13,99 @@ quality.
 
 ---
 
+## Ranked failure modes (2026-08-01)
+
+Judge every answer-path change against these, in this order. An accuracy fix
+that trades one of these for another has improved nothing:
+
+1. **Theologically wrong answers.** Worst outcome; would make Alex consider the
+   product broken.
+2. **Misrepresenting a teacher** — putting a position in a real, often living
+   minister's mouth that he does not hold.
+3. **Generic answers** — reading as interchangeable AI output rather than
+   specific to how the question was asked. Fresh per-question synthesis was
+   chosen precisely to avoid this; a correctness fix that makes every answer
+   uniform has traded failure mode 1 for failure mode 3.
+
+Most questions are general and topical ("what is deliverance"), not
+teacher-specific — weight accordingly.
+
+## Settled product decisions (2026-08-01) — do not reopen
+
+Premises from the 1 August build plan (four adversarial architecture audits,
+Claude + Codex, two rounds, the last two with live DB, independently
+convergent). Design within them; do not relitigate. Where one conflicts with an
+existing rule it is flagged inline with ⚠ — **flagged, not resolved, this
+records pass** (resolving each means a code change or a governing-doc edit a
+later session makes deliberately).
+
+1. **Fresh synthesis every question**, shaped to how the user asked. Stored or
+   pre-reviewed answers are permanently rejected — a review model can't
+   enumerate hundreds of thousands of questions in advance. No human review gate
+   anywhere on the serving path. ⚠ *Tension to watch: the position serving path
+   stores and re-serves generated positions and has a planned draft-review UI
+   (PLAN.md #48 / Open Decision #20(b)) — reconcile if/when that path goes live.*
+2. **Launch bar is "materially safer,"** not a demonstrated error rate. No public
+   claim about fabrication frequency. Deterministic correctness where it can be
+   guaranteed; honest disclosure where it cannot.
+3. **Eliminating invented claims is accepted as impossible.** Misattribution to a
+   name is solvable deterministically (the permitted-name set is finite and
+   computed before the answer is written); inventing the substance is not, at any
+   timeline. Reinforces the Landmines fabrication findings and Open Decision #20.
+4. **The probabilistic claim-support checker is HELD, pending measurement.** Do
+   not build one. Do not propose a model-based judge anywhere — that shape has
+   failed five times (Open Decision #20).
+5. **Commentaries are excluded from answers; searchable only** (Alex's call,
+   1 Aug; Open Decision #12). ⚠ *Conflict flag: the live retrieval path still
+   admits commentary chunks into answer context (down-weighted and capped at 3),
+   so behavior does not yet match this decision — a code fix, flagged not made.*
+6. **Paragraphs that cannot be tied to a specific statement still display** — not
+   flagged, not logged, not blocked. Deliberate, to avoid drowning in false
+   positives from connective prose. Alex will revisit.
+7. **No teacher taxonomy** — teachers are never labeled into theological
+   families; contributors are always derived from the evidence at question time.
+   *(Already enforced as Invariant 13's standing rule — restated here as a
+   product premise, not a second rule.)*
+8. **Position Papers are doctrinal grounding, not served answers.** Hand-authored
+   by Alex on the charismatic pillars; they constrain what an answer may claim
+   and must never supply its phrasing; triggered deterministically by topic,
+   never by the system self-assessing "doubt" (unreliable, and would skip the
+   paper exactly when it mattered most). ⚠ *Conflict flag: this directly
+   contradicts Invariant 12's note (b) and ARCHITECTURE's "Position papers
+   (house-voice answer path)," which bless the SHIPPED house-voice path that
+   reads a paper's own chunk text to phrase answers. That path is exactly what
+   Phase 1 items 1.5–1.7 change. Flagged, NOT resolved this pass — resolving it
+   means amending Invariant 12(b), which this records pass deliberately leaves
+   untouched.*
+9. **House view and teacher view are two visibly separate things in an answer,
+   never blended.** ⚠ *Conflict flag: a current house guardrail tells the model
+   to follow house framing regardless of how the source puts it, which silently
+   corrects a dissenting teacher into agreement — direct misrepresentation of a
+   real minister (failure mode 2). Reconciling the system prompt / guardrails is
+   a code fix, flagged not made.*
+10. **Tongues is a house position, not a debate** (Alex's ruling, 1 Aug): not
+    required as initial evidence of Spirit baptism, but reasonably expected for
+    all. The neutrality list shrinks by one. ⚠ *Conflict flag: the live system
+    prompt still lists "whether tongues is the required initial evidence of
+    Spirit baptism" as an in-house debate — Phase 1 items 1.4/1.5 make the code
+    match this ruling.*
+11. **Healing mechanics, prophetic accountability, and apostolic authority stay
+    debates** — presented with named teachers on both sides. Alex has no settled
+    view and will let the corpus inform it over time. Caveat on record: what the
+    corpus says is a function of who is in it, not of what is true — a corpus
+    majority must never quietly become a house position without a deliberate
+    decision.
+12. **Hidden-by-default is reversed: new material defaults to visible**, and
+    everything currently hidden becomes visible. Safe now only because there are
+    no users; it buys time, not a pass — known quality problems still clear
+    before launch. ⚠ *Conflict flag: contradicts ARCHITECTURE's "Standing source
+    policy" ("new unlicensed sources register hidden") and the "DEFAULT hidden =
+    fail-closed" source design. The license gate SQL (Invariant 2) is unchanged —
+    only the default visibility flips. Phase 1 item 1.3 is the code change +
+    inventory; the ARCHITECTURE update is flagged, not made this pass.*
+
+---
+
 ## Session Routing
 
 Determines which path a session's task runs on — not a judgment call. Read

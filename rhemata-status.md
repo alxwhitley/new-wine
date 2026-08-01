@@ -17,6 +17,33 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Build plan adopted (2026-08-01) — accuracy / anti-fabrication sequence, Phases
+0–3; now the front-of-queue priority.** Written from four adversarial architecture
+audits (Claude + Codex, two rounds each, the last two with live DB access, which
+independently converged). **Trigger — the "is speaking in tongues for today"
+answer audit:** of its four named attributions, one was sound (Daniel Kolenda, who
+has a real cessationism series in the corpus) and three failed — a claim credited
+to Michael Brown was actually Kolenda's own material (plus a wrong date, "mid-to-
+late 1800s" for what the source dates to the beginning of the twentieth century);
+John Bevere was wholly fabricated (zero material anywhere in the corpus, his name
+in no document — yet the fabricated attribution PASSES verification and renders as
+a verified teacher link to an empty author page); and a real Billy Graham quotation
+existed only inside Kolenda's document as Kolenda quoting Graham, extracted and
+attributed to Graham verbatim, which the product's own rules forbid. **Mechanism
+correction, now settled:** retrieval worked perfectly (Kolenda's material was the
+best possible evidence and all of it was present) — the fabrication was NOT a
+retrieval gap. The author-citation cap plus the push for multiple voices makes the
+model redistribute one teacher's substance across other names it knows are
+charismatic teachers; it knew too much, not too little. The only fix is deciding,
+outside the model, which names are permitted (Phase 2's teacher-name check). The
+verification gap named here — a name that exists and is allowed to show passes,
+whether or not its material was used — is Phase 2's target, not closed yet. Full
+plan folded into PLAN.md (active phase sequence) and CLAUDE.md (ranked failure
+modes + 12 settled decisions, conflicts flagged inline). **Phase 0 (read-only
+measurement) and Phase 1 (live contradictions) are the queued next sessions;** the
+position-layer live cutover is reframed to post-launch (PLAN.md #48). No code, no
+DB this session — records only.
+
 **Proposition generation — resumed, current.** Runs on the bypass-proof v3.1
 path (named-teacher extraction; provenance stamping structurally required,
 CLAUDE.md Invariant 10). The corpus-wide backfill (PLAN.md #17/#49) completed
@@ -185,24 +212,39 @@ harness session — remains open. Proofs:
 
 ## Next
 
-1. **Position layer — next slice (PLAN.md #48, follows the 2026-08-01 serving
-   path).** The serving path is built and proven standalone but NOT wired into
-   chat. Next: (a) **materialize eligibility** — the pass-both set is CPU-bound
-   to compute whole-corpus (~15+ min) and cannot run at question time; the
-   serving path uses a lazy checker as a stopgap, but the live cutover needs a
-   stored/refreshed-at-ingest eligibility signal first; (b) wire `serve_position`
-   into the live chat answer path + migrate `get_teacher_card()` off live
-   source-text synthesis (still the standing leak); (c) calibrate the still-
-   provisional floors (evidence-count 5 / similarity 0.45 / dominance 0.60);
-   (d) a draft-rows review/approval UI (also the sequenced home for the Open
-   Decision #20 side-by-side verification). The 3 draft positions written this
-   session await that review.
-2. **Blocker #4 — route `ingest_helloao.py` through `shared_ingest`.** Sole
+Reprioritized 2026-08-01 by the adopted build plan (PLAN.md active phase
+sequence). Phase 0/1 lead; the position-layer cutover is now a post-launch
+milestone, not the immediate next slice.
+
+1. **Phase 0 — measurement (read-only, per the adopted plan).** Actual
+   fabrication rate with the corrected recognition; run-to-run variance on
+   repeated questions; false-positive rate of the two prototype deterministic
+   checks (Phase 2's teacher-name and numbers checks); live-answer latency
+   baseline. Sizes everything after it; input to Open Decision #20. See PLAN.md's
+   active phase sequence.
+2. **Phase 1 — stop the live contradictions.** Request queuing (1.1) + connection
+   handling (1.2) first; reverse hidden-by-default + inventory (1.3); the
+   doctrinal ruling before router work (1.4); the tongues-paper neutrality breach
+   (1.5); the teacher-question hijack (1.6); the wrong-doctrine routing (1.7).
+   See PLAN.md.
+3. **Position layer — reframed to POST-LAUNCH (PLAN.md #48).** The plan's call:
+   launch on the current answer path; make the source-blind position path the
+   next milestone after launch, not a launch blocker. The serving path is built
+   and proven standalone but NOT wired into chat; the live cutover still needs
+   (a) **materialized eligibility** — the pass-both set is CPU-bound to compute
+   whole-corpus (~15+ min), not viable at question time; (b) the wire-in +
+   `get_teacher_card()` migration off live source-text synthesis (still the
+   standing leak); (c) the license/visibility predicate the position layer lacks
+   today; (d) the still-provisional floor calibration (evidence-count 5 /
+   similarity 0.45 / dominance 0.60); (e) a draft-rows review/approval UI (also
+   the home for Open Decision #20 side-by-side verification). The 3 draft
+   positions written 2026-08-01 await that review.
+4. **Blocker #4 — route `ingest_helloao.py` through `shared_ingest`.** Sole
    remaining chokepoint conversion; unblocks HelloAO commentary growth
    (PLAN.md #27) only, not corpus growth generally.
-3. **Folder renames** (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop
+5. **Folder renames** (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop
    the orphaned `jewish_perspectives` table.
-4. **Staging Supabase + backup/restore test.** The `sources/` backup exists
+6. **Staging Supabase + backup/restore test.** The `sources/` backup exists
    (2026-07-19) but a restore has never been verified — do not assume it works
    until tested.
 
