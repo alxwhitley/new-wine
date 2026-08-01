@@ -88,6 +88,90 @@ def _reconstruct_all_document_texts(params: dict, document_ids: List[str]) -> Di
     return out
 
 
+def classify_eligibility(
+    content: str,
+    source_text: Optional[str],
+    name_pattern,
+    verse_lookup,
+    vocab_matcher,
+) -> bool:
+    """The SINGLE per-proposition "pass both" decision -- closeness verdict
+    PASS AND citation verdict in ('pass','no_references'). Reused verbatim by
+    BOTH the whole-corpus compute_eligible_proposition_ids() and the lazy
+    EligibilityChecker below, so the two can never diverge (the fork hazard
+    CLAUDE.md's Landmines warn about). source_text is the reconstructed full
+    document text; None => not classifiable => not eligible (excluded, never
+    guessed)."""
+    if source_text is None:
+        return False
+    if cc.classify(content, source_text, name_pattern, verse_lookup, vocab_matcher).verdict != cc.PASS:
+        return False
+    spans = rg.find_reference_spans(content)
+    if not spans:
+        return True
+    statuses = [
+        rg.check_reference_grounded(s.raw, source_text, verse_lookup).status
+        for s in spans
+    ]
+    if any(s == rg.UNGROUNDED for s in statuses):
+        return False
+    if any(s == rg.UNCERTAIN for s in statuses):
+        return False
+    return True
+
+
+class EligibilityChecker:
+    """Lazy, per-candidate version of the pass-both gate. Builds the shared
+    machinery (name pattern, verse lookup, vocab matcher) ONCE, fetches and
+    caches each document's reconstructed text on first need, and memoizes each
+    proposition's verdict. Uses classify_eligibility() -- the SAME decision
+    function compute_eligible_proposition_ids() uses -- so a proposition gets
+    the identical verdict either way; only the SET of propositions checked
+    differs (candidates only, not the whole corpus).
+
+    This exists because computing the pass-both set over the whole corpus is
+    CPU-bound and far too slow to run at question time (a book-length
+    document's full text is trigram-checked against every one of its
+    propositions). The serving path checks only the ~top-N candidates a query
+    actually gathers. Read-only; opens short-lived connections as needed."""
+
+    def __init__(self, params: dict):
+        self.params = params
+        self.name_pattern = cc.build_name_pattern(cc.build_name_set(params))
+        self.verse_lookup = cc.build_verse_lookup(params)
+        self.vocab_matcher = cc.build_vocab_matcher()
+        self._doc_text: Dict[str, Optional[str]] = {}
+        self._verdict: Dict[str, bool] = {}
+
+    def _doc(self, doc_id: str) -> Optional[str]:
+        if doc_id not in self._doc_text:
+            import psycopg2
+
+            conn = psycopg2.connect(**self.params)
+            conn.set_session(readonly=True, autocommit=True)
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT content FROM chunks WHERE document_id = %s ORDER BY chunk_index",
+                    (doc_id,),
+                )
+                rows = cur.fetchall()
+                cur.close()
+            finally:
+                conn.close()
+            self._doc_text[doc_id] = "\n".join(r[0] for r in rows) if rows else None
+        return self._doc_text[doc_id]
+
+    def is_eligible(self, prop_id: str, content: str, doc_id: str) -> bool:
+        if prop_id in self._verdict:
+            return self._verdict[prop_id]
+        res = classify_eligibility(
+            content, self._doc(doc_id), self.name_pattern, self.verse_lookup, self.vocab_matcher
+        )
+        self._verdict[prop_id] = res
+        return res
+
+
 def compute_eligible_proposition_ids(params: dict, verbose: bool = False) -> Set[str]:
     """Returns the set of proposition IDs (as text) whose closeness verdict
     is PASS and whose citation verdict is 'pass' or 'no_references'.
@@ -135,28 +219,11 @@ def compute_eligible_proposition_ids(params: dict, verbose: bool = False) -> Set
 
     eligible: Set[str] = set()
     for prop_id, doc_id, content in rows:
-        source_text = text_cache.get(doc_id)
-        if source_text is None:
-            continue  # no chunks -- cannot classify; excluded, not guessed
-
-        cl = cc.classify(content, source_text, name_pattern, verse_lookup, vocab_matcher)
-        if cl.verdict != cc.PASS:
-            continue
-
-        spans = rg.find_reference_spans(content)
-        if not spans:
+        # Same per-proposition decision the lazy EligibilityChecker uses.
+        if classify_eligibility(
+            content, text_cache.get(doc_id), name_pattern, verse_lookup, vocab_matcher
+        ):
             eligible.add(prop_id)
-            continue
-
-        statuses = [
-            rg.check_reference_grounded(s.raw, source_text, verse_lookup).status
-            for s in spans
-        ]
-        if any(s == rg.UNGROUNDED for s in statuses):
-            continue
-        if any(s == rg.UNCERTAIN for s in statuses):
-            continue
-        eligible.add(prop_id)
 
     if verbose:
         print(f"Eligible (pass both): {len(eligible)}")

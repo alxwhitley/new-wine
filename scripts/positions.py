@@ -199,6 +199,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -217,6 +218,50 @@ MODEL = "claude-sonnet-4-5"
 SIMILARITY_FLOOR = 0.45
 MAX_EVIDENCE = 15
 MIN_EVIDENCE_COUNT = 5
+
+# --------------------------------------------------------------------------
+# Scope determination (PLAN.md #48 serving-path session, 2026-08-01)
+# --------------------------------------------------------------------------
+# DOMINANCE_THRESHOLD is the single, documented boundary between teacher and
+# corpus scope for a TOPIC question (one that does not name a teacher). After
+# gathering evidence corpus-wide, compute each teacher's share of that
+# gathered evidence. If the single largest teacher supplies >= this fraction,
+# the honest answer is "this is mostly that teacher's position" -> teacher
+# scope, attributed to him. Below it, no single voice dominates -> corpus
+# scope, naming the real contributors with their evidence counts.
+#
+# 0.60 is a reasoned starting point, NOT a calibrated constant (no real
+# question traffic exists yet -- the position layer does not serve users).
+# Rationale: at >=60% one teacher supplies the clear majority of the material
+# that actually answers the question, so dressing it up as a multi-teacher
+# "corpus consensus" would misrepresent it (exactly the failure the corpus
+# contributor rules exist to refuse). Below 60% the evidence is genuinely
+# distributed across two or more materially-contributing teachers. Recorded
+# in PLAN.md as overrulable once Alex sees it work. Known limitation, stated
+# not hidden: share is measured over the gathered top-N by similarity, so a
+# prolific teacher (Derek Prince, ~5k propositions) has more shots at the
+# top-N and can dominate share partly by volume, not only by topical
+# authority -- an accepted first-cut bias, flagged for the calibration pass.
+DOMINANCE_THRESHOLD = 0.60
+
+
+def normalize_topic_key(topic: str) -> str:
+    """Normalized lookup key for a position's topic: collapse every whitespace
+    run to a single space, then trim, then lowercase.
+
+    MUST match migration 077's SQL -- lower(btrim(regexp_replace(topic,
+    '\\s+', ' ', 'g'))) -- byte-for-byte. The two are ONE contract, the same
+    posture as normalize_alias_key / migration 050 (CLAUDE.md Invariant 6):
+    if the app's key and the stored key ever disagree, lookups miss silently
+    and the serving path regenerates a position that already exists. This is a
+    SEPARATE normalization from alias keys -- deliberately NOT reusing or
+    forking normalize_alias_key, which serves a different contract.
+
+    Collapse BEFORE trim is deliberate: Python str.strip() removes all
+    leading/trailing whitespace, but SQL btrim removes only spaces, so a
+    leading tab must first become a space (via the collapse) for the two to
+    agree."""
+    return re.sub(r"\s+", " ", topic).strip().lower()
 
 # --------------------------------------------------------------------------
 # Premise-correction clause (PLAN.md #48 item 4, 2026-07-30)
@@ -372,6 +417,50 @@ TENSION_MODE_PROMPT = BASE_TEMPLATE.format(
 )
 
 
+# --------------------------------------------------------------------------
+# Corpus prompt (PLAN.md #48 serving-path session, 2026-08-01)
+# --------------------------------------------------------------------------
+# A SEPARATE template for corpus positions -- deliberately NOT a variant of
+# BASE_TEMPLATE, because a corpus position is a materially different task:
+# several named teachers, evidence LABELED per teacher, and the divergence
+# rule (present real disagreement, never average past it) that has no analog
+# in a single-teacher position. It is still source-blind by exactly the same
+# mechanism as the teacher prompt: generate_corpus_position_text() (below)
+# takes only a topic string and already-paraphrased proposition content plus
+# plain teacher-NAME strings -- no source_id/document_id, no DB connection,
+# no path to source/chunk text (CLAUDE.md Invariant 12, extended to cover
+# this second generator).
+#
+# It reuses PREMISE_CORRECTION_CLAUSE verbatim (the one shared constant), and
+# reuses the FOUR CORNERS rule, the paraphrase-discipline paragraph, and the
+# no-preamble line verbatim from BASE_TEMPLATE. Those three are NOT factored
+# into shared constants here (that would force re-fingerprinting the proven
+# teacher prompts, which must stay byte-identical -- three live position_v1
+# rows and the position_v2 fingerprint depend on it). Instead a regression
+# test (test_positions.py) asserts these exact fragments appear in BOTH the
+# teacher and corpus prompts, so a future edit to one that forgets the other
+# fails loudly rather than drifting silently (the book-name-map failure shape,
+# CLAUDE.md Landmines).
+CORPUS_PROMPT_VERSION = "position_corpus_v1"
+
+CORPUS_PROMPT = """\
+You are writing a stored corpus position: a summary of what SEVERAL named teachers in a curated Bible-study research tool teach on one topic, for curious lay believers in the Spirit-filled tradition.
+
+You will be given a topic and a set of already-paraphrased teaching statements. EACH statement is labeled, in square brackets, with the name of the teacher it came from. These labeled statements are your ONLY source of information about what these teachers teach on this topic. You have no other knowledge of what any of them has said, and you must not add anything beyond what the statements say.
+
+THE GOVERNING RULE — FOUR CORNERS. Use ONLY what is stated in the teaching statements you are given. Do not add scripture references, examples, or claims that are not in them. Do not draw on general theological knowledge to fill a gap. If the statements do not cover some angle of the topic, leave it out rather than infer it.
+
+{premise_correction_clause}
+
+Attribute views to the teachers who actually hold them, by name — the statements are labeled precisely so that you can. Write ONE position, roughly 150-250 words. Where the labeled statements show the teachers in genuine agreement, present that shared teaching together. Where they materially DISAGREE, present the disagreement plainly — name who holds which view — and do NOT resolve it into a blended middle, a split-the-difference compromise, or a consensus none of them actually stated. Do not imply agreement the statements do not show. Do not give a teacher who contributed a single passing statement the same standing as one who supplies the substance; let the balance of the position follow the balance of the evidence you were given.
+
+Paraphrase. Do not quote the statements verbatim at length — restate them in connected prose, the same way the statements themselves already paraphrase their own source. A short (under roughly five word) precise phrase is fine only where it is genuinely how the teacher put a point in the evidence given to you.
+
+Output ONLY the position text — no preamble, no headers, no meta-commentary about the statements or the task.""".format(
+    premise_correction_clause=PREMISE_CORRECTION_CLAUSE
+)
+
+
 def is_calvinism_predestination_topic(topic: str) -> bool:
     """Case-insensitive substring match for the single, narrow tension-mode
     trigger. Deliberately NOT bare "election" -- that would over-trigger on
@@ -398,6 +487,22 @@ def _prompt_and_version_for_topic(topic: str) -> Tuple[str, str]:
     return POSITION_PROMPT, PROMPT_VERSION
 
 
+def _prompt_and_version(topic: str, kind: str) -> Tuple[str, str]:
+    """Scope-aware extension of _prompt_and_version_for_topic(): the ONE place
+    that decides, for EITHER scope, both which prompt is sent to the model and
+    which version label is stamped on the written row. A corpus position
+    always uses CORPUS_PROMPT (its own divergence handling subsumes the
+    Calvinism tension-mode exception, which only exists to stop a
+    single-teacher position from manufacturing a resolution -- a corpus
+    position is required to present disagreement natively). A teacher position
+    defers to the existing topic-based teacher selector. Both generators and
+    write_position()/write_corpus_position() call THIS, so generation and
+    provenance can never disagree (CLAUDE.md Invariant 10's principle)."""
+    if kind == "corpus":
+        return CORPUS_PROMPT, CORPUS_PROMPT_VERSION
+    return _prompt_and_version_for_topic(topic)
+
+
 def db_params() -> dict:
     db_url = os.environ.get("SUPABASE_DB_URL")
     if not db_url:
@@ -412,6 +517,17 @@ def db_params() -> dict:
     }
 
 
+def _is_eligible(eligible, pid: str, content: str, doc_id: str) -> bool:
+    """Polymorphic eligibility test. `eligible` may be a precomputed set of
+    pass-both proposition IDs (membership test) OR an
+    eligible_statements.EligibilityChecker (lazy per-candidate check). The
+    lazy form is what makes the serving path viable -- the whole-corpus
+    pass-both computation is far too slow to run at question time."""
+    if hasattr(eligible, "is_eligible"):
+        return eligible.is_eligible(pid, content, doc_id)
+    return pid in eligible
+
+
 def gather_evidence(
     params: dict,
     source_id: str,
@@ -420,12 +536,13 @@ def gather_evidence(
     floor: float = SIMILARITY_FLOOR,
     max_evidence: int = MAX_EVIDENCE,
 ) -> List[Dict]:
-    """Embedding-similarity search over `propositions` ONLY (never
-    `chunks`), restricted to this teacher's own documents and to
-    `eligible_ids` (the pass-both set -- see eligible_statements.py).
-    Returns up to max_evidence {"id", "content", "similarity"} dicts,
-    highest similarity first, all >= floor. Read-only; opens and closes its
-    own connection."""
+    """Embedding-similarity search over `propositions` ONLY (never `chunks`),
+    restricted to this teacher's own documents and to the pass-both eligible
+    set. `eligible_ids` may be a precomputed set OR an EligibilityChecker (see
+    _is_eligible). Returns up to max_evidence {"id","content","similarity"}
+    dicts, highest similarity first, all >= floor. The cheap similarity floor
+    is applied BEFORE the (possibly expensive) eligibility check. Read-only;
+    opens and closes its own connection."""
     import psycopg2
 
     embedding = embed_text(topic)
@@ -435,7 +552,8 @@ def gather_evidence(
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT p.id::text, p.content, 1 - (p.embedding <=> %s::vector) AS similarity
+            SELECT p.id::text, p.content, d.id::text,
+                   1 - (p.embedding <=> %s::vector) AS similarity
             FROM propositions p
             JOIN documents d ON d.id = p.document_id
             WHERE d.source_id = %s
@@ -450,15 +568,147 @@ def gather_evidence(
         conn.close()
 
     out = []
-    for pid, content, similarity in rows:
-        if pid not in eligible_ids:
-            continue
+    for pid, content, doc_id, similarity in rows:
         if similarity < floor:
+            continue
+        if not _is_eligible(eligible_ids, pid, content, doc_id):
             continue
         out.append({"id": pid, "content": content, "similarity": float(similarity)})
         if len(out) >= max_evidence:
             break
     return out
+
+
+def gather_evidence_corpus(
+    params: dict,
+    topic: str,
+    eligible_ids,
+    floor: float = SIMILARITY_FLOOR,
+    max_evidence: int = MAX_EVIDENCE,
+) -> List[Dict]:
+    """Corpus-wide sibling of gather_evidence(): the SAME embedding-similarity
+    search over `propositions` ONLY (never `chunks`), but across ALL teachers,
+    not restricted to one source. Returns up to max_evidence
+    {"id","content","source_id","teacher","similarity"} dicts, highest
+    similarity first, all >= floor and all in `eligible_ids` (the pass-both
+    set). The "teacher" attached is a plain public source name -- used for
+    scope determination, contributor counting, and per-statement labeling in
+    CORPUS_PROMPT; it is NEVER a channel for source/chunk text (Invariant 12).
+    Read-only; opens and closes its own connection. LIMIT 1000 (vs 500 for the
+    single-teacher gather) because the eligible top-N is drawn from the whole
+    corpus here, not one teacher's slice."""
+    import psycopg2
+
+    embedding = embed_text(topic)
+    conn = psycopg2.connect(**params)
+    conn.set_session(readonly=True, autocommit=True)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT p.id::text, p.content, d.id::text, d.source_id::text, s.name,
+                   1 - (p.embedding <=> %s::vector) AS similarity
+            FROM propositions p
+            JOIN documents d ON d.id = p.document_id
+            JOIN sources s ON s.id = d.source_id
+            ORDER BY p.embedding <=> %s::vector
+            LIMIT 1000
+            """,
+            (embedding, embedding),
+        )
+        rows = cur.fetchall()
+        cur.close()
+    finally:
+        conn.close()
+
+    out = []
+    for pid, content, doc_id, source_id, teacher, similarity in rows:
+        if similarity < floor:
+            continue
+        if not _is_eligible(eligible_ids, pid, content, doc_id):
+            continue
+        out.append({
+            "id": pid,
+            "content": content,
+            "source_id": source_id,
+            "teacher": teacher,
+            "similarity": float(similarity),
+        })
+        if len(out) >= max_evidence:
+            break
+    return out
+
+
+def determine_scope(evidence: List[Dict]) -> Tuple[str, Optional[str]]:
+    """Given corpus-wide gathered evidence (each item carrying 'source_id'),
+    decide scope by single-teacher dominance. If the largest-contributing
+    teacher supplies >= DOMINANCE_THRESHOLD of the gathered evidence, this
+    topic is dominated by one voice -> ("teacher", that source_id); dressing
+    it up as a multi-teacher consensus would misrepresent it. Otherwise the
+    evidence is genuinely distributed -> ("corpus", None). Pure, no I/O. Empty
+    evidence returns ("corpus", None), but the caller refuses on the
+    honest-empty floor before scope is ever consulted."""
+    if not evidence:
+        return "corpus", None
+    from collections import Counter
+
+    counts = Counter(e["source_id"] for e in evidence)
+    total = sum(counts.values())
+    top_source, top_n = counts.most_common(1)[0]
+    if top_n / total >= DOMINANCE_THRESHOLD:
+        return "teacher", top_source
+    return "corpus", None
+
+
+def contributor_breakdown(evidence: List[Dict]) -> List[Dict]:
+    """Per-teacher contribution counts derived from an in-memory evidence list
+    (each item carrying 'source_id' and 'teacher'), sorted by count desc then
+    name. Pure. This describes evidence in hand before a write; the
+    authoritative breakdown for a STORED position is
+    contributor_breakdown_from_db(), derived from that version's immutable
+    position_evidence rows."""
+    from collections import Counter
+
+    counts = Counter((e["source_id"], e["teacher"]) for e in evidence)
+    out = [
+        {"source_id": sid, "name": name, "count": n}
+        for (sid, name), n in counts.items()
+    ]
+    out.sort(key=lambda c: (-c["count"], c["name"]))
+    return out
+
+
+def contributor_breakdown_from_db(params: dict, position_id: str) -> List[Dict]:
+    """Authoritative per-teacher contribution counts for a STORED position,
+    derived from its immutable position_evidence rows joined out to sources --
+    NOT a stored count. This is migration 073/077's explicit philosophy: never
+    trust a count that could drift; derive it from the evidence rows
+    themselves (a position version's evidence rows never change -- a rebuild
+    writes a NEW version with its own rows). Read-only."""
+    import psycopg2
+
+    conn = psycopg2.connect(**params)
+    conn.set_session(readonly=True, autocommit=True)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT d.source_id::text, s.name, count(*) AS c
+            FROM position_evidence pe
+            JOIN propositions p ON p.id = pe.proposition_id
+            JOIN documents d ON d.id = p.document_id
+            JOIN sources s ON s.id = d.source_id
+            WHERE pe.position_id = %s
+            GROUP BY d.source_id, s.name
+            ORDER BY c DESC, s.name
+            """,
+            (position_id,),
+        )
+        rows = cur.fetchall()
+        cur.close()
+    finally:
+        conn.close()
+    return [{"source_id": r[0], "name": r[1], "count": int(r[2])} for r in rows]
 
 
 class PositionGenerationFailed(Exception):
@@ -499,6 +749,161 @@ def generate_position_text(teacher_name: str, topic: str, evidence: List[Dict]) 
         raise PositionGenerationFailed(str(exc)) from exc
 
 
+def generate_corpus_position_text(topic: str, attributed_evidence: List[Dict]) -> str:
+    """Corpus sibling of generate_position_text(): synthesizes a corpus
+    position from `attributed_evidence` ONLY. Each item needs a "content" key
+    and a "teacher" key (a plain public source-name string). Like
+    generate_position_text(), this opens no database connection and imports
+    nothing capable of reading `chunks`/`documents`; there is no parameter
+    through which source/chunk text could reach it -- the "teacher" label is a
+    name, not source text. CLAUDE.md Invariant 12's source-blindness now
+    covers BOTH generators, by signature, not by prompt instruction. Raises
+    PositionGenerationFailed on any call error.
+
+    The prompt/version is chosen by _prompt_and_version(topic, "corpus") -- the
+    SAME selector write_corpus_position() stamps provenance from, so generation
+    and provenance can never disagree (Invariant 10)."""
+    system_prompt, _ = _prompt_and_version(topic, "corpus")
+    evidence_block = "\n".join(
+        f"- [{e['teacher']}] {e['content']}" for e in attributed_evidence
+    )
+    user_message = (
+        f"Topic: {topic}\n\n"
+        f"Teaching statements (each labeled with its teacher):\n{evidence_block}"
+    )
+    try:
+        client = get_anthropic_client()
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=600,
+            system=[
+                {"type": "text", "text": system_prompt},
+                {"type": "text", "text": get_guardrails_text()},
+            ],
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return response.content[0].text.strip()
+    except Exception as exc:
+        raise PositionGenerationFailed(str(exc)) from exc
+
+
+# --------------------------------------------------------------------------
+# Application-level scope lock (pairs with migration 076's DB CHECK)
+# --------------------------------------------------------------------------
+_PERMITTED_SCOPES = ("teacher", "corpus")
+
+# Sentinel distinguishing "caller did not pass requested_teacher_id" (default
+# it to source_id -- a teacher-EXPLICIT question) from an explicit None (a
+# teacher position reached via a TOPIC question, whose lineage lookup key must
+# stay NULL so it can later widen to corpus).
+_UNSET = object()
+
+
+def _assert_permitted_scope(kind: str) -> None:
+    """Application-level half of the two-scope lock; the DB's
+    CHECK (kind IN ('teacher','corpus')) constraint (migration 076) is the
+    other half. Corpus-wide was unbanned on Alex's explicit 2026-08-01
+    decision (PLAN.md #48). Widening to a THIRD scope requires deliberately
+    changing BOTH this and the DB CHECK, never a runtime flag."""
+    if kind not in _PERMITTED_SCOPES:
+        raise ValueError(
+            f"kind={kind!r} is not a permitted position scope -- must be one "
+            f"of {_PERMITTED_SCOPES}. This application check pairs with the "
+            "DB's CHECK (kind IN ('teacher','corpus')) constraint (migration "
+            "076); widening to a third scope requires changing BOTH."
+        )
+
+
+def _insert_position_version(
+    params: dict,
+    *,
+    kind: str,
+    source_id: Optional[str],
+    requested_teacher_id: Optional[str],
+    topic: str,
+    content: str,
+    evidence: List[Dict],
+    prompt_version: str,
+    prompt_fingerprint: str,
+    supersedes: Optional[Dict] = None,
+) -> Dict:
+    """Writes ONE position version + its position_evidence rows in a single
+    transaction. Handles both a fresh lineage (supersedes=None -> version 1,
+    lineage_id = the new row's own id, is_current=true) and a rebuild
+    (supersedes={"id","lineage_id","version"} -> the prior version's
+    is_current is flipped false and version = prior+1 is inserted with
+    is_current=true, supersedes_id = prior id, same lineage_id). The prior
+    version is NEVER overwritten in place -- an answer a user already saw stays
+    exactly as it was, just is_current=false (PLAN.md track PL versioning
+    rule). Because kind can differ between a lineage's versions, a rebuild can
+    widen scope teacher->corpus without a from-scratch rewrite.
+
+    The prior-version flip and the new insert run in the SAME transaction, so
+    the partial unique index (one current version per (topic_key,
+    requested_teacher)) always sees exactly one current version at commit --
+    there is never a two-current window. topic_key is computed here, the one
+    place, via normalize_topic_key(), so it always matches the lookup key."""
+    import psycopg2
+    import uuid
+
+    topic_key = normalize_topic_key(topic)
+    new_id = str(uuid.uuid4())
+    if supersedes is None:
+        lineage_id = new_id
+        version = 1
+        supersedes_id = None
+    else:
+        lineage_id = supersedes["lineage_id"]
+        version = supersedes["version"] + 1
+        supersedes_id = supersedes["id"]
+
+    conn = psycopg2.connect(**params)
+    conn.autocommit = False
+    try:
+        cur = conn.cursor()
+        if supersedes is not None:
+            cur.execute(
+                "UPDATE positions SET is_current = false, updated_at = now() "
+                "WHERE id = %s AND is_current = true",
+                (supersedes["id"],),
+            )
+        cur.execute(
+            """
+            INSERT INTO positions
+              (id, kind, source_id, requested_teacher_id, topic, topic_key,
+               content, status, prompt_version, prompt_fingerprint, model,
+               lineage_id, version, is_current, supersedes_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s, true, %s)
+            RETURNING id::text, created_at, version
+            """,
+            (new_id, kind, source_id, requested_teacher_id, topic, topic_key,
+             content, prompt_version, prompt_fingerprint, MODEL,
+             lineage_id, version, supersedes_id),
+        )
+        position_id, created_at, written_version = cur.fetchone()
+        for e in evidence:
+            cur.execute(
+                "INSERT INTO position_evidence (position_id, proposition_id) VALUES (%s, %s)",
+                (position_id, e["id"]),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "position_id": position_id,
+        "lineage_id": lineage_id,
+        "version": written_version,
+        "supersedes_id": supersedes_id,
+        "topic_key": topic_key,
+        "created_at": created_at.isoformat(),
+    }
+
+
 def write_position(
     params: dict,
     source_id: str,
@@ -507,39 +912,50 @@ def write_position(
     kind: str = "teacher",
     min_evidence_count: int = MIN_EVIDENCE_COUNT,
     teacher_name: Optional[str] = None,
+    requested_teacher_id=_UNSET,
+    supersedes: Optional[Dict] = None,
 ) -> Dict:
-    """Enforces both structural guarantees before ever generating text:
-    kind must be 'teacher' (also enforced by the DB CHECK constraint,
-    migration 073 -- this is belt-and-suspenders, not the only gate), and
-    len(evidence) must meet min_evidence_count (the honest-empty floor).
-    Refusal returns a result dict rather than raising -- refusing is the
-    expected, correct outcome for thin evidence, not an error.
+    """Teacher-scoped writer. Enforces both structural guarantees before ever
+    generating text: kind must be 'teacher' (corpus positions go through
+    write_corpus_position(); the scope SET is also enforced by the DB CHECK,
+    migration 076), and len(evidence) must meet min_evidence_count (the
+    honest-empty floor -- no LLM call is made on a refusal). Refusal returns a
+    result dict rather than raising -- refusing is the expected, correct
+    outcome for thin evidence, not an error.
 
-    On success, generates the position text, then writes `positions` and
-    `position_evidence` in ONE transaction (evidence rows and the position
-    row must never exist independently of each other) and returns the
-    written row's id."""
-    if kind not in ("teacher", "corpus"):
+    requested_teacher_id: the teacher a question EXPLICITLY named. Defaults
+    (via the _UNSET sentinel) to source_id -- a teacher-explicit question,
+    where the requested teacher IS the attributed teacher. Pass None
+    explicitly for a teacher position reached via a TOPIC question that a
+    single teacher dominates: its lineage lookup key stays NULL so it can
+    later widen to corpus.
+
+    supersedes: pass a prior version dict {"id","lineage_id","version"} to
+    version a rebuild -- the prior row is kept, is_current flipped false, and a
+    new version inserted. None (default) starts a fresh v1 lineage. Nothing is
+    ever overwritten in place.
+
+    On success, generates the text and writes the position + its
+    position_evidence rows in ONE transaction (via _insert_position_version)."""
+    _assert_permitted_scope(kind)
+    if kind != "teacher":
         raise ValueError(
-            f"write_position: kind={kind!r} is not permitted -- a position is "
-            "scoped to exactly 'teacher' or 'corpus'. Corpus-wide positions "
-            "were unbanned on Alex's explicit 2026-08-01 decision (PLAN.md "
-            "#48), after the #49 backfill (850/857 eligible documents, incl. "
-            "477 Derek Prince) satisfied the precondition CLAUDE.md Invariant "
-            "13 named. This application check is a SECOND, independent lock in "
-            "addition to the DB's own CHECK (kind IN ('teacher','corpus')) "
-            "constraint (migration 076), never instead of it -- widening to a "
-            "third scope requires deliberately changing BOTH."
+            "write_position() handles kind='teacher' only; corpus positions "
+            "use write_corpus_position(). (got kind=%r)" % (kind,)
         )
 
     if len(evidence) < min_evidence_count:
         return {
             "status": "refused_floor",
+            "kind": "teacher",
             "topic": topic,
             "source_id": source_id,
             "evidence_count": len(evidence),
             "min_evidence_count": min_evidence_count,
         }
+
+    if requested_teacher_id is _UNSET:
+        requested_teacher_id = source_id
 
     if teacher_name is None:
         import psycopg2
@@ -560,57 +976,126 @@ def write_position(
     except PositionGenerationFailed as exc:
         return {
             "status": "errored",
+            "kind": "teacher",
             "topic": topic,
             "source_id": source_id,
             "evidence_count": len(evidence),
             "error": str(exc),
         }
 
-    # Stamp provenance from the SAME selector generate_position_text() used
-    # to decide which prompt was actually sent -- never the hard-coded
-    # PROMPT_VERSION/prompt_fingerprint() pair, which only ever describes
-    # POSITION_PROMPT and would mislabel every tension-mode row (CLAUDE.md
-    # Invariant 10).
-    prompt_text, stamped_prompt_version = _prompt_and_version_for_topic(topic)
+    # Stamp provenance from the SAME selector generate_position_text() used to
+    # decide which prompt was actually sent -- never a hard-coded pair, which
+    # would mislabel a tension-mode row (CLAUDE.md Invariant 10).
+    prompt_text, stamped_prompt_version = _prompt_and_version(topic, "teacher")
     stamped_fingerprint = _fingerprint(prompt_text)
 
-    import psycopg2
-
-    conn = psycopg2.connect(**params)
-    conn.autocommit = False
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO positions
-              (kind, source_id, topic, content, status, prompt_version, prompt_fingerprint, model)
-            VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s)
-            RETURNING id::text, created_at
-            """,
-            (kind, source_id, topic, content, stamped_prompt_version, stamped_fingerprint, MODEL),
-        )
-        position_id, created_at = cur.fetchone()
-        for e in evidence:
-            cur.execute(
-                "INSERT INTO position_evidence (position_id, proposition_id) VALUES (%s, %s)",
-                (position_id, e["id"]),
-            )
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cur.close()
-        conn.close()
+    ins = _insert_position_version(
+        params,
+        kind="teacher",
+        source_id=source_id,
+        requested_teacher_id=requested_teacher_id,
+        topic=topic,
+        content=content,
+        evidence=evidence,
+        prompt_version=stamped_prompt_version,
+        prompt_fingerprint=stamped_fingerprint,
+        supersedes=supersedes,
+    )
 
     return {
         "status": "written",
-        "position_id": position_id,
+        "kind": "teacher",
+        "position_id": ins["position_id"],
+        "lineage_id": ins["lineage_id"],
+        "version": ins["version"],
+        "supersedes_id": ins["supersedes_id"],
         "topic": topic,
         "source_id": source_id,
+        "requested_teacher_id": requested_teacher_id,
         "teacher_name": teacher_name,
         "evidence_count": len(evidence),
         "evidence_ids": [e["id"] for e in evidence],
         "content": content,
-        "created_at": created_at.isoformat(),
+        "created_at": ins["created_at"],
+    }
+
+
+def write_corpus_position(
+    params: dict,
+    topic: str,
+    evidence: List[Dict],
+    min_evidence_count: int = MIN_EVIDENCE_COUNT,
+    requested_teacher_id: Optional[str] = None,
+    supersedes: Optional[Dict] = None,
+) -> Dict:
+    """Corpus-scoped writer. `evidence` items must each carry "id", "content",
+    "source_id", and "teacher" (i.e. gather_evidence_corpus() output). The
+    stored row's source_id is NULL -- a corpus position names no single source
+    (migration 076's coupling CHECK); its contributing teachers are DERIVED
+    from the evidence, never stored as a single-source pointer or a taxonomy.
+
+    Same honest-empty floor as write_position() (no LLM call on refusal) and
+    the same versioning/supersede machinery. Generation is source-blind via
+    generate_corpus_position_text() -- the per-statement teacher labels are
+    plain names, not source text (Invariant 12).
+
+    requested_teacher_id is normally None (a corpus position answers a topic
+    question), but is accepted so a topic lineage widening teacher->corpus
+    keeps the SAME lookup key it had as a teacher version (which was NULL)."""
+    _assert_permitted_scope("corpus")
+
+    if len(evidence) < min_evidence_count:
+        return {
+            "status": "refused_floor",
+            "kind": "corpus",
+            "topic": topic,
+            "source_id": None,
+            "evidence_count": len(evidence),
+            "min_evidence_count": min_evidence_count,
+        }
+
+    attributed = [{"content": e["content"], "teacher": e["teacher"]} for e in evidence]
+    try:
+        content = generate_corpus_position_text(topic, attributed)
+    except PositionGenerationFailed as exc:
+        return {
+            "status": "errored",
+            "kind": "corpus",
+            "topic": topic,
+            "source_id": None,
+            "evidence_count": len(evidence),
+            "error": str(exc),
+        }
+
+    prompt_text, stamped_prompt_version = _prompt_and_version(topic, "corpus")
+    stamped_fingerprint = _fingerprint(prompt_text)
+
+    ins = _insert_position_version(
+        params,
+        kind="corpus",
+        source_id=None,
+        requested_teacher_id=requested_teacher_id,
+        topic=topic,
+        content=content,
+        evidence=evidence,
+        prompt_version=stamped_prompt_version,
+        prompt_fingerprint=stamped_fingerprint,
+        supersedes=supersedes,
+    )
+
+    return {
+        "status": "written",
+        "kind": "corpus",
+        "position_id": ins["position_id"],
+        "lineage_id": ins["lineage_id"],
+        "version": ins["version"],
+        "supersedes_id": ins["supersedes_id"],
+        "topic": topic,
+        "source_id": None,
+        "requested_teacher_id": requested_teacher_id,
+        "contributors": contributor_breakdown(evidence),
+        "evidence_count": len(evidence),
+        "evidence_ids": [e["id"] for e in evidence],
+        "content": content,
+        "created_at": ins["created_at"],
     }
