@@ -87,15 +87,27 @@ proposition has zero rows here, meaning "unknown," never backfilled. Records
 the full chunk set a proposition's extraction call actually saw, not a single
 chunk — extraction always runs on complete reconstructed document text.
 
-**positions** / **position_evidence** — teacher-specific position layer
-(PLAN.md #48, migration 073). `positions.kind` CHECK-locked to `'teacher'`
-(corpus-wide positions structurally banned pre-backfill, CLAUDE.md Invariant
-13); `prompt_version`/`prompt_fingerprint`/`model` NOT NULL from row one
-(Invariant 14, unlike `propositions`' nullable columns above).
-`position_evidence` is a real join table (`position_id`/`proposition_id`) with
-`ON DELETE RESTRICT` on `proposition_id` — an evidence proposition can't be
-silently deleted out from under a position that cites it. Not yet read by any
-serving code.
+**positions** / **position_evidence** — teacher/corpus position layer
+(PLAN.md #48; migration 073 foundation, 076 corpus ban-lift, 077 versioning).
+`positions.kind` CHECK-locked to `IN ('teacher','corpus')` (widened from
+073's teacher-only lock on Alex's 2026-08-01 call — CLAUDE.md Invariant 13; a
+third scope still needs code+migration). `source_id` is NULLABLE with a
+scope/source coupling CHECK: teacher ⇒ `source_id` NOT NULL (names one
+teacher), corpus ⇒ `source_id` NULL (contributors DERIVED from evidence, never
+a stored pointer/taxonomy). `prompt_version`/`prompt_fingerprint`/`model` NOT
+NULL from row one (Invariant 14, unlike `propositions`' nullable columns
+above) — corpus rows stamp `position_corpus_v1`. Versioning columns (mig 077):
+`lineage_id` groups a position's versions, `version` monotonic, `is_current`
+(partial unique index enforces exactly one current per `(topic_key,
+requested_teacher_id)` — the lineage/lookup key), `supersedes_id` chains a
+rebuild to its predecessor, `topic_key` = `normalize_topic_key(topic)`
+(byte-matches mig 077's SQL), `requested_teacher_id` = the teacher a question
+named (NULL = topic/corpus question — the discriminator that lets a topic
+lineage widen teacher→corpus without a rewrite). `position_evidence` is a real
+join table (`position_id`/`proposition_id`) with `ON DELETE RESTRICT` on
+`proposition_id` — an evidence proposition can't be silently deleted out from
+under a position that cites it. Served by `scripts/serve_position.py`
+(lookup-or-generate); **not yet wired into live chat** as of 2026-08-01.
 
 **app_settings** — one row, `key='safe_mode'`. On = only PD/owned retrievable
 regardless of visibility. Never writes `sources.visibility`.
@@ -179,8 +191,8 @@ Public surface: `match_position_paper(question) -> Optional[str]`,
 (SSE stream), `get_paper_body(pillar_key) -> Optional[str]`.
 
 **Naming caution — "position" spans three unrelated things** (see CLAUDE.md
-Invariant 12's note): (a) the `positions` teacher-layer table + `positions.py`
-(source-blind by signature), (b) this house-voice `position_papers.py` feature
+Invariant 12's note): (a) the `positions` teacher/corpus table + `positions.py`
+(both generators source-blind by signature), (b) this house-voice `position_papers.py` feature
 (deliberately reads document/chunk text — not a violation of (a)'s invariant),
 (c) the `docs/position_papers/` draft folder.
 

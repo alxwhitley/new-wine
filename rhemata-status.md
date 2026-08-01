@@ -56,14 +56,45 @@ DB is the durable record, per repo convention.)
 speaking-in-tongues in Rhemata's own voice via `chat.py` interception (newly
 documented in ARCHITECTURE.md, "Position papers (house-voice answer path)",
 2026-08-01). Remaining charismatic pillars are future work (drafts in the
-untracked `docs/position_papers/`, owned by Alex). Teacher/corpus positions
-remain structurally gated to `kind='teacher'` (Invariants 13/14); corpus-wide
-positions still refused twice.
+untracked `docs/position_papers/`, owned by Alex).
 
-**Repo at session close.** The working tree carries the deliberately-
-uncommitted numeral-heading detector + its test (`scripts/propositions.py`,
-`scripts/test_propositions_book_numeral_detection.py`), two uncommitted
-frontend commentary-styling tweaks, and the untracked `docs/position_papers/`
+**Position layer — serving path built + proven standalone, corpus ban lifted
+(2026-08-01, PLAN.md #48).** Alex's explicit call lifted the corpus-wide ban.
+Both structural locks widened together: migration 076 (`positions.kind` CHECK
+`'teacher'` → `IN ('teacher','corpus')`, widened not dropped; `source_id`
+NULLABLE + scope/source coupling CHECK) and the `write_position` /
+`write_corpus_position` application gate. Migration 077 added the
+versioning/lookup record shape (`lineage_id`/`version`/`is_current`/
+`supersedes_id`/`topic_key`/`requested_teacher_id`, one-current-per-lineage
+partial unique index). `scripts/serve_position.py` is the question-time
+lookup-or-generate path: serve stored current version or generate+persist+
+serve; corpus generation source-blind (Invariant 12 now covers both
+generators — teacher NAME labels only); scope by `DOMINANCE_THRESHOLD = 0.60`
+(Open Decision #13); contributors derived from evidence with counts;
+disagreement presented not averaged; versioning + teacher→corpus widening;
+four empty-state rules; no LLM call on refusal. **NOT wired into live chat** —
+that cutover + teacher-card migration are the next slice. Proven:
+`scripts/prove_serving_path.py` (39/39, fresh-connection verified),
+`scripts/test_serve_position.py` (deterministic). Live table now holds 6
+positions: the original 3 Savchuk `position_v1` drafts (untouched) + 3 genuine
+new drafts this session (Derek Prince/divine-exchange teacher; holiness corpus;
+"can a believer lose their salvation" corpus); the widening-demo lineage was
+cleaned up. Invariants 13/14 rewritten/preserved. **Hard dependency for the
+live cutover (new finding):** the pass-both eligible set is CPU-bound to
+compute whole-corpus (~15+ min, book-length docs dominate) — not viable at
+question time; the serving path uses a lazy `EligibilityChecker`, but
+production must materialize eligibility, not recompute live.
+
+**Repo at session close.** This session (2026-08-01, position serving path)
+added three commits on `main`: ban-lift `2183a38` (migration 076 +
+`write_position` gate), serving-path `6b66199` (migration 077 + `serve_position.py`
++ corpus generation/versioning in `positions.py` + `eligible_statements.py`
+lazy checker + tests), and a docs commit (CLAUDE.md Invariants 12/13, PLAN.md,
+this file). Migrations 076 and 077 are already APPLIED to the live DB (the code
+and schema are in sync). Pre-existing and still uncommitted, untouched by this
+session: the deliberately-uncommitted numeral-heading detector + its test
+(`scripts/propositions.py`, `scripts/test_propositions_book_numeral_detection.py`),
+two frontend commentary-styling tweaks, and the untracked `docs/position_papers/`
 drafts. Local `main` is ahead of `origin/main` (unpushed) — pushing is a
 separate decision (push to main deploys the backend to Railway).
 

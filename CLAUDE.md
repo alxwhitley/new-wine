@@ -211,21 +211,31 @@ different row, per the hard rule above.
     known JSON-escaping defect the other 5 share. See PLAN.md #17.
 
 12. **Position generation must stay structurally source-blind.**
-    `scripts/positions.py::generate_position_text()` — the only function
-    that calls the LLM to write a position — takes only teacher name, topic,
-    and evidence-proposition content (`propositions.content`). It has no
-    `document_id`/`source_id` parameter and opens no database connection, so
-    there is no argument through which source/chunk text could reach it.
-    This is enforced by the function's own signature, not by a prompt
-    instruction telling the model to ignore something it was handed. Any
-    future position-generation caller must preserve this — a caller that
-    "just needs a bit more context" and adds a chunk-text parameter reopens
-    the same live-answer leak the position layer exists to close.
+    `scripts/positions.py` has TWO — and only two — functions that call the
+    LLM to write a position: `generate_position_text()` (teacher scope) and
+    `generate_corpus_position_text()` (corpus scope, added 2026-08-01 with the
+    corpus serving path). Each takes only a topic, already-paraphrased
+    evidence-proposition content (`propositions.content`), and — as plain
+    public NAME strings — the teacher(s) that content is attributed to (a
+    single `teacher_name` for the teacher function; per-statement `teacher`
+    labels for the corpus function, which the divergence rule needs to name
+    who holds which view). Neither has a `document_id`/`source_id` parameter,
+    and neither opens a database connection, so there is no argument through
+    which source/chunk text could reach either. This is enforced by the
+    functions' own signatures, not by a prompt instruction telling the model
+    to ignore something it was handed. A teacher NAME is not source text —
+    passing it, or per-statement teacher labels, does not breach this; the
+    breach would be source/chunk TEXT, which no signature here admits. Any
+    future position-generation caller, or any future generator, must preserve
+    this — a caller that "just needs a bit more context" and adds a chunk-text
+    parameter reopens the same live-answer leak the position layer exists to
+    close.
 
     **Naming caution — "position" now names three unrelated things; this
-    invariant governs only (a).** (a) The teacher-layer `positions` table +
-    `positions.py::generate_position_text()` — the source-blind mechanism
-    described above. (b) `backend/app/services/position_papers.py` — the
+    invariant governs only (a).** (a) The teacher/corpus `positions` table +
+    `positions.py`'s generation functions (`generate_position_text` /
+    `generate_corpus_position_text`) — the source-blind mechanism described
+    above. (b) `backend/app/services/position_papers.py` — the
     shipped house-voice "position papers" feature (baptism/tongues pillars,
     wired into `chat.py`), which by deliberate design DOES read a paper's
     own document/chunk text (`get_paper_body()` reads `chunks`) to answer in
@@ -236,27 +246,38 @@ different row, per the hard rule above.
     (a)'s source-blindness; they are separate code paths with separate
     rules. See ARCHITECTURE.md, "Position papers (house-voice answer path)."
 
-13. **Corpus-wide positions are refused twice, not once.**
-    `write_position()` raises before ever opening a transaction if
-    `kind != "teacher"`, AND `positions.kind` carries a
-    `CHECK (kind = 'teacher')` constraint (migration 073) that would reject
-    the insert even if that application gate were bypassed or forked.
-    Widening either requires a deliberate code change or migration, never a
-    runtime flag. **The backfill precondition is now SATISFIED — Alex's
-    explicit call, made 2026-07-30 (records session), superseding this
-    invariant's prior "not yet made" framing.** The backfill (PLAN.md #49)
-    ran 2026-07-30: 850/857 eligible documents now have propositions,
-    including 477 of Derek Prince's — the exact event this invariant
-    originally named as the trigger to watch for. 7 documents remain
-    unprocessed (5 a known JSON-escaping defect, 2 a newly-found
-    book-length extraction gap, PLAN.md #17); Alex judged that close
-    enough to lift the gate rather than wait for 857/857. **This satisfies
-    the backfill precondition only — it does not itself make corpus-wide
-    positions buildable.** Both structural refusals above are untouched (no
-    code or migration change has landed), and Open Decision #13 in PLAN.md
-    (who owns the teacher-vs-corpus scope-boundary judgment call) is still
-    unresolved. Widening either is its own deliberate future session, not a
-    consequence of this entry.
+13. **Position scope is locked to exactly two values (`'teacher'` |
+    `'corpus'`), double-locked — a third scope is still refused twice.** A
+    `positions` row's scope is enforced in two independent places that must
+    agree: `write_position()` (teacher) and `write_corpus_position()` (corpus)
+    reject any other scope via `_assert_permitted_scope()` before opening a
+    transaction, AND `positions.kind` carries a
+    `CHECK (kind IN ('teacher','corpus'))` constraint (migration 076, widened
+    from 073's teacher-only lock) that rejects the insert even if that
+    application gate were bypassed or forked. Widening to a THIRD scope
+    requires a deliberate code change AND a migration, never a runtime flag.
+    **Corpus-wide was BANNED until 2026-08-01, then UNBANNED on Alex's
+    explicit decision that day** — the #49 backfill (850/857 eligible
+    documents, incl. 477 of Derek Prince's) satisfied the precondition this
+    invariant originally named. Recorded so a future session reads the widened
+    CHECK as a decision, not drift: the original teacher-only lock existed
+    because a corpus position authored before Prince's material landed would
+    have named whichever teachers happened to already have statements as "the
+    corpus" and inverted the day his documents were processed. A teacher
+    position names exactly one source (`source_id` NOT NULL); a corpus position
+    names none (`source_id` NULL) and derives its contributing teachers from
+    its evidence — enforced by migration 076's scope/source coupling CHECK, so
+    the schema itself cannot drift into an averaged, unattributed position.
+    Contributors are ALWAYS derived from a position version's evidence at
+    build/serve time (`contributor_breakdown_from_db()`), NEVER a stored
+    taxonomy of which teacher belongs to which family — that standing rule
+    (PLAN.md track PL) is unchanged and non-negotiable. **Still open, NOT
+    closed by the ban lift:** PLAN.md Open Decision #13 (who owns the
+    teacher-vs-corpus scope-boundary judgment call) remains unresolved; the
+    threshold that actually decides teacher vs corpus for a topic question
+    (`positions.DOMINANCE_THRESHOLD` = 0.60 — a single teacher supplying ≥60%
+    of gathered evidence is teacher scope) is a reasoned, overrulable starting
+    point, not a calibrated constant — see PLAN.md.
 
 14. **`positions.prompt_version`/`prompt_fingerprint`/`model` are `NOT NULL`
     — keep this discipline for any future LLM-generated-content table.**
