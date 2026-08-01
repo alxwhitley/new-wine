@@ -499,7 +499,7 @@ def _get_client_ip(http_request: Request) -> Optional[str]:
 
 
 @router.post("")
-async def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = Depends(get_optional_user)):
+def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = Depends(get_optional_user)):
     db = get_supabase()
 
     # Captured here so generate() can include it in the final SSE meta event.
