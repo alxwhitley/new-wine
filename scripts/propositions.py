@@ -1130,6 +1130,17 @@ _MATTER_LABEL_PREFIX = (
     "index", "about the author", "about this book", "about the electronic",
     "subject index", "scripture index",
 )
+# Editorial-apparatus labels (fix (a)) -- EXACT normalized match, deliberately
+# NOT a prefix match like _MATTER_LABEL_PREFIX above: a prefix match here
+# would collide with a real chapter titled e.g. "The Biography of Faith"
+# (starts with "biograph..." if stemmed loosely, but is NOT the editorial
+# "Biographical Sketch"/"Biographical Note" apparatus this set targets).
+_MATTER_LABEL_APPARATUS = {
+    "editor's note", "editors note", "editorial note",
+    "publisher's note", "publishers note",
+    "translator's note", "translators note",
+    "biographical sketch", "biographical note",
+}
 # PROTECTED labels short-circuit is_front_back_matter() to (False, "")
 # BEFORE any shape check ever runs -- see that function's own docstring for
 # why this ordering is the false-positive guard the whole design leans on
@@ -1185,6 +1196,63 @@ def _distinct_ccel_fields(text: str) -> set:
     return {m.group(1).lower() for m in _CCEL_FIELD_RE.finditer(text)}
 
 
+# ── Roman-numeral round-trip validation (fix (b) dependency) ────────────────
+# Shared, single source of truth for "is this string a genuinely valid
+# canonical roman numeral" -- used by _digit_token_ratio()'s tightened
+# roman-numeral arm below. (Also reused, unforked, by a separate
+# single-occurrence numeral/roman-numeral chapter-heading detector that
+# lives elsewhere in this module's own history but is not part of this
+# commit.)
+_ROMAN_NUMERAL_UNIT_VALUES = [
+    ("M", 1000), ("CM", 900), ("D", 500), ("CD", 400),
+    ("C", 100), ("XC", 90), ("L", 50), ("XL", 40),
+    ("X", 10), ("IX", 9), ("V", 5), ("IV", 4), ("I", 1),
+]
+
+
+def _int_to_roman(n: int) -> str:
+    """Standard greedy roman-numeral renderer -- used only as the second
+    half of _roman_to_int()'s own round-trip validation below, never
+    called directly by any other function in this module."""
+    parts: List[str] = []
+    for symbol, value in _ROMAN_NUMERAL_UNIT_VALUES:
+        while n >= value:
+            parts.append(symbol)
+            n -= value
+    return "".join(parts)
+
+
+def _roman_to_int(s: str) -> Optional[int]:
+    """Converts an UPPERCASE roman-numeral string to its integer value,
+    correctly handling subtractive notation (IV=4, IX=9, XL=40, XC=90,
+    CD=400, CM=900). Returns None if `s` is not a VALID CANONICAL roman
+    numeral -- not merely "composed of roman-numeral characters". Validated
+    by ROUND-TRIP: parse s -> int via the standard left-to-right
+    subtractive-pair algorithm, then re-render that int back to ITS OWN
+    canonical roman-numeral string via _int_to_roman() and require an EXACT
+    match against `s`. This single check simultaneously rejects both
+    "IIII" (parses to 4 under the algorithm, but 4's own canonical form is
+    "IV", not "IIII" -- mismatch) and "VX" (parses to 5 under the
+    algorithm -- V=5 < X=10 so subtracted, net 10-5=5 -- but 5's canonical
+    form is "V", not "VX" -- mismatch), with no separate hand-written rule
+    needed for either malformed shape specifically."""
+    if not s or not all(ch in "IVXLCDM" for ch in s):
+        return None
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    total = 0
+    for i, ch in enumerate(s):
+        v = values[ch]
+        if i + 1 < len(s) and v < values[s[i + 1]]:
+            total -= v
+        else:
+            total += v
+    if total <= 0 or total > 3999:
+        return None
+    if _int_to_roman(total) != s:
+        return None
+    return total
+
+
 def _digit_token_ratio(text: str) -> float:
     """Fraction of `text`'s whitespace-split tokens that are a bare
     integer (a page number), a roman numeral (a page-footer convention
@@ -1195,7 +1263,26 @@ def _digit_token_ratio(text: str) -> float:
     this was checked against). A token's own trailing comma/period/
     semicolon is tolerated (stripped before testing) since real index
     listings often separate locators that way. Returns 0.0 if `text` has
-    no tokens at all -- never divides by zero."""
+    no tokens at all -- never divides by zero.
+
+    ROMAN-NUMERAL ARM, tightened (bug fix): a token counts as roman-
+    numeral-shaped ONLY if it is (a) lowercase IN THE ORIGINAL TEXT -- this
+    is what excludes the capitalized first-person pronoun "I" (a genuine
+    corpus bug: Wesley's Defenders measured 22 of 24 "digit" tokens as the
+    pronoun "I" before this fix) -- AND (b) round-trips through the
+    existing _roman_to_int() as a genuinely VALID canonical roman numeral,
+    not merely a string built from i/v/x/l/c/d/m characters -- this is
+    what excludes ordinary lowercase English words that happen to be
+    spelled entirely from that letter set (e.g. "did", "mid", "civil" --
+    another real corpus bug: Wesley Discusses Old Sermons had "did" alone
+    match 4 times). _roman_to_int() itself is reused, never forked --
+    single source of truth for what counts as a valid roman numeral
+    anywhere in this module. A single-character token (e.g. a bare "i" or
+    "x") is excluded outright (len(stripped) >= 2 required) -- a one-letter
+    "roman numeral" is exactly the shape most likely to just be an
+    ordinary short word or a stray character, and no real corpus example
+    this fix was checked against needed single-character roman-numeral
+    tokens to be counted for the digit-locator signal to still work."""
     tokens = text.split()
     if not tokens:
         return 0.0
@@ -1206,11 +1293,82 @@ def _digit_token_ratio(text: str) -> float:
             continue
         if stripped.isdigit():
             n_digitish += 1
-        elif _ROMAN_NUMERAL_TOKEN_RE.match(stripped):
+        elif (
+            len(stripped) >= 2 and stripped == stripped.lower()
+            and _roman_to_int(stripped.upper()) is not None
+        ):
             n_digitish += 1
         elif _LOCATOR_TOKEN_RE.match(stripped):
             n_digitish += 1
     return n_digitish / len(tokens)
+
+
+# ── Third-party byline detector (fix (a)) ──────────────────────────────────
+# Catches a span like a real Wesley journal edition's own "INTRODUCTION" or
+# "AN APPRECIATION OF JOHN WESLEY'S JOURNAL" -- neither is label-matched
+# (neither is in _MATTER_LABEL_EXACT/_MATTER_LABEL_PREFIX, and both would be
+# PROTECTED anyway if they were, e.g. "Introduction"), and neither is
+# CCEL-metadata- or digit-locator-shaped -- but both are written by someone
+# OTHER than the book's own credited author, exactly the class of span this
+# corpus's own "citable requires a real attributable name" discipline
+# (CLAUDE.md Invariant 7) already cares about getting right upstream of
+# extraction: attributing a third party's own words to the book's speaker
+# would be a real misattribution, not just noise.
+_BYLINE_RE = re.compile(r'(?i)^\s*by\s+(.+?)\s*$')
+_NAME_HONORIFICS = {
+    "the", "rev", "reverend", "dr", "mr", "mrs", "ms", "sir", "prof",
+    "professor", "hon", "honorable", "st", "saint", "esq", "jr", "sr",
+    "kings", "king", "counsel",
+}
+
+
+def _normalize_person_name(s: str) -> set:
+    """Tokenizes a person-name-shaped string into a set of its own
+    significant name tokens: lowercased, curly apostrophes normalized to
+    straight ones FIRST (reusing the module's own _CURLY_QUOTE_MAP -- not
+    forked), then apostrophes/commas/periods stripped to spaces, split on
+    whitespace, and honorifics/titles/short filler tokens (see
+    _NAME_HONORIFICS, and a bare len(t) < 3 floor that also drops middle
+    initials) dropped. E.g. "Augustine Birrell, King's Counsel" ->
+    {"augustine", "birrell"} (both "king's" and "counsel" are in
+    _NAME_HONORIFICS). Returns an empty set for an empty/whitespace-only
+    input -- callers treat an empty set as "no name to compare"."""
+    s = "".join(_CURLY_QUOTE_MAP.get(c, c) for c in s).lower()
+    s = re.sub(r"[.,'’]", " ", s)
+    return {t for t in s.split() if len(t) >= 3 and t not in _NAME_HONORIFICS}
+
+
+def _has_third_party_byline(text: str, author: Optional[str]) -> bool:
+    """Scans the first 8 non-blank lines of `text` for a short,
+    byline-shaped line ("By <name>") crediting someone whose own name
+    tokens share NOTHING with `author`'s own name tokens. Returns False
+    (conservative default) if `author` is falsy/empty (nothing to compare
+    against -- this is what makes the `author` parameter's own None
+    default fully inert, per is_front_back_matter()'s own contract), or if
+    no byline-shaped line is found at all, or if a byline IS found but
+    credits the SAME author (or shares at least one name token with them --
+    e.g. a middle name or a variant spelling still counts as a match,
+    erring toward NOT flagging a real match as a false third party).
+
+    The <=12-word cap on a candidate line (before even trying the byline
+    regex) is what rejects an incidental "by" appearing INSIDE a long
+    prose sentence (a real byline is always short) rather than a genuine
+    credit line -- this mirrors the same "a real heading/byline is short"
+    discipline the numeral-heading detector's own discriminator 1 already
+    uses elsewhere in this module, applied here to a different shape."""
+    author_toks = _normalize_person_name(author or "")
+    if not author_toks:
+        return False
+    for line in [l.strip() for l in text.split("\n") if l.strip()][:8]:
+        if len(line.split()) > 12:
+            continue
+        m = _BYLINE_RE.match(line)
+        if not m:
+            continue
+        credited = _normalize_person_name(m.group(1))
+        if credited and not (author_toks & credited):
+            return True
+    return False
 
 
 def _label_is_front_back_matter(label: str) -> bool:
@@ -1261,18 +1419,47 @@ def _shape_is_front_back_matter(text: str) -> bool:
     return False
 
 
-def is_front_back_matter(label: str, text: str) -> Tuple[bool, str]:
+def is_front_back_matter(
+    label: str, text: str, author: Optional[str] = None,
+) -> Tuple[bool, str]:
     """Is (label, text) -- one chapter/sub-unit's own parent_label and
     text, as produced by split_book_into_chapters()/
     _apply_word_ceiling_fallback() -- front or back matter that should
     never reach extract_propositions() at all? Returns (is_matter,
-    reason), reason one of "label" (a matter-indicating label, checked
-    first and cheapest), "ccel_metadata" (>=CCEL_METADATA_FIELD_MIN
-    distinct CCEL field lines), "digit_locator" (word-count + digit-ratio
-    shape), or "" (not matter).
+    reason), reason one of "third_party_byline" (fix (a), checked FIRST --
+    see below), "editorial_apparatus" (fix (a), an exact-match editorial-
+    apparatus label), "label" (a matter-indicating label), "ccel_metadata"
+    (>=CCEL_METADATA_FIELD_MIN distinct CCEL field lines), "digit_locator"
+    (word-count + digit-ratio shape), or "" (not matter).
 
-    A PROTECTED label (see _MATTER_LABEL_PROTECT) ALWAYS returns (False,
-    "") without ever examining shape at all -- this is the false-positive
+    `author` (fix (a), optional, default None): the book's own credited
+    speaker/author name, used ONLY for the third-party-byline check below.
+    None (the default) makes that check unconditionally inert -- see
+    _has_third_party_byline()'s own docstring -- so every existing caller
+    that doesn't pass it (including the OTHER call site inside
+    detect_book_chapters()'s own R-computation, deliberately left as-is)
+    is byte-identical to this function's behavior before fix (a) existed.
+
+    THIRD-PARTY-BYLINE CHECK RUNS FIRST, BEFORE the protected-label
+    short-circuit below -- deliberately, so a PROTECTED label like
+    "Introduction" credited to someone other than the book's own author
+    (a real corpus example: a Wesley journal edition's own third-party
+    "INTRODUCTION", written by someone else entirely) still gets caught,
+    rather than being protected from ever being checked at all. This is
+    the one case where a protected label does NOT win outright -- see
+    _has_third_party_byline()'s own docstring for why this is safe (it
+    requires an actual, name-mismatched "By <name>" line, not merely
+    absence of a name match, so a real "Introduction" written by the
+    book's own author, or with no byline printed at all, is unaffected).
+
+    EDITORIAL-APPARATUS LABEL CHECK runs second, via an EXACT normalized
+    match against _MATTER_LABEL_APPARATUS (not a prefix match, unlike
+    _MATTER_LABEL_PREFIX -- see that set's own comment for why prefix
+    matching would be unsafe here).
+
+    Only AFTER both of the above does the ORIGINAL, unchanged logic run: a
+    PROTECTED label (see _MATTER_LABEL_PROTECT) returns (False, "")
+    without ever examining shape at all -- this is the false-positive
     guard the whole design depends on: The True Vine's real 196-word
     Preface span (label exactly "Preface") short-circuits here and is
     NEVER run through _shape_is_front_back_matter(), so it does not matter
@@ -1308,6 +1495,10 @@ def is_front_back_matter(label: str, text: str) -> Tuple[bool, str]:
     instruction already handles gracefully. A false POSITIVE (silently
     losing real content) is the failure mode this function is built to
     avoid, not a false negative."""
+    if _has_third_party_byline(text, author):
+        return True, "third_party_byline"
+    if _normalize_matter_label(label) in _MATTER_LABEL_APPARATUS:
+        return True, "editorial_apparatus"
     n = _normalize_matter_label(label)
     first = n.split()[0] if n else ""
     if first in _MATTER_LABEL_PROTECT:
@@ -2354,15 +2545,21 @@ def _extract_and_store_book_chapters(
     chapters_empty + chapters_errored + chapters_skipped_thin +
     chapters_skipped_front_matter (asserted below before returning).
 
-    FRONT/BACK-MATTER FILTER (correction pass): each sub-unit is checked
-    via is_front_back_matter(unit.parent_label, unit.text) BEFORE the
-    MIN_SUBSTANTIVE_WORD_COUNT thin-check below -- a matter-classified
-    span (a CCEL bibliographic-metadata-plus-Table-of-Contents block, a
-    Title Page, an Indexes/scripture-index span, etc.) is bucketed
-    "skipped_front_matter" and NEVER reaches extract_propositions() at
-    all, regardless of its own word count. See is_front_back_matter()'s
-    own docstring (defined near MIN_SUBSTANTIVE_WORD_COUNT above) for the
-    full label/shape decision and its protected-label false-positive
+    FRONT/BACK-MATTER FILTER (correction pass; fix (a)/(b) below): each
+    sub-unit is checked via is_front_back_matter(unit.parent_label,
+    unit.text, author=speaker) BEFORE the MIN_SUBSTANTIVE_WORD_COUNT
+    thin-check below -- a matter-classified span (a CCEL bibliographic-
+    metadata-plus-Table-of-Contents block, a Title Page, an Indexes/
+    scripture-index span, a third-party byline, an editorial-apparatus
+    label, etc.) is bucketed "skipped_front_matter" and NEVER reaches
+    extract_propositions() at all, regardless of its own word count.
+    `author=speaker` is passed on THIS call site only -- the OTHER call
+    site (detect_book_chapters()'s own R-computation) deliberately still
+    calls without `author`, out of scope for that still-unwired path. See
+    is_front_back_matter()'s own docstring (defined near
+    MIN_SUBSTANTIVE_WORD_COUNT above) for the full label/shape decision
+    (now including the byline/apparatus checks) and its protected-label
+    false-positive
     guard -- a genuine "Preface"/"Introduction"/etc. span is NEVER
     shape-checked and always proceeds past this filter unfiltered."""
     chapters, missing_expected_titles = split_book_into_chapters(ordered_chunks)
@@ -2391,7 +2588,7 @@ def _extract_and_store_book_chapters(
     for unit in sub_units:
         word_count = len(unit.text.split())
 
-        matter, matter_reason = is_front_back_matter(unit.parent_label, unit.text)
+        matter, matter_reason = is_front_back_matter(unit.parent_label, unit.text, author=speaker)
         if matter:
             n_skipped_front_matter_chapters += 1
             per_chapter.append({
@@ -2480,3 +2677,4 @@ def _extract_and_store_book_chapters(
         "propositions_stored": n_propositions_stored,
         "per_chapter": per_chapter,
     }
+

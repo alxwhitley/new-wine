@@ -590,16 +590,23 @@ def test_split_book_into_chapters_synthetic():
     #    "paragraph" batching path at split_book_into_chapters()'s own
     #    LONG_STRETCH_WORD_THRESHOLD ceiling. ─────────────────────────────
     print("\n--- 6c: no marker anywhere -> size_fallback split_method ---")
-    assert pm.LONG_STRETCH_WORD_THRESHOLD == 3000, (
+    # LONG_STRETCH_WORD_THRESHOLD raised 3000 -> 6000 (Problem 2, a later,
+    # separate, isolated one-constant change to match SAFE_CHAPTER_WORD_
+    # CEILING -- see that constant's own comment). This test's fixture must
+    # comfortably exceed whatever the real threshold is, so it's sized
+    # relative to the constant itself rather than a hardcoded word count.
+    assert pm.LONG_STRETCH_WORD_THRESHOLD == 6000, (
         "this test assumes the real threshold constant; got "
         f"{pm.LONG_STRETCH_WORD_THRESHOLD}"
     )
+    n_paragraphs = (pm.LONG_STRETCH_WORD_THRESHOLD // 200) + 15  # comfortably over threshold
     paragraphs = [
         " ".join(f"p{i}word{j}" for j in range(200)) + "."
-        for i in range(20)  # 20 paragraphs x 200 words = 4000 words, zero repeated lines
+        for i in range(n_paragraphs)  # n_paragraphs x 200 words, zero repeated lines
     ]
     no_marker_text = "\n\n".join(paragraphs)
-    assert len(no_marker_text.split()) == 4000
+    expected_total_words = n_paragraphs * 200
+    assert len(no_marker_text.split()) == expected_total_words
 
     ordered_chunks_no_marker = [("chunk-nomark", no_marker_text)]
     chapters_nm, missing_nm = pm.split_book_into_chapters(ordered_chunks_no_marker)
@@ -630,10 +637,10 @@ def test_split_book_into_chapters_synthetic():
             "size-fallback pieces must never overlap or go backwards"
         )
     total_words_across_pieces = sum(len(c.text.split()) for c in chapters_nm)
-    assert total_words_across_pieces == 4000, (
-        f"expected all 4000 words preserved across pieces (only inter-batch blank-line "
-        f"whitespace may be dropped, never actual paragraph content), got "
-        f"{total_words_across_pieces}"
+    assert total_words_across_pieces == expected_total_words, (
+        f"expected all {expected_total_words} words preserved across pieces (only "
+        f"inter-batch blank-line whitespace may be dropped, never actual paragraph "
+        f"content), got {total_words_across_pieces}"
     )
     print("  CONFIRMED: entirely marker-less stretch is split into ordered, "
           "non-overlapping size_fallback pieces (only inter-batch blank-line whitespace "
@@ -1214,6 +1221,258 @@ def test_matter_call_count_and_reconciliation_real_true_vine():
           "Vine book (Groq call mocked, DB read-only).")
 
 
+# ════════════════════════════════════════════════════════════════════════
+# Front/back-matter correction pass, round 2: third-party byline detector +
+# editorial-apparatus label set (fix (a)), and the tightened digit-ratio
+# roman-numeral arm (fix (b)). Real fixture: John Wesley's Journal (a real
+# edition with genuine third-party front matter -- an editor's note, an
+# introduction by Rev. Hugh Price Hughes, an appreciation by Augustine
+# Birrell, and a biographical sketch -- none written by Wesley himself).
+# ════════════════════════════════════════════════════════════════════════
+
+JOHN_WESLEY_JOURNAL_DOC_ID = "6e3ea1a0-92ac-4781-9637-0be037d0517b"
+
+
+def test_matter_byline_detector():
+    print("\n" + "=" * 78)
+    print("15. Third-party byline detector (fix (a)): real John Wesley Journal fixtures")
+    print("=" * 78)
+
+    db_params = _db_params()
+    chunks = _fetch_ordered_chunks(db_params, JOHN_WESLEY_JOURNAL_DOC_ID)
+    chapters, _missing = pm.split_book_into_chapters(chunks)
+    by_label = {c.label: c for c in chapters}
+
+    print("\n--- Real fixture: 'INTRODUCTION' (byline: 'by the rev. hugh price hughes, m.a.') ---")
+    intro = by_label["INTRODUCTION"]
+    assert "by the rev. hugh price hughes" in intro.text.lower(), (
+        "expected the real byline line to actually be present in this span's own text"
+    )
+    matter, reason = pm.is_front_back_matter(intro.label, intro.text, author="John Wesley")
+    print(f"  matter={matter} reason={reason!r}")
+    assert (matter, reason) == (True, "third_party_byline"), (
+        f"expected 'INTRODUCTION' (protected label, but credited to a third party) to be "
+        f"caught by the byline check, got {(matter, reason)}"
+    )
+    # Confirm the PROTECTED-label short-circuit alone would have missed this
+    # (proving the byline check's own placement BEFORE the protect-list is
+    # what makes this catch possible, not incidental).
+    assert pm._normalize_matter_label(intro.label).split()[0] in pm._MATTER_LABEL_PROTECT, (
+        "fixture check: 'introduction' must genuinely be a protected label, or this test "
+        "isn't proving what it claims to prove"
+    )
+    print("  CONFIRMED: 'INTRODUCTION' is a genuinely PROTECTED label, yet still caught -- "
+          "proving the byline check's placement before the protect-list short-circuit.")
+
+    print("\n--- Real fixture: \"AN APPRECIATION OF JOHN WESLEY'S JOURNAL\" "
+          "(byline: 'by augustine birrell, king's counsel') ---")
+    appreciation = by_label["AN APPRECIATION OF JOHN WESLEY'S JOURNAL"]
+    assert "by augustine birrell" in appreciation.text.lower()
+    matter2, reason2 = pm.is_front_back_matter(appreciation.label, appreciation.text, author="John Wesley")
+    print(f"  matter={matter2} reason={reason2!r}")
+    assert (matter2, reason2) == (True, "third_party_byline")
+
+    print("\n--- Real fixture: True Vine's own Title Page, byline 'By / Rev. Andrew Murray' "
+          "-- SAME author, must NOT be flagged as third-party ---")
+    tv_chunks = _fetch_ordered_chunks(db_params, TRUE_VINE_DOC_ID)
+    tv_chapters, _m = pm.split_book_into_chapters(tv_chunks)
+    title_page = [c for c in tv_chapters if c.label == "Title Page"][0]
+    assert "by\nrev. andrew murray" in title_page.text.lower().replace("\r", "")
+    same_author_byline = pm._has_third_party_byline(title_page.text, "Andrew Murray")
+    print(f"  _has_third_party_byline(text, author='Andrew Murray') = {same_author_byline}")
+    assert same_author_byline is False, (
+        "expected a genuine same-author byline to NOT be flagged as third-party"
+    )
+    print("  CONFIRMED: a real same-author byline ('By / Rev. Andrew Murray', author="
+          "'Andrew Murray') is correctly NOT flagged as third-party.")
+
+    print("\n--- Synthetic: same-author byline on an otherwise-unflagged label -> "
+          "full is_front_back_matter() returns (False, '') end to end ---")
+    # The real True Vine example above still classifies as matter overall
+    # (via the "label" signal, since "Title Page" is independently matter)
+    # -- this synthetic case isolates the FULL end-to-end guarantee using a
+    # label that is NOT otherwise matter-classified.
+    synthetic_text = (
+        "Some Real Chapter\n"
+        "Some Real Chapter\n"
+        "SOME REAL CHAPTER\n"
+        "By\n"
+        "Andrew Murray\n"
+        "This is real teaching content that would otherwise be extracted normally, long "
+        "enough to be a real chapter and not fall to the thin-word-count floor at all.\n"
+    )
+    matter3, reason3 = pm.is_front_back_matter("Some Real Chapter", synthetic_text, author="Andrew Murray")
+    print(f"  matter={matter3} reason={reason3!r}")
+    assert (matter3, reason3) == (False, ""), (
+        f"expected a same-author byline to leave an otherwise-unflagged label as content, "
+        f"got {(matter3, reason3)}"
+    )
+    print("  CONFIRMED: is_front_back_matter() returns (False, '') end-to-end for a "
+          "same-author byline on a label that isn't otherwise matter-classified.")
+
+    print("\n--- No byline at all: real True Vine chapters unaffected (conservative default) ---")
+    no_flip_count = 0
+    for c in tv_chapters:
+        if c.split_method != "title_repeat_boundary":
+            continue
+        matter_bare, _r = pm.is_front_back_matter(c.label, c.text)
+        matter_authored, _r2 = pm.is_front_back_matter(c.label, c.text, author="Andrew Murray")
+        assert matter_bare == matter_authored, (
+            f"expected {c.label!r} to be unaffected by supplying author= when the span has "
+            f"no byline at all, got bare={matter_bare} vs authored={matter_authored}"
+        )
+        no_flip_count += 1
+    print(f"  CONFIRMED: {no_flip_count} real True Vine title_repeat_boundary spans, none "
+          f"with a byline, all UNAFFECTED by author='Andrew Murray' (conservative default).")
+
+    print("\n--- Synthetic: incidental mid-prose 'by' (not byline-shaped) not falsely flagged ---")
+    incidental_text = (
+        "Some Chapter\n"
+        "Some Chapter\n"
+        "SOME CHAPTER\n"
+        "We are saved by grace through faith, and this is not of ourselves; it is the gift "
+        "of God, freely given to all who believe in Him and trust in His finished work.\n"
+        "By no means should we boast in our own works, for none of us could ever earn this "
+        "salvation through our own effort or merit, however sincere our striving might be.\n"
+    )
+    matter4, reason4 = pm.is_front_back_matter("Some Chapter", incidental_text, author="Some Author")
+    print(f"  matter={matter4} reason={reason4!r}")
+    assert (matter4, reason4) == (False, ""), (
+        f"expected incidental mid-prose 'by'/'By' usage to NOT be flagged as a byline, "
+        f"got {(matter4, reason4)}"
+    )
+    print("  CONFIRMED: incidental prose usage of 'by'/'By' (not a short, standalone "
+          "byline-shaped line) is correctly not flagged.")
+
+    print("\nPASSED: 15. Third-party byline detector confirmed against real Hughes/Birrell "
+          "fixtures, a real same-author byline, no-byline chapters, and an incidental-'by' trap.")
+
+
+def test_matter_apparatus_labels():
+    print("\n" + "=" * 78)
+    print("16. Editorial-apparatus label set (fix (a)): real fixtures + exact-match discipline")
+    print("=" * 78)
+
+    db_params = _db_params()
+    chunks = _fetch_ordered_chunks(db_params, JOHN_WESLEY_JOURNAL_DOC_ID)
+    chapters, _missing = pm.split_book_into_chapters(chunks)
+    by_label = {c.label: c for c in chapters}
+
+    print("\n--- Real fixture: \"EDITOR'S NOTE\" (no byline in the text itself -- confirmed) ---")
+    editors_note = by_label["EDITOR'S NOTE"]
+    assert not pm._BYLINE_RE.search(editors_note.text) or True  # see explicit line-scan below
+    has_byline_line = any(
+        pm._BYLINE_RE.match(line.strip())
+        for line in editors_note.text.split("\n")[:8] if line.strip()
+    )
+    print(f"  byline-shaped line present in first 8 lines? {has_byline_line}")
+    assert not has_byline_line, (
+        "expected NO byline-shaped line in EDITOR'S NOTE's own text -- confirming this "
+        "span is caught by the apparatus LABEL set, not incidentally by the byline check"
+    )
+    matter, reason = pm.is_front_back_matter(editors_note.label, editors_note.text, author="John Wesley")
+    print(f"  matter={matter} reason={reason!r}")
+    assert (matter, reason) == (True, "editorial_apparatus"), (
+        f"expected \"EDITOR'S NOTE\" -> (True, 'editorial_apparatus'), got {(matter, reason)}"
+    )
+
+    print("\n--- Real fixture: 'BIOGRAPHICAL SKETCH' (no byline in the text itself -- confirmed) ---")
+    bio_sketch = by_label["BIOGRAPHICAL SKETCH"]
+    has_byline_line2 = any(
+        pm._BYLINE_RE.match(line.strip())
+        for line in bio_sketch.text.split("\n")[:8] if line.strip()
+    )
+    print(f"  byline-shaped line present in first 8 lines? {has_byline_line2}")
+    assert not has_byline_line2
+    matter2, reason2 = pm.is_front_back_matter(bio_sketch.label, bio_sketch.text, author="John Wesley")
+    print(f"  matter={matter2} reason={reason2!r}")
+    assert (matter2, reason2) == (True, "editorial_apparatus")
+
+    print("\n--- Synthetic: 'The Biography of Faith' -- a real-chapter-shaped label that must "
+          "NOT collide with the apparatus set (exact-match discipline, not prefix match) ---")
+    synthetic_text = (
+        "The Biography of Faith\n"
+        "The Biography of Faith\n"
+        "THE BIOGRAPHY OF FAITH\n"
+        "This chapter tells the story of faith across the ages, real teaching content long "
+        "enough to be a genuine chapter, never intended as any kind of editorial apparatus.\n"
+    )
+    matter3, reason3 = pm.is_front_back_matter("The Biography of Faith", synthetic_text)
+    print(f"  matter={matter3} reason={reason3!r}")
+    assert (matter3, reason3) == (False, ""), (
+        f"expected 'The Biography of Faith' to be content (exact-match, not prefix-match, "
+        f"discipline), got {(matter3, reason3)}"
+    )
+    assert pm._normalize_matter_label("The Biography of Faith") not in pm._MATTER_LABEL_APPARATUS
+    print("  CONFIRMED: 'The Biography of Faith' does not collide with the apparatus set -- "
+          "exact-match discipline holds, no prefix-collision false positive.")
+
+    print("\nPASSED: 16. Editorial-apparatus label set confirmed against real fixtures "
+          "(neither has a byline of its own) and the exact-match discipline confirmed "
+          "against a synthetic near-collision.")
+
+
+def test_matter_digit_ratio_fix():
+    print("\n" + "=" * 78)
+    print("17. Tightened digit-ratio roman-numeral arm (fix (b)): real Wesley + True Vine fixtures")
+    print("=" * 78)
+
+    db_params = _db_params()
+    chunks = _fetch_ordered_chunks(db_params, JOHN_WESLEY_JOURNAL_DOC_ID)
+    chapters, _missing = pm.split_book_into_chapters(chunks)
+    by_label = {c.label: c for c in chapters}
+
+    print("\n--- Real fixture: \"Wesley's Defenders\" (was wrongly excluded pre-fix) ---")
+    defenders = by_label["Wesley's Defenders"]
+    ratio = pm._digit_token_ratio(defenders.text)
+    print(f"  words={len(defenders.text.split())} ratio={ratio:.4f}")
+    assert abs(ratio - 0.0084) < 0.001, f"expected ratio ~0.0084, got {ratio:.4f}"
+    assert ratio < pm.FRONT_BACK_MATTER_DIGIT_RATIO
+    matter, reason = pm.is_front_back_matter(defenders.label, defenders.text, author="John Wesley")
+    print(f"  matter={matter} reason={reason!r}")
+    assert (matter, reason) == (False, ""), (
+        f"expected \"Wesley's Defenders\" to now be content, got {(matter, reason)}"
+    )
+
+    print("\n--- Real fixture: 'Wesley Discusses Old Sermons' (was wrongly excluded pre-fix) ---")
+    old_sermons = by_label["Wesley Discusses Old Sermons"]
+    ratio2 = pm._digit_token_ratio(old_sermons.text)
+    print(f"  words={len(old_sermons.text.split())} ratio={ratio2:.4f}")
+    assert abs(ratio2 - 0.0076) < 0.001, f"expected ratio ~0.0076, got {ratio2:.4f}"
+    assert ratio2 < pm.FRONT_BACK_MATTER_DIGIT_RATIO
+    matter2, reason2 = pm.is_front_back_matter(old_sermons.label, old_sermons.text, author="John Wesley")
+    print(f"  matter={matter2} reason={reason2!r}")
+    assert (matter2, reason2) == (False, ""), (
+        f"expected 'Wesley Discusses Old Sermons' to now be content, got {(matter2, reason2)}"
+    )
+
+    print("\n--- Regression check: True Vine's real index spans stay matter, ratio still >=0.10 ---")
+    tv_chunks = _fetch_ordered_chunks(db_params, TRUE_VINE_DOC_ID)
+    tv_chapters, _m = pm.split_book_into_chapters(tv_chunks)
+    for label in ("Index of Scripture References", "Index of Scripture Commentary"):
+        span = [c for c in tv_chapters if c.label == label][0]
+        ratio3 = pm._digit_token_ratio(span.text)
+        matter3, reason3 = pm.is_front_back_matter(span.label, span.text, author="Andrew Murray")
+        print(f"  {label!r:35s} ratio={ratio3:.4f} matter={matter3} reason={reason3!r}")
+        assert ratio3 >= pm.FRONT_BACK_MATTER_DIGIT_RATIO, (
+            f"expected {label!r}'s digit ratio to remain well over the threshold, got {ratio3:.4f}"
+        )
+        assert matter3 is True
+
+    expected_ratios = {"Index of Scripture References": 0.7091, "Index of Scripture Commentary": 0.7045}
+    for label, expected in expected_ratios.items():
+        span = [c for c in tv_chapters if c.label == label][0]
+        actual = pm._digit_token_ratio(span.text)
+        assert abs(actual - expected) < 0.001, (
+            f"expected {label!r} ratio ~{expected}, got {actual:.4f}"
+        )
+    print("  CONFIRMED: True Vine's index spans are essentially unchanged by fix (b) "
+          "(~0.71/0.70, comfortably over the 0.10 threshold, still matter).")
+
+    print("\nPASSED: 17. Digit-ratio fix validated against real Wesley fixtures (now content) "
+          "and True Vine's index spans (unaffected regression check).")
+
+
 if __name__ == "__main__":
     test_clear_existing_default_and_false()
     test_extract_and_store_book_chapters_buckets()
@@ -1228,6 +1487,9 @@ if __name__ == "__main__":
     test_matter_cross_book_validation()
     test_matter_ambiguous_default_protected_label()
     test_matter_call_count_and_reconciliation_real_true_vine()
+    test_matter_byline_detector()
+    test_matter_apparatus_labels()
+    test_matter_digit_ratio_fix()
     print("\n" + "=" * 78)
     print("ALL test_propositions_book_chapters.py ASSERTIONS PASSED")
     print("=" * 78)
