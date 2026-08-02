@@ -17,6 +17,98 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Buffer-then-verify-then-playback + word-study latency fix (2026-08-02,
+repo-only multi-step build; harness-row per Session Routing, run as orchestrator
++ `planner-reviewer` adversarial review gate before commit; zero DB writes —
+retrieval reads + LLM generation only; build commit `9e5fe94`, this records
+commit separate; NOT pushed — Alex decides).** Two pieces built together because
+they pull against each other on latency.
+
+**PIECE 1 — nothing unverified reaches the reader.** The normal answer path no
+longer streams tokens as they generate (verification used to run *after* the
+reader already saw the text, so a fabricated teacher credit stayed visible in the
+prose with only its link denied — the Phase 2 residual, `ee3cff4`). `generate()`
+now buffers the full answer, runs the Phase 2 grounding guard + `verify_references`
+server-side, resolves any ungrounded attribution, and only then reveals the
+verified answer as a paced typewriter playback. Change is `chat.py` only —
+`reference_verifier.py` is byte-unchanged (Phase 2 guard intact) and the
+**frontend is untouched**.
+- **New helpers (`chat.py`):** `_stream_answer` (streams from Claude INTERNALLY
+  into a buffer, forwarding ONLY `": keepalive"` SSE comment heartbeats so the
+  proxy/client connection survives the ~40-55s silent buffer, yielding the result
+  out-of-band); `_extract_answer_from_raw` (preserves the Phase 0 §7a guarantees
+  on buffered output — never leak `<thinking>`/`<research_analysis>`, clean cutoff
+  note only on `max_tokens`); `_ungrounded_reference_teachers`; `_playback_events`
+  (byte-exact word-chunked reveal at `PLAYBACK_CHARS_PER_SEC = 250` — a steady,
+  reading-comfortable rate, single tunable knob).
+- **req 2 (failed-attribution handling) — decided: regenerate-once-then-clean-
+  refuse.** On an ungrounded teacher credit in the served prose, regenerate ONCE
+  constrained to the retrieved/permitted teacher names; if it STILL credits an
+  ungrounded teacher, serve a clean refusal. Never surgically edits prose (no
+  mangled sentences). The Phase 2 guard is NOT weakened — the constraint only
+  narrows attribution, never widens; `verify_references` still runs.
+- **req 1/4:** no answer byte is emitted before verification completes (heartbeats
+  are SSE comments carrying no answer text; playback is strictly after verify);
+  any generation/verification failure yields a clean error or clean refusal, never
+  a partial. **Playback speed chosen: 250 c/s** (brisk, even, ahead of the reader,
+  not a jarring instant dump). **During the wait the client shows its existing
+  loading state, unchanged** (no tokens arrive until the first playback chunk; no
+  new interstitial UI). **Frontend needed no change** — server-paced token events
+  drive the existing renderer and the `data:`-only parser ignores the heartbeat
+  comments (chosen over frontend-animated playback to avoid touching the Next.js
+  16 frontend, per `frontend/AGENTS.md`'s "not the Next.js you know" warning). The
+  **position-paper path is unchanged** (house voice, names no teachers, nothing to
+  verify) — still streams live and fast.
+
+**PIECE 2 — pre-generation latency.** Measured breakdown (req 5, before any
+change): the ~18s Phase 0 flagged is NOT retrieval — it is the model generating
+the hidden `<thinking>`/`<research_analysis>` blocks before the first `<answer>`
+token (median ~17.7s, network-independent). **Rejected per req 7 (accuracy):**
+trimming that reasoning (it is the self-verification pass guarding conflation/
+misattribution, and there is no accuracy oracle to validate a trim — decision #4
+HELD), a weaker model, retrieval caching. **Implemented (safe win):**
+`is_word_study_query` dropped the over-broad bare phrase `"what does"`, which
+false-matched ordinary "What does <teacher> teach…" questions and fired an ~8s
+lexicon RPC (+ injected irrelevant lexicon context) — retrieval on that class went
+**~10s → ~3s**, with a small accuracy *gain* (no spurious lexicon). `"what does
+the word"` still catches genuine word studies.
+
+**Verification (offline, zero DB writes).**
+- **req 9 — no false credit reaches the screen: PASS (0/6).** teacher/long-
+  context/short + the three Phase 0 fabrication-prone questions: every one served
+  `[]` false credits. The revival case fabricated on first pass (Evan Roberts,
+  Vance Havner) → **regenerated clean** (or, on a prior run, refused) — the false
+  credit never reached the served prose either way.
+- **req 8 — timing (before → after):** time-to-first-character **~24s → ~28-55s
+  (median ~35s)** — roughly doubles, the accepted tradeoff for buffer-then-verify
+  (nothing shows until full generation + verification, then playback). Total-to-
+  full-answer comparable-to-modestly-higher. The lexicon fix visibly cut retrieval
+  on the teacher question (3.3s vs 10s pre-fix). The dominant, req-7-protected
+  ~18s reasoning is unchanged, so the wait genuinely rose.
+- **req 10 — Phase 2 FP unchanged:** `reference_verifier.py` byte-identical, so the
+  55-verified/0-false-denial result holds by construction; 5/6 verification
+  questions needed no regeneration (legit attributions untouched).
+- **`planner-reviewer`: APPROVE**, no req-1..4 violation, no landmine tripped
+  (guard intact, fail-closed everywhere, playback byte-exact, Python 3.9 clean).
+  Its one actionable item (**finding #1**: keepalives covered the two generation
+  windows but not the post-generation verification window — a proxy drop there
+  would lose a fully-generated answer) was **fixed before commit** (heartbeats
+  added around the ungrounded-check and `verify_references`).
+
+**Deploy-safety (assessed): SAFE to deploy, with one flagged scale caveat.** Change
+is additive to the serving path, `chat.py` only, no schema/DB/env/dependency
+change, fails closed, and the Phase 2 guard is untouched. Everything unverified is
+withheld; failures serve clean errors/refusals. **Flagged, non-blocking at current
+zero-user scale (planner-reviewer #2):** `time.sleep` in the sync generator (the
+playback pacing + heartbeat cadence) holds one anyio threadpool worker for the
+request's duration (~generation + ~10s playback); at ~40 concurrent chats the
+shared pool (cap 40) could starve other work — revisit before real traffic (e.g.
+async pacing). **Known residual (planner-reviewer #3, pre-existing, unchanged):**
+the guard keys on the model's own `<reference_mentions>` self-report, so a teacher
+credited in prose but omitted from that block is invisible — identical to Phase 2,
+not widened here. **Not pushed** — Alex decides deployment separately; it would
+deploy alongside the already-live Phase 2 (`ee3cff4`) and the three earlier fixes.
+
 **Phase 2 shipped — teacher-name guard: retrieval-grounded naming on the
 answer path (2026-08-01, repo-only multi-step build; harness-row per Session
 Routing, run as orchestrator + `planner-reviewer` adversarial review gate
