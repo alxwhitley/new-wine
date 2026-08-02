@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -36,7 +37,12 @@ def is_word_study_query(question: str) -> bool:
         "root word", "strong's", "strongs", "lexicon", "what does the word",
         "definition of the word", "biblical definition", "greek meaning",
         "hebrew meaning", "word study", "etymology", "transliteration",
-        "what does", "meaning of", "define "
+        "meaning of", "define "
+        # NOTE: bare "what does" was removed here (2026-08-02) — it false-matched
+        # ordinary attribution questions like "What does Derek Prince teach about
+        # deliverance?", firing an ~8s lexicon RPC and injecting irrelevant
+        # lexicon chunks. The specific "what does the word" above still catches
+        # genuine word-study intent.
     ]
     return any(phrase in q for phrase in word_study_phrases)
 
@@ -487,6 +493,140 @@ def _sse(data: str) -> str:
     return f"data: {data}\n\n"
 
 
+# --- Piece 1: buffered generation + verified-playback helpers (2026-08-02) ---
+# The reader sees nothing until the full answer is generated AND verified. These
+# helpers back that flow in generate() below.
+PLAYBACK_CHARS_PER_SEC = 250.0  # steady, reading-comfortable reveal rate (single tunable knob)
+
+_NO_ANSWER_FALLBACK = (
+    "I wasn't able to finish composing a complete answer to that. "
+    "Please try again, or narrow the question a little."
+)
+_ATTRIBUTION_REFUSAL = (
+    "I started to answer, but I couldn't tie part of it to the sources in my library with "
+    "confidence, so I'm holding it back rather than put words in a teacher's mouth. Try "
+    "rephrasing, or ask about a specific teacher or passage."
+)
+
+
+def _extract_answer_from_raw(raw_text, stop_reason):
+    # type: (str, Optional[str]) -> str
+    """Extract the servable <answer> text from a full (buffered) model output,
+    preserving the Phase 0 s7a guarantees: never leak reasoning scratchpad, never
+    serve a mid-sentence truncation without a clean cutoff note. Returns "" only
+    when there is no usable answer (caller serves the clean fallback)."""
+    a0 = raw_text.find("<answer>")
+    a1 = raw_text.find("</answer>")
+    if a0 != -1 and a1 != -1 and a1 > a0:
+        return raw_text[a0 + len("<answer>"):a1].strip()
+    if a0 != -1:
+        # <answer> opened but never closed -- budget cut mid-answer.
+        tail = raw_text[a0 + len("<answer>"):]
+        rp = tail.find("<reference_mentions>")
+        if rp != -1:
+            tail = tail[:rp]
+        tail = tail.strip()
+        if tail and stop_reason == "max_tokens":
+            tail += "\n\n_(This answer was cut off before it finished -- ask a follow-up to continue.)_"
+        return tail
+    # No <answer> block at all.
+    if ("<thinking>" in raw_text) or ("<research_analysis>" in raw_text) or not raw_text.strip():
+        return ""  # reasoning scratchpad only -- signal caller to serve the clean fallback
+    clean = raw_text.strip()
+    rp = clean.find("<reference_mentions>")
+    if rp != -1:
+        clean = clean[:rp].strip()
+    return clean
+
+
+def _stream_answer(history, permitted_names=None):
+    """Generator. Streams the answer from Claude INTERNALLY (nothing is forwarded
+    to the reader) while yielding periodic SSE keepalive COMMENT lines (': ...',
+    which the client's 'data:'-only parser ignores) so the proxy/client connection
+    survives the long silent buffer. Finally yields
+    ('__RESULT__', answer_text, raw_output, stop_reason). `permitted_names`
+    (optional) hard-constrains attribution for the regeneration pass -- it only
+    NARROWS what may be attributed, never widens what the model may say."""
+    system = ANSWER_SYSTEM_BLOCKS
+    if permitted_names is not None:
+        names = ", ".join(permitted_names) if permitted_names else "(no teachers were retrieved -- attribute to no one)"
+        constraint = (
+            "STRICT ATTRIBUTION CONSTRAINT (this answer only): you may attribute a claim BY NAME "
+            "ONLY to these teachers, whose material was actually retrieved for this question: "
+            + names + ". Do NOT name, cite, or attribute any point to any other teacher, author, "
+            "commentator, or ministry -- not even in passing. If a point cannot be attributed to a "
+            "permitted name, state it without attribution. This overrides any inclination to add "
+            "other voices for balance."
+        )
+        system = list(ANSWER_SYSTEM_BLOCKS) + [{"type": "text", "text": constraint}]
+    client = get_anthropic_client()
+    raw_full = []  # type: List[str]
+    stop_reason = None
+    last_beat = time.time()
+    stream = client.messages.create(
+        model="claude-sonnet-4-5", max_tokens=3000, system=system, messages=history, stream=True,
+    )
+    for ev in stream:
+        if ev.type == "content_block_delta" and hasattr(ev.delta, "text"):
+            raw_full.append(ev.delta.text)
+        elif ev.type == "message_delta":
+            sr = getattr(getattr(ev, "delta", None), "stop_reason", None)
+            if sr:
+                stop_reason = sr
+        now = time.time()
+        if now - last_beat >= 5.0:
+            last_beat = now
+            yield ": keepalive\n\n"  # SSE comment -- keeps the connection warm, ignored by the client
+    raw_output = "".join(raw_full)
+    answer = _extract_answer_from_raw(raw_output, stop_reason) or _NO_ANSWER_FALLBACK
+    yield ("__RESULT__", answer, raw_output, stop_reason)
+
+
+def _ungrounded_reference_teachers(answer, raw_output, grounding, db):
+    # type: (str, str, object, object) -> List[str]
+    """Teachers the model CREDITED IN THE SERVED PROSE whose material was not
+    retrieved (the Phase 2 residual: a false credit that would otherwise stand
+    even though its link is denied). Keys on the model's own <reference_mentions>
+    self-report, gated on the name literally appearing in the answer prose."""
+    from app.services.reference_verifier import (
+        parse_reference_mentions, _is_retrieval_grounded, find_occurrences, _SENTINEL_SOURCE_ID,
+    )
+    from app.services.source_resolver import normalize_alias_key
+    from app.services.biblical_figures import is_biblical_figure
+    out = []  # type: List[str]
+    for p in parse_reference_mentions(raw_output):
+        if p["type"] != "teacher":
+            continue
+        name = p["raw"]
+        if is_biblical_figure(name) or not find_occurrences(answer, name):
+            continue
+        sid = None
+        key = normalize_alias_key(name)
+        if key:
+            try:
+                r = db.table("source_aliases").select("source_id").eq("alias_key", key).limit(1).execute()
+                if r.data and r.data[0]["source_id"] != _SENTINEL_SOURCE_ID:
+                    sid = r.data[0]["source_id"]
+            except Exception:
+                sid = None  # fail toward "ungrounded": a resolution failure must not hide a bad credit
+        if not _is_retrieval_grounded(name, sid, grounding):
+            out.append(name)
+    return out
+
+
+def _playback_events(text):
+    """Yield the (already-verified) answer as paced SSE token events for a smooth
+    typewriter reveal at ~PLAYBACK_CHARS_PER_SEC. Whitespace-preserving word chunks
+    so the reassembled text is exact. Nothing here is unverified -- the caller runs
+    full verification before invoking this."""
+    if not text:
+        return
+    for part in re.findall(r"\S+\s*", text):
+        yield _sse(json.dumps({"token": part}))
+        time.sleep(len(part) / PLAYBACK_CHARS_PER_SEC)
+
+
+
 def _get_client_ip(http_request: Request) -> Optional[str]:
     """Real client IP behind Railway's edge proxy. Uvicorn is not run with
     --proxy-headers, so http_request.client.host is Railway's internal proxy
@@ -864,12 +1004,17 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     def generate():
-        # True-empty short-circuit: nothing retrieved at all — no citable, no background.
-        # Only bail here; thin-citable-but-has-background takes the graceful-degradation path.
+        # Piece 1 (buffer-then-verify-then-playback, 2026-08-02): the reader sees
+        # NOTHING until the full answer has been generated AND verified server-side.
+        # The Phase 2 teacher-name guard runs, any ungrounded attribution is resolved
+        # (regenerate-once, then clean refusal), and only then is the verified answer
+        # revealed as a paced typewriter playback. During the wait the client shows
+        # its existing loading state (no tokens arrive until the first playback chunk).
         truly_empty = not chunks and not topic_context_parts
         if truly_empty:
             fallback = "I don't have strong material on that topic in my current library."
-            yield _sse(json.dumps({"token": fallback}))
+            for ev in _playback_events(fallback):
+                yield ev
             yield _sse(json.dumps({"citations": [], "conversation_id": None}))
             yield _sse("[DONE]")
             return
@@ -906,11 +1051,8 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             )
 
         if lexicon:
-            lex_context = "\n\n---\n\n".join(
-                f"[Lexicon] {c['content']}"
-                for c in lexicon
-            )
-            context += "\n\n--- LEXICON CONTEXT (silent_context — do not cite by name) ---\n\n" + lex_context
+            lex_context = "\n\n---\n\n".join(f"[Lexicon] {c['content']}" for c in lexicon)
+            context += "\n\n--- LEXICON CONTEXT (silent_context -- do not cite by name) ---\n\n" + lex_context
 
         # Build conversation history for Anthropic Claude
         history = []
@@ -923,228 +1065,90 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             "content": f"Sources:\n{context}\n\nQuestion: {request.question}",
         })
 
-        # Stream from Anthropic Claude, extracting only <answer> content (Change 4: singleton)
-        raw_full = []
-        answer_parts = []
-        stop_reason = None  # captured from the message_delta event; drives the
-                            # budget-exhaustion handling below (Phase 0 §7a fix).
-        in_answer = False
-        answer_closed = False  # SP1: once True, never re-enter in_answer — protects
-                                # against a stray "<answer>" substring appearing in
-                                # content written after </answer> (see Task 11 note above).
-        buffer = ""
+        # --- Buffer: generate the full answer. Nothing is streamed to the client here. ---
+        from app.services.reference_verifier import verify_references, build_retrieval_grounding
+        # Phase 2 teacher-name guard: a teacher earns a verified link only if its
+        # material was retrieved. Built from the exact chunks the model saw; fails
+        # closed. Also drives the ungrounded-attribution resolution below.
+        grounding = build_retrieval_grounding(chunks, db)
+        permitted_names = sorted({
+            (c.get("author") or "").strip() for c in chunks
+            if _is_citable(c) and (c.get("author") or "").strip()
+        })
 
-        def _close_answer(buf: str, close_pos: int) -> str:
-            """Shared close-tag handling for both close-detection sites
-            (Site A: </answer> found in the same chunk as the opening
-            <answer> tag; Site B: </answer> found mid-stream while already
-            in_answer). Extracts the trailing content before </answer> and
-            permanently flips BOTH guard flags together. Centralizing this
-            makes it impossible for one site to set in_answer=False without
-            also setting answer_closed=True — exactly the drift that caused
-            Task 11's stream-leak bug (Site A set only in_answer=False,
-            leaving answer_closed unset, so a later chunk containing the
-            literal substring "<answer>" in trailing content re-opened
-            in_answer and re-streamed it as real answer text).
-            """
-            nonlocal in_answer, answer_closed
-            part = buf[:close_pos]
-            if part:
-                answer_parts.append(part)
-            in_answer = False
-            answer_closed = True
-            return part
-
-        try:
-            client = get_anthropic_client()
-            stream = client.messages.create(
-                model="claude-sonnet-4-5",
-                # Phase 0 §7a: at 1500 the hidden <thinking>/<research_analysis>
-                # blocks exhausted the budget before <answer> completed on ~27% of
-                # long-context answers (measured), starving or blocking the visible
-                # answer. 3000 gives headroom for reasoning + a full answer + the
-                # <reference_mentions> block even in the worst measured case
-                # (~1340-token thinking). Cost note: this raises per-answer cost ONLY
-                # for answers that previously truncated (they now run to completion,
-                # ~+700 output tokens ≈ +$0.01 each at Sonnet output pricing); answers
-                # that already completed under 1500 stop naturally at </answer> and
-                # generate no more, so they are unaffected.
-                max_tokens=3000,
-                system=ANSWER_SYSTEM_BLOCKS,
-                messages=history,
-                stream=True,
-            )
-            for event in stream:
-                if event.type == "message_start":
-                    usage = getattr(event.message, "usage", None)
-                    if usage:
-                        logger.debug(
-                            "[CACHE] creation=%d read=%d input=%d",
-                            getattr(usage, "cache_creation_input_tokens", 0) or 0,
-                            getattr(usage, "cache_read_input_tokens", 0) or 0,
-                            getattr(usage, "input_tokens", 0),
-                        )
-                    continue
-                if event.type == "message_delta":
-                    # Carries the final stop_reason ("end_turn" | "max_tokens" | ...).
-                    # Needed to tell a budget-cut generation from a clean finish below.
-                    sr = getattr(getattr(event, "delta", None), "stop_reason", None)
-                    if sr:
-                        stop_reason = sr
-                    continue
-                if event.type == "content_block_delta" and hasattr(event.delta, "text"):
-                    text = event.delta.text
+        # Drive an internal generation, forwarding ONLY keepalive heartbeats (no
+        # answer content) so the connection survives the silent buffer; capture
+        # the (answer, raw_output, stop_reason) result out-of-band via _gen.
+        _gen = {}
+        def _drive(g):
+            for item in g:
+                if isinstance(item, tuple) and item and item[0] == "__RESULT__":
+                    _gen["r"] = item
                 else:
-                    continue
-                raw_full.append(text)
-                buffer += text
-
-                if not in_answer and not answer_closed:
-                    # Check if <answer> tag has appeared in the buffer
-                    tag_pos = buffer.find("<answer>")
-                    if tag_pos != -1:
-                        in_answer = True
-                        # Emit anything after the opening tag
-                        after_tag = buffer[tag_pos + len("<answer>"):]
-                        buffer = after_tag
-                        # Check if closing tag is already in this chunk
-                        close_pos = buffer.find("</answer>")
-                        if close_pos != -1:
-                            part = _close_answer(buffer, close_pos)
-                            if part:
-                                yield _sse(json.dumps({"token": part}))
-                            buffer = ""
-                        elif buffer:
-                            answer_parts.append(buffer)
-                            yield _sse(json.dumps({"token": buffer}))
-                            buffer = ""
-                elif in_answer:
-                    # Inside <answer> — check for closing tag
-                    close_pos = buffer.find("</answer>")
-                    if close_pos != -1:
-                        part = _close_answer(buffer, close_pos)
-                        if part:
-                            yield _sse(json.dumps({"token": part}))
-                        buffer = ""
-                    else:
-                        # Yield buffer but keep last 9 chars in case
-                        # "</answer>" spans across chunks
-                        safe_len = len(buffer) - 9
-                        if safe_len > 0:
-                            safe = buffer[:safe_len]
-                            answer_parts.append(safe)
-                            yield _sse(json.dumps({"token": safe}))
-                            buffer = buffer[safe_len:]
-                # else: answer_closed and not in_answer — SP1 guard. Silently
-                # discard everything after </answer> (e.g. Task 10's trailing
-                # <reference_mentions> block). Without this explicit no-op
-                # branch, the two-way if/else above would fall through into
-                # the "elif in_answer" branch's old unconditional "else" and
-                # start re-streaming trailing content as if it were still
-                # inside the answer — confirmed by simulation during Task 11
-                # self-review. Never re-enters emission; never re-checks for
-                # a stray "<answer>" substring (branch A above requires
-                # `not answer_closed`).
+                    yield item  # keepalive heartbeat
+        try:
+            yield from _drive(_stream_answer(history))
         except Exception:
-            logger.exception("Chat LLM stream failed")
+            logger.exception("Chat generation failed (buffered) -- clean error, no partial served")
             yield _sse(json.dumps({"error": "AI service temporarily unavailable"}))
             yield _sse("[DONE]")
             return
+        answer, raw_output = _gen["r"][1], _gen["r"][2]
 
-        # If stream ended mid-answer, flush remaining buffer. This is real answer
-        # content only — the in_answer gate above guarantees pre-<answer> reasoning
-        # is never emitted here — so it is always safe to stream. With max_tokens
-        # raised above this is rare.
-        if in_answer and buffer:
-            answer_parts.append(buffer)
-            yield _sse(json.dumps({"token": buffer}))
-            buffer = ""
+        # Keepalive across the post-generation verification window (DB round-trips
+        # below emit no bytes; without this a proxy read-timeout here would drop a
+        # fully-generated answer -- planner-reviewer finding #1).
+        yield ": keepalive\n\n"
 
-        # Truncation safety net (Phase 0 §7a): the <answer> opened but the token
-        # ceiling was hit before </answer>. The streamed text is a real, incomplete
-        # answer (never reasoning), so we keep it and add ONE clean honest sentence
-        # so the user isn't left mid-thought. Gated on stop_reason == "max_tokens"
-        # so a model that simply finished without emitting </answer> (end_turn) is
-        # NOT mislabelled as truncated. With the raised budget this should not fire
-        # for normal answers; it is a backstop, not the primary fix.
-        if in_answer and not answer_closed and stop_reason == "max_tokens":
-            note = ("\n\n_(This answer was cut off before it finished — ask a follow-up "
-                    "to continue.)_")
-            answer_parts.append(note)
-            yield _sse(json.dumps({"token": note}))
-            logger.warning("Answer hit the token ceiling mid-<answer> — appended cutoff note")
-
-        # HARD GUARANTEE (Phase 0 §7a): internal reasoning must NEVER reach the user.
-        # answer_parts is empty only when no <answer> block was ever emitted — which,
-        # given the mandated <thinking>/<research_analysis>/<answer> structure, means
-        # the budget was exhausted inside the hidden reasoning blocks. The previous
-        # code streamed raw_full here, leaking that scratchpad verbatim to the user
-        # (the "no-answer-block" failure the Phase 0 report measured on H2). Never do
-        # that: if the raw output carries any reasoning tag, it IS scratchpad — serve
-        # a clean honest fallback instead, regardless of the token budget. Only a raw
-        # output with NO reasoning tags at all (a plain-prose answer that ignored the
-        # XML format — nothing internal to leak) is emitted as-is, preserving the
-        # original graceful path for that benign case.
-        if not answer_parts:
-            raw_text = "".join(raw_full)
-            has_reasoning = ("<thinking>" in raw_text) or ("<research_analysis>" in raw_text)
-            if has_reasoning or not raw_text.strip():
-                logger.warning(
-                    "No <answer> block produced (stop_reason=%s, %d raw chars) — serving "
-                    "clean fallback, suppressing reasoning scratchpad",
-                    stop_reason, len(raw_text),
-                )
-                fallback = ("I wasn't able to finish composing a complete answer to that. "
-                            "Please try again, or narrow the question a little.")
-                answer_parts.append(fallback)
-                yield _sse(json.dumps({"token": fallback}))
-            else:
-                clean = raw_text.strip()
-                ref_tag_pos = clean.find("<reference_mentions>")
-                if ref_tag_pos != -1:
-                    clean = clean[:ref_tag_pos].strip()
-                answer_parts.append(clean)
-                yield _sse(json.dumps({"token": clean}))
-
-        answer = "".join(answer_parts).strip()
-        raw_output = "".join(raw_full)
-
-        # SP1: verify proposed verse/teacher mentions against real data.
-        # Wrapped so any failure here can never affect the answer already
-        # sent, the conversation save below, or the final meta event.
+        # --- Resolve ungrounded attributions (req 2): a false teacher credit must not
+        # reach the reader in the prose. Regenerate ONCE constrained to the permitted
+        # (retrieved) names; if it STILL credits an ungrounded teacher, refuse cleanly.
+        # Never surgically edit prose (mangling risk). The Phase 2 grounding guard is
+        # not weakened -- this only removes a false credit, never adds a link. ---
+        refused = False
         try:
-            from app.services.reference_verifier import verify_references, build_retrieval_grounding
-            # Phase 2 teacher-name guard: a named teacher earns a verified link
-            # only if that teacher's material was actually retrieved for THIS
-            # question. `chunks` is the exact context the model saw (captured
-            # from the enclosing scope, read-only here). build_retrieval_grounding
-            # fails closed — on any error it returns established=False, and every
-            # teacher is then denied a link rather than passed.
-            grounding = build_retrieval_grounding(chunks, db)
-            verified_references = verify_references(answer, raw_output, db, grounding)
+            if _ungrounded_reference_teachers(answer, raw_output, grounding, db):
+                yield from _drive(_stream_answer(history, permitted_names=permitted_names))
+                answer2, raw2 = _gen["r"][1], _gen["r"][2]
+                if _ungrounded_reference_teachers(answer2, raw2, grounding, db):
+                    logger.warning("Regeneration still credits an ungrounded teacher -- clean refusal")
+                    answer, raw_output, refused = _ATTRIBUTION_REFUSAL, "", True
+                else:
+                    answer, raw_output = answer2, raw2
         except Exception:
-            logger.exception("SP1 reference verification failed — continuing without pointers")
+            logger.exception("Attribution-resolution failed -- refusing cleanly (fail closed)")
+            answer, raw_output, refused = _ATTRIBUTION_REFUSAL, "", True
+
+        yield ": keepalive\n\n"  # cover the verify_references DB round-trips too (finding #1)
+        try:
+            verified_references = [] if refused else verify_references(answer, raw_output, db, grounding)
+        except Exception:
+            logger.exception("SP1 reference verification failed -- continuing without pointers")
             verified_references = []
 
-        # Pre-generate IDs and fire background save (Change 6)
+        # --- Persist (background) then reveal via paced playback ---
         conversation_id = request.conversation_id or str(uuid.uuid4())
         message_id = str(uuid.uuid4())
         is_new = request.conversation_id is None
         if user_id:
             threading.Thread(
                 target=_save_conversation,
-                args=(db, user_id, conversation_id, is_new, request.question, answer, message_id, citations, verified_references),
+                args=(db, user_id, conversation_id, is_new, request.question, answer, message_id,
+                      [] if refused else citations, verified_references),
                 daemon=True,
             ).start()
             logger.info("Conversation save dispatched in background: %s", conversation_id)
         else:
             conversation_id = None
             message_id = None
-            logger.debug("Skipping conversation save — no authenticated user")
+            logger.debug("Skipping conversation save -- no authenticated user")
 
-        # Send metadata and close
+        # Playback the fully-verified answer. Nothing above this line emitted answer text.
+        for ev in _playback_events(answer):
+            yield ev
+
         meta = {
-            "citations": citations,
+            "citations": [] if refused else citations,
             "conversation_id": conversation_id,
             "message_id": message_id,
             "verified_references": verified_references,
@@ -1155,5 +1159,6 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             meta["usage"] = user_usage_meta
         yield _sse(json.dumps(meta))
         yield _sse("[DONE]")
+
 
     return StreamingResponse(generate(), media_type="text/event-stream")
