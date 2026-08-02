@@ -91,3 +91,5 @@ book_chapter_live_proof_review/
 
 # Phase 2 teacher-name guard live-run artifact (local, regenerated on demand)
 scripts/teacher_name_guard_live_results.json
+# Phase 2 residual prose-scan live-run artifact (local, regenerated on demand)
+scripts/prose_scan_live_results.json

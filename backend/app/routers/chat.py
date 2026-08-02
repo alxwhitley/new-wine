@@ -584,14 +584,15 @@ def _stream_answer(history, permitted_names=None):
 
 def _ungrounded_reference_teachers(answer, raw_output, grounding, db):
     # type: (str, str, object, object) -> List[str]
-    """Teachers the model CREDITED IN THE SERVED PROSE whose material was not
-    retrieved (the Phase 2 residual: a false credit that would otherwise stand
-    even though its link is denied). Keys on the model's own <reference_mentions>
-    self-report, gated on the name literally appearing in the answer prose."""
+    """DECLARED-BLOCK arm of the residual guard: teachers the model CREDITED IN
+    THE SERVED PROSE *and* self-reported in its <reference_mentions> block, whose
+    material was not retrieved. The prose-scan arm (ungrounded_prose_teachers)
+    covers credits the model did NOT declare; both feed the same
+    regenerate-once-then-refuse resolution. Kept as the shipped declared arm — it
+    still catches a declared surname the full-name-only prose scan skips."""
     from app.services.reference_verifier import (
-        parse_reference_mentions, _is_retrieval_grounded, find_occurrences, _SENTINEL_SOURCE_ID,
+        parse_reference_mentions, _is_retrieval_grounded, find_occurrences, resolve_alias_source_id,
     )
-    from app.services.source_resolver import normalize_alias_key
     from app.services.biblical_figures import is_biblical_figure
     out = []  # type: List[str]
     for p in parse_reference_mentions(raw_output):
@@ -600,15 +601,9 @@ def _ungrounded_reference_teachers(answer, raw_output, grounding, db):
         name = p["raw"]
         if is_biblical_figure(name) or not find_occurrences(answer, name):
             continue
-        sid = None
-        key = normalize_alias_key(name)
-        if key:
-            try:
-                r = db.table("source_aliases").select("source_id").eq("alias_key", key).limit(1).execute()
-                if r.data and r.data[0]["source_id"] != _SENTINEL_SOURCE_ID:
-                    sid = r.data[0]["source_id"]
-            except Exception:
-                sid = None  # fail toward "ungrounded": a resolution failure must not hide a bad credit
+        # Shared resolver (fails toward None/ungrounded on error) — one notion of
+        # name->source_id, not a fork of the resolution the prose scan uses.
+        sid = resolve_alias_source_id(db, name)
         if not _is_retrieval_grounded(name, sid, grounding):
             out.append(name)
     return out
@@ -1066,7 +1061,10 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
         })
 
         # --- Buffer: generate the full answer. Nothing is streamed to the client here. ---
-        from app.services.reference_verifier import verify_references, build_retrieval_grounding
+        from app.services.reference_verifier import (
+            verify_references, build_retrieval_grounding, build_name_universe,
+            ungrounded_prose_teachers,
+        )
         # Phase 2 teacher-name guard: a teacher earns a verified link only if its
         # material was retrieved. Built from the exact chunks the model saw; fails
         # closed. Also drives the ungrounded-attribution resolution below.
@@ -1107,11 +1105,28 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
         # not weakened -- this only removes a false credit, never adds a link. ---
         refused = False
         try:
-            if _ungrounded_reference_teachers(answer, raw_output, grounding, db):
+            # The finite corpus name universe for the prose scan (Arm 1). Built
+            # once and reused across both the initial check and the regeneration
+            # re-check. Raises on DB failure -> caught below -> clean refusal
+            # (fail closed, req 3), never a fail-open empty universe.
+            name_universe = build_name_universe(db)
+
+            def _has_ungrounded_credit(ans, raw):
+                # DECLARED-BLOCK arm (self-reported <reference_mentions>) OR
+                # PROSE-SCAN arm (full names credited in prose but omitted from
+                # that block -- the Phase 2 residual). Either firing is an
+                # ungrounded credit that must be resolved the same way (req 4).
+                if _ungrounded_reference_teachers(ans, raw, grounding, db):
+                    return True
+                if ungrounded_prose_teachers(ans, name_universe, grounding, db):
+                    return True
+                return False
+
+            if _has_ungrounded_credit(answer, raw_output):
                 yield from _drive(_stream_answer(history, permitted_names=permitted_names))
                 answer2, raw2 = _gen["r"][1], _gen["r"][2]
-                if _ungrounded_reference_teachers(answer2, raw2, grounding, db):
-                    logger.warning("Regeneration still credits an ungrounded teacher -- clean refusal")
+                if _has_ungrounded_credit(answer2, raw2):
+                    logger.warning("Regeneration still credits an ungrounded teacher (declared or prose) -- clean refusal")
                     answer, raw_output, refused = _ATTRIBUTION_REFUSAL, "", True
                 else:
                     answer, raw_output = answer2, raw2

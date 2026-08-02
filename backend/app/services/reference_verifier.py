@@ -337,6 +337,273 @@ def verify_teacher_mention(db, raw: str, grounding: "RetrievalGrounding") -> Opt
     return source_id
 
 
+# ── Phase 2 residual: prose-attribution scan (2026-08-02) ─────────────────────
+# The declared-block guard above (verify_teacher_mention + chat.py's resolution
+# loop) keys on the model's own <reference_mentions> self-report. A teacher
+# CREDITED IN THE ANSWER PROSE but omitted from that block is invisible to it,
+# and its false credit would stand (the disclosed residual, reviewer finding #3
+# on ee3cff4/9e5fe94). This block closes that path for FULL PERSONAL NAMES ONLY
+# (Alex's scope, 2026-08-02) via two arms that share ONE grounding notion
+# (_is_retrieval_grounded — requirement 1) and fail CLOSED (requirement 3):
+#
+#   Arm 1 — corpus full-name scan: the answer prose is scanned for the finite,
+#   precomputed set of corpus "first + last" teacher names (build_name_universe).
+#   Position-agnostic, near-zero false-positive (only known corpus names match).
+#   Catches the dangerous in_corpus_not_retrieved class credited in prose
+#   (the A.W. Tozer verified-link-on-unretrieved-material symptom, Phase 0 §1c).
+#
+#   Arm 2 — attribution-context extraction: first + last names in explicit
+#   attribution constructions ("According to X", "X taught", "X's commentary")
+#   are extracted and grounding-checked. This is what catches OUT-OF-CORPUS
+#   inventions and nested-quote re-attributions (Warren Wiersbe, Ray Stedman,
+#   Douglas Wilson, Philip Jenkins, Ralph Martin, Vance Havner — none in the
+#   corpus, so no allowlist could see them). Person-filtered against biblical
+#   figures and divine/theological/organizational tokens to protect Alex's
+#   req-9 zero-false-denial bar: a trigger-happy scan that regenerates/refuses
+#   legitimate answers would wreck the product. (This is a tuning constraint on
+#   THIS guard, not a claim that a blocked answer outranks a false credit —
+#   CLAUDE.md's ranked failure modes correctly put misrepresenting a teacher
+#   ABOVE a generic/blocked answer; the filters below exclude only genuine
+#   non-persons, so no real credit is ever suppressed.)
+#
+# Bare surnames are DELIBERATELY out of scope: Arm 1's filter and Arm 2's pattern
+# both require >= 2 capitalized name tokens. Phase 0 documented that short forms
+# ("Prince" = Derek Prince) occur in ordinary prose and a surname scan would risk
+# false denials. Do not extend to surnames without the sizing evidence.
+
+_NAME_TOKEN_RE = re.compile(r"^[A-Z][A-Za-z.'’\-]*$")
+
+# Organizational / media / title / article tokens. A display or extracted string
+# containing any of these (case-insensitive, punctuation-stripped, length >= 2 so
+# a single-letter initial "A"/"W" is never mistaken for the article "a") is a
+# ministry, venue, publication, or connective phrase — NOT a personal
+# "first + last" teacher name.
+_ORG_TITLE_TOKENS = frozenset({
+    "the", "an", "of", "for", "and", "with", "to", "at", "on", "by",
+    "ministries", "ministry", "church", "churches", "fellowship", "mission", "missions",
+    "magazine", "library", "commentary", "commentaries", "database", "tv", "telecasting",
+    "network", "media", "podcast", "pdcst", "press", "publishing", "publications",
+    "college", "university", "seminary", "seminaries", "institute", "foundation",
+    "awakening", "equipping", "nations", "image", "crossroads", "heights", "school",
+})
+
+# Divine names and common theological/biblical nouns. Any extracted "first + last"
+# candidate containing one of these tokens is a theological phrase, not a personal
+# teacher name — the primary false-positive guard for Arm 2 (is_biblical_figure is
+# EXACT-match and does NOT cover "Jesus Christ", "Holy Spirit", "New Testament",
+# etc.). Token-level rather than whole-phrase so it is robust as new phrasings
+# appear; extend as real usage surfaces a gap (same philosophy as biblical_figures).
+_RELIGIOUS_NONPERSON_TOKENS = frozenset({
+    "holy", "spirit", "ghost", "god", "jesus", "christ", "lord", "jehovah", "yahweh",
+    "messiah", "trinity", "almighty", "testament", "scripture", "scriptures", "bible",
+    "gospel", "gospels", "psalm", "psalms", "covenant", "kingdom", "sabbath", "passover",
+    "pentecost", "heaven", "hell", "satan", "devil", "angel", "angels", "apostle",
+    "apostles", "prophet", "prophets", "disciple", "disciples", "commandment",
+    "commandments", "israel", "jerusalem", "zion", "calvary", "sinai", "savior",
+    "saviour", "redeemer", "creator", "pharisees", "sadducees", "gentiles",
+})
+
+# Sentence-lead / function words. A capitalized sentence-initial "As", "Given",
+# "Need", or a pronoun can be mis-grabbed as the FIRST token of a two-token name
+# ("As Prince taught" -> "As Prince"). Disqualifying these as name tokens is the
+# fix (found by the 2026-08-02 live smoke). Extend as real usage surfaces a gap.
+_FUNCTION_WORDS = frozenset({
+    "as", "according", "given", "need", "but", "so", "yet", "now", "then", "thus",
+    "here", "there", "this", "that", "these", "those", "when", "while", "since",
+    "because", "although", "however", "therefore", "moreover", "indeed", "also",
+    "both", "either", "neither", "he", "she", "they", "we", "you", "it", "his",
+    "her", "their", "our", "your", "its", "him", "them", "us", "who", "whom",
+    "which", "what", "why", "how", "where", "some", "many", "most", "such", "like",
+    "unlike", "before", "after", "during", "through", "within", "unless", "whereas",
+})
+
+_NON_PERSON_TOKENS = _ORG_TITLE_TOKENS | _RELIGIOUS_NONPERSON_TOKENS | _FUNCTION_WORDS
+
+# Display strings that pass the token filter but are English phrases / anonymous-
+# author sentinels, not personal teacher names. Kept tiny and explicit; err toward
+# exclusion (fail-safe for req 9). "Unknown Christian" is the deliberately
+# silent_context pen-name (Invariant 7) — never a citable credit anyway.
+_NON_PERSONAL_ALIASES = frozenset({"Drawing Near", "Unknown Christian"})
+
+
+def _looks_like_personal_full_name(display: Optional[str]) -> bool:
+    """True iff `display` is a personal "first + last" (2–3 token) name: every
+    token capitalized and name-shaped (initials "A.W." and hyphens
+    "Austin-Sparks" allowed), none an organizational / theological / article
+    word, and not on the explicit non-personal exclusion list. A single bare
+    token (a surname or given name alone) never qualifies — FULL NAMES ONLY."""
+    if not display:
+        return False
+    display = display.strip()
+    if display in _NON_PERSONAL_ALIASES:
+        return False
+    tokens = display.split()
+    if not (2 <= len(tokens) <= 3):
+        return False
+    for t in tokens:
+        if not _NAME_TOKEN_RE.match(t):
+            return False
+        stripped = t.strip(".'’-").lower()
+        if len(stripped) >= 2 and stripped in _NON_PERSON_TOKENS:
+            return False
+    return True
+
+
+def build_name_universe(db) -> frozenset:
+    """The finite set of proper-case personal "first + last" teacher names known
+    to the corpus — what Arm 1 of the prose scan searches for. Assembled from
+    every source's canonical `name` and every non-blank `alias_display`, filtered
+    to personal full names (`_looks_like_personal_full_name`). Bare-surname
+    aliases ("Bosworth", "Muller") are excluded by that filter, matching the
+    FULL-NAMES-ONLY scope. Building from `sources.name` too (not aliases alone)
+    keeps a teacher whose alias_display is blank — Michael Brown, Jack Deere —
+    in the universe.
+
+    Does NOT swallow query errors: it raises, so the caller's guard (which wraps
+    this in the same try/except that refuses on failure) fails CLOSED. Returning
+    an empty universe instead would fail OPEN (silently scan for nothing) — the
+    exact posture build_retrieval_grounding avoids."""
+    names = set()  # type: set
+    for row in (db.table("sources").select("name").execute().data or []):
+        nm = (row.get("name") or "").strip()
+        if _looks_like_personal_full_name(nm):
+            names.add(nm)
+    for row in (db.table("source_aliases").select("alias_display").execute().data or []):
+        disp = (row.get("alias_display") or "").strip()
+        if _looks_like_personal_full_name(disp):
+            names.add(disp)
+    return frozenset(names)
+
+
+def resolve_alias_source_id(db, name: str) -> Optional[str]:
+    """Resolve a name to its source_id via the SHARED alias path (normalize +
+    source_aliases lookup; the sentinel counts as unresolved). Returns None when
+    unresolved or on a lookup error — leaning toward "ungrounded", the fail-safe
+    direction for the prose guard, and correct regardless because
+    _is_retrieval_grounded still applies its author-name arm to a None sid (so a
+    retrieved teacher with no alias row is grounded, never false-flagged). This
+    is the one resolution both the declared-block guard and the prose scan use —
+    a single notion of name->source_id, never a fork (requirement 1)."""
+    key = normalize_alias_key(name)
+    if not key:
+        return None
+    try:
+        r = db.table("source_aliases").select("source_id").eq("alias_key", key).limit(1).execute()
+    except Exception:
+        return None
+    if r.data and r.data[0].get("source_id") != _SENTINEL_SOURCE_ID:
+        return r.data[0]["source_id"]
+    return None
+
+
+def _prose_name_present(answer_text: str, name: str) -> bool:
+    """Literal, case-sensitive presence of `name` in prose, word-bounded so a
+    name is never matched inside a larger word (the study-reference.ts free-prose
+    substring class). Reuses find_occurrences — the same presence mechanism the
+    declared guards use — then rejects a match whose immediately adjacent
+    character is a letter. A trailing apostrophe (possessive "Derek Prince's") or
+    period is a valid mention and passes."""
+    for idx in find_occurrences(answer_text, name):
+        before = answer_text[idx - 1] if idx > 0 else ""
+        after = answer_text[idx + len(name)] if idx + len(name) < len(answer_text) else ""
+        if not (before.isalpha() or after.isalpha()):
+            return True
+    return False
+
+
+# Arm 2 — attribution-context extraction. A "first + last" name (2–3 tokens)
+# appearing in an explicit attribution construction. The attribution anchor is
+# the false-positive control: an incidental capitalized phrase rarely sits inside
+# "According to __" or "__ taught".
+#
+# The token grammar is deliberately STRICT (hardened 2026-08-02 after the live
+# smoke found four false-positive classes: a trailing possessive "'s" captured
+# into the name -> "Derek Prince's" failed to resolve; tokens joined across a
+# line/heading break -> "Battlefield\n\nAccording"; a sentence-boundary span ->
+# "Prince. He"; and a leading function word -> "As Prince"). A token is a
+# capitalized WORD (internal capitals "MacArthur" and a trailing hyphenated part
+# "Austin-Sparks" allowed, but NO trailing apostrophe or period) or an INITIAL
+# run ("A.", "A.W.", "E.M."). Tokens join on HORIZONTAL whitespace only, so a
+# name never spans a newline. Extend the verb/noun sets as real usage surfaces
+# gaps (same posture as biblical_figures).
+_H = r"[^\S\r\n]+"  # one-or-more horizontal whitespace, never a line break
+_ATTR_WORD = r"[A-Z][a-z]+(?:[A-Z][a-z]+)*(?:-[A-Za-z]+)*"
+_ATTR_INITIAL = r"[A-Z](?:\.[A-Z])*\.?"
+_ATTR_TOKEN = r"(?:" + _ATTR_WORD + r"|" + _ATTR_INITIAL + r")"
+_ATTR_NAME = _ATTR_TOKEN + r"(?:" + _H + _ATTR_TOKEN + r"){1,2}"
+_ATTR_VERB = (
+    r"(?:teaches|taught|writes|wrote|argues|argued|notes|noted|reminds|reminded|"
+    r"says|said|observes|observed|explains|explained|describes|described|"
+    r"emphasizes|emphasized|emphasises|emphasised|warns|warned|maintains|maintained|"
+    r"insists|insisted|declares|declared|comments|commented|suggests|suggested|"
+    r"contends|contended|holds|held|calls|called|"
+    # Speech/teaching verbs a person-subject attribution reaches for (added
+    # 2026-08-02, reviewer finding #2 — an out-of-corpus invention credited with
+    # any of these would otherwise slip Arm 2; the name filter still gates, so a
+    # theological subject like "the Bible reasons" is dropped, not flagged):
+    r"preaches|preached|believes|believed|affirms|affirmed|states|stated|claims|"
+    r"claimed|asserts|asserted|proclaims|proclaimed|urges|urged|exhorts|exhorted|"
+    r"stresses|stressed|concludes|concluded|reasons|reasoned|speaks|spoke|"
+    r"points" + _H + r"out|pointed" + _H + r"out|puts" + _H + r"it)"
+)
+_ATTR_NOUN = (
+    r"(?:commentary|teaching|teachings|book|sermon|point|view|words|writing|writings|"
+    r"exposition|study|message|ministry|observation|insight|position|argument|work)"
+)
+_ATTRIBUTION_RE = re.compile(
+    r"(?:According" + _H + r"to|As|as)" + _H + r"(" + _ATTR_NAME + r")"   # preposition-led
+    r"|(" + _ATTR_NAME + r")(?:['’]s)?" + _H + _ATTR_VERB + r"\b"          # verb / possessive-verb led
+    r"|(" + _ATTR_NAME + r")['’]s" + _H + _ATTR_NOUN + r"\b"               # possessive + teaching-noun
+)
+
+
+def _extract_prose_attribution_names(answer_text: str) -> set:
+    """Personal "first + last" names credited in explicit attribution context.
+    A trailing possessive is stripped, then each candidate is filtered through
+    `_looks_like_personal_full_name`, so divine/theological phrases ("Jesus
+    Christ", "Holy Spirit", "New Testament"), organizational names, and
+    sentence-lead function words ("As Prince") are all dropped before the
+    grounding check."""
+    names = set()  # type: set
+    for m in _ATTRIBUTION_RE.finditer(answer_text):
+        nm = (m.group(1) or m.group(2) or m.group(3) or "").strip()
+        nm = re.sub(r"['’]s?$", "", nm).strip()  # belt-and-suspenders possessive strip
+        if nm and _looks_like_personal_full_name(nm):
+            names.add(nm)
+    return names
+
+
+def ungrounded_prose_teachers(answer_text: str, name_universe: frozenset, grounding, db) -> List[str]:
+    """Full personal teacher names credited in the ANSWER PROSE whose material was
+    not retrieved for this question — the Phase 2 residual. EXTENDS the
+    declared-block guard's coverage (it does not replace it): this scan is
+    independent of the <reference_mentions> block, so it catches a prose credit
+    the model never self-reported.
+
+    Union of Arm 1 (corpus full-name variants present anywhere in prose) and Arm 2
+    (attribution-context extraction, for out-of-corpus names). Grounding is
+    decided by the SHARED _is_retrieval_grounded predicate keyed on retrieved
+    IDENTITY (requirement 2: the Andrew-Murray alias-gap is grounded via the
+    author-name arm and never false-flagged). Fails CLOSED through
+    grounding.established (unavailable grounding -> every present name ungrounded
+    -> caller refuses)."""
+    candidates = set()  # type: set
+    for name in name_universe:                       # Arm 1
+        if _prose_name_present(answer_text, name):
+            candidates.add(name)
+    for name in _extract_prose_attribution_names(answer_text):  # Arm 2
+        candidates.add(name)
+
+    out = []  # type: List[str]
+    for name in candidates:
+        if is_biblical_figure(name):
+            continue
+        sid = resolve_alias_source_id(db, name)
+        if not _is_retrieval_grounded(name, sid, grounding):
+            out.append(name)
+    return sorted(set(out))
+
+
 def _deduplicate_overlapping_spans(verified: List[Dict]) -> List[Dict]:
     """When two DIFFERENT verified references occupy overlapping character
     spans in answer_text, keep the longer span and drop the shorter's

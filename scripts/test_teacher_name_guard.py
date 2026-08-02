@@ -22,6 +22,13 @@ from app.services.reference_verifier import (
     verify_references,
     verify_teacher_mention,
     _is_retrieval_grounded,
+    # Phase 2 residual: prose-attribution scan (2026-08-02)
+    build_name_universe,
+    ungrounded_prose_teachers,
+    resolve_alias_source_id,
+    _looks_like_personal_full_name,
+    _extract_prose_attribution_names,
+    _prose_name_present,
 )
 from app.services.source_resolver import normalize_alias_key
 
@@ -91,6 +98,169 @@ def _resolving_servable_db(source_id):
         "sources": [{"license_status": "owned", "visibility": "shown"}],
         "app_settings": [{"value": "off"}],
     })
+
+
+# ── Name-aware fake DB for the prose-scan (2026-08-02) ──────────────────────
+# Unlike _FakeQuery, this honours .eq("alias_key", key) so different names
+# resolve to different source_ids — required to test the prose scan, which
+# resolves each scanned name independently.
+class _ProseQuery:
+    def __init__(self, table, store):
+        self.table_name = table
+        self.store = store
+        self._eqs = {}  # type: dict
+
+    def select(self, *a, **k):
+        return self
+
+    def eq(self, col, val):
+        self._eqs[col] = val
+        return self
+
+    def in_(self, *a, **k):
+        return self
+
+    def limit(self, *a, **k):
+        return self
+
+    def execute(self):
+        if self.table_name == "sources":
+            return _FakeResult([{"name": n} for n in self.store.get("source_names", [])])
+        if self.table_name == "source_aliases":
+            if "alias_key" in self._eqs:
+                sid = self.store.get("alias_map", {}).get(self._eqs["alias_key"])
+                return _FakeResult([{"source_id": sid}] if sid else [])
+            return _FakeResult([{"alias_display": d} for d in self.store.get("alias_displays", [])])
+        return _FakeResult([])
+
+
+class _ProseFakeDB:
+    def __init__(self, store):
+        self.store = store
+
+    def table(self, name):
+        return _ProseQuery(name, self.store)
+
+
+def prose_scan_tests():
+    """Deterministic tests for the Phase 2 residual (prose-attribution scan).
+    Reproduces every req-8 fabrication as controlled prose input and confirms it
+    is flagged whether or not the model DECLARED it — plus the req-9
+    false-positive protections (legit retrieved teachers and theological phrases
+    must NOT flag)."""
+    print("\n── Prose-attribution scan (Phase 2 residual, 2026-08-02) ──")
+
+    PRINCE = "11111111-aaaa-bbbb-cccc-222222222222"  # retrieved
+    TOZER = "99999999-dddd-eeee-ffff-888888888888"   # in corpus, NOT retrieved
+    BROWN = "33333333-aaaa-bbbb-cccc-444444444444"    # in corpus, NOT retrieved
+
+    # A corpus with four personal teachers + one org (must be filtered out) and a
+    # blank-display teacher (Michael Brown -> carried by sources.name only).
+    store = {
+        "source_names": ["A.W. Tozer", "Derek Prince", "Andrew Murray", "Michael Brown", "Good News Church"],
+        "alias_displays": ["Derek Prince Ministries", "A W Tozer", "Good News Church", "Drawing Near"],
+        "alias_map": {
+            normalize_alias_key("A.W. Tozer"): TOZER,
+            normalize_alias_key("A W Tozer"): TOZER,
+            normalize_alias_key("Derek Prince"): PRINCE,
+            normalize_alias_key("Michael Brown"): BROWN,
+            # Andrew Murray DELIBERATELY absent -> the alias-gap Landmine.
+        },
+    }
+    db = _ProseFakeDB(store)
+
+    # Grounding: only Derek Prince (source RETRIEVED) and Andrew Murray (by author
+    # name, no alias row) were retrieved for this question.
+    grounding = RetrievalGrounding(
+        source_ids=frozenset({PRINCE}),
+        author_keys=frozenset({normalize_alias_key("Derek Prince"), normalize_alias_key("Andrew Murray")}),
+        established=True,
+    )
+
+    # ── build_name_universe: personal full names only, org/title dropped ──
+    universe = build_name_universe(db)
+    check(
+        "UNIVERSE: personal full names admitted (incl. blank-display Michael Brown "
+        "via sources.name), org 'Good News Church' + title 'Drawing Near' excluded",
+        {"A.W. Tozer", "Derek Prince", "Andrew Murray", "Michael Brown", "Derek Prince Ministries", "A W Tozer"} & universe
+        == {"A.W. Tozer", "Derek Prince", "Andrew Murray", "Michael Brown", "A W Tozer"}
+        and "Good News Church" not in universe and "Drawing Near" not in universe
+        and "Derek Prince Ministries" not in universe,
+    )
+
+    # ── req 8, prose-ONLY (undeclared) — out-of-corpus inventions & nested quotes ──
+    # ungrounded_prose_teachers reads ONLY the answer prose, never the
+    # <reference_mentions> block, so a flag here IS the "credited only in prose"
+    # case by construction (declaration-independent).
+    for name in ["Warren Wiersbe", "Ray Stedman", "Douglas Wilson", "Philip Jenkins",
+                 "Ralph Martin", "Vance Havner"]:
+        prose = f"According to {name}, this point is made. {name} taught it clearly."
+        out = ungrounded_prose_teachers(prose, universe, grounding, db)
+        check(f"REQ8 prose-only out-of-corpus: '{name}' credited in prose -> FLAGGED", name in out)
+
+    # ── req 8, in-corpus-not-retrieved (Tozer) via BOTH arms ──
+    # Arm 2 (attribution verb) and Arm 1 (universe scan, position-agnostic).
+    tozer_attr = ungrounded_prose_teachers("A.W. Tozer taught that revival begins in prayer.", universe, grounding, db)
+    check("REQ8 Tozer (in-corpus, NOT retrieved), attribution context -> FLAGGED", "A.W. Tozer" in tozer_attr)
+    tozer_heading = ungrounded_prose_teachers("## A.W. Tozer on revival\nHis burden was the knowledge of God.", universe, grounding, db)
+    check("REQ8 Tozer in a heading (no attribution verb) -> caught by Arm 1 universe scan", "A.W. Tozer" in tozer_heading)
+
+    # ── req 9: legitimately RETRIEVED teacher credited in prose -> NOT flagged ──
+    prince_prose = "According to Derek Prince, deliverance is the children's bread. Derek Prince taught this often."
+    check("REQ9 legit: retrieved 'Derek Prince' credited in prose -> NOT flagged (no false denial)",
+          ungrounded_prose_teachers(prince_prose, universe, grounding, db) == [])
+
+    # ── req 2: Andrew Murray alias-gap (retrieved, no alias row) -> NOT flagged ──
+    murray_prose = "Andrew Murray writes that abiding is the secret of the deeper life."
+    check("REQ2 alias-gap: retrieved 'Andrew Murray' (no alias row) grounded via author-name arm -> NOT flagged",
+          ungrounded_prose_teachers(murray_prose, universe, grounding, db) == [])
+
+    # ── req 9: theological / divine phrases in attribution context -> NOT flagged ──
+    trap = ("As Jesus Christ taught and the Holy Spirit reminds us, the New Testament church was bold. "
+            "According to Scripture, God says we are kept; the Old Testament describes it.")
+    check("REQ9 traps: 'Jesus Christ'/'Holy Spirit'/'New Testament'/'God'/'Old Testament' -> NOT flagged",
+          ungrounded_prose_teachers(trap, universe, grounding, db) == [])
+
+    # ── req 3: fail closed — established=False flags even a would-be-grounded name ──
+    fc = RetrievalGrounding(established=False)
+    check("REQ3 fail-closed: grounding not established -> even retrieved-looking 'Derek Prince' FLAGGED",
+          "Derek Prince" in ungrounded_prose_teachers(prince_prose, universe, fc, db))
+
+    # ── pure-helper assertions (no DB) ──
+    check("HELPER _looks_like_personal_full_name admits initials/hyphens, rejects surname/org/theological",
+          all(_looks_like_personal_full_name(n) for n in ["Derek Prince", "A.W. Tozer", "Reuben Archer Torrey", "T. Austin-Sparks"])
+          and not any(_looks_like_personal_full_name(n) for n in ["Prince", "Good News Church", "Jesus Christ", "New Testament", "Drawing Near"]))
+    check("HELPER _extract_prose_attribution_names ignores non-attribution capitalized bigrams",
+          _extract_prose_attribution_names("The Dead Sea Scrolls and the Middle East are ancient.") == set())
+    check("HELPER _prose_name_present is word-bounded (no substring false match)",
+          _prose_name_present("This echoes A.W. Tozer.", "A.W. Tozer")
+          and not _prose_name_present("Derek Princeton College", "Derek Prince"))
+
+    # ── Arm 2 extraction hardening — the four false-positive classes the
+    # 2026-08-02 live smoke surfaced (each caused a false denial on a legit
+    # answer before the fix). Regression-locked here. ──
+    check("FP-CLASS possessive: \"Derek Prince's teaching\" extracts clean 'Derek Prince' (not \"Derek Prince's\")",
+          _extract_prose_attribution_names("Derek Prince's teaching on deliverance") == {"Derek Prince"})
+    check("FP-CLASS leading function word: 'As Prince taught' extracts nothing (surname + 'As')",
+          _extract_prose_attribution_names("As Prince taught this clearly.") == set())
+    check("FP-CLASS sentence boundary: 'The Prince. He said' extracts nothing",
+          _extract_prose_attribution_names("The children of the Prince. He said so.") == set())
+    check("FP-CLASS newline span: heading break never joins two tokens into a name",
+          _extract_prose_attribution_names("## Spiritual Battlefield\n\nAccording to Scripture we fight.") == set()
+          and _extract_prose_attribution_names("Given\n\nDerek Prince was retrieved here.") == set())
+
+    # Integration: the grounded 'Derek Prince' credited in POSSESSIVE prose must
+    # NOT flag (the TS1 live false denial). Reuses the retrieved grounding above.
+    check("REQ9 possessive integration: \"Derek Prince's view\" (retrieved) -> NOT flagged",
+          ungrounded_prose_teachers("Derek Prince's view is that deliverance is the children's bread.", universe, grounding, db) == [])
+
+    # Broadened attribution verbs (reviewer finding #2): an out-of-corpus name
+    # credited with a common speech verb must still extract; a theological
+    # subject with the same verb must not.
+    check("VERB-SET: 'Charles Spurgeon preached/believed/affirmed/stated' extract; 'the Bible reasons' does not",
+          all("Charles Spurgeon" in _extract_prose_attribution_names("Charles Spurgeon %s that grace abounds." % v)
+              for v in ["preached", "believed", "affirmed", "stated", "claimed", "asserted", "urged"])
+          and _extract_prose_attribution_names("As the Bible reasons and the Holy Spirit speaks, we obey.") == set())
 
 
 def _mentions(name):
@@ -247,6 +417,9 @@ def main():
         "TypeError (gate cannot be skipped by omission)",
         structurally_required,
     )
+
+    # ── Phase 2 residual: prose-attribution scan ──
+    prose_scan_tests()
 
     print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILURE(S): ' + ', '.join(failures)}")
     if failures:
