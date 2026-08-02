@@ -1113,8 +1113,15 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
         # Wrapped so any failure here can never affect the answer already
         # sent, the conversation save below, or the final meta event.
         try:
-            from app.services.reference_verifier import verify_references
-            verified_references = verify_references(answer, raw_output, db)
+            from app.services.reference_verifier import verify_references, build_retrieval_grounding
+            # Phase 2 teacher-name guard: a named teacher earns a verified link
+            # only if that teacher's material was actually retrieved for THIS
+            # question. `chunks` is the exact context the model saw (captured
+            # from the enclosing scope, read-only here). build_retrieval_grounding
+            # fails closed — on any error it returns established=False, and every
+            # teacher is then denied a link rather than passed.
+            grounding = build_retrieval_grounding(chunks, db)
+            verified_references = verify_references(answer, raw_output, db, grounding)
         except Exception:
             logger.exception("SP1 reference verification failed — continuing without pointers")
             verified_references = []

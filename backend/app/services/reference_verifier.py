@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 from app.constants import BOOK_MAP
@@ -46,6 +47,126 @@ from app.services.biblical_figures import is_biblical_figure
 from app.services.source_resolver import is_source_servable, normalize_alias_key
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RetrievalGrounding:
+    """The set of teachers whose material was actually retrieved for THIS
+    question, in the two forms a named teacher can match against it (Phase 2
+    teacher-name guard, validated by the 2026-08-01 Phase 0 pass, §4a):
+
+      - `source_ids`: the `documents.source_id` of every retrieved chunk.
+      - `author_keys`: the `normalize_alias_key`-normalized `author` of every
+        retrieved chunk.
+
+    A teacher is grounded if EITHER its alias-resolved source_id is in
+    `source_ids` OR its normalized name is in `author_keys`. The author-key
+    arm is the hard design constraint from Phase 0 (requirement 1): it keys
+    on retrieved IDENTITY, not alias resolution, so a legitimately-retrieved
+    teacher with NO `source_aliases` row (Andrew Murray — the alias-gap
+    Landmine) is not false-flagged.
+
+    `established` is False when the set could not be built (a DB failure while
+    mapping document_id -> source_id). In that state EVERY teacher is treated
+    as ungrounded, so the guard fails CLOSED — it denies all teacher links
+    rather than passing them (the fail-open shape that bit the 01ca912
+    session must not recur here).
+    """
+    source_ids: frozenset = frozenset()
+    author_keys: frozenset = frozenset()
+    established: bool = True
+
+
+def build_retrieval_grounding(chunks: List[dict], db) -> "RetrievalGrounding":
+    """Build a `RetrievalGrounding` from the exact chunk list the model was
+    given as context. Fails CLOSED: any exception mapping document_id ->
+    source_id yields `established=False` (all teachers ungrounded).
+
+    Partial results are NOT a failure — a retrieved document whose row is
+    absent from the `documents` lookup simply contributes no source_id; its
+    author is still captured from the chunk, so a teacher retrieved through
+    it is still grounded via the author-key arm. Only a raised exception
+    (the whole lookup failing) trips the fail-closed path.
+    """
+    try:
+        author_keys = set()  # type: set
+        doc_ids = set()      # type: set
+        for c in chunks:
+            author = c.get("author")
+            if author:
+                k = normalize_alias_key(author)
+                if k:
+                    author_keys.add(k)
+            did = c.get("document_id")
+            if did:
+                doc_ids.add(did)
+
+        source_ids = set()  # type: set
+        if doc_ids:
+            resp = (
+                db.table("documents").select("id, source_id").in_("id", sorted(doc_ids)).execute()
+            )
+            for row in (resp.data or []):
+                sid = row.get("source_id")
+                if sid:
+                    source_ids.add(sid)
+
+        return RetrievalGrounding(
+            source_ids=frozenset(source_ids),
+            author_keys=frozenset(author_keys),
+            established=True,
+        )
+    except Exception:
+        logger.exception(
+            "build_retrieval_grounding failed — failing CLOSED (no teacher links this answer)"
+        )
+        return RetrievalGrounding(established=False)
+
+
+def _is_retrieval_grounded(
+    name: str, source_id: Optional[str], grounding: "RetrievalGrounding"
+) -> bool:
+    """DETECTION predicate: was a teacher with this name/source retrieved for
+    this question at all? Both arms — source-id OR author-name — because the
+    author-name arm is what stops a legitimately-retrieved teacher with no
+    alias row (Andrew Murray) from being mis-classified as a fabrication. Used
+    for measurement/reporting, NOT for the verified-link decision (see
+    `_link_source_retrieved` for why the link decision is stricter). Fails
+    CLOSED when the grounding set could not be established.
+    """
+    if not grounding.established:
+        return False  # fail closed — set unavailable, trust nothing
+    if source_id is not None and source_id in grounding.source_ids:
+        return True
+    if normalize_alias_key(name) in grounding.author_keys:
+        return True
+    return False
+
+
+def _link_source_retrieved(source_id: str, grounding: "RetrievalGrounding") -> bool:
+    """LINK-grant gate: a verified teacher link points at `source_id` (the
+    alias-resolved source), so the link is allowed only when THAT source was
+    actually retrieved — the source-id arm ALONE, deliberately NOT the
+    author-name arm.
+
+    Why the author-name arm is excluded here (but kept in the detection
+    predicate above): the author arm matches a name against the retrieved
+    authors regardless of which source_id it resolved to. If a name resolves to
+    a servable-but-not-retrieved source B, and a DIFFERENT retrieved source A
+    happens to carry an author with the same normalized name (a homonym across
+    the corpus), the author arm would grant a verified link to B on material
+    that actually came from A — a verified link to unretrieved material, the
+    exact misattribution this guard exists to prevent. The author arm's
+    legitimate purpose (the Andrew-Murray alias-gap) is the no-source_id case,
+    which never earns a link anyway (verify_teacher_mention returns None at the
+    no-alias check before this gate). So restricting the link to the source-id
+    arm loses no legitimate link and closes the homonym hole.
+
+    Fails CLOSED when the grounding set could not be established.
+    """
+    if not grounding.established:
+        return False  # fail closed
+    return source_id in grounding.source_ids
 
 _MENTIONS_BLOCK_RE = re.compile(
     r"<reference_mentions>(.*?)</reference_mentions>", re.DOTALL
@@ -170,10 +291,19 @@ def verify_verse_mention(db, raw: str) -> bool:
     return True
 
 
-def verify_teacher_mention(db, raw: str) -> Optional[str]:
+def verify_teacher_mention(db, raw: str, grounding: "RetrievalGrounding") -> Optional[str]:
     """Returns the resolved source_id if this name passes every teacher
     guard, else None. Biblical-figure check runs first and short-circuits
     — a hit here means the alias table is never even consulted.
+
+    `grounding` is REQUIRED (no default) so a caller cannot silently skip the
+    Phase 2 retrieval-grounding gate — omitting it is a TypeError before any
+    DB call, the same structural fail-closed discipline as Invariant 10's
+    `store_propositions`. The grounding gate runs LAST, after the existing
+    resolve + sentinel + license guards: a name that resolves to a real
+    servable source is still denied a verified link unless that teacher's
+    material was actually retrieved for this question (the A.W. Tozer
+    verified-link-on-unretrieved-material symptom — Phase 0 §1(c)).
     """
     if is_biblical_figure(raw):
         return None
@@ -193,6 +323,15 @@ def verify_teacher_mention(db, raw: str) -> Optional[str]:
         return None
 
     if not is_source_servable(db, source_id):
+        return None
+
+    # Phase 2 teacher-name guard: retrieval-grounded naming. A verified link
+    # points at `source_id`, so it is granted only when THAT source was actually
+    # retrieved — source-id arm only (see _link_source_retrieved for why the
+    # author-name arm is excluded from the LINK decision). Runs after servable
+    # so we never leak a name the license gate would have blocked anyway. Fails
+    # closed via grounding.established.
+    if not _link_source_retrieved(source_id, grounding):
         return None
 
     return source_id
@@ -256,12 +395,23 @@ def _deduplicate_overlapping_spans(verified: List[Dict]) -> List[Dict]:
     return result
 
 
-def verify_references(answer_text: str, raw_output: str, db) -> List[Dict]:
+def verify_references(
+    answer_text: str, raw_output: str, db, retrieved_grounding: "RetrievalGrounding"
+) -> List[Dict]:
     """Top-level entry point. Never raises — any unexpected failure
     anywhere in this function results in an empty list, never a broken
     request. Returns a list of verified references, each:
         {"type": "verse", "raw": str, "positions": [int, ...]}
         {"type": "teacher", "raw": str, "position": int, "source_id": str}
+
+    `retrieved_grounding` is REQUIRED — it carries which teachers were
+    actually retrieved for this question (Phase 2 teacher-name guard). Build
+    it with `build_retrieval_grounding(chunks, db)`; a caller with no
+    retrieval context that passes `RetrievalGrounding(established=False)`
+    (or any grounding whose sets are empty) gets zero teacher links, which
+    is the fail-closed default. Verse verification is unaffected — Scripture
+    is permitted from the model's own knowledge and does not depend on
+    retrieval.
     """
     try:
         proposals = parse_reference_mentions(raw_output)
@@ -283,7 +433,7 @@ def verify_references(answer_text: str, raw_output: str, db) -> List[Dict]:
                         continue
                     verified.append({"type": "verse", "raw": raw, "positions": positions})
                 else:
-                    source_id = verify_teacher_mention(db, raw)
+                    source_id = verify_teacher_mention(db, raw, retrieved_grounding)
                     if not source_id:
                         continue
                     verified.append({

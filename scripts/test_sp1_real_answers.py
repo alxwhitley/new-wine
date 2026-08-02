@@ -34,7 +34,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 from supabase import create_client
 from sp1_answer_harness import generate_real_answer
-from app.services.reference_verifier import verify_references
+from app.services.reference_verifier import verify_references, RetrievalGrounding
 
 SB_URL = os.environ["SUPABASE_URL"]
 SB_SVC = os.environ["SUPABASE_SERVICE_KEY"]
@@ -131,7 +131,17 @@ def run_case(case):
         print(f"Full answer for review:\n{answer}\n")
         return {"id": case["id"], "materialized": False}
 
-    verified = verify_references(answer, raw_output, db)
+    # NOTE (Phase 2 teacher-name guard): this file is already non-functional —
+    # it imports generate_real_answer from the stale scripts/sp1_answer_harness.py
+    # (which imports a symbol chat.py no longer exposes) and uses a SIMPLIFIED
+    # retrieval path the Phase 0 pass rejected for fabrication measurement. It is
+    # SUPERSEDED by scripts/verify_teacher_name_guard_live.py, which reproduces
+    # the real pipeline and builds a real RetrievalGrounding. The call signature
+    # is kept current for codebase consistency; a fail-closed grounding is passed
+    # because this simplified harness cannot supply the retrieved chunk set (so
+    # no teacher would verify here anyway — do not use this file to measure the
+    # guard; use the live harness).
+    verified = verify_references(answer, raw_output, db, RetrievalGrounding(established=False))
     mentions_block = extract_reference_mentions_block(raw_output)
     print(f"Answer:\n{answer}\n")
     print(f"Raw <reference_mentions> block (what the writer actually proposed):\n{mentions_block}\n")

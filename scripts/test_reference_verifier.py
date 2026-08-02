@@ -30,6 +30,7 @@ from app.services.reference_verifier import (
     verify_references,
     verify_teacher_mention,
     _parse_verse_or_range,
+    RetrievalGrounding,
 )
 from app.services.source_resolver import normalize_alias_key
 
@@ -38,6 +39,26 @@ SB_SVC = os.environ["SUPABASE_SERVICE_KEY"]
 
 db = create_client(SB_URL, SB_SVC)
 failures = []
+
+# Phase 2 teacher-name guard: verify_references / verify_teacher_mention now
+# take a REQUIRED retrieved_grounding. These fixtures let the pre-existing
+# guards below (presence, verse resolution, sentinel, biblical, overlap) be
+# tested unchanged. G_EMPTY grounds nothing and is used everywhere the
+# teacher either fails before the grounding gate (biblical/MISS/sentinel/
+# not-servable) or the proposal is a verse (grounding is irrelevant to
+# verses). The two teacher-SUCCESS cases pass a grounding that grounds them.
+G_EMPTY = RetrievalGrounding(established=True)
+# The verified-LINK gate is source-id-only (a link points at the resolved
+# source, so that source must have been retrieved), so ground Derek Prince by
+# his REAL source_id, looked up live — not by author name. A missing alias here
+# fails the run loudly (same drift-as-failure stance as B3 below).
+_prince_alias = db.table("source_aliases").select("source_id").eq(
+    "alias_key", normalize_alias_key("Derek Prince")).limit(1).execute()
+_prince_sid = _prince_alias.data[0]["source_id"] if _prince_alias.data else "MISSING-DEREK-PRINCE-ALIAS"
+G_PRINCE = RetrievalGrounding(source_ids=frozenset({_prince_sid}), established=True)
+G_GRACE = RetrievalGrounding(
+    source_ids=frozenset({'11111111-2222-3333-4444-555555555555'}), established=True
+)
 
 
 def check(label, condition):
@@ -134,7 +155,7 @@ def main():
         },
         on_table_call=lambda name: b1_table_calls.append(name),
     )
-    result_1 = verify_teacher_mention(b1_fake_db, "Paul")
+    result_1 = verify_teacher_mention(b1_fake_db, "Paul", G_EMPTY)
     check(
         "B1: biblical-figure backstop short-circuits 'Paul' before any DB "
         "call — fake alias table (which would otherwise resolve to a real, "
@@ -145,7 +166,7 @@ def main():
     # --- B2: Nonexistent verse (Genesis 50 has 26 verses) ---
     answer_text_2 = "This is discussed in Genesis 50:99."
     raw_output_2 = "<reference_mentions>\nVERSE: Genesis 50:99\n</reference_mentions>"
-    result_2 = verify_references(answer_text_2, raw_output_2, db)
+    result_2 = verify_references(answer_text_2, raw_output_2, db, G_EMPTY)
     check("B2: nonexistent verse (Genesis 50:99) never resolves", result_2 == [])
 
     # --- B3: Not-servable teacher (Leonard Ravenhill — unlicensed/hidden) ---
@@ -163,13 +184,13 @@ def main():
     else:
         answer_text_3 = "Leonard Ravenhill preached extensively on revival and repentance."
         raw_output_3 = "<reference_mentions>\nTEACHER: Leonard Ravenhill\n</reference_mentions>"
-        result_3 = verify_references(answer_text_3, raw_output_3, db)
+        result_3 = verify_references(answer_text_3, raw_output_3, db, G_EMPTY)
         check("B3: Leonard Ravenhill (real alias, not servable) never resolves", result_3 == [])
 
     # --- MISS: a teacher name with no source_aliases row at all ---
     answer_text_4 = "Some Nonexistent Teacher Name talks about grace."
     raw_output_4 = "<reference_mentions>\nTEACHER: Some Nonexistent Teacher Name\n</reference_mentions>"
-    result_4 = verify_references(answer_text_4, raw_output_4, db)
+    result_4 = verify_references(answer_text_4, raw_output_4, db, G_EMPTY)
     check("MISS: an unaliased teacher name never resolves", result_4 == [])
 
     # --- Sentinel: alias resolves, but specifically to the sentinel id ---
@@ -204,7 +225,7 @@ def main():
         },
         on_table_call=lambda name: sentinel_table_calls.append(name),
     )
-    result_sentinel = verify_teacher_mention(sentinel_fake_db, "Fake Sentinel-Resolving Teacher")
+    result_sentinel = verify_teacher_mention(sentinel_fake_db, "Fake Sentinel-Resolving Teacher", G_EMPTY)
     check(
         "Sentinel: an alias that resolves to the sentinel source_id never "
         "resolves — fake sources/app_settings tables (which would otherwise "
@@ -217,7 +238,7 @@ def main():
     # --- Presence-check drop: proposal not actually in the text ---
     answer_text_5 = "This answer never mentions any verse at all."
     raw_output_5 = "<reference_mentions>\nVERSE: Romans 8:28\n</reference_mentions>"
-    result_5 = verify_references(answer_text_5, raw_output_5, db)
+    result_5 = verify_references(answer_text_5, raw_output_5, db, G_EMPTY)
     check("Presence check drops a proposal that never appears in the answer", result_5 == [])
 
     # --- Vague reference: both fail the regex's required "chapter:verse"
@@ -226,13 +247,13 @@ def main():
     # attempted ---
     answer_text_6 = "That verse we discussed earlier is important."
     raw_output_6 = "<reference_mentions>\nVERSE: that verse\nVERSE: verse 26\n</reference_mentions>"
-    result_6 = verify_references(answer_text_6, raw_output_6, db)
+    result_6 = verify_references(answer_text_6, raw_output_6, db, G_EMPTY)
     check("Vague references ('that verse', 'verse 26') never resolve", result_6 == [])
 
     # --- Occurrence anchoring: verse repeated 2x, every occurrence anchored ---
     answer_text_7 = "Romans 8:28 tells us this. Later, Romans 8:28 is echoed again."
     raw_output_7 = "<reference_mentions>\nVERSE: Romans 8:28\n</reference_mentions>"
-    result_7 = verify_references(answer_text_7, raw_output_7, db)
+    result_7 = verify_references(answer_text_7, raw_output_7, db, G_EMPTY)
     check(
         "Repeated verse mention anchors every occurrence",
         len(result_7) == 1 and result_7[0]["type"] == "verse" and len(result_7[0]["positions"]) == 2,
@@ -249,7 +270,7 @@ def main():
         "Later in the sermon, Derek Prince returns to the same theme."
     )
     raw_output_8 = "<reference_mentions>\nTEACHER: Derek Prince\n</reference_mentions>"
-    result_8 = verify_references(answer_text_8, raw_output_8, db)
+    result_8 = verify_references(answer_text_8, raw_output_8, db, G_PRINCE)
     expected_first_position = find_occurrences(answer_text_8, "Derek Prince")[0]
     check(
         "Repeated teacher mention anchors ONLY the first occurrence position",
@@ -272,7 +293,7 @@ def main():
     # both independently real, both co-located at the same position.
     answer_t1 = "Romans 8:26-28 is a key passage."
     raw_t1 = "<reference_mentions>\nVERSE: Romans 8:26-28\nVERSE: Romans 8:26\n</reference_mentions>"
-    result_t1 = verify_references(answer_t1, raw_t1, overlap_fake_db)
+    result_t1 = verify_references(answer_t1, raw_t1, overlap_fake_db, G_EMPTY)
     check(
         "T1: range/prefix overlap — only the longer range survives, its "
         "own start-verse duplicate at the same position is dropped",
@@ -290,7 +311,7 @@ def main():
         "Later in the discussion, Matthew 12:31 is quoted again on its own."
     )
     raw_t2 = "<reference_mentions>\nVERSE: Matthew 12:31-32\nVERSE: Matthew 12:31\n</reference_mentions>"
-    result_t2 = verify_references(answer_t2, raw_t2, overlap_fake_db)
+    result_t2 = verify_references(answer_t2, raw_t2, overlap_fake_db, G_EMPTY)
     range_position = find_occurrences(answer_t2, "Matthew 12:31-32")[0]
     start_verse_positions = find_occurrences(answer_t2, "Matthew 12:31")
     genuine_separate_position = start_verse_positions[1]  # [0] is the co-located dup, [1] is the real second mention
@@ -309,7 +330,7 @@ def main():
     # is general — position-overlap-based, not a special case for ranges.
     answer_t3 = "1 John 3:16 says we know love by this — that Christ laid down His life for us."
     raw_t3 = "<reference_mentions>\nVERSE: 1 John 3:16\nVERSE: John 3:16\n</reference_mentions>"
-    result_t3 = verify_references(answer_t3, raw_t3, overlap_fake_db)
+    result_t3 = verify_references(answer_t3, raw_t3, overlap_fake_db, G_EMPTY)
     check(
         "T3: a shorter reference nested inside a different, unrelated "
         "longer reference's own text is dropped ('John 3:16' inside "
@@ -346,7 +367,7 @@ def main():
     )
     answer_t5 = "Amazing Grace Church hosted the conference this year."
     raw_t5 = "<reference_mentions>\nTEACHER: Amazing Grace Church\nTEACHER: Grace Church\n</reference_mentions>"
-    result_t5 = verify_references(answer_t5, raw_t5, teacher_overlap_fake_db)
+    result_t5 = verify_references(answer_t5, raw_t5, teacher_overlap_fake_db, G_GRACE)
     check(
         "T5: teacher-teacher nested-name overlap — the longer full name "
         "survives, the shorter nested name's overlapping occurrence is "
@@ -361,7 +382,7 @@ def main():
     # below is verified against a real live verses-table row, not a fake db.
     answer_text_9 = "As we see in 1st Samuel 3:13, the Lord called Samuel."
     raw_output_9 = "<reference_mentions>\nVERSE: 1st Samuel 3:13\n</reference_mentions>"
-    result_9 = verify_references(answer_text_9, raw_output_9, db)
+    result_9 = verify_references(answer_text_9, raw_output_9, db, G_EMPTY)
     check(
         "Ordinal form '1st Samuel 3:13' resolves (normalization fix)",
         len(result_9) == 1 and result_9[0]["raw"] == "1st Samuel 3:13",
@@ -369,7 +390,7 @@ def main():
 
     answer_text_10 = "First Samuel 3:13 records the Lord calling Samuel."
     raw_output_10 = "<reference_mentions>\nVERSE: First Samuel 3:13\n</reference_mentions>"
-    result_10 = verify_references(answer_text_10, raw_output_10, db)
+    result_10 = verify_references(answer_text_10, raw_output_10, db, G_EMPTY)
     check(
         "Spelled-word form 'First Samuel 3:13' resolves (widened BOOK_MAP)",
         len(result_10) == 1 and result_10[0]["raw"] == "First Samuel 3:13",
@@ -377,7 +398,7 @@ def main():
 
     answer_text_11 = "II Corinthians 5:21 speaks of becoming righteousness in Him."
     raw_output_11 = "<reference_mentions>\nVERSE: II Corinthians 5:21\n</reference_mentions>"
-    result_11 = verify_references(answer_text_11, raw_output_11, db)
+    result_11 = verify_references(answer_text_11, raw_output_11, db, G_EMPTY)
     check(
         "Roman-numeral form 'II Corinthians 5:21' resolves (widened BOOK_MAP)",
         len(result_11) == 1 and result_11[0]["raw"] == "II Corinthians 5:21",
@@ -386,7 +407,7 @@ def main():
     # Digit-form regression check, run alongside the new forms above.
     answer_text_12 = "1 Samuel 3:13 records the Lord calling Samuel."
     raw_output_12 = "<reference_mentions>\nVERSE: 1 Samuel 3:13\n</reference_mentions>"
-    result_12 = verify_references(answer_text_12, raw_output_12, db)
+    result_12 = verify_references(answer_text_12, raw_output_12, db, G_EMPTY)
     check(
         "Pre-existing digit form '1 Samuel 3:13' still resolves (no regression)",
         len(result_12) == 1 and result_12[0]["raw"] == "1 Samuel 3:13",
