@@ -17,6 +17,102 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Phase 2 residual closed — prose-attribution scan (2026-08-02, repo-only
+multi-step build; harness-row per Session Routing, run as orchestrator +
+`planner-reviewer` adversarial gate before commit; zero DB writes — retrieval
+reads + LLM generation only; build commit + separate records commit; NOT
+pushed).** Closes the last open pure-invention path: the Phase 2 guard (and its
+buffer-then-verify resolution) keyed only on the model's own
+`<reference_mentions>` self-report, so a teacher credited in the answer PROSE but
+omitted from that block went out unchecked (reviewer finding #3 on
+`ee3cff4`/`9e5fe94`). **Scope (Alex): FULL PERSONAL NAMES ONLY.** Bare surnames
+deliberately out — Phase 0 documented that short forms ("Prince") occur in
+ordinary prose and a surname scan would risk false denials.
+- **Mechanism (`reference_verifier.py`, additive — zero deletions, so the shipped
+  `verify_references`/`verify_teacher_mention` link gate is byte-behavior
+  unchanged, req 5).** `ungrounded_prose_teachers(answer, name_universe,
+  grounding, db)` = the union of two arms, both grounded by the SAME
+  `_is_retrieval_grounded` (req 1) and failing CLOSED (req 3):
+  - **Arm 1 — corpus full-name scan.** Prose is scanned for the finite,
+    precomputed set of corpus "first + last" names (`build_name_universe`, 65
+    names live — orgs/magazines/commentaries filtered out; "Precept Austin" the
+    one org-shaped admit, low-risk and correct to flag if credited-unretrieved).
+    Position-agnostic, near-zero FP. Catches the in_corpus_not_retrieved class
+    credited in prose (the A.W. Tozer symptom).
+  - **Arm 2 — attribution-context extraction.** First+last names in explicit
+    "According to X" / "X taught" / "X's commentary" constructions, grounding-
+    checked. This is what catches OUT-OF-CORPUS inventions (confirmed by query:
+    Wiersbe, Stedman, Wilson, Jenkins, Martin, Havner are NOT in the corpus, so
+    no allowlist could see them). Person-filtered against biblical figures +
+    divine/theological/org/function-word tokens.
+- **req 2 (retrieved IDENTITY, not alias resolution):** grounding via
+  `_is_retrieval_grounded`'s author-name arm keeps Andrew Murray (retrieved, no
+  alias row — the alias-gap Landmine) from being false-flagged. Confirmed by
+  trace + deterministic test.
+- **req 4 (resolution):** prose flags feed the SAME regenerate-once-then-clean-
+  refuse loop as declared flags (`chat.py generate()` now triggers on the union;
+  `build_name_universe` built once inside the resolution try, raises→refuse).
+  Declared-block guard (`_ungrounded_reference_teachers`) kept and refactored onto
+  the shared `resolve_alias_source_id` (one resolution notion, not a fork) — it
+  still covers a DECLARED surname the full-name-only prose scan skips.
+- **Verification.** Deterministic (`scripts/test_teacher_name_guard.py`, 33/33,
+  no cost): all req-8 cases flagged PROSE-ONLY (undeclared) — Wiersbe/Stedman/
+  Wilson/Jenkins/Martin/Havner via Arm 2, Tozer via both arms incl. a heading;
+  req-9 legit + theological-phrase traps not flagged; req-2 alias-gap not
+  flagged; req-3 fail-closed; and four FP-class regressions (below). Regression
+  `scripts/test_reference_verifier.py` 24/24 (shipped gate intact).
+- **Live (offline harness, `scripts/verify_prose_scan_live.py`, reuses the Phase
+  2 harness's real retrieval + generation; applies the SHIPPED guard + simulates
+  the served outcome).** Alex chose a LIGHTER smoke (fab ×2 + legit ×1 = 18
+  answers/run; ~$2-4 total across two runs, under Phase 2's ~$6). **The first run
+  did its job — it found four Arm-2 regex false-positive classes that each caused
+  a false denial on a legit answer:** possessive `'s` captured into the name
+  ("Derek Prince's" failed to resolve — the TS1 Derek-Prince question refused);
+  a token pair joined across a newline/heading ("Battlefield\n\nAccording"); a
+  sentence-boundary span ("Prince. He"); and a leading function word ("As
+  Prince"). Hardened the token grammar (strict WORD/INITIAL tokens, horizontal-
+  whitespace-only joins, trailing-possessive strip, function-word filter) and
+  regression-locked all four. **Second run after the fix: req 9 = 0 false denials
+  (12/12 legit served clean, 19/19 full-name attributions grounded, 0 fired);
+  req 8 = fabrications caught, 0 served with a false credit** (Guzik/MacArthur/
+  Evans → regenerated clean; Roberts/Spurgeon/Havner/Finney → refused). req 10
+  (multiple passes) reconfirmed Phase 0's intermittency (D2/S2 clean on some
+  runs, fabricated on others).
+- **req 6 — SURNAME SIZING (the extend/don't-extend evidence, smoke-level).**
+  Across the 18 normal answers: full-name prose attributions grounded 28 /
+  ungrounded 0; bare-surname attributions ungrounded 18 — but **surname-ONLY
+  ungrounded (a surname credit whose full name is NOT also in the answer, i.e.
+  the residual a surname scan would NEWLY catch) = 0**. Directional read: the
+  observed surname exposure is fully covered by the full-name scan (every
+  ungrounded surname co-occurred with its full name). **Caveat: this is a small,
+  legit-dominant smoke sample, not a certification** — a larger pass is needed
+  before treating "surname-only exposure is negligible" as settled. **Not acted
+  on this session (req 7).**
+- **planner-reviewer: APPROVE** (all five reqs met, no fail-open, no unbounded
+  legit false-denial). Its two actionable findings were fixed before commit:
+  **#2** broadened Arm 2's verb set (preached/believed/affirmed/stated/claimed/
+  … — an out-of-corpus invention credited with a common speech verb otherwise
+  slipped Arm 2); **#3** corrected a code comment that mis-cited CLAUDE.md's
+  failure-mode ranking. **Disclosed residuals (fail-safe direction, not fixed):**
+  (a) name-variant mismatch — a teacher retrieved as "Charles G. Finney" but
+  credited "Charles Finney" is flagged; BOUNDED — regenerate-once under the
+  permitted-name constraint fixes it, worst case a clean refusal, never a served
+  false credit, and it is the SAME bound the shipped declared arm already
+  carries; (b) Arm 2's verb/noun sets are finite (broadened, not exhaustive);
+  (c) an undeclared, out-of-corpus name appearing ONLY in a bare markdown heading
+  with no attribution verb is caught by neither prose arm (heading extraction was
+  rejected — topic headings like "## Spiritual Warfare" would false-flag) — such
+  names are, in practice, usually also DECLARED and caught by the declared arm
+  (observed live: D2's Guzik/MacArthur/Evans).
+- **Deploy-safety (assessed): SAFE to deploy** alongside the currently-unpushed
+  Phase-2/buffer-then-verify stack. The change is additive and strictly
+  restricting — it can only flag an ungrounded prose credit (→ regenerate/refuse),
+  never grant a link, never alter answer text on the served path except via the
+  already-shipped refuse/regenerate lever; no schema/DB/env/dependency change;
+  fails closed everywhere; Python 3.9 clean (Invariant 1). Two extra bulk SELECTs
+  per answer (`build_name_universe`) — negligible beside generation, flagged as a
+  possible future cache. **Not pushed** — Alex decides deployment.
+
 **Buffer-then-verify-then-playback + word-study latency fix (2026-08-02,
 repo-only multi-step build; harness-row per Session Routing, run as orchestrator
 + `planner-reviewer` adversarial review gate before commit; zero DB writes —
