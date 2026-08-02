@@ -88,3 +88,6 @@ position_calibration_review/
 # Storage was always intercepted this session, never written. Same
 # rationale as the review queues above — local-only, not for git history.
 book_chapter_live_proof_review/
+
+# Phase 2 teacher-name guard live-run artifact (local, regenerated on demand)
+scripts/teacher_name_guard_live_results.json

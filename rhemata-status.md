@@ -17,6 +17,88 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Phase 2 shipped — teacher-name guard: retrieval-grounded naming on the
+answer path (2026-08-01, repo-only multi-step build; harness-row per Session
+Routing, run as orchestrator + `planner-reviewer` adversarial review gate
+before commit; zero DB writes — retrieval reads + LLM generation only; build
+commit `ee3cff4`, this records commit separate).** A named teacher earns a
+"verified" study-panel link ONLY if that teacher's material was actually
+retrieved for that specific question. Closes the Phase 0 `in_corpus_not_
+retrieved` hole (§1c): a teacher who resolves to a real servable source (so the
+pre-existing `verify_teacher_mention` passed it) but whose source was never
+retrieved rendered as a **verified link on unused material** — the A.W. Tozer /
+Bevere symptom. **Claim-level A2 misattribution (a claim from retrieved teacher
+A credited to retrieved teacher B) is explicitly OUT of scope** — no
+"was-it-retrieved" check can catch it (Phase 0 §4a; planner-reviewer finding #1,
+a stated residual).
+- **Mechanism** (`backend/app/services/reference_verifier.py`): `RetrievalGrounding`
+  (source_ids + author_keys + `established`) built by `build_retrieval_grounding(chunks, db)`
+  from the exact chunk set the model saw. `verify_references`/`verify_teacher_mention`
+  now take a **REQUIRED** `retrieved_grounding` param — a caller cannot skip the
+  gate by omission (TypeError before any DB call, the Invariant-10 discipline).
+- **Requirement 1 (key on retrieved IDENTITY, not alias resolution):** grounding
+  carries both the retrieved documents' `source_id`s and the normalized retrieved
+  chunk authors. The author-name arm keeps a legitimately-retrieved teacher with
+  NO `source_aliases` row (Andrew Murray, the alias-gap Landmine) from being
+  mis-flagged.
+- **Link gate is source-id arm ONLY** (`_link_source_retrieved`): a verified link
+  points at the alias-resolved source, so that source must have been retrieved.
+  The author-name arm is used for DETECTION only (`_is_retrieval_grounded`), NOT
+  the link decision — using it for links would grant a link to a not-retrieved
+  source B whenever a *different* retrieved source A shares a normalized author
+  name (a homonym collision). **This split is the fix for the one actionable
+  planner-reviewer finding (#2), a genuine fail-open in the exact class the guard
+  prevents; it is closed and regression-tested.**
+- **Requirement 3 (fail closed):** `build_retrieval_grounding` returns
+  `established=False` on any `documents` lookup failure; `established=False`
+  denies every teacher link. Verse verification is untouched (Scripture is
+  permitted from model knowledge). No fail-OPEN path survived the review (the
+  01ca912-shape hole is not reproduced).
+- **Requirement 4 (blocked-attribution handling) — decided: clean LINK denial.**
+  The ungrounded name renders as plain text, no verified pointer. NOT text-surgery
+  (mangles sentences; also impossible post-stream), NOT regenerate/whole-answer
+  refusal — the answer is streamed token-by-token and fully delivered *before*
+  `verify_references` runs (`chat.py:1015/1117`), so the only post-stream lever is
+  the `verified_references` linkification metadata; buffering every answer to
+  enable regeneration/refusal abandons the token stream for a ~40s perceived-
+  latency hit (Phase 0 §6), disproportionate to an intermittent low-single-digit
+  issue and out of "retrieval-grounded naming only" scope. Residual (reviewer #3,
+  disclosed): the misattributing *prose* still stands on a correct denial (as
+  Wiersbe's does today) — removing already-streamed text needs a buffer-then-serve
+  change, the deliberate follow-up; the guard already *detects* all three
+  mechanisms so that follow-up has its signal.
+- **Verification.** Deterministic (`scripts/test_teacher_name_guard.py`, 12/12,
+  no cost): Tozer DENIED + CONTROL (grounding is the sole differentiator),
+  nested-quote DENIED, pure-invention DENIED, Murray grounded-by-name (no
+  false-flag), fail-closed denies all, homonym hole closed, structural TypeError
+  on omission. Regression (`scripts/test_reference_verifier.py`, 24/24, updated to
+  the required-param signature). **Live (requirements 5 & 6),
+  `scripts/verify_teacher_name_guard_live.py`:** reproduces `chat.py`'s full
+  retrieval + generation offline (real author-cap + Cohere rerank + neighbor
+  expansion + background injection — the fabrication mechanism Phase 0 §0 named),
+  applies the SHIPPED guard, 36 answers (3 fabrication-prone ×4 + 12 legit ×2 —
+  variance per requirement 6). Result: **55 legitimate teachers VERIFIED, 0
+  false denials (0 CONSERVATIVE-DENY), 0 fail-closed events**; all 29 fabrications
+  link-less (incl. the Phase 0 Ray Stedman and Vance Havner re-firing, plus the
+  full Precept-Austin-quoted cast). The intermittent Tozer `in_corpus_not_retrieved`
+  class did not re-fire in these 36 runs (a single Phase 0 occurrence) — it is
+  proven caught by the deterministic PRIMARY test, not the live sample. Two live
+  "mismatches" (G1: Murray/Prince) were the pre-existing SP1 **presence** guard
+  (full name in `<reference_mentions>` but the answer prose used the short form),
+  not the grounding guard — the harness now attributes presence-drops explicitly.
+  **Cost:** ~$4 total across the (killed-and-relaunched) runs, under the ~$6
+  Alex approved and the $50 ceiling.
+- **Deploy-safety (assessed): SAFE to deploy alongside the three currently-unpushed
+  fixes.** The guard is additive and strictly *restricting* — it can only remove a
+  verified link, never grant a new one, never alter answer text, no schema/DB/env
+  change, no new dependency. It fails closed. It shares `chat.py` with the
+  Phase 0 §7a token-budget fix (`0ab9c60`) and the position-paper items, but
+  touches a different, later point (post-generation `verify_references` wiring) and
+  the `reference_verifier` module those do not touch; the required-param change is
+  contained to callers all updated in this commit (grep-confirmed, reviewer
+  angle 6). Live run shows zero false denials on 55 legit attributions, so it will
+  not suppress legitimate teacher links in production.
+
 **Phase 1.4 closed — normal answer path no longer treats
 tongues-as-initial-evidence as a debate (2026-08-01, repo-only, plain/direct
 terminal session, zero DB writes; build commit `813ae7b`, this records commit
@@ -236,7 +318,13 @@ model redistribute one teacher's substance across other names it knows are
 charismatic teachers; it knew too much, not too little. The only fix is deciding,
 outside the model, which names are permitted (Phase 2's teacher-name check). The
 verification gap named here — a name that exists and is allowed to show passes,
-whether or not its material was used — is Phase 2's target, not closed yet. Full
+whether or not its material was retrieved — is **now closed for the
+retrieval-grounding piece** (Phase 2 shipped `ee3cff4`, 2026-08-01, see Current
+state: a name earns a verified link only if its material was retrieved for the
+question). The narrower residual — a name whose material *was* retrieved but the
+specific claim actually came from a *different* retrieved teacher (the A2
+Brown/Kolenda class) — is deliberately still open; no deterministic
+"was-it-retrieved" check can catch it. Full
 plan folded into PLAN.md (active phase sequence) and CLAUDE.md (ranked failure
 modes + 12 settled decisions, conflicts flagged inline). **Phase 0 (read-only
 measurement) and Phase 1 (live contradictions) are the queued next sessions;** the
