@@ -17,6 +17,45 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Per-answer cost + latency MEASURED (2026-08-03, measurement/read-only
+diagnostic; retrieval reads + LLM generation only, ZERO DB writes; plain path;
+~$2.03 total spend, under the $50 ceiling; single records commit; NOT pushed; no
+code, no behavior change).** Ran the Project-1 cost measurement flagged OPEN by
+the 2026-08-03 build plan, via a faithful offline reproduction of the live
+answer path (same chat.py helpers, system blocks, model, retrieval, full
+background-paper injection), 23-question real-traffic mix, most run 2–3×. Full
+detail + method: `docs/audits/per_answer_cost_measurement_2026-08-03.md`.
+- **Normal answer: median $0.039, range $0.030–$0.074 (n=43).** House-voice
+  (position-paper) answers ~$0.015, ~12s. The Phase-A estimate ($0.07–0.12) was
+  ~2–3× high; the measured median is the sizing basis, retiring the
+  partial-extraction figure.
+- **Cost is comfortable, NOT the ceiling.** 100-always-in-flight for an hour ≈
+  $400/hr (worst $758/hr) but real peaks are bursty; $0.039/answer is cheap.
+  Exact-match reuse scales cost by (1 − repeat rate). **The genuine open ceiling
+  at 100 concurrent is provider rate limits (RPM/ITPM/OTPM) — unchecked from the
+  repo, a commercial conversation with Anthropic, flagged for Alex (C6).**
+- **#1 Prompt caching:** the repeated instruction block is 3,656 tokens and IS
+  already cache-controlled (corrects the Phase-A "appears not to cache" guess).
+  Warm it costs $0.0011 (3% of an answer) vs $0.011 uncached (28%) — a ~$0.0099
+  (~25%-of-answer) saving that is **automatic at warm/scale traffic**; at current
+  ~zero traffic every answer is a cold write (+$0.0027 premium, harmless). No
+  further instruction-block saving to capture; the largest un-cacheable line is
+  the per-question retrieved context (~50% of cost, ~6,526 tokens median).
+- **#2 Reasoning output** (hidden `<thinking>`/`<research_analysis>`, billed at
+  output, discarded) — now a MEASURED variable line item, not a constant: median
+  53% of output tokens / 59% of generation wall-clock / 22% of answer cost
+  (worst 71% / 73% / 42%); ~$0.0094/answer median. Largest single latency
+  component. NOT changed and not proposed for change (accuracy not traded for
+  speed — settled decision #4 / Open Decision #20).
+- **#3 Teacher cards:** ~$0.015 and ~11–13s per open, NO caching → precompute
+  (Project 2 scope) saves the full per-open cost + time at any real view volume.
+- **Recommendation (D3):** build per-answer cost/token recording into Project 1
+  as standing instrumentation (this session had to reconstruct every figure
+  offline because nothing is recorded).
+- **Incidental (not in scope):** the scripture question "Romans 8:28" routed to
+  the house-voice path — a possible position-paper over-match on a plain
+  scripture question. Flagged, not investigated.
+
 **Build-plan reset after two external reviews — three-project sequence adopted;
 position layer cut down; quote rail reshaped (2026-08-03, docs/records-only; plain
 path per Session Routing, chat-proposes/terminal-commits; single records commit;
@@ -791,7 +830,11 @@ Open items only; #1, #2, #3, #5 are resolved (git history — commits `5bdf720`,
   supersedes the earlier offline ~35s time-to-first-character estimate in the
   buffer-then-verify entry above. The dominant component is the model's hidden
   reasoning (req-7-protected; trimming it needs an accuracy oracle that does not
-  exist — Open Decision #20 / settled decision #4).
+  exist — Open Decision #20 / settled decision #4). **Quantified 2026-08-03
+  (`docs/audits/per_answer_cost_measurement_2026-08-03.md`):** offline generation
+  wall-clock is median ~35s (worst ~65s), of which the hidden reasoning is
+  median ~59% (worst 73%) — it is the single largest latency component, and it
+  is the piece that cannot be trimmed without the missing accuracy oracle.
 - **Concurrency ceiling ≈ 40 simultaneous chats.** The playback pacing +
   heartbeat `time.sleep` holds one anyio threadpool worker per active request for
   the request's whole duration; at ~40 concurrent chats the shared pool (cap 40)

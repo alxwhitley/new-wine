@@ -120,7 +120,14 @@ SEQUENCE (2026-08-03)".
     choice that forecloses horizontal scaling is flagged and refused at review.
     Real per-answer COST must be measured before Project 1 is designed — cost may
     be the true ceiling; do NOT size from the partial extraction-cost figure on
-    record. The reveal moves to the CLIENT after the checked answer is delivered;
+    record. **MEASURED 2026-08-03 (`docs/audits/per_answer_cost_measurement_2026-08-03.md`):
+    median normal answer $0.039 (house-voice ~$0.015; teacher card ~$0.015/open)
+    — cost is comfortable, NOT the ceiling; the real open ceiling at 100
+    concurrent is provider rate limits (RPM/ITPM/OTPM), unchecked from the repo
+    — a commercial conversation. The instruction block is already cached (~25%
+    saving at scale); the per-question retrieved context (~50% of cost) is the
+    un-cacheable driver. This figure replaces the partial-extraction number as
+    the sizing basis.** The reveal moves to the CLIENT after the checked answer is delivered;
     no client connection ever owns a generation worker; retries must not skip the
     accuracy check. One app / one queue / one DB / one scalable worker
     deployment — not microservices.
