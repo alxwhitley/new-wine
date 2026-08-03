@@ -17,6 +17,54 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Copy-fix — unbacked quote claim removed + zero-point teacher pages gated
+(2026-08-03, repo-only code change + read-only DB diagnostic; ZERO DB writes;
+plain path, main thread; code commit `b1eccf9`, this records commit separate;
+NOT pushed — Alex decides deployment).** Closes Open blocker #17 (the recurring
+B5 landmine) and the teacher-side of #18. Two SELECT-only live checks, no writes.
+
+- **TASK 1 — false quote-verification claim removed (`frontend/app/home/page.tsx`
+  L492).** The home page carried a present-tense promise ("Every quote is checked
+  character-for-character against the source ... a quote cannot exist in Rhemata
+  unless the teacher actually said it. ... Rhemata structurally can't") with no
+  mechanism behind it — no quote pipeline exists, no quotes are served anywhere.
+  Rewrote it to the honest, already-shipped framing: Rhemata paraphrases and
+  attributes; verbatim quoting is "software-confirmed against the source ... on
+  our roadmap — not live yet" (mirrors `/sources` L40/L43). **Swept `app/` +
+  `components/`: the home page was the ONLY live surface still asserting it.**
+  `/sources` (L43 roadmap framing, L89 attribution-trust) was already honest and
+  left unchanged; `app/library/page.tsx` L641 ("edited transcript — not a
+  word-for-word recording") is an accuracy disclaimer, not the claim.
+- **TASK 2 — zero-point teacher/source pages now return not-found
+  (`backend/app/routers/study.py`, `get_teacher_card`).** `GET
+  /study/teacher/{source_id}` returned a live empty card for a curated teacher
+  whose source has zero propositions (the "verified link to an empty author
+  page" surface). Added a UNIFORM gate (all teachers, not a Bevere patch): a
+  single existence probe `propositions.select("id, documents!inner(source_id)")
+  .eq("documents.source_id", source_id).limit(1)` → 404 "No content for this
+  teacher" if empty. Placed before the servable/works logic so it applies to
+  every teacher. Frontend `TeacherCard` renders its "card isn't available right
+  now" state on the 404 — a hidden state, not an empty bio page.
+- **Who the gate affects (live-verified, `docs/audits` not written — scratchpad
+  diagnostic only):** of **9 curated teachers, exactly ONE is hidden today —
+  John Bevere (0 docs, 0 props).** The other 8 all have points and are
+  unaffected: Derek Prince (5178), Bob Mumford (49), Jack Deere (31), Charles
+  Simpson (31), Ern Baxter (26), Don Basham (16), Michael Brown (12), Oswald J.
+  Smith (8). The 39 other servable zero-prop sources (A.W. Tozer, Bill Johnson,
+  Wommack, Wigglesworth, Precept Austin, the commentary DBs, etc.) are NOT
+  curated teachers — the endpoint already 404s them ("Not a curated teacher"), so
+  they have no teacher-card page to gate. Gate query shape validated live against
+  the real Supabase (Bevere→hidden, Prince→served) and re-checked across all 9.
+- **John Bevere source row + 5 aliases intentionally LEFT in place** (per
+  instruction) for future blog material; only the empty *page* is hidden.
+- **FLAGGED, NOT touched (out of scope per the two-task boundary) — home-page
+  marketing line L489.** It names three "trusted modern-day teachers": **John
+  Bevere (empty source, 0 props)** and **Michael Koulianos (NO `sources` row at
+  all — not in the corpus)**; only **Dr. Michael Brown** of the three has content
+  (2 docs / 12 props). A live misrepresentation (failure mode 2) — recommended as
+  the immediate copy follow-up. Koulianos's total absence is a NEW finding this
+  session (not previously recorded).
+
 **Per-answer cost + latency MEASURED (2026-08-03, measurement/read-only
 diagnostic; retrieval reads + LLM generation only, ZERO DB writes; plain path;
 ~$2.03 total spend, under the $50 ceiling; single records commit; NOT pushed; no
