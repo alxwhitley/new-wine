@@ -489,7 +489,7 @@ export default function HomePage() {
               That includes historic voices like <strong className="text-card-foreground font-semibold">Derek Prince</strong> and <strong className="text-card-foreground font-semibold">Bob Mumford</strong>, alongside trusted modern-day teachers like <strong className="text-card-foreground font-semibold">John Bevere</strong>, <strong className="text-card-foreground font-semibold">Michael Koulianos</strong>, and <strong className="text-card-foreground font-semibold">Dr. Michael Brown</strong>.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
-              And when you see a quote, it&rsquo;s real. Every quote is checked character-for-character against the source before it can appear — a quote cannot exist in Rhemata unless the teacher actually said it. General AI can invent a quote. Rhemata structurally can&rsquo;t.
+              And Rhemata doesn&rsquo;t serve verbatim quotes — every claim is a paraphrase of what a named source actually teaches, labeled as summary and attributed by name. Verbatim quoting, software-confirmed against the source, is on our roadmap — not live yet.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75]">
               Every answer points back to the voices behind it, with the link to the full teaching right there.

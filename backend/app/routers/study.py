@@ -836,6 +836,22 @@ async def get_teacher_card(
     bio = profile_result.data[0]["bio"]
     name = profile_result.data[0]["sources"]["name"]
 
+    # Zero-point gate (uniform, every teacher — not a per-source patch): a
+    # curated teacher whose source has no associated points (propositions) is
+    # hidden and returns not-found rather than a live empty page (the "verified
+    # link to an empty author page" surface). Single existence probe through the
+    # propositions -> documents FK, so it scales to large teachers without a
+    # giant IN clause.
+    points_probe = (
+        db.table("propositions")
+        .select("id, documents!inner(source_id)")
+        .eq("documents.source_id", source_id)
+        .limit(1)
+        .execute()
+    )
+    if not points_probe.data:
+        raise HTTPException(status_code=404, detail="No content for this teacher")
+
     if not is_source_servable(db, source_id):
         return {"bio": bio, "works": [], "position": None}
 
