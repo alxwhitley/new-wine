@@ -17,6 +17,84 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**7-document backfill residual extracted + JSON-escaping defect fixed
+(2026-08-02, repo-only build + targeted corpus write; PLAIN SCRIPT PATH per the
+Session Routing DB-write hard rule, never harness; build commit `05aa519`,
+separate records commit; DB writes have no commit — the DB is their record; NOT
+pushed).** Closes the genuine backfill identified in
+`docs/audits/backfill_reverification_2026-08-02.md` (commit `122ad48`): exactly 7
+documents, targeted BY ID (never the "all zero-prop docs" query, which would hit
+2,176 locked-out Precept Austin word-studies). Not a mass backfill — the mass run
+completed 2026-07-30; these 7 were its known residual failures.
+
+- **Root-cause fix (build `05aa519`, `scripts/propositions.py` +
+  `scripts/test_proposition_json_repair.py`).** 5 of the 7 (the sermons) failed
+  on the documented JSON-escaping defect: `extract_propositions` parsed Groq's
+  output with a bare `json.loads`, and a model-emitted nested quotation inside a
+  `content` value with unescaped inner quotes (`... says, "My times are in your
+  hands," and ...`) raised "Expecting ',' delimiter" → whole document errored.
+  **Reproduced live first** (3/5 sermons failed on the first diagnostic round,
+  raw captured), then fixed with a deterministic, schema-aware repair
+  (`_repair_unescaped_quotes`) run ONLY as a fallback after the first parse fails
+  — NOT a model-retry loop (a key requirement). Key strings close before `:`, the
+  last `content` value string before `}`/`]`; any other in-string `"` is a
+  literal inner quote and is escaped; a still-unparseable repair raises
+  `PropositionExtractionFailed` as before (never a silent bad write). Proven
+  deterministically against the 3 real captured failures + well-formed/
+  already-escaped pass-through, and end-to-end live (below). The pre-existing,
+  deliberately-uncommitted numeral-heading book detector in the same file was
+  left unstaged — the build commit carries ONLY the JSON fix + its test.
+
+- **Extraction (v3.1, speaker=author, via the vetted `process_document` /
+  `process_book_document` paths).** Sermons and books run as SEPARATE passes
+  (sermons verified before books, per requirement). **Rows written this session
+  (fresh-read verified, not the writer's return value):**
+  - Kolenda "Cessationism 9" — 8; Prince "Mary: The Pattern Mother" — 9; Prince
+    "Seven Ways To Keep Your Deliverance" — 13; Prince "Who Are The Israel Of
+    God?" — 9; Savchuk "God Decides When" — 7. **Sermons = 46 props.**
+  - Kreighbaum "Manual Systematic Theology" [book] — 309 (25/25 size-fallback
+    chapters stored); Bosworth "Christ the Healer" [book] — 162 (15/16 stored, 1
+    front-matter skipped). **Books = 471 props.**
+  - **Total written = 517.** All stamped provenance `v3.1` /
+    `llama-3.3-70b-versatile` / non-null fingerprint; every doc has a clean
+    `1..n` `proposition_index` sequence and zero null embeddings.
+- **Corpus before → after (verify live if reused):** documents 3595 → 3595
+  (unchanged, no docs added/removed); propositions **10,622 → 11,139 (+517)**;
+  docs-with-propositions **857 → 864 (+7)**. **Isolation proven:** the +517 delta
+  exactly equals the sum of the 7, and propositions on all other documents stayed
+  at 10,622 — nothing outside the 7 was touched.
+- **Hand-check (accuracy + attribution, sampled each group; Prince emphasized).**
+  All correctly attributed and on-topic: Kolenda→Kolenda (Lucretius/Enlightenment
+  cessationism history), the 3 Derek Prince sermons→Derek Prince (Mary/Luke 1:38;
+  the Gadarene "my house"; Israel & the Church/Gen 17:8), Savchuk→Savchuk
+  (chronos/kairos), Kreighbaum→"Doug Kreighbaum" (theology as study of God, Deut
+  29:29), Bosworth→"Bosworth" (faith-for-healing from Scripture). The two sermons
+  that broke JSON in diagnosis now correctly preserve their nested quotes
+  (`"According to your word,"`, `"my house"`) — the fix works on live data.
+- **Transient Savchuk hang (worth recording).** Savchuk's FIRST attempt errored
+  after 1543s with "server closed the connection unexpectedly" — a DB connection
+  the Supabase pooler dropped after ~26 min of idle during an unusually long LLM/
+  reference-grounding stall (NOT the JSON defect; NOT reproducible — a standalone
+  re-extract took 4.7s, and a fresh-connection re-run stored 7 in 10.8s). The
+  one-off runner lacked the connection-reconnect resilience `run_full_backfill.py`
+  has; a future targeted runner should carry it.
+- **Cost (req 6): ≈ $0.45** (computed from volumes — no billed token meter):
+  Groq Llama-3.3-70b input ≈ 500–580k tokens (~$0.32), output ≈ ~110k (~$0.09),
+  OpenAI embeddings for 517 props negligible. A touch above the audit's ~$0.35
+  because of the diagnosis rounds, the transient Savchuk retry, per-sub-unit
+  prompt overhead on the 41 book chapters, and reference-grounding arbiter calls.
+  Far under the $50 ceiling.
+- **Disclosed residuals (fail-safe, not fixed):** (a) the book propositions use
+  the committed **size_fallback** split (both books had no title-repeat headings),
+  so sub-unit boundaries are word-bounded (~5,500 words) not chapter-aligned — a
+  sub-unit boundary can fall mid-chapter; labels aren't stored so this affects
+  only split boundaries, not attribution/provenance. (b) The JSON repair assumes
+  `content` is the last field (as the prompt example dictates); a reordered
+  output would fail-safe (raise), never store corrupt content. (c) The genuine
+  backfill is now **0 remaining** — a fact the separate, still-pending
+  781/91%-Prince+Bevere docs correction (PLAN.md/CLAUDE.md) should reflect. **Not
+  pushed** — Alex decides deployment (the code fix would deploy the backend).
+
 **Phase 2 residual closed — prose-attribution scan (2026-08-02, repo-only
 multi-step build; harness-row per Session Routing, run as orchestrator +
 `planner-reviewer` adversarial gate before commit; zero DB writes — retrieval
