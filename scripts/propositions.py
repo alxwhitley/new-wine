@@ -760,6 +760,72 @@ def prompt_fingerprint(prompt_version: str) -> str:
     return hashlib.sha256(template.encode("utf-8")).hexdigest()
 
 
+def _repair_unescaped_quotes(raw: str) -> str:
+    """Deterministic, schema-aware repair for the model-emitted JSON-escaping
+    defect (2026-08-02): the extraction output is a JSON array of
+    ``{"proposition_index": int, "content": "..."}`` objects, and the model
+    intermittently writes a nested quotation inside a ``content`` value with the
+    inner ``"`` unescaped -- e.g. ``... says, "My times are in your hands," and
+    ...`` -- which breaks ``json.loads`` with an "Expecting ',' delimiter" error.
+
+    This is NOT a retry loop and never re-calls the model. It walks the raw string
+    once, tracking string state, and escapes every ``"`` that is an INNER content
+    quote. It uses the fixed schema to decide when a ``"`` genuinely closes a
+    string: a KEY string (opened right after ``{`` or ``,``) closes before ``:``;
+    a VALUE string -- ``content``, always the last field of its object -- closes
+    before ``}`` or ``]``. Any other in-string ``"`` is a literal inner quote and
+    is escaped. Already-escaped quotes (``\\"``) and escaped backslashes are passed
+    through untouched.
+
+    Runs ONLY as a fallback after a first ``json.loads`` fails, so a well-formed
+    response is never altered. If the schema assumption does not hold (e.g. the
+    model reordered fields so ``content`` is not last), the repaired string simply
+    fails ``json.loads`` again and the caller raises PropositionExtractionFailed --
+    it never silently stores corrupt content. Correctness of the repaired content
+    is additionally hand-checked against source before any reliance (this session's
+    verification requirement)."""
+    out = []  # type: List[str]
+    i, n = 0, len(raw)
+    in_string = False
+    role = None  # 'key' | 'value' while in_string
+    while i < n:
+        c = raw[i]
+        if not in_string:
+            out.append(c)
+            if c == '"':
+                in_string = True
+                j = len(out) - 2  # char before this opening quote
+                while j >= 0 and out[j] in ' \t\r\n':
+                    j -= 1
+                prev = out[j] if j >= 0 else ''
+                role = 'value' if prev == ':' else 'key'
+            i += 1
+            continue
+        if c == '\\':  # pass an escape sequence through verbatim
+            out.append(c)
+            if i + 1 < n:
+                out.append(raw[i + 1])
+            i += 2
+            continue
+        if c == '"':
+            k = i + 1
+            while k < n and raw[k] in ' \t\r\n':
+                k += 1
+            nxt = raw[k] if k < n else ''
+            closes = (nxt == ':') if role == 'key' else (nxt in '}]')
+            if closes:
+                out.append(c)
+                in_string = False
+                role = None
+            else:
+                out.append('\\"')  # literal inner quote -> escape it
+            i += 1
+            continue
+        out.append(c)
+        i += 1
+    return ''.join(out)
+
+
 def extract_propositions(
     text: str,
     doc_id: str = "",
@@ -827,7 +893,14 @@ def extract_propositions(
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
-        parsed = json.loads(raw)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            # The model-emitted nested-quotation defect: unescaped inner quotes in
+            # a `content` value. Repair deterministically and re-parse ONCE (not a
+            # model retry). If the repair still doesn't parse, the outer except
+            # below raises PropositionExtractionFailed -- never a silent bad write.
+            parsed = json.loads(_repair_unescaped_quotes(raw))
     except Exception as exc:
         logger.warning("PROPOSITION_EXTRACT_FAIL doc=%r error=%s", doc_id, exc)
         raise PropositionExtractionFailed(str(exc)) from exc
