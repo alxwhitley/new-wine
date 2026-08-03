@@ -297,8 +297,11 @@ different row, per the hard rule above.
     skips them. **What the run newly surfaced, not previously known:**
     book-length documents (`source_type='book'`) structurally break the
     current single-call, `max_tokens=8192` extraction design — 2 of the 7
-    still-failing documents from the backfill are this class, not the
-    known JSON-escaping defect the other 5 share. See PLAN.md #17.
+    backfill residuals were this class, not the known JSON-escaping defect
+    the other 5 share. **All 7 since extracted 2026-08-02** (the 5 sermons via
+    the now-fixed parser, the 2 books via the multi-call `process_book_document`
+    path): the single-call limitation itself STANDS — the books simply no longer
+    go through the single-call path. See PLAN.md #17.
 
 12. **Position generation must stay structurally source-blind.**
     `scripts/positions.py` has TWO — and only two — functions that call the
@@ -387,6 +390,29 @@ different row, per the hard rule above.
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
+- **Never run a proposition-extraction pass against "all documents with zero
+  propositions" — target a NAMED document set by ID.** That bare query returns
+  the 2,176 permanently-excluded Precept Austin word-studies (locked out by name,
+  `PRECEPT_AUSTIN_SOURCE_ID`) plus public-domain/owned material the license gate
+  skips. The genuine backfill set is only what the ACTUAL gate admits (license IN
+  `licensed`/`unlicensed`, not Precept Austin, ≥50 words) — re-derived live
+  2026-08-02 as exactly 7 documents, now extracted (0 remaining; build `05aa519`;
+  `docs/audits/backfill_reverification_2026-08-02.md`, commit `122ad48`). This is
+  the concrete danger the long-stale "781-docs" figure created: a future run must
+  enumerate its targets, never sweep the zero-prop set.
+- **The corpus has NO record of extraction attempts** — no completion timestamp
+  (`documents.ingest_completed_at` is NULL corpus-wide), no status column, no log
+  table. "Never attempted" and "attempted and failed" are indistinguishable from
+  the database — which is exactly why the stale backfill-target figure survived
+  undetected. NOT being fixed (recorded, not built): treat any zero-proposition
+  document's history as unknown, never as "awaiting a first attempt."
+- **A long model stall can outlast the DB connection and drop it mid-extraction.**
+  Observed 2026-08-02: one sermon's reference-grounding stalled ~26 min, the
+  Supabase pooler dropped the idle connection, and it succeeded instantly on a
+  fresh-connection retry. Any future large extraction run needs reconnect
+  resilience (reopen on `psycopg2` `OperationalError`/`InterfaceError` and
+  continue), as `scripts/run_full_backfill.py` already does — never run one on a
+  single bare connection.
 - **Corrected 2026-07-30 — no longer true of the majority of the corpus.**
   A fixed set of **2,409 legacy propositions (created no later than
   2026-07-23) have NULL provenance permanently** — confirmed corpus-wide

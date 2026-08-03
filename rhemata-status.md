@@ -17,6 +17,37 @@ lives in git history; retrieve it there if a past session's detail is needed.
 
 ## Current state
 
+**Governing-file reconciliation — stale backfill figure corrected + completed
+work recorded (2026-08-03, docs/records-only; plain path per Session Routing,
+chat-proposes/terminal-commits; single records commit; NOT pushed; no code, no
+DB).** Reconciled the stale backfill figure and today's completed work across
+PLAN.md, CLAUDE.md, and this file, from the re-verification
+(`docs/audits/backfill_reverification_2026-08-02.md`, `122ad48`) and the
+extraction (build `05aa519`, records `f439f72`).
+- **Backfill is COMPLETE — 0 genuine documents remaining** (the 7 residuals
+  extracted 2026-08-02, 517 propositions). Bevere was already fully extracted —
+  never 91% outstanding; his material was deleted 2026-07-25 (absent by decision).
+  The "781" figure predated both the 2026-07-30 run and the Precept-Austin
+  ingestion and had already been corrected to 564 in PLAN.md — it was never a live
+  claim in the governing files; the real correction is simply that the residual is
+  now zero.
+- **PLAN.md:** #17 closed in place; ACTIVE PHASE SEQUENCE annotated with
+  completion status + the three still-open items (A2 misattribution, Precept
+  nested-quote mechanism, numbers/absolutes 100%-FP checker); version bumped to
+  v5.17 (title had drifted at v5.15).
+- **CLAUDE.md:** three landmines added — extraction must target a named ID set,
+  never "all zero-prop docs" (2,176 Precept Austin word-studies + license-gated
+  material otherwise swept in); the corpus keeps no record of extraction attempts;
+  a long model stall can drop the DB connection mid-extraction.
+- **Open blockers (below):** #8 updated to reflect 0 remaining; **two LAUNCH
+  BLOCKERS logged** (~68s time-to-first-visible-text on the normal path; ~40-chat
+  concurrency ceiling) — neither blocks further build work.
+- **Flagged, NOT resolved (a task premise was already stale):** the corpus-wide
+  positions ban was already LIFTED 2026-08-01 (Alex's explicit call — PLAN.md
+  #303 / CLAUDE.md Invariant 13). Its backfill precondition is now fully met, but
+  there is no ban to re-decide, so it was left untouched — not re-imposed, not
+  re-flagged as awaiting a decision that has already been made.
+
 **7-document backfill residual extracted + JSON-escaping defect fixed
 (2026-08-02, repo-only build + targeted corpus write; PLAIN SCRIPT PATH per the
 Session Routing DB-write hard rule, never harness; build commit `05aa519`,
@@ -600,10 +631,12 @@ DB this session — records only.
 **Proposition generation — resumed, current.** Runs on the bypass-proof v3.1
 path (named-teacher extraction; provenance stamping structurally required,
 CLAUDE.md Invariant 10). The corpus-wide backfill (PLAN.md #17/#49) completed
-2026-07-30; a small number of documents remain unprocessed — the known
-JSON-escaping defect (a model-emitted unescaped quote inside a nested scripture
-quotation, present in v3/v3.1 alike) plus the book-length single-call gap
-(partially addressed, below). Processed/remaining totals: query live.
+2026-07-30, and the last residual documents were extracted **2026-08-02 — 0
+genuine backfill documents now remain** (the JSON-escaping defect — a
+model-emitted unescaped quote inside a nested scripture quotation, present in
+v3/v3.1 alike — is fixed with `_repair_unescaped_quotes`, build `05aa519`; the
+book-length pair went through the multi-call `process_book_document` path).
+Processed/remaining totals: query live.
 
 **Chapter-scoped book extraction — committed, proven, in use.** The
 `title_repeat_boundary` path (`split_book_into_chapters()` /
@@ -685,6 +718,21 @@ separate decision (push to main deploys the backend to Railway).
 Open items only; #1, #2, #3, #5 are resolved (git history — commits `5bdf720`,
 `d4826dc`).
 
+**LAUNCH BLOCKERS (release-gating; neither blocks further build work):**
+- **≈68s to a fully-revealed answer on the normal path** (measured live: ~54s
+  before any text appears, then ~15s of playback). The deliberate cost of
+  buffer-then-verify-then-playback — nothing unverified reaches the screen
+  (`9e5fe94`) — accepted for now, MUST be reduced before launch. This live figure
+  supersedes the earlier offline ~35s time-to-first-character estimate in the
+  buffer-then-verify entry above. The dominant component is the model's hidden
+  reasoning (req-7-protected; trimming it needs an accuracy oracle that does not
+  exist — Open Decision #20 / settled decision #4).
+- **Concurrency ceiling ≈ 40 simultaneous chats.** The playback pacing +
+  heartbeat `time.sleep` holds one anyio threadpool worker per active request for
+  the request's whole duration; at ~40 concurrent chats the shared pool (cap 40)
+  starves other work. Harmless at zero-user scale; MUST be fixed (e.g. async
+  pacing) before real traffic.
+
 **4. `ingest_helloao.py` unconverted.** Own Supabase REST `.insert()` path, not
 routed through `shared_ingest`. Live API, resume-safe; blocks the 8 further
 HelloAO commentaries (PLAN.md #27). The real chokepoint gap.
@@ -697,9 +745,13 @@ likely broken (cookie-vs-localStorage mismatch). Trace:
 the wrong modal mode; `/home` shows signup CTAs to logged-in users; dead
 `AuthButton.tsx`. Trace: `docs/audits/BUTTON_AUTH_UX_AUDIT.md`.
 
-**8. Proposition backfill gap (residual).** Some unlicensed docs ingested
-before the wiring, plus alias gaps for several entities (re-ingest sentinels
-silently — `ALIAS_MISS` breadcrumb). Counts unverified; query live.
+**8. Proposition backfill — CLOSED 2026-08-02 (0 genuine documents remaining).**
+The mass run completed 2026-07-30, and the last 7 residual documents were
+extracted 2026-08-02 (517 props; build `05aa519`; re-verified live —
+`docs/audits/backfill_reverification_2026-08-02.md`). Unchanged residual, a
+separate hygiene issue not a backfill backlog: some entities still have alias gaps
+that re-ingest sentinels silently (`ALIAS_MISS` breadcrumb). Any future extraction
+targets a NAMED document-id set (CLAUDE.md landmine), never "all zero-prop docs."
 
 **9. v4 propositions prompt — decision pending.** `EXTRACTION_PROMPT_V4` exists,
 committed `ff0652c`, unwired; v3 is the default and v3.1 the named-teacher
