@@ -6,7 +6,7 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-01.
+Last verified: 2026-08-03.
 
 Trimmed 2026-08-01 back to live-state-only per the Project Knowledge Read
 Contract (the file had grown to ~2,700 lines of accumulated session
@@ -16,6 +16,65 @@ lives in git history; retrieve it there if a past session's detail is needed.
 ---
 
 ## Current state
+
+**Build-plan reset after two external reviews — three-project sequence adopted;
+position layer cut down; quote rail reshaped (2026-08-03, docs/records-only; plain
+path per Session Routing, chat-proposes/terminal-commits; single records commit;
+NOT pushed; no code, no DB; two SELECT-only live checks with no writes).** Recorded
+the new plan from two external adversarial reviews (one correctness-focused, one
+scope-cutting) of a written proposal, plus Alex's decisions, correcting-forward
+across PLAN.md, CLAUDE.md, and this file. Prior entries kept as written.
+- **New build order (supersedes the 2026-08-01 phase ordering + Ordering Call G):**
+  Project 1 scalable async answer execution → Project 2 one named voice per answer →
+  Project 3 hand-curated, server-gated quote rail. Capacity target 100 concurrent
+  generations, a DIAL not a ceiling; **real per-answer cost is OPEN and required
+  before Project 1** (do not size from the partial extraction figure). Full detail:
+  PLAN.md "CURRENT BUILD SEQUENCE (2026-08-03)"; binding rules in CLAUDE.md's
+  2026-08-03 settled decisions.
+- **Position layer cut down (B6):** single-voice half → Project 2 (absorbs the
+  source-blind path #48); durable-stored-positions half (persistence, rebuild
+  triggers, replace-vs-version, review UI, empty states) DEFERRED pending real
+  usage. Foundation stays as built — nothing torn out.
+- **Corpus-ban framing corrected — chat-side belief was WRONG.** The build prompt
+  said the ban "stays in force"; the repo showed it was LIFTED 2026-08-01 (migration
+  076; CLAUDE.md Invariant 13). Alex's ruling: repo wins. The lift STANDS; corpus
+  positions are simply not being built on (durable work deferred) — a product
+  posture, not a re-ban. **Second stale chat-side premise the repo caught in one
+  day** (first: the "781" backfill figure) — recorded as a working-pattern landmine
+  in CLAUDE.md.
+- **Live query (A) — corpus rows are INERT.** `positions` holds 6 draft rows: 4
+  teacher-scope + **2 corpus-scope** (`holiness and personal purity`; `can a
+  believer lose their salvation`), all `is_current`, all `status='draft'`. Not
+  reachable by any live serving path — `backend/app` reads nothing from the
+  `positions` table; `scripts/serve_position.py` is standalone and unwired. (Prior
+  "3 new drafts" = 1 teacher + 2 corpus, not 3 corpus.)
+- **Live query (C) — Bevere ground truth.** Source `John Bevere`
+  (`unlicensed`/**`shown`**) + 5 aliases REMAIN, but **0 documents, 0
+  propositions** (by author or by source) — material fully deleted 2026-07-25; an
+  older "fully processed for propositions" record is stale. Empty-but-servable
+  source = the "verified link to an empty author page" surface; the home page also
+  markets him as a trusted teacher. Both → copy-fix session (Open blockers #18).
+- **Quote rail reshaped (B3):** staged #21–25 superseded; automated extraction +
+  whole-corpus backfill DEFERRED (not cancelled). Minimal records (source-revision +
+  content hash + quote record with clearance basis/state), content hashing IN SCOPE
+  NOW, manual-approval-only, 50–100 first-pass quotes from clean written sources,
+  serve-by-ID with one server-side resolution point, revocation = state change.
+  Binding eligibility / no-trim / affirmative-clearance rules in CLAUDE.md (B4).
+- **Enforceable claim corrected (B5):** the "model never generates a quote → can't
+  be fabricated" claim is unenforceable; only the component-based claim is
+  permitted. **OPEN, HIGH PRIORITY (report-only this session):** the unbacked
+  present-tense claim is STILL SHIPPING on `frontend/app/home/page.tsx` (~L492) —
+  recurrence of the B5 landmine — plus the Bevere marketing line; both get a
+  dedicated copy-fix session immediately after this one (Open blockers #17/#18).
+- **A2 claim-level misattribution reclassified (B7):** previously "structurally
+  uncatchable"; now closed STRUCTURALLY by Project 2's design (the other teacher's
+  material is never in the generation). Passage-level speaker ownership (the
+  Precept-Austin nested-quote class) remains accepted/deferred, handled by
+  excluding mixed-voice sources.
+- **Pipeline diagram:** `rhemata-pipeline-diagram.html` is NOT a repo artefact
+  (confirmed absent from the repo and from ~/Desktop, ~/Downloads, ~/Documents) —
+  it lives outside the repo. Its four known inaccuracies are recorded (Open blockers
+  #19) so the record exists if it resurfaces; no in-repo "flag stale" action.
 
 **Governing-file reconciliation — stale backfill figure corrected + completed
 work recorded (2026-08-03, docs/records-only; plain path per Session Routing,
@@ -719,6 +778,12 @@ Open items only; #1, #2, #3, #5 are resolved (git history — commits `5bdf720`,
 `d4826dc`).
 
 **LAUNCH BLOCKERS (release-gating; neither blocks further build work):**
+- **Both are now Project 1's remit (2026-08-03 build plan).** The concurrency
+  ceiling is exactly what Project 1 (scalable async execution) replaces; the ~68s
+  latency is recorded there as an OPEN launch blocker with **no owner yet** —
+  moving the reveal to the client removes ~15s and fixes concurrency, but
+  generation still runs ~50s, and single-teacher answers (Project 2) reduce it
+  meaningfully but not sufficiently.
 - **≈68s to a fully-revealed answer on the normal path** (measured live: ~54s
   before any text appears, then ~15s of playback). The deliberate cost of
   buffer-then-verify-then-playback — nothing unverified reaches the screen
@@ -791,6 +856,33 @@ before treating as servable; interim lever = the `source_kind='commentary'`
 "Historical Commentaries" toggle (currently enabled). Same audit as #15.
 
 ---
+
+**17. Live unbacked quote guarantee shipping — HIGH PRIORITY (copy-fix session
+next).** `frontend/app/home/page.tsx` (~L492) states, present-tense: "Every quote
+is checked character-for-character against the source before it can appear — a
+quote cannot exist in Rhemata unless the teacher actually said it… Rhemata
+structurally can't." No mechanism backs it (B5). This is a recurrence of the
+`/sources` landmine on a separate component — POSITIONING.md (L76/L145), `/sources`
+(L43), and `docs/how-rhemata-handles-sources.md` (L19) are already roadmap-framed;
+the home page is not. Fix must sweep EVERY surface in the same session. Report-only
+2026-08-03.
+
+**18. Bevere marketing line + empty-but-servable source — HIGH PRIORITY (same
+copy-fix session).** The home page markets "John Bevere" as a "trusted modern-day
+teacher"; live query 2026-08-03 = 0 documents, 0 propositions (deleted 2026-07-25),
+but the `sources` row (`unlicensed`/`shown`) + 5 aliases remain → an empty author
+page / verified-link-to-nothing, and a living-minister misrepresentation (failure
+mode 2). Decide: remove the marketing line and/or dark the empty source. Report-only
+2026-08-03.
+
+**19. Pipeline diagram (external, non-repo) is stale in four ways.**
+`rhemata-pipeline-diagram.html` lives OUTSIDE the repo (confirmed absent from the
+repo and from ~/Desktop, ~/Downloads, ~/Documents). Known inaccuracies, recorded for
+if/when it resurfaces (not redrawn this session): (a) shows number/date
+verification that does not exist and is held at 100% false positives; (b) states
+checks run AFTER the reader sees text — false since buffer-then-verify (2026-08-02,
+`9e5fe94`); (c) shows quotes as categorically disallowed with no quote rail —
+superseded by Project 3; (d) marks the verse route as unbuilt.
 
 ## Known harness bugs
 

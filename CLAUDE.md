@@ -103,6 +103,74 @@ later session makes deliberately).
 
 ---
 
+## Settled product decisions (2026-08-03) — build-plan reset; do not reopen
+
+From two external adversarial reviews (one correctness-focused, one scope-cutting)
+of a written proposal, plus Alex's decisions. These supersede parts of the
+2026-08-01 plan; design within them. Full roadmap detail: PLAN.md "CURRENT BUILD
+SEQUENCE (2026-08-03)".
+
+13. **Build order is three projects, in sequence: (1) scalable async answer
+    execution → (2) one named voice per answer → (3) hand-curated, server-gated
+    quote rail.** Supersedes the 2026-08-01 phase ordering and PLAN.md Ordering
+    Call G.
+
+14. **Capacity target = 100 simultaneous generations, as a DIAL not a ceiling.**
+    Exceeding 100 must mean running more workers, never a rebuild; any design
+    choice that forecloses horizontal scaling is flagged and refused at review.
+    Real per-answer COST must be measured before Project 1 is designed — cost may
+    be the true ceiling; do NOT size from the partial extraction-cost figure on
+    record. The reveal moves to the CLIENT after the checked answer is delivered;
+    no client connection ever owns a generation worker; retries must not skip the
+    accuracy check. One app / one queue / one DB / one scalable worker
+    deployment — not microservices.
+
+15. **One named voice per answer — the writer gets ONE teacher's propositions;
+    the RENDERER (not the model) attaches names and links.** This IS the
+    source-blind path; do not build "source-blind generation" as a separate
+    project. It structurally closes claim-level A2 misattribution (the other
+    teacher's material is never in the generation) — a failure previously logged
+    as uncatchable. Teacher profile pages precompute instead of regenerating from
+    source text per view (`get_teacher_card()` is the standing live-synthesis
+    leak).
+
+16. **Quote rail is manual-approval only; automated extraction is deferred.** An
+    AI may PROPOSE quote candidates, never APPROVE one. Eligibility, all binding:
+    auto-transcripts are ineligible unless a human checked the passage against the
+    audio (~61% of the current evidence layer is auto-transcript from two LIVING
+    ministers — a mistranscribed sentence in quotation marks under a living
+    minister's name is the worst failure available to this product); also
+    initially ineligible — OCR, translations, anthologies/compilations,
+    interviews, guest-speaker material, mixed-author magazine pages, scraped
+    reposts, any unresolved nested quotation. The real boundary is CONFIDENCE THAT
+    THE STORED TEXT IS THE ACTUAL AUTHORED TEXT — not spoken-vs-written. A
+    translation is never a teacher's exact words. A quote never appears without its
+    restated point beside it. **NO words trimmed at either end — whitespace and
+    punctuation only** (SUPERSEDES the earlier "any trimming is recorded" rule;
+    the front of a sentence is where negations/conditionals live, and a trim can
+    reverse meaning while passing every check). A source must be AFFIRMATIVELY
+    cleared — absence of a known problem is not clearance. Cumulative unique
+    approved-quote text per work is capped AT APPROVAL TIME (not render-time
+    counting). Generated answers carry quote IDs, never text; one server-side
+    resolution point serves every surface; revocation is a state change.
+
+17. **The enforceable quote claim.** "A quote cannot be fabricated because the
+    model never generates one" is NOT enforceable — withholding source text does
+    not stop the writer emitting quotation marks, attribution language, or wording
+    recalled from training. Do not record, ship, or publish it. The ONLY permitted
+    claim: *text receives verified-quote treatment only through the verified-quote
+    component, authorized by a current, approved provenance record.* Supporting
+    controls: the prose channel must be prevented from rendering quotation
+    typography and verbatim-attribution language; restated points must be
+    prevented from carrying quotation markup or first-person teacher
+    impersonation.
+
+18. **Position layer cut down — durable stored positions deferred.** The
+    single-voice half is Project 2; persistence, rebuild triggers, replace-vs-
+    version, review UI, and empty-state redesign are DEFERRED pending real usage.
+    The 2026-08-01 corpus-ban lift STANDS (not re-imposed); corpus positions are
+    simply not built on. Foundation stays as built. See PLAN.md.
+
 ## Session Routing
 
 Determines which path a session's task runs on — not a judgment call. Read
@@ -350,7 +418,11 @@ different row, per the hard rule above.
     application gate were bypassed or forked. Widening to a THIRD scope
     requires a deliberate code change AND a migration, never a runtime flag.
     **Corpus-wide was BANNED until 2026-08-01, then UNBANNED on Alex's
-    explicit decision that day** — the #49 backfill (850/857 eligible
+    explicit decision that day** — **(2026-08-03 posture, per the build-plan settled
+    decisions above: that lift STANDS — not re-imposed, constraint not narrowed,
+    existing rows not deleted; corpus positions are simply not being BUILT ON,
+    because the durable-stored-positions work is deferred — a product posture,
+    not a re-ban.)** the #49 backfill (850/857 eligible
     documents, incl. 477 of Derek Prince's) satisfied the precondition this
     invariant originally named. Recorded so a future session reads the widened
     CHECK as a decision, not drift: the original teacher-only lock existed
@@ -387,6 +459,39 @@ different row, per the hard rule above.
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
+
+- **A live, unbacked quote guarantee is CURRENTLY SHIPPING (B5 landmine,
+  recurring in the present).** `frontend/app/home/page.tsx` (~line 492) still
+  states, present-tense: "Every quote is checked character-for-character against
+  the source before it can appear — a quote cannot exist in Rhemata unless the
+  teacher actually said it… Rhemata structurally can't." No mechanism backs this.
+  It is the SAME landmine as the earlier `/sources` incident (a separate component
+  left carrying the claim after everywhere else — POSITIONING.md, `/sources`,
+  `docs/how-rhemata-handles-sources.md` — was corrected to roadmap framing), NOT a
+  historical lesson. Any change to the quote guarantee must sweep EVERY surface in
+  the same session. Queued: its own copy-fix session immediately after the
+  2026-08-03 records pass. (Records pass was report-only — copy not changed.)
+- **The John Bevere source is EMPTY BUT SERVABLE (live query 2026-08-03).** His
+  documents and propositions were fully deleted 2026-07-25 (confirmed live: 0
+  documents, 0 propositions by author or by source), but the `sources` row
+  (`John Bevere`, `unlicensed`/**`shown`**) and 5 `source_aliases` REMAIN — so his
+  name still resolves as a real servable source with zero content: the exact
+  "verified link to an empty author page" surface the tongues-answer audit named.
+  The home page ALSO markets him as a "trusted modern-day teacher" (a living
+  minister named with zero corpus material — a live misrepresentation, failure
+  mode 2). Both belong in the copy-fix session. Resolves a records conflict: an
+  older record implying his material was "fully processed for propositions" is
+  stale — it is now zero.
+- **Stale chat-side figures/premises — verify against the repo/live DB before
+  recording.** Twice on 2026-08-03 a confident chat-side assertion was falsified by
+  the repo: the "781 / 91%-Prince+Bevere" backfill figure (already retired) and the
+  corpus-ban "still in force" premise (lifted 2026-08-01). When a prompt or chat
+  asserts a count, a decision-state, or a plan premise, the repo/live DB is
+  authoritative on what currently EXISTS — check before writing it down. Related:
+  the scale-deferral trap — the current ~40-concurrent ceiling was never decided,
+  it emerged from repeated "defer scale until users" choices; any proposal to defer
+  scale work "until there are users" repeats exactly that reasoning (Project 1's
+  100-concurrent dial exists to end it).
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
