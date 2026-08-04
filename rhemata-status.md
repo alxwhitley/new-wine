@@ -26,12 +26,16 @@ git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
 CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
 named below. Retrieve detail there.
 
-**Deployment.** `origin/main` = local `main` = `c890dd2` (pushed 2026-08-04), clean,
-nothing unpushed. The Project 1 Stage 1 async build (`82413c9`, `0215a68`), its records
-(`efa0ddd`, `c890dd2`), and the prior attribution-audit records (`e00e40d`) are now on
-`origin/main`. The async push is INERT: main.py is unchanged so the deployed backend is
-byte-identical; migration 078 was already applied additively; no frontend commits, so
-Vercel redeploys identically.
+**Deployment.** `origin/main` = `5f1aa02` (Stage 1, pushed 2026-08-04). Local `main`
+is AHEAD by 2 UNPUSHED Stage-2 commits: `dd71b87` (async cutover build) + this records
+commit. **NOT pushed** -- the Stage-2 session was told to hold the push for explicit
+confirmation. Unlike Stage 1, Stage 2 TOUCHES the live path (chat.py, main.py, frontend
+useChat/api) but the TRAFFIC SWITCH IS OFF: when pushed, `main.py`'s conditional mount is
+a no-op (env `ASYNC_ANSWER_ENABLED` unset), `chat.py` gains only one informational
+`evidence_version` meta field (answer/citations/verification byte-identical), and the
+frontend uses the live path whenever `getChatMode()` is false (routes unmounted -> 404 ->
+false). Migrations 078+079 are already applied additively. So a push deploys a
+behavior-equivalent live path with the async path dark behind two OFF switches.
 Railway (backend) + Vercel (frontend) auto-deploy from `main`; Railway build health
 is not confirmed from the repo (CLI unauthenticated). The 2026-08-01 -> 03 accuracy +
 copy-fix stack is on `origin/main` (verified): `0ab9c60` (Phase-0 §7a token fix),
@@ -118,6 +122,43 @@ unified at cutover (extraction/grounding/verification are imported, so those sta
 sync). (d) **Cutover (Stage 2+ / PLAN):** mount `async_chat`, move the reveal to the
 client, and fold in the two parity gaps the producer omits this session — background-
 topic injection and position-paper (house-voice) interception.
+
+**Project 1, Stage 2 — async cutover WIRED, traffic switch OFF (2026-08-04, build
+`dd71b87`).** Closes Stage-1 follow-ups (b) evidence_version and (d) cutover-wiring;
+(a) DB route and new metering/auth gaps stay open (below). Nothing serves the async
+path yet — two OFF switches gate it.
+- **Phase 1 parity (14/14, `scripts/async_parity_check.py`).** `evidence_version` is
+  now the real shared `corpus_version()` (migration 079: documents/sources/toggles/
+  safe_mode hash; `services/corpus_version.py` cached + fail-safe), used in BOTH the
+  async reuse key AND chat.py's informational SSE meta (Alex's Option A). `producer.py`
+  now runs position-paper interception + background-topic injection matching chat.py
+  exactly; routing parity is deterministic (same functions). Dedup key expanded to
+  include last-6 turns + `topics_established` (fixes a latent cross-conversation
+  single-flight/reuse collision). `policy_version`→v2.
+- **Phase 2 cutover (LEFT OFF).** Two-level gating, both default OFF: env
+  `ASYNC_ANSWER_ENABLED` mounts routes (deploy-level); DB `serving_enabled` is the
+  seconds-reversible TRAFFIC switch (verified flip on/off in one UPDATE, left OFF),
+  surfaced by `GET /async-chat/mode`. Frontend routes to the async client only when
+  true, failing safe to live. Client-paced reveal (`lib/api.ts`, ~250 chars/s) fires
+  only after the checked answer arrives — no client holds a worker. Flag-off proven
+  unchanged (main.py route table byte-identical when off; chat.py +1 informational
+  meta field; frontend additive+gated). Stage-1 mechanics still 24/24; real integrated
+  path (producer→worker→complete) confirmed incl. position-paper + normal + e2e queue
+  ($0.11 real spend).
+- **Phase 3 (report-only). Known ceiling on any flip:** the session-pooler 15-client
+  cap (~14 concurrent generations/worker) — NOT addressed this session; the worker
+  fleet must move to the transaction pooler / a sized route for the 100-concurrent
+  dial. Measured concurrency to date = peak 12/12 (1 worker × 12 slots, pooler-capped).
+  A controlled real-traffic confirmation (DESCRIBED, not run): flip `serving_enabled`
+  on for a single worker / small % of traffic, run a timed test sampling
+  `count(*) WHERE status='running'`, then flip `serving_enabled` back OFF.
+- **Remaining BEFORE a real flip (NOT built — a flip without these regresses):**
+  (a) metering/usage-limit parity on `/async-chat/submit` (each submission meters
+  independently even under single-flight); (b) auth→user_id + conversation persistence
+  (worker writes `answer_jobs`, but nothing saves `conversations`/`messages` for a
+  logged-in user's history); (c) `psycopg2-binary` in `backend/requirements.txt`;
+  (d) the DB route above. See CLAUDE.md's async landmine. Observed + mirrored (NOT
+  fixed): the live matcher over-matches "What is deliverance?"→baptism house voice.
 
 **Answer path — current behavior.** Normal answers buffer fully, run the Phase-2
 retrieval-grounding guard + prose-attribution scan + `verify_references`

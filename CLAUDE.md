@@ -500,27 +500,39 @@ different row, per the hard rule above.
   scale work "until there are users" repeats exactly that reasoning (Project 1's
   100-concurrent dial exists to end it).
 
-- **Project 1 Stage 1 async answer path is BUILT but INERT (2026-08-04, build
-  `82413c9`).** `backend/app/services/async_answers/` + `scripts/answer_worker.py`
-  + the UNMOUNTED `backend/app/routers/async_chat.py` run a durable Postgres-backed
-  answer queue (migration 078: `answer_jobs`/`async_answer_config`/
-  `provider_rate_usage`) ALONGSIDE the live `/chat`, which is untouched. Two things
-  to know before editing either side: (1) `async_answers/producer.py` MIRRORS
-  `chat.py`'s retrieval orchestration + generation constants (`GEN_MODEL`/
-  `GEN_MAX_TOKENS` + the STRICT ATTRIBUTION CONSTRAINT string) — a retrieval or
-  prompt-assembly change in `chat.py` that is NOT also applied to `producer.py`
-  silently makes the async path answer DIFFERENTLY from the live path (the
-  accuracy-critical extraction, grounding, and `verify_references` are IMPORTED, not
-  copied, so those stay in sync). (2) The producer deliberately OMITS background-topic
-  injection and position-paper (house-voice) interception this session — fold both in
-  at cutover. Nothing is wired into routing; do NOT assume the async path serves
-  anything until a deliberate cutover mounts `async_chat` and moves traffic. Reuse is
-  keyed on a placeholder `evidence_version` until a real corpus-version signal exists;
-  the worker's `SUPABASE_DB_URL` (session pooler, 15-client cap) must move to the
-  transaction pooler / a sized route for the 100-concurrent dial. Also:
-  `backend/requirements.txt` has NO `psycopg2` (the live backend never imports the
-  async modules, so it deploys fine today) — the worker + `async_chat` router will
-  fail to import on Railway until `psycopg2-binary` is added there at cutover.
+- **Project 1 async answer path is BUILT and cutover-WIRED, but the traffic
+  switch is OFF (Stage 2, 2026-08-04, build `dd71b87`; Stage 1 `82413c9`).**
+  `backend/app/services/async_answers/` + `scripts/answer_worker.py` +
+  `backend/app/routers/async_chat.py` run a durable Postgres-backed answer queue
+  (migrations 078/079: `answer_jobs`/`async_answer_config`/`provider_rate_usage`
+  + `corpus_version()`) ALONGSIDE the live `/chat`. **Two-level OFF switch, both
+  default OFF:** env `ASYNC_ANSWER_ENABLED` mounts the routes (main.py, deploy-
+  level); DB `async_answer_config.serving_enabled` is the seconds-reversible
+  TRAFFIC switch the frontend consults via `GET /async-chat/mode`. Do NOT assume
+  the async path serves anything until BOTH are on. **DRIFT POINT (unchanged, load-
+  bearing):** `async_answers/producer.py` MIRRORS `chat.py`'s retrieval
+  orchestration + generation constants (`GEN_MODEL`/`GEN_MAX_TOKENS` + the STRICT
+  ATTRIBUTION CONSTRAINT string) AND now its position-paper interception +
+  background-topic injection ordering — a change to any of those in `chat.py` that
+  is NOT also applied to `producer.py` silently diverges the async answer (the
+  accuracy-critical extraction, grounding, `verify_references`, and the
+  `evidence_version` = `get_corpus_version()` signal are IMPORTED/shared, so those
+  stay in sync). Unify at full cutover. **Remaining BEFORE a real flip (NOT built —
+  a flip without these is a regression):** (a) metering/usage-limit parity on
+  `/async-chat/submit` (the live path meters guests/users fail-closed; the async
+  submit does not) — and each submission must meter independently even when single-
+  flight shares one generation; (b) auth→user_id + conversation persistence (the
+  worker writes the answer to `answer_jobs` but nothing saves the `messages`/
+  `conversations` rows a logged-in user's history needs); (c) `psycopg2-binary` in
+  `backend/requirements.txt` (the live backend never imports the async modules so it
+  deploys fine, but the worker + `async_chat` router fail to import on Railway
+  without it); (d) the DB route — the worker's `SUPABASE_DB_URL` is the session
+  pooler (15-client cap, ~14 concurrent/worker), which must move to the transaction
+  pooler / a sized route for the 100-concurrent dial. Observed + faithfully mirrored,
+  NOT fixed: the live `match_position_paper` over-matches "What is deliverance?" ->
+  baptism house voice (a live-behaviour issue, out of scope). `corpus_version()`'s
+  one gap: an in-place admin re-chunk edit isn't reflected (reuse defaults OFF, so
+  moot until reuse is enabled).
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
