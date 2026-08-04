@@ -6,7 +6,7 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-04 (production-readiness recheck).
+Last verified: 2026-08-04 (async worker service deployed + verified end-to-end).
 
 Trimmed 2026-08-01 back to live-state-only per the Project Knowledge Read
 Contract (the file had grown to ~2,700 lines of accumulated session
@@ -66,10 +66,12 @@ the 100-slot dial without architecture changes. Anthropic's actual account heade
 1.6M) plus a $10 rolling-24-hour ceiling. `serving_enabled` remains false. Five real
 questions plus one queue/worker end-to-end generation passed the real verification path;
 test rows were cleaned. Submit now fails closed before metering/enqueue when serving is
-off, and stale frontend mode caches immediately retry via `/chat`. **Not deployed:** the
-Railway CLI is unauthenticated here, so no worker service was created/configured, the
-worker's DB URL was not changed in Railway, routes were not enabled, and no public traffic
-window occurred.
+off, and stale frontend mode caches immediately retry via `/chat`. **Not deployed AS OF
+that readiness recheck** (SUPERSEDED for worker creation — the worker service was
+subsequently created + verified, see the next entry; routes still unmounted + no traffic
+window still true): the Railway CLI was unauthenticated, so no worker service was
+created/configured, the worker's DB URL was not changed in Railway, routes were not
+enabled, and no public traffic window occurred.
 
 **Worker build manifest ADDED + pushed 2026-08-04 (`2ba9f12`).** The one repo-side gap
 that blocked creating the worker service — no Python build manifest at the repo root for
@@ -77,14 +79,34 @@ Railway to detect (the worker's Root Directory must be `/`, not `backend/`) — 
 repo-root `nixpacks.toml` forces the Python provider, pins `python312`, installs
 `backend/requirements.txt` into a `/opt/venv`, and starts `scripts/answer_worker.py`. This
 does NOT touch the backend service (Alex confirmed its Root Directory is `backend/`).
-**Still a by-hand Railway dashboard task, unrun here (no Railway access):** create the
-worker service (Root Directory `/`, Builder = Nixpacks, no healthcheck, restart on
-failure), set its env vars — notably `SUPABASE_DB_URL` on the **transaction pooler
-(port 6543)** not the session pooler, `WORKER_CONCURRENCY=20`, and NOT
-`ASYNC_ANSWER_ENABLED`/`ASYNC_FAKE_*` — then dark health check. The full step-by-step
-checklist was produced this session (chat only, not filed). The worker's `nixpacks.toml`
-build is NOT yet proven; first real proof is that service's build log. Pre-flip blocker
-(d) — the transaction-pooler DB route + worker deployment — remains OPEN.
+**Worker service CREATED + DEPLOYED + VERIFIED end-to-end 2026-08-04** (this session;
+real test, no traffic flip). The Railway worker service now exists (separate from the
+backend web service) and its repo-root `nixpacks.toml` build is PROVEN — the worker
+runs as a container and completed a real job. End-to-end verification (one real
+generation, **$0.076** actual spend, then fully cleaned up): a job inserted straight
+into `answer_jobs` was claimed within ~3s and completed by a REMOTE container worker
+(`worker_id=28934160b0d1-1-slot0` — 12-hex container hostname + PID 1, not this Mac
+`MacBookPro.lan`; `ps` confirmed no local worker running), producing a real verified
+answer (`model=claude-sonnet-4-5` **not** the fake producer, `outcome=answered`, 4
+citations + 7 verified_references incl. real teacher pointers — Precept Austin, Andrew
+Murray with source_ids) — the SAME real accuracy path as the earlier proof. Both
+switches stayed OFF throughout (`serving_enabled=false`, config `updated_at` untouched;
+live `/async-chat/mode` + `/submit` still 404 → `ASYNC_ANSWER_ENABLED` off at deploy
+level); the test bypassed all HTTP routes, wrote only to `answer_jobs`, persisted NO
+`conversations` row, and was fully cleaned (job row + its isolated
+`provider_rate_usage` bucket deleted; table empty again). Cost note: $0.076 vs the
+$0.039 median is the expected COLD-cache premium (3,656 cache-write tokens on a
+freshly-deployed worker); warm generations will be cheaper. **Pre-flip blocker (d) is
+now mostly closed** — worker deployed, build green, functions end-to-end. **Residual,
+NOT independently confirmed this session:** that the worker's `SUPABASE_DB_URL` is the
+transaction pooler (port **6543**) vs the session pooler (**5432**, 15-client cap
+~12/worker) — Supavisor MASKS pooler mode on the Postgres side (rewrites client
+`application_name`→`Supavisor`) and the Railway CLI is unauthenticated here, so the
+port is not readable from the DB vantage; behavioral evidence (the worker's polling
+multiplexed onto only 3–4 shared upstream backends, never growing while a slot was
+busy) is CONSISTENT with the transaction pooler but doesn't exclude a low-slot
+session-mode worker. Close it definitively via `railway variables` on the worker
+service (`SUPABASE_DB_URL` contains `:6543`) or Alex pasting it.
 
 **Attribution audit — HistoricalChristianFaith + C.S. Lewis (2026-08-04,
 read-only, SELECT-only; ZERO writes; this records commit + a docs/audit).** Full
@@ -387,17 +409,19 @@ harness session — remains open. Proofs:
 
 ## Next
 
-The current build sequence supersedes the older Phase-1 ordering below. Immediate next
-(repo-root `nixpacks.toml` worker build manifest is now DONE + pushed, `2ba9f12`, so the
-worker can build at Root Directory `/`): authenticate Railway; create the worker service
-(Root Directory `/`, Builder = Nixpacks, no healthcheck, restart on failure) with
-conservative 20-slot concurrency (`WORKER_CONCURRENCY=20`) and the **transaction-pooler**
-DB URL (`SUPABASE_DB_URL` on port 6543, NOT the session pooler; do NOT set
-`ASYNC_ANSWER_ENABLED`/`ASYNC_FAKE_*` on the worker); confirm its build log is green (the
-manifest's build is not yet proven); set `ASYNC_ANSWER_ENABLED=true` on the BACKEND service
-while `serving_enabled=false`; run dark health checks; then perform the controlled public
-window and switch `serving_enabled=false` immediately afterward. Project 2 starts only
-after that cutover is stable. The retained numbered list below is backlog context, not the
+The current build sequence supersedes the older Phase-1 ordering below. The worker
+service is now CREATED, its `nixpacks.toml` build is GREEN, and it is VERIFIED
+end-to-end (2026-08-04 — remote container worker completed a real verified generation,
+switches OFF; see Current state). Immediate next: (1) **confirm the worker's DB route
+is the transaction pooler (port 6543), not the session pooler** — the one residual of
+pre-flip blocker (d), not independently confirmable from the DB vantage this session
+(`railway variables` on the worker, or Alex pasting `SUPABASE_DB_URL`); confirm
+`WORKER_CONCURRENCY` and that `ASYNC_ANSWER_ENABLED`/`ASYNC_FAKE_*` are NOT set on the
+worker while there; (2) set `ASYNC_ANSWER_ENABLED=true` on the BACKEND service while
+`serving_enabled=false`; run dark health checks; (3) perform the controlled public
+window (also the real-traffic concurrency proof that the >~12/worker ceiling is lifted)
+and switch `serving_enabled=false` immediately afterward. Project 2 starts only after
+that cutover is stable. The retained numbered list below is backlog context, not the
 active first action.
 
 1. **Phase 0 — measurement (read-only) — DONE 2026-08-01.**

@@ -501,8 +501,9 @@ different row, per the hard rule above.
   100-concurrent dial exists to end it).
 
 - **Project 1 async answer path is BUILT and cutover-WIRED; 3 of 4 pre-flip
-  blockers now CLOSED, but the traffic switch is OFF (Stage 2 build `dd71b87`;
-  pre-flip blockers `196f1f2`, 2026-08-04; Stage 1 `82413c9`).**
+  blockers CLOSED + the worker service now DEPLOYED and VERIFIED end-to-end
+  (2026-08-04, real test, no traffic flip), traffic switch still OFF (Stage 2
+  build `dd71b87`; pre-flip blockers `196f1f2`, 2026-08-04; Stage 1 `82413c9`).**
   `backend/app/services/async_answers/` + `scripts/answer_worker.py` +
   `backend/app/routers/async_chat.py` run a durable Postgres-backed answer queue
   (migrations 078/079: `answer_jobs`/`async_answer_config`/`provider_rate_usage`
@@ -536,13 +537,29 @@ different row, per the hard rule above.
   (c) `psycopg2-binary==2.9.11` added to `backend/requirements.txt` (the worker +
   `async_chat` import psycopg2 and failed to import on Railway without it — causally
   proven in a clean 3.9 venv; one additive line, live app unaffected). Proofs:
-  `scripts/async_metering_persistence_check.py` (24/24). **STILL OPEN — (d) the DB
-  route:** the worker's `SUPABASE_DB_URL` is the session pooler (15-client cap, ~14
-  concurrent/worker; smoke concurrency caps ~12–13 here, not the slot dial), which
-  must move to the transaction pooler / a sized route for the 100-concurrent dial —
-  a flip without this pins the ceiling near ~12/worker. Note: `conversations.user_id`
-  has an FK to `auth.users`, so persistence needs a real JWT `sub` (always true in
-  prod; a bad id fails closed — `save_exchange` swallows it, delivery unaffected).
+  `scripts/async_metering_persistence_check.py` (24/24). **(d) the DB route —
+  worker now DEPLOYED + VERIFIED end-to-end 2026-08-04 (real test, no flip);
+  residual only.** A separate Railway worker service now exists and its repo-root
+  `nixpacks.toml` build is GREEN: a job inserted straight into `answer_jobs` was
+  claimed in ~3s and completed by a REMOTE container worker
+  (`worker_id=28934160b0d1-1-slot0` — 12-hex container hostname + PID 1, not a
+  local process; none was running) with a real verified answer
+  (`model=claude-sonnet-4-5` not the fake producer, `outcome=answered`, 4 citations
+  + 7 verified_references incl. real teacher pointers), switches untouched, then
+  cleaned. **Residual, NOT independently confirmed:** that the worker's
+  `SUPABASE_DB_URL` is the transaction pooler (6543) vs the session pooler (5432,
+  15-client cap ~12/worker) — Supavisor MASKS pooler mode on the Postgres side
+  (rewrites client `application_name`→`Supavisor`) and the Railway CLI is
+  unauthenticated here, so the port is not readable from the DB vantage; behavioral
+  evidence (the worker's polling multiplexed onto only 3–4 shared upstream backends,
+  never growing while a slot was busy generating) is CONSISTENT with the transaction
+  pooler but does not exclude a low-slot session-mode worker. Close it definitively
+  with `railway variables` on the worker service (`SUPABASE_DB_URL` contains `:6543`)
+  or Alex pasting it, plus a controlled real-traffic concurrency window proving the
+  >~12/worker ceiling is actually lifted, before the flip. Note:
+  `conversations.user_id` has an FK to `auth.users`, so persistence needs a real JWT
+  `sub` (always true in prod; a bad id fails closed — `save_exchange` swallows it,
+  delivery unaffected).
   Observed + faithfully mirrored, NOT fixed: the live `match_position_paper`
   over-matches "What is deliverance?" -> baptism house voice (a live-behaviour issue,
   out of scope). `corpus_version()`'s one gap: an in-place admin re-chunk edit isn't
@@ -559,10 +576,11 @@ different row, per the hard rule above.
   (the worker); the backend web service is rooted at `backend/` and reads
   `backend/nixpacks.toml`, so the backend build is byte-identical/unaffected. Do
   NOT delete it in a root-cleanup as a "duplicate" (the repo-root-reserved rule's
-  "plus tooling config" clause covers it). **Its build is NOT yet proven** — no
-  worker service has been created in Railway, so the first real build log is still
-  pending; this closed only the "worker can't build at repo root" prerequisite,
-  NOT pre-flip blocker (d) (the transaction-pooler DB route + service creation).
+  "plus tooling config" clause covers it). **Its build is now PROVEN** — the worker
+  service was created in Railway 2026-08-04, built GREEN via this manifest, and runs
+  as a container that completed a real verified generation (see the Project 1 async
+  landmine's blocker (d)). This no longer blocks service creation; (d)'s only
+  residual is confirming the worker's pooler port + a real concurrency window.
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
