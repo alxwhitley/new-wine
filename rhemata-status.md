@@ -26,13 +26,20 @@ git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
 CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
 named below. Retrieve detail there.
 
-**Deployment.** `origin/main` = local `main`, in sync (pre-flip blockers 1–3 build
-`196f1f2` + records `0e62dd3` PUSHED 2026-08-04; this deployment-line update pushed on
-top). The push deploys the code but the async path stays DARK (routes still unmounted,
-both switches OFF), and `chat.py`/`main.py` are byte-identical to pre-blocker Stage 2 —
-so the live serving path is unchanged; the only deployed delta is `psycopg2-binary` in
-`requirements.txt` (installed by Railway, unused by the live path) + the gated async
-client edits (dead until cutover). Stage 2 (`dd71b87` build + `29852f7` records) is
+**Deployment.** `origin/main` = local `main`, in sync at `2ba9f12` (pushed
+2026-08-04). Three commits landed on top of the already-pushed Stage-2 stack
+(`196f1f2`/`0e62dd3`): `2ba9f12` (repo-root `nixpacks.toml` — the async WORKER
+service's build manifest; worker-only, does NOT affect the backend service, which
+is rooted at `backend/` and reads `backend/nixpacks.toml` — backend build
+byte-identical), `6dca017` (async traffic-rollback hardening — `async_chat.py` dead
+until cutover, `frontend/lib/api.ts` on Vercel, + tests), `46d37fc` (docs closeout,
+`log.md`). The push deploys the code but the async path stays DARK (routes still
+unmounted, both switches OFF), and `chat.py`/`main.py` are byte-identical to
+pre-blocker Stage 2 — so the live serving path is unchanged; the deployed deltas vs
+the prior pushed state are the worker build manifest (inert for the backend) + the
+gated async client edits (dead until cutover). `psycopg2-binary` in
+`requirements.txt` (installed by Railway, unused by the live path) was already
+deployed in the earlier Stage-2 push. Stage 2 (`dd71b87` build + `29852f7` records) is
 DEPLOYED but the async path is DARK behind two OFF switches: `main.py`'s conditional mount is a no-op
 (env `ASYNC_ANSWER_ENABLED` unset -> async routes NOT mounted), the DB TRAFFIC switch
 `async_answer_config.serving_enabled` is false, and the frontend uses the live path
@@ -63,6 +70,21 @@ off, and stale frontend mode caches immediately retry via `/chat`. **Not deploye
 Railway CLI is unauthenticated here, so no worker service was created/configured, the
 worker's DB URL was not changed in Railway, routes were not enabled, and no public traffic
 window occurred.
+
+**Worker build manifest ADDED + pushed 2026-08-04 (`2ba9f12`).** The one repo-side gap
+that blocked creating the worker service — no Python build manifest at the repo root for
+Railway to detect (the worker's Root Directory must be `/`, not `backend/`) — is closed:
+repo-root `nixpacks.toml` forces the Python provider, pins `python312`, installs
+`backend/requirements.txt` into a `/opt/venv`, and starts `scripts/answer_worker.py`. This
+does NOT touch the backend service (Alex confirmed its Root Directory is `backend/`).
+**Still a by-hand Railway dashboard task, unrun here (no Railway access):** create the
+worker service (Root Directory `/`, Builder = Nixpacks, no healthcheck, restart on
+failure), set its env vars — notably `SUPABASE_DB_URL` on the **transaction pooler
+(port 6543)** not the session pooler, `WORKER_CONCURRENCY=20`, and NOT
+`ASYNC_ANSWER_ENABLED`/`ASYNC_FAKE_*` — then dark health check. The full step-by-step
+checklist was produced this session (chat only, not filed). The worker's `nixpacks.toml`
+build is NOT yet proven; first real proof is that service's build log. Pre-flip blocker
+(d) — the transaction-pooler DB route + worker deployment — remains OPEN.
 
 **Attribution audit — HistoricalChristianFaith + C.S. Lewis (2026-08-04,
 read-only, SELECT-only; ZERO writes; this records commit + a docs/audit).** Full
@@ -365,9 +387,14 @@ harness session — remains open. Proofs:
 
 ## Next
 
-The current build sequence supersedes the older Phase-1 ordering below. Immediate next:
-authenticate Railway; create the worker service from the existing image with conservative
-20-slot concurrency and the transaction-pooler DB URL; set `ASYNC_ANSWER_ENABLED=true`
+The current build sequence supersedes the older Phase-1 ordering below. Immediate next
+(repo-root `nixpacks.toml` worker build manifest is now DONE + pushed, `2ba9f12`, so the
+worker can build at Root Directory `/`): authenticate Railway; create the worker service
+(Root Directory `/`, Builder = Nixpacks, no healthcheck, restart on failure) with
+conservative 20-slot concurrency (`WORKER_CONCURRENCY=20`) and the **transaction-pooler**
+DB URL (`SUPABASE_DB_URL` on port 6543, NOT the session pooler; do NOT set
+`ASYNC_ANSWER_ENABLED`/`ASYNC_FAKE_*` on the worker); confirm its build log is green (the
+manifest's build is not yet proven); set `ASYNC_ANSWER_ENABLED=true` on the BACKEND service
 while `serving_enabled=false`; run dark health checks; then perform the controlled public
 window and switch `serving_enabled=false` immediately afterward. Project 2 starts only
 after that cutover is stable. The retained numbered list below is backlog context, not the

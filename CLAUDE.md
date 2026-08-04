@@ -548,6 +548,22 @@ different row, per the hard rule above.
   out of scope). `corpus_version()`'s one gap: an in-place admin re-chunk edit isn't
   reflected (reuse defaults OFF, so moot until reuse is enabled).
 
+- **The repo-root `nixpacks.toml` is the async worker service's build manifest —
+  load-bearing, NOT a stray duplicate of `backend/nixpacks.toml`.** Added
+  2026-08-04 (`2ba9f12`, pushed). The worker's Railway service uses Root Directory
+  `/` (its entrypoint `scripts/answer_worker.py` sits at repo root but imports
+  `backend/`), where no Python manifest exists for Nixpacks to auto-detect — so
+  this file FORCES the Python provider, pins `python312` (matching backend),
+  creates the venv at `/opt/venv`, installs the same `backend/requirements.txt`,
+  and sets the worker start command. It is read ONLY by a service rooted at `/`
+  (the worker); the backend web service is rooted at `backend/` and reads
+  `backend/nixpacks.toml`, so the backend build is byte-identical/unaffected. Do
+  NOT delete it in a root-cleanup as a "duplicate" (the repo-root-reserved rule's
+  "plus tooling config" clause covers it). **Its build is NOT yet proven** — no
+  worker service has been created in Railway, so the first real build log is still
+  pending; this closed only the "worker can't build at repo root" prerequisite,
+  NOT pre-flip blocker (d) (the transaction-pooler DB route + service creation).
+
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
 - **Never run a proposition-extraction pass against "all documents with zero
