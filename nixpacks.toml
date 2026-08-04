@@ -1,0 +1,39 @@
+# Root Nixpacks build config — async answer worker service only
+# (scripts/answer_worker.py — Project 1, Stage 1 durable async answer path).
+#
+# WHY THIS FILE IS AT THE REPO ROOT (and does NOT affect the backend service):
+#   The worker's entrypoint (scripts/answer_worker.py) lives at the repo root
+#   but imports the backend app (it inserts backend/ onto sys.path and loads
+#   backend/app/.env). Its Railway service therefore uses Root Directory "/"
+#   (the whole repo). The backend WEB service uses Root Directory "backend", so
+#   Nixpacks reads backend/nixpacks.toml for it — this root file is consulted
+#   ONLY by a service whose root is "/", i.e. the worker. The backend build is
+#   byte-identical after this change.
+#
+# WHY THE BUILD IS SPELLED OUT EXPLICITLY (unlike backend/nixpacks.toml):
+#   At the repo root there is no Python manifest (requirements.txt / pyproject /
+#   Pipfile / main.py) for Nixpacks' Python provider to auto-detect, so the
+#   provider is forced. A forced provider does not run its auto-generated
+#   venv+install step, so the venv is created here explicitly and the install
+#   targets backend/requirements.txt via the venv's own pip (absolute /opt/venv
+#   paths — the same venv location Nixpacks' Python provider uses).
+#
+# PARITY WITH THE BACKEND SERVICE (backend/nixpacks.toml + backend/railway.toml):
+#   - same interpreter: python312
+#   - same dependency set: the SAME backend/requirements.txt, via pip
+#   Concurrency is a runtime dial set with the WORKER_CONCURRENCY env var, not
+#   baked into the start command (default 4 if unset).
+
+providers = ["python"]
+
+[phases.setup]
+nixPkgs = ["python312"]
+
+[phases.install]
+cmds = [
+  "python3 -m venv --copies /opt/venv",
+  "/opt/venv/bin/pip install -r backend/requirements.txt",
+]
+
+[start]
+cmd = "/opt/venv/bin/python scripts/answer_worker.py"
