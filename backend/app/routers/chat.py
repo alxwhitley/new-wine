@@ -25,6 +25,7 @@ from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.llm_client import get_anthropic_client, get_guardrails_text
 from app.services.position_papers import generate_position_paper_answer, match_position_paper
+from app.services.corpus_version import get_corpus_version
 
 
 def is_word_study_query(question: str) -> bool:
@@ -743,6 +744,10 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
                     "conversation_id": conversation_id,
                     "message_id": message_id,
                     "verified_references": [],
+                    # Informational shared corpus-version signal (Stage 2); cached +
+                    # fail-safe, so it can never affect the answer. Same signal the
+                    # async reuse key uses.
+                    "evidence_version": get_corpus_version(db),
                 }
                 if user_usage_meta:
                     meta["usage"] = user_usage_meta
@@ -1167,6 +1172,10 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             "conversation_id": conversation_id,
             "message_id": message_id,
             "verified_references": verified_references,
+            # Informational shared corpus-version signal (Stage 2); cached +
+            # fail-safe, so it can never affect the answer. Same signal the async
+            # reuse key uses.
+            "evidence_version": get_corpus_version(db),
         }
         if updated_topics:
             meta["topics_established"] = updated_topics

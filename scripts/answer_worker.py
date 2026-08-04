@@ -62,7 +62,7 @@ def _seconds_to_next_minute() -> int:
     return max(1, 61 - int(time.time()) % 60)
 
 
-def _fake_produce(supabase, question: str, messages=None) -> ProducerResult:
+def _fake_produce(supabase, question, messages=None, topics_established=None):
     """Zero-cost stand-in for produce(): simulates generation latency and
     returns canned verified output with synthetic token counts. Proves the queue
     mechanics (durability, single-flight, kill-safety, reconnect, spend halt,
@@ -81,6 +81,7 @@ def _fake_produce(supabase, question: str, messages=None) -> ProducerResult:
         cache_read_tokens=0,
         cache_write_tokens=0,
         cost_usd=0.039,
+        updated_topics=dict(topics_established or {}),
     )
 
 
@@ -167,7 +168,10 @@ class Worker:
             return True  # we did do work (a claim + defer); keep the loop hot
 
         try:
-            result = self.produce_fn(self._supabase_client(), job["question"], job.get("messages") or [])
+            result = self.produce_fn(
+                self._supabase_client(), job["question"],
+                job.get("messages") or [], job.get("topics_established") or {},
+            )
         except Exception as exc:
             status = jobs.fail_or_requeue(db, job_id, "producer error: %r" % exc)
             logger.exception("[%s] job %s produce failed -> %s", worker_id, job_id, status)
@@ -188,6 +192,7 @@ class Worker:
             cache_read_tokens=result.cache_read_tokens,
             cache_write_tokens=result.cache_write_tokens,
             cost_usd=result.cost_usd,
+            updated_topics=result.updated_topics,
         )
         logger.info("[%s] job %s done (%s, $%.4f)", worker_id, job_id, result.outcome, result.cost_usd)
         return True

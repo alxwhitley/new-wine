@@ -58,6 +58,9 @@ class AsyncAnswerConfig:
     spend_ceiling_usd: Optional[float] = None
     spend_window: str = "rolling_24h"
     lease_seconds: int = 300
+    # Stage 2: the seconds-reversible traffic switch, default OFF. The frontend
+    # routes to the async path only when this is true AND the routes are mounted.
+    serving_enabled: bool = False
 
 
 def load_config(db) -> AsyncAnswerConfig:
@@ -69,7 +72,7 @@ def load_config(db) -> AsyncAnswerConfig:
             cur.execute(
                 "SELECT paused, max_queue_depth, reuse_ttl_seconds, rpm_limit, "
                 "itpm_limit, otpm_limit, spend_ceiling_usd, spend_window, "
-                "lease_seconds FROM async_answer_config WHERE id = 1"
+                "lease_seconds, serving_enabled FROM async_answer_config WHERE id = 1"
             )
             return cur.fetchone()
 
@@ -88,6 +91,7 @@ def load_config(db) -> AsyncAnswerConfig:
         ),
         spend_window=row["spend_window"],
         lease_seconds=int(row["lease_seconds"]),
+        serving_enabled=bool(row["serving_enabled"]),
     )
 
 

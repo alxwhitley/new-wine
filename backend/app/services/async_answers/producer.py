@@ -27,6 +27,7 @@ Python 3.9 (Invariant 1).
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +37,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.llm_client import get_anthropic_client
+from app.services.corpus_version import get_corpus_version
 from .config import estimate_cost_usd
 
 logger = logging.getLogger(__name__)
@@ -63,17 +65,19 @@ def _compute_prompt_version() -> str:
 
 
 PROMPT_VERSION = _compute_prompt_version()
-POLICY_VERSION = "policy_v1"  # bump when the accuracy-check orchestration changes
-# No corpus-version signal exists in the schema yet (documents have no version
-# counter). A real evidence_version (e.g. max(documents.updated_at) or a corpus
-# generation counter) is a follow-up decision for Alex -- flagged, not guessed.
-DEFAULT_EVIDENCE_VERSION = "corpus-unversioned"
+# policy_version tracks the answer-orchestration version. Bumped to v2 in Stage 2:
+# the producer now runs position-paper interception + background-topic injection
+# to match chat.py, so any Stage-1 reuse under policy_v1 is correctly invalidated.
+POLICY_VERSION = "policy_v2"
+# evidence_version is now the REAL shared corpus_version() signal (Stage 2,
+# migration 079) -- see app.services.corpus_version. get_corpus_version() is
+# cached + fail-safe, so the reuse key gets a real signal and can never raise.
 
 
 @dataclass
 class ProducerResult:
     answer: str
-    outcome: str  # answered | refused_attribution | no_material | error
+    outcome: str  # answered | refused_attribution | no_material | position_paper | error
     citations: List[Dict[str, Any]] = field(default_factory=list)
     verified_references: List[Dict[str, Any]] = field(default_factory=list)
     retrieved_chunk_ids: List[str] = field(default_factory=list)
@@ -84,6 +88,9 @@ class ProducerResult:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     cost_usd: float = 0.0
+    # Background-topic state to hand back to the client (parity with chat.py's
+    # meta["topics_established"]).
+    updated_topics: Dict[str, int] = field(default_factory=dict)
 
 
 def current_policy(supabase) -> Dict[str, Any]:
@@ -100,14 +107,15 @@ def current_policy(supabase) -> Dict[str, Any]:
     }
     return {
         "filters": snapshot,
-        "evidence_version": DEFAULT_EVIDENCE_VERSION,
+        "evidence_version": get_corpus_version(supabase),  # real shared signal (mig 079)
         "prompt_version": PROMPT_VERSION,
         "policy_version": POLICY_VERSION,
     }
 
 
 # ---- retrieval (MIRROR of chat.chat() ~L754-993; DRIFT POINT) ---------------
-def _retrieve(db, question: str) -> Tuple[List[dict], List[dict], int]:
+def _retrieve(db, question, injected_doc_ids=None):
+    # type: (object, str, Optional[set]) -> Tuple[List[dict], List[dict], int]
     from app.routers import chat as _chat
 
     filters = get_disabled_filters()
@@ -163,6 +171,16 @@ def _retrieve(db, question: str) -> Tuple[List[dict], List[dict], int]:
         for cid, (score, chunk) in all_scores.items()
         if not is_chunk_disabled(chunk, filters)
     }
+
+    # Remove chunks from injected background-topic papers (chat.py Fix 6) -- they
+    # are already in topic_context_parts, so keeping them in the main pool would
+    # duplicate content and waste citable slots.
+    if injected_doc_ids:
+        all_scores = {
+            cid: (score, chunk)
+            for cid, (score, chunk) in all_scores.items()
+            if chunk.get("document_id") not in injected_doc_ids
+        }
 
     # boost_factor + source-kind fusion weights.
     all_scores = {
@@ -262,7 +280,8 @@ def _retrieve(db, question: str) -> Tuple[List[dict], List[dict], int]:
     return chunks, citations, citable_count
 
 
-def _build_context(chunks: List[dict], citable_count: int) -> str:
+def _build_context(chunks, citable_count, topic_context_parts=None):
+    # type: (List[dict], int, Optional[List[str]]) -> str
     from app.routers import chat as _chat
     regular = [c for c in chunks if not c.get("_lexicon")]
     lexicon = [c for c in chunks if c.get("_lexicon")]
@@ -288,7 +307,14 @@ def _build_context(chunks: List[dict], citable_count: int) -> str:
         )
     context = "\n\n---\n\n".join(context_parts)
 
-    if citable_count < 2:
+    # Prepend injected background-topic papers (chat.py generate() L1035-1037).
+    if topic_context_parts:
+        topic_block = "\n\n---\n\n".join(topic_context_parts)
+        context = topic_block + "\n\n---\n\n" + context
+
+    # Graceful-degradation hint -- only when citable sources are thin AND there is
+    # no background paper carrying the topic (matches chat.py L1041).
+    if citable_count < 2 and not topic_context_parts:
         context += (
             "\n\n[Retrieval note: citable sources on this topic are thin or absent. "
             "The strongest available material is background-only. "
@@ -369,25 +395,115 @@ def _add_usage(a: Dict[str, int], b: Dict[str, int]) -> Dict[str, int]:
             ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")}
 
 
-def produce(supabase, question: str, messages: Optional[List[Dict[str, Any]]] = None) -> ProducerResult:
-    """Retrieve -> buffered generation -> ungrounded-attribution resolution
-    (regenerate-once-then-refuse) -> verify_references. Returns a fully verified
-    result. Raises only on an unexpected fault the worker should retry."""
+def _inject_background_topics(db, question, messages, topics_established):
+    # type: (object, str, List[Dict[str, Any]], Dict[str, int]) -> Tuple[List[str], set, Dict[str, int]]
+    """Background-topic context injection -- MIRROR of chat.chat() Step 0.5
+    (~L758-816). Returns (topic_context_parts, injected_doc_ids, updated_topics).
+    Same 6-turn inject/condense window and the same [Background] labelling."""
+    from app.routers import chat as _chat
+    _chat._ensure_background_topics()
+    current_turn = len(messages)
+    matched_topics = _chat.match_background_topics(question)
+    topics_to_inject = []    # type: List[str]  # full paper this turn
+    topics_to_condense = []  # type: List[str]  # first chunk only (within 6-turn window)
+    for topic_key in matched_topics:
+        injection_turn = (topics_established or {}).get(topic_key, -99)
+        if current_turn - injection_turn > 6:
+            topics_to_inject.append(topic_key)
+        else:
+            topics_to_condense.append(topic_key)
+
+    topic_context_parts = []  # type: List[str]
+    injected_doc_ids = set()  # type: set
+    updated_topics = dict(topics_established or {})
+    if topics_to_inject or topics_to_condense:
+        topic_lookup = {t["topic_key"]: t for t in _chat._background_topics}
+        for topic_key in topics_to_inject:
+            topic = topic_lookup.get(topic_key)
+            if not topic:
+                continue
+            try:
+                chunk_result = db.table("chunks").select("content").eq(
+                    "document_id", topic["document_id"]).order("chunk_index").execute()
+                if chunk_result.data:
+                    full_text = "\n\n".join(c["content"] for c in chunk_result.data)
+                    topic_context_parts.append(
+                        "[Background] (citation_mode=silent_context) \"%s\"\n%s" % (topic["title"], full_text))
+                    injected_doc_ids.add(topic["document_id"])
+                    updated_topics[topic_key] = current_turn
+            except Exception:
+                logger.exception("Producer failed to fetch chunks for topic %s", topic_key)
+        for topic_key in topics_to_condense:
+            topic = topic_lookup.get(topic_key)
+            if not topic:
+                continue
+            try:
+                chunk_result = db.table("chunks").select("content").eq(
+                    "document_id", topic["document_id"]).order("chunk_index").limit(1).execute()
+                if chunk_result.data:
+                    first_chunk = chunk_result.data[0]["content"]
+                    topic_context_parts.append(
+                        "[Background] (citation_mode=silent_context) \"%s\"\n%s" % (topic["title"], first_chunk))
+                    injected_doc_ids.add(topic["document_id"])
+            except Exception:
+                logger.exception("Producer failed to fetch condensed chunk for topic %s", topic_key)
+    return topic_context_parts, injected_doc_ids, updated_topics
+
+
+def produce(supabase, question, messages=None, topics_established=None):
+    # type: (object, str, Optional[List[Dict[str, Any]]], Optional[Dict[str, int]]) -> ProducerResult
+    """Position-paper interception -> background-topic injection -> retrieve ->
+    buffered generation -> ungrounded-attribution resolution (regenerate-once-
+    then-refuse) -> verify_references. Matches chat.py's ordering exactly. Raises
+    only on an unexpected fault the worker should retry."""
     from app.routers import chat as _chat
     from app.services.reference_verifier import (
         verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
     )
+    from app.services.position_papers import match_position_paper, generate_position_paper_answer
     messages = messages or []
+    topics_established = topics_established or {}
 
-    chunks, citations, citable_count = _retrieve(supabase, question)
-
-    if not chunks:
+    # Position-paper interception FIRST (chat.py L711, before retrieval). On a
+    # match, answer in Rhemata's own house voice and bypass retrieval + the
+    # teacher-citation accuracy check entirely -- house-voice content has no
+    # citations to verify (this is answer-source (a) of the position design).
+    matched_pillar = match_position_paper(question)
+    if matched_pillar:
+        parts = []  # type: List[str]
+        for event in generate_position_paper_answer(matched_pillar, question, messages):
+            if event.startswith("data: "):
+                try:
+                    payload = json.loads(event[len("data: "):].rstrip("\n"))
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(payload, dict) and "token" in payload:
+                    parts.append(payload["token"])
+        answer = "".join(parts).strip() or _chat._NO_ANSWER_FALLBACK
         return ProducerResult(
-            answer="I don't have strong material on that topic in my current library.",
-            outcome="no_material",
+            answer=answer, outcome="position_paper", citations=[], verified_references=[],
+            model="position_paper",
+            # generate_position_paper_answer does not expose token usage, so record
+            # the measured house-voice median (~$0.015) rather than $0 -- keeps the
+            # spend ceiling from being blind to position-paper generations.
+            cost_usd=0.015,
+            updated_topics=dict(topics_established),
         )
 
-    context = _build_context(chunks, citable_count)
+    # Background-topic injection (chat.py Step 0.5).
+    topic_context_parts, injected_doc_ids, updated_topics = _inject_background_topics(
+        supabase, question, messages, topics_established)
+
+    chunks, citations, citable_count = _retrieve(supabase, question, injected_doc_ids)
+
+    # truly_empty short-circuit (chat.py generate() L1008): nothing to answer from.
+    if not chunks and not topic_context_parts:
+        return ProducerResult(
+            answer="I don't have strong material on that topic in my current library.",
+            outcome="no_material", updated_topics=updated_topics,
+        )
+
+    context = _build_context(chunks, citable_count, topic_context_parts)
     history = _build_history(messages, context, question)
 
     grounding = build_retrieval_grounding(chunks, supabase)
@@ -451,4 +567,5 @@ def produce(supabase, question: str, messages: Optional[List[Dict[str, Any]]] = 
         cache_read_tokens=total_usage["cache_read_tokens"],
         cache_write_tokens=total_usage["cache_write_tokens"],
         cost_usd=cost,
+        updated_topics=updated_topics,
     )

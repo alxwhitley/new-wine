@@ -37,23 +37,46 @@ def _normalize_question(question: str) -> str:
     return _WS.sub(" ", (question or "").strip()).lower()
 
 
+def _history_signature(messages):
+    # type: (Optional[List[Dict[str, Any]]]) -> List[Dict[str, str]]
+    """The last-6 user/assistant turns -- the exact slice the producer feeds the
+    model as history. The answer depends on it, so the reuse/single-flight key
+    MUST include it (otherwise identical questions in DIFFERENT conversations
+    would wrongly collapse to one shared answer). Mirrors chat.py's messages[-6:]."""
+    if not messages:
+        return []
+    recent = messages[-6:] if len(messages) > 6 else messages
+    out = []  # type: List[Dict[str, str]]
+    for m in recent:
+        role = m.get("role") if isinstance(m, dict) else getattr(m, "role", None)
+        content = m.get("content") if isinstance(m, dict) else getattr(m, "content", None)
+        if role in ("user", "assistant"):
+            out.append({"role": role, "content": content or ""})
+    return out
+
+
 def compute_dedup_key(
     question: str,
     filters: Optional[Dict[str, Any]],
     evidence_version: str,
     prompt_version: str,
     policy_version: str,
+    messages: Optional[List[Dict[str, Any]]] = None,
+    topics_established: Optional[Dict[str, int]] = None,
 ) -> str:
-    """Deterministic content key = sha256 over the exact reuse dimensions.
-    filters are canonicalized (sorted keys) so key ordering never splits the
-    key. Any change to evidence/prompt/policy version invalidates reuse -- which
-    is exactly the intended cache-busting behaviour."""
+    """Deterministic content key = sha256 over EVERYTHING that determines the
+    answer: normalized question, retrieval filters, evidence/prompt/policy
+    version, the last-6 conversation turns, and the established background-topic
+    state. Canonicalized (sorted keys). Any change to any dimension invalidates
+    reuse and prevents wrong single-flight collapse across conversations."""
     payload = {
         "q": _normalize_question(question),
         "filters": filters or {},
         "evidence_version": evidence_version,
         "prompt_version": prompt_version,
         "policy_version": policy_version,
+        "history": _history_signature(messages),
+        "topics": topics_established or {},
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
@@ -119,6 +142,7 @@ def enqueue(
     policy_version: str,
     filters: Optional[Dict[str, Any]] = None,
     messages: Optional[List[Dict[str, Any]]] = None,
+    topics_established: Optional[Dict[str, int]] = None,
     idempotency_key: Optional[str] = None,
     cfg: Optional[AsyncAnswerConfig] = None,
 ) -> Dict[str, Any]:
@@ -128,7 +152,11 @@ def enqueue(
     same concurrent content (single-flight)."""
     filters = filters or {}
     messages = messages or []
-    dedup_key = compute_dedup_key(question, filters, evidence_version, prompt_version, policy_version)
+    topics_established = topics_established or {}
+    dedup_key = compute_dedup_key(
+        question, filters, evidence_version, prompt_version, policy_version,
+        messages=messages, topics_established=topics_established,
+    )
 
     # Backpressure: refuse new work past the configured depth.
     if cfg is not None and cfg.max_queue_depth is not None:
@@ -145,11 +173,11 @@ def enqueue(
         with dict_cursor(conn) as cur:
             cur.execute(
                 "INSERT INTO answer_jobs (idempotency_key, dedup_key, question, filters, "
-                "messages, evidence_version, prompt_version, policy_version) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+                "messages, topics_established, evidence_version, prompt_version, policy_version) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
                 (
                     idempotency_key, dedup_key, question, Json(filters), Json(messages),
-                    evidence_version, prompt_version, policy_version,
+                    Json(topics_established), evidence_version, prompt_version, policy_version,
                 ),
             )
             return cur.fetchone()
@@ -236,8 +264,13 @@ def complete(
     cache_read_tokens: Optional[int],
     cache_write_tokens: Optional[int],
     cost_usd: Optional[float],
+    updated_topics: Optional[Dict[str, int]] = None,
 ) -> None:
-    """Persist a verified answer + Phase-4 instrumentation and mark the job done."""
+    """Persist a verified answer + Phase-4 instrumentation and mark the job done.
+    `updated_topics` is stored in result_meta for the client (parity with chat.py's
+    meta['topics_established'])."""
+    result_meta = {"updated_topics": updated_topics or {}}
+
     def _done(conn):
         with dict_cursor(conn) as cur:
             cur.execute(
@@ -245,13 +278,13 @@ def complete(
                 "citations = %s, verified_references = %s, retrieved_chunk_ids = %s, "
                 "retrieved_point_ids = %s, model = %s, input_tokens = %s, output_tokens = %s, "
                 "cache_read_tokens = %s, cache_write_tokens = %s, cost_usd = %s, "
-                "finished_at = now(), lease_expires_at = NULL, updated_at = now() "
+                "result_meta = %s, finished_at = now(), lease_expires_at = NULL, updated_at = now() "
                 "WHERE id = %s",
                 (
                     answer, outcome, Json(citations), Json(verified_references),
                     Json(retrieved_chunk_ids), Json(retrieved_point_ids), model,
                     input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-                    cost_usd, job_id,
+                    cost_usd, Json(result_meta), job_id,
                 ),
             )
     db.run(_done)

@@ -53,6 +53,7 @@ router = APIRouter()
 class AsyncChatRequest(BaseModel):
     question: str
     messages: List[Dict[str, Any]] = []
+    topics_established: Dict[str, int] = {}
     idempotency_key: Optional[str] = None
 
     @field_validator("question")
@@ -78,6 +79,23 @@ def _public_job(job: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+@router.get("/mode")
+async def mode():
+    """The seconds-reversible TRAFFIC switch (async_answer_config.serving_enabled,
+    default OFF). The frontend calls the async path only when this returns
+    async_enabled=true. When these routes aren't mounted (env off), the fetch
+    404s and the frontend stays on the live path. Reversible with one UPDATE."""
+    def _read():
+        db = Db()
+        try:
+            return load_config(db).serving_enabled
+        finally:
+            db.close()
+
+    enabled = await run_in_threadpool(_read)
+    return {"async_enabled": bool(enabled)}
+
+
 @router.post("/submit")
 async def submit(req: AsyncChatRequest):
     """Enqueue a question. Idempotent by idempotency_key; single-flight + reuse
@@ -96,6 +114,7 @@ async def submit(req: AsyncChatRequest):
                 policy_version=policy["policy_version"],
                 filters=policy["filters"],
                 messages=req.messages,
+                topics_established=req.topics_established,
                 idempotency_key=req.idempotency_key,
                 cfg=cfg,
             )
@@ -144,12 +163,15 @@ async def result(job_id: str, poll_interval: float = 1.0, timeout: float = 300.0
                 return
 
         if job["status"] == "done":
-            # Deliver the whole verified answer at once; the client paces.
+            # Deliver the whole verified answer at once; the CLIENT paces the reveal.
+            rmeta = job.get("result_meta") or {}
             yield _sse(json.dumps({"answer": job.get("answer") or ""}))
             yield _sse(json.dumps({
                 "citations": job.get("citations") or [],
                 "verified_references": job.get("verified_references") or [],
                 "outcome": job.get("outcome"),
+                "evidence_version": job.get("evidence_version"),
+                "topics_established": rmeta.get("updated_topics") or {},
                 "job_id": job_id,
             }))
             yield _sse("[DONE]")

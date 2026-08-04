@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { streamChatMessage, fetchWeeklyUsage, Citation } from "@/lib/api";
+import { streamChatMessage, streamAsyncChatMessage, getChatMode, fetchWeeklyUsage, Citation } from "@/lib/api";
 import type { VerifiedReference } from "@/lib/study-reference";
 
 export interface Message {
@@ -67,7 +67,11 @@ export function useChat(
       let newConversationId: string | null = null;
 
       try {
-        await streamChatMessage(
+        // Stage 2 cutover: route to the async path ONLY when the server switch is
+        // on (getChatMode fails safe to false -> live path). Mode OFF is identical
+        // to the pre-Stage-2 behaviour.
+        const streamFn = (await getChatMode()) ? streamAsyncChatMessage : streamChatMessage;
+        await streamFn(
           question,
           {
             onToken: (token) => {

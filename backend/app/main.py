@@ -37,6 +37,17 @@ app.include_router(pastors_notes.router, prefix="/pastors-notes", tags=["pastors
 app.include_router(usage.router, prefix="/usage", tags=["usage"])
 app.include_router(account.router, prefix="/account", tags=["account"])
 
+# Stage 2 cutover -- async answer path routes, gated on ASYNC_ANSWER_ENABLED
+# (default "false"). When OFF (the default) these routes are NOT mounted, so the
+# app's route table is byte-identical to before this change and the live /chat
+# path is entirely unaffected. Enabling the env (a deploy) makes the routes exist;
+# the actual seconds-reversible TRAFFIC switch is async_answer_config.serving_enabled,
+# which the frontend consults via GET /async-chat/mode. Both default OFF.
+if os.environ.get("ASYNC_ANSWER_ENABLED", "false").lower() == "true":
+    from app.routers import async_chat
+    app.include_router(async_chat.router, prefix="/async-chat", tags=["async-chat"])
+    logging.getLogger(__name__).info("Async answer routes MOUNTED (ASYNC_ANSWER_ENABLED=true)")
+
 @app.get("/")
 async def root():
     return {"message": "Rhemata API"}

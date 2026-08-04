@@ -381,7 +381,8 @@ def demo_g_real(db, n):
         res = produce(supabase, q, [])
         dt = time.time() - t0
         total_cost += (res.cost_usd or 0.0)
-        ok = bool(res.answer) and res.outcome in ("answered", "refused_attribution", "no_material")
+        ok = bool(res.answer) and res.outcome in (
+            "answered", "refused_attribution", "no_material", "position_paper")
         all_ok = all_ok and ok
         print("  Q%d %r -> outcome=%s  %.1fs  $%.4f  in=%d out=%d  cites=%d  verified_refs=%d"
               % (i + 1, q, res.outcome, dt, res.cost_usd, res.input_tokens, res.output_tokens,

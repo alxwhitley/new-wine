@@ -170,6 +170,127 @@ export async function streamChatMessage(
   }
 }
 
+// ── Async answer path (Stage 2 cutover) ──────────────────────────────────────
+// The async path is gated behind a seconds-reversible server switch. useChat calls
+// getChatMode() and routes to streamAsyncChatMessage ONLY when it returns true;
+// otherwise it uses the live streamChatMessage above, byte-for-byte as before.
+
+type ChatMode = { v: boolean; ts: number };
+let _chatModeCache: ChatMode | null = null;
+const CHAT_MODE_TTL_MS = 30_000;
+
+/** Returns true iff the async answer path is enabled server-side. Fails safe to
+ *  false (live path) on 404 (routes not mounted) or any network error. Cached 30s. */
+export async function getChatMode(): Promise<boolean> {
+  const now = Date.now();
+  if (_chatModeCache && now - _chatModeCache.ts < CHAT_MODE_TTL_MS) return _chatModeCache.v;
+  try {
+    const res = await fetch(`${API_URL}/async-chat/mode`);
+    if (!res.ok) {
+      _chatModeCache = { v: false, ts: now };
+      return false;
+    }
+    const data = await res.json();
+    const v = data?.async_enabled === true;
+    _chatModeCache = { v, ts: now };
+    return v;
+  } catch {
+    _chatModeCache = { v: false, ts: now };
+    return false;
+  }
+}
+
+/** Client-side reading-pace reveal (~250 chars/sec), matching the server's old
+ *  PLAYBACK_CHARS_PER_SEC. Fires only after the fully-checked answer has arrived. */
+async function clientPaceReveal(answer: string, onToken: (t: string) => void): Promise<void> {
+  if (!answer) return;
+  const CHARS_PER_SEC = 250;
+  const parts = answer.match(/\S+\s*/g) ?? [answer];
+  for (const part of parts) {
+    onToken(part);
+    await new Promise((r) => setTimeout(r, (part.length / CHARS_PER_SEC) * 1000));
+  }
+}
+
+/** Same signature as streamChatMessage. Submits to the durable queue, then streams
+ *  the (already server-verified) whole answer and reveals it at reading pace on the
+ *  CLIENT. No client connection ever holds a generation worker open; reconnecting is
+ *  just re-GETting the durable job. */
+export async function streamAsyncChatMessage(
+  question: string,
+  callbacks: StreamCallbacks,
+  options?: {
+    token?: string | null;
+    conversationId?: string | null; // accepted for signature parity; unused (async path has no server-side conversation yet)
+    messages?: ChatMessagePayload[];
+    anonId?: string | null;
+    topicsEstablished?: Record<string, number>;
+  },
+): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (options?.token) headers["Authorization"] = `Bearer ${options.token}`;
+
+  // 1. Submit (returns instantly with a durable job id).
+  const submitRes = await fetch(`${API_URL}/async-chat/submit`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      question,
+      messages: options?.messages ?? [],
+      topics_established: options?.topicsEstablished ?? {},
+    }),
+  });
+  if (submitRes.status === 503) throw new Error("queue_full");
+  if (!submitRes.ok) throw new Error("Chat request failed");
+  const submitData = await submitRes.json();
+  const jobId: string | undefined = submitData?.job_id;
+  if (!jobId) throw new Error("Chat request failed");
+
+  // 2. Stream the result. Reconnect = re-issue this GET for the same job_id.
+  const res = await fetch(`${API_URL}/async-chat/result/${jobId}`, { headers });
+  if (!res.body) throw new Error("No response body");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let revealed = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue; // ignore ": keepalive" comments
+      const payload = trimmed.slice(6);
+      if (payload === "[DONE]") return;
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed.error) {
+          callbacks.onError(parsed.error);
+          return;
+        }
+        if (parsed.answer !== undefined && !revealed) {
+          revealed = true;
+          await clientPaceReveal(parsed.answer, callbacks.onToken);
+        }
+        if (parsed.citations !== undefined) {
+          callbacks.onMeta({
+            citations: parsed.citations ?? [],
+            conversation_id: null,
+            verified_references: parsed.verified_references ?? undefined,
+            topics_established: parsed.topics_established ?? undefined,
+          });
+        }
+      } catch {
+        // Not JSON — skip
+      }
+    }
+  }
+}
+
 export async function searchDocuments(query: string, token?: string | null): Promise<SearchResponse> {
   const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
