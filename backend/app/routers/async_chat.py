@@ -94,20 +94,22 @@ def _client_ip(http_request: Request) -> Optional[str]:
     return http_request.client.host if http_request.client else None
 
 
+def _serving_enabled() -> bool:
+    """Read the traffic switch fresh for each control-plane request."""
+    db = Db()
+    try:
+        return bool(load_config(db).serving_enabled)
+    finally:
+        db.close()
+
+
 @router.get("/mode")
 async def mode():
     """The seconds-reversible TRAFFIC switch (async_answer_config.serving_enabled,
     default OFF). The frontend calls the async path only when this returns
     async_enabled=true. When these routes aren't mounted (env off), the fetch
     404s and the frontend stays on the live path. Reversible with one UPDATE."""
-    def _read():
-        db = Db()
-        try:
-            return load_config(db).serving_enabled
-        finally:
-            db.close()
-
-    enabled = await run_in_threadpool(_read)
+    enabled = await run_in_threadpool(_serving_enabled)
     return {"async_enabled": bool(enabled)}
 
 
@@ -120,10 +122,17 @@ async def submit(
     """Enqueue a question. Idempotent by idempotency_key; single-flight + reuse
     by content. Returns instantly with a job_id to poll/stream.
 
-    Metering runs FIRST, fail-closed, keyed on the CALLER (user_id / anon_id),
-    BEFORE enqueue's single-flight/reuse collapse -- so every submission is counted
-    independently even when several submissions share one generation (parity with
-    chat.py, which meters every /chat request)."""
+    The serving switch runs first. Once enabled, metering is fail-closed and keyed
+    on the CALLER (user_id / anon_id), BEFORE enqueue's single-flight/reuse collapse
+    -- so every accepted submission is counted independently even when several
+    submissions share one generation (parity with chat.py)."""
+    # Enforce the traffic switch at the trusted boundary. A browser may retain a
+    # stale mode=true cache briefly after rollback; direct callers can bypass
+    # /mode entirely. Refuse before metering so a disabled-path probe neither
+    # consumes quota nor creates work.
+    if not await run_in_threadpool(_serving_enabled):
+        raise HTTPException(status_code=503, detail="async_serving_disabled")
+
     supabase = get_supabase()
     client_ip = _client_ip(http_request)
 

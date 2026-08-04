@@ -250,7 +250,18 @@ export async function streamAsyncChatMessage(
         throw new Error("weekly_limit_reached:" + JSON.stringify(data.detail));
       }
     }
-    if (submitRes.status === 503) throw new Error("queue_full");
+    if (submitRes.status === 503) {
+      const data = await submitRes.json().catch(() => ({}));
+      if (data.detail === "async_serving_disabled") {
+        // The DB switch may have been turned off after getChatMode() cached true.
+        // Pin the cache off and retry this untouched request through the live path;
+        // submit is gated before metering/enqueue, so this cannot double-charge or
+        // create two generations.
+        _chatModeCache = { v: false, ts: Date.now() };
+        return streamChatMessage(question, callbacks, options);
+      }
+      throw new Error("queue_full");
+    }
     throw new Error("Chat request failed");
   }
   const submitData = await submitRes.json();

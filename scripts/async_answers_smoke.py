@@ -76,6 +76,15 @@ _CONFIG_COLS = {
 }
 
 
+def snapshot_config(db):
+    cfg = load_config(db)
+    return {name: getattr(cfg, name) for name in _CONFIG_COLS}
+
+
+def restore_config(db, values):
+    set_config(db, **values)
+
+
 def set_config(db, **kw):
     bad = set(kw) - _CONFIG_COLS
     if bad:
@@ -331,19 +340,25 @@ def demo_f_concurrency(db, slots):
     print("\nDEMO F -- measured concurrency reached (capacity dial = slots x workers)")
     cleanup(db)
     reset_config(db)
+    set_config(db, paused=True)
     # Wide fake latency so many jobs overlap and the peak is samplable.
     os.environ["ASYNC_FAKE_LATENCY"] = "3.0"
-    n_jobs = slots + max(10, slots // 2)
-    for i in range(n_jobs):
-        enqueue_fake(db, "SMOKE F concurrency job %03d" % i, cfg=load_config(db))
-    check("enqueued %d distinct jobs" % n_jobs, jobs.queue_depth(db) >= n_jobs, "depth=%d" % jobs.queue_depth(db))
-
     worker = answer_worker.Worker(
         concurrency=slots, poll_interval=0.05, once=False,
         produce_fn=answer_worker._fake_produce, worker_prefix="smoke-conc-" + uuid.uuid4().hex[:6],
     )
     wt = threading.Thread(target=worker.run, daemon=True)
     wt.start()
+
+    # Railway workers are long-lived. Warm every slot's transaction-pooler
+    # client before measuring generation concurrency; otherwise this diagnostic
+    # mostly measures 100 simultaneous TLS handshakes from the laptop.
+    time.sleep(5.0)
+    n_jobs = slots + max(10, slots // 2)
+    for i in range(n_jobs):
+        enqueue_fake(db, "SMOKE F concurrency job %03d" % i, cfg=load_config(db))
+    check("enqueued %d distinct jobs" % n_jobs, jobs.queue_depth(db) >= n_jobs, "depth=%d" % jobs.queue_depth(db))
+    set_config(db, paused=False)
 
     peak = 0
     sampler = Db()
@@ -373,6 +388,8 @@ def demo_g_real(db, n):
         "What is deliverance?",
         "What does the Bible teach about fasting?",
         "How does spiritual warfare work?",
+        "How should Christians respond to anxiety?",
+        "What does biblical forgiveness require?",
     ][:n]
     total_cost = 0.0
     all_ok = True
@@ -425,6 +442,7 @@ def main():
     db = Db()
     real_cost = 0.0
     peak = None
+    original_config = snapshot_config(db)
     try:
         reset_config(db)
         cleanup(db)
@@ -436,9 +454,9 @@ def main():
         demo_rate_limit(db)
         peak = demo_f_concurrency(db, args.conc_demo)
         if args.real > 0:
-            real_cost = demo_g_real(db, min(args.real, 3))
+            real_cost = demo_g_real(db, min(args.real, 5))
     finally:
-        reset_config(db)
+        restore_config(db, original_config)
         removed = cleanup(db)
         db.close()
 

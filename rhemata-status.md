@@ -6,7 +6,7 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-04.
+Last verified: 2026-08-04 (production-readiness recheck).
 
 Trimmed 2026-08-01 back to live-state-only per the Project Knowledge Read
 Contract (the file had grown to ~2,700 lines of accumulated session
@@ -50,6 +50,19 @@ copy-fix stack is on `origin/main` (verified): `0ab9c60` (Phase-0 §7a token fix
 `ee3cff4` (Phase-2 retrieval-grounded teacher-name guard), `9e5fe94`
 (buffer-then-verify-then-playback + prose-attribution scan), `05aa519` (proposition
 JSON-repair), `b1eccf9` (copy/gate fix).
+
+**Project 1 final readiness check (2026-08-04; local changes not yet pushed/deployed).**
+The transaction pooler route (6543) connected successfully. A corrected warmed-client
+capacity run measured 20/20 simultaneous generations; five replicas at 20 slots reach
+the 100-slot dial without architecture changes. Anthropic's actual account headers are
+10,000 RPM / 10M ITPM / 2M OTPM; live async dials are set to 80% headroom (8,000 / 8M /
+1.6M) plus a $10 rolling-24-hour ceiling. `serving_enabled` remains false. Five real
+questions plus one queue/worker end-to-end generation passed the real verification path;
+test rows were cleaned. Submit now fails closed before metering/enqueue when serving is
+off, and stale frontend mode caches immediately retry via `/chat`. **Not deployed:** the
+Railway CLI is unauthenticated here, so no worker service was created/configured, the
+worker's DB URL was not changed in Railway, routes were not enabled, and no public traffic
+window occurred.
 
 **Attribution audit — HistoricalChristianFaith + C.S. Lewis (2026-08-04,
 read-only, SELECT-only; ZERO writes; this records commit + a docs/audit).** Full
@@ -352,9 +365,13 @@ harness session — remains open. Proofs:
 
 ## Next
 
-Reprioritized 2026-08-01 by the adopted build plan (PLAN.md active phase
-sequence). Phase 0/1 lead; the position-layer cutover is now a post-launch
-milestone, not the immediate next slice.
+The current build sequence supersedes the older Phase-1 ordering below. Immediate next:
+authenticate Railway; create the worker service from the existing image with conservative
+20-slot concurrency and the transaction-pooler DB URL; set `ASYNC_ANSWER_ENABLED=true`
+while `serving_enabled=false`; run dark health checks; then perform the controlled public
+window and switch `serving_enabled=false` immediately afterward. Project 2 starts only
+after that cutover is stable. The retained numbered list below is backlog context, not the
+active first action.
 
 1. **Phase 0 — measurement (read-only) — DONE 2026-08-01.**
    `docs/audits/phase0_measurement_2026-08-01.md`. Key results: corrected
