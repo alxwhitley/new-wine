@@ -517,7 +517,10 @@ different row, per the hard rule above.
   anything until a deliberate cutover mounts `async_chat` and moves traffic. Reuse is
   keyed on a placeholder `evidence_version` until a real corpus-version signal exists;
   the worker's `SUPABASE_DB_URL` (session pooler, 15-client cap) must move to the
-  transaction pooler / a sized route for the 100-concurrent dial.
+  transaction pooler / a sized route for the 100-concurrent dial. Also:
+  `backend/requirements.txt` has NO `psycopg2` (the live backend never imports the
+  async modules, so it deploys fine today) — the worker + `async_chat` router will
+  fail to import on Railway until `psycopg2-binary` is added there at cutover.
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
