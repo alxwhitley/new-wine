@@ -1,0 +1,454 @@
+"""Produce the SAME verified answer the live /chat path produces -- off-request.
+
+This is the accuracy-critical seam. The launch guarantee (commit 9e5fe94) is
+that nothing unverified ever reaches the reader and that a retry re-runs the
+check. The producer preserves that by REUSING the live primitives:
+
+  - retrieval leaf helpers imported from app.routers.chat (expand_query,
+    hybrid_search_rrf, Cohere rerank, neighbor expansion, lexicon, _is_citable, ...)
+  - the answer extraction imported from chat._extract_answer_from_raw
+  - the accuracy check imported from reference_verifier (build_retrieval_grounding,
+    ungrounded_prose_teachers, verify_references) + chat._ungrounded_reference_teachers
+
+Only two things are DUPLICATED here rather than imported, because chat.py stays
+byte-identical this inert session and neither is exposed as a reusable symbol:
+  1. the retrieval ORCHESTRATION sequence (mirrors chat.chat() ~L754-993)
+  2. the generation constants + STRICT ATTRIBUTION CONSTRAINT string
+     (mirrors chat._stream_answer)
+Both are flagged DRIFT POINTs to unify at the cutover session. Everything
+accuracy-bearing (extraction, grounding, verification) is imported, not copied.
+
+Parity gaps deliberately NOT carried this session (documented, additive later):
+background-topic injection and position-paper (house-voice) interception. The
+producer handles the NORMAL cited-answer path.
+
+Python 3.9 (Invariant 1).
+"""
+from __future__ import annotations
+
+import hashlib
+import logging
+import re
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from app.services.source_filter import get_disabled_filters, is_chunk_disabled
+from app.services.llm_client import get_anthropic_client
+from .config import estimate_cost_usd
+
+logger = logging.getLogger(__name__)
+
+# ---- generation constants (DRIFT POINT: keep in sync with chat._stream_answer) ----
+GEN_MODEL = "claude-sonnet-4-5"
+GEN_MAX_TOKENS = 3000
+
+# ---- policy versioning for the reuse key -----------------------------------
+# prompt_version is a real fingerprint of the exact instruction wording the
+# writer sees (system_prompt.txt + guardrails). A wording change busts reuse.
+def _compute_prompt_version() -> str:
+    app_dir = Path(__file__).resolve().parent.parent.parent  # backend/app
+    try:
+        sys_txt = (app_dir / "system_prompt.txt").read_text()
+    except Exception:
+        sys_txt = ""
+    try:
+        from app.services.llm_client import get_guardrails_text
+        guard_txt = get_guardrails_text()
+    except Exception:
+        guard_txt = ""
+    h = hashlib.sha256((sys_txt + "\x00" + guard_txt).encode("utf-8")).hexdigest()
+    return "prompt_" + h[:12]
+
+
+PROMPT_VERSION = _compute_prompt_version()
+POLICY_VERSION = "policy_v1"  # bump when the accuracy-check orchestration changes
+# No corpus-version signal exists in the schema yet (documents have no version
+# counter). A real evidence_version (e.g. max(documents.updated_at) or a corpus
+# generation counter) is a follow-up decision for Alex -- flagged, not guessed.
+DEFAULT_EVIDENCE_VERSION = "corpus-unversioned"
+
+
+@dataclass
+class ProducerResult:
+    answer: str
+    outcome: str  # answered | refused_attribution | no_material | error
+    citations: List[Dict[str, Any]] = field(default_factory=list)
+    verified_references: List[Dict[str, Any]] = field(default_factory=list)
+    retrieved_chunk_ids: List[str] = field(default_factory=list)
+    retrieved_point_ids: List[str] = field(default_factory=list)
+    model: str = GEN_MODEL
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    cost_usd: float = 0.0
+
+
+def current_policy(supabase) -> Dict[str, Any]:
+    """The reuse-key inputs under the CURRENT effective policy. Submit paths call
+    this to build the enqueue key; the producer regenerates under current filters
+    at run time (documented cache-staleness tradeoff at zero users)."""
+    from app.routers import chat as _chat
+    filters = get_disabled_filters()
+    include_copyrighted = bool(filters["include_copyrighted"]) and _chat.INCLUDE_COPYRIGHTED_ENV
+    snapshot = {
+        "source_kinds": sorted(filters.get("source_kinds") or []),
+        "source_names": sorted(filters.get("source_names") or []),
+        "include_copyrighted": include_copyrighted,
+    }
+    return {
+        "filters": snapshot,
+        "evidence_version": DEFAULT_EVIDENCE_VERSION,
+        "prompt_version": PROMPT_VERSION,
+        "policy_version": POLICY_VERSION,
+    }
+
+
+# ---- retrieval (MIRROR of chat.chat() ~L754-993; DRIFT POINT) ---------------
+def _retrieve(db, question: str) -> Tuple[List[dict], List[dict], int]:
+    from app.routers import chat as _chat
+
+    filters = get_disabled_filters()
+    include_copyrighted = bool(filters["include_copyrighted"]) and _chat.INCLUDE_COPYRIGHTED_ENV
+
+    variants, keywords = _chat.expand_query(question)
+    variant_weights = [1.0, 0.7, 0.7]
+    FTS_WEIGHT = 1.0
+
+    all_scores = {}  # type: Dict[str, Tuple[float, dict]]
+
+    def _merge(scores, weight):
+        for cid, (score, chunk) in scores.items():
+            weighted = score * weight
+            if cid in all_scores:
+                all_scores[cid] = (all_scores[cid][0] + weighted, all_scores[cid][1])
+            else:
+                all_scores[cid] = (weighted, chunk)
+
+    first_embedding = None  # type: Optional[List[float]]
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        if keywords:
+            variant_futures = [
+                ex.submit(_chat.hybrid_search_rrf, variant, db,
+                          include_copyrighted=include_copyrighted, run_fts=False)
+                for variant in variants
+            ]
+            fts_future = ex.submit(_chat.hybrid_search_rrf, keywords, db,
+                                   include_copyrighted=include_copyrighted, run_vector=False)
+            for i, future in enumerate(variant_futures):
+                weight = variant_weights[i] if i < len(variant_weights) else 0.5
+                variant_scores, embedding = future.result()
+                if i == 0:
+                    first_embedding = embedding
+                _merge(variant_scores, weight)
+            fts_scores, _ = fts_future.result()
+            _merge(fts_scores, FTS_WEIGHT)
+        else:
+            futures = [
+                ex.submit(_chat.hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
+                for variant in variants
+            ]
+            for i, future in enumerate(futures):
+                weight = variant_weights[i] if i < len(variant_weights) else 0.5
+                variant_scores, embedding = future.result()
+                if i == 0:
+                    first_embedding = embedding
+                _merge(variant_scores, weight)
+
+    # Filter disabled source_kinds / source_names.
+    all_scores = {
+        cid: (score, chunk)
+        for cid, (score, chunk) in all_scores.items()
+        if not is_chunk_disabled(chunk, filters)
+    }
+
+    # boost_factor + source-kind fusion weights.
+    all_scores = {
+        cid: (
+            score
+            * (chunk.get("boost_factor") or 1.0)
+            * _chat.SOURCE_KIND_FUSION_WEIGHTS.get(
+                chunk.get("source_kind") or chunk.get("source_type") or "", 1.0
+            ),
+            chunk,
+        )
+        for cid, (score, chunk) in all_scores.items()
+    }
+
+    # Document-level collapse -- max 2 chunks per document.
+    ranked = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
+    doc_counts = {}  # type: Dict[str, int]
+    collapsed = []
+    for cid, (score, chunk) in ranked:
+        did = chunk.get("document_id", "")
+        doc_counts[did] = doc_counts.get(did, 0) + 1
+        if doc_counts[did] <= 2:
+            collapsed.append((cid, (score, chunk)))
+
+    # Per-author cap -- max 3 chunks per author.
+    author_counts = {}  # type: Dict[str, int]
+    author_capped = []
+    for cid, (score, chunk) in collapsed:
+        author = chunk.get("author") or "Unknown"
+        author_counts[author] = author_counts.get(author, 0) + 1
+        if author_counts[author] <= 3:
+            author_capped.append((cid, (score, chunk)))
+
+    top_chunks = author_capped[:30]
+    chunks = [chunk for _, (_, chunk) in top_chunks]
+
+    # Cohere rerank -- 30 -> 8.
+    co = _chat._get_cohere()
+    if co and len(chunks) > 0:
+        try:
+            docs = [c.get("content", "") for c in chunks]
+            rerank_result = co.rerank(model="rerank-v3.5", query=question, documents=docs, top_n=8)
+            chunks = [chunks[r.index] for r in rerank_result.results]
+        except Exception:
+            logger.exception("Cohere rerank failed (producer), using RRF top 8")
+            chunks = chunks[:8]
+
+    citable_count = sum(1 for c in chunks if _chat._is_citable(c))
+
+    # Neighbor expansion, cap 12.
+    seen_ids = {c["id"] for c in chunks}
+    neighbors = _chat.fetch_neighbor_chunks_batch(chunks, seen_ids, db)
+    expanded = list(chunks)
+    for n in neighbors:
+        if len(expanded) >= 12:
+            break
+        seen_ids.add(n["id"])
+        expanded.append(n)
+
+    # Cap commentary chunks.
+    commentary_seen = 0
+    capped_expanded = []
+    for c in expanded:
+        if (c.get("source_kind") or c.get("source_type") or "") == "commentary":
+            if commentary_seen >= _chat.COMMENTARY_CONTEXT_CAP:
+                continue
+            commentary_seen += 1
+        capped_expanded.append(c)
+    chunks = capped_expanded
+
+    # Conditional lexicon retrieval (word-study questions).
+    if _chat.is_word_study_query(question):
+        try:
+            from app.services.embeddings import embed_text
+            lex_embedding = first_embedding if first_embedding else embed_text(question)
+            lex_result = db.rpc("match_lexicon_chunks", {
+                "query_embedding": lex_embedding, "match_count": 5,
+            }).execute()
+            if lex_result.data:
+                for lc in lex_result.data:
+                    lc["_lexicon"] = True
+                chunks.extend(lex_result.data)
+        except Exception:
+            logger.exception("Lexicon retrieval failed (producer), continuing without")
+
+    citations = [
+        {
+            "chunk_id": c["id"],
+            "document_title": c.get("title"),
+            "author": c.get("author"),
+            "content": c["content"],
+            "url": c.get("url"),
+        }
+        for c in chunks
+        if _chat._is_citable(c)
+    ]
+    return chunks, citations, citable_count
+
+
+def _build_context(chunks: List[dict], citable_count: int) -> str:
+    from app.routers import chat as _chat
+    regular = [c for c in chunks if not c.get("_lexicon")]
+    lexicon = [c for c in chunks if c.get("_lexicon")]
+
+    context_parts = []
+    source_num = 0
+    for i, c in enumerate(regular):
+        if _chat._is_citable(c):
+            source_num += 1
+            label = "[Source %d]" % source_num
+        else:
+            label = "[Background]"
+        context_parts.append(
+            "%s (source_kind=%s, citation_mode=%s) \"%s\" by %s, chunk %s\n%s" % (
+                label,
+                c.get("source_kind") or c.get("source_type", "unknown"),
+                c.get("citation_mode", "citable"),
+                c.get("title", "Unknown"),
+                c.get("author", "Unknown"),
+                c.get("chunk_index", i),
+                c["content"],
+            )
+        )
+    context = "\n\n---\n\n".join(context_parts)
+
+    if citable_count < 2:
+        context += (
+            "\n\n[Retrieval note: citable sources on this topic are thin or absent. "
+            "The strongest available material is background-only. "
+            "Follow the graceful degradation rules in your instructions.]"
+        )
+
+    if lexicon:
+        lex_context = "\n\n---\n\n".join("[Lexicon] %s" % c["content"] for c in lexicon)
+        context += "\n\n--- LEXICON CONTEXT (silent_context -- do not cite by name) ---\n\n" + lex_context
+
+    return context
+
+
+def _build_history(messages: List[Dict[str, Any]], context: str, question: str) -> List[Dict[str, str]]:
+    history = []  # type: List[Dict[str, str]]
+    recent = messages[-6:] if len(messages) > 6 else messages
+    for msg in recent:
+        role = msg.get("role")
+        if role in ("user", "assistant"):
+            history.append({"role": role, "content": msg.get("content", "")})
+    history.append({
+        "role": "user",
+        "content": "Sources:\n%s\n\nQuestion: %s" % (context, question),
+    })
+    return history
+
+
+# ---- generation with usage capture (MIRROR of chat._stream_answer; DRIFT POINT) --
+def _generate_and_capture(history, permitted_names=None):
+    from app.routers import chat as _chat
+    system = _chat.ANSWER_SYSTEM_BLOCKS
+    if permitted_names is not None:
+        names = ", ".join(permitted_names) if permitted_names else "(no teachers were retrieved -- attribute to no one)"
+        constraint = (
+            "STRICT ATTRIBUTION CONSTRAINT (this answer only): you may attribute a claim BY NAME "
+            "ONLY to these teachers, whose material was actually retrieved for this question: "
+            + names + ". Do NOT name, cite, or attribute any point to any other teacher, author, "
+            "commentator, or ministry -- not even in passing. If a point cannot be attributed to a "
+            "permitted name, state it without attribution. This overrides any inclination to add "
+            "other voices for balance."
+        )
+        system = list(_chat.ANSWER_SYSTEM_BLOCKS) + [{"type": "text", "text": constraint}]
+
+    client = get_anthropic_client()
+    raw_full = []  # type: List[str]
+    stop_reason = None
+    usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
+
+    stream = client.messages.create(
+        model=GEN_MODEL, max_tokens=GEN_MAX_TOKENS, system=system, messages=history, stream=True,
+    )
+    for ev in stream:
+        if ev.type == "message_start":
+            u = getattr(getattr(ev, "message", None), "usage", None)
+            if u is not None:
+                usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
+                usage["cache_read_tokens"] = getattr(u, "cache_read_input_tokens", 0) or 0
+                usage["cache_write_tokens"] = getattr(u, "cache_creation_input_tokens", 0) or 0
+        elif ev.type == "content_block_delta" and hasattr(ev.delta, "text"):
+            raw_full.append(ev.delta.text)
+        elif ev.type == "message_delta":
+            d = getattr(ev, "delta", None)
+            sr = getattr(d, "stop_reason", None)
+            if sr:
+                stop_reason = sr
+            u = getattr(ev, "usage", None)
+            out = getattr(u, "output_tokens", None) if u is not None else None
+            if out is not None:
+                usage["output_tokens"] = out
+
+    raw_output = "".join(raw_full)
+    answer = _chat._extract_answer_from_raw(raw_output, stop_reason) or _chat._NO_ANSWER_FALLBACK
+    return answer, raw_output, stop_reason, usage
+
+
+def _add_usage(a: Dict[str, int], b: Dict[str, int]) -> Dict[str, int]:
+    return {k: int(a.get(k, 0)) + int(b.get(k, 0)) for k in
+            ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")}
+
+
+def produce(supabase, question: str, messages: Optional[List[Dict[str, Any]]] = None) -> ProducerResult:
+    """Retrieve -> buffered generation -> ungrounded-attribution resolution
+    (regenerate-once-then-refuse) -> verify_references. Returns a fully verified
+    result. Raises only on an unexpected fault the worker should retry."""
+    from app.routers import chat as _chat
+    from app.services.reference_verifier import (
+        verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
+    )
+    messages = messages or []
+
+    chunks, citations, citable_count = _retrieve(supabase, question)
+
+    if not chunks:
+        return ProducerResult(
+            answer="I don't have strong material on that topic in my current library.",
+            outcome="no_material",
+        )
+
+    context = _build_context(chunks, citable_count)
+    history = _build_history(messages, context, question)
+
+    grounding = build_retrieval_grounding(chunks, supabase)
+    permitted_names = sorted({
+        (c.get("author") or "").strip() for c in chunks
+        if _chat._is_citable(c) and (c.get("author") or "").strip()
+    })
+
+    answer, raw_output, _sr, usage = _generate_and_capture(history)
+    total_usage = dict(usage)
+
+    refused = False
+    try:
+        name_universe = build_name_universe(supabase)
+
+        def _has_ungrounded(ans, raw):
+            if _chat._ungrounded_reference_teachers(ans, raw, grounding, supabase):
+                return True
+            if ungrounded_prose_teachers(ans, name_universe, grounding, supabase):
+                return True
+            return False
+
+        if _has_ungrounded(answer, raw_output):
+            answer2, raw2, _sr2, usage2 = _generate_and_capture(history, permitted_names=permitted_names)
+            total_usage = _add_usage(total_usage, usage2)
+            if _has_ungrounded(answer2, raw2):
+                logger.warning("Producer regeneration still credits an ungrounded teacher -- clean refusal")
+                answer, raw_output, refused = _chat._ATTRIBUTION_REFUSAL, "", True
+            else:
+                answer, raw_output = answer2, raw2
+    except Exception:
+        logger.exception("Producer attribution-resolution failed -- refusing cleanly (fail closed)")
+        answer, raw_output, refused = _chat._ATTRIBUTION_REFUSAL, "", True
+
+    try:
+        verified_references = [] if refused else verify_references(answer, raw_output, supabase, grounding)
+    except Exception:
+        logger.exception("Producer SP1 reference verification failed -- continuing without pointers")
+        verified_references = []
+
+    cost = estimate_cost_usd(
+        total_usage["input_tokens"], total_usage["output_tokens"],
+        total_usage["cache_read_tokens"], total_usage["cache_write_tokens"],
+    )
+    # "Points" == retrieved chunks on the current answer path (propositions are
+    # the separate position layer, not the chat path). Record both the full
+    # retrieved set and the citable subset for Phase-4 traceability.
+    retrieved_chunk_ids = [c["id"] for c in chunks]
+    retrieved_point_ids = [c["id"] for c in chunks if _chat._is_citable(c)]
+
+    return ProducerResult(
+        answer=answer,
+        outcome="refused_attribution" if refused else "answered",
+        citations=[] if refused else citations,
+        verified_references=verified_references,
+        retrieved_chunk_ids=retrieved_chunk_ids,
+        retrieved_point_ids=retrieved_point_ids,
+        model=GEN_MODEL,
+        input_tokens=total_usage["input_tokens"],
+        output_tokens=total_usage["output_tokens"],
+        cache_read_tokens=total_usage["cache_read_tokens"],
+        cache_write_tokens=total_usage["cache_write_tokens"],
+        cost_usd=cost,
+    )
