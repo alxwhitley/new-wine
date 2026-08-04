@@ -26,12 +26,14 @@ git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
 CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
 named below. Retrieve detail there.
 
-**Deployment.** `origin/main` = `332dd7b` (last pushed 2026-08-04). Local `main` is
-AHEAD by 2 UNPUSHED commits — `196f1f2` (pre-flip blockers 1–3: metering + persistence +
-psycopg2, 2026-08-04) + this records commit — deliberately NOT pushed (awaiting Alex's
-go-ahead), so nothing deployed has changed (Railway/Vercel deploy from `origin/main`).
-Stage 2 (`dd71b87` build + `29852f7` records) is DEPLOYED but
-the async path is DARK behind two OFF switches: `main.py`'s conditional mount is a no-op
+**Deployment.** `origin/main` = local `main`, in sync (pre-flip blockers 1–3 build
+`196f1f2` + records `0e62dd3` PUSHED 2026-08-04; this deployment-line update pushed on
+top). The push deploys the code but the async path stays DARK (routes still unmounted,
+both switches OFF), and `chat.py`/`main.py` are byte-identical to pre-blocker Stage 2 —
+so the live serving path is unchanged; the only deployed delta is `psycopg2-binary` in
+`requirements.txt` (installed by Railway, unused by the live path) + the gated async
+client edits (dead until cutover). Stage 2 (`dd71b87` build + `29852f7` records) is
+DEPLOYED but the async path is DARK behind two OFF switches: `main.py`'s conditional mount is a no-op
 (env `ASYNC_ANSWER_ENABLED` unset -> async routes NOT mounted), the DB TRAFFIC switch
 `async_answer_config.serving_enabled` is false, and the frontend uses the live path
 whenever `getChatMode()` is false (routes unmounted -> 404 -> false). The only live delta
