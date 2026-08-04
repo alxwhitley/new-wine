@@ -26,7 +26,11 @@ git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
 CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
 named below. Retrieve detail there.
 
-**Deployment.** `origin/main` = local `main` = `e466b80`, clean, nothing unpushed.
+**Deployment.** `origin/main` = `e466b80`. Local `main` is AHEAD by 3 UNPUSHED,
+INERT commits: `e00e40d` (prior records), `82413c9` (Project 1 Stage 1 async build),
+and this records commit. NOT pushed -- deploy is Alex's call; it is safe (main.py is
+unchanged, so the deployed backend stays byte-identical; migration 078 is already
+applied additively).
 Railway (backend) + Vercel (frontend) auto-deploy from `main`; Railway build health
 is not confirmed from the repo (CLI unauthenticated). The 2026-08-01 -> 03 accuracy +
 copy-fix stack is on `origin/main` (verified): `0ab9c60` (Phase-0 §7a token fix),
@@ -76,6 +80,43 @@ serve-by-ID). The corpus-position ban was LIFTED 2026-08-01 and STANDS (not
 re-imposed; durable work simply deferred). Full detail: PLAN.md "CURRENT BUILD
 SEQUENCE (2026-08-03)" + CLAUDE.md 2026-08-03 settled decisions.
 
+**Project 1, Stage 1 — durable async answer path BUILT 2026-08-04 (INERT / additive;
+NOT cut over).** The scalable asynchronous execution path now exists ALONGSIDE the
+live `/chat` path, which is byte-identical and remains the serving path. Nothing is
+wired into routing (`async_chat` router NOT mounted in main.py). Build `82413c9`;
+migration 078 applied (answer_jobs queue + Phase-4 per-answer instrumentation,
+async_answer_config dials, provider_rate_usage). One app / one Postgres-backed queue
+(a table in the existing Supabase DB, claimed via `FOR UPDATE SKIP LOCKED`) / one DB /
+one scalable worker (`scripts/answer_worker.py`). Implemented: durable jobs that
+survive restart, idempotency keys, single-flight (STRUCTURAL — active-dedup partial-
+unique index), exact-match reuse, reconnectable delivery, backpressure, provider rate
+ceilings (RPM/ITPM/OTPM), spend ceiling, retries-re-run-the-accuracy-check. The
+producer REUSES chat.py retrieval + reference_verifier's real accuracy check
+(regenerate-once-then-refuse preserved). PROOF (`scripts/async_answers_smoke.py`):
+23/23 — completes; killed worker loses nothing (lease reclaim + finish); 2 identical
+concurrent → 1 generation; reconnect; spend halt+resume; peak 12/12 concurrent (1
+worker × 12 slots); real accuracy path end-to-end ($0.32 real spend, 3 topical Qs
+answered, 7–10 citations + verified refs each). Phase 1 diagnostic confirmed the ~40
+ceiling is AnyIO's default 40-thread pool held for the request's whole ~68s (blocking
+generation + `time.sleep` playback inside a sync streaming generator).
+
+**Stage-1 follow-ups — flagged, NOT resolved (all deliberate, left for Alex):**
+(a) **DB connection route** — the current `SUPABASE_DB_URL` is the SESSION-mode pooler,
+hard-capped at 15 client connections (`pool_size: 15`), so one worker process tops out
+~14 slots. Reaching the 100-concurrent DIAL needs the worker fleet on the transaction
+pooler (port 6543) or a directly-sized route — a Supabase config/commercial decision,
+same class as the unchecked provider RPM/ITPM ceilings, NOT a rebuild. (b) **evidence_
+version** — no corpus-version signal exists in the schema; the reuse key uses a
+placeholder (`corpus-unversioned`). A real signal (e.g. `max(documents.updated_at)` or a
+corpus generation counter) is needed before reuse is trusted in prod. (c) **producer ↔
+chat.py retrieval DRIFT** — `producer.py` mirrors chat.py's retrieval orchestration +
+generation constants (chat.py stays byte-identical this inert session); a retrieval or
+prompt-assembly change in chat.py must ALSO be applied to producer.py until they are
+unified at cutover (extraction/grounding/verification are imported, so those stay in
+sync). (d) **Cutover (Stage 2+ / PLAN):** mount `async_chat`, move the reveal to the
+client, and fold in the two parity gaps the producer omits this session — background-
+topic injection and position-paper (house-voice) interception.
+
 **Answer path — current behavior.** Normal answers buffer fully, run the Phase-2
 retrieval-grounding guard + prose-attribution scan + `verify_references`
 server-side, resolve any ungrounded credit (regenerate-once-then-clean-refuse),
@@ -122,8 +163,10 @@ Open items only; #1, #2, #3, #5 are resolved (git history — commits `5bdf720`,
 - **Concurrency ceiling ≈ 40 simultaneous chats.** The playback pacing +
   heartbeat `time.sleep` holds one anyio threadpool worker per active request for
   the request's whole duration; at ~40 concurrent chats the shared pool (cap 40)
-  starves other work. Harmless at zero-user scale; MUST be fixed (e.g. async
-  pacing) before real traffic.
+  starves other work. Harmless at zero-user scale; MUST be fixed before real
+  traffic. **Replacement BUILT (INERT) 2026-08-04 — Project 1 Stage 1 durable async
+  path; see "Project 1, Stage 1" in Current state. NOT cut over yet; the live path
+  still serves.**
 
 **4. `ingest_helloao.py` unconverted.** Own Supabase REST `.insert()` path, not
 routed through `shared_ingest`. Live API, resume-safe; blocks the 8 further

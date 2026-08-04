@@ -500,6 +500,25 @@ different row, per the hard rule above.
   scale work "until there are users" repeats exactly that reasoning (Project 1's
   100-concurrent dial exists to end it).
 
+- **Project 1 Stage 1 async answer path is BUILT but INERT (2026-08-04, build
+  `82413c9`).** `backend/app/services/async_answers/` + `scripts/answer_worker.py`
+  + the UNMOUNTED `backend/app/routers/async_chat.py` run a durable Postgres-backed
+  answer queue (migration 078: `answer_jobs`/`async_answer_config`/
+  `provider_rate_usage`) ALONGSIDE the live `/chat`, which is untouched. Two things
+  to know before editing either side: (1) `async_answers/producer.py` MIRRORS
+  `chat.py`'s retrieval orchestration + generation constants (`GEN_MODEL`/
+  `GEN_MAX_TOKENS` + the STRICT ATTRIBUTION CONSTRAINT string) — a retrieval or
+  prompt-assembly change in `chat.py` that is NOT also applied to `producer.py`
+  silently makes the async path answer DIFFERENTLY from the live path (the
+  accuracy-critical extraction, grounding, and `verify_references` are IMPORTED, not
+  copied, so those stay in sync). (2) The producer deliberately OMITS background-topic
+  injection and position-paper (house-voice) interception this session — fold both in
+  at cutover. Nothing is wired into routing; do NOT assume the async path serves
+  anything until a deliberate cutover mounts `async_chat` and moves traffic. Reuse is
+  keyed on a placeholder `evidence_version` until a real corpus-version signal exists;
+  the worker's `SUPABASE_DB_URL` (session pooler, 15-client cap) must move to the
+  transaction pooler / a sized route for the 100-concurrent dial.
+
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
 - **Never run a proposition-extraction pass against "all documents with zero
