@@ -36,15 +36,17 @@ import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from starlette.concurrency import run_in_threadpool
 
+from app.auth import get_optional_user
 from app.db.supabase import get_supabase
-from app.services.async_answers import jobs
+from app.services.async_answers import conversation_store, jobs
 from app.services.async_answers.config import load_config
 from app.services.async_answers.db import Db
+from app.services.async_answers.metering import enforce_query_limit
 from app.services.async_answers.producer import current_policy
 
 router = APIRouter()
@@ -55,6 +57,9 @@ class AsyncChatRequest(BaseModel):
     messages: List[Dict[str, Any]] = []
     topics_established: Dict[str, int] = {}
     idempotency_key: Optional[str] = None
+    # anon_id: guest metering key (mirrors chat.py's ChatRequest.anon_id). Required
+    # for guests, ignored for authenticated callers.
+    anon_id: Optional[str] = None
 
     @field_validator("question")
     @classmethod
@@ -79,6 +84,16 @@ def _public_job(job: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _client_ip(http_request: Request) -> Optional[str]:
+    """Real client IP behind Railway's edge proxy -- read X-Forwarded-For's
+    leftmost entry, exactly as chat.py's _get_client_ip does (uvicorn isn't run
+    with --proxy-headers, so request.client.host is the internal proxy)."""
+    xff = http_request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return http_request.client.host if http_request.client else None
+
+
 @router.get("/mode")
 async def mode():
     """The seconds-reversible TRAFFIC switch (async_answer_config.serving_enabled,
@@ -97,13 +112,29 @@ async def mode():
 
 
 @router.post("/submit")
-async def submit(req: AsyncChatRequest):
+async def submit(
+    req: AsyncChatRequest,
+    http_request: Request,
+    user_id: Optional[str] = Depends(get_optional_user),
+):
     """Enqueue a question. Idempotent by idempotency_key; single-flight + reuse
-    by content. Returns instantly with a job_id to poll/stream."""
+    by content. Returns instantly with a job_id to poll/stream.
+
+    Metering runs FIRST, fail-closed, keyed on the CALLER (user_id / anon_id),
+    BEFORE enqueue's single-flight/reuse collapse -- so every submission is counted
+    independently even when several submissions share one generation (parity with
+    chat.py, which meters every /chat request)."""
+    supabase = get_supabase()
+    client_ip = _client_ip(http_request)
+
+    # Fail-closed usage metering (raises 400/429/503 exactly as chat.py does).
+    usage_meta = await run_in_threadpool(
+        enforce_query_limit, supabase, user_id, req.anon_id, client_ip
+    )
+
     def _enqueue():
         db = Db()
         try:
-            supabase = get_supabase()
             policy = current_policy(supabase)
             cfg = load_config(db)
             return jobs.enqueue(
@@ -125,19 +156,51 @@ async def submit(req: AsyncChatRequest):
     if result.get("reason") == "rejected_backpressure":
         raise HTTPException(status_code=503, detail="queue_full")
     job = result["job"]
-    return {"reason": result["reason"], **_public_job(job)}
+    resp = {"reason": result["reason"], **_public_job(job)}
+    if usage_meta:
+        resp["usage"] = usage_meta  # authenticated-user weekly usage (parity with chat.py meta.usage)
+    return resp
 
 
 @router.get("/result/{job_id}")
-async def result(job_id: str, poll_interval: float = 1.0, timeout: float = 300.0):
+async def result(
+    job_id: str,
+    http_request: Request,
+    poll_interval: float = 1.0,
+    timeout: float = 300.0,
+    conversation_id: Optional[str] = None,
+    user_id: Optional[str] = Depends(get_optional_user),
+):
     """Reconnectable delivery. Streams keepalives until the job reaches a
     terminal state, then delivers the whole verified answer + meta at once (the
-    client paces the reveal). Reconnecting mid-wait is just another GET."""
+    client paces the reveal). Reconnecting mid-wait is just another GET.
+
+    For an authenticated reader, the completed exchange is persisted to their
+    conversation history here (per-reader, not in the worker -- one shared
+    generation still yields one history per reader) and the conversation_id +
+    message_id are returned in the meta, matching chat.py. Persistence is
+    idempotent, so a reconnect re-GET never duplicates it."""
 
     def _get():
         db = Db()
         try:
             return jobs.get_job(db, job_id)
+        finally:
+            db.close()
+
+    def _persist(job, uid, conv_id):
+        db = Db()
+        try:
+            conversation_store.save_exchange(
+                db,
+                user_id=uid,
+                conversation_id=conv_id,
+                question=job.get("question") or "",
+                answer=job.get("answer") or "",
+                citations=job.get("citations") or [],
+                verified_references=job.get("verified_references") or [],
+                job_id=str(job_id),
+            )
         finally:
             db.close()
 
@@ -166,12 +229,24 @@ async def result(job_id: str, poll_interval: float = 1.0, timeout: float = 300.0
             # Deliver the whole verified answer at once; the CLIENT paces the reveal.
             rmeta = job.get("result_meta") or {}
             yield _sse(json.dumps({"answer": job.get("answer") or ""}))
+
+            # Persist to the authenticated reader's history (idempotent, best-effort,
+            # off the event loop). Guests are not persisted, matching chat.py.
+            conv_id = None
+            message_id = None
+            if user_id:
+                conv_id = conversation_store.resolve_conversation_id(conversation_id, str(job_id), user_id)
+                message_id = conversation_store.assistant_message_id(conv_id, str(job_id))
+                await run_in_threadpool(_persist, job, user_id, conv_id)
+
             yield _sse(json.dumps({
                 "citations": job.get("citations") or [],
                 "verified_references": job.get("verified_references") or [],
                 "outcome": job.get("outcome"),
                 "evidence_version": job.get("evidence_version"),
                 "topics_established": rmeta.get("updated_topics") or {},
+                "conversation_id": conv_id,
+                "message_id": message_id,
                 "job_id": job_id,
             }))
             yield _sse("[DONE]")

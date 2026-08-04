@@ -221,7 +221,7 @@ export async function streamAsyncChatMessage(
   callbacks: StreamCallbacks,
   options?: {
     token?: string | null;
-    conversationId?: string | null; // accepted for signature parity; unused (async path has no server-side conversation yet)
+    conversationId?: string | null; // threaded to /result so the answer lands in the right conversation
     messages?: ChatMessagePayload[];
     anonId?: string | null;
     topicsEstablished?: Record<string, number>;
@@ -230,7 +230,8 @@ export async function streamAsyncChatMessage(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (options?.token) headers["Authorization"] = `Bearer ${options.token}`;
 
-  // 1. Submit (returns instantly with a durable job id).
+  // 1. Submit (returns instantly with a durable job id). Metering happens here,
+  //    server-side, keyed on the caller -- so usage arrives in the submit response.
   const submitRes = await fetch(`${API_URL}/async-chat/submit`, {
     method: "POST",
     headers,
@@ -238,16 +239,32 @@ export async function streamAsyncChatMessage(
       question,
       messages: options?.messages ?? [],
       topics_established: options?.topicsEstablished ?? {},
+      anon_id: options?.anonId ?? null,
     }),
   });
-  if (submitRes.status === 503) throw new Error("queue_full");
-  if (!submitRes.ok) throw new Error("Chat request failed");
+  if (!submitRes.ok) {
+    if (submitRes.status === 429) {
+      const data = await submitRes.json().catch(() => ({}));
+      if (data.detail === "guest_limit_reached") throw new Error("guest_limit_reached");
+      if (data.detail?.error === "weekly_limit_reached") {
+        throw new Error("weekly_limit_reached:" + JSON.stringify(data.detail));
+      }
+    }
+    if (submitRes.status === 503) throw new Error("queue_full");
+    throw new Error("Chat request failed");
+  }
   const submitData = await submitRes.json();
   const jobId: string | undefined = submitData?.job_id;
   if (!jobId) throw new Error("Chat request failed");
+  const submitUsage = submitData?.usage as { used: number; limit: number; week_start: string } | undefined;
 
   // 2. Stream the result. Reconnect = re-issue this GET for the same job_id.
-  const res = await fetch(`${API_URL}/async-chat/result/${jobId}`, { headers });
+  //    The conversation_id (if we have one) tells the server which conversation
+  //    to persist the answer under.
+  const cidQuery = options?.conversationId
+    ? `?conversation_id=${encodeURIComponent(options.conversationId)}`
+    : "";
+  const res = await fetch(`${API_URL}/async-chat/result/${jobId}${cidQuery}`, { headers });
   if (!res.body) throw new Error("No response body");
 
   const reader = res.body.getReader();
@@ -279,9 +296,11 @@ export async function streamAsyncChatMessage(
         if (parsed.citations !== undefined) {
           callbacks.onMeta({
             citations: parsed.citations ?? [],
-            conversation_id: null,
+            conversation_id: parsed.conversation_id ?? null,
+            message_id: parsed.message_id ?? null,
             verified_references: parsed.verified_references ?? undefined,
             topics_established: parsed.topics_established ?? undefined,
+            usage: submitUsage,
           });
         }
       } catch {
