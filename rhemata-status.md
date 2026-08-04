@@ -93,8 +93,9 @@ unique index), exact-match reuse, reconnectable delivery, backpressure, provider
 ceilings (RPM/ITPM/OTPM), spend ceiling, retries-re-run-the-accuracy-check. The
 producer REUSES chat.py retrieval + reference_verifier's real accuracy check
 (regenerate-once-then-refuse preserved). PROOF (`scripts/async_answers_smoke.py`):
-23/23 — completes; killed worker loses nothing (lease reclaim + finish); 2 identical
-concurrent → 1 generation; reconnect; spend halt+resume; peak 12/12 concurrent (1
+26/26 — completes; killed worker loses nothing (lease reclaim + finish); 2 identical
+concurrent → 1 generation; reconnect; spend AND provider-rate-ceiling halt+resume;
+peak 12/12 concurrent (1
 worker × 12 slots); real accuracy path end-to-end ($0.32 real spend, 3 topical Qs
 answered, 7–10 citations + verified refs each). Phase 1 diagnostic confirmed the ~40
 ceiling is AnyIO's default 40-thread pool held for the request's whole ~68s (blocking
