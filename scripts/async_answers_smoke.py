@@ -123,6 +123,31 @@ def count_by_dedup(db, dedup_key):
     return db.run(_q)
 
 
+def count_status(db, status):
+    def _q(conn):
+        with dict_cursor(conn) as cur:
+            cur.execute(
+                "SELECT count(*) AS c FROM answer_jobs WHERE status = %s AND question LIKE 'SMOKE %%'",
+                (status,),
+            )
+            return int(cur.fetchone()["c"])
+    return db.run(_q)
+
+
+def clear_rate_buckets(db):
+    db.run(lambda conn: conn.cursor().execute("DELETE FROM provider_rate_usage"))
+
+
+def force_smoke_ready(db):
+    def _u(conn):
+        with dict_cursor(conn) as cur:
+            cur.execute(
+                "UPDATE answer_jobs SET run_after = now() "
+                "WHERE status = 'queued' AND question LIKE 'SMOKE %'"
+            )
+    db.run(_u)
+
+
 FAKE_POLICY = dict(evidence_version="smoke-e", prompt_version="smoke-p", policy_version="smoke-x")
 
 
@@ -276,6 +301,32 @@ def demo_e_spend_ceiling(db):
     reset_config(db)
 
 
+def demo_rate_limit(db):
+    print("\nDEMO R -- provider rate ceiling defers work, then resumes")
+    cleanup(db)
+    reset_config(db)
+    clear_rate_buckets(db)
+    # RPM ceiling of 2: at most 2 generations may start in a rolling minute.
+    set_config(db, rpm_limit=2)
+    for i in range(4):
+        enqueue_fake(db, "SMOKE R rate job %d" % i, cfg=load_config(db))
+    run_fake_worker_once(concurrency=1)
+    done = count_status(db, "done")
+    queued = count_status(db, "queued")
+    check("rpm=2: exactly 2 jobs generated this minute", done == 2, "done=%d" % done)
+    check("over-rate jobs deferred (stay queued), not generated", queued == 2, "queued=%d" % queued)
+
+    # New minute (cleared bucket) + higher ceiling + ready run_after -> drains.
+    clear_rate_buckets(db)
+    set_config(db, rpm_limit=10)
+    force_smoke_ready(db)
+    run_fake_worker_once(concurrency=2)
+    check("ceiling window opens: all 4 complete (work resumes)", count_status(db, "done") == 4,
+          "done=%d" % count_status(db, "done"))
+    reset_config(db)
+    clear_rate_buckets(db)
+
+
 def demo_f_concurrency(db, slots):
     print("\nDEMO F -- measured concurrency reached (capacity dial = slots x workers)")
     cleanup(db)
@@ -381,6 +432,7 @@ def main():
         demo_c_single_flight(db)
         demo_d_reconnect(db)
         demo_e_spend_ceiling(db)
+        demo_rate_limit(db)
         peak = demo_f_concurrency(db, args.conc_demo)
         if args.real > 0:
             real_cost = demo_g_real(db, min(args.real, 3))
