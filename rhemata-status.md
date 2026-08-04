@@ -26,8 +26,11 @@ git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
 CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
 named below. Retrieve detail there.
 
-**Deployment.** `origin/main` = local `main` = `29852f7` (Stage 2, pushed 2026-08-04),
-clean, nothing unpushed. Stage 2 (`dd71b87` build + `29852f7` records) is DEPLOYED but
+**Deployment.** `origin/main` = `332dd7b` (last pushed 2026-08-04). Local `main` is
+AHEAD by 2 UNPUSHED commits — `196f1f2` (pre-flip blockers 1–3: metering + persistence +
+psycopg2, 2026-08-04) + this records commit — deliberately NOT pushed (awaiting Alex's
+go-ahead), so nothing deployed has changed (Railway/Vercel deploy from `origin/main`).
+Stage 2 (`dd71b87` build + `29852f7` records) is DEPLOYED but
 the async path is DARK behind two OFF switches: `main.py`'s conditional mount is a no-op
 (env `ASYNC_ANSWER_ENABLED` unset -> async routes NOT mounted), the DB TRAFFIC switch
 `async_answer_config.serving_enabled` is false, and the frontend uses the live path
@@ -35,7 +38,7 @@ whenever `getChatMode()` is false (routes unmounted -> 404 -> false). The only l
 vs pre-Stage-2 is one informational `evidence_version` meta field on chat.py answers
 (answer/citations/verification byte-identical) plus a cached `getChatMode()` probe per
 send. Migrations 078+079 applied additively. To flip traffic on: close the pre-flip
-blockers (CLAUDE.md async landmine), set env `ASYNC_ANSWER_ENABLED=true` (redeploy) +
+blocker (only the DB pooler route remains — CLAUDE.md async landmine (d)), set env `ASYNC_ANSWER_ENABLED=true` (redeploy) +
 `UPDATE async_answer_config SET serving_enabled=true`; to flip back (seconds):
 `UPDATE async_answer_config SET serving_enabled=false`.
 Railway (backend) + Vercel (frontend) auto-deploy from `main`; Railway build health
@@ -154,13 +157,27 @@ path yet — two OFF switches gate it.
   A controlled real-traffic confirmation (DESCRIBED, not run): flip `serving_enabled`
   on for a single worker / small % of traffic, run a timed test sampling
   `count(*) WHERE status='running'`, then flip `serving_enabled` back OFF.
-- **Remaining BEFORE a real flip (NOT built — a flip without these regresses):**
-  (a) metering/usage-limit parity on `/async-chat/submit` (each submission meters
-  independently even under single-flight); (b) auth→user_id + conversation persistence
-  (worker writes `answer_jobs`, but nothing saves `conversations`/`messages` for a
-  logged-in user's history); (c) `psycopg2-binary` in `backend/requirements.txt`;
-  (d) the DB route above. See CLAUDE.md's async landmine. Observed + mirrored (NOT
-  fixed): the live matcher over-matches "What is deliverance?"→baptism house voice.
+- **Pre-flip blockers — 3 of 4 CLOSED 2026-08-04 (build `196f1f2`; proof
+  `scripts/async_metering_persistence_check.py` 24/24).** (a) metering/usage-limit
+  parity on `/async-chat/submit` — submit now takes auth + `anon_id` + IP and meters
+  fail-closed BEFORE enqueue, keyed on the caller, so every submission counts
+  independently even under single-flight (2 users, identical Q, same instant → 1
+  generation, 2 meterings; over-limit → 429 not enqueued; guest anon/IP + 400-no-anon
+  match chat.py). (b) auth→user_id + conversation persistence — `/async-chat/result`
+  persists the completed exchange to the authenticated reader's history in chat.py's
+  exact row shape (conversations + user msg + assistant msg w/ citations +
+  verified_references), per-READER not in the worker (one shared generation → one
+  history PER reader), reconnect-idempotent via deterministic uuid5 ids + `ON CONFLICT
+  DO NOTHING`; guests not persisted. (c) `psycopg2-binary==2.9.11` added to
+  `backend/requirements.txt` (worker + `async_chat` import psycopg2, failed on Railway
+  without it — causally proven in a clean 3.9 venv; one additive line, live app
+  unaffected). All new logic MIRRORS chat.py in the async layer (chat.py byte-identical;
+  new DRIFT POINTS `metering.py` + `conversation_store.py`, unify at cutover). **STILL
+  OPEN — (d) the DB route above** (session→transaction pooler): a flip without it pins
+  concurrency near ~12/worker. New note: `conversations.user_id` FKs `auth.users`, so
+  persistence needs a real JWT `sub` (always true in prod; a bad id fails closed). See
+  CLAUDE.md's async landmine. Observed + mirrored (NOT fixed): the live matcher
+  over-matches "What is deliverance?"→baptism house voice.
 
 **Answer path — current behavior.** Normal answers buffer fully, run the Phase-2
 retrieval-grounding guard + prose-attribution scan + `verify_references`

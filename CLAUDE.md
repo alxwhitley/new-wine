@@ -500,8 +500,9 @@ different row, per the hard rule above.
   scale work "until there are users" repeats exactly that reasoning (Project 1's
   100-concurrent dial exists to end it).
 
-- **Project 1 async answer path is BUILT and cutover-WIRED, but the traffic
-  switch is OFF (Stage 2, 2026-08-04, build `dd71b87`; Stage 1 `82413c9`).**
+- **Project 1 async answer path is BUILT and cutover-WIRED; 3 of 4 pre-flip
+  blockers now CLOSED, but the traffic switch is OFF (Stage 2 build `dd71b87`;
+  pre-flip blockers `196f1f2`, 2026-08-04; Stage 1 `82413c9`).**
   `backend/app/services/async_answers/` + `scripts/answer_worker.py` +
   `backend/app/routers/async_chat.py` run a durable Postgres-backed answer queue
   (migrations 078/079: `answer_jobs`/`async_answer_config`/`provider_rate_usage`
@@ -510,29 +511,42 @@ different row, per the hard rule above.
   level); DB `async_answer_config.serving_enabled` is the seconds-reversible
   TRAFFIC switch the frontend consults via `GET /async-chat/mode`. Do NOT assume
   the async path serves anything until BOTH are on. **DRIFT POINT (unchanged, load-
-  bearing):** `async_answers/producer.py` MIRRORS `chat.py`'s retrieval
-  orchestration + generation constants (`GEN_MODEL`/`GEN_MAX_TOKENS` + the STRICT
-  ATTRIBUTION CONSTRAINT string) AND now its position-paper interception +
-  background-topic injection ordering — a change to any of those in `chat.py` that
-  is NOT also applied to `producer.py` silently diverges the async answer (the
+  bearing):** the async layer MIRRORS `chat.py` rather than sharing it, so
+  `chat.py`'s live path stays byte-identical pre-cutover — `async_answers/producer.py`
+  mirrors chat.py's retrieval orchestration + generation constants (`GEN_MODEL`/
+  `GEN_MAX_TOKENS` + the STRICT ATTRIBUTION CONSTRAINT string) + position-paper
+  interception + background-topic ordering; `async_answers/metering.py` mirrors
+  chat.py's fail-closed guest/user metering; `async_answers/conversation_store.py`
+  mirrors `_save_conversation`'s row shape. A change to any of those in `chat.py`
+  NOT also applied to its async mirror silently diverges the async path (the
   accuracy-critical extraction, grounding, `verify_references`, and the
   `evidence_version` = `get_corpus_version()` signal are IMPORTED/shared, so those
-  stay in sync). Unify at full cutover. **Remaining BEFORE a real flip (NOT built —
-  a flip without these is a regression):** (a) metering/usage-limit parity on
-  `/async-chat/submit` (the live path meters guests/users fail-closed; the async
-  submit does not) — and each submission must meter independently even when single-
-  flight shares one generation; (b) auth→user_id + conversation persistence (the
-  worker writes the answer to `answer_jobs` but nothing saves the `messages`/
-  `conversations` rows a logged-in user's history needs); (c) `psycopg2-binary` in
-  `backend/requirements.txt` (the live backend never imports the async modules so it
-  deploys fine, but the worker + `async_chat` router fail to import on Railway
-  without it); (d) the DB route — the worker's `SUPABASE_DB_URL` is the session
-  pooler (15-client cap, ~14 concurrent/worker), which must move to the transaction
-  pooler / a sized route for the 100-concurrent dial. Observed + faithfully mirrored,
-  NOT fixed: the live `match_position_paper` over-matches "What is deliverance?" ->
-  baptism house voice (a live-behaviour issue, out of scope). `corpus_version()`'s
-  one gap: an in-place admin re-chunk edit isn't reflected (reuse defaults OFF, so
-  moot until reuse is enabled).
+  stay in sync). Unify at full cutover. **Pre-flip blockers — 3 of 4 CLOSED
+  2026-08-04 (build `196f1f2`):** (a) metering/usage-limit parity — `/async-chat/
+  submit` now takes auth + `anon_id` + IP and meters fail-closed (same
+  `increment_guest_query`/`increment_user_query` RPCs) BEFORE enqueue, keyed on the
+  CALLER, so every submission counts independently even when single-flight collapses
+  it to one generation (proven: 2 users, identical Q, same instant → 1 generation,
+  2 meterings; over-limit → 429 not enqueued); (b) auth→user_id + conversation
+  persistence — `/async-chat/result` persists the completed exchange to the
+  authenticated reader's history in chat.py's exact shape (conversations row + user
+  msg + assistant msg w/ citations + verified_references), per-READER not in the
+  worker (one shared generation → one history PER reader), idempotent across a
+  reconnect re-GET via deterministic uuid5 message ids + `ON CONFLICT DO NOTHING`;
+  (c) `psycopg2-binary==2.9.11` added to `backend/requirements.txt` (the worker +
+  `async_chat` import psycopg2 and failed to import on Railway without it — causally
+  proven in a clean 3.9 venv; one additive line, live app unaffected). Proofs:
+  `scripts/async_metering_persistence_check.py` (24/24). **STILL OPEN — (d) the DB
+  route:** the worker's `SUPABASE_DB_URL` is the session pooler (15-client cap, ~14
+  concurrent/worker; smoke concurrency caps ~12–13 here, not the slot dial), which
+  must move to the transaction pooler / a sized route for the 100-concurrent dial —
+  a flip without this pins the ceiling near ~12/worker. Note: `conversations.user_id`
+  has an FK to `auth.users`, so persistence needs a real JWT `sub` (always true in
+  prod; a bad id fails closed — `save_exchange` swallows it, delivery unaffected).
+  Observed + faithfully mirrored, NOT fixed: the live `match_position_paper`
+  over-matches "What is deliverance?" -> baptism house voice (a live-behaviour issue,
+  out of scope). `corpus_version()`'s one gap: an in-place admin re-chunk edit isn't
+  reflected (reuse defaults OFF, so moot until reuse is enabled).
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
