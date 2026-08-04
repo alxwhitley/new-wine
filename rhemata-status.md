@@ -26,11 +26,12 @@ git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
 CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
 named below. Retrieve detail there.
 
-**Deployment.** `origin/main` = `e466b80`. Local `main` is AHEAD by 3 UNPUSHED,
-INERT commits: `e00e40d` (prior records), `82413c9` (Project 1 Stage 1 async build),
-and this records commit. NOT pushed -- deploy is Alex's call; it is safe (main.py is
-unchanged, so the deployed backend stays byte-identical; migration 078 is already
-applied additively).
+**Deployment.** `origin/main` = local `main` = `c890dd2` (pushed 2026-08-04), clean,
+nothing unpushed. The Project 1 Stage 1 async build (`82413c9`, `0215a68`), its records
+(`efa0ddd`, `c890dd2`), and the prior attribution-audit records (`e00e40d`) are now on
+`origin/main`. The async push is INERT: main.py is unchanged so the deployed backend is
+byte-identical; migration 078 was already applied additively; no frontend commits, so
+Vercel redeploys identically.
 Railway (backend) + Vercel (frontend) auto-deploy from `main`; Railway build health
 is not confirmed from the repo (CLI unauthenticated). The 2026-08-01 -> 03 accuracy +
 copy-fix stack is on `origin/main` (verified): `0ab9c60` (Phase-0 §7a token fix),
