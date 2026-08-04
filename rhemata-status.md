@@ -26,16 +26,18 @@ git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
 CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
 named below. Retrieve detail there.
 
-**Deployment.** `origin/main` = `5f1aa02` (Stage 1, pushed 2026-08-04). Local `main`
-is AHEAD by 2 UNPUSHED Stage-2 commits: `dd71b87` (async cutover build) + this records
-commit. **NOT pushed** -- the Stage-2 session was told to hold the push for explicit
-confirmation. Unlike Stage 1, Stage 2 TOUCHES the live path (chat.py, main.py, frontend
-useChat/api) but the TRAFFIC SWITCH IS OFF: when pushed, `main.py`'s conditional mount is
-a no-op (env `ASYNC_ANSWER_ENABLED` unset), `chat.py` gains only one informational
-`evidence_version` meta field (answer/citations/verification byte-identical), and the
-frontend uses the live path whenever `getChatMode()` is false (routes unmounted -> 404 ->
-false). Migrations 078+079 are already applied additively. So a push deploys a
-behavior-equivalent live path with the async path dark behind two OFF switches.
+**Deployment.** `origin/main` = local `main` = `29852f7` (Stage 2, pushed 2026-08-04),
+clean, nothing unpushed. Stage 2 (`dd71b87` build + `29852f7` records) is DEPLOYED but
+the async path is DARK behind two OFF switches: `main.py`'s conditional mount is a no-op
+(env `ASYNC_ANSWER_ENABLED` unset -> async routes NOT mounted), the DB TRAFFIC switch
+`async_answer_config.serving_enabled` is false, and the frontend uses the live path
+whenever `getChatMode()` is false (routes unmounted -> 404 -> false). The only live delta
+vs pre-Stage-2 is one informational `evidence_version` meta field on chat.py answers
+(answer/citations/verification byte-identical) plus a cached `getChatMode()` probe per
+send. Migrations 078+079 applied additively. To flip traffic on: close the pre-flip
+blockers (CLAUDE.md async landmine), set env `ASYNC_ANSWER_ENABLED=true` (redeploy) +
+`UPDATE async_answer_config SET serving_enabled=true`; to flip back (seconds):
+`UPDATE async_answer_config SET serving_enabled=false`.
 Railway (backend) + Vercel (frontend) auto-deploy from `main`; Railway build health
 is not confirmed from the repo (CLI unauthenticated). The 2026-08-01 -> 03 accuracy +
 copy-fix stack is on `origin/main` (verified): `0ab9c60` (Phase-0 §7a token fix),
