@@ -132,14 +132,41 @@ SEQUENCE (2026-08-03)".
     accuracy check. One app / one queue / one DB / one scalable worker
     deployment — not microservices.
 
-15. **One named voice per answer — the writer gets ONE teacher's propositions;
-    the RENDERER (not the model) attaches names and links.** This IS the
-    source-blind path; do not build "source-blind generation" as a separate
-    project. It structurally closes claim-level A2 misattribution (the other
-    teacher's material is never in the generation) — a failure previously logged
-    as uncatchable. Teacher profile pages precompute instead of regenerating from
-    source text per view (`get_teacher_card()` is the standing live-synthesis
-    leak).
+15. **One named voice per answer — the writer gets ONE teacher's propositions
+    per answer, for single-teacher topics. The safety goal is achieved by
+    narrowing what material reaches the writer, not by relocating who writes
+    the attribution.** **Corrected 2026-08-06 (Project 2 phase 1 design
+    session), decided not deferred** — this decision's original wording, "the
+    RENDERER (not the model) attaches names and links," is RETIRED as a build
+    target, not left as unmet future work. Reasoning, recorded so it is not
+    re-litigated: (a) the real product goal is preventing a claim being
+    credited to the wrong teacher, not relocating who writes the attribution —
+    the original wording conflated mechanism with goal; (b) locking retrieval
+    to one teacher does NOT make the model's self-attribution correct by
+    construction — it retains parametric knowledge of other charismatic
+    teachers, the exact mechanism behind the documented tongues-answer
+    fabrication ("not a retrieval gap... it knew too much"); (c) the existing
+    `reference_verifier.py` guard (`_ungrounded_reference_teachers` /
+    `ungrounded_prose_teachers` → regenerate-once-then-refuse) already catches
+    this and gets strictly MORE precise with a size-1 permitted-name set — no
+    new machinery needed; (d) true renderer-side injection would require either
+    rewriting the entire citation-instruction surface to produce unattributed
+    prose, or post-hoc sentence-level name insertion — the latter directly
+    contradicts the standing "never surgically edit prose (mangling risk)" rule
+    and Settled decision #6. This IS the source-blind path; do not build
+    "source-blind generation" as a separate project. It structurally closes
+    claim-level A2 misattribution (the other teacher's material is never in the
+    generation) — a failure previously logged as uncatchable. **Phase 1 scope
+    (confirmed):** single-teacher topics only, enforced at retrieval/context-
+    assembly (`chat.py` + its `producer.py` mirror); in-house-debate topics
+    (decision #11) are OUT of phase 1 and keep working unchanged — full design
+    in PLAN.md's CURRENT BUILD SEQUENCE, Project 2. Teacher profile pages
+    precompute instead of regenerating from source text per view
+    (`get_teacher_card()` is the standing live-synthesis leak — found this
+    session to be per-(teacher, question), not per-teacher, so its fix is NOT
+    independent of phase 1 as originally assumed; it needs the same
+    topic-classification layer phase 1 must build for debate-topic detection —
+    see PLAN.md).
 
 16. **Quote rail is manual-approval only; automated extraction is deferred.** An
     AI may PROPOSE quote candidates, never APPROVE one. Eligibility, all binding:
