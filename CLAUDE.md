@@ -178,16 +178,42 @@ SEQUENCE (2026-08-03)".
     and empty-state redesign were DEFERRED pending real usage. The 2026-08-01
     corpus-ban lift STANDS (not re-imposed); corpus positions were simply not
     built on. Foundation stays as built.
-    **Un-deferred 2026-08-04:** Alex asked for a concrete 4-step plan to revive
-    exactly this system (positions.py + serve_position.py's stored/versioned
-    positions) — a real, dated intent to build is the "real usage" signal this
-    deferral was waiting on. A read-only diagnostic confirmed the foundation is
-    untouched and undrifted since 2026-08-01 (`docs/audits/
-    position_layer_revival_diagnostic_2026-08-04.md`). **Open Decisions #14
-    (refresh trigger), #15 (replace-vs-version), and #16 (topic list) are now
-    ACTIVE** — #16 in particular is now a hard prerequisite for wiring this
-    into live chat, not a deferred nice-to-have. See PLAN.md's 2026-08-04
-    version-history entry and the audit doc for the full build plan.
+    **Un-deferred 2026-08-04, then substantially revised the same day.**
+    Steps 1-3 of the original 4-step revival plan (inventory, speed, license
+    gate) were built and verified. Step 4 (connect + prove) mapped the
+    answer path and proposed a deterministic groundedness check — then,
+    before any of it was built, an adversarial pressure test of the whole
+    store-then-synthesize (two-hop) shape found it FATALLY flawed: a check
+    on the generated answer cannot see drift already baked into the stored
+    position (proven live, not hypothetically — a documented fabrication,
+    Ravenhill/Philippians 4:8-9, was found still `eligible=true` and
+    already feeding a real stored position's evidence); reactive
+    invalidation is not computable from what's recorded today and
+    structurally cannot detect corpus material being ADDED, the dominant
+    real case (517 new eligible propositions landed 2026-08-03); no
+    concurrency guard or failure memory existed for either hop.
+    **The accepted direction is now ONE hop, not two:** a matched
+    position's underlying PROPOSITIONS — never its rendered text — feed
+    `chat.py`'s existing, already-hardened retrieval/generation/
+    verification pipeline directly; the position's own generated text
+    becomes a build-time human-review artifact only, never served. Same
+    day, narrowly scoped: 2 of the 3 documented fabrication cases (Conlon,
+    Ravenhill) are now `eligible=false` (content not rewritten — undecided;
+    the third, Savchuk's "Devil's Voice", is a strong content match, never
+    ID-confirmed, deliberately left untouched) — and rebuilding the one
+    dependent position demonstrated the layer's real volatility live:
+    removing one bad proposition flipped `holiness and personal purity`
+    from a 4-teacher corpus position to a Prince-only teacher position, not
+    a minor drift. **Nothing of the revised one-hop design is built.** Open
+    Decisions #14 (refresh trigger — now answered by periodic
+    re-gather-and-diff with a severity-tiered response to scope flips vs.
+    ordinary drift, not reactive invalidation), #15 (replace-vs-version —
+    unchanged, versioning already works and is proven), and #16 (topic
+    list) remain ACTIVE — #16 is still the real, hard, completely unbuilt
+    prerequisite; nothing above matters until it exists. Full diagnostic,
+    pressure test, remediation, and revised design (with a ranked list of
+    what's still weak even after the revision):
+    `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
 
 ## Session Routing
 

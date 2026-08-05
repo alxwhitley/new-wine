@@ -6,13 +6,14 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-04 (async worker service deployed + verified end-to-end).
+Last verified: 2026-08-04 (position-layer fabrication remediation executed +
+verified live; store-then-synthesize design rejected, one-hop revision
+written — see below).
 
-**Target ≤150 lines (CLAUDE.md's Session close contract).** Trimmed 2026-08-01
-(from ~2,700 lines) and twice more 2026-08-04 (from ~840, then this pass from
-~480). Cut material is never the only copy — it survives in git history and in
-the per-topic durable homes: PLAN.md (roadmap/decisions), CLAUDE.md
-(invariants/landmines), `docs/audits/`, and the commits named below.
+**Target ≤150 lines (CLAUDE.md's Session close contract).** Trimmed
+2026-08-01 (from ~2,700 lines) and repeatedly since. Cut material is never
+the only copy — it survives in git history and PLAN.md/CLAUDE.md/
+`docs/audits/` and the commits named below.
 
 ---
 
@@ -28,13 +29,11 @@ narrative in PLAN.md's version history.
 **Project 1 (scalable async answers) — worker built, deployed, verified;
 switches still OFF.** Worker service exists on Railway (repo-root
 `nixpacks.toml`), completed one real end-to-end generation ($0.076, cleaned up
-after). Transaction-pooler connection (port 6543) confirmed reachable; 20/20
-simultaneous generations measured; five 20-slot replicas reach the 100-slot
-dial without an architecture change. **Residual, unconfirmed:** whether the
-worker's live `SUPABASE_DB_URL` is actually the transaction pooler (6543) vs
-session pooler (5432, ~12/worker cap) — Supavisor masks this from the DB side;
-needs `railway variables` on the worker service or Alex pasting the URL. Full
-detail: PLAN.md CURRENT BUILD SEQUENCE + CLAUDE.md's async landmine.
+after); 20/20 simultaneous generations measured. **Residual, unconfirmed:**
+whether the worker's live `SUPABASE_DB_URL` is the transaction pooler (6543)
+vs session pooler (5432, ~12/worker cap) — needs `railway variables` on the
+worker or Alex pasting the URL. Detail: PLAN.md CURRENT BUILD SEQUENCE +
+CLAUDE.md's async landmine.
 
 **Answer path — current behavior (live `/chat`, unchanged).** Buffers fully,
 runs the Phase-2 retrieval-grounding guard + prose-attribution scan +
@@ -44,11 +43,31 @@ verified link only if retrieved for the question. The position-paper
 (house-voice) path serves the baptism + tongues pillars via `chat.py`
 interception and still streams live.
 
+**Position layer — design revised 2026-08-04, nothing built.** The
+stored-position-then-rewrite (two-hop) design was pressure-tested and found
+fatally flawed: a check on the generated answer can't see drift already baked
+into the stored position (proven live — a documented fabrication, Ravenhill/
+Philippians 4:8-9, was found still `eligible=true` and already feeding a
+real stored position's evidence); reactive invalidation can't detect corpus
+material being ADDED, the dominant real case (517 new eligible propositions
+landed 2026-08-03, after both live corpus positions were built); no
+concurrency guard or failure memory existed either. **Accepted direction is
+now one hop:** a matched position's underlying propositions — never its
+rendered text — feed `chat.py`'s existing, already-hardened pipeline
+directly, supplementing normal retrieval; the position's own text becomes a
+build-time human-review artifact only, never served. Same-day remediation
+cleared 2 of 3 documented fabrication cases (Ravenhill, Conlon — now
+`eligible=false`, content not rewritten, undecided) and demonstrated the
+volatility live: removing one bad proposition flipped `holiness and personal
+purity` from a 4-teacher corpus position to a Prince-only teacher position
+(commits `ab18222`/`b8034eb`). Third case (Savchuk) unconfirmed, untouched.
+Topic-matching (`match_stored_position()`, #16) remains the real, unbuilt
+prerequisite. Full diagnostic/pressure test/remediation/revised design/ranked
+weaknesses: `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+
 **Corpus/data.** Propositions backfill COMPLETE (0 genuine documents
 remaining). Chapter-scoped book extraction covers 8/53 books; the
-numeral-heading detector is built but uncommitted (zero callers). Position
-serving path is built + proven standalone, NOT wired into live chat. All
-counts: query live.
+numeral-heading detector is built but uncommitted. All counts: query live.
 
 **Attribution audit (2026-08-04, read-only, zero writes).**
 `docs/audits/historical_commentary_attribution_reverification_2026-08-04.md`.
@@ -81,21 +100,21 @@ simultaneous-chat ceiling (anyio threadpool exhaustion) — replacement built
 - **#18** Home-page marketing line names Bevere (empty source, 0 props) and Koulianos (not in corpus) as "trusted teachers" — living-minister misrepresentation, still open.
 - **#19** External pipeline diagram (non-repo, not found locally) stale in 4 ways — fix if/when it resurfaces.
 
-Resolved (git history): #1, #2, #3, #5, #15, #17.
+Resolved: #1, #2, #3, #5, #15, #17.
 
 ## Known harness bugs
 
 Both resolved: the 2026-07-18 executor write-accounting loop (`d9ab1cc`) and
-`BASH_WRITE_INDICATORS` SQL-verb over-flagging (`569d412`). CLAUDE.md's
-Session Routing DB-write hard rule and its revisit trigger are unchanged.
+`BASH_WRITE_INDICATORS` over-flagging (`569d412`). Session Routing's
+DB-write hard rule and revisit trigger are unchanged.
 
 ---
 
 ## Mobile UI
 
-- Pass A shipped (floating-panel chat, full-bleed shell, bottom tab bar —
-  gated behind `NEXT_PUBLIC_FULL_NAV_ENABLED`).
-- Pass B pending: `UsageRing` not yet remounted in the sidebar drawer.
+- Pass A shipped (floating-panel chat, full-bleed shell, bottom tab bar,
+  gated behind `NEXT_PUBLIC_FULL_NAV_ENABLED`). Pass B pending: `UsageRing`
+  not yet remounted in the sidebar drawer.
 
 ---
 
@@ -108,27 +127,24 @@ Session Routing DB-write hard rule and its revisit trigger are unchanged.
    `serving_enabled` still false), run the controlled public traffic window,
    and flip `serving_enabled` back off immediately after. Project 2 starts
    only once that cutover is stable.
-2. **Position layer — UN-DEFERRED 2026-08-04 (CLAUDE.md item 18); steps 2-3
-   BUILT + verified, step 4 not started.** Step 2: materialized eligibility
-   (migration 080, 8,284/11,139 eligible — real cost 2h04m, corrects the
-   stale "~15+ min" estimate 8x), `cache_control`, streaming siblings. Step 3:
-   `gather_evidence()`/`gather_evidence_corpus()` now gated on
-   license/visibility (`LICENSE_GATE_SQL`, reusing Invariant 2's predicate
-   verbatim, no migration needed) — confirmed real effect, not a no-op
-   (Savchuk/Poonen, both unlicensed+hidden, now correctly excluded). Both
-   steps verified: `test_serve_position.py` clean; `prove_serving_path.py`
-   32/36, the 4 gaps a pre-existing unrelated test-fixture staleness issue,
-   not a regression — see audit doc. Commits `6fc39bc`/`82e5d2e`. Next: step
-   4's topic-matching (Open Decision #16, now a hard prerequisite) and
-   chat.py wiring behind a two-level off-switch. `get_teacher_card()`'s
-   live-synthesis leak stays
-   Project 2 scope, untouched by this. Full plan:
-   `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+2. **Position layer — revised build sequence (see Current state above; full
+   detail in the audit doc), one hop not two.** In order: topic list +
+   `match_stored_position()` (Open Decision #16, still the hard
+   prerequisite) → build-time review workflow → the chunk-shape adapter
+   (position evidence → `chat.py`'s existing chunk shape) → the
+   `_insert_position_version()` concurrency fix (unguarded unique-index
+   violation, found live in the pressure test) → the `chat.py` injection
+   point (parallel to existing background-topic injection) → the freshness
+   re-gather-and-diff sweep → rollout (shadow mode, then the async path's
+   proven two-level off-switch). Also still open, not decided: whether the
+   two remediated propositions get rewritten, whether the unconfirmed
+   Savchuk case gets pulled, whether superseded position versions get
+   retracted vs. left as-is.
 3. Route `ingest_helloao.py` through `shared_ingest` (blocker #4).
 4. Folder renames (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop the
    orphaned `jewish_perspectives` table.
 5. Staging Supabase + a verified backup/restore test (backup exists, restore
-   never tested at project level).
+   never tested).
 
 SP track: SP2 done (Phases 1–9); SP4 teacher cards shipped and signed off; SP
 panel refinement done. Next SP item is #43 (SP5, mobile bottom-sheet). #38

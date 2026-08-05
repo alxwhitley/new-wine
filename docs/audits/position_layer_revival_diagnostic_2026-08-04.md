@@ -1717,3 +1717,320 @@ here:**
 5. Whether superseded v1 of `holiness and personal purity` should be
    explicitly marked `'retracted'` after the rebuild, or left as
    superseded `'draft'` (§4 — cosmetic, not functional).
+
+## Revised design (2026-08-04, design only — nothing in this section implemented)
+
+Written after the pressure test found the store-then-synthesize design
+largely failed (its FATAL findings 1-3, above) and after the same day's
+remediation demonstrated the volatility problem live, not hypothetically
+(removing one proposition flipped a 4-teacher corpus position to a
+single-teacher one). This section is the revision, built on the pressure
+test's own accepted alternative (finding 7): one generation hop, not two —
+a matched position feeds `chat.py`'s already-hardened pipeline rather than
+triggering a second, separately-checked rewrite. Nothing here is built;
+every claim is either a direct consequence of code already read this
+session or explicitly marked as a proposed default.
+
+### 1. The one-hop route, concretely
+
+**The stored position's generated TEXT (`positions.content`) is never used
+in live answer generation, at all.** Its only remaining job is a
+build-time review artifact — something a human reads once (§3), to judge
+whether the underlying evidence is coherent before it's trusted for reuse.
+It never reaches `chat.py`, never reaches the model, never reaches a
+reader. This is the direct fix for finding 1: with no second hop, there is
+no second, weaker check being asked to certify something a first, human
+step never verified for content fidelity.
+
+**Two things cross the boundary into `chat.py`'s pipeline, both derived
+from the position's evidence linkage, neither from its rendered text:**
+
+1. **The underlying propositions themselves**, as citable context —
+   `position_evidence` → `propositions.content`, joined out to
+   `documents`/`sources` for `document_id`, `author` (teacher name), and
+   `citation_mode` (inherited from the source document, same field real
+   chunks already carry). Shaped into the SAME dict shape a real `chunks`
+   row already has (`document_id`, `author`, `content`, `source_kind`,
+   `citation_mode`, `title`) — a plain data-mapping function, not a new
+   context-assembly mechanism — and folded into `chat.py`'s existing
+   `chunks` list, supplementing normal retrieval rather than replacing it
+   (the position's evidence might be thin or oddly phrased for this exact
+   question; live retrieval still runs and still contributes). This is
+   architecturally the SAME pattern `chat.py`'s existing background-topic
+   injection already proves works (`match_background_topics()` →
+   `topics_to_inject` → a labeled context block, chat.py:153-162,
+   763-820) — no new injection mechanism needs inventing, only a new
+   source feeding the same slot.
+2. **The position's scope metadata** — `kind` (`teacher`/`corpus`) and,
+   for `teacher`, the dominant `source_id` — as an optional, TIGHTER
+   `permitted_names` constraint at generation time, not just on the
+   regenerate-after-failure pass `chat.py` already runs (:1131). A topic a
+   stored position has already determined is single-teacher-dominant can
+   constrain the model from the FIRST generation attempt, not only after
+   an ungrounded credit is caught and retried.
+
+**Why this makes the attribution-grounding guard and `verify_references()`
+apply for free — and the one load-bearing caveat on that claim:**
+`build_retrieval_grounding()` (reference_verifier.py:80-123) builds its
+grounding set from exactly the `document_id`/`author` fields on whatever
+is in the `chunks` list it's given — it does not care whether a chunk came
+from `match_chunks` or from a position's evidence, AS LONG AS the shape in
+item 1 above is correct. **This is a real integration-correctness
+requirement, not a given** — if the position-evidence-to-chunk-shape
+mapping is ever wrong (a missing `document_id`, a misresolved `author`),
+the existing guard would silently stop protecting this evidence class from
+day one, with nothing loud signaling the gap (see "still weak," below).
+
+### 2. Freshness by periodic re-gather-and-diff
+
+**Trigger.** Not reactive (finding 2 already showed reactive
+change-detection cannot see material being ADDED, the dominant real case).
+Two trigger sources, layered:
+- **Event-triggered:** a re-gather-and-diff sweep run at the end of
+  `backfill_proposition_eligibility.py` and any bulk extraction/backfill
+  script (`run_full_backfill.py`-shaped sessions) — both are already
+  identifiable, deliberate events in this codebase's own history (the
+  517-proposition 2026-08-03 landing was exactly one such event). Small,
+  additive hooks on two existing scripts, not new machinery.
+- **Scheduled backstop:** a fixed-cadence sweep independent of (a), since
+  Landmines already documents this corpus has no reliable
+  ingest-completion tracking ("The corpus has NO record of extraction
+  attempts") — assuming an event hook always fires is not safe to assume.
+  **At current volume (7 position rows, 6 distinct topics) this needs no
+  automation at all — running the sweep by hand after a known batch event
+  is completely sufficient.** Scheduling only becomes worth building once
+  topic count grows enough that manual reruns are a real burden — an
+  explicit non-decision, not an oversight.
+
+**"Materially changed," defined as two severity tiers, not one — per this
+session's explicit instruction that a scope flip is a different class of
+problem than contributor-share drift:**
+
+- **Tier 1 — scope divergence (severe).** Re-run the same dominance
+  determination (`determine_scope()`-shaped logic) against a FRESH
+  corpus-wide gather. If the fresh result disagrees with the stored
+  position's `kind` (corpus↔teacher), OR agrees on `kind='teacher'` but
+  names a DIFFERENT dominant `source_id`, this is Tier 1. **Proven live
+  this session, not hypothetical:** removing one proposition from
+  eligibility was enough to flip `holiness and personal purity` from
+  corpus (4 teachers) to teacher (Prince alone) — the exact shape of
+  divergence this tier exists to catch. A scope flip is a wholesale
+  identity change of who the position represents — continuing to serve it
+  even once more risks CLAUDE.md's ranked failure mode #2
+  (misrepresenting a teacher), so it is treated as urgent, not queued.
+- **Tier 2 — same-scope evidence drift (routine).** Fresh top-`MAX_EVIDENCE`
+  proposition-ID overlap against the stored `position_evidence` set drops
+  below a threshold — **proposed starting default: fewer than half of the
+  currently-stored evidence IDs still appear in a fresh gather** —
+  explicitly a reasoned, uncalibrated default in the same spirit as
+  `DOMINANCE_THRESHOLD = 0.60` (PLAN.md's own acknowledged posture for
+  that constant), not a measured cutoff. The position still correctly
+  names WHO holds the view; only which specific statements support it has
+  shifted.
+
+**What happens on divergence — different per tier, as instructed:**
+- **Tier 1: suppress immediately.** Mark the position row `status='stale'`
+  — an existing, schema-present, currently ZERO-usage value (confirmed
+  live this session: `positions`' CHECK constraint already permits
+  `'stale'`, migration 073; grep across `backend/`/`scripts/` finds no
+  code path that has ever written or read it for this table). No new
+  schema needed. The injection point in `chat.py` (§7) checks `status NOT
+  IN ('stale', 'retracted')` before using a position's evidence at all —
+  a stale position simply stops being injected, and the topic falls back
+  to ordinary retrieval-only generation, silently and safely, until a
+  human-reviewed rebuild restores it.
+- **Tier 2: flag for the next batch rebuild, keep serving in the
+  interim.** Deliberately NOT the same handling as Tier 1 — the position
+  is not yet wrong about who holds the view, only imprecise about which
+  statements currently best support it, closer to the live RAG path's own
+  ordinary day-to-day evidence variance than to a correctness failure.
+  **No new persisted flag proposed for this tier** — the sweep's own
+  report (which positions crossed the Tier-2 threshold) is the queue,
+  read by whoever runs the next batch rebuild session, not a standing DB
+  column. If this project later wants Tier 2 tracked persistently rather
+  than via a report, that is a small, explicit, named future schema
+  addition — flagged here, not assumed or built.
+
+### 3. Review at position-build time
+
+**What gets reviewed:** the SAME generated `positions.content` text
+already produced today (`generate_position_text()`/
+`generate_corpus_position_text()`, unchanged) plus its evidence set —
+read by a human before the position is trusted as an input to live
+generation (i.e., before `chat.py` is ever allowed to inject its
+evidence). This is precisely where the pressure test's own finding 1
+proposal belongs: "hop 1 specifically... is where a cheap, targeted human
+spot-check pays for itself... a position is written once and read by an
+unbounded number of future question-answer hops." The review is looking
+for exactly the two things this whole thread's checks cannot deterministically
+catch — content fidelity to the evidence (does the paragraph actually
+say what the propositions say) and reference/attribution mispairing (the
+Ravenhill class this session already found and cleared by hand).
+
+**Volume, projected not measured.** Topic count grows only from Open
+Decision #16's still-unbuilt mechanism — confirmed this session, by grep,
+that the "growth mechanism" PLAN.md already specified for exactly this
+purpose (source (c), the machine-generated fallback, "must log/tag the
+topic of every answer it gives, so a queue of frequently-asked,
+currently-fallback-answered topics can be produced later") was **never
+built** — zero hits anywhere in `backend/`/`scripts/`. Given topics grow
+only from real observed usage, gated by a mechanism that doesn't exist
+yet, and given this product's own bounded register (a focused set of
+charismatic/theological topics, not an open-ended encyclopedia), a
+realistic steady-state count is plausibly dozens to low hundreds — stated
+as a projection, not a measurement; no one has counted real per-question
+topics because the logging that would let them was itself never built.
+
+**Review volume is bounded by TOPIC count, reviewed once per build/rebuild
+— not by QUESTION count, which is the actual thing Decision #1 refuses to
+gate.** This is the explicit reasoning this section was asked to put on
+record: Decision #1 ("no human review gate anywhere on the serving path")
+was refusing a review step that scales with QUESTIONS ("a review model
+can't enumerate hundreds of thousands of questions in advance"). A
+build-time review scales with TOPICS — a few dozen to a couple hundred
+entries, each reviewed once and amortized across an unbounded number of
+future questions — a categorically different shape and scale of burden,
+not the same thing at a smaller size. And critically: **even a
+build-time-reviewed position's evidence still goes through the FULL,
+unmodified, per-question automated pipeline at answer time** (retrieval,
+generation, attribution-grounding guard, `verify_references()`) — no
+individual served answer is ever human-reviewed, so "no human review on
+the serving path" remains literally true. What's reviewed is the input
+pool an answer may draw from, once, upstream — not the answer.
+
+### 4. What the Groundedness-check proposal's three checks become
+
+| Check | Under one hop |
+|---|---|
+| 1. Teacher-name closure | **Redundant — already covered**, by `chat.py`'s existing attribution-grounding guard (declared-block + prose-scan arms), PROVIDED §1's chunk-shape mapping is correct (the one load-bearing caveat, repeated deliberately — this is not a free win, it's a correctly-built-integration win). No separate position-specific implementation needed. |
+| 2. Verse existence | **Redundant — already covered**, unconditionally, by `verify_references()`'s existing `verify_verse_mention()` guard, which runs on every generated answer regardless of where its context came from. Nothing position-specific needed. |
+| 3. Verse-in-evidence membership | **Not redundant — has no analog in `chat.py`'s pipeline, and is genuinely dropped at answer time under this design.** `verify_references()`'s own docstring is explicit that scripture is "permitted from the model's own knowledge and does not depend on retrieval" (reference_verifier.py:679-681) — the live path deliberately does not require a cited verse to come from evidence, only to be real. A position-derived answer gets exactly this SAME, existence-only guarantee — no worse than the live path today, but no longer the stricter evidence-tethering the two-hop proposal aspired to. What Check 3 was actually protecting against (a reference introduced beyond the evidence) is instead handled upstream and once: Invariant 11's three-layer citation-grounding arbiter already gates what becomes an ELIGIBLE proposition in the first place, and §3's build-time human review is the second, deliberate look — not a per-answer check, an explicit, disclosed trade, consistent with one hop being the accepted direction. |
+
+### 5. Three items carried forward, not decided here
+
+Unchanged from today's remediation section — explicitly still open:
+1. Whether `0892b75d...` (Ravenhill) and `18783354...` (Conlon) get their
+   content rewritten, or stay permanently `eligible=false` and unfixed in
+   the table.
+2. Whether `23d846db...` (the Savchuk candidate) is pulled — still not
+   ID-confirmed against an original finding, still `eligible=true`, still
+   live.
+3. Whether superseded position versions get explicitly `'retracted'` or
+   left as superseded `'draft'` (§2 above reuses `'stale'` for a DIFFERENT
+   purpose — live-divergence suppression of the CURRENT version — and
+   does not touch this separate question about SUPERSEDED versions).
+
+### 6. What this design does NOT solve
+
+- **Substance drift — as open here as everywhere else in this product,
+  unchanged by this revision.** A paraphrase (proposition-extraction from
+  raw text, OR the live model's synthesis from propositions into an
+  answer) that quietly reshapes meaning without introducing a new
+  checkable name or reference is invisible to every check in this design,
+  exactly as it is on the ordinary RAG path today — because it now
+  literally IS the ordinary RAG path's own generation, just fed different
+  evidence. One hop does not make this worse (it removes the whole
+  ADDITIONAL hop where such drift could have compounded, per finding 1)
+  but does not make it better either — CLAUDE.md Settled Decision #3's
+  gap, unchanged.
+- **The Ravenhill-class "real reference attached to the wrong point"
+  defect** — not caught by anything proposed anywhere in this thread,
+  at any stage, deterministically. Only a human, reading the actual
+  source, has ever caught this class (§3 relies on exactly that, once,
+  at build time — not a new capability, the same one already used today).
+- **The staleness window BETWEEN sweeps.** §2 closes the STRUCTURAL
+  blindness reactive invalidation had (it cannot see additions) but does
+  not eliminate a staleness window — it bounds it to "since the last
+  sweep" and makes it visible (`status='stale'`, a report), rather than
+  indefinite and invisible. Not the same as solved.
+- **Topic-matching accuracy — still entirely unbuilt.** Open Decision #16
+  and `match_stored_position()` remain the real, hard prerequisite this
+  design does not touch; nothing here matters until that exists.
+- **The DB-architecture mismatch Step 4 flagged is reduced, not
+  eliminated.** One hop removes it from the ANSWER-time path entirely —
+  reading `positions`/`position_evidence`/`propositions` at request time
+  can go through the same `get_supabase()` REST client `chat.py` already
+  uses everywhere else (they are plain `SELECT`s), so no raw-`psycopg2`
+  connection is needed per question, unlike the two-hop design's finding
+  6. The BUILD-time write path (generation + `rebuild_position()`) still
+  needs `psycopg2`, exactly as it does today — unchanged, not solved, just
+  no longer paid twice.
+
+### 7. Revised build sequence
+
+Concurrency/race and failure-memory (pressure test's fatal finding 3) are
+folded in as their own steps, not left as known-and-unfixed:
+
+1. **Topic list + `match_stored_position()`** (Open Decision #16) — still
+   the hard prerequisite, unchanged by this revision.
+2. **Build-time review workflow** (§3) — even a lightweight,
+   human-in-the-loop script (print position + evidence, require an
+   explicit approve/reject) must exist before any position is eligible to
+   be injected into live generation at all.
+3. **The chunk-shape adapter** (§1) — the one genuinely new piece of code
+   this design requires: a pure data-mapping function, position evidence
+   → chat.py's existing chunk shape. Small, testable in isolation, no new
+   generation or verification path.
+4. **Concurrency fix, moved ahead of any batch/scheduled use** — 
+   `_insert_position_version()`'s unique-index violation on concurrent
+   writers (pressure test finding 3) is currently unguarded — `write_
+   position()`/`write_corpus_position()` do not catch it, so a second
+   concurrent writer crashes rather than gracefully re-reading the
+   winner's row. Must be fixed before step 7's sweep could ever run
+   concurrently with a manual build, or before two reviewers could ever
+   work at once.
+5. **Failure-memory fix, also from finding 3** — a topic that fails
+   build-time review repeatedly (the Calvinism/predestination class is
+   the documented precedent for "structurally hard for this exact
+   prompt") currently has no persisted memory, so every retry re-pays
+   full generation cost. Needs a minimal marker — the cleanest is a small,
+   explicit, NAMED future migration widening the `status` CHECK (e.g., a
+   `'failed'` value) rather than overloading `'stale'`/`'retracted'`,
+   which already carry the two distinct meanings defined in §2/§5. Not
+   implemented here — named as its own future step so it isn't silently
+   skipped.
+6. **Injection point in `chat.py`** — parallel to the existing
+   `match_background_topics()` pattern (chat.py:153-162): on a topic
+   match, check the position's `status` (§2), fetch its current evidence
+   via the chunk-shape adapter (step 3), inject alongside normal
+   retrieval. Everything downstream of this point — generation,
+   attribution-grounding guard, `verify_references()`, playback, meta —
+   runs completely unchanged.
+7. **The freshness sweep** (§2) — build the re-gather-and-diff script and
+   its two-tier severity split; start manual/on-demand at current volume,
+   formalize into a scheduled job only once topic count actually grows
+   enough to justify it.
+8. **Rollout** — unchanged from Step 4's own recommendation, still the
+   right precedent: shadow mode first (generate alongside real traffic,
+   log side by side, show nothing to users), then the async-answer path's
+   proven two-level off-switch shape (env-gated code mount + a
+   seconds-reversible DB boolean) — not reinvented here, reused as-is.
+
+### Ranked — still weak after this revision
+
+1. **Topic-matching (`match_stored_position()`, Open Decision #16) is the
+   actual bottleneck, unchanged by any part of this revision.** Everything
+   above is moot until it exists — the single most load-bearing missing
+   piece, exactly as every prior session in this thread already found.
+2. **The chunk-shape adapter (§1, §7 step 3) is unproven and is where a
+   quiet, structural failure would hide most easily.** If built
+   incorrectly, Checks 1 and 2 (§4) silently stop protecting position-
+   derived evidence, and — per this whole thread's own repeated pattern
+   (the Ravenhill proposition sitting live and unflagged for weeks) —
+   nothing loud would necessarily surface that. Whoever builds this needs
+   a dedicated test asserting a position-injected teacher is correctly
+   recognized as "grounded" by `build_retrieval_grounding()`, in the same
+   spirit as `test_serve_position.py`'s existing signature-assertion
+   discipline for Invariant 12.
+3. **The Tier-1/Tier-2 divergence thresholds (§2) are reasoned defaults,
+   not calibrated ones** — same honest caveat this codebase already
+   applies to `DOMINANCE_THRESHOLD`. Needs real re-gather cycles observed
+   before being trusted.
+4. **Substance drift is still completely open** — the single largest
+   standing risk of the whole thread, unmoved by this or any prior
+   revision, named plainly per this session's own instruction so Alex can
+   decide whether to accept the design with it left open.
+5. **Build-time review (§3) has a defined WHAT and a projected HOW MUCH,
+   but no defined WHO or CADENCE.** An operational, not technical, gap —
+   flagged so it isn't mistaken for solved just because the technical
+   shape is specified.
