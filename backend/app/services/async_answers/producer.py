@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # constant here -- a module-level snapshot would freeze at import time and
 # never see a live model change. GEN_MAX_TOKENS remains hand-synced with
 # chat._stream_answer.
-GEN_MAX_TOKENS = 3000
+GEN_MAX_TOKENS = 8000
 
 # ---- policy versioning for the reuse key -----------------------------------
 # prompt_version is a real fingerprint of the exact instruction wording the

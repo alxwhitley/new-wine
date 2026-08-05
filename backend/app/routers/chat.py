@@ -565,7 +565,7 @@ def _stream_answer(history, permitted_names=None):
     stop_reason = None
     last_beat = time.time()
     stream = client.messages.create(
-        model=get_generation_model(), max_tokens=3000, thinking={"type": "disabled"}, system=system, messages=history, stream=True,
+        model=get_generation_model(), max_tokens=8000, thinking={"type": "disabled"}, system=system, messages=history, stream=True,
     )
     for ev in stream:
         if ev.type == "content_block_delta" and hasattr(ev.delta, "text"):
