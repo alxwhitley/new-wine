@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-04 (position-layer fabrication remediation executed +
-verified live; store-then-synthesize design rejected, one-hop revision
-written — see below).
+Last verified: 2026-08-06 (Sonnet 5 model swap + a live model-switch config
+lever both built and live-tested with real generations — see below; both
+uncommitted).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Trimmed
 2026-08-01 (from ~2,700 lines) and repeatedly since. Cut material is never
@@ -20,62 +20,76 @@ the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 ## Current state
 
 **Deployment.** `origin/main` = local `main` at `2ba9f12` (pushed 2026-08-04).
-Async path stays DARK: `chat.py`/`main.py` byte-identical to pre-async Stage 2,
-routes unmounted (`ASYNC_ANSWER_ENABLED` unset), DB switch
-`async_answer_config.serving_enabled=false`. Live serving path is unchanged.
-Deploy history: commits `2ba9f12`, `6dca017`, `196f1f2`, `dd71b87`; full
-narrative in PLAN.md's version history.
+Async path stays DARK (`ASYNC_ANSWER_ENABLED` unset, DB switch
+`serving_enabled=false`); live serving path unchanged. Deploy history:
+`2ba9f12`, `6dca017`, `196f1f2`, `dd71b87`; full narrative in PLAN.md.
 
 **Project 1 (scalable async answers) — worker built, deployed, verified;
-switches still OFF.** Worker service exists on Railway (repo-root
-`nixpacks.toml`), completed one real end-to-end generation ($0.076, cleaned up
-after); 20/20 simultaneous generations measured. **Residual, unconfirmed:**
-whether the worker's live `SUPABASE_DB_URL` is the transaction pooler (6543)
-vs session pooler (5432, ~12/worker cap) — needs `railway variables` on the
-worker or Alex pasting the URL. Detail: PLAN.md CURRENT BUILD SEQUENCE +
-CLAUDE.md's async landmine.
+switches still OFF.** Worker on Railway; one real end-to-end generation
+proven ($0.076); 20/20 simultaneous generations measured. **Residual:**
+worker's `SUPABASE_DB_URL` — transaction pooler (6543) or session pooler
+(5432, ~12/worker cap)? Needs `railway variables` or Alex pasting the URL.
+Detail: PLAN.md + CLAUDE.md's async landmine.
 
 **Answer path — current behavior (live `/chat`, unchanged).** Buffers fully,
 runs the Phase-2 retrieval-grounding guard + prose-attribution scan +
-`verify_references`, resolves ungrounded credit
-(regenerate-once-then-refuse), reveals as paced playback. A teacher earns a
-verified link only if retrieved for the question. The position-paper
-(house-voice) path serves the baptism + tongues pillars via `chat.py`
-interception and still streams live.
+`verify_references`, resolves ungrounded credit (regenerate-once-then-
+refuse), reveals as paced playback. Position-paper (house-voice) path
+serves baptism + tongues via `chat.py` interception, still streams live.
 
-**Position layer — design revised 2026-08-04, nothing built.** The
-stored-position-then-rewrite (two-hop) design was pressure-tested and found
-fatally flawed: a check on the generated answer can't see drift already baked
-into the stored position (proven live — a documented fabrication, Ravenhill/
-Philippians 4:8-9, was found still `eligible=true` and already feeding a
-real stored position's evidence); reactive invalidation can't detect corpus
-material being ADDED, the dominant real case (517 new eligible propositions
-landed 2026-08-03, after both live corpus positions were built); no
-concurrency guard or failure memory existed either. **Accepted direction is
-now one hop:** a matched position's underlying propositions — never its
-rendered text — feed `chat.py`'s existing, already-hardened pipeline
-directly, supplementing normal retrieval; the position's own text becomes a
-build-time human-review artifact only, never served. Same-day remediation
-cleared 2 of 3 documented fabrication cases (Ravenhill, Conlon — now
-`eligible=false`, content not rewritten, undecided) and demonstrated the
-volatility live: removing one bad proposition flipped `holiness and personal
-purity` from a 4-teacher corpus position to a Prince-only teacher position
-(commits `ab18222`/`b8034eb`). Third case (Savchuk) unconfirmed, untouched.
-Topic-matching (`match_stored_position()`, #16) remains the real, unbuilt
-prerequisite. Full diagnostic/pressure test/remediation/revised design/ranked
-weaknesses: `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+**Position layer — design revised 2026-08-04, nothing built.** Two-hop
+stored-position-then-rewrite rejected (can't see drift baked into a stored
+position; can't detect corpus material being ADDED). **Accepted: one hop**
+— a matched position's underlying propositions, never its rendered text,
+feed `chat.py`'s hardened pipeline directly; the position's own text is a
+build-time review artifact only. Cleared 2/3 fabrication cases (Ravenhill,
+Conlon — `eligible=false`), Savchuk unconfirmed. Topic-matching
+(`match_stored_position()`, #16) remains the unbuilt prerequisite. Detail:
+`docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
 
-**Corpus/data.** Propositions backfill COMPLETE (0 genuine documents
-remaining). Chapter-scoped book extraction covers 8/53 books; the
-numeral-heading detector is built but uncommitted. All counts: query live.
+**Corpus/data.** Propositions backfill COMPLETE. Chapter-scoped book
+extraction covers 8/53 books; numeral-heading detector built, uncommitted.
+Counts: query live.
 
-**Attribution audit (2026-08-04, read-only, zero writes).**
-`docs/audits/historical_commentary_attribution_reverification_2026-08-04.md`.
-307 HistoricalChristianFaith docs: author names intact, nothing stripped
-(Open blocker #15 premise resolved). The C.S. Lewis doc under this source is
-correctly attributed but wrongly tagged `public_domain` (protected to
-~2033); Tolkien / Douglas Wilson are the same class — Open blocker #16, still
-open.
+**Attribution audit (2026-08-04).** `docs/audits/
+historical_commentary_attribution_reverification_2026-08-04.md` — 307
+HistoricalChristianFaith docs intact, nothing stripped (#15 resolved). C.S.
+Lewis/Tolkien/Douglas Wilson mistagged `public_domain` — #16, still open.
+
+**Model swap (Sonnet 5) — built, live-tested, NOT committed.**
+`claude-sonnet-4-5` → `claude-sonnet-5` at all generation call sites;
+`thinking={"type":"disabled"}` added explicitly everywhere (Sonnet 5
+defaults adaptive thinking ON when omitted — would've silently eaten the
+`max_tokens=3000` budget). Harness-built + independently re-verified.
+**Live-tested 2026-08-06** — 7 real generations via `producer.produce()`
+(offline, SELECT-only, ~$0.26 total): teacher-allowlist +
+`verify_references` guards held every time, zero misattribution. **Real
+median cost $0.0504 at the intro rate ($2/$10/MTok, expires 2026-08-31),
+$0.0755 at list ($3/$15)** — vs the $0.039 baseline
+(`docs/audits/per_answer_cost_measurement_2026-08-03.md`): +29%/+94%,
+driven by the new tokenizer, not a broken swap. **Real risk found:** one
+long-form question hit `max_tokens=3000`, cut off cleanly (§7a fired, no
+leak) — but lost ALL citation verification (0 refs vs 5-6 real citations
+visibly present), since the model never reached `<reference_mentions>`.
+**Reproduced, not new:** `match_position_paper`'s scripture-question
+over-match (already flagged, 2026-08-03 audit) fired on 2/7 questions.
+
+**Same day: live model-switch lever added, ALSO uncommitted.** New table
+`generation_model_config` (migration 081, a real DB write — correctly
+plain-script per Session Routing's hard rule, not harness) holds the live
+model ID; `llm_client.get_generation_model()` reads it with a 60s
+in-process cache (matches `source_filter.get_disabled_filters()`), falling
+back to the hardcoded `GENERATION_MODEL` constant — logged — on any
+missing/empty/unreachable value; no allow-list. Every generation call site
+now reads through this accessor instead of a frozen constant (producer.py's
+old `GEN_MODEL` and positions.py's `MODEL` module-level snapshots are both
+gone — either would defeat a live switch). **Proven live:** switched to
+`claude-haiku-4-5`, confirmed via real `chat._stream_answer()` +
+`producer._generate_and_capture()` calls that the actual Anthropic
+`response.model` reflects it; switched back to `claude-sonnet-5`, confirmed
+again; simulated an empty config value, confirmed the fallback fires
+(logged) and generation still succeeds. No env var/flag/serving-switch
+touched. Both this and the model swap are uncommitted, same diff.
 
 ---
 
@@ -96,17 +110,16 @@ simultaneous-chat ceiling (anyio threadpool exhaustion) — replacement built
 - **#12** `jewish_perspectives` table orphaned (2 rows, no code references).
 - **#13** SP2 Study Panel — no real screen-reader (VoiceOver/NVDA) pass ever run.
 - **#14** Hebrew lexicon (TBESH) not covered by the Greek CC BY 4.0 grant — don't build against it until cleared.
-- **#16** C.S. Lewis / Tolkien / Douglas Wilson mistagged `public_domain` under HistoricalChristianFaith — live exposure; durable fix needs a per-author license override (Alex's schema decision).
-- **#18** Home-page marketing line names Bevere (empty source, 0 props) and Koulianos (not in corpus) as "trusted teachers" — living-minister misrepresentation, still open.
-- **#19** External pipeline diagram (non-repo, not found locally) stale in 4 ways — fix if/when it resurfaces.
+- **#16** Lewis/Tolkien/Wilson mistagged `public_domain` under HistoricalChristianFaith — durable fix needs a per-author license override (Alex's schema decision).
+- **#18** Home-page names Bevere (empty, 0 props) and Koulianos (not in corpus) as "trusted teachers" — living-minister misrepresentation, still open.
+- **#19** External pipeline diagram (non-repo, not found) stale in 4 ways — fix if it resurfaces.
 
 Resolved: #1, #2, #3, #5, #15, #17.
 
 ## Known harness bugs
 
-Both resolved: the 2026-07-18 executor write-accounting loop (`d9ab1cc`) and
-`BASH_WRITE_INDICATORS` over-flagging (`569d412`). Session Routing's
-DB-write hard rule and revisit trigger are unchanged.
+Both resolved (`d9ab1cc`, `569d412`). Session Routing's DB-write hard rule
+and revisit trigger unchanged.
 
 ---
 
@@ -127,25 +140,23 @@ DB-write hard rule and revisit trigger are unchanged.
    `serving_enabled` still false), run the controlled public traffic window,
    and flip `serving_enabled` back off immediately after. Project 2 starts
    only once that cutover is stable.
-2. **Position layer — revised build sequence (see Current state above; full
-   detail in the audit doc), one hop not two.** In order: topic list +
-   `match_stored_position()` (Open Decision #16, still the hard
-   prerequisite) → build-time review workflow → the chunk-shape adapter
-   (position evidence → `chat.py`'s existing chunk shape) → the
-   `_insert_position_version()` concurrency fix (unguarded unique-index
-   violation, found live in the pressure test) → the `chat.py` injection
-   point (parallel to existing background-topic injection) → the freshness
-   re-gather-and-diff sweep → rollout (shadow mode, then the async path's
-   proven two-level off-switch). Also still open, not decided: whether the
-   two remediated propositions get rewritten, whether the unconfirmed
-   Savchuk case gets pulled, whether superseded position versions get
-   retracted vs. left as-is.
+2. **Position layer — one-hop build sequence** (Current state above; detail
+   in the audit doc): topic list + `match_stored_position()` (#16) →
+   review workflow → chunk-shape adapter → concurrency fix → `chat.py`
+   injection → freshness sweep → rollout. Undecided: rewrite the 2
+   remediated propositions? pull Savchuk? retract superseded versions?
 3. Route `ingest_helloao.py` through `shared_ingest` (blocker #4).
 4. Folder renames (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop the
    orphaned `jewish_perspectives` table.
 5. Staging Supabase + a verified backup/restore test (backup exists, restore
    never tested).
+6. **Flip `async_answers/config.py`'s cost constants back to list price on or
+   after 2026-08-31.** `USD_PER_MTOK_INPUT`/`USD_PER_MTOK_OUTPUT` currently
+   hold Sonnet 5's introductory rate ($2/$10 per MTok, Alex's call
+   2026-08-05), not list price ($3/$15) — the constants themselves carry an
+   `*** EXPIRES 2026-08-31 ***` comment, but nothing enforces the flip
+   automatically. Miss this and every cost estimate silently under-reports by
+   ~33% after the intro window closes.
 
-SP track: SP2 done (Phases 1–9); SP4 teacher cards shipped and signed off; SP
-panel refinement done. Next SP item is #43 (SP5, mobile bottom-sheet). #38
-(SP0 mobile mockup) completion unverified — confirm before assuming.
+SP track: SP2/SP4/panel-refinement done. Next: #43 (SP5, mobile bottom-sheet).
+#38 (SP0 mobile mockup) completion unverified — confirm before assuming.
