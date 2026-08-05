@@ -662,8 +662,37 @@ different row, per the hard rule above.
   structurally different case (Savchuk's "Devil's Voice" — an invented
   scriptural-AUTHORITY claim with no actual chapter:verse to check) remains
   confirmed but undetectable by any reference-grounding check by
-  construction — nothing to parse. **The spoken-form gap named here is now
-  fixed (2026-07-28, `scripts/citation_verifier_layers.py`'s Layer 1,
+  construction — nothing to parse. **Documented here since 2026-07-24/
+  2026-07-28 but never actually remediated until 2026-08-04 — found still
+  live and `eligible=true` by the position-layer design pressure test
+  (`docs/audits/position_layer_revival_diagnostic_2026-08-04.md`,
+  "Fabricated-proposition remediation"), because neither case is a
+  closeness or citation-existence failure (both real citations resolve
+  fine; the defect is pairing a real citation with the wrong claim), so
+  neither was ever caught by the automated flagging these two checks
+  otherwise feed.** The two ID-confirmed cases — Conlon
+  (`18783354-931f-4244-bfe3-f47ce185b3ba`) and Ravenhill
+  (`0892b75d-1c9f-4a65-a47e-768c1c5c1803`) — are now `eligible=false`
+  (`scripts/remediate_fabricated_propositions_2026-08-04.py`), removing
+  them from all future position-layer evidence gathering; **content was
+  NOT rewritten for either** — Alex has not ruled on whether to also
+  correct the stored text, so both rows still contain their original
+  mispaired wording, just excluded from use. Rebuilding the one position
+  that had consumed the Ravenhill row (`holiness and personal purity`,
+  corpus-scope) surfaced a real, unplanned side effect worth knowing before
+  anyone reruns this pattern elsewhere: with that one proposition gone, the
+  topic's evidence dominance recalculated past `DOMINANCE_THRESHOLD`, and
+  the rebuilt version is now a single-teacher Derek Prince position, not a
+  corpus position — Ravenhill, Murray, and Poonen no longer appear as
+  contributors to this topic at all, an intended consequence of the
+  already-built scope-redetermination logic, not a bug, but a bigger
+  change than "minus one contributor." **The Savchuk case
+  (`23d846db-66de-4cc6-8308-138877fd3772`, in "How to Spot the Devil's
+  Voice in Your Head") is a strong content match but was never
+  ID-confirmed against an original finding — left untouched, still
+  `eligible=true`, still live, pending Alex's decision.** **The spoken-form
+  gap named here is now fixed (2026-07-28,
+  `scripts/citation_verifier_layers.py`'s Layer 1,
   commit `ff74a42`)** — but that fix lives in the repurposed
   generation-time verifier (PLAN.md #45.6), not in
   `reference_grounding.find_reference_spans()`, the scanner
