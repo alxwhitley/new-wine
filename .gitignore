@@ -93,3 +93,7 @@ book_chapter_live_proof_review/
 scripts/teacher_name_guard_live_results.json
 # Phase 2 residual prose-scan live-run artifact (local, regenerated on demand)
 scripts/prose_scan_live_results.json
+# Position-layer eligibility backfill cache (local, regenerated on demand --
+# recovery mechanism for a failed/retried write, not a source of truth)
+scripts/eligible_ids_cache.json
+eligibility_dryrun_*.log

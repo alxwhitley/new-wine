@@ -172,6 +172,42 @@ class EligibilityChecker:
         return res
 
 
+def load_eligible_ids(params: dict) -> Set[str]:
+    """Fast alternative to EligibilityChecker for question time: reads the
+    materialized `propositions.eligible` column (migration 080) instead of
+    recomputing per-candidate. A single indexed SELECT over exactly the rows
+    that matter (propositions_eligible_idx is a partial index WHERE eligible),
+    not a CPU-bound trigram/citation recheck -- this is what makes the
+    position-serving path viable at real question time (PLAN.md #48 step 2a).
+
+    Returns a plain Set[str], the SAME shape compute_eligible_proposition_ids()
+    returns -- positions.py's _is_eligible() already treats a set as a
+    membership test, so this is a drop-in replacement for either the lazy
+    checker OR the live whole-corpus compute at any call site that gathers
+    evidence.
+
+    KNOWN STALENESS (disclosed in migration 080, not solved here): a
+    proposition ingested after the last backfill run, or a proposition whose
+    eligibility would change under a later fix to closeness_check.py/
+    reference_grounding.py's decision logic, will not be reflected here until
+    scripts/backfill_proposition_eligibility.py re-runs. Callers that need a
+    guaranteed-current verdict (e.g. auditing one specific proposition right
+    after a code change) should use classify_eligibility() or
+    compute_eligible_proposition_ids() directly instead."""
+    import psycopg2
+
+    conn = psycopg2.connect(**params)
+    conn.set_session(readonly=True, autocommit=True)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id::text FROM propositions WHERE eligible = true")
+        rows = cur.fetchall()
+        cur.close()
+    finally:
+        conn.close()
+    return {r[0] for r in rows}
+
+
 def compute_eligible_proposition_ids(params: dict, verbose: bool = False) -> Set[str]:
     """Returns the set of proposition IDs (as text) whose closeness verdict
     is PASS and whose citation verdict is 'pass' or 'no_references'.

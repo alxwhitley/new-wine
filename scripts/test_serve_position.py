@@ -49,6 +49,20 @@ def test_invariant_12_signatures_source_blind():
     for bad in forbidden:
         _check(f"generate_corpus_position_text has no {bad!r} param", bad not in cp)
 
+    # Streaming siblings (2026-08-04, PLAN.md #48 step 2c) must carry the
+    # identical source-blind contract -- additive, never a looser copy.
+    tps = list(inspect.signature(pos.generate_position_text_stream).parameters)
+    _check(f"generate_position_text_stream params == [teacher_name, topic, evidence] (got {tps})",
+           tps == ["teacher_name", "topic", "evidence"])
+    for bad in forbidden:
+        _check(f"generate_position_text_stream has no {bad!r} param", bad not in tps)
+
+    cps = list(inspect.signature(pos.generate_corpus_position_text_stream).parameters)
+    _check(f"generate_corpus_position_text_stream params == [topic, attributed_evidence] (got {cps})",
+           cps == ["topic", "attributed_evidence"])
+    for bad in forbidden:
+        _check(f"generate_corpus_position_text_stream has no {bad!r} param", bad not in cps)
+
 
 def test_normalize_topic_key():
     print("\n" + "=" * 78)

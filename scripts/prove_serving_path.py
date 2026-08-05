@@ -122,14 +122,18 @@ def count_rows(params, topic_key, requested_teacher_id):
 
 
 def build_eligibility():
-    """The lazy pass-both checker -- the only viable form at question time (the
-    whole-corpus computation is CPU-bound; see the session report). Uses the
-    SAME per-proposition decision as eligible_statements.compute_eligible_
-    proposition_ids (classify_eligibility), so verdicts are identical; only the
-    set of propositions checked differs (candidates only)."""
+    """The materialized pass-both set (migration 080 + eligible_statements.
+    load_eligible_ids(), 2026-08-04) -- a fast, indexed read instead of the
+    lazy per-candidate EligibilityChecker this used before materialization
+    existed (whole-corpus computation is CPU-bound; the lazy checker was the
+    only viable-at-question-time form before this). Uses the SAME
+    per-proposition decision as eligible_statements.compute_eligible_
+    proposition_ids (classify_eligibility) via the backfill that populated the
+    column, so verdicts are identical -- see
+    docs/audits/position_layer_revival_diagnostic_2026-08-04.md."""
     import eligible_statements as es
-    print("building lazy EligibilityChecker (pass-both gate)...")
-    return es.EligibilityChecker(pos.db_params())
+    print("loading materialized eligible set (propositions.eligible)...")
+    return es.load_eligible_ids(pos.db_params())
 
 
 def main():
