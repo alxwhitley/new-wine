@@ -8,7 +8,7 @@ seen elsewhere as unverified.
 
 Last verified: 2026-08-06 (Sonnet 5 model swap + a live model-switch config
 lever both built and live-tested with real generations — see below; both
-uncommitted).
+committed, `fe56086`).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Trimmed
 2026-08-01 (from ~2,700 lines) and repeatedly since. Cut material is never
@@ -56,7 +56,7 @@ historical_commentary_attribution_reverification_2026-08-04.md` — 307
 HistoricalChristianFaith docs intact, nothing stripped (#15 resolved). C.S.
 Lewis/Tolkien/Douglas Wilson mistagged `public_domain` — #16, still open.
 
-**Model swap (Sonnet 5) — built, live-tested, NOT committed.**
+**Model swap (Sonnet 5) — built, live-tested, committed (`fe56086`).**
 `claude-sonnet-4-5` → `claude-sonnet-5` at all generation call sites;
 `thinking={"type":"disabled"}` added explicitly everywhere (Sonnet 5
 defaults adaptive thinking ON when omitted — would've silently eaten the
@@ -74,7 +74,7 @@ visibly present), since the model never reached `<reference_mentions>`.
 **Reproduced, not new:** `match_position_paper`'s scripture-question
 over-match (already flagged, 2026-08-03 audit) fired on 2/7 questions.
 
-**Same day: live model-switch lever added, ALSO uncommitted.** New table
+**Same day: live model-switch lever added, same commit (`fe56086`).** New table
 `generation_model_config` (migration 081, a real DB write — correctly
 plain-script per Session Routing's hard rule, not harness) holds the live
 model ID; `llm_client.get_generation_model()` reads it with a 60s
@@ -89,7 +89,8 @@ gone — either would defeat a live switch). **Proven live:** switched to
 `response.model` reflects it; switched back to `claude-sonnet-5`, confirmed
 again; simulated an empty config value, confirmed the fallback fires
 (logged) and generation still succeeds. No env var/flag/serving-switch
-touched. Both this and the model swap are uncommitted, same diff.
+touched. Both this and the model swap are committed together in `fe56086`;
+live DB confirms `generation_model_config.model = 'claude-sonnet-5'`.
 
 ---
 
