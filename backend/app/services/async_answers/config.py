@@ -5,12 +5,23 @@ spend ceiling, lease length) lives in a single DB row so a change applies
 across the whole worker fleet without a redeploy. Read fresh each poll; there
 is no in-process cache to go stale.
 
-Also holds the per-answer cost model. `claude-sonnet-4-5` (the model the live
-path uses, unchanged here) is Sonnet-tier: $3 / MTok input, $15 / MTok output,
-cache reads ~0.1x input, cache writes ~1.25x input. These are OVERRIDABLE
-constants, not a hardcoded truth -- the measured per-answer median of $0.039
+Also holds the per-answer cost model. `claude-sonnet-5` (the model the live
+path uses, unchanged here) is Sonnet-tier. The constants below currently hold
+the INTRODUCTORY rate ($2 / MTok input, $10 / MTok output), active through
+2026-08-31 -- Alex's explicit call, 2026-08-05. Sonnet 5's LIST price is
+$3/$15 per MTok (unchanged from Sonnet 4.5); cache reads ~0.1x input, cache
+writes ~1.25x input, unaffected by which of the two rates is active.
+
+*** EXPIRES 2026-08-31 *** -- after this date the introductory rate no longer
+applies and these two constants MUST be flipped back to list price ($3.0/$15.0)
+or every cost estimate silently under-reports by ~33%. Tracked in
+rhemata-status.md's Next section so this doesn't get missed.
+
+These are OVERRIDABLE constants, not a hardcoded truth -- the measured
+per-answer median of $0.039
 (docs/audits/per_answer_cost_measurement_2026-08-03.md) is the ground-truth
-sanity check.
+sanity check, and predates this intro-rate adoption (measured against list
+price) -- expect actuals to run below that figure while the intro rate holds.
 
 Python 3.9 (Invariant 1).
 """
@@ -23,9 +34,13 @@ from .db import dict_cursor
 
 # ---- cost model (per million tokens, USD) --------------------------------
 # Overridable; keep in sync with the answer-generation model in chat.py.
-COST_MODEL = "claude-sonnet-4-5"
-USD_PER_MTOK_INPUT = 3.0
-USD_PER_MTOK_OUTPUT = 15.0
+COST_MODEL = "claude-sonnet-5"
+# *** INTRODUCTORY RATE -- EXPIRES 2026-08-31 ***
+# These are Sonnet 5's introductory prices, NOT list price. List price is
+# $3.0 / $15.0 per MTok. On or after 2026-08-31, flip these two constants
+# back to list price -- see rhemata-status.md's Next section.
+USD_PER_MTOK_INPUT = 2.0
+USD_PER_MTOK_OUTPUT = 10.0
 CACHE_READ_MULTIPLIER = 0.1   # cache_read_input_tokens billed ~0.1x input
 CACHE_WRITE_MULTIPLIER = 1.25  # cache_creation_input_tokens billed ~1.25x input
 

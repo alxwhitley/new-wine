@@ -209,11 +209,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from app.services.embeddings import embed_text  # noqa: E402
-from app.services.llm_client import get_anthropic_client, get_guardrails_text  # noqa: E402
+from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model  # noqa: E402
 
 PROMPT_VERSION = "position_v2"
 TENSION_MODE_PROMPT_VERSION = "position_tension_v3"
-MODEL = "claude-sonnet-4-5"
 
 SIMILARITY_FLOOR = 0.45
 MAX_EVIDENCE = 15
@@ -776,8 +775,9 @@ def generate_position_text(teacher_name: str, topic: str, evidence: List[Dict]) 
     try:
         client = get_anthropic_client()
         response = client.messages.create(
-            model=MODEL,
+            model=get_generation_model(),
             max_tokens=500,
+            thinking={"type": "disabled"},
             system=[
                 {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
                 {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
@@ -814,8 +814,9 @@ def generate_corpus_position_text(topic: str, attributed_evidence: List[Dict]) -
     try:
         client = get_anthropic_client()
         response = client.messages.create(
-            model=MODEL,
+            model=get_generation_model(),
             max_tokens=600,
+            thinking={"type": "disabled"},
             system=[
                 {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
                 {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
@@ -851,8 +852,9 @@ def generate_position_text_stream(teacher_name: str, topic: str, evidence: List[
     try:
         client = get_anthropic_client()
         stream = client.messages.create(
-            model=MODEL,
+            model=get_generation_model(),
             max_tokens=500,
+            thinking={"type": "disabled"},
             system=[
                 {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
                 {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
@@ -885,8 +887,9 @@ def generate_corpus_position_text_stream(topic: str, attributed_evidence: List[D
     try:
         client = get_anthropic_client()
         stream = client.messages.create(
-            model=MODEL,
+            model=get_generation_model(),
             max_tokens=600,
+            thinking={"type": "disabled"},
             system=[
                 {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
                 {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
@@ -941,6 +944,7 @@ def _insert_position_version(
     evidence: List[Dict],
     prompt_version: str,
     prompt_fingerprint: str,
+    model: str,
     supersedes: Optional[Dict] = None,
 ) -> Dict:
     """Writes ONE position version + its position_evidence rows in a single
@@ -993,7 +997,7 @@ def _insert_position_version(
             RETURNING id::text, created_at, version
             """,
             (new_id, kind, source_id, requested_teacher_id, topic, topic_key,
-             content, prompt_version, prompt_fingerprint, MODEL,
+             content, prompt_version, prompt_fingerprint, model,
              lineage_id, version, supersedes_id),
         )
         position_id, created_at, written_version = cur.fetchone()
@@ -1115,6 +1119,7 @@ def write_position(
         evidence=evidence,
         prompt_version=stamped_prompt_version,
         prompt_fingerprint=stamped_fingerprint,
+        model=get_generation_model(),
         supersedes=supersedes,
     )
 
@@ -1196,6 +1201,7 @@ def write_corpus_position(
         evidence=evidence,
         prompt_version=stamped_prompt_version,
         prompt_fingerprint=stamped_fingerprint,
+        model=get_generation_model(),
         supersedes=supersedes,
     )
 

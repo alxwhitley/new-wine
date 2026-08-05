@@ -23,7 +23,7 @@ from app.auth import get_optional_user
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
-from app.services.llm_client import get_anthropic_client, get_guardrails_text
+from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model
 from app.services.position_papers import generate_position_paper_answer, match_position_paper
 from app.services.corpus_version import get_corpus_version
 
@@ -565,7 +565,7 @@ def _stream_answer(history, permitted_names=None):
     stop_reason = None
     last_beat = time.time()
     stream = client.messages.create(
-        model="claude-sonnet-4-5", max_tokens=3000, system=system, messages=history, stream=True,
+        model=get_generation_model(), max_tokens=3000, thinking={"type": "disabled"}, system=system, messages=history, stream=True,
     )
     for ev in stream:
         if ev.type == "content_block_delta" and hasattr(ev.delta, "text"):

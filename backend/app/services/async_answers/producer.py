@@ -36,14 +36,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
-from app.services.llm_client import get_anthropic_client
+from app.services.llm_client import get_anthropic_client, get_generation_model
 from app.services.corpus_version import get_corpus_version
 from .config import estimate_cost_usd
 
 logger = logging.getLogger(__name__)
 
 # ---- generation constants (DRIFT POINT: keep in sync with chat._stream_answer) ----
-GEN_MODEL = "claude-sonnet-4-5"
+# The model ID is looked up fresh (via get_generation_model(), migration 081,
+# cached 60s) at each _generate_and_capture() call below, not a module-level
+# constant here -- a module-level snapshot would freeze at import time and
+# never see a live model change. GEN_MAX_TOKENS remains hand-synced with
+# chat._stream_answer.
 GEN_MAX_TOKENS = 3000
 
 # ---- policy versioning for the reuse key -----------------------------------
@@ -82,7 +86,7 @@ class ProducerResult:
     verified_references: List[Dict[str, Any]] = field(default_factory=list)
     retrieved_chunk_ids: List[str] = field(default_factory=list)
     retrieved_point_ids: List[str] = field(default_factory=list)
-    model: str = GEN_MODEL
+    model: str = field(default_factory=get_generation_model)
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
@@ -359,12 +363,13 @@ def _generate_and_capture(history, permitted_names=None):
         system = list(_chat.ANSWER_SYSTEM_BLOCKS) + [{"type": "text", "text": constraint}]
 
     client = get_anthropic_client()
+    model_used = get_generation_model()
     raw_full = []  # type: List[str]
     stop_reason = None
     usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
 
     stream = client.messages.create(
-        model=GEN_MODEL, max_tokens=GEN_MAX_TOKENS, system=system, messages=history, stream=True,
+        model=model_used, max_tokens=GEN_MAX_TOKENS, thinking={"type": "disabled"}, system=system, messages=history, stream=True,
     )
     for ev in stream:
         if ev.type == "message_start":
@@ -387,7 +392,7 @@ def _generate_and_capture(history, permitted_names=None):
 
     raw_output = "".join(raw_full)
     answer = _chat._extract_answer_from_raw(raw_output, stop_reason) or _chat._NO_ANSWER_FALLBACK
-    return answer, raw_output, stop_reason, usage
+    return answer, raw_output, stop_reason, usage, model_used
 
 
 def _add_usage(a: Dict[str, int], b: Dict[str, int]) -> Dict[str, int]:
@@ -512,7 +517,7 @@ def produce(supabase, question, messages=None, topics_established=None):
         if _chat._is_citable(c) and (c.get("author") or "").strip()
     })
 
-    answer, raw_output, _sr, usage = _generate_and_capture(history)
+    answer, raw_output, _sr, usage, model_used = _generate_and_capture(history)
     total_usage = dict(usage)
 
     refused = False
@@ -527,7 +532,7 @@ def produce(supabase, question, messages=None, topics_established=None):
             return False
 
         if _has_ungrounded(answer, raw_output):
-            answer2, raw2, _sr2, usage2 = _generate_and_capture(history, permitted_names=permitted_names)
+            answer2, raw2, _sr2, usage2, model_used = _generate_and_capture(history, permitted_names=permitted_names)
             total_usage = _add_usage(total_usage, usage2)
             if _has_ungrounded(answer2, raw2):
                 logger.warning("Producer regeneration still credits an ungrounded teacher -- clean refusal")
@@ -561,7 +566,7 @@ def produce(supabase, question, messages=None, topics_established=None):
         verified_references=verified_references,
         retrieved_chunk_ids=retrieved_chunk_ids,
         retrieved_point_ids=retrieved_point_ids,
-        model=GEN_MODEL,
+        model=model_used,
         input_tokens=total_usage["input_tokens"],
         output_tokens=total_usage["output_tokens"],
         cache_read_tokens=total_usage["cache_read_tokens"],

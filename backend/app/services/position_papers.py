@@ -8,7 +8,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
-from app.services.llm_client import get_anthropic_client
+from app.services.llm_client import get_anthropic_client, get_generation_model
 from app.services.source_resolver import normalize_alias_key
 
 logger = logging.getLogger(__name__)
@@ -781,8 +781,9 @@ def generate_position_paper_answer(
     try:
         client = get_anthropic_client()
         stream = client.messages.create(
-            model="claude-sonnet-4-5",
+            model=get_generation_model(),
             max_tokens=2048,
+            thinking={"type": "disabled"},
             system=system_blocks,
             messages=history,
             stream=True,

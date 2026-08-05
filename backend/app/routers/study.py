@@ -13,7 +13,7 @@ from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.source_resolver import is_source_servable
-from app.services.llm_client import get_anthropic_client, get_guardrails_text
+from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model
 
 logger = logging.getLogger(__name__)
 
@@ -902,8 +902,9 @@ async def get_teacher_card(
     try:
         client = get_anthropic_client()
         response = client.messages.create(
-            model="claude-sonnet-4-5",
+            model=get_generation_model(),
             max_tokens=400,
+            thinking={"type": "disabled"},
             system=[
                 {"type": "text", "text": TEACHER_POSITION_PROMPT},
                 {"type": "text", "text": get_guardrails_text()},
