@@ -8,466 +8,127 @@ seen elsewhere as unverified.
 
 Last verified: 2026-08-04 (async worker service deployed + verified end-to-end).
 
-Trimmed 2026-08-01 back to live-state-only per the Project Knowledge Read
-Contract (the file had grown to ~2,700 lines of accumulated session
-narrative). The prior session-by-session history (2026-07-17 → 2026-08-01)
-lives in git history; retrieve it there if a past session's detail is needed.
-
-Re-trimmed 2026-08-04: the Current state section had re-grown to ~840
-lines of 2026-08-01 → 03 session narrative; that detail now lives in git
-history and the per-topic durable homes (PLAN.md, CLAUDE.md, `docs/audits/`).
+**Target ≤150 lines (CLAUDE.md's Session close contract).** Trimmed 2026-08-01
+(from ~2,700 lines) and twice more 2026-08-04 (from ~840, then this pass from
+~480). Cut material is never the only copy — it survives in git history and in
+the per-topic durable homes: PLAN.md (roadmap/decisions), CLAUDE.md
+(invariants/landmines), `docs/audits/`, and the commits named below.
 
 ---
 
 ## Current state
 
-Live-state-only. Prior session-by-session narrative (through 2026-08-03) lives in
-git history and in the per-topic durable homes — PLAN.md (roadmap/decisions),
-CLAUDE.md (invariants/landmines), the `docs/audits/` reports, and the commits
-named below. Retrieve detail there.
+**Deployment.** `origin/main` = local `main` at `2ba9f12` (pushed 2026-08-04).
+Async path stays DARK: `chat.py`/`main.py` byte-identical to pre-async Stage 2,
+routes unmounted (`ASYNC_ANSWER_ENABLED` unset), DB switch
+`async_answer_config.serving_enabled=false`. Live serving path is unchanged.
+Deploy history: commits `2ba9f12`, `6dca017`, `196f1f2`, `dd71b87`; full
+narrative in PLAN.md's version history.
 
-**Deployment.** `origin/main` = local `main`, in sync at `2ba9f12` (pushed
-2026-08-04). Three commits landed on top of the already-pushed Stage-2 stack
-(`196f1f2`/`0e62dd3`): `2ba9f12` (repo-root `nixpacks.toml` — the async WORKER
-service's build manifest; worker-only, does NOT affect the backend service, which
-is rooted at `backend/` and reads `backend/nixpacks.toml` — backend build
-byte-identical), `6dca017` (async traffic-rollback hardening — `async_chat.py` dead
-until cutover, `frontend/lib/api.ts` on Vercel, + tests), `46d37fc` (docs closeout,
-`log.md`). The push deploys the code but the async path stays DARK (routes still
-unmounted, both switches OFF), and `chat.py`/`main.py` are byte-identical to
-pre-blocker Stage 2 — so the live serving path is unchanged; the deployed deltas vs
-the prior pushed state are the worker build manifest (inert for the backend) + the
-gated async client edits (dead until cutover). `psycopg2-binary` in
-`requirements.txt` (installed by Railway, unused by the live path) was already
-deployed in the earlier Stage-2 push. Stage 2 (`dd71b87` build + `29852f7` records) is
-DEPLOYED but the async path is DARK behind two OFF switches: `main.py`'s conditional mount is a no-op
-(env `ASYNC_ANSWER_ENABLED` unset -> async routes NOT mounted), the DB TRAFFIC switch
-`async_answer_config.serving_enabled` is false, and the frontend uses the live path
-whenever `getChatMode()` is false (routes unmounted -> 404 -> false). The only live delta
-vs pre-Stage-2 is one informational `evidence_version` meta field on chat.py answers
-(answer/citations/verification byte-identical) plus a cached `getChatMode()` probe per
-send. Migrations 078+079 applied additively. To flip traffic on: close the pre-flip
-blocker (only the DB pooler route remains — CLAUDE.md async landmine (d)), set env `ASYNC_ANSWER_ENABLED=true` (redeploy) +
-`UPDATE async_answer_config SET serving_enabled=true`; to flip back (seconds):
-`UPDATE async_answer_config SET serving_enabled=false`.
-Railway (backend) + Vercel (frontend) auto-deploy from `main`; Railway build health
-is not confirmed from the repo (CLI unauthenticated). The 2026-08-01 -> 03 accuracy +
-copy-fix stack is on `origin/main` (verified): `0ab9c60` (Phase-0 §7a token fix),
-`01ca912` / `813ae7b` (position-paper over-match + tongues house position),
-`ee3cff4` (Phase-2 retrieval-grounded teacher-name guard), `9e5fe94`
-(buffer-then-verify-then-playback + prose-attribution scan), `05aa519` (proposition
-JSON-repair), `b1eccf9` (copy/gate fix).
+**Project 1 (scalable async answers) — worker built, deployed, verified;
+switches still OFF.** Worker service exists on Railway (repo-root
+`nixpacks.toml`), completed one real end-to-end generation ($0.076, cleaned up
+after). Transaction-pooler connection (port 6543) confirmed reachable; 20/20
+simultaneous generations measured; five 20-slot replicas reach the 100-slot
+dial without an architecture change. **Residual, unconfirmed:** whether the
+worker's live `SUPABASE_DB_URL` is actually the transaction pooler (6543) vs
+session pooler (5432, ~12/worker cap) — Supavisor masks this from the DB side;
+needs `railway variables` on the worker service or Alex pasting the URL. Full
+detail: PLAN.md CURRENT BUILD SEQUENCE + CLAUDE.md's async landmine.
 
-**Project 1 final readiness check (2026-08-04; local changes not yet pushed/deployed).**
-The transaction pooler route (6543) connected successfully. A corrected warmed-client
-capacity run measured 20/20 simultaneous generations; five replicas at 20 slots reach
-the 100-slot dial without architecture changes. Anthropic's actual account headers are
-10,000 RPM / 10M ITPM / 2M OTPM; live async dials are set to 80% headroom (8,000 / 8M /
-1.6M) plus a $10 rolling-24-hour ceiling. `serving_enabled` remains false. Five real
-questions plus one queue/worker end-to-end generation passed the real verification path;
-test rows were cleaned. Submit now fails closed before metering/enqueue when serving is
-off, and stale frontend mode caches immediately retry via `/chat`. **Not deployed AS OF
-that readiness recheck** (SUPERSEDED for worker creation — the worker service was
-subsequently created + verified, see the next entry; routes still unmounted + no traffic
-window still true): the Railway CLI was unauthenticated, so no worker service was
-created/configured, the worker's DB URL was not changed in Railway, routes were not
-enabled, and no public traffic window occurred.
+**Answer path — current behavior (live `/chat`, unchanged).** Buffers fully,
+runs the Phase-2 retrieval-grounding guard + prose-attribution scan +
+`verify_references`, resolves ungrounded credit
+(regenerate-once-then-refuse), reveals as paced playback. A teacher earns a
+verified link only if retrieved for the question. The position-paper
+(house-voice) path serves the baptism + tongues pillars via `chat.py`
+interception and still streams live.
 
-**Worker build manifest ADDED + pushed 2026-08-04 (`2ba9f12`).** The one repo-side gap
-that blocked creating the worker service — no Python build manifest at the repo root for
-Railway to detect (the worker's Root Directory must be `/`, not `backend/`) — is closed:
-repo-root `nixpacks.toml` forces the Python provider, pins `python312`, installs
-`backend/requirements.txt` into a `/opt/venv`, and starts `scripts/answer_worker.py`. This
-does NOT touch the backend service (Alex confirmed its Root Directory is `backend/`).
-**Worker service CREATED + DEPLOYED + VERIFIED end-to-end 2026-08-04** (this session;
-real test, no traffic flip). The Railway worker service now exists (separate from the
-backend web service) and its repo-root `nixpacks.toml` build is PROVEN — the worker
-runs as a container and completed a real job. End-to-end verification (one real
-generation, **$0.076** actual spend, then fully cleaned up): a job inserted straight
-into `answer_jobs` was claimed within ~3s and completed by a REMOTE container worker
-(`worker_id=28934160b0d1-1-slot0` — 12-hex container hostname + PID 1, not this Mac
-`MacBookPro.lan`; `ps` confirmed no local worker running), producing a real verified
-answer (`model=claude-sonnet-4-5` **not** the fake producer, `outcome=answered`, 4
-citations + 7 verified_references incl. real teacher pointers — Precept Austin, Andrew
-Murray with source_ids) — the SAME real accuracy path as the earlier proof. Both
-switches stayed OFF throughout (`serving_enabled=false`, config `updated_at` untouched;
-live `/async-chat/mode` + `/submit` still 404 → `ASYNC_ANSWER_ENABLED` off at deploy
-level); the test bypassed all HTTP routes, wrote only to `answer_jobs`, persisted NO
-`conversations` row, and was fully cleaned (job row + its isolated
-`provider_rate_usage` bucket deleted; table empty again). Cost note: $0.076 vs the
-$0.039 median is the expected COLD-cache premium (3,656 cache-write tokens on a
-freshly-deployed worker); warm generations will be cheaper. **Pre-flip blocker (d) is
-now mostly closed** — worker deployed, build green, functions end-to-end. **Residual,
-NOT independently confirmed this session:** that the worker's `SUPABASE_DB_URL` is the
-transaction pooler (port **6543**) vs the session pooler (**5432**, 15-client cap
-~12/worker) — Supavisor MASKS pooler mode on the Postgres side (rewrites client
-`application_name`→`Supavisor`) and the Railway CLI is unauthenticated here, so the
-port is not readable from the DB vantage; behavioral evidence (the worker's polling
-multiplexed onto only 3–4 shared upstream backends, never growing while a slot was
-busy) is CONSISTENT with the transaction pooler but doesn't exclude a low-slot
-session-mode worker. Close it definitively via `railway variables` on the worker
-service (`SUPABASE_DB_URL` contains `:6543`) or Alex pasting it.
+**Corpus/data.** Propositions backfill COMPLETE (0 genuine documents
+remaining). Chapter-scoped book extraction covers 8/53 books; the
+numeral-heading detector is built but uncommitted (zero callers). Position
+serving path is built + proven standalone, NOT wired into live chat. All
+counts: query live.
 
-**Attribution audit — HistoricalChristianFaith + C.S. Lewis (2026-08-04,
-read-only, SELECT-only; ZERO writes; this records commit + a docs/audit).** Full
-report: `docs/audits/historical_commentary_attribution_reverification_2026-08-04.md`.
-- **TASK 1 — the 307 "stripped attribution" commentary docs: premise is wrong.**
-  Author names are intact in `documents.author` for all 307/307 (0 empty, 307
-  distinct); nothing was stripped or lost. Recoverability = 307 already in-hand /
-  0 re-fetch / 0 unrecoverable. The real, separate issues: `citation_mode=
-  silent_context` suppresses names in CHAT (correct — commentaries are excluded
-  from answers anyway, `props=0`); the author is text metadata under ONE collection
-  source, not a first-class entity; raw provenance (`url`/`file_path`/`full_text`)
-  is NULL and the original `/tmp` SQLite source is gone. Open blocker #15 premise
-  resolved.
-- **TASK 2 — the C.S. Lewis doc is CORRECT author, WRONG copyright tag (live).**
-  Doc `caedc32c…` = verbatim *Mere Christianity* (705 chunks), `year=1963`, under
-  the blanket `public_domain`/`shown` HCF source. Lewis d. 1963 -> protected to
-  ~2033; the PD tag is indefensible. It is retrievable (license gate passes on the
-  source's PD status) and shown BY NAME in Study Mode (`/study/commentary` applies
-  no citation_mode filter). Same class: J.R.R. Tolkien (d. 1973) and Douglas Wilson
-  (living). Interim lever: the "Historical Commentaries" `source_toggles` row
-  (`enabled=true` live). Open blocker #16 — still open, a schema decision for Alex.
-
-**Per-answer cost MEASURED (2026-08-03; sizing basis for Project 1).**
-`docs/audits/per_answer_cost_measurement_2026-08-03.md`. Normal answer median
-**$0.039** (range $0.030–0.074, n=43); house-voice ~$0.015. Cost is comfortable,
-NOT the ceiling — the genuine open ceiling at 100 concurrent is provider rate
-limits (RPM/ITPM/OTPM), unchecked, a commercial conversation (C6). The instruction
-block (3,656 tok) is already cache-controlled (~25% saving warm/at scale); hidden
-reasoning is ~22% of cost / ~59% of latency, not trimmable without an accuracy
-oracle (decision #4). Teacher cards ~$0.015/open, no caching -> precompute
-(Project 2). Recommendation (D3): build per-answer cost/token instrumentation into
-Project 1.
-
-**Build posture — three-project sequence (2026-08-03 reset).** Project 1 scalable
-async answer execution -> Project 2 one named voice per answer -> Project 3
-hand-curated, server-gated quote rail. Capacity target 100 concurrent (a DIAL, not
-a ceiling). Position layer cut down (single-voice half -> Project 2;
-durable-stored-positions deferred); quote rail reshaped (manual-approval only,
-serve-by-ID). The corpus-position ban was LIFTED 2026-08-01 and STANDS (not
-re-imposed; durable work simply deferred). Full detail: PLAN.md "CURRENT BUILD
-SEQUENCE (2026-08-03)" + CLAUDE.md 2026-08-03 settled decisions.
-
-**Project 1, Stage 1 — durable async answer path BUILT 2026-08-04 (INERT / additive;
-NOT cut over).** The scalable asynchronous execution path now exists ALONGSIDE the
-live `/chat` path, which is byte-identical and remains the serving path. Nothing is
-wired into routing (`async_chat` router NOT mounted in main.py). Build `82413c9`;
-migration 078 applied (answer_jobs queue + Phase-4 per-answer instrumentation,
-async_answer_config dials, provider_rate_usage). One app / one Postgres-backed queue
-(a table in the existing Supabase DB, claimed via `FOR UPDATE SKIP LOCKED`) / one DB /
-one scalable worker (`scripts/answer_worker.py`). Implemented: durable jobs that
-survive restart, idempotency keys, single-flight (STRUCTURAL — active-dedup partial-
-unique index), exact-match reuse, reconnectable delivery, backpressure, provider rate
-ceilings (RPM/ITPM/OTPM), spend ceiling, retries-re-run-the-accuracy-check. The
-producer REUSES chat.py retrieval + reference_verifier's real accuracy check
-(regenerate-once-then-refuse preserved). PROOF (`scripts/async_answers_smoke.py`):
-26/26 — completes; killed worker loses nothing (lease reclaim + finish); 2 identical
-concurrent → 1 generation; reconnect; spend AND provider-rate-ceiling halt+resume;
-peak 12/12 concurrent (1
-worker × 12 slots); real accuracy path end-to-end ($0.32 real spend, 3 topical Qs
-answered, 7–10 citations + verified refs each). Phase 1 diagnostic confirmed the ~40
-ceiling is AnyIO's default 40-thread pool held for the request's whole ~68s (blocking
-generation + `time.sleep` playback inside a sync streaming generator).
-
-**Stage-1 follow-ups — flagged, NOT resolved (all deliberate, left for Alex):**
-(a) **DB connection route** — the current `SUPABASE_DB_URL` is the SESSION-mode pooler,
-hard-capped at 15 client connections (`pool_size: 15`), so one worker process tops out
-~14 slots. Reaching the 100-concurrent DIAL needs the worker fleet on the transaction
-pooler (port 6543) or a directly-sized route — a Supabase config/commercial decision,
-same class as the unchecked provider RPM/ITPM ceilings, NOT a rebuild. (b) **evidence_
-version** — no corpus-version signal exists in the schema; the reuse key uses a
-placeholder (`corpus-unversioned`). A real signal (e.g. `max(documents.updated_at)` or a
-corpus generation counter) is needed before reuse is trusted in prod. (c) **producer ↔
-chat.py retrieval DRIFT** — `producer.py` mirrors chat.py's retrieval orchestration +
-generation constants (chat.py stays byte-identical this inert session); a retrieval or
-prompt-assembly change in chat.py must ALSO be applied to producer.py until they are
-unified at cutover (extraction/grounding/verification are imported, so those stay in
-sync). (d) **Cutover (Stage 2+ / PLAN):** mount `async_chat`, move the reveal to the
-client, and fold in the two parity gaps the producer omits this session — background-
-topic injection and position-paper (house-voice) interception.
-
-**Project 1, Stage 2 — async cutover WIRED, traffic switch OFF (2026-08-04, build
-`dd71b87`).** Closes Stage-1 follow-ups (b) evidence_version and (d) cutover-wiring;
-(a) DB route and new metering/auth gaps stay open (below). Nothing serves the async
-path yet — two OFF switches gate it.
-- **Phase 1 parity (14/14, `scripts/async_parity_check.py`).** `evidence_version` is
-  now the real shared `corpus_version()` (migration 079: documents/sources/toggles/
-  safe_mode hash; `services/corpus_version.py` cached + fail-safe), used in BOTH the
-  async reuse key AND chat.py's informational SSE meta (Alex's Option A). `producer.py`
-  now runs position-paper interception + background-topic injection matching chat.py
-  exactly; routing parity is deterministic (same functions). Dedup key expanded to
-  include last-6 turns + `topics_established` (fixes a latent cross-conversation
-  single-flight/reuse collision). `policy_version`→v2.
-- **Phase 2 cutover (LEFT OFF).** Two-level gating, both default OFF: env
-  `ASYNC_ANSWER_ENABLED` mounts routes (deploy-level); DB `serving_enabled` is the
-  seconds-reversible TRAFFIC switch (verified flip on/off in one UPDATE, left OFF),
-  surfaced by `GET /async-chat/mode`. Frontend routes to the async client only when
-  true, failing safe to live. Client-paced reveal (`lib/api.ts`, ~250 chars/s) fires
-  only after the checked answer arrives — no client holds a worker. Flag-off proven
-  unchanged (main.py route table byte-identical when off; chat.py +1 informational
-  meta field; frontend additive+gated). Stage-1 mechanics still 24/24; real integrated
-  path (producer→worker→complete) confirmed incl. position-paper + normal + e2e queue
-  ($0.11 real spend).
-- **Phase 3 (report-only). Known ceiling on any flip:** the session-pooler 15-client
-  cap (~14 concurrent generations/worker) — NOT addressed this session; the worker
-  fleet must move to the transaction pooler / a sized route for the 100-concurrent
-  dial. Measured concurrency to date = peak 12/12 (1 worker × 12 slots, pooler-capped).
-  A controlled real-traffic confirmation (DESCRIBED, not run): flip `serving_enabled`
-  on for a single worker / small % of traffic, run a timed test sampling
-  `count(*) WHERE status='running'`, then flip `serving_enabled` back OFF.
-- **Pre-flip blockers — 3 of 4 CLOSED 2026-08-04 (build `196f1f2`; proof
-  `scripts/async_metering_persistence_check.py` 24/24).** (a) metering/usage-limit
-  parity on `/async-chat/submit` — submit now takes auth + `anon_id` + IP and meters
-  fail-closed BEFORE enqueue, keyed on the caller, so every submission counts
-  independently even under single-flight (2 users, identical Q, same instant → 1
-  generation, 2 meterings; over-limit → 429 not enqueued; guest anon/IP + 400-no-anon
-  match chat.py). (b) auth→user_id + conversation persistence — `/async-chat/result`
-  persists the completed exchange to the authenticated reader's history in chat.py's
-  exact row shape (conversations + user msg + assistant msg w/ citations +
-  verified_references), per-READER not in the worker (one shared generation → one
-  history PER reader), reconnect-idempotent via deterministic uuid5 ids + `ON CONFLICT
-  DO NOTHING`; guests not persisted. (c) `psycopg2-binary==2.9.11` added to
-  `backend/requirements.txt` (worker + `async_chat` import psycopg2, failed on Railway
-  without it — causally proven in a clean 3.9 venv; one additive line, live app
-  unaffected). All new logic MIRRORS chat.py in the async layer (chat.py byte-identical;
-  new DRIFT POINTS `metering.py` + `conversation_store.py`, unify at cutover). **STILL
-  OPEN — (d) the DB route above** (session→transaction pooler): a flip without it pins
-  concurrency near ~12/worker. New note: `conversations.user_id` FKs `auth.users`, so
-  persistence needs a real JWT `sub` (always true in prod; a bad id fails closed). See
-  CLAUDE.md's async landmine. Observed + mirrored (NOT fixed): the live matcher
-  over-matches "What is deliverance?"→baptism house voice.
-
-**Answer path — current behavior.** Normal answers buffer fully, run the Phase-2
-retrieval-grounding guard + prose-attribution scan + `verify_references`
-server-side, resolve any ungrounded credit (regenerate-once-then-clean-refuse),
-then reveal as paced playback — nothing unverified reaches the reader (`9e5fe94`).
-A named teacher earns a verified link only if its material was retrieved for the
-question (`ee3cff4`). The position-paper (house-voice) path serves the baptism +
-tongues pillars via `chat.py` interception and still streams live. **Two launch
-blockers stand (below): ~68s to a fully-revealed answer; ~40-chat concurrency
-ceiling — both are Project 1's remit.**
-
-**Corpus / data.** Proposition generation runs the bypass-proof v3.1 path
-(Invariant 10); the corpus-wide backfill is COMPLETE (0 genuine documents
-remaining; 7 residuals extracted 2026-08-02). Chapter-scoped book extraction
-covers 8 of 53 books (`title_repeat_boundary`); the numeral-heading detector
-stays uncommitted with zero callers. The position serving path is built + proven
-standalone but NOT wired into live chat (see Next #3). All counts: query live.
+**Attribution audit (2026-08-04, read-only, zero writes).**
+`docs/audits/historical_commentary_attribution_reverification_2026-08-04.md`.
+307 HistoricalChristianFaith docs: author names intact, nothing stripped
+(Open blocker #15 premise resolved). The C.S. Lewis doc under this source is
+correctly attributed but wrongly tagged `public_domain` (protected to
+~2033); Tolkien / Douglas Wilson are the same class — Open blocker #16, still
+open.
 
 ---
 
 ## Open blockers
 
-Open items only; #1, #2, #3, #5 are resolved (git history — commits `5bdf720`,
-`d4826dc`).
+**Launch blockers (Project 1's remit, neither blocks further build work):**
+~68s to a fully-revealed answer (dominated by hidden model reasoning, ~59% of
+wall-clock, untrimmable without an accuracy oracle — Open Decision #20); ~40
+simultaneous-chat ceiling (anyio threadpool exhaustion) — replacement built
+(Project 1 Stage 1) but not cut over yet.
 
-**LAUNCH BLOCKERS (release-gating; neither blocks further build work):**
-- **Both are now Project 1's remit (2026-08-03 build plan).** The concurrency
-  ceiling is exactly what Project 1 (scalable async execution) replaces; the ~68s
-  latency is recorded there as an OPEN launch blocker with **no owner yet** —
-  moving the reveal to the client removes ~15s and fixes concurrency, but
-  generation still runs ~50s, and single-teacher answers (Project 2) reduce it
-  meaningfully but not sufficiently.
-- **≈68s to a fully-revealed answer on the normal path** (measured live: ~54s
-  before any text appears, then ~15s of playback). The deliberate cost of
-  buffer-then-verify-then-playback — nothing unverified reaches the screen
-  (`9e5fe94`) — accepted for now, MUST be reduced before launch. This live figure
-  supersedes the earlier offline ~35s time-to-first-character estimate in the
-  buffer-then-verify entry above. The dominant component is the model's hidden
-  reasoning (req-7-protected; trimming it needs an accuracy oracle that does not
-  exist — Open Decision #20 / settled decision #4). **Quantified 2026-08-03
-  (`docs/audits/per_answer_cost_measurement_2026-08-03.md`):** offline generation
-  wall-clock is median ~35s (worst ~65s), of which the hidden reasoning is
-  median ~59% (worst 73%) — it is the single largest latency component, and it
-  is the piece that cannot be trimmed without the missing accuracy oracle.
-- **Concurrency ceiling ≈ 40 simultaneous chats.** The playback pacing +
-  heartbeat `time.sleep` holds one anyio threadpool worker per active request for
-  the request's whole duration; at ~40 concurrent chats the shared pool (cap 40)
-  starves other work. Harmless at zero-user scale; MUST be fixed before real
-  traffic. **Replacement BUILT (INERT) 2026-08-04 — Project 1 Stage 1 durable async
-  path; see "Project 1, Stage 1" in Current state. NOT cut over yet; the live path
-  still serves.**
+- **#4** `ingest_helloao.py` unconverted — blocks 8 further HelloAO commentaries only, not corpus growth generally.
+- **#6** Guest→account conversion likely broken (cookie/localStorage mismatch). `docs/audits/GUEST_AUTH_AUDIT.md`.
+- **#7** Auth CTA inconsistencies (`/library/authors`, `/home`, dead `AuthButton.tsx`). `docs/audits/BUTTON_AUTH_UX_AUDIT.md`.
+- **#9** v4 propositions prompt (`EXTRACTION_PROMPT_V4`) built, unwired — adopt/iterate/discard undecided.
+- **#10** Precept Austin raw-source gap — fewer raw scrape files than ingested docs.
+- **#11** `verify_chunk_alignment.py` docstring stale (describes removed insert modes).
+- **#12** `jewish_perspectives` table orphaned (2 rows, no code references).
+- **#13** SP2 Study Panel — no real screen-reader (VoiceOver/NVDA) pass ever run.
+- **#14** Hebrew lexicon (TBESH) not covered by the Greek CC BY 4.0 grant — don't build against it until cleared.
+- **#16** C.S. Lewis / Tolkien / Douglas Wilson mistagged `public_domain` under HistoricalChristianFaith — live exposure; durable fix needs a per-author license override (Alex's schema decision).
+- **#18** Home-page marketing line names Bevere (empty source, 0 props) and Koulianos (not in corpus) as "trusted teachers" — living-minister misrepresentation, still open.
+- **#19** External pipeline diagram (non-repo, not found locally) stale in 4 ways — fix if/when it resurfaces.
 
-**4. `ingest_helloao.py` unconverted.** Own Supabase REST `.insert()` path, not
-routed through `shared_ingest`. Live API, resume-safe; blocks the 8 further
-HelloAO commentaries (PLAN.md #27). The real chokepoint gap.
-
-**6. Guest→account conversion unlinked.** Email-confirmation session handoff
-likely broken (cookie-vs-localStorage mismatch). Trace:
-`docs/audits/GUEST_AUTH_AUDIT.md`.
-
-**7. Auth CTA inconsistencies.** `/library/authors` bypasses BetaGate and opens
-the wrong modal mode; `/home` shows signup CTAs to logged-in users; dead
-`AuthButton.tsx`. Trace: `docs/audits/BUTTON_AUTH_UX_AUDIT.md`.
-
-**8. Proposition backfill — CLOSED 2026-08-02 (0 genuine documents remaining).**
-The mass run completed 2026-07-30, and the last 7 residual documents were
-extracted 2026-08-02 (517 props; build `05aa519`; re-verified live —
-`docs/audits/backfill_reverification_2026-08-02.md`). Unchanged residual, a
-separate hygiene issue not a backfill backlog: some entities still have alias gaps
-that re-ingest sentinels silently (`ALIAS_MISS` breadcrumb). Any future extraction
-targets a NAMED document-id set (CLAUDE.md landmine), never "all zero-prop docs."
-
-**9. v4 propositions prompt — decision pending.** `EXTRACTION_PROMPT_V4` exists,
-committed `ff0652c`, unwired; v3 is the default and v3.1 the named-teacher
-path. Median word count still short of target on the 18-doc test
-(`docs/audits/proposition-v3-v4-comparison-2026-07-16.md`). Adopt / iterate /
-discard — and if adopt, decide backfill.
-
-**10. Precept Austin raw-source gap.** Fewer raw scrape files in
-`sources/precept_austin/raw/` than ingested documents — some have no local raw
-backing if re-verification is ever needed.
-
-**11. `verify_chunk_alignment.py` docstring stale.** Describes `shared_ingest`
-insert modes (`psycopg2_batch` / `rest_per_chunk`) that no longer exist.
-
-**12. `jewish_perspectives` table orphaned.** 2 rows, zero code references
-outside migrations/docs.
-
-**13. SP2 Study Panel — no real screen-reader pass ever run.** Phase 9 fixed 5
-keyboard/ARIA gaps via a structural/keyboard audit; no VoiceOver/NVDA listen
-has been done.
-
-**14. Hebrew lexicon permission gate.** TBESH (Hebrew) is NOT covered by the
-CC BY 4.0 grant that clears Greek (TBESG/TFLSJ); needs Online Bible's own
-permission. SP2 renders Greek only, structurally. Do not build against TBESH
-until cleared (PLAN.md Open Decisions #11).
-
-**15. Attribution-mode — 307 HistoricalChristianFaith docs — PREMISE RESOLVED
-2026-08-04.** Re-verified live: author names are intact in `documents.author` for
-all 307/307 (nothing stripped); `citation_mode='silent_context'` on all 307 is
-correct (suppresses names in chat; commentaries are excluded from answers anyway,
-`props=0`). No lost attribution to recover. Residual is structural only (the author
-is text metadata under one collection source, not a first-class entity) — deferred,
-not a blocker. Audit:
-`docs/audits/historical_commentary_attribution_reverification_2026-08-04.md`.
-
-**16. Copyright — C.S. Lewis / Tolkien / Douglas Wilson under the blanket-PD
-HistoricalChristianFaith source — OPEN, live exposure.** Re-verified 2026-08-04:
-the C.S. Lewis doc (`caedc32c…`) is verbatim *Mere Christianity*, correctly
-attributed to Lewis but wrongly tagged `public_domain` (d. 1963, protected ~2033);
-Tolkien (d. 1973) and Douglas Wilson (living) are the same class. All three are
-retrievable (license gate passes on the source's PD status) and shown BY NAME in
-Study Mode. The schema has no per-author license override — a source-level model
-can't mark them differently from Augustine. Interim lever: flip the "Historical
-Commentaries" `source_toggles` row (`commentary`) to `enabled=false` (currently
-true) to pull all 307 from Study retrieval. Durable fix = per-author/per-document
-license override (Alex's schema decision). Audit as #15.
-
----
-
-**17. Live unbacked quote guarantee — CLOSED 2026-08-03 (`b1eccf9`).** The
-present-tense character-for-character quote claim on `frontend/app/home/page.tsx`
-(~L492) was rewritten to the honest paraphrase-and-roadmap framing; `app/` +
-`components/` were swept and the home page was the only remaining live surface
-(`/sources`, POSITIONING.md, and `docs/how-rhemata-handles-sources.md` were already
-roadmap-framed).
-
-**18. Bevere marketing line + empty-but-servable source — PARTLY CLOSED
-2026-08-03; marketing line OPEN.** The empty-author-page surface is now gated:
-`/study/teacher/{id}` 404s any curated teacher with zero points, so Bevere's card
-no longer serves an empty page (`b1eccf9`). STILL OPEN: the home-page marketing
-line (`page.tsx` L489) names "John Bevere" (empty source, 0 props) and "Michael
-Koulianos" (NO `sources` row at all — not in the corpus) as "trusted modern-day
-teachers"; only Dr. Michael Brown of the three has content. A living-minister
-misrepresentation (failure mode 2). Decide: remove/rewrite the marketing line and/or
-dark the empty Bevere source (row + 5 aliases intentionally retained for future
-blog material).
-
-**19. Pipeline diagram (external, non-repo) is stale in four ways.**
-`rhemata-pipeline-diagram.html` lives OUTSIDE the repo (confirmed absent from the
-repo and from ~/Desktop, ~/Downloads, ~/Documents). Known inaccuracies, recorded for
-if/when it resurfaces (not redrawn this session): (a) shows number/date
-verification that does not exist and is held at 100% false positives; (b) states
-checks run AFTER the reader sees text — false since buffer-then-verify (2026-08-02,
-`9e5fe94`); (c) shows quotes as categorically disallowed with no quote rail —
-superseded by Project 3; (d) marks the verse route as unbuilt.
+Resolved (git history): #1, #2, #3, #5, #15, #17.
 
 ## Known harness bugs
 
-Both resolved: the 2026-07-18 executor write-accounting loop (fixed 2026-07-19,
-`d9ab1cc`) and the `BASH_WRITE_INDICATORS` SQL-verb over-flagging (narrowed
-2026-07-31, `569d412` — no DB-write-capable command is ever allowlisted).
-CLAUDE.md's Session Routing DB-write hard rule is unchanged; its revisit
-trigger's second condition — a deliberately-run, reviewed, clean DB-write
-harness session — remains open. Proofs:
-`.claude/harness-selftest/test_write_accounting_loop_fix.py`,
-`test_sql_verb_narrowing.py`.
+Both resolved: the 2026-07-18 executor write-accounting loop (`d9ab1cc`) and
+`BASH_WRITE_INDICATORS` SQL-verb over-flagging (`569d412`). CLAUDE.md's
+Session Routing DB-write hard rule and its revisit trigger are unchanged.
 
 ---
 
 ## Mobile UI
 
-- Pass A shipped (floating-panel chat, full-bleed shell, bottom tab bar). The
-  tab bar is gated off by default behind `NEXT_PUBLIC_FULL_NAV_ENABLED`
-  (chat-only beta); `=true` restores it exactly.
-- Pass B pending: `UsageRing` was pulled from the mobile top bar and not yet
-  remounted in the sidebar drawer.
+- Pass A shipped (floating-panel chat, full-bleed shell, bottom tab bar —
+  gated behind `NEXT_PUBLIC_FULL_NAV_ENABLED`).
+- Pass B pending: `UsageRing` not yet remounted in the sidebar drawer.
 
 ---
 
 ## Next
 
-The current build sequence supersedes the older Phase-1 ordering below. The worker
-service is now CREATED, its `nixpacks.toml` build is GREEN, and it is VERIFIED
-end-to-end (2026-08-04 — remote container worker completed a real verified generation,
-switches OFF; see Current state). Immediate next: (1) **confirm the worker's DB route
-is the transaction pooler (port 6543), not the session pooler** — the one residual of
-pre-flip blocker (d), not independently confirmable from the DB vantage this session
-(`railway variables` on the worker, or Alex pasting `SUPABASE_DB_URL`); confirm
-`WORKER_CONCURRENCY` and that `ASYNC_ANSWER_ENABLED`/`ASYNC_FAKE_*` are NOT set on the
-worker while there; (2) set `ASYNC_ANSWER_ENABLED=true` on the BACKEND service while
-`serving_enabled=false`; run dark health checks; (3) perform the controlled public
-window (also the real-traffic concurrency proof that the >~12/worker ceiling is lifted)
-and switch `serving_enabled=false` immediately afterward. Project 2 starts only after
-that cutover is stable. The retained numbered list below is backlog context, not the
-active first action.
-
-1. **Phase 0 — measurement (read-only) — DONE 2026-08-01.**
-   `docs/audits/phase0_measurement_2026-08-01.md`. Key results: corrected
-   scripture-fabrication rate ~0% (the stale 72-reference number was a
-   compact-scanner artifact); teacher-attribution fabrication real but low
-   (1/26 baseline, incl. the dangerous verified-link `in_corpus_not_retrieved`
-   class — A.W. Tozer passed the SP1 verifier via a nested Precept-Austin quote);
-   fabrication is intermittent (3/12 questions flipped across 4 runs, 0/12
-   consistent) so single-run rates understate exposure; teacher-name check
-   prototype 0% false positives (125 attributions), numbers/absolutes check 100%
-   false positives (unusable as prototyped); latency baseline flagged STALE
-   (predates 9fdf8d2, local single-request) — **re-run from Railway is an open
-   follow-up.** Two unplanned findings were pulled forward and both fixed the same
-   day: §7a token-exhaustion (entry above, deployed) and §7b position-paper
-   over-matching (entry above). Input to Open Decision #20 (still HELD).
-2. **Phase 1 — stop the live contradictions.** Request queuing (1.1) + connection
-   handling (1.2) **done 2026-08-01** (see Current state above — re-run Phase 0's
-   latency baseline before trusting it). Position-paper over-matching — the
-   tongues-paper neutrality breach (1.5), the teacher-question hijack (1.6), the
-   wrong-doctrine routing (1.7) — **done 2026-08-01** (see Current state above).
-   The normal-path doctrinal fix (1.4) — the system prompt listed
-   tongues-as-initial-evidence as an in-house debate — is **done 2026-08-01**
-   (build commit `813ae7b`; CLAUDE.md decision #10's conflict flag cleared; see
-   Current state above). Next: reverse hidden-by-default + inventory (1.3). See
-   PLAN.md.
-3. **Position layer — reframed to POST-LAUNCH (PLAN.md #48).** The plan's call:
-   launch on the current answer path; make the source-blind position path the
-   next milestone after launch, not a launch blocker. The serving path is built
-   and proven standalone but NOT wired into chat; the live cutover still needs
-   (a) **materialized eligibility** — the pass-both set is CPU-bound to compute
-   whole-corpus (~15+ min), not viable at question time; (b) the wire-in +
-   `get_teacher_card()` migration off live source-text synthesis (still the
-   standing leak); (c) the license/visibility predicate the position layer lacks
-   today; (d) the still-provisional floor calibration (evidence-count 5 /
-   similarity 0.45 / dominance 0.60); (e) a draft-rows review/approval UI (also
-   the home for Open Decision #20 side-by-side verification). The 3 draft
-   positions written 2026-08-01 await that review.
-4. **Blocker #4 — route `ingest_helloao.py` through `shared_ingest`.** Sole
-   remaining chokepoint conversion; unblocks HelloAO commentary growth
-   (PLAN.md #27) only, not corpus growth generally.
-5. **Folder renames** (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop
-   the orphaned `jewish_perspectives` table.
-6. **Staging Supabase + backup/restore test.** The `sources/` backup exists
-   (2026-07-19) but a restore has never been verified — do not assume it works
-   until tested.
+1. **Confirm the worker's DB route is the transaction pooler (6543), not the
+   session pooler (5432)** — the one residual blocking cutover (`railway
+   variables` on the worker, or Alex pasting `SUPABASE_DB_URL`). Then set
+   `ASYNC_ANSWER_ENABLED=true` on the backend (dark health check with
+   `serving_enabled` still false), run the controlled public traffic window,
+   and flip `serving_enabled` back off immediately after. Project 2 starts
+   only once that cutover is stable.
+2. **Position layer — UN-DEFERRED 2026-08-04 (CLAUDE.md item 18); steps 2-3
+   BUILT + verified, step 4 not started.** Step 2: materialized eligibility
+   (migration 080, 8,284/11,139 eligible — real cost 2h04m, corrects the
+   stale "~15+ min" estimate 8x), `cache_control`, streaming siblings. Step 3:
+   `gather_evidence()`/`gather_evidence_corpus()` now gated on
+   license/visibility (`LICENSE_GATE_SQL`, reusing Invariant 2's predicate
+   verbatim, no migration needed) — confirmed real effect, not a no-op
+   (Savchuk/Poonen, both unlicensed+hidden, now correctly excluded). Both
+   steps verified: `test_serve_position.py` clean; `prove_serving_path.py`
+   32/36, the 4 gaps a pre-existing unrelated test-fixture staleness issue,
+   not a regression — see audit doc. Commits `6fc39bc`/`82e5d2e`. Next: step
+   4's topic-matching (Open Decision #16, now a hard prerequisite) and
+   chat.py wiring behind a two-level off-switch. `get_teacher_card()`'s
+   live-synthesis leak stays
+   Project 2 scope, untouched by this. Full plan:
+   `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+3. Route `ingest_helloao.py` through `shared_ingest` (blocker #4).
+4. Folder renames (`lexicon/`→`stepbible/`, `documents/`→`inbox/`) + drop the
+   orphaned `jewish_perspectives` table.
+5. Staging Supabase + a verified backup/restore test (backup exists, restore
+   never tested at project level).
 
 SP track: SP2 done (Phases 1–9); SP4 teacher cards shipped and signed off; SP
 panel refinement done. Next SP item is #43 (SP5, mobile bottom-sheet). #38
