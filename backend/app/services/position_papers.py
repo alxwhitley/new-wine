@@ -218,10 +218,11 @@ PROPHETIC_ACCOUNTABILITY_DEBATE = (
     "debate, not settled house teaching."
 )
 APOSTOLIC_AUTHORITY_DEBATE = (
-    "The nature and boundaries of apostolic authority today, whether the "
-    "office of apostle continues, and how apostolic ministry should be "
-    "exercised and held accountable. Teachers hold differing views on "
-    "this; it is a live debate, not settled house teaching."
+    "The nature and boundaries of apostolic authority today — whether the "
+    "office of apostle continues in some form, and how apostolic ministry "
+    "should be exercised and held accountable, apart from the authority "
+    "to write Scripture, which no one holds today. Teachers hold differing "
+    "views on this; it is a live debate, not settled house teaching."
 )
 STANDING_DEBATE_CONTRASTS = [
     HEALING_MECHANICS_DEBATE,
