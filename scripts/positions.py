@@ -528,6 +528,38 @@ def _is_eligible(eligible, pid: str, content: str, doc_id: str) -> bool:
     return pid in eligible
 
 
+# --------------------------------------------------------------------------
+# License/visibility gate (2026-08-04, PLAN.md #48 step 3)
+# --------------------------------------------------------------------------
+# CLAUDE.md Invariant 2's exact predicate, reused verbatim -- not re-derived
+# -- from migrations 049/056/065 and source_resolver.is_source_servable(), so
+# gather_evidence()/gather_evidence_corpus() can never disagree with the rest
+# of the product on which sources are servable. %s is the safe_mode_on
+# boolean (see _read_safe_mode_on() -- read fresh every call, never cached,
+# same discipline as is_source_servable()).
+#
+# Deliberately does NOT reference: documents.is_copyrighted (unreliable,
+# Invariant 4 -- derived from folder path, wrong for e.g. Derek Prince's
+# documents); citation_mode (a different concern, Invariant 7 -- attribution
+# display, not rights); or sources.retrievable (a generated column confirmed
+# INCONSISTENT with this exact predicate for a 'licensed' source -- see
+# docs/audits/position_layer_revival_diagnostic_2026-08-04.md, Step 3 finding
+# #5 -- currently dormant but not a substitute for this predicate).
+LICENSE_GATE_SQL = """(
+        s.license_status IN ('public_domain', 'owned')
+        OR (NOT %s AND s.visibility = 'shown')
+      )"""
+
+
+def _read_safe_mode_on(cur) -> bool:
+    """Read app_settings['safe_mode'] fresh on the given cursor -- never
+    cache across calls, matching source_resolver.is_source_servable()'s own
+    discipline (a global kill switch must always reflect the current value)."""
+    cur.execute("SELECT value = 'on' FROM app_settings WHERE key = 'safe_mode'")
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
 def gather_evidence(
     params: dict,
     source_id: str,
@@ -537,12 +569,14 @@ def gather_evidence(
     max_evidence: int = MAX_EVIDENCE,
 ) -> List[Dict]:
     """Embedding-similarity search over `propositions` ONLY (never `chunks`),
-    restricted to this teacher's own documents and to the pass-both eligible
-    set. `eligible_ids` may be a precomputed set OR an EligibilityChecker (see
-    _is_eligible). Returns up to max_evidence {"id","content","similarity"}
-    dicts, highest similarity first, all >= floor. The cheap similarity floor
-    is applied BEFORE the (possibly expensive) eligibility check. Read-only;
-    opens and closes its own connection."""
+    restricted to this teacher's own documents, to sources currently
+    servable under the license/visibility gate (LICENSE_GATE_SQL), and to the
+    pass-both eligible set. `eligible_ids` may be a precomputed set OR an
+    EligibilityChecker (see _is_eligible). Returns up to max_evidence
+    {"id","content","similarity"} dicts, highest similarity first, all >=
+    floor. The cheap similarity floor is applied BEFORE the (possibly
+    expensive) eligibility check. Read-only; opens and closes its own
+    connection."""
     import psycopg2
 
     embedding = embed_text(topic)
@@ -550,17 +584,20 @@ def gather_evidence(
     conn.set_session(readonly=True, autocommit=True)
     try:
         cur = conn.cursor()
+        safe_mode_on = _read_safe_mode_on(cur)
         cur.execute(
-            """
+            f"""
             SELECT p.id::text, p.content, d.id::text,
                    1 - (p.embedding <=> %s::vector) AS similarity
             FROM propositions p
             JOIN documents d ON d.id = p.document_id
+            JOIN sources s ON s.id = d.source_id
             WHERE d.source_id = %s
+              AND {LICENSE_GATE_SQL}
             ORDER BY p.embedding <=> %s::vector
             LIMIT 500
             """,
-            (embedding, source_id, embedding),
+            (embedding, source_id, safe_mode_on, embedding),
         )
         rows = cur.fetchall()
         cur.close()
@@ -587,7 +624,8 @@ def gather_evidence_corpus(
     max_evidence: int = MAX_EVIDENCE,
 ) -> List[Dict]:
     """Corpus-wide sibling of gather_evidence(): the SAME embedding-similarity
-    search over `propositions` ONLY (never `chunks`), but across ALL teachers,
+    search over `propositions` ONLY (never `chunks`), but across ALL teachers
+    currently servable under the license/visibility gate (LICENSE_GATE_SQL),
     not restricted to one source. Returns up to max_evidence
     {"id","content","source_id","teacher","similarity"} dicts, highest
     similarity first, all >= floor and all in `eligible_ids` (the pass-both
@@ -604,17 +642,19 @@ def gather_evidence_corpus(
     conn.set_session(readonly=True, autocommit=True)
     try:
         cur = conn.cursor()
+        safe_mode_on = _read_safe_mode_on(cur)
         cur.execute(
-            """
+            f"""
             SELECT p.id::text, p.content, d.id::text, d.source_id::text, s.name,
                    1 - (p.embedding <=> %s::vector) AS similarity
             FROM propositions p
             JOIN documents d ON d.id = p.document_id
             JOIN sources s ON s.id = d.source_id
+            WHERE {LICENSE_GATE_SQL}
             ORDER BY p.embedding <=> %s::vector
             LIMIT 1000
             """,
-            (embedding, embedding),
+            (embedding, safe_mode_on, embedding),
         )
         rows = cur.fetchall()
         cur.close()
@@ -739,8 +779,8 @@ def generate_position_text(teacher_name: str, topic: str, evidence: List[Dict]) 
             model=MODEL,
             max_tokens=500,
             system=[
-                {"type": "text", "text": system_prompt},
-                {"type": "text", "text": get_guardrails_text()},
+                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
             ],
             messages=[{"role": "user", "content": user_message}],
         )
@@ -777,12 +817,88 @@ def generate_corpus_position_text(topic: str, attributed_evidence: List[Dict]) -
             model=MODEL,
             max_tokens=600,
             system=[
-                {"type": "text", "text": system_prompt},
-                {"type": "text", "text": get_guardrails_text()},
+                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
             ],
             messages=[{"role": "user", "content": user_message}],
         )
         return response.content[0].text.strip()
+    except Exception as exc:
+        raise PositionGenerationFailed(str(exc)) from exc
+
+
+def generate_position_text_stream(teacher_name: str, topic: str, evidence: List[Dict]):
+    """Streaming sibling of generate_position_text() -- identical source-blind
+    signature, prompt selection, and cache_control shape, but yields text
+    deltas as they arrive instead of blocking for the full ~500-token
+    response. Exists for the live cold-generate path (PLAN.md #48 step 4): a
+    waiting user sees tokens as they're written rather than after the whole
+    call completes. The blocking generate_position_text() is unchanged and
+    stays the one used by the offline/batch path
+    (generate_teacher_positions.py, prove_serving_path.py) -- this is
+    additive, never a replacement.
+
+    Yields str chunks (never SSE-framed -- this module has no HTTP/transport
+    dependency; a caller like a future backend/app/services/position_layer.py
+    is responsible for any SSE framing, same separation position_papers.py's
+    own streaming function keeps from chat.py). Raises
+    PositionGenerationFailed on any call error, exactly like the blocking
+    sibling -- a failed call is never indistinguishable from a legitimate
+    result."""
+    system_prompt, _ = _prompt_and_version_for_topic(topic)
+    evidence_block = "\n".join(f"- {e['content']}" for e in evidence)
+    user_message = f"Teacher: {teacher_name}\n\nTopic: {topic}\n\nTeaching statements:\n{evidence_block}"
+    try:
+        client = get_anthropic_client()
+        stream = client.messages.create(
+            model=MODEL,
+            max_tokens=500,
+            system=[
+                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
+            ],
+            messages=[{"role": "user", "content": user_message}],
+            stream=True,
+        )
+        for event in stream:
+            if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                text = event.delta.text
+                if text:
+                    yield text
+    except Exception as exc:
+        raise PositionGenerationFailed(str(exc)) from exc
+
+
+def generate_corpus_position_text_stream(topic: str, attributed_evidence: List[Dict]):
+    """Streaming sibling of generate_corpus_position_text() -- see
+    generate_position_text_stream()'s docstring; same relationship to its
+    blocking counterpart (additive, source-blind, cache_control preserved,
+    plain str chunks, no SSE framing here)."""
+    system_prompt, _ = _prompt_and_version(topic, "corpus")
+    evidence_block = "\n".join(
+        f"- [{e['teacher']}] {e['content']}" for e in attributed_evidence
+    )
+    user_message = (
+        f"Topic: {topic}\n\n"
+        f"Teaching statements (each labeled with its teacher):\n{evidence_block}"
+    )
+    try:
+        client = get_anthropic_client()
+        stream = client.messages.create(
+            model=MODEL,
+            max_tokens=600,
+            system=[
+                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": get_guardrails_text(), "cache_control": {"type": "ephemeral"}},
+            ],
+            messages=[{"role": "user", "content": user_message}],
+            stream=True,
+        )
+        for event in stream:
+            if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                text = event.delta.text
+                if text:
+                    yield text
     except Exception as exc:
         raise PositionGenerationFailed(str(exc)) from exc
 
