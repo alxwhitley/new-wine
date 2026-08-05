@@ -172,11 +172,22 @@ SEQUENCE (2026-08-03)".
     prevented from carrying quotation markup or first-person teacher
     impersonation.
 
-18. **Position layer cut down — durable stored positions deferred.** The
-    single-voice half is Project 2; persistence, rebuild triggers, replace-vs-
-    version, review UI, and empty-state redesign are DEFERRED pending real usage.
-    The 2026-08-01 corpus-ban lift STANDS (not re-imposed); corpus positions are
-    simply not built on. Foundation stays as built. See PLAN.md.
+18. **Position layer cut down — durable stored positions deferred. UN-DEFERRED
+    2026-08-04 (Alex's explicit call) — see below.** The single-voice half is
+    Project 2; persistence, rebuild triggers, replace-vs-version, review UI,
+    and empty-state redesign were DEFERRED pending real usage. The 2026-08-01
+    corpus-ban lift STANDS (not re-imposed); corpus positions were simply not
+    built on. Foundation stays as built.
+    **Un-deferred 2026-08-04:** Alex asked for a concrete 4-step plan to revive
+    exactly this system (positions.py + serve_position.py's stored/versioned
+    positions) — a real, dated intent to build is the "real usage" signal this
+    deferral was waiting on. A read-only diagnostic confirmed the foundation is
+    untouched and undrifted since 2026-08-01 (`docs/audits/
+    position_layer_revival_diagnostic_2026-08-04.md`). **Open Decisions #14
+    (refresh trigger), #15 (replace-vs-version), and #16 (topic list) are now
+    ACTIVE** — #16 in particular is now a hard prerequisite for wiring this
+    into live chat, not a deferred nice-to-have. See PLAN.md's 2026-08-04
+    version-history entry and the audit doc for the full build plan.
 
 ## Session Routing
 
