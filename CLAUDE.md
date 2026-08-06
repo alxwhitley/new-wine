@@ -838,14 +838,14 @@ different row, per the hard rule above.
   consolidating into one shared map is a parked future session, not
   scheduled. Fixing a book-name bug at only one of the five copies will
   silently leave the other four wrong.
-- **`study-reference.ts::detectVerseReferences` (the live chat-answer
-  scripture underliner) has a real, pre-existing false-match bug**,
-  confirmed live on unmodified `HEAD` 2026-07-28, unrelated to and not
-  caused by that session's BOOK_MAP work: it scans free prose for embedded
-  valid substrings, so `"I Genesis 1:1"` matches the embedded
-  `"Genesis 1:1"` and ignores the leading "I ". Backend sites don't share
-  this shape of bug (they parse one anchored, isolated string, not
-  free-scanned prose). Unowned, unfixed.
+- **RESOLVED 2026-08-06 — `study-reference.ts::detectVerseReferences` no
+  longer underlines an embedded valid substring after an unrecognized
+  alphabetic prefix.** The live bug confirmed 2026-07-28 (`"I Genesis 1:1"`
+  incorrectly underlined only `"Genesis 1:1"`) is covered by a regression
+  test and verified on the real rendered chat-message component. Recognized
+  prefixes (`1 Samuel`, `II Timothy`, `First Corinthians`) remain valid. This
+  fix is deliberately isolated to the chat underliner; the other independent
+  book-name matching copies were not changed.
 - Some sources have no alias rows; re-ingesting their content sentinels
   silently. `ALIAS_MISS` is the grep-able breadcrumb.
 - **No cheap check exists for the demonstrated fabrication class: real,

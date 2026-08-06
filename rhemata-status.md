@@ -6,10 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-06 (non-teacher-material quote-source exclusions APPLIED
-across Murray + Prince; Project 3 quote rail first slice built + demoed; admin-auth
-bug fixed, pushed + deployed; Project 1 async cutover LIVE; Project 2 phase 1 steps
-1+2 DONE; position papers rebuilt as fence + guarded retrieval).
+Last verified: 2026-08-06 (scripture-underliner false match fixed + browser-verified;
+quote-source exclusions APPLIED; quote rail demoed; async cutover LIVE; Project 2
+phase 1 steps 1+2 DONE; position papers rebuilt as fence + guarded retrieval).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Cut material is
 never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
@@ -18,6 +17,11 @@ never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 ---
 
 ## Current state
+
+**Live-chat scripture underliner false match FIXED 2026-08-06.** `I Genesis 1:1`
+stays plain text; `1 Samuel`, `II Timothy`, `First Corinthians`, and `John` cases
+remain underlined. Regression-tested and verified through the rendered production
+`ChatMessage`; the other four book-name matcher copies were intentionally untouched.
 
 **Deployment.** **Everything is pushed and deployed** (2026-08-06) — `origin/main`
 now holds all four session commits (admin-auth fix, Project 3 quote-rail build, the
@@ -132,20 +136,15 @@ Resolved: #1-3, #5, #15, #17, #20 (admin bug did NOT manifest in prod; fix deplo
 ## Next
 
 1. **Project 3 quote rail — decide next steps** (not yet ordered): wire
-   `resolve_quote()` into a real serving surface; build the deferred
-   AI-candidate-suggestion piece; curate beyond the 3 demo quotes; check
-   the other 9 Murray books + Prince docs for exclusion-worthy front matter
-   at scale (#21).
-2. **Watch the Project 1 live flip** under real concurrency — one serial
-   test only so far.
+   `resolve_quote()` into a serving surface; build deferred AI suggestions;
+   curate beyond the 3 demo quotes.
+2. **Watch the Project 1 live flip** under real concurrency — one serial test only.
 3. **Position layer — one-hop build sequence**: topic list (#16) →
    `match_stored_position()` → review workflow → chunk-shape adapter →
    concurrency fix → `chat.py` injection → rollout.
-4. Route `ingest_helloao.py` through `shared_ingest`; folder renames + drop
-   the orphaned `jewish_perspectives` table.
+4. Route `ingest_helloao.py` through `shared_ingest`; rename folders + drop `jewish_perspectives`.
 5. Staging Supabase + a verified backup/restore test.
-6. Flip `async_answers/config.py`'s cost constants to list price on/after
-   2026-08-31.
+6. Flip async-answer cost constants to list price on/after 2026-08-31.
 7. Decide the roman-numeral book-chapter detector's fate — committed, unwired.
 
 SP track: SP2/SP4/panel-refinement done. Next: #43 (SP5, mobile bottom-sheet).
