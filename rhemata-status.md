@@ -6,10 +6,10 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-06 (Project 3 quote rail first slice built + demoed;
-an unrelated but blocking admin-auth bug found + fixed same session; Project
-1 async cutover LIVE; Project 2 phase 1 steps 1+2 DONE; position papers
-rebuilt as fence + guarded retrieval).
+Last verified: 2026-08-06 (non-teacher-material quote-source exclusions APPLIED
+across Murray + Prince; Project 3 quote rail first slice built + demoed; admin-auth
+bug fixed, pushed + deployed; Project 1 async cutover LIVE; Project 2 phase 1 steps
+1+2 DONE; position papers rebuilt as fence + guarded retrieval).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Cut material is
 never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
@@ -19,27 +19,15 @@ never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 
 ## Current state
 
-**Deployment.** Railway (`rhemata` + `answer-worker`) confirmed DEPLOYED at
-`127eacc`/`d186c22`. Live `/chat` unchanged. **Local `main` is 3 commits
-ahead of `origin/main`** this session (admin-auth fix, Project 3 build,
-this records commit) — NOT pushed, NOT deployed. **Migration 082 (quote
-rail schema) IS already live against the real production Supabase** — no
-staging DB exists; migrations apply directly to the one real database. 3
-real quote rows (2 Murray, 1 Prince, 1 subsequently revoked) + 3
-`document_quote_clearance` rows now exist live, not cleaned up — genuine
-correctly-sourced demo output; decide whether to keep, revoke, or delete.
-
-**Bug found + fixed this session, unrelated to Project 3 but blocking it —
-`require_admin_role`/`require_contributor` were completely unreachable
-(`da27fe4`).** A FastAPI dependency-introspection incompatibility between a
-class-based `__call__(self, request: Request)` and `auth.py`'s own `from
-__future__ import annotations` meant every call 422'd before the auth/role
-logic ran — no admin- or contributor-gated route in the app was reachable.
-Fix routes through the working `get_optional_user` via a nested `Depends()`
-instead — no behavior change, verified against a live admin JWT (422→200).
-**Unconfirmed: whether this was also live-broken on deployed Railway**
-(unpinned transitive `starlette`/`pydantic` could differ there) — check
-directly before assuming either way.
+**Deployment.** **The admin-auth fix (`da27fe4`) IS pushed to `origin/main` and
+deployed** — Railway `rhemata` + `answer-worker` + Vercel all reported green,
+verified live this session. **Local `main` is ahead of `origin/main` by the Project 3
+quote-rail build (`0e6a4f1`), its docs (`ad1d782`), and this session's exclusion +
+records commits — NOT pushed, NOT deployed.** **Migration 082 + the non-teacher
+exclusions ARE live against the real production Supabase** — no staging DB exists;
+writes apply directly to the one real database. 3 real demo quote rows (2 Murray, 1
+Prince, 1 revoked) + 3 `document_quote_clearance` rows still exist live — decide
+whether to keep, revoke, or delete.
 
 **Project 3 (hand-curated quote rail) — first slice BUILT + DEMOED
 2026-08-06 (`0e6a4f1`), manual-curation-only, NOT wired into any serving
@@ -51,19 +39,30 @@ exact-substring match against the captured snapshot — is enforced by a DB
 trigger, not application code, since the backend bypasses RLS on every call
 (migration 037). Verified live: an approval attempt against a real
 commentary document was rejected by the database itself, rolled back clean.
-Andrew Murray's "The New Life" chunks 0-5 (CCEL front matter + a
-translator's note) are now structurally excluded at the DB level, not just
-documented (`docs/audits/quote_rail_project3_audit_2026-08-06.md`). Step 2
-verifier + 4-case regression suite, 8/8 passing against real corpus text.
-Step 3 review tool (`frontend/app/admin/quotes`) + Step 4 resolution point
-(`quotes_service.resolve_quote`) demoed end-to-end through a real browser
-(Playwright, real admin session, real DOM text selection) — 3 real quotes
-created, all resolved correctly by ID, one revoked and correctly
-re-resolves to nothing, independently re-verified against a fresh DB read.
-AI-suggested candidate extraction is explicitly out of scope, not built.
-Derek Prince's corpus (mostly tagged `sermon_transcript` in the schema) is
-treated as eligible written material per Alex's explicit ruling this
-session — see the audit doc for the tension this resolves.
+Verifier + 4-case regression suite, 8/8 passing. Review tool
+(`frontend/app/admin/quotes`) + resolution point (`quotes_service.resolve_quote`)
+demoed end-to-end through a real browser — 3 real quotes, resolve by ID, one
+revoked re-resolves to nothing. AI-suggested extraction is out of scope. Derek
+Prince's `sermon_transcript` corpus is eligible written material per Alex's ruling.
+
+**Non-teacher-material exclusions APPLIED 2026-08-06 (`ddd6b7b` + DB write;
+`scripts/apply_non_teacher_exclusions_2026-08-06.py`).** Alex's judgment calls on
+the follow-up audit (`docs/audits/non_teacher_material_audit_2026-08-06.md`) are
+now live: **68 chunks carry `quote_ineligible_reason`** (6 pre-existing New Life +
+62 new). Cleanly excluded (whole non-teacher chunks): CCEL front matter on all 9
+remaining Murray books; Lord's Table catechism/Directory appendix; School of
+Prayer's George Müller verbatim chunks (Murray's own framing kept eligible) + the
+CCEL book advertisement; Bride Prepares Herself (Prince) guest-speaker testimony;
+auto scripture indexes where separable. Trigger enforcement re-verified live
+(rolled-back test) on the three serious items — Müller, book ad, catechism — all
+blocked; a kept Murray chunk not blocked. **FLAGGED, not excluded — third-party
+text embedded in a teacher's own chunk, un-isolable at chunk granularity, needs a
+sub-chunk mechanism or Alex accepting whole-chunk loss:** the John R. Mott
+quotation (School of Obedience, interwoven in every chunk), the Lord's Table + New
+Life translator footnotes, the New Life Heidelberg quote (the "second problem area"
+beyond 0-5), the Waiting On God 'Freda Hanbury' poem, the Müller boundary chunks,
+the Bride ch11 boundary, and the magazine/tape running headers. Detail: the audit
+doc + script header.
 
 **Project 1 (scalable async answers) — PROVEN end-to-end 2026-08-06;
 `serving_enabled` TRUE, async routes SERVING real traffic.** Real question
@@ -116,9 +115,9 @@ but unproven at real concurrency (one serial test only).
 - **#12** `jewish_perspectives` orphaned; **#13** SP2 Study Panel — no screen-reader pass.
 - **#14** Hebrew lexicon (TBESH) not covered by the Greek CC BY 4.0 grant. **#16** Lewis/Tolkien/Wilson mistagged `public_domain`.
 - **#18** Home-page names Bevere/Koulianos as "trusted teachers" — living-minister misrepresentation, still open. **#19** External pipeline diagram stale.
-- **#20 (new)** Confirm whether the `require_admin_role` bug (above) was ever live in production. **#21 (new)** Andrew Murray's other 2 CCEL-sourced books were never chunk-level-checked for the same non-Murray front-matter found in "The New Life" (Project 3 audit) — not investigated.
+- **#22 (new)** Embedded third-party material FLAGGED but un-excludable at chunk granularity (Mott quote, translator footnotes, New Life Heidelberg quote, Freda Hanbury poem, Müller boundaries, magazine/tape running headers) — needs a sub-chunk exclusion mechanism or Alex's decision to accept whole-chunk loss. See Project 3 above + the audit doc.
 
-Resolved: #1-3, #5, #15, #17.
+Resolved: #1-3, #5, #15, #17, #20 (admin bug did NOT manifest in prod; fix deployed), #21 (all 9 remaining Murray books + Prince audited + exclusions applied 2026-08-06).
 
 ---
 
