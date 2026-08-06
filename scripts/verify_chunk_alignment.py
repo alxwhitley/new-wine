@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 """
-verify_chunk_alignment.py — standalone spot-check tool.
+verify_chunk_alignment.py — standalone post-ingest spot-check tool.
 
-Recomputes the embedding for a stored chunk's `content` and cosine-compares
-it against that chunk's stored `embedding`, using pgvector's own `<=>`
-operator so no local vector-math dependency is needed. Same technique used
-at #8 (chunk-header-bake verification) to prove text/embedding pairing
-survived a conversion, rather than trust it.
+For one stored document, selects up to ``sample_size`` chunks in
+``chunk_index`` order, recomputes each embedding from the chunk's stored
+``content``, and asks Postgres/pgvector to cosine-compare that fresh vector
+with the row's stored ``embedding``. It prints one result per sampled chunk;
+it deliberately does not apply a pass/fail threshold, so a low similarity is
+a finding for the caller to investigate rather than a script crash.
 
-Standalone by design (#9's diagnostic, Q6): not called from inside any
-insert path (shared_ingest.py's psycopg2_batch or rest_per_chunk). Run
-separately, after the fact, against real rows already committed to the DB.
+This is a read-only diagnostic run after rows are committed. The current
+shared ingest path computes chunk text and embeddings before writing, then
+writes the document, chunks, propositions, and completion stamp through its
+shared database connection. Fresh ingest inserts all chunks in one batch;
+``on_existing="reuse"`` appends only the unstored tail using continued
+``chunk_index`` values, while ``on_existing="delete_and_reingest"`` replaces
+the old document and its dependent rows in an atomic swap. This script does
+not participate in those writes and does not verify chunk boundaries,
+proposition extraction, source resolution, completeness, or transaction
+behavior — it checks only stored content/embedding pairing for the sample.
 
 Usage:
   python3 scripts/verify_chunk_alignment.py --document-id <uuid>
