@@ -118,8 +118,8 @@ def current_policy(supabase) -> Dict[str, Any]:
 
 
 # ---- retrieval (MIRROR of chat.chat() ~L754-993; DRIFT POINT) ---------------
-def _retrieve(db, question, injected_doc_ids=None):
-    # type: (object, str, Optional[set]) -> Tuple[List[dict], List[dict], int]
+def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
+    # type: (object, str, Optional[set], Optional[str]) -> Tuple[List[dict], List[dict], int, bool]
     from app.routers import chat as _chat
 
     filters = get_disabled_filters()
@@ -266,6 +266,22 @@ def _retrieve(db, question, injected_doc_ids=None):
         capped_expanded.append(c)
     chunks = capped_expanded
 
+    # House-position exclusion -- MIRROR of chat.chat()'s Step 4.5; DRIFT
+    # POINT, imported not copied (calls _chat.get_paper_body /
+    # _chat.exclude_contradicting_teachers directly, same reuse pattern as
+    # the rest of this function). See chat.py's own Step 4.5 comment for the
+    # full reasoning (Alex's ruling, 2026-08-06, CLAUDE.md Settled decision
+    # #9).
+    fallback_to_paper_voice = False
+    if matched_pillar_key and chunks:
+        house_position_text = _chat.get_paper_body(matched_pillar_key)
+        if house_position_text:
+            chunks, excluded_authors = _chat.exclude_contradicting_teachers(
+                matched_pillar_key, house_position_text, question, chunks,
+            )
+            if excluded_authors and not chunks:
+                fallback_to_paper_voice = True
+
     # Conditional lexicon retrieval (word-study questions).
     if _chat.is_word_study_query(question):
         try:
@@ -292,7 +308,7 @@ def _retrieve(db, question, injected_doc_ids=None):
         for c in chunks
         if _chat._is_citable(c)
     ]
-    return chunks, citations, citable_count
+    return chunks, citations, citable_count, fallback_to_paper_voice
 
 
 def _build_context(chunks, citable_count, topic_context_parts=None):
@@ -476,41 +492,60 @@ def produce(supabase, question, messages=None, topics_established=None):
     from app.services.reference_verifier import (
         verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
     )
-    from app.services.position_papers import match_position_paper, generate_position_paper_answer
+    from app.services.position_papers import match_position_paper, render_paper_voice_with_disclaimer
     messages = messages or []
     topics_established = topics_established or {}
 
-    # Position-paper interception FIRST (chat.py L711, before retrieval). On a
-    # match, answer in Rhemata's own house voice and bypass retrieval + the
-    # teacher-citation accuracy check entirely -- house-voice content has no
-    # citations to verify (this is answer-source (a) of the position design).
-    matched_pillar = match_position_paper(question)
-    if matched_pillar:
-        parts = []  # type: List[str]
-        for event in generate_position_paper_answer(matched_pillar, question, messages):
-            if event.startswith("data: "):
-                try:
-                    payload = json.loads(event[len("data: "):].rstrip("\n"))
-                except (ValueError, TypeError):
-                    continue
-                if isinstance(payload, dict) and "token" in payload:
-                    parts.append(payload["token"])
-        answer = "".join(parts).strip() or _chat._NO_ANSWER_FALLBACK
-        return ProducerResult(
-            answer=answer, outcome="position_paper", citations=[], verified_references=[],
-            model="position_paper",
-            # generate_position_paper_answer does not expose token usage, so record
-            # the measured house-voice median (~$0.015) rather than $0 -- keeps the
-            # spend ceiling from being blind to position-paper generations.
-            cost_usd=0.015,
-            updated_topics=dict(topics_established),
-        )
+    # Position-paper match (Alex's ruling, 2026-08-06 -- MIRROR of
+    # chat.chat()'s matched_pillar_key comment; DRIFT POINT). A position
+    # paper is constraining silent context, never a served answer: retrieval
+    # below runs completely normally on a match, same as a non-match. See
+    # position_papers.py's module docstring for the full architecture.
+    matched_pillar_key = match_position_paper(question)
 
     # Background-topic injection (chat.py Step 0.5).
     topic_context_parts, injected_doc_ids, updated_topics = _inject_background_topics(
         supabase, question, messages, topics_established)
 
-    chunks, citations, citable_count = _retrieve(supabase, question, injected_doc_ids)
+    # Position-paper fence injection -- MIRROR of chat.chat()'s Step 0.6.
+    if matched_pillar_key:
+        pillar = _chat._PILLAR_BY_KEY.get(matched_pillar_key)
+        if pillar and pillar["document_id"] not in injected_doc_ids:
+            paper_body = _chat.get_paper_body(matched_pillar_key)
+            if paper_body:
+                topic_context_parts.append(
+                    "[House Position] (citation_mode=silent_context) This is "
+                    "Rhemata's own settled house position on %s. It bounds what "
+                    "this answer may claim — do not state anything that "
+                    "contradicts it. Never cite, name, quote, or copy its exact "
+                    "wording into your answer.\n\n%s" % (pillar["voice_topic_name"], paper_body)
+                )
+                injected_doc_ids.add(pillar["document_id"])
+
+    chunks, citations, citable_count, fallback_to_paper_voice = _retrieve(
+        supabase, question, injected_doc_ids, matched_pillar_key,
+    )
+
+    # Sanctioned No-Oracle-Rule fallback -- MIRROR of chat.chat()'s generate()
+    # fallback_to_paper_voice branch. Fires ONLY when exclusion emptied a
+    # non-empty retrieval; never for thin/empty retrieval, never on no match.
+    if fallback_to_paper_voice:
+        answer = render_paper_voice_with_disclaimer(matched_pillar_key, question, messages)
+        if not answer:
+            answer = _chat._NO_ANSWER_FALLBACK
+        logger.info(
+            "position_paper_exclusion: FALLBACK fired (producer) | pillar=%s | question=%r",
+            matched_pillar_key, question,
+        )
+        return ProducerResult(
+            answer=answer, outcome="position_paper", citations=[], verified_references=[],
+            model="position_paper",
+            # render_paper_voice_with_disclaimer does not expose token usage --
+            # same measured house-voice median used before, so the spend
+            # ceiling isn't blind to this rare fallback either.
+            cost_usd=0.015,
+            updated_topics=dict(topics_established),
+        )
 
     # truly_empty short-circuit (chat.py generate() L1008): nothing to answer from.
     if not chunks and not topic_context_parts:

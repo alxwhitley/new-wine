@@ -23,6 +23,29 @@ logger = logging.getLogger(__name__)
 # added deliberately to PILLARS below — never derived from an open table or
 # a runtime flag. A DB-table-backed registry would need much stronger
 # justification than this code constant; prefer the code constant.
+#
+# ── Architecture, corrected 2026-08-06 (Alex's ruling; resolves CLAUDE.md
+# Settled decision #8's flagged 2026-08-01 conflict) ───────────────────────
+# A position paper is CONSTRAINING SILENT CONTEXT, never a served answer.
+# match_position_paper() still decides whether a question's topic has a
+# matched house position; get_paper_body() still loads that paper's own
+# text. But the caller (chat.py / its producer.py mirror) no longer
+# bypasses retrieval on a match — retrieval runs completely normally, the
+# paper's body is injected as bounding [House Position] silent context (the
+# writer may not contradict it and may not copy its wording, cite it, or
+# name it), and the answer is generated from real retrieved teacher
+# material with real citations, through the normal guarded answer path.
+# Retrieved material that genuinely contradicts the house position is
+# excluded before generation (app.services.position_paper_exclusion), never
+# silently reframed into agreement.
+# generate_position_paper_answer() still exists and is UNCHANGED, but its
+# role is now narrow: it backs ONLY the sanctioned No-Oracle-Rule fallback
+# (render_paper_voice_with_disclaimer(), below) for the case where exclusion
+# removes every retrieved teacher and would otherwise leave an empty
+# answer — never the default path for a match. That fallback appends the
+# standard disclaimer, unlike this function's own voice prompt (which still,
+# correctly, forbids adding one itself — the disclaimer is appended
+# deterministically in code, never left to the model to phrase).
 
 # ── Anchor text constants ───────────────────────────────────────────────
 # Named individually (rather than inlined into PILLARS below) so each is
@@ -806,3 +829,39 @@ def generate_position_paper_answer(
     except Exception:
         logger.exception("Position-paper LLM stream failed for pillar=%s", pillar_key)
         yield _sse(json.dumps({"error": "AI service temporarily unavailable"}))
+
+
+# ── Sanctioned fallback: exclusion-emptied-the-answer only ────────────────
+# Alex's ruling, 2026-08-06: if app.services.position_paper_exclusion
+# removes every retrieved teacher for genuinely contradicting the matched
+# house position, do not serve the empty state — fall back to the paper's
+# own voice (a sanctioned form under the No-Oracle Rule) with the standard
+# disclaimer. This is the ONLY sanctioned reason for this fallback — never
+# thin retrieval, never a match failure, never an error; chat.py's/
+# producer.py's own callers are responsible for only reaching this when
+# that specific condition holds.
+DISCLAIMER_TEXT = "Rhemata can make mistakes. Please let us know if you see any."
+
+
+def render_paper_voice_with_disclaimer(pillar_key, question, messages=None):
+    # type: (str, str, Optional[List[object]]) -> str
+    """Buffer generate_position_paper_answer() into a complete string and
+    append DISCLAIMER_TEXT, deterministically in code — never left to the
+    model to phrase, so it can never be dropped, paraphrased, or mangled.
+    Returns "" if the underlying generation produced nothing (caller decides
+    how to handle that — this function does not itself supply a fallback
+    fallback)."""
+    parts = []  # type: List[str]
+    for event in generate_position_paper_answer(pillar_key, question, messages):
+        if not event.startswith("data: "):
+            continue
+        try:
+            payload = json.loads(event[len("data: "):].rstrip("\n"))
+        except (ValueError, TypeError):
+            continue
+        if isinstance(payload, dict) and "token" in payload:
+            parts.append(payload["token"])
+    answer = "".join(parts).strip()
+    if not answer:
+        return ""
+    return answer + "\n\n" + DISCLAIMER_TEXT

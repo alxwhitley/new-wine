@@ -187,9 +187,16 @@ class _LogCapture(logging.Handler):
         self.records.append(self.format(record))
 
 
-def _retrieve_with_lock_observation(db, question):
+def _retrieve_with_lock_observation(db, question, matched_pillar_key=None):
     """Runs producer._retrieve() (chat.py's mirrored pipeline) against a real
-    question and returns (chunks, citations, fired: bool, log_lines)."""
+    question and returns (chunks, citations, fired: bool, log_lines).
+
+    matched_pillar_key: as of the position-papers-as-fence build (2026-08-06),
+    _retrieve() takes a 4th param and returns a 4th value
+    (fallback_to_paper_voice) -- position-paper interception no longer
+    short-circuits before retrieval, so retrieval (and this lock) now
+    genuinely runs for position-paper-matched questions too, unlike when
+    this test was first written."""
     from app.services.async_answers import producer
 
     handler = _LogCapture()
@@ -197,7 +204,9 @@ def _retrieve_with_lock_observation(db, question):
     stl_module.logger.addHandler(handler)
     stl_module.logger.setLevel(logging.INFO)
     try:
-        chunks, citations, citable_count = producer._retrieve(db, question)
+        chunks, citations, citable_count, _fallback = producer._retrieve(
+            db, question, matched_pillar_key=matched_pillar_key,
+        )
     finally:
         stl_module.logger.removeHandler(handler)
 
@@ -227,10 +236,11 @@ def _run_tier_b():
         pillar = match_position_paper(question)
         print(f"     match_position_paper -> {pillar!r}")
         if pillar:
-            print("     (position-paper interception fires FIRST in chat.py/producer.py -- "
-                  "this question never reaches retrieval, so the lock never runs for it live)")
-            continue
-        chunks, citations, fired, log_lines = _retrieve_with_lock_observation(db, question)
+            print("     (a matched position paper is now constraining silent context, "
+                  "not a served answer -- retrieval runs normally, so this lock genuinely "
+                  "reaches this question too; see scripts/test_position_paper_fence.py "
+                  "for the position-paper-specific behavior this build added)")
+        chunks, citations, fired, log_lines = _retrieve_with_lock_observation(db, question, matched_pillar_key=pillar)
         authors = sorted({c.get("author") for c in citations if c.get("author")})
         print(f"     lock fired: {fired} | citable authors in result: {authors}")
         for line in log_lines:

@@ -24,7 +24,10 @@ from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model
-from app.services.position_papers import generate_position_paper_answer, match_position_paper
+from app.services.position_papers import (
+    match_position_paper, get_paper_body, render_paper_voice_with_disclaimer, PILLARS,
+)
+from app.services.position_paper_exclusion import exclude_contradicting_teachers
 from app.services.corpus_version import get_corpus_version
 from app.services.single_teacher_lock import apply_single_teacher_lock
 
@@ -115,6 +118,12 @@ def _or_keywords(text: str) -> Optional[str]:
     return " OR ".join(tokens)
 
 router = APIRouter()
+
+# Pillar metadata lookup (document_id / voice_topic_name) for the fence
+# injection below — mirrors position_papers.py's own internal
+# _PILLARS_BY_KEY rather than adding new API surface there; PILLARS is
+# already a plain, already-imported module-level list.
+_PILLAR_BY_KEY = {p["pillar_key"]: p for p in PILLARS}  # type: Dict[str, dict]
 
 # ── Background topics cache ──────────────────────────────────────────
 _background_topics: list = []
@@ -699,63 +708,17 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
 
     try:
 
-        # Position-paper interception: if the question semantically matches
-        # one of the registered position-paper pillars (a small, closed,
-        # code-defined registry in position_papers.py — currently
-        # baptism_holy_spirit and speaking_in_tongues), answer directly in
-        # Rhemata's own voice from that pillar's paper (no citation, no
-        # teacher attribution), bypassing the normal teacher-citation
-        # retrieval and generation pipeline entirely. See
-        # position_papers.py's module docstring for why this must not
-        # become a generic "serve any silent_context document" mechanism.
-        # On no-match, matched_pillar_key is None and everything below runs
-        # completely unchanged, exactly as before this interception existed.
+        # Position-paper match (Alex's ruling, 2026-08-06 — resolves CLAUDE.md
+        # Settled decision #8's flagged 2026-08-01 conflict): a position
+        # paper is CONSTRAINING SILENT CONTEXT, never a served answer. On a
+        # match, matched_pillar_key drives two things further down — (a) the
+        # paper's body is injected as bounding [House Position] silent
+        # context (Step 0.6 below) and (b) retrieved material that
+        # contradicts the house position is excluded before generation
+        # (Step 4.5 below) — but retrieval itself runs completely normally,
+        # exactly as it does for a non-matching question. See
+        # position_papers.py's module docstring for the full architecture.
         matched_pillar_key = match_position_paper(request.question)
-        if matched_pillar_key:
-            def generate_position_paper():
-                answer_parts = []  # type: List[str]
-                for event in generate_position_paper_answer(matched_pillar_key, request.question, request.messages):
-                    yield event
-                    if event.startswith("data: "):
-                        try:
-                            payload = json.loads(event[len("data: "):].rstrip("\n"))
-                        except (ValueError, TypeError):
-                            continue
-                        if isinstance(payload, dict) and "token" in payload:
-                            answer_parts.append(payload["token"])
-                answer = "".join(answer_parts).strip()
-
-                conversation_id = request.conversation_id or str(uuid.uuid4())
-                message_id = str(uuid.uuid4())
-                is_new = request.conversation_id is None
-                if user_id:
-                    threading.Thread(
-                        target=_save_conversation,
-                        args=(db, user_id, conversation_id, is_new, request.question, answer, message_id, [], []),
-                        daemon=True,
-                    ).start()
-                    logger.info("Conversation save dispatched in background (position-paper path): %s", conversation_id)
-                else:
-                    conversation_id = None
-                    message_id = None
-                    logger.debug("Skipping conversation save — no authenticated user (position-paper path)")
-
-                meta = {
-                    "citations": [],
-                    "conversation_id": conversation_id,
-                    "message_id": message_id,
-                    "verified_references": [],
-                    # Informational shared corpus-version signal (Stage 2); cached +
-                    # fail-safe, so it can never affect the answer. Same signal the
-                    # async reuse key uses.
-                    "evidence_version": get_corpus_version(db),
-                }
-                if user_usage_meta:
-                    meta["usage"] = user_usage_meta
-                yield _sse(json.dumps(meta))
-                yield _sse("[DONE]")
-
-            return StreamingResponse(generate_position_paper(), media_type="text/event-stream")
 
         # Step 0: Get source filter settings
         filters = get_disabled_filters()
@@ -819,6 +782,28 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
                         logger.info("Condensed injection for established topic: %s", topic_key)
                 except Exception:
                     logger.exception("Failed to fetch condensed chunk for topic %s", topic_key)
+
+        # Step 0.6: Position-paper fence injection (Alex's ruling, 2026-08-06
+        # — see the comment on matched_pillar_key above and position_papers.py's
+        # module docstring). On a match, the paper's own body becomes bounding
+        # silent context: the writer may not contradict it and may not cite,
+        # name, or copy its wording. Skipped if the SAME document was already
+        # injected above via a background-topic alias hit — same content,
+        # avoid double injection (both mechanisms happen to reference the
+        # same two documents today).
+        if matched_pillar_key:
+            pillar = _PILLAR_BY_KEY.get(matched_pillar_key)
+            if pillar and pillar["document_id"] not in injected_doc_ids:
+                paper_body = get_paper_body(matched_pillar_key)
+                if paper_body:
+                    topic_context_parts.append(
+                        "[House Position] (citation_mode=silent_context) This is "
+                        f"Rhemata's own settled house position on {pillar['voice_topic_name']}. "
+                        "It bounds what this answer may claim — do not state anything "
+                        "that contradicts it. Never cite, name, quote, or copy its exact "
+                        f"wording into your answer.\n\n{paper_body}"
+                    )
+                    injected_doc_ids.add(pillar["document_id"])
 
         # Step 1: Expand query into variants ([original, paraphrase1, paraphrase2]) + FTS keywords
         variants, keywords = expand_query(request.question)
@@ -987,6 +972,28 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             capped_expanded.append(c)
         chunks = capped_expanded
 
+        # Step 4.5: House-position exclusion (Alex's ruling, 2026-08-06 —
+        # resolves CLAUDE.md Settled decision #9's flagged conflict: a house
+        # guardrail silently reframing a dissenting teacher into agreement).
+        # For a position-paper-matched question, any retrieved teacher whose
+        # material genuinely contradicts the house position is excluded
+        # entirely — never silently reframed. Runs on this final, already-
+        # curated chunk set (post-rerank, post-neighbor-expansion), before
+        # lexicon chunks (never a "teacher," excluded from this check) are
+        # appended and before citations are built, so both naturally reflect
+        # the exclusion. fallback_to_paper_voice fires ONLY when retrieval
+        # found real material and exclusion removed every last chunk of it —
+        # never for thin/empty retrieval to begin with, never on no match.
+        fallback_to_paper_voice = False
+        if matched_pillar_key and chunks:
+            house_position_text = get_paper_body(matched_pillar_key)
+            if house_position_text:
+                chunks, excluded_authors = exclude_contradicting_teachers(
+                    matched_pillar_key, house_position_text, request.question, chunks,
+                )
+                if excluded_authors and not chunks:
+                    fallback_to_paper_voice = True
+
         # Step 5: Conditional lexicon retrieval — reuse cached embedding (Change 2)
         if is_word_study_query(request.question):
             try:
@@ -1022,6 +1029,49 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     def generate():
+        # Sanctioned No-Oracle-Rule fallback (Alex's ruling, 2026-08-06):
+        # every retrieved teacher was excluded for contradicting the house
+        # position, so serve the position paper's own voice instead of an
+        # empty answer — WITH the standard disclaimer (unlike the retired
+        # direct-serve path, which never carried one). Uncited by design
+        # (matches generate_position_paper_answer()'s own voice prompt), so
+        # this skips the citation/verification pipeline entirely, same as
+        # the old direct-serve path did.
+        if fallback_to_paper_voice:
+            answer = render_paper_voice_with_disclaimer(matched_pillar_key, request.question, request.messages)
+            if not answer:
+                answer = _NO_ANSWER_FALLBACK
+            logger.info(
+                "position_paper_exclusion: FALLBACK fired | pillar=%s | question=%r",
+                matched_pillar_key, request.question,
+            )
+            conversation_id = request.conversation_id or str(uuid.uuid4())
+            message_id = str(uuid.uuid4())
+            is_new = request.conversation_id is None
+            if user_id:
+                threading.Thread(
+                    target=_save_conversation,
+                    args=(db, user_id, conversation_id, is_new, request.question, answer, message_id, [], []),
+                    daemon=True,
+                ).start()
+            else:
+                conversation_id = None
+                message_id = None
+            for ev in _playback_events(answer):
+                yield ev
+            meta = {
+                "citations": [],
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "verified_references": [],
+                "evidence_version": get_corpus_version(db),
+            }
+            if user_usage_meta:
+                meta["usage"] = user_usage_meta
+            yield _sse(json.dumps(meta))
+            yield _sse("[DONE]")
+            return
+
         # Piece 1 (buffer-then-verify-then-playback, 2026-08-02): the reader sees
         # NOTHING until the full answer has been generated AND verified server-side.
         # The Phase 2 teacher-name guard runs, any ungrounded attribution is resolved
