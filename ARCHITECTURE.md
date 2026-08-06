@@ -167,48 +167,85 @@ real data before any study-panel links are surfaced.
 
 ---
 
-## Position papers (house-voice answer path)
+## Position papers (fence + guarded retrieval)
 
 `backend/app/services/position_papers.py` — a small, CLOSED, code-defined
-registry (`PILLARS`) of Alex's own first-party owned "house position papers,"
-answered in Rhemata's own voice: no citation, no teacher attribution, no
-"Rhemata can make mistakes" disclaimer. This is answer-source (a) of the
-three-source position design (PLAN.md #48). **Two pillars are live —
-`baptism_holy_spirit` and `speaking_in_tongues`;** the remaining charismatic
-pillars are future work (drafts sit in `docs/position_papers/`, not yet
-registered).
+registry (`PILLARS`) of Alex's own first-party owned "house position papers."
+**Two pillars are live — `baptism_holy_spirit` and `speaking_in_tongues`;**
+the remaining six charismatic pillars are future work (drafts sit in
+`docs/position_papers/`, not yet registered).
 
-Wired into the `chat` router: `chat.py` imports `match_position_paper` /
-`generate_position_paper_answer` and, before any retrieval, calls
-`match_position_paper(question)`. On a match it streams the house-voice answer
-and **bypasses the normal teacher-citation retrieval + generation entirely**;
-on no-match it is a complete no-op and the normal pipeline runs unchanged.
+**Corrected 2026-08-06 (CLAUDE.md Settled decisions #8/#16/#17) — a position
+paper is constraining silent context, never a served answer.** Until this
+date, a match bypassed retrieval entirely and served the paper's own
+pre-written body directly, uncited, in Rhemata's own voice — the SHIPPED
+mechanism CLAUDE.md's Settled decision #8 flagged, from 2026-08-01, as
+directly contradicting decision #8 itself. That conflict is now resolved in
+decision #8's favor, not left standing:
 
-- Matching is fully semantic: the question is embedded once (OpenAI), scored
-  per pillar as max-similarity against that pillar's positive anchors vs. its
-  contrast anchors, gated by a per-pillar `match_threshold` AND
-  pos_sim > contrast_sim, with cross-pillar ties broken by an explicit
-  `tie_break_priority` (never list/dict order). No phrase blocklist, no
-  hardcoded topic strings.
-- The answer body is loaded from the `chunks` table by the pillar's
-  `document_id` (read-only SELECT, cached per process) and fed to a dedicated
-  streaming `claude-sonnet-4-5` call under a house-voice system prompt —
-  **deliberately NOT** `chat.py`'s cited-retrieval `ANSWER_SYSTEM_BLOCKS`, and
-  with no `<answer>` XML wrapper.
-- Scope guard (module docstring): this must never become a generic "serve any
-  `silent_context` document" mechanism — that would be a license-gate bypass.
-  A new pillar is safe only because it must be Alex's own owned content added
-  deliberately to `PILLARS` in code, never from a DB table or a runtime flag.
+- `chat.py`/`producer.py` still call `match_position_paper(question)` early,
+  but a match no longer short-circuits anything — retrieval (query expansion,
+  hybrid search, rerank, neighbor expansion) runs completely normally, exactly
+  as it does for a non-matching question.
+- On a match, the paper's own body (`get_paper_body()`) is injected into the
+  retrieval context as `[House Position] (citation_mode=silent_context)`
+  content: it bounds what the answer may claim (the writer may not contradict
+  it) but must never be cited, named, quoted, or have its wording copied.
+  Deduped against the pre-existing background-topic injection mechanism
+  (`chat.py`'s "Fix 6") so the same document is never retrieved and injected
+  twice.
+- `backend/app/services/position_paper_exclusion.py` (new) —
+  `exclude_contradicting_teachers(pillar_key, house_position_text, question,
+  chunks) -> (filtered_chunks, excluded_authors)`. One Anthropic call per
+  question (not per teacher): retrieved citable, non-lexicon chunks are
+  grouped by author, and the model judges each teacher's material against
+  the house position, returning a structured per-teacher contradicts/doesn't
+  verdict. A teacher whose material genuinely contradicts is excluded
+  entirely from the answer's context/citations — never silently reframed
+  into agreement (the failure CLAUDE.md decision #9 flagged). Fails SAFE
+  toward NOT excluding on any parse/API error. Every exclusion is logged at
+  INFO (question, teacher, topic, reason) for later false-exclusion-rate
+  measurement — an explicit, Alex-authorized exception to this codebase's
+  usual posture against LLM judgment calls (Open Decision #20 concerns a
+  different problem, post-hoc claim verification on an unmatched answer).
+- If exclusion removes every chunk from an otherwise non-empty retrieval —
+  never for thin/empty retrieval, never on no match, never on an error —
+  `render_paper_voice_with_disclaimer()` (in `position_papers.py`) serves the
+  sanctioned No-Oracle-Rule fallback: the paper's own voice (still generated
+  by `generate_position_paper_answer()`, unchanged, now used ONLY for this
+  narrow case) with the standard disclaimer appended deterministically in
+  code, never left to the model. Logged every time it fires.
+
+Matching itself is unchanged: fully semantic, the question embedded once
+(OpenAI), scored per pillar as max-similarity against that pillar's positive
+anchors vs. its contrast anchors, gated by a per-pillar `match_threshold` AND
+pos_sim > contrast_sim, cross-pillar ties broken by an explicit
+`tie_break_priority`. No phrase blocklist, no hardcoded topic strings.
+
+Scope guard (module docstring, unchanged): this must never become a generic
+"serve any `silent_context` document" mechanism — that would be a license-gate
+bypass. A new pillar is safe only because it must be Alex's own owned content
+added deliberately to `PILLARS` in code, never from a DB table or a runtime
+flag.
 
 Public surface: `match_position_paper(question) -> Optional[str]`,
+`get_paper_body(pillar_key) -> Optional[str]`,
 `generate_position_paper_answer(pillar_key, question, messages) -> Iterator[str]`
-(SSE stream), `get_paper_body(pillar_key) -> Optional[str]`.
+(SSE stream — now used only by the fallback path, not the default),
+`render_paper_voice_with_disclaimer(pillar_key, question, messages) -> str`
+(new — buffers the above + appends `DISCLAIMER_TEXT`),
+`PILLARS` (the registry list itself — `chat.py` builds its own
+`_PILLAR_BY_KEY` lookup from it for the fence-injection step, rather than new
+API surface on this module).
 
 **Naming caution — "position" spans three unrelated things** (see CLAUDE.md
 Invariant 12's note): (a) the `positions` teacher/corpus table + `positions.py`
-(both generators source-blind by signature), (b) this house-voice `position_papers.py` feature
-(deliberately reads document/chunk text — not a violation of (a)'s invariant),
-(c) the `docs/position_papers/` draft folder.
+(both generators source-blind by signature), (b) this `position_papers.py`
+feature — reads document/chunk text by deliberate design, but as of
+2026-08-06 only to inject fence context or, in the narrow disclosed fallback,
+to phrase an uncited-with-disclaimer answer; not (a)'s routine path and not a
+violation of (a)'s invariant either way, (c) the `docs/position_papers/`
+draft folder.
 
 ---
 

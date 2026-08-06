@@ -70,19 +70,28 @@ later session makes deliberately).
    by Alex on the charismatic pillars; they constrain what an answer may claim
    and must never supply its phrasing; triggered deterministically by topic,
    never by the system self-assessing "doubt" (unreliable, and would skip the
-   paper exactly when it mattered most). ⚠ *Conflict flag: this directly
-   contradicts Invariant 12's note (b) and ARCHITECTURE's "Position papers
-   (house-voice answer path)," which bless the SHIPPED house-voice path that
-   reads a paper's own chunk text to phrase answers. That path is exactly what
-   Phase 1 items 1.5–1.7 change. Flagged, NOT resolved this pass — resolving it
-   means amending Invariant 12(b), which this records pass deliberately leaves
-   untouched.*
+   paper exactly when it mattered most). **RESOLVED 2026-08-06 (Alex's ruling;
+   built, not just decided) — the conflict this decision flagged since
+   2026-08-01 is closed in this decision's favor, not left standing.** A
+   position-paper match no longer bypasses retrieval: the paper's own body is
+   injected as bounding `[House Position]` silent context (never cited, named,
+   quoted, or copied), and the answer is generated from real retrieved teacher
+   material with real citations, through the normal guarded answer path.
+   Invariant 12's note (b) and ARCHITECTURE's "Position papers" section are
+   corrected to match, not left blessing the retired mechanism. See Settled
+   decisions #16/#17 below for the two rulings that came with this (exclude
+   contradicting teachers; paper-voice-plus-disclaimer fallback when exclusion
+   empties the answer) and `backend/app/services/position_paper_exclusion.py`.
 9. **House view and teacher view are two visibly separate things in an answer,
-   never blended.** ⚠ *Conflict flag: a current house guardrail tells the model
-   to follow house framing regardless of how the source puts it, which silently
-   corrects a dissenting teacher into agreement — direct misrepresentation of a
-   real minister (failure mode 2). Reconciling the system prompt / guardrails is
-   a code fix, flagged not made.*
+   never blended.** **RESOLVED 2026-08-06, alongside decision #8** — the
+   flagged guardrail (`system_prompt.txt`'s conviction-first self-check) no
+   longer instructs the model to silently rewrite an already-attributed
+   dissenting teacher into agreement; it now states Rhemata's conviction
+   alongside a named source's own view, never instead of it. The deeper case
+   this guarded against — a genuinely contradicting teacher reaching the
+   writer for a position-paper-matched topic — is now handled upstream by
+   decision #16's exclusion mechanism, so the writer rarely even sees one to
+   begin with.
 10. **Tongues is a house position, not a debate** (Alex's ruling, 1 Aug): not
     required as initial evidence of Spirit baptism, but reasonably expected for
     all. The neutrality list shrinks by one.
@@ -247,6 +256,40 @@ SEQUENCE (2026-08-03)".
     pressure test, remediation, and revised design (with a ranked list of
     what's still weak even after the revision):
     `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+
+## Settled product decisions (2026-08-06) — position papers as fence; do not reopen
+
+Alex's ruling, resolving Settled decisions #8/#9's flagged 2026-08-01 conflict
+(see those decisions above — RESOLVED in place, not superseded). Built the same
+session: `backend/app/services/position_paper_exclusion.py`,
+`backend/app/services/position_papers.py`'s `render_paper_voice_with_disclaimer()`,
+and the `chat.py`/`producer.py` retrieval-path wiring.
+
+16. **Retrieved teacher material that contradicts a matched house position is
+    excluded from the answer, never presented alongside it and never silently
+    reframed into agreement.** Whether a teacher "contradicts" is a per-answer
+    model judgment, not a deterministic check, and will sometimes be wrong in
+    both directions — Alex was told this directly and accepts it; this is an
+    explicit, authorized exception to this codebase's usual posture against
+    LLM-based judgment calls (Open Decision #20's five failed attempts were at
+    a different problem, post-hoc claim-support verification on an unmatched
+    answer — this is a pre-generation content filter with a narrow, structured
+    per-teacher verdict, not the same shape). Every exclusion is logged
+    (question, teacher, topic, reason) so the false-exclusion rate is
+    measurable later, per the same measure-before-building discipline used
+    elsewhere. This makes answers on house-position topics read more like
+    consensus than the corpus's full range of material would otherwise show —
+    accepted, not an oversight. Do not build a corrective for either point
+    without Alex revisiting it first.
+17. **If excluding every retrieved teacher would leave an empty answer, fall
+    back to the position paper's own voice — a sanctioned form under the
+    No-Oracle Rule — carrying the standard disclaimer** ("Rhemata can make
+    mistakes. Please let us know if you see any."), appended deterministically
+    in code, never left to the model to phrase. This is the ONLY sanctioned
+    reason for this fallback: never thin retrieval, never a match failure,
+    never an error — those keep using the product's existing graceful-
+    degradation / clean-error handling, unchanged. Every time this fallback
+    fires is logged.
 
 ## Session Routing
 
@@ -473,16 +516,23 @@ different row, per the hard rule above.
     invariant governs only (a).** (a) The teacher/corpus `positions` table +
     `positions.py`'s generation functions (`generate_position_text` /
     `generate_corpus_position_text`) — the source-blind mechanism described
-    above. (b) `backend/app/services/position_papers.py` — the
-    shipped house-voice "position papers" feature (baptism/tongues pillars,
-    wired into `chat.py`), which by deliberate design DOES read a paper's
-    own document/chunk text (`get_paper_body()` reads `chunks`) to answer in
-    Rhemata's own voice from Alex's own first-party owned content. That is a
-    different, legitimate mechanism — **NOT a violation of this invariant,
-    which does not apply to it.** (c) `docs/position_papers/` — draft papers
-    for pillars not yet shipped. Do not read (b)'s chunk-reading as breaking
-    (a)'s source-blindness; they are separate code paths with separate
-    rules. See ARCHITECTURE.md, "Position papers (house-voice answer path)."
+    above. (b) `backend/app/services/position_papers.py` — the "position
+    papers" feature (baptism/tongues pillars). **Corrected 2026-08-06
+    (Settled decisions #8/#16/#17): no longer a house-voice full-bypass
+    answer path.** `get_paper_body()` still reads a paper's own document/
+    chunk text, but only to inject it as bounding `[House Position]` silent
+    context around a normal, retrieved, cited answer — never to phrase a
+    served answer directly, except through the narrow, disclosed,
+    disclaimer-carrying fallback (`render_paper_voice_with_disclaimer()`)
+    for the specific case where contradiction-exclusion (decision #16) empties
+    an otherwise-real retrieval. This remains a different mechanism from (a)
+    — it still reads chunk text, which (a)'s functions structurally cannot —
+    but it is **no longer the routine path it once was; it is now the
+    exception path**, and (a)'s source-blindness is still not violated by
+    it. (c) `docs/position_papers/` — draft papers for pillars not yet
+    shipped (6 of them; only baptism_holy_spirit and speaking_in_tongues are
+    registered/live). See ARCHITECTURE.md, "Position papers (fence + guarded
+    retrieval)."
 
 13. **Position scope is locked to exactly two values (`'teacher'` |
     `'corpus'`), double-locked — a third scope is still refused twice.** A
