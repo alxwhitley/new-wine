@@ -599,28 +599,16 @@ different row, per the hard rule above.
   a "works here, broken there" behavior gap appears, check the transitive dep
   versions BEFORE assuming a code difference. Pinning `pydantic`/`starlette` would
   remove the divergence (offered to Alex 2026-08-06, not yet actioned).
-- **A live, unbacked quote guarantee is CURRENTLY SHIPPING (B5 landmine,
-  recurring in the present).** `frontend/app/home/page.tsx` (~line 492) still
-  states, present-tense: "Every quote is checked character-for-character against
-  the source before it can appear — a quote cannot exist in Rhemata unless the
-  teacher actually said it… Rhemata structurally can't." No mechanism backs this.
-  It is the SAME landmine as the earlier `/sources` incident (a separate component
-  left carrying the claim after everywhere else — POSITIONING.md, `/sources`,
-  `docs/how-rhemata-handles-sources.md` — was corrected to roadmap framing), NOT a
-  historical lesson. Any change to the quote guarantee must sweep EVERY surface in
-  the same session. Queued: its own copy-fix session immediately after the
-  2026-08-03 records pass. (Records pass was report-only — copy not changed.)
-- **The John Bevere source is EMPTY BUT SERVABLE (live query 2026-08-03).** His
-  documents and propositions were fully deleted 2026-07-25 (confirmed live: 0
-  documents, 0 propositions by author or by source), but the `sources` row
-  (`John Bevere`, `unlicensed`/**`shown`**) and 5 `source_aliases` REMAIN — so his
-  name still resolves as a real servable source with zero content: the exact
-  "verified link to an empty author page" surface the tongues-answer audit named.
-  The home page ALSO markets him as a "trusted modern-day teacher" (a living
-  minister named with zero corpus material — a live misrepresentation, failure
-  mode 2). Both belong in the copy-fix session. Resolves a records conflict: an
-  older record implying his material was "fully processed for propositions" is
-  stale — it is now zero.
+- **RESOLVED 2026-08-06 — the home-page quote copy no longer makes an unbacked
+  verification or impossibility claim.** It now says quotes selected for inclusion
+  are reviewed and approved by a real person against the original source. The
+  sweep covered the live user-facing frontend; `/sources` already correctly says
+  software verification is roadmap-only and not live.
+- **RESOLVED 2026-08-06 — empty living-teacher marketing removed.** John Bevere
+  and Michael Koulianos are no longer named as covered teachers on Home, Library,
+  or Authors. Live corpus browse confirmed zero documents for both; Home now names
+  covered voices including Derek Prince, Andrew Murray, Jack Deere, and Michael
+  Brown. Historical deletion/source records remain in the audit trail.
 - **Stale chat-side figures/premises — verify against the repo/live DB before
   recording.** Twice on 2026-08-03 a confident chat-side assertion was falsified by
   the repo: the "781 / 91%-Prince+Bevere" backfill figure (already retired) and the
