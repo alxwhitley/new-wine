@@ -86,12 +86,18 @@ later session makes deliberately).
 10. **Tongues is a house position, not a debate** (Alex's ruling, 1 Aug): not
     required as initial evidence of Spirit baptism, but reasonably expected for
     all. The neutrality list shrinks by one.
-11. **Healing mechanics, prophetic accountability, and apostolic authority stay
-    debates** — presented with named teachers on both sides. Alex has no settled
-    view and will let the corpus inform it over time. Caveat on record: what the
-    corpus says is a function of who is in it, not of what is true — a corpus
-    majority must never quietly become a house position without a deliberate
-    decision.
+11. **Healing mechanics, prophetic accountability, apostolic authority, and
+    eschatological timing stay debates** (eschatological timing added
+    2026-08-05) — presented with named teachers on both sides. Alex has no
+    settled view and will let the corpus inform it over time. Caveat on
+    record: what the corpus says is a function of who is in it, not of what
+    is true — a corpus majority must never quietly become a house position
+    without a deliberate decision. **Sanctification models is NOT a debate
+    topic** (Alex's ruling, 2026-08-05) — it was a candidate under
+    consideration during Project 2 phase 1 design but was determined not to
+    be a genuine live debate; it is an ordinary topic with no standing
+    exception, same as any topic without one. This is a removal, not a
+    deferral — do not re-add it as a pending/future anchor.
 12. **Hidden-by-default is reversed: new material defaults to visible**, and
     everything currently hidden becomes visible. Safe now only because there are
     no users; it buys time, not a pass — known quality problems still clear
