@@ -114,14 +114,14 @@ production callers. Counts: query live. Generation model: Sonnet 5 live
 ~68s to a fully-revealed answer; ~40-concurrent ceiling replacement LIVE
 but unproven at real concurrency (one serial test only).
 
-- **#4** `ingest_helloao.py` unconverted. **#6** Guest→account conversion likely broken (`docs/audits/GUEST_AUTH_AUDIT.md`). **#7** Auth CTA inconsistencies (`docs/audits/BUTTON_AUTH_UX_AUDIT.md`).
-- **#9** v4 propositions prompt built, unwired. **#10** Precept Austin raw-source gap. **#11** `verify_chunk_alignment.py` docstring stale.
+- **#4** `ingest_helloao.py` unconverted. **#6** Guest→account conversion likely broken (`docs/audits/GUEST_AUTH_AUDIT.md`). **#7** Auth CTA inconsistencies remain open (`docs/audits/BUTTON_AUTH_UX_AUDIT.md`); the dead `AuthButton.tsx` component was removed 2026-08-06.
+- **#9** v4 propositions prompt built, unwired. **#10** Precept Austin raw-source gap.
 - **#12** `jewish_perspectives` orphaned; **#13** SP2 Study Panel — no screen-reader pass.
 - **#14** Hebrew lexicon (TBESH) not covered by the Greek CC BY 4.0 grant. **#16** Lewis/Tolkien/Wilson mistagged `public_domain`.
 - **#19** External pipeline diagram stale.
 - **#22 (new)** Embedded third-party material FLAGGED but un-excludable at chunk granularity (Mott quote, translator footnotes, New Life Heidelberg quote, Freda Hanbury poem, Müller boundaries, magazine/tape running headers) — needs a sub-chunk exclusion mechanism or Alex's decision to accept whole-chunk loss. See Project 3 above + the audit doc.
 
-Resolved: #1-3, #5, #15, #17, #18 (home copy + frontend sweep removed empty Bevere/Koulianos marketing; quote claim corrected 2026-08-06), #20 (admin bug did NOT manifest in prod; fix deployed), #21 (all 9 remaining Murray books + Prince audited + exclusions applied 2026-08-06).
+Resolved: #1-3, #5, #11 (verify-chunk-alignment docstring corrected 2026-08-06), #15, #17, #18 (home copy + frontend sweep removed empty Bevere/Koulianos marketing; quote claim corrected 2026-08-06), #20 (admin bug did NOT manifest in prod; fix deployed), #21 (all 9 remaining Murray books + Prince audited + exclusions applied 2026-08-06).
 
 ---
 
