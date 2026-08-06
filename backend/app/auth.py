@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import jwt
 from jwt import PyJWKClient
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from app.db.supabase import get_supabase
 
@@ -67,14 +67,25 @@ def require_user(request: Request) -> str:
 
 
 class _RequireRole:
-    """FastAPI dependency: verify user is authenticated and has one of the allowed roles."""
+    """FastAPI dependency: verify user is authenticated and has one of the allowed roles.
+
+    __call__ takes user_id via a nested Depends(get_optional_user) rather than
+    a direct `request: Request` parameter. With this file's `from __future__
+    import annotations`, FastAPI's dependency introspection fails to resolve
+    a bound method's own `Request`-typed parameter (confirmed via an isolated
+    repro: identical code as a plain function resolves correctly; as this
+    class's __call__ it does not) -- every request 422s with "field required:
+    query.request" before this dependency's own logic ever runs, so no
+    admin/contributor-gated route was reachable at all. Routing through
+    get_optional_user (a plain function, unaffected) sidesteps the bug
+    entirely without changing behavior.
+    """
 
     def __init__(self, allowed):
         # type: (List[str]) -> None
         self.allowed = allowed
 
-    def __call__(self, request: Request) -> str:
-        user_id = get_optional_user(request)
+    def __call__(self, user_id: Optional[str] = Depends(get_optional_user)) -> str:
         if not user_id:
             raise HTTPException(status_code=401, detail="Authentication required")
         role = get_user_role(user_id)
