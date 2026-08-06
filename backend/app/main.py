@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import chat, search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account
+from app.routers import chat, search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes
 
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])
@@ -36,6 +36,7 @@ app.include_router(library.router, prefix="/library", tags=["library"])
 app.include_router(pastors_notes.router, prefix="/pastors-notes", tags=["pastors-notes"])
 app.include_router(usage.router, prefix="/usage", tags=["usage"])
 app.include_router(account.router, prefix="/account", tags=["account"])
+app.include_router(quotes.router, prefix="/quotes", tags=["quotes"])
 
 # Stage 2 cutover -- async answer path routes, gated on ASYNC_ANSWER_ENABLED
 # (default "false"). When OFF (the default) these routes are NOT mounted, so the
