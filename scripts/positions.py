@@ -210,6 +210,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from app.services.embeddings import embed_text  # noqa: E402
 from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model  # noqa: E402
+from app.services.dominance import DOMINANCE_THRESHOLD, determine_scope  # noqa: E402,F401
 
 PROMPT_VERSION = "position_v2"
 TENSION_MODE_PROMPT_VERSION = "position_tension_v3"
@@ -221,27 +222,15 @@ MIN_EVIDENCE_COUNT = 5
 # --------------------------------------------------------------------------
 # Scope determination (PLAN.md #48 serving-path session, 2026-08-01)
 # --------------------------------------------------------------------------
-# DOMINANCE_THRESHOLD is the single, documented boundary between teacher and
-# corpus scope for a TOPIC question (one that does not name a teacher). After
-# gathering evidence corpus-wide, compute each teacher's share of that
-# gathered evidence. If the single largest teacher supplies >= this fraction,
-# the honest answer is "this is mostly that teacher's position" -> teacher
-# scope, attributed to him. Below it, no single voice dominates -> corpus
-# scope, naming the real contributors with their evidence counts.
-#
-# 0.60 is a reasoned starting point, NOT a calibrated constant (no real
-# question traffic exists yet -- the position layer does not serve users).
-# Rationale: at >=60% one teacher supplies the clear majority of the material
-# that actually answers the question, so dressing it up as a multi-teacher
-# "corpus consensus" would misrepresent it (exactly the failure the corpus
-# contributor rules exist to refuse). Below 60% the evidence is genuinely
-# distributed across two or more materially-contributing teachers. Recorded
-# in PLAN.md as overrulable once Alex sees it work. Known limitation, stated
-# not hidden: share is measured over the gathered top-N by similarity, so a
-# prolific teacher (Derek Prince, ~5k propositions) has more shots at the
-# top-N and can dominate share partly by volume, not only by topical
-# authority -- an accepted first-cut bias, flagged for the calibration pass.
-DOMINANCE_THRESHOLD = 0.60
+# DOMINANCE_THRESHOLD and determine_scope() now live in
+# app.services.dominance (relocated 2026-08-06, PLAN.md v5.24 step 2) --
+# imported above, not redefined here, so this module and
+# app.services.single_teacher_lock (the retrieval-time lock) can never
+# independently drift on the dominance threshold or its Counter logic. See
+# that module's own docstring for the full reasoning and the value's
+# provenance. Re-exported under these same names so every existing
+# `positions.DOMINANCE_THRESHOLD` / `positions.determine_scope` call site
+# (scripts/serve_position.py, scripts/test_serve_position.py) is unaffected.
 
 
 def normalize_topic_key(topic: str) -> str:
@@ -676,27 +665,6 @@ def gather_evidence_corpus(
         if len(out) >= max_evidence:
             break
     return out
-
-
-def determine_scope(evidence: List[Dict]) -> Tuple[str, Optional[str]]:
-    """Given corpus-wide gathered evidence (each item carrying 'source_id'),
-    decide scope by single-teacher dominance. If the largest-contributing
-    teacher supplies >= DOMINANCE_THRESHOLD of the gathered evidence, this
-    topic is dominated by one voice -> ("teacher", that source_id); dressing
-    it up as a multi-teacher consensus would misrepresent it. Otherwise the
-    evidence is genuinely distributed -> ("corpus", None). Pure, no I/O. Empty
-    evidence returns ("corpus", None), but the caller refuses on the
-    honest-empty floor before scope is ever consulted."""
-    if not evidence:
-        return "corpus", None
-    from collections import Counter
-
-    counts = Counter(e["source_id"] for e in evidence)
-    total = sum(counts.values())
-    top_source, top_n = counts.most_common(1)[0]
-    if top_n / total >= DOMINANCE_THRESHOLD:
-        return "teacher", top_source
-    return "corpus", None
 
 
 def contributor_breakdown(evidence: List[Dict]) -> List[Dict]:

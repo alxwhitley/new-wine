@@ -26,6 +26,7 @@ from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model
 from app.services.position_papers import generate_position_paper_answer, match_position_paper
 from app.services.corpus_version import get_corpus_version
+from app.services.single_teacher_lock import apply_single_teacher_lock
 
 
 def is_word_study_query(question: str) -> bool:
@@ -913,14 +914,31 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             if doc_counts[did] <= 2:
                 collapsed.append((cid, (score, chunk)))
 
-        # Step 3a: Per-author cap — max 3 chunks per unique author
-        author_counts: Dict[str, int] = {}
-        author_capped: List[Tuple[str, Tuple[float, dict]]] = []
-        for cid, (score, chunk) in collapsed:
-            author = chunk.get("author") or "Unknown"
-            author_counts[author] = author_counts.get(author, 0) + 1
-            if author_counts[author] <= 3:
-                author_capped.append((cid, (score, chunk)))
+        # Step 3a: Single-teacher lock (Project 2 phase 1 step 2, CLAUDE.md
+        # #15) — for a confirmed settled topic (never a topic that merely
+        # fails to match a debate topic) whose retrieved evidence for THIS
+        # question actually concentrates in one teacher, restrict to that
+        # teacher's own chunks. On no-lock (the common case today — see
+        # single_teacher_lock.py's own docstring), `collapsed` passes
+        # through unchanged and the per-author cap below runs exactly as
+        # before this existed.
+        locked_chunks, locked = apply_single_teacher_lock(request.question, collapsed, db)
+        if locked:
+            # Per-author cap is skipped, not reapplied: its purpose (stop
+            # one teacher's material crowding out other teachers in the
+            # rerank pool) is moot once already restricted to one teacher —
+            # reapplying it would just discard that teacher's own good
+            # material for no benefit.
+            author_capped: List[Tuple[str, Tuple[float, dict]]] = locked_chunks
+        else:
+            # Step 3b: Per-author cap — max 3 chunks per unique author
+            author_counts: Dict[str, int] = {}
+            author_capped = []
+            for cid, (score, chunk) in collapsed:
+                author = chunk.get("author") or "Unknown"
+                author_counts[author] = author_counts.get(author, 0) + 1
+                if author_counts[author] <= 3:
+                    author_capped.append((cid, (score, chunk)))
 
         # Fix 1: widen rerank pool to 30, keep top 8 after Cohere.
         top_chunks = author_capped[:30]

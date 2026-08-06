@@ -209,14 +209,25 @@ def _retrieve(db, question, injected_doc_ids=None):
         if doc_counts[did] <= 2:
             collapsed.append((cid, (score, chunk)))
 
-    # Per-author cap -- max 3 chunks per author.
-    author_counts = {}  # type: Dict[str, int]
-    author_capped = []
-    for cid, (score, chunk) in collapsed:
-        author = chunk.get("author") or "Unknown"
-        author_counts[author] = author_counts.get(author, 0) + 1
-        if author_counts[author] <= 3:
-            author_capped.append((cid, (score, chunk)))
+    # Single-teacher lock (Project 2 phase 1 step 2, CLAUDE.md #15) --
+    # MIRROR of chat.chat()'s Step 3a; DRIFT POINT, imported not copied
+    # (calls _chat.apply_single_teacher_lock directly, same reuse pattern
+    # as hybrid_search_rrf/_is_citable/etc. above) so this and chat.py can
+    # never independently drift on the lock decision itself.
+    locked_chunks, locked = _chat.apply_single_teacher_lock(question, collapsed, db)
+    if locked:
+        # Per-author cap skipped, not reapplied -- moot once already
+        # restricted to one teacher (see single_teacher_lock.py).
+        author_capped = locked_chunks
+    else:
+        # Per-author cap -- max 3 chunks per author.
+        author_counts = {}  # type: Dict[str, int]
+        author_capped = []
+        for cid, (score, chunk) in collapsed:
+            author = chunk.get("author") or "Unknown"
+            author_counts[author] = author_counts.get(author, 0) + 1
+            if author_counts[author] <= 3:
+                author_capped.append((cid, (score, chunk)))
 
     top_chunks = author_capped[:30]
     chunks = [chunk for _, (_, chunk) in top_chunks]

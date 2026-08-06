@@ -54,14 +54,17 @@ Two public entry points:
       Returns which of the four decision-#11 debate-topic keys matched
       (see DEBATE_TOPIC_KEYS), or None. classify_topic() does not expose
       this -- it collapses to the same "debate" bucket a topic that
-      matched none of the four lists also falls into (the default) -- but
-      a future consumer that specifically needs to exclude just the four
-      named debate topics from some other pipeline step (e.g. the
-      single-teacher retrieval lock this classifier was originally
-      commissioned to unblock, CLAUDE.md #15 / PLAN.md v5.24 step 2) needs
-      that distinction and would otherwise have to reimplement this
-      matching from scratch. Exposed since it is already computed
-      internally, not built as new speculative surface.
+      matched none of the four lists also falls into (the default). Used
+      by study.py's get_teacher_card() fix to gate its debate-aware prompt
+      on an explicit match, not the plain boolean.
+  matched_settled_topic(question) -> Optional[str]
+      The mirror image, for the settled side (see SETTLED_TOPIC_KEYS --
+      currently just "tongues"). Used by app.services.single_teacher_lock
+      (Project 2 phase 1 step 2, CLAUDE.md #15 / PLAN.md v5.24) to gate the
+      retrieval-time single-teacher lock on an explicit settled match, not
+      the plain classify_topic(question) == SETTLED boolean -- same
+      defensive posture as matched_debate_topic() above, on the branch that
+      actually needs it this time.
 """
 
 import datetime
@@ -236,6 +239,24 @@ def matched_debate_topic(question: str) -> Optional[str]:
     docstring for why this is exposed separately from classify_topic()."""
     key = _matched_topic_key(question)
     return key if key in DEBATE_TOPIC_PHRASES else None
+
+
+def matched_settled_topic(question: str) -> Optional[str]:
+    """Return which of the settled-topic keys `question` matches (see
+    SETTLED_TOPIC_KEYS -- currently just "tongues", decision #10), or None
+    if it matches none of them -- including if it matches a debate topic or
+    nothing at all. The mirror image of matched_debate_topic(), for the same
+    reason: a consumer that needs to know "is this SPECIFICALLY a confirmed
+    settled topic" must not gate on classify_topic(question) == SETTLED
+    alone if it might ever be tempted to invert the check (== DEBATE would
+    silently include the unmatched default) -- this gives the unambiguous
+    specific-topic signal directly. In practice classify_topic() only ever
+    returns SETTLED on an actual match here (there is no "default to
+    settled" case), so the two are equivalent today; this function exists so
+    a caller does not have to reason about that equivalence to get it right,
+    and stays correct even if classify_topic()'s own logic changes later."""
+    key = _matched_topic_key(question)
+    return key if key in SETTLED_TOPIC_PHRASES else None
 
 
 def _log_unmatched(question: str) -> None:
