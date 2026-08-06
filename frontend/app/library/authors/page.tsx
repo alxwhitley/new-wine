@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 const AUTHOR_IMAGES: Record<string, string> = {
   "Ern Baxter": "/images/authors/ern-baxter.webp",
   "Jack Deere": "/images/authors/jack-deere.jpeg",
-  "John Bevere": "/images/authors/john-bevere.webp",
   "Michael Brown": "/images/authors/michael-brown.jpeg",
   "Oswald J. Smith": "/images/authors/oswald-smith.jpeg",
 };
@@ -30,7 +29,6 @@ const AUTHORS = [
   { name: "Ern Baxter", years: "1914–1993", bio: "Canadian Pentecostal preacher regarded as one of the greatest orators of the 20th century, Baxter served as Bible teacher for William Branham's crusades and delivered his landmark \"Thy Kingdom Come\" message to 5,000 leaders in Kansas City." },
   { name: "Charles Simpson", years: "1937–2024", bio: "Baptist-turned-charismatic pastor from Mobile, Alabama who co-founded New Wine Magazine in 1969 and became a key leader in the charismatic renewal, known for his pastoral teaching on covenant community and spiritual authority." },
   { name: "Don Basham", years: "1926–1989", bio: "Bible teacher and author who pioneered deliverance ministry in the charismatic movement, Basham served as editor of New Wine Magazine from 1975–1981 and was known for his accessible writing on the Holy Spirit and spiritual warfare." },
-  { name: "John Bevere", years: "b. 1959", bio: "Co-founder of Messenger International and bestselling author of The Bait of Satan and The Awe of God, Bevere is known globally for his bold teachings on the fear of the Lord, spiritual authority, and uncompromising discipleship." },
   { name: "Michael Brown", years: "b. 1955", bio: "Scholar, apologist, and radio host with a PhD from NYU, Brown is a leading charismatic voice on the Jewish roots of Christianity, revival, and cultural apologetics, and has authored over 40 books." },
   { name: "Jack Deere", years: "b. 1948", bio: "Former Dallas Seminary professor of Old Testament who became a charismatic theologian after encountering the gifts through John Wimber; best known for Surprised by the Power of the Spirit, a landmark defense of continuationism." },
   { name: "Oswald J. Smith", years: "1889–1986", bio: "Canadian pastor, hymn writer, and missions statesman who founded The People's Church in Toronto; preached 12,000 sermons in 80 countries and was described by Billy Graham as \"the greatest missionary statesman of our time.\"" },

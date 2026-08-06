@@ -486,10 +486,10 @@ export default function HomePage() {
               Ask general AI and you get &ldquo;some Christians believe&hellip; others hold&hellip;&rdquo; — every tradition averaged into one careful, beige paragraph. Rhemata answers only from vetted sources across the Spirit-filled tradition, so your question gets an answer with conviction behind it.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
-              That includes historic voices like <strong className="text-card-foreground font-semibold">Derek Prince</strong> and <strong className="text-card-foreground font-semibold">Bob Mumford</strong>, alongside trusted modern-day teachers like <strong className="text-card-foreground font-semibold">John Bevere</strong>, <strong className="text-card-foreground font-semibold">Michael Koulianos</strong>, and <strong className="text-card-foreground font-semibold">Dr. Michael Brown</strong>.
+              That includes historic voices like <strong className="text-card-foreground font-semibold">Derek Prince</strong>, <strong className="text-card-foreground font-semibold">Andrew Murray</strong>, and <strong className="text-card-foreground font-semibold">Bob Mumford</strong>, alongside teachers like <strong className="text-card-foreground font-semibold">Jack Deere</strong> and <strong className="text-card-foreground font-semibold">Dr. Michael Brown</strong>.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
-              And Rhemata doesn&rsquo;t serve verbatim quotes — every claim is a paraphrase of what a named source actually teaches, labeled as summary and attributed by name. Verbatim quoting, software-confirmed against the source, is on our roadmap — not live yet.
+              And Rhemata doesn&rsquo;t present AI-generated wording as a teacher&rsquo;s exact words. When a quote is selected for inclusion, a real person reviews and approves it against the original source — a deliberate, careful process that keeps attribution grounded.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75]">
               Every answer points back to the voices behind it, with the link to the full teaching right there.

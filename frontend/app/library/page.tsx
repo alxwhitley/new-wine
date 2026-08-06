@@ -32,10 +32,6 @@ const FEATURED_SERMON_POOL: string[] = [
   "843643e2-4b31-425f-ac40-ec70d3b7dec8", // Derek Prince — The Fatherhood Of God
   "240db671-7230-40a2-9075-50d08cbb27b8", // Derek Prince — Seven Steps To Christian Love
   "c4a94c4b-b6ac-436c-ab9d-6adad6f7688a", // Derek Prince — Motivation for Living To Do God's Will
-  "038e5864-77ee-4def-9726-59d0d2a987fb", // John Bevere — The Fear of the Lord Is My Treasure
-  "d540ea1c-ecad-44d8-9454-5ca61886ddb6", // John Bevere — Why You Are Not Experiencing the Presence of God
-  "7ebf33e9-15df-49c1-b8a8-68c8245ceb9c", // John Bevere — Pursuing Holiness
-  "bb0fa362-6bcb-4230-8083-45d3e8f59fa9", // John Bevere — Proof That God Still Speaks Today
 ];
 
 const FEATURED_ARTICLE_POOL: string[] = [
@@ -89,7 +85,6 @@ const SEARCH_SUGGESTIONS = [
 const AUTHOR_IMAGES: Record<string, string> = {
   "Ern Baxter": "/images/authors/ern-baxter.webp",
   "Jack Deere": "/images/authors/jack-deere.jpeg",
-  "John Bevere": "/images/authors/john-bevere.webp",
   "Michael Brown": "/images/authors/michael-brown.jpeg",
   "Oswald J. Smith": "/images/authors/oswald-smith.jpeg",
 };
@@ -102,7 +97,6 @@ const AUTHOR_DATA = [
   { name: "Ern Baxter", years: "1914–1993", specialty: "Kingdom proclamation, worship, and Spirit-empowered preaching." },
   { name: "Charles Simpson", years: "1937–2024", specialty: "Covenant community, pastoral care, and charismatic church life." },
   { name: "Don Basham", years: "1926–1989", specialty: "Holy Spirit baptism, deliverance ministry, and spiritual authority." },
-  { name: "John Bevere", years: "b. 1959", specialty: "The fear of the Lord, spiritual authority, and uncompromising discipleship." },
   { name: "Michael Brown", years: "b. 1955", specialty: "Revival, Jewish roots of Christianity, and cultural apologetics." },
   { name: "Jack Deere", years: "b. 1948", specialty: "Continuation of spiritual gifts, prophecy, and hearing God's voice." },
   { name: "Oswald J. Smith", years: "1889–1986", specialty: "Evangelism, world missions, and the Spirit-empowered church." },
