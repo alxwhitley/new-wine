@@ -193,14 +193,15 @@ TONGUES_CONTRAST_COMMUNION = (
 
 # ── Standing debate-topic contrasts — SHARED across every pillar, current
 # and future (Alex's ruling, 2026-08-01, pulled forward from Phase 1 items
-# 1.5-1.7 per the Phase 0 report): healing mechanics, prophetic
-# accountability, and apostolic authority remain live debates, presented
-# with named teachers on both sides — never settled Rhemata teaching. This
-# is exactly the structural fix Phase 0's finding called for: adding a new
-# pillar's own contrast anchors previously did nothing to protect a SIBLING
-# pillar or any FUTURE pillar from over-matching one of these three topics —
-# each pillar's contrast_anchors list only ever defended that one pillar.
-# These three anchors are merged into every pillar's contrast_sim at score
+# 1.5-1.7 per the Phase 0 report; eschatological timing added 2026-08-05):
+# healing mechanics, prophetic accountability, apostolic authority, and
+# eschatological timing remain live debates, presented with named teachers
+# on both sides — never settled Rhemata teaching. This is exactly the
+# structural fix Phase 0's finding called for: adding a new pillar's own
+# contrast anchors previously did nothing to protect a SIBLING pillar or any
+# FUTURE pillar from over-matching one of these four topics — each pillar's
+# contrast_anchors list only ever defended that one pillar.
+# These four anchors are merged into every pillar's contrast_sim at score
 # time (see _pillar_scores below) rather than copy-pasted into each pillar's
 # own contrast_anchors — a future pillar registered in PILLARS inherits this
 # protection automatically, with no new code and nothing to remember.
@@ -224,10 +225,17 @@ APOSTOLIC_AUTHORITY_DEBATE = (
     "to write Scripture, which no one holds today. Teachers hold differing "
     "views on this; it is a live debate, not settled house teaching."
 )
+ESCHATOLOGICAL_TIMING_DEBATE = (
+    "The timing and sequence of end-times events — whether the rapture "
+    "precedes, coincides with, or follows the tribulation, and how the "
+    "millennium should be understood. Teachers hold differing views on "
+    "this; it is a live debate, not settled house teaching."
+)
 STANDING_DEBATE_CONTRASTS = [
     HEALING_MECHANICS_DEBATE,
     PROPHETIC_ACCOUNTABILITY_DEBATE,
     APOSTOLIC_AUTHORITY_DEBATE,
+    ESCHATOLOGICAL_TIMING_DEBATE,
 ]
 
 # Minimum required margin between a pillar's pos_sim and its (pillar-owned +
@@ -525,8 +533,9 @@ def match_position_paper(question: str) -> Optional[str]:
            (b) pos_sim clears contrast_sim (max similarity across this
                pillar's OWN contrast anchors AND the shared
                STANDING_DEBATE_CONTRASTS — healing mechanics, prophetic
-               accountability, apostolic authority, per Alex's ruling that
-               these stay debates on every pillar, present and future) by
+               accountability, apostolic authority, eschatological timing,
+               per Alex's ruling that these stay debates on every pillar,
+               present and future) by
                at least MIN_QUALIFY_MARGIN — not a bare `>`. A razor-thin
                margin (found live: under 0.002 between two phrasings of the
                same salvation question) no longer qualifies; on genuinely
