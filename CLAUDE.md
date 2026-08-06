@@ -587,6 +587,18 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **`backend/requirements.txt` pins only `fastapi==0.128.8`/`uvicorn` — `pydantic`
+  and `starlette` are UNPINNED, so local and the deployed Railway container can run
+  different transitive versions, and any rebuild pulls whatever is newest.** A bug
+  can therefore reproduce in one environment and not the other. Demonstrated
+  2026-08-06: the `require_admin_role`/`require_contributor` unreachability bug
+  (`da27fe4`) reproduced locally (Python 3.9 + `pydantic` 2.12.5 → every admin route
+  422'd) but did NOT manifest on the deployed backend (an older container tolerated
+  the same code) — so production admin auth was actually working while local looked
+  broken, and the fix's "was prod ever broken?" question stayed genuinely open. When
+  a "works here, broken there" behavior gap appears, check the transitive dep
+  versions BEFORE assuming a code difference. Pinning `pydantic`/`starlette` would
+  remove the divergence (offered to Alex 2026-08-06, not yet actioned).
 - **A live, unbacked quote guarantee is CURRENTLY SHIPPING (B5 landmine,
   recurring in the present).** `frontend/app/home/page.tsx` (~line 492) still
   states, present-tense: "Every quote is checked character-for-character against

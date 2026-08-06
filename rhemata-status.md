@@ -19,19 +19,21 @@ never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 
 ## Current state
 
-**Deployment.** **The admin-auth fix (`da27fe4`) IS pushed to `origin/main` and
-deployed** — Railway `rhemata` + `answer-worker` + Vercel all reported green,
-verified live this session. **Local `main` is ahead of `origin/main` by the Project 3
-quote-rail build (`0e6a4f1`), its docs (`ad1d782`), and this session's exclusion +
-records commits — NOT pushed, NOT deployed.** **Migration 082 + the non-teacher
-exclusions ARE live against the real production Supabase** — no staging DB exists;
-writes apply directly to the one real database. 3 real demo quote rows (2 Murray, 1
-Prince, 1 revoked) + 3 `document_quote_clearance` rows still exist live — decide
-whether to keep, revoke, or delete.
+**Deployment.** **Everything is pushed and deployed** (2026-08-06) — `origin/main`
+now holds all four session commits (admin-auth fix, Project 3 quote-rail build, the
+non-teacher exclusion work, records). All three targets (Railway `rhemata` +
+`answer-worker` + Vercel) deployed green; verified live, not just pushed — the new
+`/quotes` admin routes now serve on prod, admin-gated (unauth → 401, not 404), and
+`/` + the live `/chat` path are unaffected. **The quote-rail admin tool is now LIVE
+in production** (admin-only, NOT wired into any user-facing serving path). **Migration
+082 + the non-teacher exclusions are live against the real production Supabase** — no
+staging DB; writes apply directly to the one real database. 3 real demo quote rows (2
+Murray, 1 Prince, 1 revoked) + 3 `document_quote_clearance` rows still exist live —
+decide whether to keep, revoke, or delete.
 
-**Project 3 (hand-curated quote rail) — first slice BUILT + DEMOED
-2026-08-06 (`0e6a4f1`), manual-curation-only, NOT wired into any serving
-path.** Schema (migration 082): `quote_source_revisions` (immutable
+**Project 3 (hand-curated quote rail) — first slice BUILT + DEMOED + DEPLOYED
+LIVE 2026-08-06 (`0e6a4f1`), manual-curation-only, admin-only, NOT wired into
+any user-facing serving path.** Schema (migration 082): `quote_source_revisions` (immutable
 per-chunk snapshot), `document_quote_clearance` (affirmative-only),
 `quotes` (draft/approved/revoked). Every hard rule — admin-role-only
 approval, source clearance required, commentary permanent hard-exclude,
@@ -89,18 +91,16 @@ agreement; if exclusion empties the retrieval,
 standard disclaimer — the ONLY sanctioned reason for that fallback.
 CLAUDE.md #8/#9 RESOLVED + 2 new decisions (#16/#17).
 
-**Answer path — current behavior.** Buffers fully, runs the Phase-2
-retrieval-grounding guard + prose-attribution scan + `verify_references`,
-resolves ungrounded credit (regenerate-once-then-refuse). **Position layer**
-(teacher/corpus `positions` table, unrelated to position PAPERS above) —
-design revised 2026-08-04, nothing built; topic list (#16) is the unbuilt
-prerequisite. Detail: `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+**Answer path.** Buffers fully; runs the Phase-2 retrieval-grounding guard +
+prose-attribution scan + `verify_references`; resolves ungrounded credit
+(regenerate-once-then-refuse). **Position layer** (teacher/corpus `positions`
+table, ≠ position PAPERS) — revised 2026-08-04, nothing built; topic list (#16)
+is the prerequisite (`docs/audits/position_layer_revival_diagnostic_2026-08-04.md`).
 
-**Corpus/data.** Propositions backfill COMPLETE. Chapter-scoped book
-extraction covers 8/53 books; roman-numeral detector COMMITTED (`8d6b7bc`)
-but zero production callers. Lewis/Tolkien/Wilson mistagged `public_domain`
-(#16, open). Counts: query live. Generation model: Sonnet 5 live,
-`generation_model_config` (migration 081) holds it, 60s-cached.
+**Corpus/data.** Propositions backfill COMPLETE. Chapter-scoped book extraction
+covers 8/53 books; roman-numeral detector COMMITTED (`8d6b7bc`) but zero
+production callers. Counts: query live. Generation model: Sonnet 5 live
+(`generation_model_config`, migration 081, 60s-cached).
 
 ---
 
