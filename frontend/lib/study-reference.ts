@@ -130,7 +130,7 @@ const ALL_NAMES = Array.from(NAME_TO_CODE.keys())
   .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 
 const REFERENCE_CORE = `(${ALL_NAMES.join("|")})\\.?\\s(\\d{1,3}):(\\d{1,3})(?:[-\\u2013](\\d{1,3}))?`;
-const REFERENCE_SOURCE = `\\b${REFERENCE_CORE}\\b`;
+const REFERENCE_SOURCE = `(?<![A-Za-z])\\b${REFERENCE_CORE}\\b`;
 const REFERENCE_ANCHORED = new RegExp(`^${REFERENCE_CORE}$`);
 
 export interface VerseIdentity {
@@ -164,6 +164,11 @@ export function detectVerseReferences(
   const results: Array<Extract<StudyReference, { type: "verse" }> & { index: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
+    // Do not fall through from an unrecognized single-letter book prefix to
+    // an embedded valid book name (for example, "I Genesis 1:1"). Recognized
+    // prefixes such as "II Timothy" are already part of the longest match.
+    const precedingText = text.slice(0, m.index);
+    if (/(?:^|[^A-Za-z])[A-Za-z]\s+$/.test(precedingText)) continue;
     const identity = parseVerseIdentity(m[0]);
     if (!identity) continue;
     results.push({
