@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-06 (async cutover in progress — `ASYNC_ANSWER_ENABLED`
-live; Project 2 phase 1's debate-topic anchors now complete, sanctification
-models removed as a debate topic — see below).
+Last verified: 2026-08-06 (Project 1 async cutover PROVEN end-to-end and now
+LIVE — `serving_enabled=true`; Project 2 phase 1's debate-topic anchors
+complete, sanctification models removed as a debate topic — see below).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Trimmed
 2026-08-01 (from ~2,700 lines) and repeatedly since. Cut material is never
@@ -20,27 +20,30 @@ the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 ## Current state
 
 **Deployment.** Local `main` and `origin/main` both at `127eacc` — pushed,
-fully in sync, nothing pending. This session: `bec0f54`..`127eacc` (7
-commits — apostolic-authority wording fix, commentary styling, 5 draft
-position papers, numeral-heading book-chapter detector, eschatological-
-timing anchor, decision #11 correction, `system_prompt.txt` match-up; see
-Project 2 below for the debate-topic detail). Backend + frontend both
-redeployed off this push — confirm both landed Ready/Online before relying
-on any of it live. Async routes are LIVE-MOUNTED on the `rhemata` Railway
-service (`ASYNC_ANSWER_ENABLED=true`, set 2026-08-06); DB switch
-`serving_enabled=false` — no real traffic yet. Live `/chat` unchanged.
+fully in sync, nothing pending. Backend (`rhemata`) and worker
+(`answer-worker`) Railway services both confirmed DEPLOYED at `127eacc`
+(`railway status --json`: both `SUCCESS`/`RUNNING`), after `d186c22` — so
+the max_tokens fix is live, not just committed, on both mirror sites.
+`SUPABASE_DB_URL` (transaction pooler, `:6543`) confirmed present and
+identical on both services via `railway variables`. Live `/chat` unchanged,
+remains the automatic fallback on any `503 async_serving_disabled`.
 
-**Project 1 (scalable async answers) — cutover in progress, one real step
-closer.** Worker pooler RESOLVED: transaction pooler (6543), Alex-confirmed.
-`ASYNC_ANSWER_ENABLED=true` set and verified live (`/async-chat/mode`: 404 →
-200). `rhemata`'s missing `SUPABASE_DB_URL` (PostgREST-only; async routes
-need direct Postgres) was found and fixed by copying the worker's confirmed
-transaction-pooler URL onto it. `POST /async-chat/submit` correctly refuses
-503 while `serving_enabled=false`. **Not yet re-proven against this exact
-deployed code:** full claim→produce→complete via the real HTTP route — only
-proven previously via direct-enqueue bypass and local `producer.produce()`
-calls. **Before a traffic window:** one real end-to-end submission against
-the CURRENT code — Alex's call on method.
+**Project 1 (scalable async answers) — PROVEN end-to-end 2026-08-06;
+`serving_enabled` is now TRUE, async routes SERVING real traffic.** Both
+pre-flip fixes confirmed DEPLOYED (not just committed) first — see
+Deployment above. Then one real question through the actual deployed HTTP
+route — `POST /async-chat/submit` → `GET /async-chat/result/{job_id}` SSE,
+the exact shape `frontend/lib/api.ts` uses, not a DB bypass, not a unit
+test (job `b4323fe5-9f70-40c1-8447-325bd49ecbe5`, 12:48–12:49 UTC).
+Result, confirmed against the `answer_jobs` row: `status=done`,
+`outcome=answered`, `last_error=None`, `output_tokens=7247` (under the 8000
+ceiling, clean ending — no truncation), 11 citations, 6 non-empty
+`verified_references` — the exact failure mode under test (old bug
+silently emptied this field on truncation) did not occur. Cost $0.173,
+~106s claim-to-done. `serving_enabled` flipped true immediately after.
+**Not proven by this pass:** real concurrency at the 100-dial target — one
+serial request only; watch the worker under real multi-user traffic before
+treating the ~40-concurrent ceiling as lifted in practice.
 
 **Project 2 (one named voice per answer) — phase 1 DESIGNED; debate-topic
 anchors now COMPLETE; classifier itself still unbuilt.** Full detail:
@@ -59,42 +62,31 @@ constant). `system_prompt.txt`'s in-house-debate list corrected to match
 classifies a question against these 4 anchors; they're currently consumed
 only defensively (position-paper false-match guard).
 
-**Answer path — current behavior (live `/chat`, unchanged).** Buffers fully,
-runs the Phase-2 retrieval-grounding guard + prose-attribution scan +
-`verify_references`, resolves ungrounded credit (regenerate-once-then-
-refuse), reveals as paced playback. Position-paper path serves baptism +
-tongues via `chat.py` interception.
+**Answer path — current behavior.** Buffers fully, runs the Phase-2
+retrieval-grounding guard + prose-attribution scan + `verify_references`,
+resolves ungrounded credit (regenerate-once-then-refuse); server-paced
+playback on `/chat`, client-paced on the now-live async path. Position-paper
+path serves baptism + tongues via interception on both `chat.py` and its
+async mirror.
 
 **Position layer — design revised 2026-08-04, nothing built.** One-hop
 accepted (a matched position's PROPOSITIONS, never its rendered text, feed
 `chat.py`'s hardened pipeline; the position's own text is a build-time
 review artifact only). 2/3 fabrication cases cleared (`eligible=false`),
-Savchuk unconfirmed. Topic-matching (#16) remains the unbuilt prerequisite —
-see Project 2's classifier adjacency above. Detail: `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+Savchuk unconfirmed. Topic-matching (#16) is the unbuilt prerequisite — see
+Project 2's classifier adjacency above. Detail: `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
 
 **Corpus/data.** Propositions backfill COMPLETE. Chapter-scoped book
-extraction covers 8/53 books; roman-numeral/bare-"Chapter N" numeral-heading
-detector now COMMITTED (`8d6b7bc`) — still zero production callers, not
-wired into real ingestion pending per-book verification (a confident-wrong-
-answer failure mode was found twice building it, only one fixed — see
-CLAUDE.md Landmines). Counts: query live.
-
-**Attribution audit (2026-08-04).** 307 HistoricalChristianFaith docs
-intact (#15 resolved). Lewis/Tolkien/Wilson mistagged `public_domain` —
-#16, open.
+extraction covers 8/53 books; roman-numeral/bare-"Chapter N" detector
+COMMITTED (`8d6b7bc`) but zero production callers pending per-book
+verification (see CLAUDE.md Landmines). Attribution audit (2026-08-04): 307
+HistoricalChristianFaith docs intact (#15 resolved); Lewis/Tolkien/Wilson
+mistagged `public_domain` (#16, open). Counts: query live.
 
 **Model swap (Sonnet 5) + live model-switch lever — built, live-tested,
 committed (`fe56086`).** All generation call sites on `claude-sonnet-5`,
-`thinking` disabled. Real median cost $0.0504 intro / $0.0755 list.
-`generation_model_config` (migration 081) holds the live model ID,
-60s-cached — proven live both ways.
-
-**max_tokens truncation — MEASURED and FIXED, 2026-08-06 (`d186c22`).**
-27% of single-call answers hit the old 3000-token ceiling, half silently
-(`verified_references` came back empty with zero signal). `GEN_MAX_TOKENS`
-(`producer.py`/`chat.py` mirror pair) 3000→8000, verified 8/8, real usage
-topped out at 5612/8000. **Still open:** `verified_references=[]` can occur
-on a cleanly-completed answer with room to spare — cause unconfirmed.
+`thinking` disabled. `generation_model_config` (migration 081) holds the
+live model ID, 60s-cached.
 
 ---
 
@@ -102,8 +94,8 @@ on a cleanly-completed answer with room to spare — cause unconfirmed.
 
 **Launch blockers (Project 1's remit, neither blocks further build work):**
 ~68s to a fully-revealed answer (~59% hidden reasoning, untrimmable without
-an accuracy oracle — #20); ~40 simultaneous-chat ceiling — replacement
-built, not cut over yet.
+an accuracy oracle — #20); ~40 simultaneous-chat ceiling — replacement now
+LIVE (2026-08-06) but unproven at real concurrency, one serial test only.
 
 - **#4** `ingest_helloao.py` unconverted — blocks 8 further HelloAO commentaries only, not corpus growth generally.
 - **#6** Guest→account conversion likely broken (cookie/localStorage mismatch). `docs/audits/GUEST_AUTH_AUDIT.md`.
@@ -134,11 +126,11 @@ trigger unchanged.
 
 ## Next
 
-1. **One real end-to-end submission against the current deployed code**
-   (brief `serving_enabled` flip, or the enqueue bypass — Alex's call), to
-   prove claim→produce→complete before opening a controlled traffic window.
-   Then run the window, flip `serving_enabled` back off. Project 2 build
-   starts only once that cutover is stable.
+1. **Watch the live flip.** `serving_enabled=true` (2026-08-06) is proven
+   by one serial test job only, not a soak under real concurrency — watch
+   worker logs / `answer_jobs` outcomes as real users hit it. Revert with
+   one UPDATE (`serving_enabled=false`) if anything looks wrong. Project 2
+   build starts once this is confirmed stable under real usage.
 2. **Project 2 phase 1 build**: debate-topic classifier (anchor text now
    complete for all 4 topics — build the embedding-similarity gate,
    fail-toward-debate on uncertainty) → retrieval lock in
