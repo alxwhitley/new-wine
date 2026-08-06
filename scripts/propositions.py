@@ -2751,3 +2751,617 @@ def _extract_and_store_book_chapters(
         "per_chapter": per_chapter,
     }
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Single-occurrence numeral/roman-numeral chapter-heading detection
+# ═══════════════════════════════════════════════════════════════════════════
+# NEW, SEPARATE detection path for pattern (a): a book whose chapter
+# headings each appear exactly ONCE (no "title repeated verbatim twice"
+# marker _find_title_repeat_boundaries() relies on) -- e.g. Andrew Murray's
+# "The Master's Indwelling" ('I. CARNAL CHRISTIANS.') or F.B. Meyer's "The
+# Secret of Guidance" ('II. Where Am I Wrong?'). split_book_into_chapters(),
+# _find_title_repeat_boundaries(), is_front_back_matter(),
+# _extract_and_store_book_chapters(), process_book_document(), and
+# store_propositions() are ALL UNTOUCHED by this section -- every one of
+# them is called here exactly as it already exists, never reimplemented or
+# modified. This section is purely additive.
+#
+# NOT in scope here (investigated and explicitly excluded, not a bug):
+# `LONG_STRETCH_WORD_THRESHOLD`-driven re-splitting of correctly-detected
+# 3000-6000-word repeat-marker chapters into "(untitled continuation)"
+# size_fallback pieces inside split_book_into_chapters() itself -- a real,
+# separate, already-existing quality issue in already-committed code,
+# deliberately not touched this step. OCR-corrupted heading keywords
+# ("CHAPTEE", "WOKD") are also explicitly out of scope -- no fuzzy matching
+# is added for them; a book relying on those (Catherine Booth's "Aggressive
+# Christianity", Phoebe Palmer's "The Way of Holiness") is INTENDED to fall
+# through to needs_eyeball, not a gap this section closes.
+
+# _ROMAN_NUMERAL_UNIT_VALUES/_int_to_roman()/_roman_to_int() (originally here
+# too) now live earlier in this file, near _digit_token_ratio() -- fix (b)'s
+# own dependency on them moved their definition, not forked it; reused
+# unchanged here.
+# ── Line-pattern regexes ────────────────────────────────────────────────────
+# Deliberately NOT compiled with re.IGNORECASE -- the roman-numeral
+# character classes below only ever match UPPERCASE I/V/X/L/C/D/M, and the
+# "Chapter"/"CHAPTER" keyword alternation only ever matches those two exact
+# spellings. This is what structurally satisfies discriminator (2) (a
+# lowercase-roman page-number line like "ii" can never reach either regex
+# at all, by construction, with no separate runtime check needed for it).
+#
+# Deliberately EXCLUDED (higher false-positive risk, explicitly out of
+# scope per this section's own design brief): bare arabic-dot headings
+# ("1. Title") with no "Chapter" keyword, and a bare number alone on its
+# own line. A book relying only on those falls to needs_eyeball.
+#
+# ROMAN-DOT's own title-capture bound (58 chars) is DELIBERATELY left
+# EXACTLY as it was -- this is what protects against inline argument-
+# enumerators in ordinary prose (confirmed real false-positive risks:
+# Finney's "I. To what particular points...", Ryle's "I. Let us consider,
+# firstly...", CLF's "D. ..."). Only CHAPTER-WORD's own bound is widened
+# below (58 -> 118 chars) -- the literal "Chapter"/"CHAPTER" keyword prefix
+# makes a false match at THIS pattern specifically much less likely, and
+# real in-body chapter titles at this pattern can run longer than 58 chars
+# (e.g. Finney's real "Chapter 10: Dishonesty in Small Matters Inconsistent
+# with Honesty in Anything", 77 chars total).
+_ROMAN_DOT_HEADING_RE = re.compile(r'^([IVXLCDM]{1,7})\.\s+(\S.{0,58})$')
+_CHAPTER_WORD_HEADING_RE = re.compile(
+    r'^(?:Chapter|CHAPTER)\s+([IVXLCDM]{1,7}|\d{1,3})(?:\s*[-:]\s*(\S.{0,118}))?$'
+)
+_TRAILING_BARE_NUMBER_RE = re.compile(r'\s\d{1,4}\s*$')
+
+# Leading quote characters to strip before discriminator 3's capital-letter
+# check (roman-dot pattern only) -- reuses the EXISTING _CURLY_QUOTE_MAP
+# (defined above, used elsewhere in this module for line normalization) as
+# the single source of truth for which characters count as curly quotes,
+# rather than inventing a second, parallel quote-character set. Straight
+# quote marks are added on top since _CURLY_QUOTE_MAP itself only maps
+# curly ones to their straight equivalents.
+_LEADING_TITLE_QUOTE_CHARS = set(_CURLY_QUOTE_MAP.keys()) | {'"', "'"}
+
+# Confidence thresholds (see _detect_numeral_heading_sequence()'s own
+# docstring for what each guards against).
+NUMERAL_MIN_ACCEPTED = 3
+NUMERAL_MIN_COVERAGE_RATIO = 0.6
+NUMERAL_MAX_GAP = 3
+
+# Minimum body-text word count required BETWEEN two candidates for one to
+# legally follow the other in the DP chain below (_select_numeral_chain())
+# -- distinct from NUMERAL_MAX_GAP, which caps a gap between consecutive
+# ACCEPTED SEQUENCE VALUES (e.g. value 5 following value 3), not a word
+# count. A real chapter has at least this many words of body text before
+# the next heading candidate; mirrors MIN_SUBSTANTIVE_WORD_COUNT's own
+# rationale (content under 50 words is already treated as too thin to be a
+# real chapter elsewhere in this module). This is what invalidates a link
+# between two members of a front-matter TOC-restatement cluster or a
+# same-value running-header repeat sitting almost back-to-back with almost
+# no real content between them.
+NUMERAL_MIN_CONTENT_GAP_WORDS = 50
+
+# Document-span floor guard, the safety-critical one: the accepted chain's
+# OWN span (last_accepted_offset - first_accepted_offset) must cover at
+# least this fraction of the WHOLE document's own character length, or the
+# result is needs_eyeball regardless of how clean the chain looks by every
+# other measure (length, coverage, gap). Empirically validated: real,
+# book-spanning chains on books that work correctly measured 75-89% span
+# fraction (Master's Indwelling, Meyer's Secret of Guidance, Bounds'
+# Necessity of Prayer, Torrey's How To Pray, Ryle's Holiness); the two
+# confirmed-bad chains this guard exists to catch (Kreighbaum's own
+# localized 5-point end-of-book outline, and School of Obedience's
+# subsection-cluster chain when the numeral detector is consulted in
+# isolation) measured 1.5% and 11.7% respectively -- a 63-point margin, so
+# 0.5 is a safe, well-separated threshold, not a knife-edge guess. This is
+# the guard that actually rejects Kreighbaum: Fix (B)'s own span-weighted
+# DP objective change alone does NOT reject it (there is no wider
+# candidate chain anywhere in that book for the objective to prefer
+# instead -- the real top-level chapter structure doesn't use this
+# detector's recognized conventions at all), so this independent,
+# document-level floor is the backstop that catches a chain which is
+# locally "clean" (high coverage, small gaps) but globally tiny relative
+# to the whole document.
+NUMERAL_MIN_DOC_SPAN_FRACTION = 0.5
+
+
+def _select_numeral_chain(
+    candidates: List[Tuple[int, int, str, int]],
+    cum_words: List[int],
+) -> List[dict]:
+    """Longest strictly-value-increasing chain over `candidates`
+    (line_start_offset, value, raw_label, line_idx), already ascending by
+    offset and already discriminator-survived. `cum_words` is a prefix-sum
+    array over the SAME document's lines (cum_words[k] == total word count
+    across lines[0:k]) -- this is a pure PERFORMANCE optimization of
+    "gap = word_count(text[offset_j:offset_i])": since every candidate
+    offset is exactly a LINE-START offset, text[offset_j:offset_i] is
+    always exactly the whole lines from line_idx_j up to (but not
+    including) line_idx_i, so cum_words[line_idx_i] - cum_words[line_idx_j]
+    yields the IDENTICAL word count a literal substring-slice-and-split
+    would, in O(1) instead of O(gap length) per pair -- this matters at
+    O(n^2) candidate-pair scale on a long, candidate-dense real book
+    (confirmed necessary against a real fixture during this build: a naive
+    per-pair text-slice computation did not complete in a reasonable time
+    on one of this session's own real book fixtures). The DECISION the DP
+    makes is unchanged either way; only how the same gap number is computed
+    differs. A given numeral value may legitimately
+    appear as MULTIPLE candidates (a running page-header repeating a
+    chapter's own title through its body, a front-matter TOC-restatement
+    cluster, a genuine phantom) -- this function does NOT dedupe them
+    beforehand; the DP below decides which one, if any, belongs in the
+    winning chain.
+
+    DP recurrence, evaluated for each candidate i in ascending-offset
+    order: only a value-1 candidate may START a chain on its own (seeded to
+    length 1, max_gap 0, no predecessor) -- this is not a separate special
+    case needing its own branch in the loop below, since no earlier
+    candidate j can ever have value_j < 1, so the "values must strictly
+    increase" check the general loop already applies would reject every
+    possible predecessor for a value-1 candidate anyway; the explicit seed
+    just avoids leaving a value-1 candidate at None when nothing else can
+    ever produce a chain for it. For every other candidate i, considering
+    each EARLIER candidate j (offset_j < offset_i) with a valid chain of
+    its own (best[j] is not None): the link i<-j is valid only if value_i
+    strictly exceeds value_j AND there are at least
+    NUMERAL_MIN_CONTENT_GAP_WORDS words of body text between them
+    (word_count(text[offset_j:offset_i])) -- this second condition is what
+    invalidates a link between two members of a front-matter TOC-
+    restatement cluster or two same-value running-header repeats sitting
+    almost back-to-back, without needing any other signal to tell "real"
+    from "phantom" candidates apart. Among all valid predecessors, keep the
+    one that maximizes chain LENGTH first, and among equal-length options
+    minimizes the chain's own largest single link-gap (never "prefer the
+    latest occurrence" -- see below for why).
+
+    WHY min-max-gap, not prefer-latest: consider a book whose real Chapter
+    I heading is followed, deep inside chapter I's own body, by phantom
+    "headings" that happen to satisfy every discriminator (a mid-book
+    recap restating "II. ..." and "III. ..." as rhetorical section labels,
+    for instance) at exactly the values chapters II and III would
+    otherwise use. A chain that routes through those phantoms to reach
+    chapter IV can tie in LENGTH with the chain that uses the real chapter
+    II/III headings instead (both visit exactly the same set of distinct
+    values). But the phantom-routed chain's own last link -- from the
+    LATE phantom position back up to chapter IV's real, much-later
+    position -- must span everything chapters II and III's own real bodies
+    would have contained, since that content was never "spent" on the
+    skipped real headings; that ONE link's gap is necessarily far larger
+    than the largest gap in a chain of ordinary, evenly-sized chapter
+    bodies. Minimizing the chain's own worst single gap is what correctly
+    picks the real-heading chain over the phantom-routed one -- this
+    reasoning is not merely assumed; see this module's own numeral-
+    detection test suite for the real book (Andrew Murray's "The School of
+    Obedience") this was verified against directly.
+
+    Final tiebreak among chains still tied on (length, -max_gap): the
+    SMALLEST starting offset -- i.e., among all candidate END-points i
+    achieving the best (length, -max_gap) score, backtrack each one fully
+    and prefer whichever full chain begins at the earliest document
+    position (relevant when more than one value-1 candidate exists, e.g. a
+    front-matter TOC restatement's own "I." next to the real "I."
+    heading -- each seeds an independent chain, and this tiebreak applies
+    if two competing full chains ever end up exactly tied otherwise).
+
+    Returns the winning chain's candidates as {"value", "line_start_offset",
+    "raw_label"} dicts, in document order -- [] if no candidate has value 1
+    at all (nothing can ever start a chain). Pure function: no DB, no LLM,
+    no network."""
+    n = len(candidates)
+    # best[i] = None, or (length, chain_start_offset, max_gap, prev_index).
+    # chain_start_offset is THREADED through every step (inherited unchanged
+    # from the chosen predecessor, exactly like max_gap already is) so that
+    # span = candidates[i][0] - chain_start_offset is available -- and
+    # compared -- at EVERY internal step, not only once at the very end.
+    # This is a deliberate, verified departure from the simpler "compare
+    # span only at final selection" approach: that simpler version was
+    # implemented and tested FIRST, against School of Obedience specifically
+    # -- it did NOT change that book's result at all, because the flawed
+    # subsection-cluster chain already displaces the real, wider chain
+    # INSIDE this loop (at the exact node where both chains, tied in
+    # length, first converge -- see the WHY block below) long before any
+    # final-only comparison ever runs. Comparing span at every step is what
+    # actually lets the wider, earlier-starting real chain win at that
+    # convergence point.
+    best: List[Optional[Tuple[int, int, int, Optional[int]]]] = [None] * n
+
+    for i in range(n):
+        offset_i, value_i, _label_i, line_idx_i = candidates[i]
+        if value_i == 1:
+            best[i] = (1, offset_i, 0, None)
+        for j in range(i):
+            if best[j] is None:
+                continue
+            _offset_j, value_j, _label_j, line_idx_j = candidates[j]
+            if value_i <= value_j:
+                continue
+            gap_words = cum_words[line_idx_i] - cum_words[line_idx_j]
+            if gap_words < NUMERAL_MIN_CONTENT_GAP_WORDS:
+                continue
+            j_length, j_start, j_max_gap, _j_prev = best[j]
+            candidate_length = j_length + 1
+            candidate_start = j_start  # inherited unchanged -- span is a
+            # property of the WHOLE chain from its own seed, never reset
+            # partway through an extension.
+            candidate_max_gap = max(j_max_gap, gap_words)
+            candidate_span = offset_i - candidate_start
+            if best[i] is None:
+                current_key = None
+            else:
+                cur_length, cur_start, cur_max_gap, _cur_prev = best[i]
+                current_key = (cur_length, offset_i - cur_start, -cur_max_gap)
+            candidate_key = (candidate_length, candidate_span, -candidate_max_gap)
+            if best[i] is None or candidate_key > current_key:
+                best[i] = (candidate_length, candidate_start, candidate_max_gap, j)
+
+    best_score: Optional[Tuple[int, int, int]] = None
+    tied_indices: List[int] = []
+    for i in range(n):
+        if best[i] is None:
+            continue
+        length_i, start_i, max_gap_i, _prev_i = best[i]
+        span_i = candidates[i][0] - start_i
+        key = (length_i, span_i, -max_gap_i)
+        if best_score is None or key > best_score:
+            best_score = key
+            tied_indices = [i]
+        elif key == best_score:
+            tied_indices.append(i)
+
+    if not tied_indices:
+        return []
+    # Final determinism tiebreak among still-tied complete chains: earliest
+    # first_offset (best[i][1] is already each candidate's own chain_start,
+    # no backtracking needed to find it).
+    chosen_idx = min(tied_indices, key=lambda i: best[i][1])
+
+    chain_indices: List[int] = []
+    cur: Optional[int] = chosen_idx
+    while cur is not None:
+        chain_indices.append(cur)
+        cur = best[cur][3]
+    chain_indices.reverse()
+
+    return [
+        {"value": candidates[idx][1], "line_start_offset": candidates[idx][0], "raw_label": candidates[idx][2]}
+        for idx in chain_indices
+    ]
+
+
+def _detect_numeral_heading_sequence(text: str) -> dict:
+    """Detects a single-occurrence numeral/roman-numeral chapter-heading
+    SEQUENCE in `text`. Recognizes exactly two line shapes (see the regexes
+    above), scanned in document order against each stripped line, with each
+    raw match run through 5 discriminators BEFORE it is even considered a
+    candidate for the chain-selection DP below:
+
+      1. The line itself is <=130 chars AND <=20 words (an independent
+         backstop beyond the regexes' own bounded title-length capture --
+         widened from the original 64/12 specifically to accommodate
+         longer real CHAPTER-WORD titles once that pattern's own bound was
+         widened below; this mainly affects chapter-word matches, since
+         roman-dot's own regex bound is tighter and unchanged).
+      2. Structural (no runtime check needed) -- see the regex comments
+         above: the roman-numeral portion can only ever be uppercase, and
+         the chapter-word keyword can only ever be "Chapter"/"CHAPTER".
+      3. For the ROMAN-DOT pattern specifically (not chapter-word), the
+         title text must start with a capital letter -- rejects a
+         lowercase sentence-continuation false match (e.g. Ryle's inline
+         "II. I pass on to the second thing..." -- rejected outright at the
+         regex-match stage in that specific real case, since its own title
+         portion exceeds the UNCHANGED 58-char roman-dot bound; this
+         discriminator is a second, independent guard for a SHORT-but-
+         lowercase false match). A leading quote character (the curly ones
+         from _CURLY_QUOTE_MAP's own keys, plus straight "/') is stripped
+         from the title text FIRST, so a real quoted chapter title (e.g.
+         Ryle's '"Lovest Thou Me?"') is judged by its first REAL letter,
+         not by the leading punctuation mark.
+      4. The line must NOT end in a trailing bare number (a Table-of-
+         Contents page number, e.g. "I. CARNAL CHRISTIANS. 3").
+      5. The candidate must be immediately followed by real prose -- a line
+         >=50 chars within the next 3 non-blank lines after it (confirms
+         this is an in-body heading directly before chapter text, not a
+         cluster of short TOC lines).
+
+    Surviving candidates then go through _select_numeral_chain() -- a
+    two-pass, gap-validated DP replacing this function's original GREEDY
+    "first occurrence of each value wins" walk. The greedy walk could not
+    prefer a real heading over an earlier phantom/TOC-restatement that
+    happened to satisfy every discriminator and share the same numeral
+    value (confirmed twice against real books this session); the DP
+    instead selects the LONGEST strictly-value-increasing chain, requiring
+    at least NUMERAL_MIN_CONTENT_GAP_WORDS words of real body text between
+    any two linked candidates, and tie-broken by MINIMUM worst-single-gap
+    (never "prefer the latest occurrence") -- see _select_numeral_chain()'s
+    own docstring for the full mechanism and why that specific tiebreak is
+    load-bearing, not an arbitrary choice.
+
+    Confidence ("confident": True) requires ALL of:
+      - len(accepted) >= NUMERAL_MIN_ACCEPTED (3)
+      - accepted[0]["value"] == 1
+      - len(accepted) >= NUMERAL_MIN_COVERAGE_RATIO (0.6) * max_value
+      - no gap > NUMERAL_MAX_GAP (3) between consecutive ACCEPTED values
+
+    (Unchanged by the DP replacement -- these guards now simply operate on
+    the DP's own chosen chain instead of the old greedy chain.) This is
+    what rejects Doug Kreighbaum's "Manual Systematic Theology" (whose body
+    uses "Chapter N" for SCRIPTURE chapter references, not book chapters,
+    producing an accepted sequence like [1, 2, 500]) -- a huge gap AND
+    near-zero coverage both fail independently, landing on needs_eyeball
+    rather than a confident wrong answer.
+
+    Returns a dict: {"confident": bool, "accepted": [{"value": int,
+    "line_start_offset": int, "raw_label": str}, ...] (post-DP-selection,
+    document order), "max_value": int, "gaps": List[int], "why": str}.
+
+    Pure function: no DB, no LLM, no network."""
+    lines = text.split("\n")
+    line_offsets: List[int] = []
+    pos = 0
+    for line in lines:
+        line_offsets.append(pos)
+        pos += len(line) + 1
+
+    # Prefix-sum word count over lines -- cum_words[k] == total word count
+    # across lines[0:k] -- passed to _select_numeral_chain() so its O(n^2)
+    # gap computation is O(1) per pair instead of O(gap length); see that
+    # function's own docstring for why this matters at real-book scale.
+    cum_words: List[int] = [0] * (len(lines) + 1)
+    for k, line in enumerate(lines):
+        cum_words[k + 1] = cum_words[k] + len(line.split())
+
+    def _followed_by_real_prose(line_idx: int) -> bool:
+        seen = 0
+        for j in range(line_idx + 1, len(lines)):
+            candidate_line = lines[j].strip()
+            if not candidate_line:
+                continue
+            seen += 1
+            if len(candidate_line) >= 50:
+                return True
+            if seen >= 3:
+                break
+        return False
+
+    raw_candidates: List[Tuple[int, int, str, int]] = []  # (line_start_offset, value, raw_label, line_idx)
+    for i, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        roman_match = _ROMAN_DOT_HEADING_RE.match(line)
+        if roman_match:
+            numeral_str, title_group = roman_match.group(1), roman_match.group(2)
+        else:
+            chapter_match = _CHAPTER_WORD_HEADING_RE.match(line)
+            if not chapter_match:
+                continue
+            numeral_str, title_group = chapter_match.group(1), chapter_match.group(2)
+
+        # Discriminator 1 (widened -- see this function's own docstring).
+        if len(line) > 130 or len(line.split()) > 20:
+            continue
+
+        # Discriminator 3 -- roman-dot pattern only, per this function's
+        # own design brief. Strips a leading quote character (curly or
+        # straight) before checking the first REAL character is uppercase.
+        if roman_match:
+            title_check = title_group
+            if title_check and title_check[0] in _LEADING_TITLE_QUOTE_CHARS:
+                title_check = title_check[1:]
+            if not (title_check and title_check[0].isupper()):
+                continue
+
+        # Discriminator 4.
+        if _TRAILING_BARE_NUMBER_RE.search(line):
+            continue
+
+        value = int(numeral_str) if numeral_str.isdigit() else _roman_to_int(numeral_str)
+        if value is None:
+            continue
+
+        # Discriminator 5.
+        if not _followed_by_real_prose(i):
+            continue
+
+        raw_candidates.append((line_offsets[i], value, line, i))
+
+    accepted = _select_numeral_chain(raw_candidates, cum_words)
+
+    max_value = accepted[-1]["value"] if accepted else 0
+    gaps = [accepted[k + 1]["value"] - accepted[k]["value"] for k in range(len(accepted) - 1)]
+
+    doc_span_fraction = 0.0
+    if accepted and len(text) > 0:
+        doc_span_fraction = (
+            accepted[-1]["line_start_offset"] - accepted[0]["line_start_offset"]
+        ) / len(text)
+
+    confident = (
+        len(accepted) >= NUMERAL_MIN_ACCEPTED
+        and bool(accepted) and accepted[0]["value"] == 1
+        and max_value > 0 and len(accepted) >= NUMERAL_MIN_COVERAGE_RATIO * max_value
+        and all(g <= NUMERAL_MAX_GAP for g in gaps)
+        and doc_span_fraction >= NUMERAL_MIN_DOC_SPAN_FRACTION
+    )
+
+    if confident:
+        why = (
+            "confident: {0} accepted starting at 1, coverage {0}/{1} = {2:.0%}, "
+            "max gap {3}, doc span {4:.0%}".format(
+                len(accepted), max_value,
+                (len(accepted) / max_value) if max_value else 0.0,
+                max(gaps) if gaps else 0,
+                doc_span_fraction,
+            )
+        )
+    else:
+        reasons = []
+        if len(accepted) < NUMERAL_MIN_ACCEPTED:
+            reasons.append("only {0} accepted candidate(s) (need >= {1})".format(
+                len(accepted), NUMERAL_MIN_ACCEPTED))
+        if accepted and accepted[0]["value"] != 1:
+            reasons.append("sequence starts at {0}, not 1".format(accepted[0]["value"]))
+        if max_value and len(accepted) < NUMERAL_MIN_COVERAGE_RATIO * max_value:
+            reasons.append("coverage {0}/{1} = {2:.0%} < {3:.0%}".format(
+                len(accepted), max_value, len(accepted) / max_value, NUMERAL_MIN_COVERAGE_RATIO))
+        if gaps and max(gaps) > NUMERAL_MAX_GAP:
+            reasons.append("gap of {0} between consecutive accepted values (max allowed {1})".format(
+                max(gaps), NUMERAL_MAX_GAP))
+        if accepted and doc_span_fraction < NUMERAL_MIN_DOC_SPAN_FRACTION:
+            reasons.append("doc span {0:.1%} < required {1:.0%} (chain covers too little of "
+                            "the whole document to be the real top-level structure)".format(
+                                doc_span_fraction, NUMERAL_MIN_DOC_SPAN_FRACTION))
+        if not reasons:
+            reasons.append("no candidates found at all")
+        why = "; ".join(reasons)
+
+    return {
+        "confident": confident, "accepted": accepted, "max_value": max_value, "gaps": gaps,
+        "doc_span_fraction": doc_span_fraction, "why": why,
+    }
+
+
+def _build_numeral_chapters(
+    text: str,
+    offset_map: List[Tuple[str, int, int]],
+    accepted: List[dict],
+) -> List[ChapterSpan]:
+    """Builds ChapterSpans from _detect_numeral_heading_sequence()'s own
+    accepted candidate list -- reuses the EXISTING ChapterSpan shape, the
+    EXISTING _label_from_context()/preface_pre_boundary convention
+    split_book_into_chapters() itself already uses for content preceding
+    its own first detected boundary, and the EXISTING
+    _chunk_ids_overlapping() chunk-offset-mapping helper -- none of these
+    are reforked. New split_method value: "numeral_heading_boundary"."""
+    chapters: List[ChapterSpan] = []
+    first_start = accepted[0]["line_start_offset"]
+    if first_start > 0:
+        pre_text = text[0:first_start]
+        if pre_text.strip():
+            chapters.append(ChapterSpan(
+                label=_label_from_context(pre_text),
+                char_start=0, char_end=first_start, text=pre_text,
+                chunk_ids=_chunk_ids_overlapping(offset_map, 0, first_start),
+                split_method="preface_pre_boundary",
+            ))
+
+    for idx, cand in enumerate(accepted):
+        b_start = cand["line_start_offset"]
+        b_end = accepted[idx + 1]["line_start_offset"] if idx + 1 < len(accepted) else len(text)
+        span_text = text[b_start:b_end]
+        chapters.append(ChapterSpan(
+            label=cand["raw_label"],
+            char_start=b_start, char_end=b_end, text=span_text,
+            chunk_ids=_chunk_ids_overlapping(offset_map, b_start, b_end),
+            split_method="numeral_heading_boundary",
+        ))
+    return chapters
+
+
+class BookStructureResult(NamedTuple):
+    """Return shape for detect_book_chapters() -- see that function's own
+    docstring for the full decision logic.
+
+    status      -- "repeat_detected" (the EXISTING split_book_into_
+                   chapters() repeat-marker result is authoritative --
+                   R >= 3, or the numeral detector didn't beat it),
+                   "numeral_detected" (the new single-occurrence numeral/
+                   roman-numeral heading-sequence detector fired instead),
+                   or "needs_eyeball" (neither detector produced a
+                   confident result).
+    chapters    -- List[ChapterSpan], reusing the EXISTING ChapterSpan
+                   shape unchanged. None IFF status == "needs_eyeball" --
+                   never a guessed/partial list for a low-confidence book.
+    detector    -- "title_repeat_boundary" | "numeral_heading_boundary" |
+                   "none" -- names which split_method value the spans in
+                   `chapters` actually carry (for "repeat_detected", this
+                   is the EXISTING split_book_into_chapters() result
+                   verbatim -- it may still legitimately contain
+                   "preface_pre_boundary"/"size_fallback" spans alongside
+                   "title_repeat_boundary" ones, exactly as that function
+                   already produces; "detector" here just names which
+                   overall path was chosen, not that every single span
+                   shares one split_method value), or "none" for
+                   needs_eyeball.
+    diagnostics -- dict: {"R": int, "N": int, "max_value": int,
+                   "gaps": List[int], "numeral_confident": bool,
+                   "why": str} -- always present regardless of status, so a
+                   caller can see WHY a given status was chosen even when
+                   it's the confident one."""
+    status: str
+    chapters: Optional[List[ChapterSpan]]
+    detector: str
+    diagnostics: dict
+
+
+def detect_book_chapters(ordered_chunks: List[Tuple[str, str]]) -> BookStructureResult:
+    """Top-level book-structure-detection entry point, combining the
+    EXISTING repeat-marker detector (split_book_into_chapters(), called
+    here UNMODIFIED) with the NEW single-occurrence numeral-heading
+    detector (_detect_numeral_heading_sequence(), see its own docstring)
+    above.
+
+    R (the repeat-detector's own "real chapter count") is the count of
+    split_book_into_chapters()'s own returned spans whose split_method is
+    exactly "title_repeat_boundary" AND which the ALREADY-COMMITTED,
+    UNMODIFIED is_front_back_matter() would NOT classify as matter --
+    front/back-matter spans (a repeated "Indexes"/"Title Page" marker,
+    etc.) must never inflate R, or a book with real front matter but few
+    or no real repeat-detected chapters could wrongly look "repeat_detected
+    enough" on paper.
+
+    N is _detect_numeral_heading_sequence()'s own len(accepted) count,
+    computed against the SAME reconstructed text (via
+    _build_chunk_offset_map(), the same helper split_book_into_chapters()
+    itself uses -- reused, not reforked).
+
+    Decision, in this exact order:
+      1. If the numeral detector is confident AND N > R -> "numeral_detected"
+         (the numeral detector found strictly MORE real chapters than the
+         repeat detector did for this same book -- it wins).
+      2. Elif R >= 3 -> "repeat_detected", returning split_book_into_
+         chapters()'s own result VERBATIM, completely unchanged -- this is
+         what guarantees byte-identical behavior for every already-clean
+         book: for those books this branch fires and NOTHING about the
+         returned chapters list differs from calling split_book_into_
+         chapters() directly.
+      3. Elif the numeral detector is confident (which already implies
+         N >= 3, per its own confidence criteria) -> "numeral_detected".
+      4. Else -> "needs_eyeball", chapters=None.
+
+    Pure function: no DB, no LLM, no network -- callers supply
+    ordered_chunks themselves, same convention as split_book_into_
+    chapters()."""
+    chapters_r, _missing = split_book_into_chapters(ordered_chunks)
+    R = sum(
+        1 for c in chapters_r
+        if c.split_method == "title_repeat_boundary"
+        and not is_front_back_matter(c.label, c.text)[0]
+    )
+
+    text, offset_map = _build_chunk_offset_map(ordered_chunks)
+    numeral_result = _detect_numeral_heading_sequence(text)
+    N = len(numeral_result["accepted"])
+    numeral_confident = numeral_result["confident"]
+
+    diagnostics = {
+        "R": R,
+        "N": N,
+        "max_value": numeral_result["max_value"],
+        "gaps": numeral_result["gaps"],
+        "doc_span_fraction": numeral_result["doc_span_fraction"],
+        "numeral_confident": numeral_confident,
+        "why": numeral_result["why"],
+    }
+
+    if numeral_confident and N > R:
+        chapters = _build_numeral_chapters(text, offset_map, numeral_result["accepted"])
+        return BookStructureResult("numeral_detected", chapters, "numeral_heading_boundary", diagnostics)
+
+    if R >= 3:
+        return BookStructureResult("repeat_detected", chapters_r, "title_repeat_boundary", diagnostics)
+
+    if numeral_confident:
+        chapters = _build_numeral_chapters(text, offset_map, numeral_result["accepted"])
+        return BookStructureResult("numeral_detected", chapters, "numeral_heading_boundary", diagnostics)
+
+    return BookStructureResult("needs_eyeball", None, "none", diagnostics)
