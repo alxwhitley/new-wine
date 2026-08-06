@@ -66,7 +66,7 @@ export function CommentaryAccordionRow({
               )}
             </button>
             {isExpanded && (
-              <div className="mt-2 font-serif">{formatCommentaryContent(r.content)}</div>
+              <div className="mt-4 max-w-2xl font-serif">{formatCommentaryContent(r.content)}</div>
             )}
           </div>
         );

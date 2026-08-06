@@ -22,9 +22,9 @@ export function formatCommentaryContent(content: string): ReactElement[] {
       const commentator = authorRaw.replace(/[''`]s\s+Commentary.*$/i, '').trim() || authorRaw;
       const verseRef = headerMatch[2].trim();
       elements.push(
-        <div key={`h-${bi}`} className={`mb-3${isFirst ? '' : ' border-t border-border/40 pt-4 mt-6'}`}>
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted-foreground">{commentator}</p>
-          <p className="font-sans text-sm font-medium text-foreground mt-0.5">{verseRef}</p>
+        <div key={`h-${bi}`} className={`mb-4${isFirst ? '' : ' border-t border-border/50 pt-6 mt-8'}`}>
+          <p className="font-sans text-xs uppercase tracking-wide text-muted-foreground">{commentator}</p>
+          <p className="mt-1 font-sans text-sm font-semibold text-foreground">{verseRef}</p>
         </div>
       );
       isFirst = false;
@@ -36,14 +36,14 @@ export function formatCommentaryContent(content: string): ReactElement[] {
       const lm = para.match(LEMMA_START_RE);
       if (lm) {
         elements.push(
-          <p key={`${bi}-${pi}`} className="text-foreground/90 mb-4 text-[15px] leading-relaxed">
+          <p key={`${bi}-${pi}`} className="mb-5 text-pretty text-base leading-7 text-foreground/90">
             <span className="font-semibold text-foreground">{lm[1]} -</span>{' '}
             {lm[2].trim()}
           </p>
         );
       } else {
         elements.push(
-          <p key={`${bi}-${pi}`} className="text-foreground/90 mb-4 text-[15px] leading-relaxed">{para}</p>
+          <p key={`${bi}-${pi}`} className="mb-5 text-pretty text-base leading-7 text-foreground/90">{para}</p>
         );
       }
     }
