@@ -14,6 +14,7 @@ from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.source_resolver import is_source_servable
 from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model
+from app.services.debate_topics import matched_debate_topic
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,57 @@ TEACHER_POSITION_PROMPT = (
     "or add your own theological commentary — represent only what appears "
     "in the source material."
 )
+
+# Debate-topic variant (Project 2 phase 1, CLAUDE.md Settled decision #11 /
+# app.services.debate_topics) -- selected instead of TEACHER_POSITION_PROMPT
+# whenever matched_debate_topic(question) identifies one of the four named
+# decision-#11 debate topics. Deliberately gated on matched_debate_topic(),
+# NOT classify_topic() -- classify_topic()'s own DEBATE/SETTLED output
+# defaults to DEBATE for every unmatched question (by design, see
+# debate_topics.py's own docstring), so gating this prompt swap on
+# classify_topic(question) == DEBATE would put the "teachers in this
+# library genuinely disagree with one another" framing in front of the
+# model for ordinary, uncontested topics too (tithing, deliverance, etc.)
+# -- a false claim about the corpus for those questions, found live by
+# scripts/test_debate_topics.py's own routing test during this build.
+# matched_debate_topic() only returns non-None on an actual phrase-list hit
+# against one of the four named topics, so this prompt only fires when it's
+# actually true.
+#
+# Guards against the same failure scripts/positions.py's RESOLUTION_
+# INSTRUCTION_TENSION exists to prevent for Calvinism/predestination (added
+# after a confirmed case, Draft 15, where ordinary resolution wording
+# stitched real Derek Prince statements into a one-sided conclusion his own
+# words never actually asserted): without this, a teacher whose own
+# excerpts show real uncertainty or an unresolved tension on a debate topic
+# could get flattened into one confident stance the excerpts don't support
+# -- misattributing a resolved position to a teacher who never took one
+# (CLAUDE.md ranked failure mode 2). Unlike positions.py's tension prompt,
+# this is not worded for one specific topic -- it fires for any of the four
+# decision-#11 debate topics alike.
+TEACHER_POSITION_DEBATE_PROMPT = (
+    "You are summarizing what a specific teacher has said on a topic, based "
+    "only on the excerpts provided below. This topic is one where teachers "
+    "in this library genuinely disagree with one another — treat these "
+    "excerpts as this one teacher's own view, not as a settled answer. "
+    "Paraphrase in your own words — never quote more than a few words "
+    "verbatim. Cite specific works by title when relevant. Present what "
+    "the excerpts actually show, including any real tension, nuance, or "
+    "unresolved question in how this teacher put it — do not resolve it "
+    "into a cleaner, more confident stance than the excerpts themselves "
+    "support. If the excerpts don't address the question, say so plainly "
+    "rather than guessing or generalizing. Do not editorialize or add your "
+    "own theological commentary — represent only what appears in the "
+    "source material."
+)
+
+
+def _select_teacher_position_prompt(question: str) -> str:
+    """Pure, directly-testable routing decision between the two prompts
+    above -- factored out of get_teacher_card() so scripts/test_debate_
+    topics.py can assert on it deterministically (no live LLM call, no DB)
+    rather than only being provable by inspecting live model output."""
+    return TEACHER_POSITION_DEBATE_PROMPT if matched_debate_topic(question) else TEACHER_POSITION_PROMPT
 
 
 def parse_ref(ref: str):
@@ -906,7 +958,7 @@ async def get_teacher_card(
             max_tokens=400,
             thinking={"type": "disabled"},
             system=[
-                {"type": "text", "text": TEACHER_POSITION_PROMPT},
+                {"type": "text", "text": _select_teacher_position_prompt(question)},
                 {"type": "text", "text": get_guardrails_text()},
             ],
             messages=[{
