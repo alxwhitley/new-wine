@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useRef, memo } from "react";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Quote } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import type { Citation } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { useResolvedQuotes } from "@/hooks/useResolvedQuotes";
+import type { Citation, ResolvedQuote } from "@/lib/api";
 import {
   detectVerseReferences,
   isVerified,
@@ -39,6 +41,9 @@ interface ChatMessageProps {
    * fetched once at the page level. A detected name only renders as an
    * underline if it's in this list AND SP1 verified it for this message. */
   curatedTeachers?: CuratedTeacher[];
+  /** Quote IDs from the answer's async meta frame (empty for most answers).
+   * Resolved client-side via useResolvedQuotes; never text from the model. */
+  quoteIds?: string[];
 }
 
 function CitationPill({
@@ -347,6 +352,38 @@ function FeedbackButtons({
   );
 }
 
+function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
+  const quotes = useResolvedQuotes(quoteIds);
+  // teacher_name is required for display -- a quote whose backend source
+  // lookup failed (teacher_name: null) must never render, since named-voice
+  // attribution is the entire reason this surface exists (CLAUDE.md).
+  const attributed = quotes.filter((q): q is ResolvedQuote & { teacher_name: string } => !!q.teacher_name);
+  if (attributed.length === 0) return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {attributed.map((q) => (
+        <div key={q.id} className="rounded-lg border border-border px-4 py-3">
+          <div className="flex gap-2.5">
+            <Quote className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="font-serif italic text-sm text-foreground leading-relaxed">
+                {q.quote_text}
+              </p>
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">{q.teacher_name}</span>
+                <Badge variant="secondary" className="rounded-md text-xs">
+                  {q.topic}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Memoized: react-markdown's own <Markdown> component re-creates its whole
 // processor and output from scratch on every render, unconditionally — it
 // does not check whether `children`/`components` changed (confirmed via
@@ -379,6 +416,7 @@ export const ChatMessage = memo(function ChatMessage({
   isStreaming = false,
   verifiedReferences = [],
   curatedTeachers = [],
+  quoteIds,
 }: ChatMessageProps) {
   if (role === "user") {
     return (
@@ -443,6 +481,7 @@ export const ChatMessage = memo(function ChatMessage({
           {cleanedContent}
         </ReactMarkdown>
       </div>
+      <QuoteRail quoteIds={quoteIds} />
       <FeedbackButtons
         messageId={messageId}
         question={question}

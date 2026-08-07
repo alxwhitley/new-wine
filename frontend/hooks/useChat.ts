@@ -8,6 +8,7 @@ export interface Message {
   citations?: Citation[];
   messageId?: string | null;
   verifiedReferences?: VerifiedReference[];
+  quoteIds?: string[];
 }
 
 export interface WeeklyLimitDetail {
@@ -109,6 +110,7 @@ export function useChat(
                     ...(meta.citations?.length ? { citations: meta.citations } : {}),
                     ...(meta.message_id ? { messageId: meta.message_id } : {}),
                     ...(meta.verified_references?.length ? { verifiedReferences: meta.verified_references } : {}),
+                    ...(meta.quote_ids?.length ? { quoteIds: meta.quote_ids } : {}),
                   };
                 }
                 return updated;

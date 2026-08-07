@@ -490,6 +490,7 @@ export default function Home() {
                         isStreaming={isStreaming}
                         verifiedReferences={message.verifiedReferences}
                         curatedTeachers={curatedTeachers}
+                        quoteIds={message.quoteIds}
                       />
                     );
                   })}

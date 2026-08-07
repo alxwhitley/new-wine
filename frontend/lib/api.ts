@@ -11,6 +11,14 @@ export interface Citation {
   url?: string;
 }
 
+export interface ResolvedQuote {
+  id: string;
+  quote_text: string;
+  topic: string;
+  teacher_name: string | null;
+  approved_at: string;
+}
+
 export interface ChatResponse {
   answer: string;
   citations: Citation[];
@@ -77,7 +85,7 @@ export interface WeeklyUsage {
 
 export interface StreamCallbacks {
   onToken: (token: string) => void;
-  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number>; usage?: { used: number; limit: number; week_start: string }; verified_references?: VerifiedReference[] }) => void;
+  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number>; usage?: { used: number; limit: number; week_start: string }; verified_references?: VerifiedReference[]; quote_ids?: string[] }) => void;
   onError: (error: string) => void;
 }
 
@@ -312,6 +320,7 @@ export async function streamAsyncChatMessage(
             verified_references: parsed.verified_references ?? undefined,
             topics_established: parsed.topics_established ?? undefined,
             usage: submitUsage,
+            quote_ids: parsed.quote_ids ?? [],
           });
         }
       } catch {
@@ -319,6 +328,17 @@ export async function streamAsyncChatMessage(
       }
     }
   }
+}
+
+export async function resolveQuotes(quoteIds: string[]): Promise<ResolvedQuote[]> {
+  const res = await fetch(`${API_URL}/answer-quotes/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quote_ids: quoteIds }),
+  });
+  if (!res.ok) throw new Error("Quote resolve failed");
+  const data = await res.json();
+  return data.quotes ?? [];
 }
 
 export async function searchDocuments(query: string, token?: string | null): Promise<SearchResponse> {
