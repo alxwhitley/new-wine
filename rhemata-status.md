@@ -6,10 +6,11 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-06 (quote rail WIRED into live async answer generation
-AND pushed + deployed; 28/28 + 4/4 live checks; quote-source exclusions
-APPLIED; async cutover LIVE; Project 2 phase 1 steps 1+2 DONE; position
-papers rebuilt as fence + guarded retrieval).
+Last verified: 2026-08-06/07 (quote rail now genuinely end-to-end and
+user-visible — backend wired + pushed + deployed prior session; frontend
+display piece built + live-browser-verified THIS session, NOT yet pushed;
+quote-source exclusions APPLIED; async cutover LIVE; Project 2 phase 1
+steps 1+2 DONE; position papers rebuilt as fence + guarded retrieval).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Cut material is
 never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
@@ -19,45 +20,48 @@ never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 
 ## Current state
 
-**Project 3 (quote rail) — WIRED into live answer generation 2026-08-06,
-ASYNC PATH ONLY (deliberate; chat.py untouched, byte-identical — see
-CLAUDE.md's new landmine on why chat.py stays a live, silently-reachable
-fallback, so a quote appearing is best-effort, not guaranteed).**
-`producer.produce()` calls the new `quotes_service.select_quotes_for_answer()`
-post-`verify_references`, fail-soft — deterministic embedding-cosine
-similarity between the question and each approved quote's `topic` tag
-(candidates narrowed to teacher_source_ids *considered*, not just cited —
-deliberate looser-matching call, known residual risk). Returns `quote_ids`
-only (never text), threaded through `jobs.complete()` (migration 083:
-`answer_jobs.quote_ids`) into the async SSE meta frame. New public, un-gated
-`POST /answer-quotes/resolve` calls the SAME `resolve_quote()` the admin
-route uses. The `topic` tag doubles as the shown restated-point context (no
-new column — a deliberate lighter-weight substitute for CLAUDE.md #16/#17's
-full rule). Per-work quote cap now enforced at approval time
-(`_enforce_quote_cap`, provisional 2000 chars/document).
-**Live-verified end-to-end, real DB, real Anthropic/OpenAI calls, all test
-rows cleaned up: 28/28 + 4/4 on the cap** (matching question selects the
-real Murray quote and resolves correctly for guest + signed-in with
-persistence intact; non-match produces `quote_ids: []` with citations/answer
-unaffected; a revoked id resolves to nothing; a real third cap-exceeding
-approval was rejected then rolled back clean).
-`QUOTE_TOPIC_SIMILARITY_THRESHOLD` was guessed at 0.75 by analogy to
-`position_papers.py`, then caught live by this session's own test as
-miscalibrated (real match scored 0.579) — recalibrated to 0.40 against 10
-real embedding calls (matches 0.497–0.585, non-matches 0.084–0.256); still
-provisional, full rationale in `services/quotes.py`.
+**Project 3 (quote rail) — backend wired + pushed + deployed (2026-08-06);
+frontend display piece built + live-browser-verified (2026-08-06/07), NOT
+yet pushed. Genuinely end-to-end and user-visible once pushed — ASYNC PATH
+ONLY (chat.py untouched — see CLAUDE.md's landmine).**
+`producer.produce()` selects approved quotes post-`verify_references` via
+deterministic embedding-cosine similarity against each quote's `topic` tag,
+fail-soft; `quote_ids`-only delivery through the async SSE meta frame; new
+public, un-gated `POST /answer-quotes/resolve`. `QUOTE_TOPIC_SIMILARITY_THRESHOLD`
+recalibrated live to 0.40 (was a bad 0.75 guess) — still provisional. Backend
+live-verified 28/28 + 4/4 on the per-work quote cap, all test rows cleaned up.
+Full backend detail: PLAN.md v5.29.
 
-**Deployment.** Everything is pushed and deployed (2026-08-06) — `origin/main`
-now holds this session's two commits (`309f4bd` feature, `4fc98b4` records)
-plus the prior day's backlog (admin-auth fix, Project 3 admin tool,
-non-teacher exclusions, scripture-underliner fix). All three targets
-(Railway `rhemata` + `answer-worker` + Vercel) deployed green; **verified
-live, not just pushed**: `POST /answer-quotes/resolve` (new, un-gated) now
-resolves the real Murray "waiting on God" quote correctly on prod;
-`answer-worker`'s restarted container logs show it running the real
-producer (`fake=False`); `GET /async-chat/mode` still returns
-`async_enabled=true`. 3 real quote rows (2 approved, 1 revoked) + 3
-clearance rows still exist live.
+**Frontend (this session, PLAN.md v5.30):** `frontend/lib/api.ts` threads
+`quote_ids` off the meta frame (was parsed and dropped) + adds `resolveQuotes()`
+(plain unauthenticated POST, works identically for guest/signed-in). New
+`frontend/hooks/useResolvedQuotes.ts` mirrors the app's existing fetch-after-
+render idiom (`useTeacherCard`), exposing no loading/error state so an empty
+`quote_ids`, a revoked id, or a failed fetch all render nothing. New
+`QuoteRail` in `chat-message.tsx` renders a bordered card (gold quote icon,
+italic serif quote text, teacher name, topic `Badge` always paired) between
+the answer and feedback thumbs — a `teacher_name: null` quote is filtered out
+entirely. All within existing DESIGN.md tokens. `planner-reviewer` APPROVED
+(all 8 binding criteria verified against the real diff); one non-blocking
+hardening note (missing state reset pre-fetch, unreachable today) closed
+same session with a 1-line fix.
+
+**Live-verified in a real browser against the real production DB (local
+FastAPI run against production Supabase, since `localhost:3000` is
+CORS-blocked from the deployed backend — same code/data, not a mock),
+all 4 required scenarios, real questions, real Anthropic calls:** guest +
+matching question → Andrew Murray "waiting on God" card renders correctly;
+signed-in (real disposable Supabase test user, hard-deleted after — zero
+orphaned rows) + matching question → Derek Prince "fasting" card renders
+identically; non-matching question → zero visible change; `/answer-quotes/resolve`
+forced to fail → full answer renders normally, no card, no visible error.
+`npx tsc --noEmit` clean throughout. Commits: `d0d0d2e` (feature, local
+only). **Not pushed/deployed this session — Alex's call on when.**
+
+**Backend deployment (prior session, still current).** `origin/main` holds
+the backend build (`309f4bd`/`4fc98b4`) — Railway (`rhemata` + `answer-worker`)
++ Vercel all deployed green; `POST /answer-quotes/resolve` verified live on
+prod. 3 real quote rows (2 approved, 1 revoked) + 3 clearance rows live.
 
 **Non-teacher-material exclusions APPLIED 2026-08-06 (`ddd6b7b` + DB write).**
 68 chunks carry `quote_ineligible_reason` (CCEL front matter across Murray's
@@ -133,12 +137,11 @@ Resolved: #1-3, #5, #11 (verify-chunk-alignment docstring corrected 2026-08-06),
 
 ## Next
 
-1. **Project 3 quote rail** — wired into the async path AND deployed live
-   this session; decide: wire chat.py too (or leave the async-only
-   fallback-inconsistency accepted, per CLAUDE.md's new landmine); curate
-   beyond the 2 approved quotes; calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD`
-   against real traffic
-   once volume exists; build deferred AI suggestions.
+1. **Project 3 quote rail** — backend deployed, frontend built + verified but
+   NOT pushed yet: push/deploy when Alex says go. Also open: decide whether
+   to wire chat.py too (per CLAUDE.md's landmine); curate beyond the 2
+   approved quotes; calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD` against real
+   traffic once volume exists; build deferred AI suggestions.
 2. **Watch the Project 1 live flip** under real concurrency — one serial test only.
 3. **Position layer — one-hop build sequence**: topic list (#16) →
    `match_stored_position()` → review workflow → chunk-shape adapter →
