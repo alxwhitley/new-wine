@@ -6,11 +6,11 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-06/07 (quote rail now genuinely end-to-end and
-user-visible — backend + frontend both built, live-verified, pushed to
-`origin/main`, and confirmed live on Vercel production; quote-source
-exclusions APPLIED; async cutover LIVE; Project 2 phase 1 steps 1+2 DONE;
-position papers rebuilt as fence + guarded retrieval).
+Last verified: 2026-08-06/07 (this session: Settled decision #5 commentary
+exclusion shipped in code — hard exclude on chat.py + producer.py; unit tests
+ALL PASS; live `_retrieve` smoke 0 commentary on 3 questions. Prior: quote
+rail live e2e; async cutover LIVE; Project 2 phase 1 steps 1+2 DONE; position
+papers as fence).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Cut material is
 never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
@@ -19,6 +19,16 @@ never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 ---
 
 ## Current state
+
+**Settled decision #5 — commentaries out of answers (this session).** Soft
+down-weight + `COMMENTARY_CONTEXT_CAP=3` retired. Hard exclude at Step 2.6
+(pre collapse/rerank) + defense strip post-neighbor on both `chat.py` and
+`producer.py`. Helpers: `is_commentary_chunk` / `exclude_commentary_chunks`.
+Study Mode unchanged. Unit: `scripts/test_commentary_answer_exclusion.py`
+ALL PASS. Live smoke via `producer._retrieve` on 3 questions (incl.
+church-fathers / commentary-worded queries): **0 commentary chunks in answer
+bag**. CLAUDE.md conflict flag closed; ARCHITECTURE.md retrieval section
+updated.
 
 **Project 3 (quote rail) — backend wired + deployed (2026-08-06); frontend
 display piece built, live-browser-verified, and pushed (2026-08-06/07).

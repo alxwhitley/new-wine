@@ -56,9 +56,13 @@ later session makes deliberately).
    not build one. Do not propose a model-based judge anywhere — that shape has
    failed five times (Open Decision #20).
 5. **Commentaries are excluded from answers; searchable only** (Alex's call,
-   1 Aug; Open Decision #12). ⚠ *Conflict flag: the live retrieval path still
-   admits commentary chunks into answer context (down-weighted and capped at 3),
-   so behavior does not yet match this decision — a code fix, flagged not made.*
+   1 Aug). **RESOLVED in code 2026-08-06/07** — answer retrieval hard-excludes
+   `source_kind`/`source_type` commentary at Step 2.6 (before collapse/rerank)
+   on both `chat.py` and `producer.py`, with a second strip after neighbor
+   expansion. Soft down-weight + `COMMENTARY_CONTEXT_CAP=3` retired. Study Mode
+   (`/study/commentary`, `match_commentary_*` RPCs) is unchanged and remains
+   the searchable surface. Helpers: `is_commentary_chunk` /
+   `exclude_commentary_chunks` in `chat.py`.
 6. **Paragraphs that cannot be tied to a specific statement still display** — not
    flagged, not logged, not blocked. Deliberate, to avoid drowning in false
    positives from connective prose. Alex will revisit.

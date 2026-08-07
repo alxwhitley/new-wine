@@ -181,6 +181,21 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
         if not is_chunk_disabled(chunk, filters)
     }
 
+    # Hard-exclude commentary from the answer bag (Settled decision #5) --
+    # MIRROR of chat.chat() Step 2.6. Must run before collapse/rerank.
+    pre_commentary = len(all_scores)
+    all_scores = {
+        cid: (score, chunk)
+        for cid, (score, chunk) in all_scores.items()
+        if not _chat.is_commentary_chunk(chunk)
+    }
+    dropped_commentary = pre_commentary - len(all_scores)
+    if dropped_commentary:
+        logger.info(
+            "Excluded %d commentary chunk(s) from answer retrieval (producer, decision #5)",
+            dropped_commentary,
+        )
+
     # Remove chunks from injected background-topic papers (chat.py Fix 6) -- they
     # are already in topic_context_parts, so keeping them in the main pool would
     # duplicate content and waste citable slots.
@@ -260,16 +275,9 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
         seen_ids.add(n["id"])
         expanded.append(n)
 
-    # Cap commentary chunks.
-    commentary_seen = 0
-    capped_expanded = []
-    for c in expanded:
-        if (c.get("source_kind") or c.get("source_type") or "") == "commentary":
-            if commentary_seen >= _chat.COMMENTARY_CONTEXT_CAP:
-                continue
-            commentary_seen += 1
-        capped_expanded.append(c)
-    chunks = capped_expanded
+    # Defense-in-depth: decision #5 hard exclude after neighbor expansion
+    # (primary gate is Step 2.6 above). Mirrors chat.chat().
+    chunks = _chat.exclude_commentary_chunks(expanded)
 
     # House-position exclusion -- MIRROR of chat.chat()'s Step 4.5; DRIFT
     # POINT, imported not copied (calls _chat.get_paper_body /

@@ -50,7 +50,8 @@ from app.routers import chat as chatmod
 from app.routers.chat import (
     expand_query, hybrid_search_rrf, fetch_neighbor_chunks_batch, _is_citable,
     is_word_study_query, ANSWER_SYSTEM_BLOCKS,
-    SOURCE_KIND_FUSION_WEIGHTS, COMMENTARY_CONTEXT_CAP, INCLUDE_COPYRIGHTED_ENV,
+    SOURCE_KIND_FUSION_WEIGHTS, is_commentary_chunk, exclude_commentary_chunks,
+    INCLUDE_COPYRIGHTED_ENV,
 )
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.position_papers import match_position_paper
@@ -166,6 +167,11 @@ def retrieve(question: str) -> Tuple[List[dict], List[str]]:
 
     # Step 2.5: disabled-source filter
     all_scores = {cid: (s, c) for cid, (s, c) in all_scores.items() if not is_chunk_disabled(c, filters)}
+    # Step 2.6: hard-exclude commentary (Settled decision #5)
+    all_scores = {
+        cid: (s, c) for cid, (s, c) in all_scores.items()
+        if not is_commentary_chunk(c)
+    }
     # Fix 6: drop injected position-paper docs from the main pool
     if injected_doc_ids:
         all_scores = {cid: (s, c) for cid, (s, c) in all_scores.items() if c.get("document_id") not in injected_doc_ids}
@@ -212,16 +218,8 @@ def retrieve(question: str) -> Tuple[List[dict], List[str]]:
             break
         seen.add(n["id"])
         chunks.append(n)
-    # Fix 4: commentary cap
-    commentary_seen = 0
-    capped = []
-    for c in chunks:
-        if (c.get("source_kind") or c.get("source_type") or "") == "commentary":
-            if commentary_seen >= COMMENTARY_CONTEXT_CAP:
-                continue
-            commentary_seen += 1
-        capped.append(c)
-    chunks = capped
+    # Decision #5: hard-exclude commentary after neighbor expansion
+    chunks = exclude_commentary_chunks(chunks)
     # Step 5: conditional lexicon retrieval
     if is_word_study_query(question):
         try:

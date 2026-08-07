@@ -36,7 +36,8 @@ from app.routers.chat import (
     _ensure_background_topics,
     _get_cohere,
     SOURCE_KIND_FUSION_WEIGHTS,
-    COMMENTARY_CONTEXT_CAP,
+    is_commentary_chunk,
+    exclude_commentary_chunks,
     _NEIGHBOR_SKIP_KINDS,
 )
 
@@ -173,7 +174,15 @@ def run_diagnostic(question: str, db, filters: dict) -> dict:
     }
     print(f"\n[Stage 2.5] Source filter: {pre} → {len(all_scores)} chunks remaining")
 
-    # Stage 2.75 — boost_factor + source-kind fusion weights (Fix 4)
+    # Stage 2.6 — hard-exclude commentary (Settled decision #5)
+    pre_c = len(all_scores)
+    all_scores = {
+        cid: (s, c) for cid, (s, c) in all_scores.items()
+        if not is_commentary_chunk(c)
+    }
+    print(f"\n[Stage 2.6] Commentary exclude (decision #5): {pre_c} → {len(all_scores)}")
+
+    # Stage 2.75 — boost_factor + source-kind fusion weights
     all_scores = {
         cid: (
             s
@@ -274,18 +283,11 @@ def run_diagnostic(question: str, db, filters: dict) -> dict:
         print(f"  Neighbor expansion ERROR: {exc}")
         expanded = reranked
 
-    # Fix 4: commentary cap in final assembled context
-    commentary_seen = 0
-    capped = []
-    for c in expanded:
-        if (c.get("source_kind") or c.get("source_type") or "") == "commentary":
-            if commentary_seen >= COMMENTARY_CONTEXT_CAP:
-                continue
-            commentary_seen += 1
-        capped.append(c)
-    if len(capped) < len(expanded):
-        print(f"  Commentary cap ({COMMENTARY_CONTEXT_CAP}): {len(expanded)} → {len(capped)} chunks")
-    expanded = capped
+    # Defense-in-depth: hard-exclude commentary after neighbor expansion
+    pre_ex = len(expanded)
+    expanded = exclude_commentary_chunks(expanded)
+    if len(expanded) < pre_ex:
+        print(f"  Commentary hard-exclude (decision #5): {pre_ex} → {len(expanded)} chunks")
 
     # Final composition breakdown
     citable_final  = [c for c in expanded if _is_citable(c)]

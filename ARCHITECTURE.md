@@ -136,13 +136,17 @@ form can prefill on URL blur. Service-role-only RLS (no owning user).
 ### Retrieval
 
 Query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) →
-top 30 with `SOURCE_KIND_FUSION_WEIGHTS` (commentary ×0.6, book ×0.8, lexicon
-×0.5) → Cohere rerank → top 8.
+disabled-source filter → **hard-exclude commentary** (Settled decision #5;
+`is_commentary_chunk` / `exclude_commentary_chunks` on both `chat.py` and
+`producer.py`) → top 30 with `SOURCE_KIND_FUSION_WEIGHTS` (book ×0.8, lexicon
+×0.5; commentary is not soft-weighted — it is removed earlier) → Cohere
+rerank → top 8 → neighbor expansion → second commentary strip (defense-in-depth).
 
 - `match_chunks` — HNSW, `hnsw.ef_search=200`
 - `search_documents` — document-level FTS, ts_headline snippets
 - Neighbor expansion skips commentary/lexicon (`_NEIGHBOR_SKIP_KINDS`)
-- Commentary capped at 3 in final context (`COMMENTARY_CONTEXT_CAP`)
+- Commentaries never enter answer context (decision #5); Study Mode still
+  serves them via `match_commentary_*` / `GET /study/commentary`
 - FTS OR-fallback: on 0 results, retries OR-joined top-3 longest tokens (min 6
   chars, `_FTS_BROAD_TERMS` excluded)
 - `citable_count` gate counts post-Cohere, pre-neighbor top-8; sermon/citable

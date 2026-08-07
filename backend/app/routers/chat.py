@@ -55,13 +55,32 @@ COHERE_API_KEY = os.environ.get("COHERE_API_KEY")
 
 logger = logging.getLogger(__name__)
 
-# Fix 4: source-kind weights applied during RRF fusion (before final ranking)
+# Source-kind weights applied during RRF fusion (before final ranking).
+# Commentary is NOT listed: Settled decision #5 excludes it from answers
+# entirely (hard filter in is_commentary_chunk / exclude_commentary_chunks),
+# not a soft down-weight. Study Mode still serves commentaries separately.
 SOURCE_KIND_FUSION_WEIGHTS = {
-    "commentary": 0.6,
     "book": 0.8,
     "lexicon": 0.5,
 }
-COMMENTARY_CONTEXT_CAP = 3  # max commentary chunks in the final assembled context
+
+
+def is_commentary_chunk(chunk: dict) -> bool:
+    """True if this chunk is commentary (answer path must never use it).
+
+    Settled product decision #5 (2026-08-01): commentaries are excluded from
+    answers; searchable only (Study Mode / dedicated commentary endpoints).
+    Checks source_kind first, then source_type — same field order used
+    elsewhere on this path.
+    """
+    sk = chunk.get("source_kind") or chunk.get("source_type") or ""
+    return sk == "commentary"
+
+
+def exclude_commentary_chunks(chunks):
+    # type: (List[dict]) -> List[dict]
+    """Drop every commentary chunk. Idempotent; order-preserving."""
+    return [c for c in chunks if not is_commentary_chunk(c)]
 
 _app_dir = Path(__file__).resolve().parent.parent
 _system_prompt_text = (_app_dir / "system_prompt.txt").read_text()
@@ -864,6 +883,23 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             if not is_chunk_disabled(chunk, filters)
         }
 
+        # Step 2.6: Hard-exclude commentary from the answer bag (Settled
+        # decision #5). Must run before collapse/rerank so commentary does
+        # not consume top-30 slots. Study Mode is unaffected (separate
+        # match_commentary_* RPCs).
+        pre_commentary = len(all_scores)
+        all_scores = {
+            cid: (score, chunk)
+            for cid, (score, chunk) in all_scores.items()
+            if not is_commentary_chunk(chunk)
+        }
+        dropped_commentary = pre_commentary - len(all_scores)
+        if dropped_commentary:
+            logger.info(
+                "Excluded %d commentary chunk(s) from answer retrieval (decision #5)",
+                dropped_commentary,
+            )
+
         # Fix 6: Remove chunks from injected position papers — they're already in
         # topic_context_parts, so including them in the main pool would duplicate content
         # and waste context slots for citable sources.
@@ -874,8 +910,8 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
                 if chunk.get("document_id") not in injected_doc_ids
             }
 
-        # Step 2.75: Apply boost_factor and source-kind fusion weights (Fix 4).
-        # source-kind weights de-prioritize commentary/book/lexicon so citable sermons
+        # Step 2.75: Apply boost_factor and source-kind fusion weights.
+        # source-kind weights de-prioritize book/lexicon so citable sermons
         # and articles surface into the rerank pool more reliably.
         all_scores = {
             cid: (
@@ -951,7 +987,7 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
         citable_count = sum(1 for c in chunks if _is_citable(c))
 
         # Step 4: Neighbor chunk expansion — batch fetch ±1 chunk_index, cap at 12 total.
-        # Fix 4: commentary/lexicon parents are skipped inside fetch_neighbor_chunks_batch.
+        # Commentary/lexicon parents are skipped inside fetch_neighbor_chunks_batch.
         seen_ids = {c["id"] for c in chunks}
         neighbors = fetch_neighbor_chunks_batch(chunks, seen_ids, db)
         expanded = list(chunks)
@@ -961,16 +997,9 @@ def chat(request: ChatRequest, http_request: Request, user_id: Optional[str] = D
             seen_ids.add(n["id"])
             expanded.append(n)
 
-        # Fix 4: cap commentary chunks in the final assembled context.
-        commentary_seen = 0
-        capped_expanded = []
-        for c in expanded:
-            if (c.get("source_kind") or c.get("source_type") or "") == "commentary":
-                if commentary_seen >= COMMENTARY_CONTEXT_CAP:
-                    continue
-                commentary_seen += 1
-            capped_expanded.append(c)
-        chunks = capped_expanded
+        # Defense-in-depth: decision #5 hard exclude again after neighbor
+        # expansion (early filter at 2.6 is the primary gate).
+        chunks = exclude_commentary_chunks(expanded)
 
         # Step 4.5: House-position exclusion (Alex's ruling, 2026-08-06 —
         # resolves CLAUDE.md Settled decision #9's flagged conflict: a house
