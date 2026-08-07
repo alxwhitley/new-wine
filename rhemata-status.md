@@ -6,9 +6,10 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-06 (scripture-underliner false match fixed + browser-verified;
-quote-source exclusions APPLIED; quote rail demoed; async cutover LIVE; Project 2
-phase 1 steps 1+2 DONE; position papers rebuilt as fence + guarded retrieval).
+Last verified: 2026-08-06 (quote rail WIRED into live async answer generation,
+28/28 + 4/4 live checks; quote-source exclusions APPLIED; async cutover LIVE;
+Project 2 phase 1 steps 1+2 DONE; position papers rebuilt as fence + guarded
+retrieval).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Cut material is
 never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
@@ -18,57 +19,52 @@ never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 
 ## Current state
 
-**Live-chat scripture underliner false match FIXED 2026-08-06.** `I Genesis 1:1`
-stays plain text; `1 Samuel`, `II Timothy`, `First Corinthians`, and `John` cases
-remain underlined. Regression-tested and verified through the rendered production
-`ChatMessage`; the other four book-name matcher copies were intentionally untouched.
+**Project 3 (quote rail) — WIRED into live answer generation 2026-08-06,
+ASYNC PATH ONLY (deliberate; chat.py untouched, byte-identical — see
+CLAUDE.md's new landmine on why chat.py stays a live, silently-reachable
+fallback, so a quote appearing is best-effort, not guaranteed).**
+`producer.produce()` calls the new `quotes_service.select_quotes_for_answer()`
+post-`verify_references`, fail-soft — deterministic embedding-cosine
+similarity between the question and each approved quote's `topic` tag
+(candidates narrowed to teacher_source_ids *considered*, not just cited —
+deliberate looser-matching call, known residual risk). Returns `quote_ids`
+only (never text), threaded through `jobs.complete()` (migration 083:
+`answer_jobs.quote_ids`) into the async SSE meta frame. New public, un-gated
+`POST /answer-quotes/resolve` calls the SAME `resolve_quote()` the admin
+route uses. The `topic` tag doubles as the shown restated-point context (no
+new column — a deliberate lighter-weight substitute for CLAUDE.md #16/#17's
+full rule). Per-work quote cap now enforced at approval time
+(`_enforce_quote_cap`, provisional 2000 chars/document).
+**Live-verified end-to-end, real DB, real Anthropic/OpenAI calls, all test
+rows cleaned up: 28/28 + 4/4 on the cap** (matching question selects the
+real Murray quote and resolves correctly for guest + signed-in with
+persistence intact; non-match produces `quote_ids: []` with citations/answer
+unaffected; a revoked id resolves to nothing; a real third cap-exceeding
+approval was rejected then rolled back clean).
+`QUOTE_TOPIC_SIMILARITY_THRESHOLD` was guessed at 0.75 by analogy to
+`position_papers.py`, then caught live by this session's own test as
+miscalibrated (real match scored 0.579) — recalibrated to 0.40 against 10
+real embedding calls (matches 0.497–0.585, non-matches 0.084–0.256); still
+provisional, full rationale in `services/quotes.py`.
 
-**Deployment.** **Everything is pushed and deployed** (2026-08-06) — `origin/main`
-now holds all four session commits (admin-auth fix, Project 3 quote-rail build, the
-non-teacher exclusion work, records). All three targets (Railway `rhemata` +
-`answer-worker` + Vercel) deployed green; verified live, not just pushed — the new
-`/quotes` admin routes now serve on prod, admin-gated (unauth → 401, not 404), and
-`/` + the live `/chat` path are unaffected. **The quote-rail admin tool is now LIVE
-in production** (admin-only, NOT wired into any user-facing serving path). **Migration
-082 + the non-teacher exclusions are live against the real production Supabase** — no
-staging DB; writes apply directly to the one real database. 3 real demo quote rows (2
-Murray, 1 Prince, 1 revoked) + 3 `document_quote_clearance` rows still exist live —
-decide whether to keep, revoke, or delete.
+**Deployment.** Prior session's work (admin-auth fix, Project 3 admin tool,
+non-teacher exclusions) is pushed/deployed live on all three targets
+(Railway `rhemata` + `answer-worker` + Vercel). **THIS session's quote-rail
+wiring is committed locally only, NOT yet pushed or deployed** — live tests
+ran the real code directly, and migration 083 applied straight to the live
+DB (schema changes are independent of app deploys), but the app code itself
+needs a push + Railway/Vercel deploy before real traffic sees any of it.
+3 real quote rows (2 approved, 1 revoked) + 3 clearance rows still exist
+live.
 
-**Project 3 (hand-curated quote rail) — first slice BUILT + DEMOED + DEPLOYED
-LIVE 2026-08-06 (`0e6a4f1`), manual-curation-only, admin-only, NOT wired into
-any user-facing serving path.** Schema (migration 082): `quote_source_revisions` (immutable
-per-chunk snapshot), `document_quote_clearance` (affirmative-only),
-`quotes` (draft/approved/revoked). Every hard rule — admin-role-only
-approval, source clearance required, commentary permanent hard-exclude,
-exact-substring match against the captured snapshot — is enforced by a DB
-trigger, not application code, since the backend bypasses RLS on every call
-(migration 037). Verified live: an approval attempt against a real
-commentary document was rejected by the database itself, rolled back clean.
-Verifier + 4-case regression suite, 8/8 passing. Review tool
-(`frontend/app/admin/quotes`) + resolution point (`quotes_service.resolve_quote`)
-demoed end-to-end through a real browser — 3 real quotes, resolve by ID, one
-revoked re-resolves to nothing. AI-suggested extraction is out of scope. Derek
-Prince's `sermon_transcript` corpus is eligible written material per Alex's ruling.
-
-**Non-teacher-material exclusions APPLIED 2026-08-06 (`ddd6b7b` + DB write;
-`scripts/apply_non_teacher_exclusions_2026-08-06.py`).** Alex's judgment calls on
-the follow-up audit (`docs/audits/non_teacher_material_audit_2026-08-06.md`) are
-now live: **68 chunks carry `quote_ineligible_reason`** (6 pre-existing New Life +
-62 new). Cleanly excluded (whole non-teacher chunks): CCEL front matter on all 9
-remaining Murray books; Lord's Table catechism/Directory appendix; School of
-Prayer's George Müller verbatim chunks (Murray's own framing kept eligible) + the
-CCEL book advertisement; Bride Prepares Herself (Prince) guest-speaker testimony;
-auto scripture indexes where separable. Trigger enforcement re-verified live
-(rolled-back test) on the three serious items — Müller, book ad, catechism — all
-blocked; a kept Murray chunk not blocked. **FLAGGED, not excluded — third-party
-text embedded in a teacher's own chunk, un-isolable at chunk granularity, needs a
-sub-chunk mechanism or Alex accepting whole-chunk loss:** the John R. Mott
-quotation (School of Obedience, interwoven in every chunk), the Lord's Table + New
-Life translator footnotes, the New Life Heidelberg quote (the "second problem area"
-beyond 0-5), the Waiting On God 'Freda Hanbury' poem, the Müller boundary chunks,
-the Bride ch11 boundary, and the magazine/tape running headers. Detail: the audit
-doc + script header.
+**Non-teacher-material exclusions APPLIED 2026-08-06 (`ddd6b7b` + DB write).**
+68 chunks carry `quote_ineligible_reason` (CCEL front matter across Murray's
+books, Lord's Table catechism, Müller verbatim chunks, Bride guest-speaker
+testimony, etc.) per Alex's judgment calls in
+`docs/audits/non_teacher_material_audit_2026-08-06.md`. Trigger enforcement
+re-verified live on the three serious items. Several embedded (not whole-
+chunk) third-party spans remain FLAGGED, not excluded — needs a sub-chunk
+mechanism or Alex accepting whole-chunk loss; full list in that audit doc.
 
 **Project 1 (scalable async answers) — PROVEN end-to-end 2026-08-06;
 `serving_enabled` TRUE, async routes SERVING real traffic.** Real question
@@ -135,9 +131,12 @@ Resolved: #1-3, #5, #11 (verify-chunk-alignment docstring corrected 2026-08-06),
 
 ## Next
 
-1. **Project 3 quote rail — decide next steps** (not yet ordered): wire
-   `resolve_quote()` into a serving surface; build deferred AI suggestions;
-   curate beyond the 3 demo quotes.
+1. **Project 3 quote rail** — wired into the async path this session, NOT
+   yet pushed/deployed (see Deployment above); push + deploy, then decide:
+   wire chat.py too (or leave the async-only fallback-inconsistency
+   accepted, per CLAUDE.md's new landmine); curate beyond the 2 approved
+   quotes; calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD` against real traffic
+   once volume exists; build deferred AI suggestions.
 2. **Watch the Project 1 live flip** under real concurrency — one serial test only.
 3. **Position layer — one-hop build sequence**: topic list (#16) →
    `match_stored_position()` → review workflow → chunk-shape adapter →

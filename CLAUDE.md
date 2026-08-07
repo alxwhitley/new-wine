@@ -587,6 +587,24 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **The quote rail (Project 3) is wired into the ASYNC answer path only —
+  chat.py deliberately untouched. Do not "complete" this by wiring chat.py
+  too without checking with Alex first; the omission is a recorded decision,
+  not unfinished work.** `app.services.async_answers.producer.produce()`
+  calls `quotes_service.select_quotes_for_answer()`; `backend/app/routers/
+  chat.py`'s synchronous path does not and, per this session's own read-only
+  diagnostic, still serves real traffic — `getChatMode()`'s network-error
+  fail-safe, the 30s client-side mode cache, and the explicit 503 fallback in
+  `frontend/lib/api.ts` all silently route a user back to chat.py, and a full
+  rollback (`async_answer_config.serving_enabled = false`) sends 100% of
+  traffic there. The practical effect: a quote can appear on one answer and
+  not the next for the same user, in the same session, with no visible cause
+  — accepted as best-effort, not a bug to fix by making both paths
+  consistent without a deliberate product call first. Wiring chat.py too is
+  a legitimate future option, but it means either duplicating the selection
+  call there (another DRIFT POINT, same class already tracked for producer.py
+  vs chat.py generation logic) or finally unifying the two paths at cutover
+  — a real decision, not a small addition.
 - **`backend/requirements.txt` pins only `fastapi==0.128.8`/`uvicorn` — `pydantic`
   and `starlette` are UNPINNED, so local and the deployed Railway container can run
   different transitive versions, and any rebuild pulls whatever is newest.** A bug
