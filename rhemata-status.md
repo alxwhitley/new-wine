@@ -150,15 +150,13 @@ Resolved: #1-3, #5, #11 (verify-chunk-alignment docstring corrected 2026-08-06),
 
 ## Next
 
-1. **Project 3 quote rail** — code fully shipped, pushed, and confirmed live
-   on Vercel production. Open: decide whether to wire chat.py too (per
-   CLAUDE.md's landmine); curate beyond the 2 approved quotes; calibrate
-   `QUOTE_TOPIC_SIMILARITY_THRESHOLD` against real traffic once volume
-   exists; build deferred AI suggestions.
-2. **Watch the Project 1 live flip** under real concurrency — one serial test only.
-3. **Position layer — one-hop build sequence**: topic list (#16) →
-   `match_stored_position()` → review workflow → chunk-shape adapter →
-   concurrency fix → `chat.py` injection → rollout.
+1. **Position layer one-hop — #16 V1 ADOPTED (seed, 6 topics).** Next code
+   step: `match_stored_position()` against
+   `docs/audits/position_topic_list_v1_2026-08-07.md`, then review workflow →
+   chunk-shape adapter → concurrency fix → inject → rollout.
+2. **Project 3 quote rail** — live; open: chat.py wire decision; curate
+   beyond 2 quotes; threshold calibration; deferred AI suggestions.
+3. **Watch the Project 1 live flip** under real concurrency — one serial test only.
 4. Route `ingest_helloao.py` through `shared_ingest`; rename folders + drop `jewish_perspectives`.
 5. Staging Supabase + a verified backup/restore test.
 6. Flip async-answer cost constants to list price on/after 2026-08-31.
