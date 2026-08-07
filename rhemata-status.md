@@ -6,10 +6,10 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-06 (quote rail WIRED into live async answer generation,
-28/28 + 4/4 live checks; quote-source exclusions APPLIED; async cutover LIVE;
-Project 2 phase 1 steps 1+2 DONE; position papers rebuilt as fence + guarded
-retrieval).
+Last verified: 2026-08-06 (quote rail WIRED into live async answer generation
+AND pushed + deployed; 28/28 + 4/4 live checks; quote-source exclusions
+APPLIED; async cutover LIVE; Project 2 phase 1 steps 1+2 DONE; position
+papers rebuilt as fence + guarded retrieval).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Cut material is
 never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
@@ -47,15 +47,17 @@ miscalibrated (real match scored 0.579) — recalibrated to 0.40 against 10
 real embedding calls (matches 0.497–0.585, non-matches 0.084–0.256); still
 provisional, full rationale in `services/quotes.py`.
 
-**Deployment.** Prior session's work (admin-auth fix, Project 3 admin tool,
-non-teacher exclusions) is pushed/deployed live on all three targets
-(Railway `rhemata` + `answer-worker` + Vercel). **THIS session's quote-rail
-wiring is committed locally only, NOT yet pushed or deployed** — live tests
-ran the real code directly, and migration 083 applied straight to the live
-DB (schema changes are independent of app deploys), but the app code itself
-needs a push + Railway/Vercel deploy before real traffic sees any of it.
-3 real quote rows (2 approved, 1 revoked) + 3 clearance rows still exist
-live.
+**Deployment.** Everything is pushed and deployed (2026-08-06) — `origin/main`
+now holds this session's two commits (`309f4bd` feature, `4fc98b4` records)
+plus the prior day's backlog (admin-auth fix, Project 3 admin tool,
+non-teacher exclusions, scripture-underliner fix). All three targets
+(Railway `rhemata` + `answer-worker` + Vercel) deployed green; **verified
+live, not just pushed**: `POST /answer-quotes/resolve` (new, un-gated) now
+resolves the real Murray "waiting on God" quote correctly on prod;
+`answer-worker`'s restarted container logs show it running the real
+producer (`fake=False`); `GET /async-chat/mode` still returns
+`async_enabled=true`. 3 real quote rows (2 approved, 1 revoked) + 3
+clearance rows still exist live.
 
 **Non-teacher-material exclusions APPLIED 2026-08-06 (`ddd6b7b` + DB write).**
 68 chunks carry `quote_ineligible_reason` (CCEL front matter across Murray's
@@ -131,11 +133,11 @@ Resolved: #1-3, #5, #11 (verify-chunk-alignment docstring corrected 2026-08-06),
 
 ## Next
 
-1. **Project 3 quote rail** — wired into the async path this session, NOT
-   yet pushed/deployed (see Deployment above); push + deploy, then decide:
-   wire chat.py too (or leave the async-only fallback-inconsistency
-   accepted, per CLAUDE.md's new landmine); curate beyond the 2 approved
-   quotes; calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD` against real traffic
+1. **Project 3 quote rail** — wired into the async path AND deployed live
+   this session; decide: wire chat.py too (or leave the async-only
+   fallback-inconsistency accepted, per CLAUDE.md's new landmine); curate
+   beyond the 2 approved quotes; calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD`
+   against real traffic
    once volume exists; build deferred AI suggestions.
 2. **Watch the Project 1 live flip** under real concurrency — one serial test only.
 3. **Position layer — one-hop build sequence**: topic list (#16) →
