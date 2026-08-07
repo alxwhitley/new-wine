@@ -4,23 +4,43 @@ This is the accuracy-critical seam. The launch guarantee (commit 9e5fe94) is
 that nothing unverified ever reaches the reader and that a retry re-runs the
 check. The producer preserves that by REUSING the live primitives:
 
-  - retrieval leaf helpers imported from app.routers.chat (expand_query,
-    hybrid_search_rrf, Cohere rerank, neighbor expansion, lexicon, _is_citable, ...)
-  - the answer extraction imported from chat._extract_answer_from_raw
+  - retrieval leaf helpers imported from app.services.answer_toolbox
+    (expand_query, hybrid_search_rrf, Cohere rerank, neighbor expansion,
+    lexicon, _is_citable, ...) -- moved out of app.routers.chat 2026-08-07
+    (mirror-unification batch 1); chat.py now imports from the same toolbox
+    module rather than owning these definitions, so this is no longer a
+    dependency on chat.py specifically, just on the shared toolbox both
+    paths use.
+  - apply_single_teacher_lock / get_paper_body imported directly from their
+    real homes (single_teacher_lock.py / position_papers.py) rather than
+    transiting through chat.py -- verified no behavior change (nothing
+    monkeypatches either via chat.py).
+  - exclude_contradicting_teachers is DELIBERATELY still reached via the
+    `chat` module attribute (`from app.routers import chat as _chat`, then
+    `_chat.exclude_contradicting_teachers(...)`), not a direct import --
+    scripts/test_position_paper_fence.py monkeypatches
+    `chat.exclude_contradicting_teachers` to construct its everyone-excluded
+    fallback case, and a direct `from position_paper_exclusion import
+    exclude_contradicting_teachers` executed fresh per call would silently
+    stop seeing that patch. See _retrieve()'s own comment for the proof.
+  - the answer extraction imported from answer_toolbox._extract_answer_from_raw
   - the accuracy check imported from reference_verifier (build_retrieval_grounding,
-    ungrounded_prose_teachers, verify_references) + chat._ungrounded_reference_teachers
+    ungrounded_prose_teachers, verify_references) +
+    answer_toolbox._ungrounded_reference_teachers
 
-Only two things are DUPLICATED here rather than imported, because chat.py stays
-byte-identical this inert session and neither is exposed as a reusable symbol:
+Two things remain DUPLICATED here rather than imported, because neither is
+exposed as a reusable symbol (unchanged by the 2026-08-07 move -- a later
+batch's job, not this one):
   1. the retrieval ORCHESTRATION sequence (mirrors chat.chat() ~L754-993)
   2. the generation constants + STRICT ATTRIBUTION CONSTRAINT string
      (mirrors chat._stream_answer)
 Both are flagged DRIFT POINTs to unify at the cutover session. Everything
 accuracy-bearing (extraction, grounding, verification) is imported, not copied.
 
-Parity gaps deliberately NOT carried this session (documented, additive later):
-background-topic injection and position-paper (house-voice) interception. The
-producer handles the NORMAL cited-answer path.
+Background-topic injection and position-paper (house-voice) interception are
+now carried here too (Stage 2) -- see produce()'s own docstring; this module
+docstring's earlier "not carried this session" note is stale and describes an
+earlier state of this file, not the current one.
 
 Python 3.9 (Invariant 1).
 """
@@ -106,9 +126,9 @@ def current_policy(supabase) -> Dict[str, Any]:
     """The reuse-key inputs under the CURRENT effective policy. Submit paths call
     this to build the enqueue key; the producer regenerates under current filters
     at run time (documented cache-staleness tradeoff at zero users)."""
-    from app.routers import chat as _chat
+    from app.services import answer_toolbox
     filters = get_disabled_filters()
-    include_copyrighted = bool(filters["include_copyrighted"]) and _chat.INCLUDE_COPYRIGHTED_ENV
+    include_copyrighted = bool(filters["include_copyrighted"]) and answer_toolbox.INCLUDE_COPYRIGHTED_ENV
     snapshot = {
         "source_kinds": sorted(filters.get("source_kinds") or []),
         "source_names": sorted(filters.get("source_names") or []),
@@ -125,12 +145,35 @@ def current_policy(supabase) -> Dict[str, Any]:
 # ---- retrieval (MIRROR of chat.chat() ~L754-993; DRIFT POINT) ---------------
 def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     # type: (object, str, Optional[set], Optional[str]) -> Tuple[List[dict], List[dict], int, bool]
+    # Shared retrieval leaf helpers now live in answer_toolbox.py (moved from
+    # chat.py 2026-08-07, mirror-unification batch 1) -- neither this module
+    # nor chat.py owns them; both import from the toolbox. Of the 3 names
+    # that did NOT move: apply_single_teacher_lock and get_paper_body are
+    # imported directly from their real homes below (single_teacher_lock.py /
+    # position_papers.py) -- verified no behavior change, nothing in the repo
+    # monkeypatches either of them via chat.py.
+    #
+    # exclude_contradicting_teachers is DELIBERATELY still reached via the
+    # `chat` module attribute, NOT a direct import from
+    # position_paper_exclusion.py -- confirmed live during this same batch
+    # that scripts/test_position_paper_fence.py's fallback-case test
+    # monkeypatches `chat.exclude_contradicting_teachers` (see that script's
+    # docstring), and a `from position_paper_exclusion import
+    # exclude_contradicting_teachers` executed fresh inside this function on
+    # every call would bind to the REAL function each time, silently missing
+    # that patch (proven: `chat.exclude_contradicting_teachers is fake` ->
+    # True, but a fresh direct import's identity -> False). Direct-importing
+    # this one name would have been a real behavior change, not just a
+    # dependency-hop reduction -- so it stays as-is.
+    from app.services import answer_toolbox
+    from app.services.single_teacher_lock import apply_single_teacher_lock
+    from app.services.position_papers import get_paper_body
     from app.routers import chat as _chat
 
     filters = get_disabled_filters()
-    include_copyrighted = bool(filters["include_copyrighted"]) and _chat.INCLUDE_COPYRIGHTED_ENV
+    include_copyrighted = bool(filters["include_copyrighted"]) and answer_toolbox.INCLUDE_COPYRIGHTED_ENV
 
-    variants, keywords = _chat.expand_query(question)
+    variants, keywords = answer_toolbox.expand_query(question)
     variant_weights = [1.0, 0.7, 0.7]
     FTS_WEIGHT = 1.0
 
@@ -148,11 +191,11 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     with ThreadPoolExecutor(max_workers=4) as ex:
         if keywords:
             variant_futures = [
-                ex.submit(_chat.hybrid_search_rrf, variant, db,
+                ex.submit(answer_toolbox.hybrid_search_rrf, variant, db,
                           include_copyrighted=include_copyrighted, run_fts=False)
                 for variant in variants
             ]
-            fts_future = ex.submit(_chat.hybrid_search_rrf, keywords, db,
+            fts_future = ex.submit(answer_toolbox.hybrid_search_rrf, keywords, db,
                                    include_copyrighted=include_copyrighted, run_vector=False)
             for i, future in enumerate(variant_futures):
                 weight = variant_weights[i] if i < len(variant_weights) else 0.5
@@ -164,7 +207,7 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
             _merge(fts_scores, FTS_WEIGHT)
         else:
             futures = [
-                ex.submit(_chat.hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
+                ex.submit(answer_toolbox.hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
                 for variant in variants
             ]
             for i, future in enumerate(futures):
@@ -187,7 +230,7 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     all_scores = {
         cid: (score, chunk)
         for cid, (score, chunk) in all_scores.items()
-        if not _chat.is_commentary_chunk(chunk)
+        if not answer_toolbox.is_commentary_chunk(chunk)
     }
     dropped_commentary = pre_commentary - len(all_scores)
     if dropped_commentary:
@@ -211,7 +254,7 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
         cid: (
             score
             * (chunk.get("boost_factor") or 1.0)
-            * _chat.SOURCE_KIND_FUSION_WEIGHTS.get(
+            * answer_toolbox.SOURCE_KIND_FUSION_WEIGHTS.get(
                 chunk.get("source_kind") or chunk.get("source_type") or "", 1.0
             ),
             chunk,
@@ -231,10 +274,10 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
 
     # Single-teacher lock (Project 2 phase 1 step 2, CLAUDE.md #15) --
     # MIRROR of chat.chat()'s Step 3a; DRIFT POINT, imported not copied
-    # (calls _chat.apply_single_teacher_lock directly, same reuse pattern
-    # as hybrid_search_rrf/_is_citable/etc. above) so this and chat.py can
-    # never independently drift on the lock decision itself.
-    locked_chunks, locked = _chat.apply_single_teacher_lock(question, collapsed, db)
+    # (calls apply_single_teacher_lock directly, imported from its real home
+    # single_teacher_lock.py -- same function chat.py calls) so this and
+    # chat.py can never independently drift on the lock decision itself.
+    locked_chunks, locked = apply_single_teacher_lock(question, collapsed, db)
     if locked:
         # Per-author cap skipped, not reapplied -- moot once already
         # restricted to one teacher (see single_teacher_lock.py).
@@ -253,7 +296,7 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     chunks = [chunk for _, (_, chunk) in top_chunks]
 
     # Cohere rerank -- 30 -> 8.
-    co = _chat._get_cohere()
+    co = answer_toolbox._get_cohere()
     if co and len(chunks) > 0:
         try:
             docs = [c.get("content", "") for c in chunks]
@@ -263,11 +306,11 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
             logger.exception("Cohere rerank failed (producer), using RRF top 8")
             chunks = chunks[:8]
 
-    citable_count = sum(1 for c in chunks if _chat._is_citable(c))
+    citable_count = sum(1 for c in chunks if answer_toolbox._is_citable(c))
 
     # Neighbor expansion, cap 12.
     seen_ids = {c["id"] for c in chunks}
-    neighbors = _chat.fetch_neighbor_chunks_batch(chunks, seen_ids, db)
+    neighbors = answer_toolbox.fetch_neighbor_chunks_batch(chunks, seen_ids, db)
     expanded = list(chunks)
     for n in neighbors:
         if len(expanded) >= 12:
@@ -277,17 +320,19 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
 
     # Defense-in-depth: decision #5 hard exclude after neighbor expansion
     # (primary gate is Step 2.6 above). Mirrors chat.chat().
-    chunks = _chat.exclude_commentary_chunks(expanded)
+    chunks = answer_toolbox.exclude_commentary_chunks(expanded)
 
     # House-position exclusion -- MIRROR of chat.chat()'s Step 4.5; DRIFT
-    # POINT, imported not copied (calls _chat.get_paper_body /
-    # _chat.exclude_contradicting_teachers directly, same reuse pattern as
-    # the rest of this function). See chat.py's own Step 4.5 comment for the
+    # POINT. get_paper_body is imported directly from its real home
+    # (position_papers.py); exclude_contradicting_teachers is called via
+    # _chat.exclude_contradicting_teachers on purpose -- see this function's
+    # own header comment for why that one stays a chat-module-attribute call
+    # rather than a direct import. See chat.py's own Step 4.5 comment for the
     # full reasoning (Alex's ruling, 2026-08-06, CLAUDE.md Settled decision
     # #9).
     fallback_to_paper_voice = False
     if matched_pillar_key and chunks:
-        house_position_text = _chat.get_paper_body(matched_pillar_key)
+        house_position_text = get_paper_body(matched_pillar_key)
         if house_position_text:
             chunks, excluded_authors = _chat.exclude_contradicting_teachers(
                 matched_pillar_key, house_position_text, question, chunks,
@@ -296,7 +341,7 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
                 fallback_to_paper_voice = True
 
     # Conditional lexicon retrieval (word-study questions).
-    if _chat.is_word_study_query(question):
+    if answer_toolbox.is_word_study_query(question):
         try:
             from app.services.embeddings import embed_text
             lex_embedding = first_embedding if first_embedding else embed_text(question)
@@ -319,21 +364,21 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
             "url": c.get("url"),
         }
         for c in chunks
-        if _chat._is_citable(c)
+        if answer_toolbox._is_citable(c)
     ]
     return chunks, citations, citable_count, fallback_to_paper_voice
 
 
 def _build_context(chunks, citable_count, topic_context_parts=None):
     # type: (List[dict], int, Optional[List[str]]) -> str
-    from app.routers import chat as _chat
+    from app.services import answer_toolbox
     regular = [c for c in chunks if not c.get("_lexicon")]
     lexicon = [c for c in chunks if c.get("_lexicon")]
 
     context_parts = []
     source_num = 0
     for i, c in enumerate(regular):
-        if _chat._is_citable(c):
+        if answer_toolbox._is_citable(c):
             source_num += 1
             label = "[Source %d]" % source_num
         else:
@@ -388,8 +433,8 @@ def _build_history(messages: List[Dict[str, Any]], context: str, question: str) 
 
 # ---- generation with usage capture (MIRROR of chat._stream_answer; DRIFT POINT) --
 def _generate_and_capture(history, permitted_names=None):
-    from app.routers import chat as _chat
-    system = _chat.ANSWER_SYSTEM_BLOCKS
+    from app.services import answer_toolbox
+    system = answer_toolbox.ANSWER_SYSTEM_BLOCKS
     if permitted_names is not None:
         names = ", ".join(permitted_names) if permitted_names else "(no teachers were retrieved -- attribute to no one)"
         constraint = (
@@ -400,7 +445,7 @@ def _generate_and_capture(history, permitted_names=None):
             "permitted name, state it without attribution. This overrides any inclination to add "
             "other voices for balance."
         )
-        system = list(_chat.ANSWER_SYSTEM_BLOCKS) + [{"type": "text", "text": constraint}]
+        system = list(answer_toolbox.ANSWER_SYSTEM_BLOCKS) + [{"type": "text", "text": constraint}]
 
     client = get_anthropic_client()
     model_used = get_generation_model()
@@ -431,7 +476,7 @@ def _generate_and_capture(history, permitted_names=None):
                 usage["output_tokens"] = out
 
     raw_output = "".join(raw_full)
-    answer = _chat._extract_answer_from_raw(raw_output, stop_reason) or _chat._NO_ANSWER_FALLBACK
+    answer = answer_toolbox._extract_answer_from_raw(raw_output, stop_reason) or answer_toolbox._NO_ANSWER_FALLBACK
     return answer, raw_output, stop_reason, usage, model_used
 
 
@@ -445,10 +490,10 @@ def _inject_background_topics(db, question, messages, topics_established):
     """Background-topic context injection -- MIRROR of chat.chat() Step 0.5
     (~L758-816). Returns (topic_context_parts, injected_doc_ids, updated_topics).
     Same 6-turn inject/condense window and the same [Background] labelling."""
-    from app.routers import chat as _chat
-    _chat._ensure_background_topics()
+    from app.services import answer_toolbox
+    answer_toolbox._ensure_background_topics()
     current_turn = len(messages)
-    matched_topics = _chat.match_background_topics(question)
+    matched_topics = answer_toolbox.match_background_topics(question)
     topics_to_inject = []    # type: List[str]  # full paper this turn
     topics_to_condense = []  # type: List[str]  # first chunk only (within 6-turn window)
     for topic_key in matched_topics:
@@ -462,7 +507,11 @@ def _inject_background_topics(db, question, messages, topics_established):
     injected_doc_ids = set()  # type: set
     updated_topics = dict(topics_established or {})
     if topics_to_inject or topics_to_condense:
-        topic_lookup = {t["topic_key"]: t for t in _chat._background_topics}
+        # answer_toolbox._background_topics is REBOUND (not mutated in place)
+        # by _ensure_background_topics() above -- accessed via module
+        # attribute, never a `from`-import, so this always reads the freshly
+        # loaded value (see answer_toolbox.py's REBOUND-GLOBAL warning).
+        topic_lookup = {t["topic_key"]: t for t in answer_toolbox._background_topics}
         for topic_key in topics_to_inject:
             topic = topic_lookup.get(topic_key)
             if not topic:
@@ -501,11 +550,11 @@ def produce(supabase, question, messages=None, topics_established=None):
     buffered generation -> ungrounded-attribution resolution (regenerate-once-
     then-refuse) -> verify_references. Matches chat.py's ordering exactly. Raises
     only on an unexpected fault the worker should retry."""
-    from app.routers import chat as _chat
+    from app.services import answer_toolbox
     from app.services.reference_verifier import (
         verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
     )
-    from app.services.position_papers import match_position_paper, render_paper_voice_with_disclaimer
+    from app.services.position_papers import match_position_paper, render_paper_voice_with_disclaimer, get_paper_body
     messages = messages or []
     topics_established = topics_established or {}
 
@@ -521,10 +570,13 @@ def produce(supabase, question, messages=None, topics_established=None):
         supabase, question, messages, topics_established)
 
     # Position-paper fence injection -- MIRROR of chat.chat()'s Step 0.6.
+    # _PILLAR_BY_KEY is not itself rebound, but accessed via the module
+    # (answer_toolbox._PILLAR_BY_KEY) for the same consistent-access reason
+    # chat.py now uses -- see answer_toolbox.py's REBOUND-GLOBAL warning.
     if matched_pillar_key:
-        pillar = _chat._PILLAR_BY_KEY.get(matched_pillar_key)
+        pillar = answer_toolbox._PILLAR_BY_KEY.get(matched_pillar_key)
         if pillar and pillar["document_id"] not in injected_doc_ids:
-            paper_body = _chat.get_paper_body(matched_pillar_key)
+            paper_body = get_paper_body(matched_pillar_key)
             if paper_body:
                 topic_context_parts.append(
                     "[House Position] (citation_mode=silent_context) This is "
@@ -545,7 +597,7 @@ def produce(supabase, question, messages=None, topics_established=None):
     if fallback_to_paper_voice:
         answer = render_paper_voice_with_disclaimer(matched_pillar_key, question, messages)
         if not answer:
-            answer = _chat._NO_ANSWER_FALLBACK
+            answer = answer_toolbox._NO_ANSWER_FALLBACK
         logger.info(
             "position_paper_exclusion: FALLBACK fired (producer) | pillar=%s | question=%r",
             matched_pillar_key, question,
@@ -573,7 +625,7 @@ def produce(supabase, question, messages=None, topics_established=None):
     grounding = build_retrieval_grounding(chunks, supabase)
     permitted_names = sorted({
         (c.get("author") or "").strip() for c in chunks
-        if _chat._is_citable(c) and (c.get("author") or "").strip()
+        if answer_toolbox._is_citable(c) and (c.get("author") or "").strip()
     })
 
     answer, raw_output, _sr, usage, model_used = _generate_and_capture(history)
@@ -584,7 +636,7 @@ def produce(supabase, question, messages=None, topics_established=None):
         name_universe = build_name_universe(supabase)
 
         def _has_ungrounded(ans, raw):
-            if _chat._ungrounded_reference_teachers(ans, raw, grounding, supabase):
+            if answer_toolbox._ungrounded_reference_teachers(ans, raw, grounding, supabase):
                 return True
             if ungrounded_prose_teachers(ans, name_universe, grounding, supabase):
                 return True
@@ -595,12 +647,12 @@ def produce(supabase, question, messages=None, topics_established=None):
             total_usage = _add_usage(total_usage, usage2)
             if _has_ungrounded(answer2, raw2):
                 logger.warning("Producer regeneration still credits an ungrounded teacher -- clean refusal")
-                answer, raw_output, refused = _chat._ATTRIBUTION_REFUSAL, "", True
+                answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
             else:
                 answer, raw_output = answer2, raw2
     except Exception:
         logger.exception("Producer attribution-resolution failed -- refusing cleanly (fail closed)")
-        answer, raw_output, refused = _chat._ATTRIBUTION_REFUSAL, "", True
+        answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
 
     try:
         verified_references = [] if refused else verify_references(answer, raw_output, supabase, grounding)
@@ -646,7 +698,7 @@ def produce(supabase, question, messages=None, topics_established=None):
     # the separate position layer, not the chat path). Record both the full
     # retrieved set and the citable subset for Phase-4 traceability.
     retrieved_chunk_ids = [c["id"] for c in chunks]
-    retrieved_point_ids = [c["id"] for c in chunks if _chat._is_citable(c)]
+    retrieved_point_ids = [c["id"] for c in chunks if answer_toolbox._is_citable(c)]
 
     return ProducerResult(
         answer=answer,

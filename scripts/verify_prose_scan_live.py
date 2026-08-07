@@ -48,7 +48,9 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 import verify_teacher_name_guard_live as base
 from verify_teacher_name_guard_live import retrieve, build_context, db, FAB_QUESTIONS, LEGIT_QUESTIONS
 
-from app.routers.chat import ANSWER_SYSTEM_BLOCKS, _is_citable, _ungrounded_reference_teachers
+# Moved out of app.routers.chat into app.services.answer_toolbox 2026-08-07
+# (mirror-unification batch 1); chat.py imports these from the same place.
+from app.services.answer_toolbox import ANSWER_SYSTEM_BLOCKS, _is_citable, _ungrounded_reference_teachers
 from app.services.llm_client import get_anthropic_client
 from app.services.position_papers import match_position_paper
 from app.services.reference_verifier import (

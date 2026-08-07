@@ -45,9 +45,12 @@ load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 from supabase import create_client
 
-# Real production pieces — imported, never re-implemented.
-from app.routers import chat as chatmod
-from app.routers.chat import (
+# Real production pieces — imported, never re-implemented. These 8 names
+# moved out of app.routers.chat into app.services.answer_toolbox 2026-08-07
+# (mirror-unification batch 1); chat.py itself now imports them from the
+# same place, so this is still "the shipped code," not a fork.
+from app.services import answer_toolbox as chatmod
+from app.services.answer_toolbox import (
     expand_query, hybrid_search_rrf, fetch_neighbor_chunks_batch, _is_citable,
     is_word_study_query, ANSWER_SYSTEM_BLOCKS,
     SOURCE_KIND_FUSION_WEIGHTS, is_commentary_chunk, exclude_commentary_chunks,

@@ -19,7 +19,9 @@ _BACKEND = _SCRIPTS.parent / "backend"
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from app.routers.chat import (  # noqa: E402
+# Moved out of app.routers.chat into app.services.answer_toolbox 2026-08-07
+# (mirror-unification batch 1); chat.py imports these from the same place.
+from app.services.answer_toolbox import (  # noqa: E402
     is_commentary_chunk,
     exclude_commentary_chunks,
     SOURCE_KIND_FUSION_WEIGHTS,

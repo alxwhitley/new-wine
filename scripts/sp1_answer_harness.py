@@ -9,11 +9,12 @@ regression scripts (Tasks 9, 12) and the Track-A pinned reference test
 (Task 13) — the retrieval+Claude-call logic lives in exactly one place.
 
 Note: ANSWER_SYSTEM_BLOCKS is read from system_prompt.txt once, at import
-time, inside app.routers.chat. Each script that imports this helper does so
-in its own fresh `python3` process, so a script run before Task 10's
-system_prompt.txt edit picks up the OLD prompt, and one run after picks up
-the NEW prompt — no special handling needed, just run things in the order
-the tasks specify.
+time, inside app.services.answer_toolbox (moved out of app.routers.chat
+2026-08-07, mirror-unification batch 1 -- chat.py now imports it from the
+same place). Each script that imports this helper does so in its own fresh
+`python3` process, so a script run before Task 10's system_prompt.txt edit
+picks up the OLD prompt, and one run after picks up the NEW prompt — no
+special handling needed, just run things in the order the tasks specify.
 """
 import sys
 from pathlib import Path
@@ -21,7 +22,18 @@ from typing import Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from app.routers.chat import hybrid_search_rrf, _is_citable, ANSWER_SYSTEM_BLOCKS, _get_anthropic
+from app.services.answer_toolbox import hybrid_search_rrf, _is_citable, ANSWER_SYSTEM_BLOCKS
+# Pre-existing, unrelated bug fix (2026-08-07): this previously imported
+# `_get_anthropic` from chat.py, which stopped existing there on 2026-07-18
+# (commit b4a8c8c, "Extract shared Anthropic client + guardrails loader from
+# chat.py") -- that commit moved the client-singleton getter out of chat.py
+# and renamed it get_anthropic_client() on app.services.llm_client, updating
+# chat.py's own call site accordingly. This script was never updated to
+# match and has imported a name chat.py no longer exposes ever since (already
+# noted as stale for this reason in
+# docs/audits/phase0_measurement_2026-08-01.md:34-35). Fixed here to import
+# the real, current function from its real home.
+from app.services.llm_client import get_anthropic_client
 
 
 def generate_real_answer(question: str, db) -> Tuple[str, str]:
@@ -53,7 +65,7 @@ def generate_real_answer(question: str, db) -> Tuple[str, str]:
         "content": f"Sources:\n{context}\n\nQuestion: {question}",
     }]
 
-    client = _get_anthropic()
+    client = get_anthropic_client()
     response = client.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=3000,

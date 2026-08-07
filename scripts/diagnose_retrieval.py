@@ -27,7 +27,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 from app.db.supabase import get_supabase
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
-from app.routers.chat import (
+# Moved out of app.routers.chat into app.services.answer_toolbox 2026-08-07
+# (mirror-unification batch 1); chat.py imports these from the same place.
+from app.services.answer_toolbox import (
     expand_query,
     hybrid_search_rrf,
     fetch_neighbor_chunks_batch,
