@@ -697,17 +697,13 @@ different row, per the hard rule above.
   local process; none was running) with a real verified answer
   (`model=claude-sonnet-4-5` not the fake producer, `outcome=answered`, 4 citations
   + 7 verified_references incl. real teacher pointers), switches untouched, then
-  cleaned. **Residual, NOT independently confirmed:** that the worker's
-  `SUPABASE_DB_URL` is the transaction pooler (6543) vs the session pooler (5432,
-  15-client cap ~12/worker) — Supavisor MASKS pooler mode on the Postgres side
-  (rewrites client `application_name`→`Supavisor`) and the Railway CLI is
-  unauthenticated here, so the port is not readable from the DB vantage; behavioral
-  evidence (the worker's polling multiplexed onto only 3–4 shared upstream backends,
-  never growing while a slot was busy generating) is CONSISTENT with the transaction
-  pooler but does not exclude a low-slot session-mode worker. Close it definitively
-  with `railway variables` on the worker service (`SUPABASE_DB_URL` contains `:6543`)
-  or Alex pasting it, plus a controlled real-traffic concurrency window proving the
-  >~12/worker ceiling is actually lifted, before the flip. Note:
+  cleaned. **Pooler residual CLOSED 2026-08-07:** Railway `answer-worker` and
+  `rhemata` backend both have `SUPABASE_DB_URL` on the transaction pooler
+  (`:6543`, host `aws-1-us-east-1.pooler.supabase.com`) — confirmed via
+  `railway variables`, not the DB vantage (Supavisor still masks mode server-
+  side). Local `backend/app/.env` remains `:5432` (session) for dev only.
+  **Still open:** a controlled real-traffic concurrency window proving the
+  100-dial / >~12/worker ceiling is actually lifted. Note:
   `conversations.user_id` has an FK to `auth.users`, so persistence needs a real JWT
   `sub` (always true in prod; a bad id fails closed — `save_exchange` swallows it,
   delivery unaffected).
@@ -730,8 +726,8 @@ different row, per the hard rule above.
   "plus tooling config" clause covers it). **Its build is now PROVEN** — the worker
   service was created in Railway 2026-08-04, built GREEN via this manifest, and runs
   as a container that completed a real verified generation (see the Project 1 async
-  landmine's blocker (d)). This no longer blocks service creation; (d)'s only
-  residual is confirming the worker's pooler port + a real concurrency window.
+  landmine's blocker (d)). Pooler port residual closed 2026-08-07; remaining residual
+  is a real concurrency window at the 100-dial.
 
 - `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
   API and is the real gap.
