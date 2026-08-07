@@ -596,8 +596,10 @@ different row, per the hard rule above.
   too without checking with Alex first; the omission is a recorded decision,
   not unfinished work.** `app.services.async_answers.producer.produce()`
   calls `quotes_service.select_quotes_for_answer()`; `backend/app/routers/
-  chat.py`'s synchronous path does not and, per this session's own read-only
-  diagnostic, still serves real traffic — `getChatMode()`'s network-error
+  chat.py`'s synchronous path does not. **As of 2026-08-07 the async path is
+  the PRIMARY one (`serving_enabled` TRUE); chat.py is the silent FALLBACK** —
+  still genuinely reachable, so this stays live, but it is no longer the
+  majority path this entry originally described. `getChatMode()`'s network-error
   fail-safe, the 30s client-side mode cache, and the explicit 503 fallback in
   `frontend/lib/api.ts` all silently route a user back to chat.py, and a full
   rollback (`async_answer_config.serving_enabled = false`) sends 100% of
@@ -644,16 +646,23 @@ different row, per the hard rule above.
 
 - **Project 1 async answer path is BUILT and cutover-WIRED; 3 of 4 pre-flip
   blockers CLOSED + the worker service now DEPLOYED and VERIFIED end-to-end
-  (2026-08-04, real test, no traffic flip), traffic switch still OFF (Stage 2
+  (2026-08-04, real test); **the traffic switch is now ON — `serving_enabled`
+  read TRUE from the live DB 2026-08-07 (set 2026-08-06 12:48 UTC), so the async
+  path IS serving real traffic** (Stage 2
   build `dd71b87`; pre-flip blockers `196f1f2`, 2026-08-04; Stage 1 `82413c9`).**
   `backend/app/services/async_answers/` + `scripts/answer_worker.py` +
   `backend/app/routers/async_chat.py` run a durable Postgres-backed answer queue
   (migrations 078/079: `answer_jobs`/`async_answer_config`/`provider_rate_usage`
-  + `corpus_version()`) ALONGSIDE the live `/chat`. **Two-level OFF switch, both
-  default OFF:** env `ASYNC_ANSWER_ENABLED` mounts the routes (main.py, deploy-
-  level); DB `async_answer_config.serving_enabled` is the seconds-reversible
-  TRAFFIC switch the frontend consults via `GET /async-chat/mode`. Do NOT assume
-  the async path serves anything until BOTH are on. **DRIFT POINT (unchanged, load-
+  + `corpus_version()`) ALONGSIDE the live `/chat`. **Two-level switch — both
+  DEFAULT off in code, both currently ON in production:** env
+  `ASYNC_ANSWER_ENABLED` mounts the routes (main.py, deploy-level); DB
+  `async_answer_config.serving_enabled` is the seconds-reversible TRAFFIC switch
+  the frontend consults via `GET /async-chat/mode`. `config.py`'s
+  `serving_enabled: bool = False` is the dataclass FALLBACK, not the live value —
+  read the DB row, never the default, before concluding which path serves.
+  A full rollback (`serving_enabled = false`) still sends 100% of traffic back to
+  `chat.py` in seconds, which is why the mirror below is still load-bearing.
+  **DRIFT POINT (unchanged, load-
   bearing):** the async layer MIRRORS `chat.py` rather than sharing it, so
   `chat.py`'s live path stays byte-identical pre-cutover — `async_answers/producer.py`
   mirrors chat.py's retrieval orchestration + generation constants (`GEN_MODEL`/
