@@ -95,6 +95,11 @@ class ProducerResult:
     # Background-topic state to hand back to the client (parity with chat.py's
     # meta["topics_established"]).
     updated_topics: Dict[str, int] = field(default_factory=dict)
+    # Quote rail (Project 3, wired 2026-08-06, async path only). IDS ONLY --
+    # never quote text -- resolved later at render time via
+    # quotes_service.resolve_quote(). See _select_quotes()'s call site below
+    # for why this stays empty for the overwhelming majority of answers.
+    quote_ids: List[str] = field(default_factory=list)
 
 
 def current_policy(supabase) -> Dict[str, Any]:
@@ -595,6 +600,36 @@ def produce(supabase, question, messages=None, topics_established=None):
         logger.exception("Producer SP1 reference verification failed -- continuing without pointers")
         verified_references = []
 
+    # Quote rail selection (Project 3, wired 2026-08-06) -- ASYNC PATH ONLY,
+    # deliberate. chat.py (the old synchronous path) is NOT wired this
+    # session and stays byte-identical -- it remains a live, silently-
+    # reachable fallback (getChatMode() network-error fail-safe, the 30s
+    # client mode cache, and the explicit 503 fallback in frontend/lib/
+    # api.ts), so a quote appearing on an answer is best-effort, not
+    # guaranteed, depending on which path happened to serve it. Accepted,
+    # recorded product decision -- see CLAUDE.md's landmine on this before
+    # "completing" the picture by wiring chat.py too.
+    #
+    # Runs post-generation, after verify_references, and only on a non-
+    # refused answer (an attribution refusal already empties citations
+    # above; pairing a quote beside a refusal would be the same
+    # misattribution-by-juxtaposition risk in a different shape). Fail-soft:
+    # any fault here -- embedding API, DB -- must never affect answer
+    # delivery, so it's wrapped and swallowed here, not left to
+    # select_quotes_for_answer() itself (which does not swallow its own
+    # errors; see its docstring).
+    quote_ids = []  # type: List[str]
+    if not refused:
+        try:
+            from app.services.quotes import select_quotes_for_answer
+            from app.services.single_teacher_lock import resolve_source_ids_for_documents
+            considered_doc_ids = [c.get("document_id") for c in chunks if c.get("document_id")]
+            doc_to_source = resolve_source_ids_for_documents(supabase, considered_doc_ids)
+            quote_ids = select_quotes_for_answer(supabase, question, doc_to_source.values())
+        except Exception:
+            logger.exception("Producer quote-rail selection failed -- continuing without quotes")
+            quote_ids = []
+
     cost = estimate_cost_usd(
         total_usage["input_tokens"], total_usage["output_tokens"],
         total_usage["cache_read_tokens"], total_usage["cache_write_tokens"],
@@ -610,6 +645,7 @@ def produce(supabase, question, messages=None, topics_established=None):
         outcome="refused_attribution" if refused else "answered",
         citations=[] if refused else citations,
         verified_references=verified_references,
+        quote_ids=quote_ids,
         retrieved_chunk_ids=retrieved_chunk_ids,
         retrieved_point_ids=retrieved_point_ids,
         model=model_used,

@@ -265,10 +265,12 @@ def complete(
     cache_write_tokens: Optional[int],
     cost_usd: Optional[float],
     updated_topics: Optional[Dict[str, int]] = None,
+    quote_ids: Optional[List[str]] = None,
 ) -> None:
     """Persist a verified answer + Phase-4 instrumentation and mark the job done.
     `updated_topics` is stored in result_meta for the client (parity with chat.py's
-    meta['topics_established'])."""
+    meta['topics_established']). `quote_ids` (migration 083, Project 3 wiring) is
+    IDS ONLY -- never quote text -- same fail-soft-to-empty pattern as citations."""
     result_meta = {"updated_topics": updated_topics or {}}
 
     def _done(conn):
@@ -278,13 +280,14 @@ def complete(
                 "citations = %s, verified_references = %s, retrieved_chunk_ids = %s, "
                 "retrieved_point_ids = %s, model = %s, input_tokens = %s, output_tokens = %s, "
                 "cache_read_tokens = %s, cache_write_tokens = %s, cost_usd = %s, "
-                "result_meta = %s, finished_at = now(), lease_expires_at = NULL, updated_at = now() "
+                "result_meta = %s, quote_ids = %s, finished_at = now(), lease_expires_at = NULL, "
+                "updated_at = now() "
                 "WHERE id = %s",
                 (
                     answer, outcome, Json(citations), Json(verified_references),
                     Json(retrieved_chunk_ids), Json(retrieved_point_ids), model,
                     input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-                    cost_usd, Json(result_meta), job_id,
+                    cost_usd, Json(result_meta), Json(quote_ids or []), job_id,
                 ),
             )
     db.run(_done)

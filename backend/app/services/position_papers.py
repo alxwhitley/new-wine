@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 from typing import Dict, Iterator, List, Optional, Tuple
 
 from app.db.supabase import get_supabase
-from app.services.embeddings import embed_text
+from app.services.embeddings import cosine_similarity as _cosine, embed_text
 from app.services.llm_client import get_anthropic_client, get_generation_model
 from app.services.source_resolver import normalize_alias_key
 
@@ -335,15 +334,6 @@ _PILLARS_BY_KEY = {p["pillar_key"]: p for p in PILLARS}  # type: Dict[str, dict]
 # equidistant in raw terms, but comfortably clear of both boundary points
 # found in actual calibration data, not chosen for roundness alone.
 TIE_BREAK_EPSILON = 0.02
-
-
-def _cosine(a: List[float], b: List[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return dot / (na * nb)
 
 
 # ── Anchor embedding cache — keyed PER PILLAR, embedded at most once per

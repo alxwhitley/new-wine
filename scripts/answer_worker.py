@@ -193,6 +193,7 @@ class Worker:
             cache_write_tokens=result.cache_write_tokens,
             cost_usd=result.cost_usd,
             updated_topics=result.updated_topics,
+            quote_ids=result.quote_ids,
         )
         logger.info("[%s] job %s done (%s, $%.4f)", worker_id, job_id, result.outcome, result.cost_usd)
         return True

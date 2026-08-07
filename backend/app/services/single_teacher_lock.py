@@ -70,13 +70,19 @@ logger = logging.getLogger(__name__)
 ChunkEntry = Tuple[str, Tuple[float, dict]]
 
 
-def _resolve_source_ids(db, document_ids):
+def resolve_source_ids_for_documents(db, document_ids):
     # type: (object, List[str]) -> Dict[str, str]
     """document_id -> source_id, via one batched read-only SELECT against
     `documents`. Fails soft: an empty/partial mapping just means fewer (or
     zero) chunks are locatable to a source_id, which
     apply_single_teacher_lock() treats as "cannot determine dominance, do
-    not lock" -- never a crash on the live answer path."""
+    not lock" -- never a crash on the live answer path.
+
+    Public (promoted from _resolve_source_ids 2026-08-06) so the quote-rail
+    selection wiring (app.services.async_answers.producer) can derive the
+    same considered-teacher-source_ids from `chunks` without forking this
+    lookup -- the same "one shared implementation" move already made for
+    DOMINANCE_THRESHOLD/determine_scope (dominance.py)."""
     unique_ids = sorted({d for d in document_ids if d})
     if not unique_ids:
         return {}
@@ -127,7 +133,7 @@ def apply_single_teacher_lock(question, collapsed, db):
         return collapsed, False
 
     document_ids = [chunk.get("document_id", "") for _, (_, chunk) in collapsed]
-    doc_to_source = _resolve_source_ids(db, document_ids)
+    doc_to_source = resolve_source_ids_for_documents(db, document_ids)
 
     evidence = [
         {"source_id": doc_to_source[chunk.get("document_id", "")]}

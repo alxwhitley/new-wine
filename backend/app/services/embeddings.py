@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 from typing import List
 
@@ -9,6 +10,21 @@ logger = logging.getLogger(__name__)
 _client = None
 
 EMBED_BATCH_SIZE = 100
+
+
+def cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Shared home for the one cosine-similarity implementation embedding
+    consumers should use (position_papers.py's pillar matching, quotes.py's
+    quote-topic matching, and any future one) -- consolidated here 2026-08-06
+    rather than left as position_papers.py's own private `_cosine`, the same
+    "one shared implementation, not independently-maintained copies" move
+    already made for DOMINANCE_THRESHOLD/determine_scope (see dominance.py)."""
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (na * nb)
 
 
 def _get_client():

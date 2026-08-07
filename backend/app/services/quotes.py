@@ -13,10 +13,14 @@ checks here.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Iterable, List, Optional, Tuple
 
+from app.services.embeddings import cosine_similarity, embed_batch, embed_text
 from app.services.quote_verifier import verify_quote_exact_match
+
+logger = logging.getLogger(__name__)
 
 # The two teachers this rail is currently scoped to -- an application-level
 # curation decision (docs/audits/quote_rail_project3_audit_2026-08-06.md),
@@ -25,6 +29,58 @@ CONFIRMED_TEACHER_SOURCE_IDS = {
     "17be391b-d025-4178-8543-3e84da675c5d": "Derek Prince",
     "d26f77e7-6ce0-4311-991b-03d9900a6045": "Andrew Murray",
 }
+
+# ── Live-answer selection (2026-08-06 wiring session) ────────────────────────
+#
+# QUOTE_TOPIC_SIMILARITY_THRESHOLD -- PROVISIONAL, needs real-USAGE
+# calibration (no real question traffic has exercised this yet -- only 2
+# approved quotes exist corpus-wide), but NOT a blind guess: an initial 0.75
+# (chosen by analogy to position_papers.py's anchor-vs-anchor similarities,
+# which run much higher because both sides of that comparison are similarly-
+# shaped phrases) turned out badly miscalibrated for this comparison shape --
+# a full question sentence against a short 2-4 word topic tag scores
+# structurally lower. Caught live, 2026-08-06, by this session's own
+# end-to-end test: the real "waiting on God" match scored 0.579, well under
+# 0.75, so nothing was ever selected. Recalibrated against 10 real embedding
+# calls (4 genuine question/topic matches, 6 genuine non-matches, both
+# corpus topics, varied question phrasing):
+#   matches:     0.4968, 0.5469, 0.5790, 0.5854
+#   non-matches: 0.0844, 0.1116, 0.1451, 0.1818, 0.2482, 0.2560
+# Clean separation with a ~0.24 gap between the closest match (0.4968) and
+# the closest non-match (0.2560). 0.40 sits in that gap -- a real measured
+# margin, not a round number, same evidentiary posture as position_papers.py's
+# own TIE_BREAK_EPSILON comment. Still provisional: n=10 hand-written
+# questions, not real traffic, and both corpus topics happen to be short
+# noun phrases -- a future quote with a longer or oddly-worded topic tag
+# could sit outside this calibration. Revisit once real traffic and more
+# quote volume exist, exactly as dominance.py's own threshold note describes
+# for its own constant.
+QUOTE_TOPIC_SIMILARITY_THRESHOLD = 0.40
+
+# How many quotes may attach to a single answer. Provisional, same posture as
+# the threshold above -- irrelevant at today's volume (2 approved quotes
+# total, so at most 2 could ever qualify), but the selector needs SOME bound
+# before quote volume grows past what "beside the answer" can reasonably show.
+MAX_QUOTES_PER_ANSWER = 3
+
+# Settled decision #16 ("cumulative unique approved-quote text per work is
+# capped AT APPROVAL TIME"). No cap value was specified anywhere in the
+# governing docs before this session -- PROVISIONAL, needs real-usage
+# calibration, same posture as the constants above. 2000 characters is a
+# conservative starting ceiling: existing approved quotes run 93-164
+# characters (2026-08-06), so this permits roughly a dozen quotes per work
+# before blocking further approval, comfortably short of what could read as
+# reconstructing a meaningful fraction of the source text through many small
+# "quotes."
+#
+# "Work" = one `documents` row. document_work_groups (migration 071, e.g. the
+# 20-part "Roman Pilgrimage" series) is NOT wired into any consumer yet
+# (confirmed docs/audits/quote_rail_project3_audit_2026-08-06.md) -- so a
+# split-work series is capped PER DOCUMENT, not per underlying teaching, until
+# that grouping is wired in somewhere. A known, disclosed gap, not a silent
+# one: closing it means changing _document_id_for_cap() below once
+# document_work_groups has a real consumer to resolve through.
+QUOTE_CAP_CHARS_PER_WORK = 2000
 
 
 def _require_confirmed_teacher(teacher_source_id: str) -> None:
@@ -92,6 +148,43 @@ def clear_document(db, document_id: str, cleared_by: str, note: str):
     return {"already_cleared": False}
 
 
+def _enforce_quote_cap(db, document_id: str, candidate_quote_text: str) -> None:
+    """Settled decision #16's "cumulative unique approved-quote text per work
+    is capped AT APPROVAL TIME" -- application-level only (unlike migration
+    082's four hard gates, this is NOT also a DB trigger; see
+    QUOTE_CAP_CHARS_PER_WORK's module-level comment for why that's an
+    accepted, narrower boundary for this particular rule, and for the
+    per-document-not-per-work-group caveat). Raises ValueError, same pattern
+    as the Step 2 verifier check above -- caught by the router and turned
+    into a clean 400, before any row is written."""
+    sibling_chunks = db.table("chunks").select("id").eq("document_id", document_id).execute().data
+    chunk_ids = [c["id"] for c in sibling_chunks]
+    if not chunk_ids:
+        return
+    revisions = (
+        db.table("quote_source_revisions").select("id").in_("chunk_id", chunk_ids).execute().data
+    )
+    revision_ids = [r["id"] for r in revisions]
+    existing_texts = set()  # type: set
+    if revision_ids:
+        existing_rows = (
+            db.table("quotes")
+            .select("quote_text")
+            .in_("source_revision_id", revision_ids)
+            .eq("status", "approved")
+            .execute()
+            .data
+        )
+        existing_texts = {r["quote_text"] for r in existing_rows}
+    projected_chars = sum(len(t) for t in (existing_texts | {candidate_quote_text}))
+    if projected_chars > QUOTE_CAP_CHARS_PER_WORK:
+        raise ValueError(
+            "quote cap exceeded for this document: %d existing approved chars + this "
+            "candidate would total %d chars, over the provisional cap of %d"
+            % (sum(len(t) for t in existing_texts), projected_chars, QUOTE_CAP_CHARS_PER_WORK)
+        )
+
+
 def create_and_approve_quote(
     db,
     chunk_id: str,
@@ -107,7 +200,10 @@ def create_and_approve_quote(
     first for a clean, specific rejection reason; the database's own
     trigger (migration 082) re-checks the same rule plus the other three
     hard gates as the authoritative backstop, against the immutable
-    snapshot this function captures, not a later re-read of the chunk."""
+    snapshot this function captures, not a later re-read of the chunk. Also
+    runs the per-work quote cap (_enforce_quote_cap, Settled decision #16) --
+    application-level only, not DB-trigger-enforced; see that function's
+    docstring."""
     _require_confirmed_teacher(teacher_source_id)
     for label, value in (("quote_text", quote_text), ("topic", topic), ("reviewer_note", reviewer_note)):
         if not value or not value.strip():
@@ -117,10 +213,13 @@ def create_and_approve_quote(
     if not verification.valid:
         raise ValueError("verifier rejected candidate: %s" % verification.reason)
 
-    chunk_rows = db.table("chunks").select("content").eq("id", chunk_id).limit(1).execute().data
+    chunk_rows = db.table("chunks").select("content, document_id").eq("id", chunk_id).limit(1).execute().data
     if not chunk_rows:
         raise ValueError("chunk %s not found" % chunk_id)
     passage_text = chunk_rows[0]["content"]
+    document_id = chunk_rows[0]["document_id"]
+
+    _enforce_quote_cap(db, document_id, quote_text)
 
     revision = (
         db.table("quote_source_revisions")
@@ -191,3 +290,71 @@ def resolve_quote(db, quote_id: str) -> Optional[dict]:
         "teacher_name": teacher_name,
         "approved_at": quote["approved_at"],
     }
+
+
+def select_quotes_for_answer(
+    db,
+    question: str,
+    considered_teacher_source_ids: Iterable[str],
+    question_embedding: Optional[List[float]] = None,
+) -> List[str]:
+    """Deterministic, post-generation quote selection for the live answer
+    path (2026-08-06 wiring session; async path only -- see producer.py's
+    call site). Returns a list of quote IDS ONLY -- never text -- ready to
+    travel in the meta frame and be resolved later through resolve_quote(),
+    the single resolution point.
+
+    Candidates: status='approved' AND teacher_source_id in
+    considered_teacher_source_ids -- the FULL set of teachers whose material
+    was considered/retrieved for this answer, deliberately NOT narrowed to
+    only the teachers actually cited. This is a looser-matching decision
+    (Alex's explicit call, 2026-08-06): a quote can appear beside an answer
+    that didn't end up citing that teacher at all. Known, accepted residual
+    risk, not a bug -- narrowing to cited-only is a one-line change here
+    (intersect against the answer's own citations) if this proves too loose
+    in practice.
+
+    Matching: cosine similarity between an embedding of the raw question and
+    an embedding of each candidate's short `topic` tag (e.g. "fasting",
+    "waiting on God") -- fully deterministic given the same inputs, no live
+    LLM judgment call. See QUOTE_TOPIC_SIMILARITY_THRESHOLD's module-level
+    comment for why 0.75 and its provisional status.
+
+    Callers MUST wrap this in their own fail-soft try/except (this function
+    can raise -- an embedding-API fault, a DB fault) -- it does not swallow
+    its own errors, so a caller that forgets to wrap it will not get the
+    "answer delivers unchanged on any quote-rail fault" guarantee the design
+    requires."""
+    source_ids = sorted({sid for sid in considered_teacher_source_ids if sid})
+    if not source_ids:
+        return []
+
+    rows = (
+        db.table("quotes")
+        .select("id, topic")
+        .eq("status", "approved")
+        .in_("teacher_source_id", source_ids)
+        .execute()
+        .data
+    )
+    if not rows:
+        return []
+
+    q_vec = question_embedding if question_embedding is not None else embed_text(question)
+    topic_vecs = embed_batch([r["topic"] for r in rows])
+
+    scored = []  # type: List[Tuple[float, str]]
+    for row, topic_vec in zip(rows, topic_vecs):
+        score = cosine_similarity(q_vec, topic_vec)
+        if score >= QUOTE_TOPIC_SIMILARITY_THRESHOLD:
+            scored.append((score, row["id"]))
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    selected = [quote_id for _, quote_id in scored[:MAX_QUOTES_PER_ANSWER]]
+    if selected:
+        logger.info(
+            "quote_rail: selected %d quote(s) for question=%r | scores=%s | threshold=%.2f",
+            len(selected), question, [round(s, 4) for s, _ in scored[:MAX_QUOTES_PER_ANSWER]],
+            QUOTE_TOPIC_SIMILARITY_THRESHOLD,
+        )
+    return selected

@@ -1,12 +1,23 @@
-"""Async answer path -- HTTP delivery surface (BUILT BUT NOT MOUNTED / INERT).
+"""Async answer path -- HTTP delivery surface.
 
-This router is deliberately NOT included in app.main this session, so the live
-FastAPI app is byte-identical and nothing an existing reader experiences
-changes. It is the delivery half of the durable path, ready for the cutover
-session. To mount at cutover (a deliberate, separate change):
+MOUNTED and LIVE (corrected 2026-08-06 -- this docstring previously said
+"BUILT BUT NOT MOUNTED / INERT", which stopped being true once main.py started
+conditionally mounting this router; stale docstrings are exactly the kind of
+thing CLAUDE.md Invariant 5 warns not to trust). Two independent, both
+currently-on switches gate what actually happens:
 
-    from app.routers import async_chat
-    app.include_router(async_chat.router, prefix="/async-chat", tags=["async-chat"])
+  1. Env ASYNC_ANSWER_ENABLED (main.py) -- whether these routes exist in the
+     route table at all. A deploy-level switch.
+  2. DB async_answer_config.serving_enabled -- the seconds-reversible TRAFFIC
+     switch this file's own /mode endpoint reports. The frontend calls the
+     async path only when /mode returns true; otherwise (or on ANY network
+     error -- see frontend/lib/api.ts's getChatMode()) it silently falls back
+     to the old synchronous /chat path (chat.py), which remains live and
+     reachable for exactly that reason. This is why some product behavior
+     wired only into this path (e.g. the Project 3 quote rail,
+     app.services.async_answers.producer.produce()'s quote_ids selection) is
+     accepted as best-effort rather than guaranteed on every answer -- see
+     CLAUDE.md's landmine on this.
 
 Shape (decision #14): submission and delivery are decoupled from generation.
   POST /async-chat/submit  -> enqueue; returns {job_id, status, reason}. Returns
@@ -251,6 +262,12 @@ async def result(
             yield _sse(json.dumps({
                 "citations": job.get("citations") or [],
                 "verified_references": job.get("verified_references") or [],
+                # Quote rail (Project 3, wired 2026-08-06, async path only) --
+                # IDS ONLY, never text. Empty for the overwhelming majority of
+                # answers today (2 approved quotes corpus-wide). The client
+                # resolves these through the new public /answer-quotes/resolve
+                # endpoint at render time -- never embed the text here.
+                "quote_ids": job.get("quote_ids") or [],
                 "outcome": job.get("outcome"),
                 "evidence_version": job.get("evidence_version"),
                 "topics_established": rmeta.get("updated_topics") or {},

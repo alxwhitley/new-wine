@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import chat, search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes
+from app.routers import chat, search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes
 
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])
@@ -37,6 +37,13 @@ app.include_router(pastors_notes.router, prefix="/pastors-notes", tags=["pastors
 app.include_router(usage.router, prefix="/usage", tags=["usage"])
 app.include_router(account.router, prefix="/account", tags=["account"])
 app.include_router(quotes.router, prefix="/quotes", tags=["quotes"])
+# Reader-facing quote resolution (Project 3 wiring) -- deliberately separate
+# from quotes.router above (that one is entirely require_admin_role-gated;
+# this one is intentionally un-gated -- see answer_quotes.py's module
+# docstring). Mounted unconditionally, independent of ASYNC_ANSWER_ENABLED,
+# since it does no generation itself and stays forward-compatible if chat.py
+# is ever wired to the same rail.
+app.include_router(answer_quotes.router, prefix="/answer-quotes", tags=["answer-quotes"])
 
 # Stage 2 cutover -- async answer path routes, gated on ASYNC_ANSWER_ENABLED
 # (default "false"). When OFF (the default) these routes are NOT mounted, so the
