@@ -1,23 +1,31 @@
 """Async answer path -- HTTP delivery surface.
 
-MOUNTED and LIVE (corrected 2026-08-06 -- this docstring previously said
-"BUILT BUT NOT MOUNTED / INERT", which stopped being true once main.py started
-conditionally mounting this router; stale docstrings are exactly the kind of
-thing CLAUDE.md Invariant 5 warns not to trust). Two independent, both
-currently-on switches gate what actually happens:
+MOUNTED and LIVE, unconditionally (corrected 2026-08-07, mirror-unification
+batch 4 -- this docstring previously described a two-switch gate: an env
+ASYNC_ANSWER_ENABLED controlling whether these routes existed in the route
+table at all, plus the DB switch below. The env gate was removed this batch,
+Alex's explicit decision: main.py mounts this router the same way it mounts
+every other router, no conditional -- with chat.py deleted this same batch,
+this is the ONLY answer path, and gating whether its routes even exist behind
+an env var defaulting to "false" created a way to accidentally end up with
+zero answer paths mounted and no visible error. Stale docstrings are exactly
+the kind of thing CLAUDE.md Invariant 5 warns not to trust -- keep this
+current). One switch remains:
 
-  1. Env ASYNC_ANSWER_ENABLED (main.py) -- whether these routes exist in the
-     route table at all. A deploy-level switch.
-  2. DB async_answer_config.serving_enabled -- the seconds-reversible TRAFFIC
-     switch this file's own /mode endpoint reports. The frontend calls the
-     async path only when /mode returns true; otherwise (or on ANY network
-     error -- see frontend/lib/api.ts's getChatMode()) it silently falls back
-     to the old synchronous /chat path (chat.py), which remains live and
-     reachable for exactly that reason. This is why some product behavior
-     wired only into this path (e.g. the Project 3 quote rail,
-     app.services.async_answers.producer.produce()'s quote_ids selection) is
-     accepted as best-effort rather than guaranteed on every answer -- see
-     CLAUDE.md's landmine on this.
+  DB async_answer_config.serving_enabled -- an EMERGENCY PAUSE, not a
+  rollback mechanism (corrected 2026-08-07, mirror-unification batch 3,
+  Part 3 -- this docstring previously described the frontend "silently
+  falling back to the old synchronous /chat path" when this switch is
+  off or /mode is unreachable; that fallback was removed the same batch,
+  Alex's explicit decision: no fallback of any kind). The frontend no
+  longer calls /mode as a router at all -- it calls this path directly
+  and treats a 503 async_serving_disabled response (or any network
+  failure reaching this router) as a real, user-visible error. Flipping
+  this switch off now takes the WHOLE PRODUCT offline for chat answers --
+  chat.py's /chat endpoint no longer exists at all (deleted 2026-08-07,
+  mirror-unification batch 4), so there is no legacy path to fall back to
+  even in principle. The switch itself stays; only its meaning changes,
+  from soft rollback to honest kill-switch.
 
 Shape (decision #14): submission and delivery are decoupled from generation.
   POST /async-chat/submit  -> enqueue; returns {job_id, status, reason}. Returns
@@ -116,10 +124,15 @@ def _serving_enabled() -> bool:
 
 @router.get("/mode")
 async def mode():
-    """The seconds-reversible TRAFFIC switch (async_answer_config.serving_enabled,
-    default OFF). The frontend calls the async path only when this returns
-    async_enabled=true. When these routes aren't mounted (env off), the fetch
-    404s and the frontend stays on the live path. Reversible with one UPDATE."""
+    """Reports the emergency-pause switch (async_answer_config.serving_enabled,
+    default OFF) -- an honest kill-switch, not a rollback toggle (corrected
+    2026-08-07, mirror-unification batch 3, Part 3: this previously described
+    the frontend routing to the async path only when this returned
+    async_enabled=true, falling back to the live /chat path otherwise -- that
+    routing/fallback behavior was removed the same batch; the frontend no
+    longer calls this endpoint at all). Kept as a standalone read-only
+    diagnostic/health-check surface (e.g. for future ops tooling), not as
+    part of any request path. Reversible with one UPDATE."""
     enabled = await run_in_threadpool(_serving_enabled)
     return {"async_enabled": bool(enabled)}
 

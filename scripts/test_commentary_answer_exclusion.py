@@ -118,10 +118,16 @@ def test_fusion_weights_no_soft_commentary_path():
 
 def test_no_cap_constant():
     print("\n== retired COMMENTARY_CONTEXT_CAP ==")
-    import app.routers.chat as chatmod
+    # Repointed 2026-08-07 (mirror-unification batch 4): chat.py, the
+    # original home of this retired constant, is deleted. The commentary-
+    # exclusion logic (and this constant's absence) now lives in
+    # answer_toolbox.py (moved there 2026-08-07, mirror-unification batch
+    # 1) -- the real, current location both the async path and (formerly)
+    # chat.py imported from.
+    import app.services.answer_toolbox as toolbox_mod
     _check(
         "COMMENTARY_CONTEXT_CAP no longer defined",
-        not hasattr(chatmod, "COMMENTARY_CONTEXT_CAP"),
+        not hasattr(toolbox_mod, "COMMENTARY_CONTEXT_CAP"),
     )
 
 

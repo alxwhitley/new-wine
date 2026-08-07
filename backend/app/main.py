@@ -22,9 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import chat, search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes
+from app.routers import search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes, async_chat
 
-app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(document.router, prefix="/document", tags=["document"])
 app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
@@ -40,21 +39,20 @@ app.include_router(quotes.router, prefix="/quotes", tags=["quotes"])
 # Reader-facing quote resolution (Project 3 wiring) -- deliberately separate
 # from quotes.router above (that one is entirely require_admin_role-gated;
 # this one is intentionally un-gated -- see answer_quotes.py's module
-# docstring). Mounted unconditionally, independent of ASYNC_ANSWER_ENABLED,
-# since it does no generation itself and stays forward-compatible if chat.py
-# is ever wired to the same rail.
+# docstring).
 app.include_router(answer_quotes.router, prefix="/answer-quotes", tags=["answer-quotes"])
 
-# Stage 2 cutover -- async answer path routes, gated on ASYNC_ANSWER_ENABLED
-# (default "false"). When OFF (the default) these routes are NOT mounted, so the
-# app's route table is byte-identical to before this change and the live /chat
-# path is entirely unaffected. Enabling the env (a deploy) makes the routes exist;
-# the actual seconds-reversible TRAFFIC switch is async_answer_config.serving_enabled,
-# which the frontend consults via GET /async-chat/mode. Both default OFF.
-if os.environ.get("ASYNC_ANSWER_ENABLED", "false").lower() == "true":
-    from app.routers import async_chat
-    app.include_router(async_chat.router, prefix="/async-chat", tags=["async-chat"])
-    logging.getLogger(__name__).info("Async answer routes MOUNTED (ASYNC_ANSWER_ENABLED=true)")
+# Async answer path routes -- mounted unconditionally, same as every other
+# router above. The ASYNC_ANSWER_ENABLED env gate that used to make this
+# conditional was removed 2026-08-07 (mirror-unification batch 4, Alex's
+# explicit decision): with chat.py deleted this same batch, this is now the
+# ONLY answer path -- gating whether its routes even exist behind an env var
+# that defaulted to "false" created a way to accidentally end up with zero
+# answer paths mounted, with no visible error. The
+# DB-driven async_answer_config.serving_enabled switch remains -- an
+# emergency pause, not a rollback (there's no other path to roll back to;
+# see async_chat.py's module docstring) -- unaffected by this change.
+app.include_router(async_chat.router, prefix="/async-chat", tags=["async-chat"])
 
 @app.get("/")
 async def root():

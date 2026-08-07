@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { streamChatMessage, streamAsyncChatMessage, getChatMode, fetchWeeklyUsage, Citation } from "@/lib/api";
+import { streamAsyncChatMessage, fetchWeeklyUsage, Citation } from "@/lib/api";
 import type { VerifiedReference } from "@/lib/study-reference";
 
 export interface Message {
@@ -68,11 +68,13 @@ export function useChat(
       let newConversationId: string | null = null;
 
       try {
-        // Stage 2 cutover: route to the async path ONLY when the server switch is
-        // on (getChatMode fails safe to false -> live path). Mode OFF is identical
-        // to the pre-Stage-2 behaviour.
-        const streamFn = (await getChatMode()) ? streamAsyncChatMessage : streamChatMessage;
-        await streamFn(
+        // The async answer path is the only path -- no mode check, no fallback
+        // (2026-08-07, mirror-unification batch 3, Part 2, Alex's explicit
+        // decision). streamAsyncChatMessage surfaces its own failures (the
+        // emergency-pause switch being off, or a network error reaching the
+        // backend at all) as a real error via callbacks.onError below --
+        // never a silent handoff to a different implementation.
+        await streamAsyncChatMessage(
           question,
           {
             onToken: (token) => {

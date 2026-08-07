@@ -15,14 +15,18 @@ check. The producer preserves that by REUSING the live primitives:
     real homes (single_teacher_lock.py / position_papers.py) rather than
     transiting through chat.py -- verified no behavior change (nothing
     monkeypatches either via chat.py).
-  - exclude_contradicting_teachers is DELIBERATELY still reached via the
-    `chat` module attribute (`from app.routers import chat as _chat`, then
-    `_chat.exclude_contradicting_teachers(...)`), not a direct import --
-    scripts/test_position_paper_fence.py monkeypatches
-    `chat.exclude_contradicting_teachers` to construct its everyone-excluded
-    fallback case, and a direct `from position_paper_exclusion import
-    exclude_contradicting_teachers` executed fresh per call would silently
-    stop seeing that patch. See _retrieve()'s own comment for the proof.
+  - exclude_contradicting_teachers is DELIBERATELY reached via the
+    `position_paper_exclusion` module attribute (`from app.services import
+    position_paper_exclusion`, then
+    `position_paper_exclusion.exclude_contradicting_teachers(...)`), not a
+    plain `from position_paper_exclusion import exclude_contradicting_teachers`
+    -- retargeted 2026-08-07 (mirror-unification batch 4) off
+    `app.routers.chat` (deleted this batch; used to be reached as
+    `_chat.exclude_contradicting_teachers`). scripts/test_position_paper_fence.py
+    monkeypatches `position_paper_exclusion.exclude_contradicting_teachers`
+    to construct its everyone-excluded fallback case, and a plain import
+    executed fresh per call would silently stop seeing that patch. See
+    _retrieve()'s own comment for the proof.
   - the answer extraction imported from answer_toolbox._extract_answer_from_raw
   - the accuracy check imported from reference_verifier (build_retrieval_grounding,
     ungrounded_prose_teachers, verify_references) +
@@ -153,22 +157,26 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     # position_papers.py) -- verified no behavior change, nothing in the repo
     # monkeypatches either of them via chat.py.
     #
-    # exclude_contradicting_teachers is DELIBERATELY still reached via the
-    # `chat` module attribute, NOT a direct import from
-    # position_paper_exclusion.py -- confirmed live during this same batch
-    # that scripts/test_position_paper_fence.py's fallback-case test
-    # monkeypatches `chat.exclude_contradicting_teachers` (see that script's
-    # docstring), and a `from position_paper_exclusion import
-    # exclude_contradicting_teachers` executed fresh inside this function on
-    # every call would bind to the REAL function each time, silently missing
-    # that patch (proven: `chat.exclude_contradicting_teachers is fake` ->
-    # True, but a fresh direct import's identity -> False). Direct-importing
-    # this one name would have been a real behavior change, not just a
-    # dependency-hop reduction -- so it stays as-is.
+    # exclude_contradicting_teachers is DELIBERATELY reached via the
+    # `position_paper_exclusion` module attribute, NOT a plain `from
+    # position_paper_exclusion import exclude_contradicting_teachers` --
+    # retargeted 2026-08-07 (mirror-unification batch 4) off the deleted
+    # `from app.routers import chat as _chat` (chat.py no longer exists).
+    # Confirmed live during this same batch that
+    # scripts/test_position_paper_fence.py's fallback-case test
+    # monkeypatches `position_paper_exclusion.exclude_contradicting_teachers`
+    # (see that script's docstring), and a plain `from position_paper_exclusion
+    # import exclude_contradicting_teachers` executed fresh inside this
+    # function on every call would bind to the REAL function each time,
+    # silently missing that patch (proven:
+    # `position_paper_exclusion.exclude_contradicting_teachers is fake` ->
+    # True, but a fresh plain import's identity -> False). Plain-importing
+    # this one name would be a real behavior change, not just a
+    # dependency-hop reduction -- so it stays as a module-attribute access.
     from app.services import answer_toolbox
     from app.services.single_teacher_lock import apply_single_teacher_lock
     from app.services.position_papers import get_paper_body
-    from app.routers import chat as _chat
+    from app.services import position_paper_exclusion
 
     filters = get_disabled_filters()
     include_copyrighted = bool(filters["include_copyrighted"]) and answer_toolbox.INCLUDE_COPYRIGHTED_ENV
@@ -322,19 +330,20 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     # (primary gate is Step 2.6 above). Mirrors chat.chat().
     chunks = answer_toolbox.exclude_commentary_chunks(expanded)
 
-    # House-position exclusion -- MIRROR of chat.chat()'s Step 4.5; DRIFT
-    # POINT. get_paper_body is imported directly from its real home
-    # (position_papers.py); exclude_contradicting_teachers is called via
-    # _chat.exclude_contradicting_teachers on purpose -- see this function's
-    # own header comment for why that one stays a chat-module-attribute call
-    # rather than a direct import. See chat.py's own Step 4.5 comment for the
-    # full reasoning (Alex's ruling, 2026-08-06, CLAUDE.md Settled decision
-    # #9).
+    # House-position exclusion -- MIRROR of the deleted chat.py's former
+    # Step 4.5; DRIFT POINT. get_paper_body is imported directly from its
+    # real home (position_papers.py); exclude_contradicting_teachers is
+    # called via position_paper_exclusion.exclude_contradicting_teachers on
+    # purpose -- retargeted 2026-08-07 (mirror-unification batch 4) off
+    # `_chat.exclude_contradicting_teachers`, see this function's own header
+    # comment for why it stays a module-attribute call rather than a plain
+    # import. Full reasoning (Alex's ruling, 2026-08-06, CLAUDE.md Settled
+    # decision #9) unchanged by the retarget.
     fallback_to_paper_voice = False
     if matched_pillar_key and chunks:
         house_position_text = get_paper_body(matched_pillar_key)
         if house_position_text:
-            chunks, excluded_authors = _chat.exclude_contradicting_teachers(
+            chunks, excluded_authors = position_paper_exclusion.exclude_contradicting_teachers(
                 matched_pillar_key, house_position_text, question, chunks,
             )
             if excluded_authors and not chunks:
@@ -660,15 +669,17 @@ def produce(supabase, question, messages=None, topics_established=None):
         logger.exception("Producer SP1 reference verification failed -- continuing without pointers")
         verified_references = []
 
-    # Quote rail selection (Project 3, wired 2026-08-06) -- ASYNC PATH ONLY,
-    # deliberate. chat.py (the old synchronous path) is NOT wired this
-    # session and stays byte-identical -- it remains a live, silently-
-    # reachable fallback (getChatMode() network-error fail-safe, the 30s
-    # client mode cache, and the explicit 503 fallback in frontend/lib/
-    # api.ts), so a quote appearing on an answer is best-effort, not
-    # guaranteed, depending on which path happened to serve it. Accepted,
-    # recorded product decision -- see CLAUDE.md's landmine on this before
-    # "completing" the picture by wiring chat.py too.
+    # Quote rail selection (Project 3, wired 2026-08-06) -- this producer is
+    # now the ONLY answer path (2026-08-07, mirror-unification job, all
+    # batches): chat.py, the old synchronous path that never had quote-rail
+    # selection wired in, no longer exists at all -- deleted in batch 4,
+    # after batch 3 removed the frontend's silent fallback that used to make
+    # it a live (if best-effort) target. There is now exactly one answer
+    # path, and it always runs quote selection (subject to the fail-soft
+    # wrapping below) -- "best-effort depending on which path happened to
+    # serve it" no longer applies to anything; there is no other path left
+    # to compare against. See CLAUDE.md's landmine entry on this job for the
+    # full before/after history.
     #
     # Runs post-generation, after verify_references, and only on a non-
     # refused answer (an attribution refusal already empties citations

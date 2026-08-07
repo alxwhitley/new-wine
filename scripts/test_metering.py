@@ -166,15 +166,27 @@ cur.execute(
     (monday_date, TEST_USER_ID)
 )
 print(f"  SET count=50, week_start={monday_date}")
-print(f"  Sending POST {API_BASE}/chat with user JWT...")
+print(f"  Sending POST {API_BASE}/async-chat/submit with user JWT...")
 
+# Repointed 2026-08-07 (mirror-unification batch 4): chat.py's /chat is
+# deleted; /async-chat/submit is now the only answer-path entry point.
+# enforce_query_limit() (backend/app/services/async_answers/metering.py) is
+# the single, shared metering implementation both routes used -- chat.py's
+# route called it directly, async_chat.py's /submit calls it via
+# run_in_threadpool, but it's the exact same function raising the exact same
+# HTTPException(429, detail={...}) shape BEFORE enqueue/generation, so this
+# still proves "hard stop fires before any generation happens" (the enqueue
+# call that would create a job for the worker to pick up never runs). The
+# response-body shape asserted below (detail.error/used/limit/week_start/
+# resets) is unchanged -- confirmed by reading metering.py directly, not
+# assumed.
 chat_payload = {
     "question": "What is the baptism of the Holy Spirit?",
     "messages": [],
     "anon_id": None,
 }
 resp = httpx.post(
-    f'{API_BASE}/chat',
+    f'{API_BASE}/async-chat/submit',
     json=chat_payload,
     headers={'Authorization': f'Bearer {JWT}', 'Content-Type': 'application/json'},
     timeout=30,

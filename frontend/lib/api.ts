@@ -89,6 +89,12 @@ export interface StreamCallbacks {
   onError: (error: string) => void;
 }
 
+// DEAD CODE as of 2026-08-07 (mirror-unification job complete): the backend
+// endpoint this fetches (/chat, chat.py) is deleted, and useChat.ts no longer
+// calls this function at all (batch 3 removed the fallback that used to
+// route here). Left in place rather than deleted in the same pass as the
+// backend deletion -- zero callers, safe to remove whenever frontend
+// cleanup touches this file next.
 export async function streamChatMessage(
   question: string,
   callbacks: StreamCallbacks,
@@ -178,35 +184,26 @@ export async function streamChatMessage(
   }
 }
 
-// ── Async answer path (Stage 2 cutover) ──────────────────────────────────────
-// The async path is gated behind a seconds-reversible server switch. useChat calls
-// getChatMode() and routes to streamAsyncChatMessage ONLY when it returns true;
-// otherwise it uses the live streamChatMessage above, byte-for-byte as before.
+// ── Async answer path ─────────────────────────────────────────────────────────
+// This is now the ONE answer path the frontend calls -- no routing, no fallback.
+// getChatMode()/_chatModeCache (a mode-check used to decide between this path and
+// the legacy streamChatMessage) were removed 2026-08-07 (mirror-unification batch
+// 3, Part 2 -- Alex's explicit decision: no fallback of any kind). They were pure
+// routing plumbing with no purpose once there's only one path to route to, and
+// keeping a mode pre-check would have added a redundant network round-trip that
+// still couldn't eliminate the need for streamAsyncChatMessage to handle its own
+// failures below (a race between the pre-check and the real submit is always
+// possible). A failure to reach or use this path now surfaces as a real, visible
+// error via callbacks.onError -- never a silent handoff to a different path.
+//
 
-type ChatMode = { v: boolean; ts: number };
-let _chatModeCache: ChatMode | null = null;
-const CHAT_MODE_TTL_MS = 30_000;
-
-/** Returns true iff the async answer path is enabled server-side. Fails safe to
- *  false (live path) on 404 (routes not mounted) or any network error. Cached 30s. */
-export async function getChatMode(): Promise<boolean> {
-  const now = Date.now();
-  if (_chatModeCache && now - _chatModeCache.ts < CHAT_MODE_TTL_MS) return _chatModeCache.v;
-  try {
-    const res = await fetch(`${API_URL}/async-chat/mode`);
-    if (!res.ok) {
-      _chatModeCache = { v: false, ts: now };
-      return false;
-    }
-    const data = await res.json();
-    const v = data?.async_enabled === true;
-    _chatModeCache = { v, ts: now };
-    return v;
-  } catch {
-    _chatModeCache = { v: false, ts: now };
-    return false;
-  }
-}
+/** Shown when the answer service can't be reached or is deliberately paused
+ *  (async_answer_config.serving_enabled = false -- see async_chat.py's module
+ *  docstring). Plain, honest, non-marketing tone, matching the backend's
+ *  _NO_ANSWER_FALLBACK string. Two candidates were drafted 2026-08-07;
+ *  Alex confirmed this one. */
+const _SERVICE_UNAVAILABLE_MESSAGE =
+  "I wasn't able to reach Rhemata's answer service just now. Please try again in a moment.";
 
 /** Client-side reading-pace reveal (~250 chars/sec), matching the server's old
  *  PLAYBACK_CHARS_PER_SEC. Fires only after the fully-checked answer has arrived. */
@@ -240,16 +237,26 @@ export async function streamAsyncChatMessage(
 
   // 1. Submit (returns instantly with a durable job id). Metering happens here,
   //    server-side, keyed on the caller -- so usage arrives in the submit response.
-  const submitRes = await fetch(`${API_URL}/async-chat/submit`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      question,
-      messages: options?.messages ?? [],
-      topics_established: options?.topicsEstablished ?? {},
-      anon_id: options?.anonId ?? null,
-    }),
-  });
+  let submitRes: Response;
+  try {
+    submitRes = await fetch(`${API_URL}/async-chat/submit`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question,
+        messages: options?.messages ?? [],
+        topics_established: options?.topicsEstablished ?? {},
+        anon_id: options?.anonId ?? null,
+      }),
+    });
+  } catch {
+    // Network error reaching the backend at all -- no fallback path exists
+    // (2026-08-07, mirror-unification batch 3, Part 2). Surface a real,
+    // visible error instead of throwing a generic Error the caller has no
+    // specific copy for.
+    callbacks.onError(_SERVICE_UNAVAILABLE_MESSAGE);
+    return;
+  }
   if (!submitRes.ok) {
     if (submitRes.status === 429) {
       const data = await submitRes.json().catch(() => ({}));
@@ -261,12 +268,12 @@ export async function streamAsyncChatMessage(
     if (submitRes.status === 503) {
       const data = await submitRes.json().catch(() => ({}));
       if (data.detail === "async_serving_disabled") {
-        // The DB switch may have been turned off after getChatMode() cached true.
-        // Pin the cache off and retry this untouched request through the live path;
-        // submit is gated before metering/enqueue, so this cannot double-charge or
-        // create two generations.
-        _chatModeCache = { v: false, ts: Date.now() };
-        return streamChatMessage(question, callbacks, options);
+        // The emergency-pause switch (async_answer_config.serving_enabled) is
+        // off -- a deliberate kill-switch, not a rollback mechanism (see
+        // async_chat.py's module docstring, corrected 2026-08-07). There is
+        // no other path to hand this off to: surface a real, visible error.
+        callbacks.onError(_SERVICE_UNAVAILABLE_MESSAGE);
+        return;
       }
       throw new Error("queue_full");
     }
@@ -283,7 +290,13 @@ export async function streamAsyncChatMessage(
   const cidQuery = options?.conversationId
     ? `?conversation_id=${encodeURIComponent(options.conversationId)}`
     : "";
-  const res = await fetch(`${API_URL}/async-chat/result/${jobId}${cidQuery}`, { headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/async-chat/result/${jobId}${cidQuery}`, { headers });
+  } catch {
+    callbacks.onError(_SERVICE_UNAVAILABLE_MESSAGE);
+    return;
+  }
   if (!res.body) throw new Error("No response body");
 
   const reader = res.body.getReader();

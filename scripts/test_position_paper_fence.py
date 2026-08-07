@@ -10,10 +10,11 @@ silent context, never a served answer. Covers:
   - backend/app/services/position_paper_exclusion.py's
     exclude_contradicting_teachers() (grouping/citability filtering; the
     live classification call itself is exercised in Tier B, not mocked)
-  - backend/app/routers/chat.py + backend/app/services/async_answers/
-    producer.py's wiring: retrieval now runs on a position-paper match,
-    exclusion fires before generation, the everyone-excluded fallback fires
-    only in that specific case
+  - backend/app/services/async_answers/producer.py's wiring (the sole
+    surviving answer path -- backend/app/routers/chat.py was deleted
+    2026-08-07, mirror-unification batch 4): retrieval now runs on a
+    position-paper match, exclusion fires before generation, the
+    everyone-excluded fallback fires only in that specific case
 
 Mirrors this repo's ad hoc scripts/test_*.py convention -- no pytest,
 hand-built `_check(label, condition)` assertions.
@@ -29,8 +30,9 @@ verbatim, and reports whether exclusion fired (a real corpus-dependent
 outcome, not asserted either way, since which teachers genuinely contradict
 is a live corpus fact, not a fixed expectation). Also constructs the
 everyone-excluded case (via a narrow, documented monkeypatch of
-chat.exclude_contradicting_teachers, restored immediately after) and
-confirms the fallback fires with the exact disclaimer, uncited.
+position_paper_exclusion.exclude_contradicting_teachers, restored
+immediately after) and confirms the fallback fires with the exact
+disclaimer, uncited.
 
 Run: python3 scripts/test_position_paper_fence.py
 """
@@ -125,26 +127,29 @@ def _run_paper_case(db, label, question):
 
 def _run_fallback_case(db):
     """Constructs the everyone-excluded case via a narrow, documented
-    monkeypatch of chat.exclude_contradicting_teachers -- the exact symbol
-    producer._retrieve() reaches via _chat.exclude_contradicting_teachers --
-    restored immediately in a finally block. Confirms the real control flow
-    in chat.py/producer.py, not just the standalone disclaimer helper."""
-    import app.routers.chat as chat
+    monkeypatch of position_paper_exclusion.exclude_contradicting_teachers --
+    the exact symbol producer._retrieve() reaches via
+    position_paper_exclusion.exclude_contradicting_teachers (retargeted
+    2026-08-07, mirror-unification batch 4, off the now-deleted
+    app.routers.chat module) -- restored immediately in a finally block.
+    Confirms the real control flow in producer.py, not just the standalone
+    disclaimer helper."""
+    from app.services import position_paper_exclusion
     from app.services.async_answers import producer
 
     print("\n  -- constructed case: exclusion empties the answer -> fallback --")
     question = "What is the baptism of the Holy Spirit?"
-    _real = chat.exclude_contradicting_teachers
+    _real = position_paper_exclusion.exclude_contradicting_teachers
 
     def _fake_exclude_all(pillar_key, house_position_text, q, chunks):
         authors = sorted({(c.get("author") or "").strip() for c in chunks if c.get("author")})
         return [], authors
 
-    chat.exclude_contradicting_teachers = _fake_exclude_all
+    position_paper_exclusion.exclude_contradicting_teachers = _fake_exclude_all
     try:
         result = producer.produce(db, question, messages=[])
     finally:
-        chat.exclude_contradicting_teachers = _real
+        position_paper_exclusion.exclude_contradicting_teachers = _real
 
     _check("fallback outcome is 'position_paper'", result.outcome == "position_paper")
     _check("fallback carries zero citations", result.citations == [])
