@@ -69,9 +69,9 @@ it if this file is more than a few sessions stale.
 
 ### Phase 1 — Async cutover hardening
 Async path (`answer_jobs` queue + worker) is confirmed serving 100% of live
-traffic (`async_answer_config.serving_enabled = TRUE`, set 2026-08-06);
-`chat.py` is now a silent fallback only.
-- **Delete the `producer.py`/`chat.py` mirror** — unify into one answer path. This is the largest live drift-risk today: a change to one path not mirrored to the other silently diverges (accuracy-critical logic is imported/shared already; retrieval orchestration + generation constants + position-paper interception are the parts still hand-duplicated).
+traffic (`async_answer_config.serving_enabled = TRUE`, set 2026-08-06).
+`chat.py` no longer exists.
+- **DONE (2026-08-07)** — the `producer.py`/`chat.py` mirror is deleted, not just unified: `chat.py` itself is gone (commits `4557e5c` toolbox extraction, `e223c98` chat.py deletion + fallback removal). Shared leaf functions moved to `answer_toolbox.py`; metering consolidated to one function; the frontend's silent fallback-on-failure removed entirely (Alex's explicit decision — a failure surfaces as a real, visible error, never a silent handoff to a second path); `async_answer_config.serving_enabled` recharacterized as an honest emergency pause, not a rollback (nothing left to roll back to). Full detail: CLAUDE.md's Project 1 landmine.
 - **DONE (2026-08-07)** — worker `SUPABASE_DB_URL` is transaction pooler **:6543** (Railway `answer-worker` + `rhemata` backend both confirmed via `railway variables`; host `aws-1-us-east-1.pooler.supabase.com`). Local `backend/app/.env` remains :5432 (session) for dev only — not the production residual. Remaining scale item is a real concurrency window at the 100-dial, not pooler misconfig.
 - Latency — generation still ~50s vs. Alex's 7s hard-ceiling target (Open Decision #17). **No owner.** Independent strand, doesn't block the items above.
 - `[∥ safe]` Core-serving safety gate (#15) still not closeable: Supabase project-level backup/PITR status is genuinely unknown (no Management API credential available in this environment); no staging Supabase project exists; full-project disaster-restore unproven. Record-level restore *is* proven (2026-07-24).
@@ -93,7 +93,7 @@ Explicitly **deferred** pending real usage; corpus-wide ban stays lifted but not
 5. **Matcher DONE (2026-08-07, inert)** — `match_stored_position()` in `backend/app/services/stored_position_topics.py` (phrase lists from OD #16 V1; debate wins; paper-fenced out; multi-match → None + log). Tests: `scripts/test_stored_position_topics.py` Tier A+B green (all six keys live `is_current`). **No live caller** — same ship posture as early `debate_topics.py`. Remaining one-hop sequence (not built): look up current position by key → feed its PROPOSITIONS (never rendered text) into the hardened answer path → review/concurrency/rollout. Old two-hop store-then-synthesize was pressure-tested and rejected 2026-08-04.
 
 ### Phase 4 — Quote rail curation
-Project 3 (schema + verifier + selection + frontend) is built and live — **async path only**, deliberately not wired into `chat.py` (accepted decision, not a gap). All items below `[∥ safe]` — independent surfaces:
+Project 3 (schema + verifier + selection + frontend) is built and live on the answer path (originally async-only by deliberate decision; `chat.py`'s deletion 2026-08-07 makes this moot -- there's only one path now, and it always runs quote selection). All items below `[∥ safe]` — independent surfaces:
 - Calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD` (currently 0.40, provisional) against real traffic.
 - Build a sub-chunk exclusion mechanism for embedded non-teacher text sharing a chunk with real teacher material (Müller quotations, translator footnotes, catechism inserts — flagged 2026-08-06, full list in archive). Today's mechanism is whole-chunk-only.
 - Curate beyond the 2 seeded teachers (Andrew Murray, Derek Prince) — only 3 quotes exist total.
@@ -207,6 +207,7 @@ Terse pointer only — full build/decision narrative for every item lives in
 - **Settled decisions #8/#9/#16/#17** (CLAUDE.md) — position papers rebuilt as fence + guarded retrieval, contradiction-exclusion, disclaimer fallback — 2026-08-06.
 - **CLAUDE.md Settled decision #5** — commentaries hard-excluded from answers — 2026-08-07.
 - **Phase 1.3 inventory** (no flip) — 2026-08-07 read-only: 14 unlicensed+hidden sources; material content is Ravenhill/Savchuk/Poonen; flip still open (Phase 2).
+- **Mirror unification** — `chat.py` deleted; async is the only answer path. Shared toolbox extracted (`answer_toolbox.py`), metering consolidated, silent fallback-on-failure removed entirely, `serving_enabled` recharacterized as an honest emergency pause. Commits `4557e5c` / `e223c98`, 2026-08-07.
 
 ---
 

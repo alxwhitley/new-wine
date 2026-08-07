@@ -137,8 +137,8 @@ form can prefill on URL blur. Service-role-only RLS (no owning user).
 
 Query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) →
 disabled-source filter → **hard-exclude commentary** (Settled decision #5;
-`is_commentary_chunk` / `exclude_commentary_chunks` on both `chat.py` and
-`producer.py`) → top 30 with `SOURCE_KIND_FUSION_WEIGHTS` (book ×0.8, lexicon
+`is_commentary_chunk` / `exclude_commentary_chunks`, in
+`backend/app/services/answer_toolbox.py`) → top 30 with `SOURCE_KIND_FUSION_WEIGHTS` (book ×0.8, lexicon
 ×0.5; commentary is not soft-weighted — it is removed earlier) → Cohere
 rerank → top 8 → neighbor expansion → second commentary strip (defense-in-depth).
 
@@ -157,8 +157,9 @@ recursive character, 1000 chars, 200 overlap. Lexicon — one entry, one chunk.
 
 ### Answer generation
 
-`chat.py` `generate()` streams `claude-sonnet-4-5` (`max_tokens=3000`, raised from
-1500 on 2026-08-01, commit `0ab9c60`, Phase 0 §7a) and emits ONLY the `<answer>`
+`producer.py` `_generate_and_capture()` (the only answer path since chat.py's
+deletion, 2026-08-07 mirror-unification job) streams `claude-sonnet-4-5`
+(`GEN_MAX_TOKENS = 8000`) and emits ONLY the `<answer>`
 block; the `<thinking>`/`<research_analysis>` prefix is discarded, never streamed.
 **Hard guarantee (Phase 0 §7a): internal reasoning can never reach the user.** If
 the generation ends with no `<answer>` block (budget exhausted inside the hidden
@@ -187,7 +188,7 @@ mechanism CLAUDE.md's Settled decision #8 flagged, from 2026-08-01, as
 directly contradicting decision #8 itself. That conflict is now resolved in
 decision #8's favor, not left standing:
 
-- `chat.py`/`producer.py` still call `match_position_paper(question)` early,
+- `producer.py` still calls `match_position_paper(question)` early,
   but a match no longer short-circuits anything — retrieval (query expansion,
   hybrid search, rerank, neighbor expansion) runs completely normally, exactly
   as it does for a non-matching question.
@@ -196,8 +197,8 @@ decision #8's favor, not left standing:
   content: it bounds what the answer may claim (the writer may not contradict
   it) but must never be cited, named, quoted, or have its wording copied.
   Deduped against the pre-existing background-topic injection mechanism
-  (`chat.py`'s "Fix 6") so the same document is never retrieved and injected
-  twice.
+  ("Fix 6", in `producer.py`) so the same document is never retrieved and
+  injected twice.
 - `backend/app/services/position_paper_exclusion.py` (new) —
   `exclude_contradicting_teachers(pillar_key, house_position_text, question,
   chunks) -> (filtered_chunks, excluded_authors)`. One Anthropic call per
@@ -238,9 +239,9 @@ Public surface: `match_position_paper(question) -> Optional[str]`,
 (SSE stream — now used only by the fallback path, not the default),
 `render_paper_voice_with_disclaimer(pillar_key, question, messages) -> str`
 (new — buffers the above + appends `DISCLAIMER_TEXT`),
-`PILLARS` (the registry list itself — `chat.py` builds its own
-`_PILLAR_BY_KEY` lookup from it for the fence-injection step, rather than new
-API surface on this module).
+`PILLARS` (the registry list itself — `answer_toolbox.py` builds its own
+`_PILLAR_BY_KEY` lookup from it, used by `producer.py` for the
+fence-injection step, rather than new API surface on this module).
 
 **Naming caution — "position" spans three unrelated things** (see CLAUDE.md
 Invariant 12's note): (a) the `positions` teacher/corpus table + `positions.py`

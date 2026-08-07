@@ -57,12 +57,13 @@ later session makes deliberately).
    failed five times (Open Decision #20).
 5. **Commentaries are excluded from answers; searchable only** (Alex's call,
    1 Aug). **RESOLVED in code 2026-08-06/07** — answer retrieval hard-excludes
-   `source_kind`/`source_type` commentary at Step 2.6 (before collapse/rerank)
-   on both `chat.py` and `producer.py`, with a second strip after neighbor
-   expansion. Soft down-weight + `COMMENTARY_CONTEXT_CAP=3` retired. Study Mode
-   (`/study/commentary`, `match_commentary_*` RPCs) is unchanged and remains
-   the searchable surface. Helpers: `is_commentary_chunk` /
-   `exclude_commentary_chunks` in `chat.py`.
+   `source_kind`/`source_type` commentary at Step 2.6 (before collapse/rerank),
+   with a second strip after neighbor expansion. Soft down-weight +
+   `COMMENTARY_CONTEXT_CAP=3` retired. Study Mode (`/study/commentary`,
+   `match_commentary_*` RPCs) is unchanged and remains the searchable surface.
+   Helpers: `is_commentary_chunk` / `exclude_commentary_chunks` in
+   `backend/app/services/answer_toolbox.py` (moved out of the now-deleted
+   chat.py, 2026-08-07 mirror-unification job) — one implementation, not two.
 6. **Paragraphs that cannot be tied to a specific statement still display** — not
    flagged, not logged, not blocked. Deliberate, to avoid drowning in false
    positives from connective prose. Alex will revisit.
@@ -177,7 +178,8 @@ SEQUENCE (2026-08-03)".
     claim-level A2 misattribution (the other teacher's material is never in the
     generation) — a failure previously logged as uncatchable. **Phase 1 scope
     (confirmed):** single-teacher topics only, enforced at retrieval/context-
-    assembly (`chat.py` + its `producer.py` mirror); in-house-debate topics
+    assembly (`producer.py` -- the only answer path since chat.py's deletion,
+    2026-08-07 mirror-unification job); in-house-debate topics
     (decision #11) are OUT of phase 1 and keep working unchanged — full design
     in PLAN.md's CURRENT BUILD SEQUENCE, Project 2. Teacher profile pages
     precompute instead of regenerating from source text per view
@@ -240,8 +242,10 @@ SEQUENCE (2026-08-03)".
     concurrency guard or failure memory existed for either hop.
     **The accepted direction is now ONE hop, not two:** a matched
     position's underlying PROPOSITIONS — never its rendered text — feed
-    `chat.py`'s existing, already-hardened retrieval/generation/
-    verification pipeline directly; the position's own generated text
+    the answer path's existing, already-hardened retrieval/generation/
+    verification pipeline directly (`producer.py` -- the only answer path
+    since chat.py's deletion, 2026-08-07 mirror-unification job); the
+    position's own generated text
     becomes a build-time human-review artifact only, never served. Same
     day, narrowly scoped: 2 of the 3 documented fabrication cases (Conlon,
     Ravenhill) are now `eligible=false` (content not rewritten — undecided;
@@ -267,7 +271,9 @@ Alex's ruling, resolving Settled decisions #8/#9's flagged 2026-08-01 conflict
 (see those decisions above — RESOLVED in place, not superseded). Built the same
 session: `backend/app/services/position_paper_exclusion.py`,
 `backend/app/services/position_papers.py`'s `render_paper_voice_with_disclaimer()`,
-and the `chat.py`/`producer.py` retrieval-path wiring.
+and the retrieval-path wiring in `producer.py` (originally also wired into
+chat.py; that side is moot since chat.py's deletion, 2026-08-07
+mirror-unification job — `producer.py` is the only answer path now).
 
 16. **Retrieved teacher material that contradicts a matched house position is
     excluded from the answer, never presented alongside it and never silently
@@ -591,26 +597,13 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- **The quote rail (Project 3) is wired into the ASYNC answer path only —
-  chat.py deliberately untouched. Do not "complete" this by wiring chat.py
-  too without checking with Alex first; the omission is a recorded decision,
-  not unfinished work.** `app.services.async_answers.producer.produce()`
-  calls `quotes_service.select_quotes_for_answer()`; `backend/app/routers/
-  chat.py`'s synchronous path does not. **As of 2026-08-07 the async path is
-  the PRIMARY one (`serving_enabled` TRUE); chat.py is the silent FALLBACK** —
-  still genuinely reachable, so this stays live, but it is no longer the
-  majority path this entry originally described. `getChatMode()`'s network-error
-  fail-safe, the 30s client-side mode cache, and the explicit 503 fallback in
-  `frontend/lib/api.ts` all silently route a user back to chat.py, and a full
-  rollback (`async_answer_config.serving_enabled = false`) sends 100% of
-  traffic there. The practical effect: a quote can appear on one answer and
-  not the next for the same user, in the same session, with no visible cause
-  — accepted as best-effort, not a bug to fix by making both paths
-  consistent without a deliberate product call first. Wiring chat.py too is
-  a legitimate future option, but it means either duplicating the selection
-  call there (another DRIFT POINT, same class already tracked for producer.py
-  vs chat.py generation logic) or finally unifying the two paths at cutover
-  — a real decision, not a small addition.
+- **RESOLVED 2026-08-07 (mirror-unification job, commits `4557e5c`/`e223c98`)
+  — the quote rail's chat.py asymmetry is gone.** chat.py (the old
+  synchronous `/chat` path) is deleted; `async_answers/producer.py` is the
+  only answer path left and always runs quote-rail selection (subject to
+  its own fail-soft wrapping). "A quote can appear on one answer and not
+  the next for the same user" is no longer possible — there is no second
+  path left to land on.
 - **`backend/requirements.txt` pins only `fastapi==0.128.8`/`uvicorn` — `pydantic`
   and `starlette` are UNPINNED, so local and the deployed Railway container can run
   different transitive versions, and any rebuild pulls whatever is newest.** A bug
@@ -653,27 +646,39 @@ different row, per the hard rule above.
   `backend/app/services/async_answers/` + `scripts/answer_worker.py` +
   `backend/app/routers/async_chat.py` run a durable Postgres-backed answer queue
   (migrations 078/079: `answer_jobs`/`async_answer_config`/`provider_rate_usage`
-  + `corpus_version()`) ALONGSIDE the live `/chat`. **Two-level switch — both
-  DEFAULT off in code, both currently ON in production:** env
-  `ASYNC_ANSWER_ENABLED` mounts the routes (main.py, deploy-level); DB
-  `async_answer_config.serving_enabled` is the seconds-reversible TRAFFIC switch
-  the frontend consults via `GET /async-chat/mode`. `config.py`'s
-  `serving_enabled: bool = False` is the dataclass FALLBACK, not the live value —
-  read the DB row, never the default, before concluding which path serves.
-  A full rollback (`serving_enabled = false`) still sends 100% of traffic back to
-  `chat.py` in seconds, which is why the mirror below is still load-bearing.
-  **DRIFT POINT (unchanged, load-
-  bearing):** the async layer MIRRORS `chat.py` rather than sharing it, so
-  `chat.py`'s live path stays byte-identical pre-cutover — `async_answers/producer.py`
-  mirrors chat.py's retrieval orchestration + generation constants (`GEN_MODEL`/
-  `GEN_MAX_TOKENS` + the STRICT ATTRIBUTION CONSTRAINT string) + position-paper
-  interception + background-topic ordering; `async_answers/metering.py` mirrors
-  chat.py's fail-closed guest/user metering; `async_answers/conversation_store.py`
-  mirrors `_save_conversation`'s row shape. A change to any of those in `chat.py`
-  NOT also applied to its async mirror silently diverges the async path (the
-  accuracy-critical extraction, grounding, `verify_references`, and the
-  `evidence_version` = `get_corpus_version()` signal are IMPORTED/shared, so those
-  stay in sync). Unify at full cutover. **Pre-flip blockers — 3 of 4 CLOSED
+  + `corpus_version()`) — as of 2026-08-07 (mirror-unification job, commits
+  `4557e5c`/`e223c98`) this is the ONLY answer path; `/chat` (chat.py) is
+  deleted, not "alongside" it. **RESOLVED — the mirror/two-level-switch
+  history below is preserved for context, not current state.** Before the
+  fix: chat.py ran alongside the async path as a silently-reachable
+  fallback, gated by a two-level switch (env `ASYNC_ANSWER_ENABLED`
+  mounting the routes + DB `async_answer_config.serving_enabled` as a
+  seconds-reversible rollback dial), and `async_answers/producer.py`,
+  `async_answers/metering.py`, and `async_answers/conversation_store.py`
+  each hand-duplicated a piece of chat.py's logic (retrieval orchestration
+  + generation constants, guest/user metering, conversation persistence)
+  rather than sharing it — a documented DRIFT POINT since Stage 1. All of
+  it is resolved now: shared leaf functions live in
+  `backend/app/services/answer_toolbox.py` (moved out of chat.py, batch 1);
+  metering is one function, `async_answers/metering.py`'s
+  `enforce_query_limit()` (batch 3); the `ASYNC_ANSWER_ENABLED` env gate is
+  removed — `async_chat` mounts unconditionally in `main.py`, same as every
+  other router (batch 4); the frontend's fallback-on-failure behavior is
+  removed entirely, Alex's explicit decision — a failure now surfaces as a
+  real, visible error via `callbacks.onError`, never a silent handoff
+  (batch 3); `async_answer_config.serving_enabled` is now an honest
+  emergency pause (off = the whole product is offline for chat answers,
+  stated plainly in `async_chat.py`'s docstring), not a rollback switch,
+  since there is nothing left to roll back to. `config.py`'s
+  `serving_enabled: bool = False` is still the dataclass FALLBACK, not the
+  live value — read the DB row, never the default, before concluding
+  whether serving is paused. One finding from this job, deliberately NOT
+  fixed: `conversation_store.py`'s persistence was found to be strictly
+  more correct than chat.py's deleted `_save_conversation` (which had real
+  silent-data-loss bugs on a stale client-supplied `conversation_id`, a
+  mid-persist crash, and a non-atomic two-write race) — Alex's explicit
+  call was to let chat.py's buggier version die with the deletion rather
+  than backport a fix into code being removed anyway. **Pre-flip blockers — 3 of 4 CLOSED
   2026-08-04 (build `196f1f2`):** (a) metering/usage-limit parity — `/async-chat/
   submit` now takes auth + `anon_id` + IP and meters fail-closed (same
   `increment_guest_query`/`increment_user_query` RPCs) BEFORE enqueue, keyed on the
