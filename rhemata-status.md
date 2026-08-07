@@ -7,10 +7,10 @@ table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
 Last verified: 2026-08-06/07 (quote rail now genuinely end-to-end and
-user-visible — backend wired + pushed + deployed prior session; frontend
-display piece built + live-browser-verified THIS session, NOT yet pushed;
-quote-source exclusions APPLIED; async cutover LIVE; Project 2 phase 1
-steps 1+2 DONE; position papers rebuilt as fence + guarded retrieval).
+user-visible — backend + frontend both built, live-verified, pushed to
+`origin/main`, and confirmed live on Vercel production; quote-source
+exclusions APPLIED; async cutover LIVE; Project 2 phase 1 steps 1+2 DONE;
+position papers rebuilt as fence + guarded retrieval).
 
 **Target ≤150 lines (CLAUDE.md's Session close contract).** Cut material is
 never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
@@ -20,10 +20,10 @@ never the only copy — it survives in git history and PLAN.md/CLAUDE.md/
 
 ## Current state
 
-**Project 3 (quote rail) — backend wired + pushed + deployed (2026-08-06);
-frontend display piece built + live-browser-verified (2026-08-06/07), NOT
-yet pushed. Genuinely end-to-end and user-visible once pushed — ASYNC PATH
-ONLY (chat.py untouched — see CLAUDE.md's landmine).**
+**Project 3 (quote rail) — backend wired + deployed (2026-08-06); frontend
+display piece built, live-browser-verified, and pushed (2026-08-06/07).
+Genuinely end-to-end and user-visible — ASYNC PATH ONLY (chat.py untouched
+— see CLAUDE.md's landmine).**
 `producer.produce()` selects approved quotes post-`verify_references` via
 deterministic embedding-cosine similarity against each quote's `topic` tag,
 fail-soft; `quote_ids`-only delivery through the async SSE meta frame; new
@@ -55,13 +55,16 @@ signed-in (real disposable Supabase test user, hard-deleted after — zero
 orphaned rows) + matching question → Derek Prince "fasting" card renders
 identically; non-matching question → zero visible change; `/answer-quotes/resolve`
 forced to fail → full answer renders normally, no card, no visible error.
-`npx tsc --noEmit` clean throughout. Commits: `d0d0d2e` (feature, local
-only). **Not pushed/deployed this session — Alex's call on when.**
+`npx tsc --noEmit` clean throughout. Commits: `d0d0d2e` (feature), `86f9a3a`
+(records) — pushed to `origin/main`. **Deployed and confirmed live same
+session:** `vercel ls` shows the new production deployment `Ready` (~2 min
+after push); the live `rhemata.app` JS bundle was fetched and confirmed to
+contain the `answer-quotes` resolve call (grepped across all served chunks)
+— the quote rail is genuinely live, not just pushed.
 
-**Backend deployment (prior session, still current).** `origin/main` holds
-the backend build (`309f4bd`/`4fc98b4`) — Railway (`rhemata` + `answer-worker`)
-+ Vercel all deployed green; `POST /answer-quotes/resolve` verified live on
-prod. 3 real quote rows (2 approved, 1 revoked) + 3 clearance rows live.
+**Backend deployment (prior session, still current + unaffected by this
+push).** `POST /answer-quotes/resolve` previously verified live on prod;
+3 real quote rows (2 approved, 1 revoked) + 3 clearance rows live.
 
 **Non-teacher-material exclusions APPLIED 2026-08-06 (`ddd6b7b` + DB write).**
 68 chunks carry `quote_ineligible_reason` (CCEL front matter across Murray's
@@ -137,11 +140,11 @@ Resolved: #1-3, #5, #11 (verify-chunk-alignment docstring corrected 2026-08-06),
 
 ## Next
 
-1. **Project 3 quote rail** — backend deployed, frontend built + verified but
-   NOT pushed yet: push/deploy when Alex says go. Also open: decide whether
-   to wire chat.py too (per CLAUDE.md's landmine); curate beyond the 2
-   approved quotes; calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD` against real
-   traffic once volume exists; build deferred AI suggestions.
+1. **Project 3 quote rail** — code fully shipped, pushed, and confirmed live
+   on Vercel production. Open: decide whether to wire chat.py too (per
+   CLAUDE.md's landmine); curate beyond the 2 approved quotes; calibrate
+   `QUOTE_TOPIC_SIMILARITY_THRESHOLD` against real traffic once volume
+   exists; build deferred AI suggestions.
 2. **Watch the Project 1 live flip** under real concurrency — one serial test only.
 3. **Position layer — one-hop build sequence**: topic list (#16) →
    `match_stored_position()` → review workflow → chunk-shape adapter →
