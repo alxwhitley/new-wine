@@ -194,8 +194,9 @@ export default function QuoteReviewPage() {
 
       <h1 className="text-2xl font-semibold text-foreground">Quote review</h1>
       <p className="text-sm text-muted-foreground -mt-4">
-        Manual curation only. Nothing here is AI-suggested or AI-approved — every quote is your
-        own selection, and a failed check blocks saving rather than warning.
+        You select the passage; the automatic verifier decides whether it can be saved. A failed
+        check blocks saving rather than warning, and the decision is final — there is no separate
+        approval step.
       </p>
 
       {/* Teacher + document pickers */}

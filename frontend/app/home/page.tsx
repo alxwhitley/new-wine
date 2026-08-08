@@ -489,7 +489,7 @@ export default function HomePage() {
               That includes historic voices like <strong className="text-card-foreground font-semibold">Derek Prince</strong>, <strong className="text-card-foreground font-semibold">Andrew Murray</strong>, and <strong className="text-card-foreground font-semibold">Bob Mumford</strong>, alongside teachers like <strong className="text-card-foreground font-semibold">Jack Deere</strong> and <strong className="text-card-foreground font-semibold">Dr. Michael Brown</strong>.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75] mb-3.5">
-              And Rhemata doesn&rsquo;t present AI-generated wording as a teacher&rsquo;s exact words. When a quote is selected for inclusion, a real person reviews and approves it against the original source — a deliberate, careful process that keeps attribution grounded.
+              And Rhemata doesn&rsquo;t present AI-generated wording as a teacher&rsquo;s exact words.
             </p>
             <p className="text-muted-foreground text-[1.0625rem] leading-[1.75]">
               Every answer points back to the voices behind it, with the link to the full teaching right there.

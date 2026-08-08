@@ -1,15 +1,25 @@
 """
-Quote rail service functions (Project 3, manual-curation-only).
+Quote rail service functions (Project 3).
 
-Document/passage listing for review, source clearance, quote creation +
-approval, revocation, and the single resolution point (Step 4) -- the only
-sanctioned way anything in this codebase may read an approved quote's text.
-See migration 082 for the schema and the hard database-level approval
-gates (commentary exclusion, source clearance, admin-only approval,
-exact-substring match) -- this module is the application-side counterpart,
-never a substitute for them. A quote this module tries to approve without
-satisfying every gate is rejected by the database itself, not just by the
-checks here.
+Document/passage listing for curation, source clearance, quote creation,
+revocation, and the single resolution point (Step 4) -- the only sanctioned
+way anything in this codebase may read an approved quote's text.
+
+Human approval was removed 2026-08-08 (CLAUDE.md "Settled product decisions
+(2026-08-08)" -- per-quote review did not scale). A candidate that passes
+every check in app.services.quote_verifier.verify_quote_candidate() is saved
+as approved directly -- there is no separate person confirming it, and
+nothing here is an LLM/AI judgment call either; approval is now a
+deterministic function of the tightened verifier's checks. See migration
+085 for the schema change (the admin-role approval gate removed from the
+database trigger, a speaker-confirmation gate added in its place) and
+migration 082 for what still stands (commentary exclusion, source
+clearance, exact-substring match) -- this module is the application-side
+counterpart, never a substitute for the database's own gates. A quote this
+module tries to approve without satisfying every gate is rejected by the
+database itself, not just by the checks here. Every acceptance and refusal
+is written to quote_verification_log (migration 085) -- a record, not a
+review queue; see _log_quote_decision().
 """
 from __future__ import annotations
 
@@ -18,7 +28,7 @@ from datetime import datetime, timezone
 from typing import Iterable, List, Optional, Tuple
 
 from app.services.embeddings import cosine_similarity, embed_batch, embed_text
-from app.services.quote_verifier import verify_quote_exact_match
+from app.services.quote_verifier import verify_quote_candidate
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +195,41 @@ def _enforce_quote_cap(db, document_id: str, candidate_quote_text: str) -> None:
         )
 
 
+def _log_quote_decision(
+    db,
+    *,
+    chunk_id: Optional[str],
+    document_id: Optional[str],
+    teacher_source_id: Optional[str],
+    quote_text: str,
+    decision: str,
+    rule: str,
+    reason: Optional[str],
+    submitted_by: str,
+) -> None:
+    """Write one row to quote_verification_log (migration 085). A record,
+    not a review queue -- nobody reads this routinely; it exists so that if
+    a bad quote ever surfaces, the path that let it through is
+    reconstructable. Fail-soft on the log write itself: a logging failure
+    must never change, block, or retroactively undo the actual accept/
+    refuse decision it's describing."""
+    try:
+        db.table("quote_verification_log").insert(
+            {
+                "chunk_id": chunk_id,
+                "document_id": document_id,
+                "teacher_source_id": teacher_source_id,
+                "candidate_quote_text": quote_text,
+                "decision": decision,
+                "rule": rule,
+                "reason": reason,
+                "submitted_by": submitted_by,
+            }
+        ).execute()
+    except Exception as e:
+        logger.warning("quote_verification_log write failed (decision=%s, rule=%s): %s", decision, rule, e)
+
+
 def create_and_approve_quote(
     db,
     chunk_id: str,
@@ -194,23 +239,40 @@ def create_and_approve_quote(
     reviewer_note: str,
     user_id: str,
 ):
-    """Create a quote and immediately attempt to approve it in one action --
-    the review tool has one human doing selection and approval together, so
-    a separate draft step adds no real safety. Runs the Step 2 verifier
-    first for a clean, specific rejection reason; the database's own
-    trigger (migration 082) re-checks the same rule plus the other three
-    hard gates as the authoritative backstop, against the immutable
-    snapshot this function captures, not a later re-read of the chunk. Also
-    runs the per-work quote cap (_enforce_quote_cap, Settled decision #16) --
-    application-level only, not DB-trigger-enforced; see that function's
-    docstring."""
+    """Create and approve a quote in one action. There is no human approval
+    step (removed 2026-08-08) -- a candidate is saved as approved directly
+    once it passes every check in quote_verifier.verify_quote_candidate()
+    (exact-substring match, exclusion zone, boundary/sentence-completeness,
+    speaker confirmation). Refusals are final: this function raises rather
+    than saving a draft for later reconsideration. The database's own
+    trigger (migration 082, gates revised by migration 085) re-checks the
+    exact-match, commentary, clearance, and speaker gates as the
+    authoritative backstop, against the immutable snapshot this function
+    captures, not a later re-read of the chunk. Also runs the per-work
+    quote cap (_enforce_quote_cap, Settled decision #16) -- application-
+    level only, not DB-trigger-enforced; see that function's docstring.
+    Every acceptance and refusal is logged via _log_quote_decision()."""
     _require_confirmed_teacher(teacher_source_id)
     for label, value in (("quote_text", quote_text), ("topic", topic), ("reviewer_note", reviewer_note)):
         if not value or not value.strip():
             raise ValueError("%s is required" % label)
 
-    verification = verify_quote_exact_match(db, chunk_id, quote_text)
+    chunk_lookup = db.table("chunks").select("document_id").eq("id", chunk_id).limit(1).execute().data
+    document_id_for_log = chunk_lookup[0]["document_id"] if chunk_lookup else None
+
+    verification = verify_quote_candidate(db, chunk_id, quote_text, teacher_source_id)
     if not verification.valid:
+        _log_quote_decision(
+            db,
+            chunk_id=chunk_id,
+            document_id=document_id_for_log,
+            teacher_source_id=teacher_source_id,
+            quote_text=quote_text,
+            decision="refused",
+            rule=verification.rule,
+            reason=verification.reason,
+            submitted_by=user_id,
+        )
         raise ValueError("verifier rejected candidate: %s" % verification.reason)
 
     chunk_rows = db.table("chunks").select("content, document_id").eq("id", chunk_id).limit(1).execute().data
@@ -219,7 +281,21 @@ def create_and_approve_quote(
     passage_text = chunk_rows[0]["content"]
     document_id = chunk_rows[0]["document_id"]
 
-    _enforce_quote_cap(db, document_id, quote_text)
+    try:
+        _enforce_quote_cap(db, document_id, quote_text)
+    except ValueError as e:
+        _log_quote_decision(
+            db,
+            chunk_id=chunk_id,
+            document_id=document_id,
+            teacher_source_id=teacher_source_id,
+            quote_text=quote_text,
+            decision="refused",
+            rule="quote_cap_exceeded",
+            reason=str(e),
+            submitted_by=user_id,
+        )
+        raise
 
     revision = (
         db.table("quote_source_revisions")
@@ -246,6 +322,18 @@ def create_and_approve_quote(
         )
         .execute()
         .data[0]
+    )
+
+    _log_quote_decision(
+        db,
+        chunk_id=chunk_id,
+        document_id=document_id,
+        teacher_source_id=teacher_source_id,
+        quote_text=quote_text,
+        decision="accepted",
+        rule="accepted",
+        reason=None,
+        submitted_by=user_id,
     )
     return quote
 
