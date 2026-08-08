@@ -564,6 +564,8 @@ def produce(supabase, question, messages=None, topics_established=None):
         verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
     )
     from app.services.position_papers import match_position_paper, render_paper_voice_with_disclaimer, get_paper_body
+    from app.services.stored_position_topics import match_stored_position
+    from app.services.stored_position_evidence import fetch_stored_position_evidence
     messages = messages or []
     topics_established = topics_established or {}
 
@@ -573,6 +575,25 @@ def produce(supabase, question, messages=None, topics_established=None):
     # below runs completely normally on a match, same as a non-match. See
     # position_papers.py's module docstring for the full architecture.
     matched_pillar_key = match_position_paper(question)
+
+    # Stored-position evidence injection (Project 2 "one-hop", PLAN.md Phase 3
+    # item 5; CLAUDE.md Settled decision #18) -- a materially different
+    # mechanism from the position-paper fence above: a paper bounds the
+    # answer as silent context; a matched stored position instead NARROWS
+    # what evidence reaches the writer, replacing normal retrieval's chunk
+    # set with the position's own vetted propositions, still run through the
+    # exact same generation/verification pipeline below with real citations.
+    # Never both at once -- a position-paper match (semantic, independent
+    # mechanism) takes precedence if it somehow also fires for the same
+    # question; match_stored_position() already independently excludes
+    # debate topics (decision #11) and paper-fenced topics (baptism/tongues)
+    # by construction, so overlap is not expected in practice, but this
+    # ordering makes the precedence explicit rather than accidental.
+    matched_topic_key = None if matched_pillar_key else match_stored_position(question)
+    stored_evidence_chunks = (
+        fetch_stored_position_evidence(supabase, matched_topic_key)
+        if matched_topic_key else None
+    )
 
     # Background-topic injection (chat.py Step 0.5).
     topic_context_parts, injected_doc_ids, updated_topics = _inject_background_topics(
@@ -596,9 +617,38 @@ def produce(supabase, question, messages=None, topics_established=None):
                 )
                 injected_doc_ids.add(pillar["document_id"])
 
-    chunks, citations, citable_count, fallback_to_paper_voice = _retrieve(
-        supabase, question, injected_doc_ids, matched_pillar_key,
-    )
+    if stored_evidence_chunks:
+        # Narrowed evidence path: skip normal _retrieve() entirely. Every
+        # chunk here already passed the live license/visibility gate and the
+        # commentary/word_study exclusion inside
+        # fetch_stored_position_evidence(); everything else below (context
+        # building, grounding, generation, the attribution guard,
+        # verify_references, quote selection) is completely unchanged and
+        # does not know or care that these chunks came from stored evidence
+        # rather than live retrieval.
+        chunks = stored_evidence_chunks
+        citable_count = sum(1 for c in chunks if answer_toolbox._is_citable(c))
+        citations = [
+            {
+                "chunk_id": c["id"],
+                "document_title": c.get("title"),
+                "author": c.get("author"),
+                "content": c["content"],
+                "url": c.get("url"),
+            }
+            for c in chunks
+            if answer_toolbox._is_citable(c)
+        ]
+        fallback_to_paper_voice = False
+        logger.info(
+            "stored_position_topics: injecting stored evidence | topic_key=%r "
+            "| evidence_count=%d",
+            matched_topic_key, len(chunks),
+        )
+    else:
+        chunks, citations, citable_count, fallback_to_paper_voice = _retrieve(
+            supabase, question, injected_doc_ids, matched_pillar_key,
+        )
 
     # Sanctioned No-Oracle-Rule fallback -- MIRROR of chat.chat()'s generate()
     # fallback_to_paper_voice branch. Fires ONLY when exclusion emptied a
