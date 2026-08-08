@@ -8,7 +8,32 @@ per book per commentary, and one chunk per verse commentary entry.
 
 API format: https://bible.helloao.org/api/c/{commentary}/{book}/{chapter}.json
 
-Resume-safe: checks existing documents by title before inserting.
+Converted (Phase 5 #13) to route through shared_ingest.ingest_document() --
+resolve/insert/chunk/embed/propositions is the shared writer's job now; this
+script keeps only what's genuinely HelloAO-specific: the live API fetch per
+chapter, HTML-stripping/abbreviation-expansion cleanup, the Groq topic-
+tagging call, and the one-chunk-per-verse formatting (via a chunk_fn
+override, matching ingest_lexicon.py's one-entry-one-chunk pattern -- a
+verse commentary entry is not split the way a sermon is).
+
+Unlike ingest_preceptaustin.py/ingest_lexicon.py (both read local files),
+this script fetches from a live API -- there is no local file to preview
+without a network call, so --dry-run still hits the live API (necessary to
+preview real content) but performs zero Supabase reads or writes: it
+returns before the document_exists() resume-safety check even runs (same
+posture as ingest_preceptaustin.py's --dry-run), and caps itself to a
+book's first 2 chapters so preview cost stays small regardless of book
+length.
+
+One real behavior change from pre-conversion: `documents.full_text` is now
+stored (shared_ingest always stores its `body_text` argument as full_text);
+the pre-conversion version never set this column at all. This lines up with
+Phase 5 #7 (full_text-at-chokepoint backfill) rather than fighting it.
+
+Resume-safe: checks existing documents by title before inserting (unchanged
+from pre-conversion -- this is a whole-document skip, not shared_ingest's
+reuse/append; a book's commentary is fetched/chunked/inserted as one unit,
+never appended to incrementally across runs).
 """
 
 import argparse
@@ -22,33 +47,15 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import urlparse, unquote
 
-import psycopg2
 import requests
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / "backend" / "app" / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from supabase import create_client
-from app.services.embeddings import embed_text
-from bible_refs import extract_bible_references
-from source_resolver import resolve_source_id
-import propositions
-
-# Dedicated psycopg2 connection params for the propositions step only (this
-# script is otherwise entirely Supabase-REST-based) -- mirrors ingest.py's
-# pattern: a fresh connection opened/closed per document, kept separate from
-# the REST client used for everything else.
-_parsed_db = urlparse(os.environ["SUPABASE_DB_URL"])
-DB_PARAMS = {
-    "host": _parsed_db.hostname,
-    "port": _parsed_db.port or 5432,
-    "user": unquote(_parsed_db.username or ""),
-    "password": unquote(_parsed_db.password or ""),
-    "dbname": _parsed_db.path.lstrip("/"),
-}
+import shared_ingest
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -174,6 +181,15 @@ MAX_TAG_CHARS = 4000
 groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
+_parsed_db = urlparse(os.environ["SUPABASE_DB_URL"])
+DB_PARAMS = {
+    "host": _parsed_db.hostname,
+    "port": _parsed_db.port or 5432,
+    "user": unquote(_parsed_db.username or ""),
+    "password": unquote(_parsed_db.password or ""),
+    "dbname": _parsed_db.path.lstrip("/"),
+}
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -270,26 +286,19 @@ def tag_document(content_sample):
 # ── Ingestion ────────────────────────────────────────────────────────────────
 
 
-def ingest_book(commentary_key, book_id, book_name, chapter_count):
-    # type: (str, str, str, int) -> bool
-    """Fetch all chapters for a book and ingest as one document with per-verse chunks."""
-    commentary = COMMENTARIES[commentary_key]
-    title = doc_title(commentary["source_name"], book_name)
-
-    if document_exists(title):
-        logger.info("SKIP (exists): %s", title)
-        return False
-
-    logger.info("Fetching: %s (%d chapters)", title, chapter_count)
-
-    # Collect all verse commentaries across chapters
+def _fetch_verses(commentary, book_id, book_name, chapter_count, max_chapters=None):
+    # type: (Dict, str, str, int, Optional[int]) -> List[Dict]
+    """Fetch and clean verse commentary entries for a book, up to
+    max_chapters (None = all). Pure fetch + clean, no DB interaction and no
+    chunk formatting -- shared by ingest_book()'s real path and its
+    --dry-run preview."""
     all_verses = []  # type: List[Dict]
-    full_text_parts = []  # type: List[str]
+    limit = chapter_count if max_chapters is None else min(chapter_count, max_chapters)
 
-    for ch in range(1, chapter_count + 1):
+    for ch in range(1, limit + 1):
         data = fetch_chapter(commentary["slug"], book_id, ch)
         if not data:
-            logger.warning("  No data for %s %s ch %d", commentary_key, book_id, ch)
+            logger.warning("  No data for %s %s ch %d", commentary["slug"], book_id, ch)
             continue
 
         # API structure: data.chapter.content = [{type: "verse", number: N, content: ["..."]}]
@@ -320,19 +329,79 @@ def ingest_book(commentary_key, book_id, book_name, chapter_count):
                     "verse": int(verse_num),
                     "content": cleaned,
                 })
-                full_text_parts.append(f"{ref}: {cleaned}")
 
         # Be polite to the API
         time.sleep(0.1)
 
+    return all_verses
+
+
+def _commentary_chunk_fn(commentary, all_verses):
+    # type: (Dict, List[Dict]) -> "Callable[[str], List[str]]"
+    """Returns a chunk_fn for shared_ingest.ingest_document() that ignores
+    body_text and returns one pre-formatted chunk per verse commentary
+    entry -- the same "[Source Name | Book Ch:Verse]" header format this
+    script has always used, now handed to the shared writer's chunk_fn hook
+    instead of looping the insert locally (ingest_lexicon.py's edge
+    behavior #1: a lexical/verse entry is not split the way a sermon is)."""
+    def _chunk_fn(_body_text):
+        chunks = []
+        for verse in all_verses:
+            header = f"[{commentary['source_name']} | {verse['ref']}]"
+            chunks.append(f"{header}\n\n{verse['content']}")
+        return chunks
+    return _chunk_fn
+
+
+def ingest_book(commentary_key, book_id, book_name, chapter_count, dry_run=False):
+    # type: (str, str, str, int, bool) -> str
+    """Fetch all chapters for a book and ingest as one document with one
+    chunk per verse, through shared_ingest.ingest_document().
+
+    Returns one of "stored" | "skipped" | "failed" | "dry_run".
+
+    dry_run=True previews the fetched verse count, tags-eligible text, and
+    first few chunks with zero Supabase reads or writes -- returns before
+    the document_exists() resume-safety check runs at all (same posture as
+    ingest_preceptaustin.py's --dry-run), and caps itself to the book's
+    first 2 chapters so preview cost stays small regardless of book length.
+    """
+    commentary = COMMENTARIES[commentary_key]
+    title = doc_title(commentary["source_name"], book_name)
+
+    if dry_run:
+        preview_verses = _fetch_verses(commentary, book_id, book_name, chapter_count, max_chapters=2)
+        print(f"\n  [DRY RUN] {title}")
+        print(f"  commentary={commentary_key}  book={book_id} ({book_name})  "
+              f"chapters_previewed={min(2, chapter_count)} of {chapter_count}")
+        if not preview_verses:
+            print("  [DRY RUN] No verse data found in previewed chapters — nothing to chunk.")
+            return "dry_run"
+        preview_chunks = _commentary_chunk_fn(commentary, preview_verses)("")
+        print(f"  [DRY RUN] {len(preview_verses)} verse entries in previewed chapters "
+              f"-> {len(preview_chunks)} chunks. Previewing first {min(3, len(preview_chunks))}:")
+        for chunk in preview_chunks[:3]:
+            print(f"  ── {chunk[:300]}{'...' if len(chunk) > 300 else ''}")
+        print("  [DRY RUN] No data written to Supabase. (A real run fetches all "
+              f"{chapter_count} chapters and additionally runs topic tagging + "
+              "propositions on the full book text.)")
+        return "dry_run"
+
+    if document_exists(title):
+        logger.info("SKIP (exists): %s", title)
+        return "skipped"
+
+    logger.info("Fetching: %s (%d chapters)", title, chapter_count)
+    all_verses = _fetch_verses(commentary, book_id, book_name, chapter_count)
+
     if not all_verses:
         logger.warning("  No verse data found for %s", title)
-        return False
+        return "skipped"
 
     logger.info("  %d verse entries collected", len(all_verses))
 
     # Tag the document (use first ~4000 chars of combined text)
-    full_text = "\n".join(full_text_parts)
+    full_text = "\n".join(f"{v['ref']}: {v['content']}" for v in all_verses)
     topic_tags = tag_document(full_text)
     if topic_tags:
         logger.info("  Tags: %s", ", ".join(topic_tags))
@@ -340,68 +409,37 @@ def ingest_book(commentary_key, book_id, book_name, chapter_count):
     # Extract bible references (the book itself is the primary reference)
     bible_refs = [book_name]
 
-    # Resolve attribution -> source_id via alias table. ALIAS_MISS is
-    # printed by the resolver on a miss; source_id falls to sentinel.
-    _resolved_id, _norm_key, _via = resolve_source_id(
-        supabase, commentary["source_name"], commentary["author"]
+    result = shared_ingest.ingest_document(
+        db=supabase,
+        db_params=DB_PARAMS,
+        title=title,
+        body_text=full_text,
+        filename=title,
+        author=commentary["author"],
+        source_name=commentary["source_name"],
+        source_type="commentary",
+        source_kind="commentary",
+        citation_mode="citable",
+        is_copyrighted=False,
+        topic_tags=topic_tags if topic_tags else None,
+        bible_references=bible_refs,
+        # Title-keyed dedup (document_exists() above), not url/file_path --
+        # skip_dedup=True makes that explicit. find_existing_fn is unneeded:
+        # we only reach here when document_exists() already confirmed the
+        # title is new.
+        skip_dedup=True,
+        chunk_fn=_commentary_chunk_fn(commentary, all_verses),
     )
-    logger.info("Resolved source: %r -> %s (via %s)", _norm_key, _resolved_id, _via)
 
-    # Insert document
-    doc_data = {
-        "title": title,
-        "author": commentary["author"],
-        "source_name": commentary["source_name"],
-        "source_type": "commentary",
-        "source_kind": "commentary",
-        "citation_mode": "citable",
-        "is_copyrighted": False,
-        "topic_tags": topic_tags if topic_tags else None,
-        "bible_references": bible_refs,
-        "source_id": _resolved_id,
-    }
-
-    doc_result = supabase.table("documents").insert(doc_data).execute()
-    if not doc_result.data:
-        logger.error("  Failed to insert document for %s", title)
-        return False
-
-    doc_id = doc_result.data[0]["id"]
-
-    # Insert one chunk per verse commentary
-    for idx, verse in enumerate(all_verses):
-        header = f"[{commentary['source_name']} | {verse['ref']}]"
-        chunk_content = f"{header}\n\n{verse['content']}"
-
-        embedding = embed_text(chunk_content)
-
-        chunk_data = {
-            "document_id": doc_id,
-            "chunk_index": idx,
-            "content": chunk_content,
-            "embedding": embedding,
-        }
-        supabase.table("chunks").insert(chunk_data).execute()
-
-        if (idx + 1) % 50 == 0:
-            logger.info("  Embedded %d/%d chunks", idx + 1, len(all_verses))
-
-    logger.info("  Done: %s (%d chunks)", title, len(all_verses))
-
-    # Propositions (licensed/unlicensed sources only -- gate lives in
-    # propositions.py; Precept Austin locked out by name there). All three HelloAO commentaries (Matthew Henry, Adam
-    # Clarke, Jamieson-Fausset-Brown) are public_domain, so this currently
-    # always returns "skipped_licensed": one cheap DB lookup, no Groq spend.
-    # Kept wired anyway so a future license_status change needs no code
-    # change. Dedicated connection, opened and closed per document.
-    _prop_conn = psycopg2.connect(**DB_PARAMS)
-    try:
-        prop_result = propositions.process_document(_prop_conn, doc_id, _resolved_id, full_text, embed_text)
-        logger.info("  propositions: %s", prop_result)
-    finally:
-        _prop_conn.close()
-
-    return True
+    if result["status"] == "processed":
+        logger.info("  OK: %s (%d chunks)", title, len(result["chunks"]))
+        return "stored"
+    elif result["status"] == "skipped":
+        logger.info("  SKIPPED %s: %s", title, result["reason"])
+        return "skipped"
+    else:
+        logger.error("  FAILED %s: %s", title, result["reason"])
+        return "failed"
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -418,6 +456,9 @@ def main():
                         help="Test mode: ingest only Genesis for each commentary")
     parser.add_argument("--time-limit", type=int, default=0,
                         help="Stop after this many minutes (0 = no limit)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Preview fetched verse counts/tags/chunks for the first 2 "
+                             "chapters of each selected book — no Supabase reads or writes")
     args = parser.parse_args()
 
     start_time = time.time()
@@ -447,8 +488,8 @@ def main():
     else:
         books_to_process = BOOKS
 
-    total_ingested = 0
-    total_skipped = 0
+    counts = {"stored": 0, "skipped": 0, "failed": 0, "dry_run": 0}
+    attempted = 0
 
     for commentary_key in commentary_keys:
         logger.info("=" * 60)
@@ -461,21 +502,27 @@ def main():
                 elapsed = (time.time() - start_time) / 60.0
                 if elapsed >= args.time_limit:
                     logger.info("Time limit reached (%.1f min). Stopping.", elapsed)
-                    logger.info("Total: %d ingested, %d skipped", total_ingested, total_skipped)
-                    return
+                    break
 
+            attempted += 1
             try:
-                if ingest_book(commentary_key, book_id, book_name, chapter_count):
-                    total_ingested += 1
-                else:
-                    total_skipped += 1
+                outcome = ingest_book(commentary_key, book_id, book_name, chapter_count,
+                                       dry_run=args.dry_run)
+                counts[outcome] += 1
             except Exception as e:
                 logger.exception("Failed to ingest %s %s: %s", commentary_key, book_name, e)
-                total_skipped += 1
+                counts["failed"] += 1
 
     elapsed = (time.time() - start_time) / 60.0
     logger.info("=" * 60)
-    logger.info("Done. %d ingested, %d skipped (%.1f min)", total_ingested, total_skipped, elapsed)
+    if args.dry_run:
+        logger.info("[DRY RUN] Done. previewed=%d (%.1f min) — nothing written to Supabase",
+                     counts["dry_run"], elapsed)
+    else:
+        logger.info(
+            "Done. attempted=%d stored=%d skipped=%d failed=%d (%.1f min)",
+            attempted, counts["stored"], counts["skipped"], counts["failed"], elapsed,
+        )
 
 
 if __name__ == "__main__":
