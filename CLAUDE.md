@@ -264,9 +264,16 @@ SEQUENCE (2026-08-03)".
     dependent position demonstrated the layer's real volatility live:
     removing one bad proposition flipped `holiness and personal purity`
     from a 4-teacher corpus position to a Prince-only teacher position, not
-    a minor drift. **Nothing of the revised one-hop design is built.** Open
-    Decision #16 (topic list) remains ACTIVE — still the real, hard,
-    completely unbuilt prerequisite; nothing above matters until it exists.
+    a minor drift. **Corrected 2026-08-08 — no longer true: the revised
+    one-hop design IS now built.** Open Decision #16 (topic list) is
+    RESOLVED (V1 adopted 2026-08-06/07, six topics — see PLAN.md Phase 3);
+    the matcher (`match_stored_position()`) shipped 2026-08-07; the
+    evidence-injection wiring itself shipped 2026-08-08 (commit `eca8070`,
+    `backend/app/services/stored_position_evidence.py` + `producer.py`) and
+    is verified end-to-end with real generation on all six seeded topics —
+    zero stored-position-text leakage into any served answer. Full current
+    status, including what's still deliberately out of scope (production
+    concurrency/rollout): PLAN.md Phase 3 item 6.
     **Open Decisions #14 (refresh trigger) and #15 (replace-vs-version) are
     RESOLVED 2026-08-08 — see Settled decisions #21/#22 below.** This
     paragraph's own earlier "#14 now answered by... / #15 unchanged...
