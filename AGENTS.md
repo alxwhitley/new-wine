@@ -1,4 +1,4 @@
-# Rhemata — Claude Code Context
+# Rhemata — Codex Context
 
 AI-assisted Bible study tool for Spirit-filled/charismatic believers. RAG chat
 with inline citations over a vetted, named corpus. Product model: Magisterium AI.
@@ -33,7 +33,7 @@ teacher-specific — weight accordingly.
 ## Settled product decisions (2026-08-01) — do not reopen
 
 Premises from the 1 August build plan (four adversarial architecture audits,
-Claude + Codex, two rounds, the last two with live DB, independently
+Codex + Codex, two rounds, the last two with live DB, independently
 convergent). Design within them; do not relitigate. Where one conflicts with an
 existing rule it is flagged inline with ⚠ — **flagged, not resolved, this
 records pass** (resolving each means a code change or a governing-doc edit a
@@ -418,7 +418,7 @@ not before, and not by default.
 | **Read-only diagnostic / audit** | Zero `Edit`/`Write` calls, zero DB mutation — SELECT-only queries, file reads, greps, read-only script runs. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | No build-then-judge loop needed for a single read-only pass; harness review overhead buys nothing here. |
 | **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or multiple ordered steps (new feature, new script plus its own verification, a refactor) — zero DB writes anywhere in the session. | **Harness** (`executor`/`planner-reviewer`). | `HARNESS.md` (always, for harness sessions); `ARCHITECTURE.md` (near-universal for build work); `PRODUCT.md` + `DESIGN.md` only if the task touches UI; `POSITIONING.md` only if it touches copy. | `PRODUCT.md`/`DESIGN.md`/`POSITIONING.md` unless the task's own surface requires them. | This is what the harness exists for — multi-step work that benefits from a planning/review split. |
 | **Repo-only single-script / trivial edit** | A single mechanical edit or one-shot script, no multi-step build sequence — zero DB writes anywhere in the session. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | A planning/review loop is overhead a one-shot change doesn't need. |
-| **Docs/records-only** | Task's only output is a change to `CLAUDE.md` / `PLAN.md` / `POSITIONING.md` / `DESIGN.md` / `rhemata-status.md`. | **Plain — chat proposes, terminal commits**, per the Project Knowledge Read Contract's propose→commit rule. | N/A — harness not used | N/A — harness not used | Structurally enforced, not just preferred: `guard_pretooluse.py` denies `Edit`/`Write` on all five governed files for any subagent — the harness physically cannot do this work. |
+| **Docs/records-only** | Task's only output is a change to `AGENTS.md` / `PLAN.md` / `POSITIONING.md` / `DESIGN.md` / `rhemata-status.md`. | **Plain — chat proposes, terminal commits**, per the Project Knowledge Read Contract's propose→commit rule. | N/A — harness not used | N/A — harness not used | Structurally enforced, not just preferred: `guard_pretooluse.py` denies `Edit`/`Write` on all five governed files for any subagent — the harness physically cannot do this work. |
 
 **Stall-risk mitigation for harness sessions (repo-only multi-step build
 row):** if a harness session shows the same flagged-item count across ≥3
@@ -794,7 +794,7 @@ different row, per the hard rule above.
   claimed in ~3s and completed by a REMOTE container worker
   (`worker_id=28934160b0d1-1-slot0` — 12-hex container hostname + PID 1, not a
   local process; none was running) with a real verified answer
-  (`model=claude-sonnet-4-5` not the fake producer, `outcome=answered`, 4 citations
+  (`model=Codex-sonnet-4-5` not the fake producer, `outcome=answered`, 4 citations
   + 7 verified_references incl. real teacher pointers), switches untouched, then
   cleaned. **Pooler residual CLOSED 2026-08-07:** Railway `answer-worker` and
   `rhemata` backend both have `SUPABASE_DB_URL` on the transaction pooler
@@ -1069,7 +1069,7 @@ within days and has already caused one round of false blockers.
 | Backend | Python 3.9 / FastAPI → Railway |
 | Database | Supabase (PostgreSQL + pgvector) |
 | Embeddings | OpenAI `text-embedding-3-small` (1536 dims, set explicitly) |
-| Answer generation | Anthropic `claude-sonnet-4-5` via `anthropic` SDK |
+| Answer generation | Anthropic `Codex-sonnet-4-5` via `anthropic` SDK |
 | Query expansion / metadata / tagging / transcript cleaning | Groq `llama-3.3-70b-versatile` |
 | Reranking | Cohere rerank-v3.5 — top 30 RRF → top 8 |
 | Vision / OCR | Gemini 2.5 Flash |
@@ -1080,7 +1080,7 @@ within days and has already caused one round of false blockers.
 
 - Alex works fast — short messages, direct feedback.
 - Surface risks before building, not after.
-- All code changes stay in Claude Code. Don't suggest manual edits unless trivial.
+- All code changes stay in Codex. Don't suggest manual edits unless trivial.
 - Read output directly — never ask Alex to copy-paste terminal output.
 - Check actual files before assuming structure.
 - Never log planned work as done. Never claim build state you can't see.
@@ -1097,7 +1097,7 @@ State lives in repo files. No Notion mirroring, no sync step (retired 2026-07-09
 
 | File | Owns |
 |---|---|
-| `CLAUDE.md` | This file. Invariants, stack, working rules. Always loaded. |
+| `AGENTS.md` | This file. Invariants, stack, working rules. Always loaded. |
 | `ARCHITECTURE.md` | Tree, schema, scripts, env vars, commands. Load on demand. |
 | `HARNESS.md` | Executor/planner-reviewer gate design. Harness sessions only. |
 | `POSITIONING.md` | Messaging, voice, product posture. Source of truth. |
@@ -1106,7 +1106,7 @@ State lives in repo files. No Notion mirroring, no sync step (retired 2026-07-09
 | `PLAN.md` | Roadmap, standing session rules, open decisions, findings log. |
 | `rhemata-status.md` | Live state only. Overwritten each session. Never durable truth. |
 
-**Writer rules:** terminal authors and writes `CLAUDE.md`, `ARCHITECTURE.md`,
+**Writer rules:** terminal authors and writes `AGENTS.md`, `ARCHITECTURE.md`,
 `HARNESS.md`, `PRODUCT.md`, `DESIGN.md`, `rhemata-status.md` — from
 confirmed-working builds only. `PLAN.md` content is chat-originated: chat decides roadmap, terminal writes
 it verbatim. Terminal is the pen, not the author. Chat never edits any file
@@ -1118,13 +1118,13 @@ it belongs in ARCHITECTURE.md. If a decision is superseded, **delete it** — do
 not stack a correction on top. Git is the provenance record. This file reached
 12,000 words because nothing was ever removed, only appended to.
 
-**Session close contract** lives in `.claude/skills/session-close/SKILL.md`
+**Session close contract** lives in `.Codex/skills/session-close/SKILL.md`
 (load on "update the files to close the session" / "close out the session") —
 not always-loaded here; procedure unchanged, only the load path.
 
 **Repo root is reserved.** Only these markdown files may live at root:
-`CLAUDE.md`, `ARCHITECTURE.md`, `HARNESS.md`, `PLAN.md`, `POSITIONING.md`,
+`AGENTS.md`, `ARCHITECTURE.md`, `HARNESS.md`, `PLAN.md`, `POSITIONING.md`,
 `PRODUCT.md`, `DESIGN.md`, `rhemata-status.md` — plus tooling config. Every other markdown
 file goes in a folder: audits and one-off reports to `docs/audits/`, marketing
 source markdown to `docs/`. A new file at root is a mistake, not a decision.
-`CLAUDE.md` must stay at root — Claude Code looks for it there.
+`AGENTS.md` must stay at root — Codex looks for it there.
