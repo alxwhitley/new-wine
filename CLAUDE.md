@@ -265,12 +265,14 @@ SEQUENCE (2026-08-03)".
     removing one bad proposition flipped `holiness and personal purity`
     from a 4-teacher corpus position to a Prince-only teacher position, not
     a minor drift. **Nothing of the revised one-hop design is built.** Open
-    Decisions #14 (refresh trigger — now answered by periodic
-    re-gather-and-diff with a severity-tiered response to scope flips vs.
-    ordinary drift, not reactive invalidation), #15 (replace-vs-version —
-    unchanged, versioning already works and is proven), and #16 (topic
-    list) remain ACTIVE — #16 is still the real, hard, completely unbuilt
-    prerequisite; nothing above matters until it exists. Full diagnostic,
+    Decision #16 (topic list) remains ACTIVE — still the real, hard,
+    completely unbuilt prerequisite; nothing above matters until it exists.
+    **Open Decisions #14 (refresh trigger) and #15 (replace-vs-version) are
+    RESOLVED 2026-08-08 — see Settled decisions #21/#22 below.** This
+    paragraph's own earlier "#14 now answered by... / #15 unchanged...
+    remain ACTIVE" language was self-contradictory (described an answer,
+    then called the question still open) — corrected here rather than left
+    standing. Full diagnostic,
     pressure test, remediation, and revised design (with a ranked list of
     what's still weak even after the revision):
     `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
@@ -384,6 +386,36 @@ approved in production still pass every tightened rule), and
     mistranscribed word or phrase reaching the quote surface. A future
     session must find this recorded here before quoting from newly-ingested
     audio-sourced material, not discover the gap by shipping a bad quote.
+
+## Settled product decisions (2026-08-08, session 2) — position-layer governance, quote-rail scope, product rename
+
+Sixteen decisions Alex made this session, records-only (no code/DB touched
+by the decisions themselves — one live-DB SELECT via the
+`rhemata_readonly_analysis` role confirmed corpus facts for the Phase 4
+rescope below). Eight are architecture/product-shape calls, recorded here.
+Four are doctrinal framing calls for named position papers — recorded
+directly in the papers (`docs/position_papers/`), not restated here. Three
+are pure roadmap/operational calls (20s latency target, next quote-curation
+priority, merging two overlapping checks) — recorded in PLAN.md only. One
+(a Precept Austin "sourcing leak downgrade") was found already resolved
+2026-08-07 and was skipped rather than re-recorded as still-open — see
+PLAN.md's Open Decisions note.
+
+20. **Teacher-dominance threshold (`DOMINANCE_THRESHOLD=0.60`, Invariant 13) gets no manual override mechanism.** Closes Open Decision #13. The threshold stays exactly as-is; there is no per-case runtime override path. Near-boundary cases get logged for later review instead. Reason: an override path means stored exceptions, ongoing maintenance, and re-review as the corpus grows — real cost against a problem that hasn't actually been observed yet. Revisit only after real usage produces real edge cases. This does not freeze the constant itself — Invariant 13's "reasoned, overrulable starting point, not a calibrated constant" framing still stands for Alex revising the number in code later; what's closed here is a *runtime* override mechanism, a different thing.
+
+21. **Stored-position refresh: automatic re-check, escalate only meaningful shifts — new admin-panel notification dependency.** Closes Open Decision #14. When new material lands that touches a stored position, the system re-checks on a schedule automatically; routine, non-material drift updates silently. A MEANINGFUL shift — one that would change the position's substance, flip single-teacher to blended, or introduce a real contradiction — must be flagged to Alex, specifically as a notification inside the ADMIN PANEL, not email. **Admin-panel notifications do not exist as a feature today** — this is now a real, separate build dependency of the refresh mechanism (PLAN.md Horizon item 4 depends on the same not-yet-designed surface). This also corrects Settled decision #18 above, whose "now answered by periodic re-gather-and-diff... remain ACTIVE" language was self-contradictory — periodic re-gather-and-diff with a severity-tiered response IS the accepted shape; it just hadn't actually been decided until now.
+
+22. **Rebuilt positions keep version history.** Closes Open Decision #15. Not a reversal of anything live: no document in this repo ever recorded "replace" as the decided default (Open Decision #15 read "Not decided" continuously since 2026-07-28), and the code already does this — `scripts/positions.py::_insert_position_version()` never overwrites a prior version, flips `is_current=false`, and inserts a new row (`supersedes_id` set, `lineage_id` shared, `version` incremented). This decision formally closes the open question in favor of the versioning behavior already built, and states the reason for the record: the product's entire positioning is accountability and traceability, and silently discarding what a position used to say contradicts that.
+
+23. **Quote review tool stays admin-only.** No broader access, including now that quote approval is automatic (Settled decisions #18/#19 above). Confirmed unchanged: every route in `backend/app/routers/quotes.py` already gates on `Depends(require_admin_role)`. Reason: broader access multiplies who can introduce a bad quote candidate with no corresponding benefit.
+
+24. **Quotes serve on the primary (and now only) async answer path.** Structurally satisfied, not merely a policy choice: `chat.py` (the synchronous fallback path this decision originally distinguished against) was deleted 2026-08-07 (mirror-unification job) — there is exactly one answer path today, and it always runs quote selection. If a second synchronous path is ever reintroduced, this decision's original policy (quotes on the primary/proven path only, revisit after concurrency is proven at the 100-dial) governs again; until then there is nothing to distinguish it from.
+
+25. **The product is renamed Manna.** Rhemata is retired as the product name. The "provision, not source" framing — Israel was given manna as provision, but was never meant to make the provision its source — carries into product copy and the About page. Naming decision only: no code, repo, domain, or identifier changes are in scope from this decision alone; the rename's actual implementation across the product needs separate scoping (tracked at PLAN.md Horizon item 1, "Full rebrand and UI redesign," which is Phase-2-of-the-product work, not near-term).
+
+26. **Precept Austin word-study material: excluded for now, not permanently.** Corrects the framing implied by the archive's old "PA permanently excluded" shorthand (`docs/plan-archive.md`, an unrelated older "gift"-reversal episode, not this retrieval exclusion — but close enough in wording to invite confusion). The 2026-08-07 hard-exclusion fix (Landmines, below) stays exactly as built — nothing here weakens it. What's new: finding a reliable, trustworthy method of reintroducing PA word-study content into answers without meaning drift is now a recorded future initiative (needs real scoping before any work happens; not scheduled — PLAN.md Horizon item 7). Distinct from Open Decision #10 (PA word-study *rewrite*/modernization) — a different question. **The separate, permanent exclusion of Precept Austin from the quote pipeline and from paraphrase generation is UNCHANGED** — this decision touches only the answer-retrieval hard-exclusion, not those.
+
+27. **The two ID-confirmed fabricated-proposition passages stay out permanently.** Ravenhill/Philippians 4:8-9 and Conlon/Matthew 7:21-23 (both `eligible=false` since 2026-08-04, Landmines below) are not rewritten and not reinstated — closes the "Alex has not ruled on whether to also correct the stored text" question the Landmines entry left open for these two. Reason: a rewrite risks introducing a newer, subtler error, and two passages is not a real content gap. The Savchuk case is a separate, still-open question — never ID-confirmed against an original finding, unlike these two, so it is not automatically covered by this ruling.
 
 ## Session Routing
 
@@ -681,6 +713,42 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **RESOLVED 2026-08-07 — the Precept Austin "citable author" leak (PLAN.md
+  Phase 2) is closed.** Root cause: `is_commentary_chunk()`
+  (`backend/app/services/answer_toolbox.py`) only matched
+  `source_kind`/`source_type` literally equal to `"commentary"`. Precept
+  Austin's 2,176 documents are tagged `source_kind="word_study"`,
+  `source_type="background"` (never `"commentary"`) — so they were never
+  excluded, hard or soft (`SOURCE_KIND_FUSION_WEIGHTS` has no `word_study`
+  entry either). Confirmed live before the fix: an ordinary question
+  ("What is the meaning of grace in the Christian life?") retrieved 33 of
+  67 total chunks from Precept Austin, several `citation_mode='citable'`
+  (1,779 of the 2,176 PA documents carry `citable` — a pre-2026-05-24
+  ingestion-script-vintage artifact, unrelated to this fix and not
+  corrected retroactively), with 3 reaching the pre-rerank top-30 pool
+  that feeds the final answer. Fix: `is_commentary_chunk()` now checks
+  membership in `_COMMENTARY_EQUIVALENT_KINDS = {"commentary",
+  "word_study"}` — `word_study` is Precept Austin's only source_kind, so
+  this closes all of it, not a source-ID-specific patch; `_NEIGHBOR_SKIP_KINDS`
+  also gained `"word_study"` for the same defense-in-depth reason
+  `"commentary"` is already there. Re-running the exact reproduction
+  question post-fix through `producer._retrieve()` end-to-end returns 0
+  Precept Austin chunks. `scripts/test_commentary_answer_exclusion.py`
+  extended with word_study cases, all passing. Lexicon (`source_kind=
+  "lexicon"`, also `source_type="background"`) is untouched — it keeps its
+  existing soft down-weight and dedicated word-study-query retrieval path;
+  only Precept Austin's `word_study` kind is newly hard-excluded. **This
+  exclusion is a current retrieval-path default, not a permanent
+  architectural ban — see Settled decision #26 (2026-08-08):** a future,
+  carefully-scoped reintroduction of word-study content is a recorded
+  initiative, not foreclosed; nothing about this fix or that decision
+  weakens PA's separate, permanent exclusion from the quote pipeline and
+  paraphrase generation. **Out of
+  scope, deliberately untouched:** the future word-study lookup panel
+  (Precept Austin content surfaced separately when a user clicks a Greek/
+  Hebrew word) — that's a different, unbuilt surface, scoped for a later
+  session; nothing in `is_word_study_query()` or the `match_lexicon_chunks`
+  retrieval path changed.
 - **RESOLVED 2026-08-07 (mirror-unification job, commits `4557e5c`/`e223c98`)
   — the quote rail's chat.py asymmetry is gone.** chat.py (the old
   synchronous `/chat` path) is deleted; `async_answers/producer.py` is the
@@ -910,9 +978,12 @@ different row, per the hard rule above.
   (`0892b75d-1c9f-4a65-a47e-768c1c5c1803`) — are now `eligible=false`
   (`scripts/remediate_fabricated_propositions_2026-08-04.py`), removing
   them from all future position-layer evidence gathering; **content was
-  NOT rewritten for either** — Alex has not ruled on whether to also
-  correct the stored text, so both rows still contain their original
-  mispaired wording, just excluded from use. Rebuilding the one position
+  NOT rewritten for either, and per Settled decision #27 (2026-08-08)
+  never will be** — both passages stay excluded permanently, closing the
+  question this entry originally left open (a rewrite risks introducing a
+  newer, subtler error, and two passages is not a real content gap); both
+  rows still contain their original mispaired wording, just excluded from
+  use. Rebuilding the one position
   that had consumed the Ravenhill row (`holiness and personal purity`,
   corpus-scope) surfaced a real, unplanned side effect worth knowing before
   anyone reruns this pattern elsewhere: with that one proposition gone, the
@@ -929,9 +1000,11 @@ different row, per the hard rule above.
   quote-rail human-approval-removal session, same flag-and-exclude
   mechanism as Conlon/Ravenhill (`scripts/
   remediate_savchuk_proposition_2026-08-08.py`), now `eligible=false`.
-  Content NOT rewritten (Alex has still not ruled on that, same as Conlon/
-  Ravenhill); zero `position_evidence` rows referenced it, so no position
-  rebuild was needed.** **The spoken-form
+  Content NOT rewritten — a distinct, still-open question from Conlon/
+  Ravenhill's Settled decision #27 above: this case was never ID-confirmed
+  against an original finding, unlike those two, so it is not automatically
+  covered by that ruling; zero `position_evidence` rows referenced it, so no
+  position rebuild was needed.** **The spoken-form
   gap named here is now fixed (2026-07-28,
   `scripts/citation_verifier_layers.py`'s Layer 1,
   commit `ff74a42`)** — but that fix lives in the repurposed
@@ -1012,7 +1085,14 @@ different row, per the hard rule above.
   and is not safe to wire in without per-book verification. Do not assume
   `detect_book_chapters()` is live just because it exists in
   `propositions.py` — check for actual callers. See PLAN.md #50 and Open
-  Decision #21.
+  Decision #21. **This same structural gap is why quote extraction from all
+  53 book-type documents was tabled indefinitely 2026-08-08** (read-only
+  diagnostic `docs/audits/book_structure_diagnostic.md`, run that session:
+  no body/apparatus or chapter-boundary structure is recorded anywhere in
+  the schema for books, `quote_ineligible_reason` covers only 66 of 25,064
+  book chunks across 10 of 53 documents, and the detector's two regressions
+  above are exactly why it isn't safe to lean on for boundary-finding
+  either — see PLAN.md Phase 4).
 - **CORRECTED 2026-08-01 — no longer an open decision.** The two live
   imperfections below (originally found 2026-07-31) are now fixed at the
   data level, not just in code: commit `8e251c8` shipped the byline/

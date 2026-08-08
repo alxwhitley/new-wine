@@ -74,12 +74,12 @@ traffic (`async_answer_config.serving_enabled = TRUE`, set 2026-08-06).
 `chat.py` no longer exists.
 - **DONE (2026-08-07)** — the `producer.py`/`chat.py` mirror is deleted, not just unified: `chat.py` itself is gone (commits `4557e5c` toolbox extraction, `e223c98` chat.py deletion + fallback removal). Shared leaf functions moved to `answer_toolbox.py`; metering consolidated to one function; the frontend's silent fallback-on-failure removed entirely (Alex's explicit decision — a failure surfaces as a real, visible error, never a silent handoff to a second path); `async_answer_config.serving_enabled` recharacterized as an honest emergency pause, not a rollback (nothing left to roll back to). Full detail: CLAUDE.md's Project 1 landmine.
 - **DONE (2026-08-07)** — worker `SUPABASE_DB_URL` is transaction pooler **:6543** (Railway `answer-worker` + `rhemata` backend both confirmed via `railway variables`; host `aws-1-us-east-1.pooler.supabase.com`). Local `backend/app/.env` remains :5432 (session) for dev only — not the production residual. Remaining scale item is a real concurrency window at the 100-dial, not pooler misconfig.
-- Latency — generation still ~50s vs. Alex's 7s hard-ceiling target (Open Decision #17). **No owner.** Independent strand, doesn't block the items above.
+- Latency — generation still ~50s. **Target corrected 2026-08-08 (Open Decision #17 resolved): 20s, not 7s** — the 7s figure was unrealistic for a checked answer (verification is inherently slower than raw generation); this was the only live occurrence of the 7s figure in the repo, now replaced. **Hold on speed investment until the 100-dial concurrency load test is complete** — correctness is proven, concurrency is not. **No owner.** Independent strand, doesn't block the items above.
 - `[∥ safe]` Core-serving safety gate (#15) still not closeable: Supabase project-level backup/PITR status is genuinely unknown (no Management API credential available in this environment); no staging Supabase project exists; full-project disaster-restore unproven. Record-level restore *is* proven (2026-07-24).
 
 ### Phase 2 — Answer-quality / safety guards
 Ranked Failure Mode 1 territory (theologically wrong / misattributed answers) — highest-priority category per CLAUDE.md.
-- `[∥ safe]` **Phase 1.3** (from the 2026-08-01 accuracy sequence): reverse hidden-by-default + inventory (Settled Decision #12, CLAUDE.md). **Inventory DONE 2026-08-07 (read-only, no flip)** — live counts: owned/shown 2, public_domain/shown 28, unlicensed/shown 29, unlicensed/hidden **14**. Schema `sources.visibility` DEFAULT still `'hidden'`; registration scripts still fail-closed to hidden. Of the 14 hidden: **Ravenhill** (117 docs / 767 eligible props), **Savchuk** (126 / 983), **Poonen** (50 / 411) hold nearly all content; **sentinel** "Unassigned — needs source" (2 docs) must stay hidden (Invariant 3); 10 empty shells (0 docs). All 14 have `retrievable=false` but the live license gate keys on visibility+license, not `retrievable` — a visibility flip alone would open those three teachers under `safe_mode=off`. **Flip still OPEN — Alex's call** (which subset; never sentinel; whether to reverse schema/script defaults).
+- `[∥ safe]` **Phase 1.3** (from the 2026-08-01 accuracy sequence): reverse hidden-by-default + inventory (Settled Decision #12, CLAUDE.md). **Inventory DONE 2026-08-07 (read-only, no flip)** — live counts: owned/shown 2, public_domain/shown 28, unlicensed/shown 29, unlicensed/hidden **14**. Schema `sources.visibility` DEFAULT still `'hidden'`; registration scripts still fail-closed to hidden. Of the 14 hidden: **Ravenhill** (117 docs / 767 eligible props), **Savchuk** (126 / 983), **Poonen** (50 / 411) hold nearly all content; **sentinel** "Unassigned — needs source" (2 docs) must stay hidden (Invariant 3); 10 empty shells (0 docs). All 14 have `retrievable=false` but the live license gate keys on visibility+license, not `retrievable` — a visibility flip alone would open those three teachers under `safe_mode=off`. **The policy is already settled** (CLAUDE.md Settled decision #12, 2026-08-01: hidden-by-default reverses; new material defaults visible; everything currently hidden becomes visible eventually — "buys time, not a pass"). **Corrected 2026-08-08 — what's still genuinely open is narrower than "whether": which subset to flip first (never sentinel) and the mechanical execution** (schema default + script defaults + the actual visibility-bit change on the 14 rows), none of which has happened yet. Alex's call is on subset/timing, not on whether the reversal happens at all.
 - **RESOLVED 2026-08-07** — Precept Austin "citable author" leak (found 2026-08-07, fixed same day, Alex's go-ahead): `is_commentary_chunk()` in `answer_toolbox.py` now treats `source_kind="word_study"` as commentary-equivalent, same hard exclusion as `"commentary"` (Precept Austin is the only `word_study` source, so this closes all of it). Live-confirmed before/after: an ordinary question went from 33/67 retrieved chunks being Precept Austin to 0. Full detail: CLAUDE.md's Landmines section. **Still separately unbuilt, not touched by this fix:** the word-study lookup panel (surfacing Precept Austin content when a user clicks a Greek/Hebrew word) — a different surface, scoped for later.
 - **Open Decision #20** — generation-output verification guard. 5 attempts have failed to separate true-negative near-misses from true-positive answers; accepted-for-now gap. Do not attempt a 6th automated variant without first running the queued read-only diagnostic (false-flag rate of the existing direct-contact check against known-good positions).
 - Phase 2.4 (numbers/absolutes check) — **HELD**, unusable as prototyped (100% false positives). Phase 3 (continuous measurement) — **not started**.
@@ -87,9 +87,9 @@ Ranked Failure Mode 1 territory (theologically wrong / misattributed answers) �
 
 ### Phase 3 — Position layer decision (durable stored positions)
 Explicitly **deferred** pending real usage; corpus-wide ban stays lifted but nothing is being built on it. Largely sequential — gated on decisions before build work is meaningful:
-1. Open Decision #13 — position scope-boundary ownership (who overrules `DOMINANCE_THRESHOLD=0.60`, and when). **Unresolved.**
-2. Open Decision #14 — refresh trigger for a persisted position (leaning flag-and-approve). **Not decided.**
-3. Open Decision #15 — rebuilt position: replace or version alongside the prior one. **Not decided.**
+1. Open Decision #13 — **RESOLVED 2026-08-08**: no override mechanism; `DOMINANCE_THRESHOLD=0.60` stays as-is, near-boundary cases logged for later review. See CLAUDE.md Settled decision #20.
+2. Open Decision #14 — **RESOLVED 2026-08-08**: automatic scheduled re-check; only meaningful shifts escalate, via a new admin-panel notification (surface not yet built — see Horizon item 4's dependency). See CLAUDE.md Settled decision #21.
+3. Open Decision #15 — **RESOLVED 2026-08-08**: versioning, not replace — closes the open question in favor of the behavior `_insert_position_version()` already implements. See CLAUDE.md Settled decision #22.
 4. Open Decision #16 — topic list: **V1 adopted** 2026-08-06/07 (6 topics, seed only — fasting, deliverance, prayer, divine exchange, losing salvation, holiness). Unblocks but does not build the matcher.
 5. **Matcher DONE (2026-08-07, inert)** — `match_stored_position()` in `backend/app/services/stored_position_topics.py` (phrase lists from OD #16 V1; debate wins; paper-fenced out; multi-match → None + log). Tests: `scripts/test_stored_position_topics.py` Tier A+B green (all six keys live `is_current`). **No live caller** — same ship posture as early `debate_topics.py`. Remaining one-hop sequence (not built): look up current position by key → feed its PROPOSITIONS (never rendered text) into the hardened answer path → review/concurrency/rollout. Old two-hop store-then-synthesize was pressure-tested and rejected 2026-08-04.
 
@@ -97,7 +97,10 @@ Explicitly **deferred** pending real usage; corpus-wide ban stays lifted but not
 Project 3 (schema + verifier + selection + frontend) is built and live on the answer path (originally async-only by deliberate decision; `chat.py`'s deletion 2026-08-07 makes this moot -- there's only one path now, and it always runs quote selection). All items below `[∥ safe]` — independent surfaces:
 - Calibrate `QUOTE_TOPIC_SIMILARITY_THRESHOLD` (currently 0.40, provisional) against real traffic.
 - Build a sub-chunk exclusion mechanism for embedded non-teacher text sharing a chunk with real teacher material (Müller quotations, translator footnotes, catechism inserts — flagged 2026-08-06, full list in archive). Today's mechanism is whole-chunk-only.
-- Curate beyond the 2 seeded teachers (Andrew Murray, Derek Prince) — only 3 quotes exist total.
+- **Curation rescoped 2026-08-08 (Alex's decision — records-only; no pipeline, detector, or flagging code touched).** Quote extraction from ALL book-type source documents (`source_type='book'`, all 53 book documents — including all 10 Andrew Murray books and Doug Kreighbaum's 4 books) is **tabled indefinitely**. Reason: `docs/audits/book_structure_diagnostic.md` (read-only, run 2026-08-08) found no body/apparatus or chapter-boundary structure exists anywhere in the schema for books — a book is a flat chunk run; `quote_ineligible_reason` covers only 66 of 25,064 book chunks across 10 of 53 documents (all Andrew Murray); the one existing chapter detector (`detect_book_chapters()`) is unwired with two documented, unfixed accuracy regressions (CLAUDE.md's book-length-extraction Landmine; Open Decision #21). Whether/how to build proper boundary detection for books is now a separate future decision, explicitly not blocking anything else.
+  **Consequence: Andrew Murray drops out of active curation scope entirely.** Live-DB-confirmed 2026-08-08 (`rhemata_readonly_analysis` role, SELECT-only): all 10 of his documents are book-type; zero non-book material exists to curate from. The session's original 2-teacher seed (Murray, Prince) is no longer the target.
+  **Rescoped target: Derek Prince plus all other currently-visible non-book teachers** (`source_type != 'book'` — sermon/transcript/paper/magazine material), expanding past the original 2-teacher seed toward the existing 50–100 first-pass approved-quote target (`docs/plan-archive.md`). Live-DB-confirmed 2026-08-08 non-book document counts by currently-**shown** teacher (excluding Precept Austin — permanently excluded from the quote pipeline regardless of book/non-book status — and excluding pure-commentary sources, out of scope for quotes under the standing commentary-exclusion rule): **Derek Prince 496** (491 sermon + 5 magazine_article — by far the deepest bench), New Wine Magazine 15, CLF Church 14, Daniel Kolenda 11, Jack Deere 6, Carter Conlon 6, **Doug Kreighbaum 5** (1 manual + 3 papers + 1 sermon — his 4 *books* stay tabled under the exclusion above), Charles Simpson 4, Bob Mumford 4, Michael Brown 2, Ruth Prince 2, Ern Baxter 2, Don Basham 2, Oswald J. Smith 1. Currently-**hidden** teachers with non-book material also exist (Vlad Savchuk 126, Leonard Ravenhill 117, Zac Poonen 50) but curating them now would be wasted work while hidden (Phase 1.3/Settled Decision #12 above) — the same reasoning Alex already gave for prioritizing Prince first.
+  **Next curation session's actual priority: Derek Prince specifically** — deepest bench among visible non-book teachers by a wide margin.
 - *(Superseded from the old #21–25 quote-track numbering: #21/#22 table+verifier are done, folded into Project 3; #23 serving-gate is functionally superseded by the async resolution point; #24 AI-suggested extraction and #25 whole-corpus backfill stay explicitly deferred, B3.)*
 
 ### Phase 5 — Chokepoint code gaps
@@ -147,7 +150,7 @@ backend/infra complete** — this is the steady state that milestone unlocks.
 
 ## Open Decisions — pending only
 
-*(Resolved decisions — #6 file location, #7 full_text-at-chokepoint, #8 commentaries atomicity, #12 ingest_commentaries retire, #22 the two live-DB imperfections — moved to `docs/plan-archive.md`; one-line pointer only, no live action needed.)*
+*(Resolved decisions — #6 file location, #7 full_text-at-chokepoint, #8 commentaries atomicity, #9 skip-check/#11 overlap (merged, 2026-08-08), #12 ingest_commentaries retire, #13 position scope-boundary ownership (2026-08-08, CLAUDE.md Settled decision #20), #14 refresh trigger (2026-08-08, CLAUDE.md Settled decision #21), #15 rebuilt-position version history (2026-08-08, CLAUDE.md Settled decision #22), #17 answer-speed target (20s, 2026-08-08 — see Phase 1 latency item), #22 the two live-DB imperfections — #6/#7/#8/#12/#22 moved to `docs/plan-archive.md` (one-line pointer only); #9/#13/#14/#15/#17 resolved 2026-08-08, reasoning lives in CLAUDE.md/Phase 3/Phase 1 as cross-referenced, not archived. #10 (below) is a DIFFERENT question from CLAUDE.md Settled decision #26's 2026-08-08 word-study *reintroduction* initiative — #10 is about rewriting/modernizing word-study content, still genuinely undecided.)*
 
 | # | Decision | Current default / state |
 |---|---|---|
@@ -156,14 +159,9 @@ backend/infra complete** — this is the steady state that milestone unlocks.
 | 3 | Near-1930 PD verification (Lake, Brengle, Penn-Lewis, Morgan, Wigglesworth 1924) | Alex checks pub date per title; PD line advances every Jan 1 |
 | 4 | Admin shell: modal or sidebar | Keep modal |
 | 5 | **Risk tier — Tier 1→2 gate.** | You are Tier 1 (≤20 private beta). Signup opening or exceeding ~20 users triggers Tier 2 → Phase 6 (#32–37) + Phase 1 (serving rebuild) + quote verifier (now done, Project 3) all required first |
-| 9 | Skip-check / #11 overlap — same underlying question, merge or keep separate? | Decision owner: Alex. Current lean: merge |
-| 10 | Precept Austin word-study rewrite | Deferred, not decided — high meaning-drift risk on word studies specifically |
+| 10 | Precept Austin word-study **rewrite** (distinct from the 2026-08-08 retrieval-*reintroduction* initiative, CLAUDE.md Settled decision #26 / Horizon item 7) | Deferred, not decided — high meaning-drift risk on word studies specifically |
 | 11 | Hebrew lexicon permission gate (TBESH) | Blocked pending Online Bible's permission; Greek (TBESG/TFLSJ, CC BY 4.0) unaffected |
-| 13 | Position-scope boundary ownership | Still open — see Phase 3 |
-| 14 | Refresh trigger for a persisted position | Not decided — see Phase 3 |
-| 15 | Rebuilt position: replace or version | Not decided — see Phase 3 |
 | 16 | Ahead-of-time position topic list | **V1 adopted** 2026-08-06/07 — see Phase 3 |
-| 17 | Answer-generation speed sequencing | Not decided — see Phase 1 latency item |
 | 18 | System-prompt review timing | Not decided — see Phase 2 |
 | 19 | Commentary archaic-voice fix | Not decided — holding on in-flight licensing conversations |
 | 20 | Generation-output verification guard | Open, accepted-for-now — see Phase 2 |
@@ -184,9 +182,10 @@ items).
 
 ### 1. Full rebrand and UI redesign — held until product Phase 2
 
-Once the product rename (Rhemata → Manna) is settled — that name change is a
-separate settled decision; **as of 2026-08-08 it is not yet located as a
-formal entry in this PLAN file**, so do not invent status here — Alex wants
+The product rename (Rhemata → Manna) is **now formally settled and recorded**
+(CLAUDE.md Settled decision #25, 2026-08-08 — naming decision only, no code/
+repo/domain/identifier changes in scope from that decision alone). Once its
+actual implementation across the product is scoped separately, Alex wants
 a full visual identity and UI redesign built around Manna, **built directly
 in the app via Claude Code**, not designed first in Framer.
 
@@ -299,6 +298,18 @@ from continuing to type in that conversation, not just nudged.
 
 Needs real scoping (length/token trigger; how summary generation and
 hand-off work) before it is buildable. Hold in backlog.
+
+### 7. Precept Austin word-study reintroduction — future initiative (added 2026-08-08)
+
+Precept Austin word-study material stays hard-excluded from answers today
+(2026-08-07 fix, CLAUDE.md Landmines) — that exclusion is not weakened by
+this item. Alex decided 2026-08-08 (CLAUDE.md Settled decision #26) that
+the exclusion is not permanent: find a reliable, trustworthy method of
+reintroducing word-study content into answers without meaning drift. Needs
+real scoping before any work happens; not scheduled. Distinct from Open
+Decision #10 (PA word-study *rewrite*/modernization — a different, still
+separately undecided question). Does **not** touch PA's separate, permanent
+exclusion from the quote pipeline or from paraphrase generation.
 
 ---
 

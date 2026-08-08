@@ -6,8 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-07 (session close: mirror-unification complete,
-chat.py deleted — local commits only, NOT yet pushed to origin).
+Last verified: 2026-08-08 (session close: sixteen governance/product
+decisions recorded, records-only, zero code/DB changes made by the decisions
+themselves).
 
 **Session close:** `.claude/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -16,70 +17,90 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**This session (2026-08-07) — Mirror-unification job: chat.py deleted,
-async is the only answer path.** Ran through the repo's harness
-(executor/planner-reviewer); two independent review passes REJECTED work
-before approving it (a fabricated code-comment claim about git history;
-stale post-deletion prose in producer.py/metering.py/api.ts) — both caught
-and fixed pre-commit, not shipped.
+**This session (2026-08-08, session 2) — recorded sixteen product/architecture
+decisions + a quote-curation rescope. Records-only, zero code/DB touched.**
+A prior attempt at this exact task (run through Grok, not a reasoning model)
+had not landed — PLAN.md showed none of it written. Read PLAN.md/CLAUDE.md/
+rhemata-status.md end-to-end plus all `docs/position_papers/` files; found 5
+`[EDITORIAL DECISION NEEDED — ALEX]` markers, not 4 — resolved the 4 named
+(prosperity, divine healing, prophecy, deliverance) with dated position text
+in the papers themselves; `five_fold_ministry.md`'s marker is a genuinely
+different, unresolved question (restored-vs-never-ceased five-fold offices)
+— left in place, flagged, not guessed at. Closed Open Decisions #9 (merge),
+#13 (no dominance-threshold override), #14 (auto re-check + new admin-panel-
+notification dependency), #15 (versioning, not replace — the code already
+did this; this closes the question rather than reversing a "replace" default
+that was never actually recorded anywhere), #17 (20s latency target,
+supersedes the 7s figure — its only live occurrence). Recorded CLAUDE.md
+Settled decisions #20-27 (dominance-threshold override, refresh trigger,
+position versioning, quote-tool admin-only, quotes-on-async-only now
+structural since `chat.py`'s deletion, the Manna rename, PA word-study
+reintroduction-not-permanent, the two fabricated passages staying out
+permanently) — also fixed a self-contradictory sentence in existing Settled
+decision #18 that the OD#14/#15 resolution surfaced. Corrected PLAN.md
+Phase 1.3's stale "whether to flip" framing: the hidden→visible **policy**
+was already settled 2026-08-01 (CLAUDE.md #12); only subset-selection and
+execution remain genuinely open, not the underlying decision.
 
-1. **Commit `4557e5c`** — extracted ~33 shared leaf functions/constants out
-   of chat.py into `backend/app/services/answer_toolbox.py` (belongs to
-   neither path); repointed `producer.py` + 7 scripts; retired
-   `scripts/async_parity_check.py` (its whole purpose — proving producer.py
-   stayed in sync with chat.py — had nothing left to prove); fixed an
-   unrelated pre-existing broken import in `sp1_answer_harness.py`
-   (`_get_anthropic`, gone from chat.py since 2026-07-18's `b4a8c8c`).
-2. **Read-only diagnostic (no commit)** — diffed the two remaining
-   duplicate-mirror pairs. Metering: IDENTICAL, consolidated. Conversation
-   persistence: DRIFTED — chat.py's `_save_conversation` had real
-   silent-data-loss bugs (stale client-supplied `conversation_id`,
-   mid-persist crash, non-atomic two-write race) that
-   `conversation_store.py`'s single-transaction, idempotent version already
-   avoided. **Alex's call: let chat.py's version die with the deletion, not
-   backported.**
-3. **Commit `e223c98`** — consolidated metering onto one function; removed
-   the frontend's silent fallback-to-chat.py entirely (Alex: no fallback of
-   any kind, ever — a failure now surfaces as a real visible error via
-   `callbacks.onError`); recharacterized `async_answer_config.serving_enabled`
-   as an honest emergency pause, not a rollback (nothing left to roll back
-   to); removed the `ASYNC_ANSWER_ENABLED` env gate (async mounts
-   unconditionally now, same as every other router); **deleted
-   `backend/app/routers/chat.py`** and its `/chat` mount. Caught and fixed,
-   before deletion, a real would-be 100%-outage bug: `producer.py`'s
-   house-position exclusion call still transited through
-   `app.routers.chat` — retargeted to `position_paper_exclusion.py`
-   directly, proven live (real Anthropic/embedding/Cohere calls) both
-   before and after the deletion.
-4. **Commit `5d660ee`** (docs) — CLAUDE.md's Project 1 + quote-rail
-   landmines and PLAN.md's Phase 1 entry corrected to resolved-history
-   framing; ARCHITECTURE.md repointed off chat.py, plus one pre-existing
-   stale figure fixed along the way (`max_tokens=3000` documented, real
-   value is `GEN_MAX_TOKENS = 8000`).
+**Mid-session addendum:** Alex tabled quote extraction from all 53
+book-type documents indefinitely (`docs/audits/book_structure_diagnostic.md`
+— no chapter/body-boundary structure exists anywhere in the schema for
+books; the one detector is unwired with 2 documented, unfixed regressions).
+Live-DB-confirmed via the `rhemata_readonly_analysis` read-only role
+(SELECT-only) that this drops **Andrew Murray out of curation entirely** —
+all 10 of his documents are book-type, zero non-book material exists.
+Rescoped PLAN.md Phase 4 to **Derek Prince** (496 non-book docs, deepest
+bench by far) plus other visible non-book teachers; Doug Kreighbaum keeps a
+small non-book slice (5 docs) even though his 4 books stay tabled. Full
+teacher-by-teacher counts: PLAN.md Phase 4.
 
-**Not fully proven:** a real job through the actual queue+worker (not just
-a direct `produce()` call) hit connection-pool exhaustion (`max clients
-reached`, local `:5432` session pooler capped at 15) on the last two smoke
-runs. Read as a local-dev-environment artifact — the direct accuracy-
-critical path (real citations + verified refs) and the queue mechanics for
-a simple case both proved out cleanly — not a code regression, but not
-independently confirmed at scale either.
+**Skipped, per explicit instruction, not silently dropped:** the sixteenth
+decision ("PA sourcing leak downgraded to batched") — the retrieval leak it
+describes was already RESOLVED 2026-08-07; recording it as still-open would
+have corrupted the record, so it was not written. Reported as a conflict
+instead.
 
-**Local commits, NOT pushed:** `4557e5c`, `e223c98`, `5d660ee` (and this
-close commit) — on top of the prior session's `2c2e7b8`/`b5c0b81`/`67618cb`,
-which WERE pushed. Push is Alex's call, not yet requested.
+**Files touched this session:** `CLAUDE.md`, `PLAN.md`, `rhemata-status.md`
+(this file), plus 4 of 6 `docs/position_papers/*.md` files
+(`five_fold_ministry.md` and `gifts_of_the_spirit_overview.md` untouched).
+`AGENTS.md`, `.gitignore`, `backend/app/services/answer_toolbox.py`, and
+`scripts/test_commentary_answer_exclusion.py` were **deliberately left
+alone** — out of scope for a records-only session and not part of what Alex
+asked to be committed; their pre-existing uncommitted state (from the prior
+Precept Austin fix session) is unchanged. Two commits made: (1) `PLAN.md` +
+`CLAUDE.md` + `rhemata-status.md` — the latter two also carry forward the
+Precept Austin fix documentation that was already sitting uncommitted in
+them; (2) the 4 resolved position papers.
+
+**Prior sessions (2026-08-07/08, session 1) — condensed.** `chat.py`/
+`producer.py` mirror-unification re-verified intact (zero drift). Precept
+Austin "citable author" leak closed same-day: `is_commentary_chunk()` now
+hard-excludes `source_kind="word_study"` (Precept Austin's only kind), not
+just `"commentary"` — live-confirmed 33/67→0 retrieved PA chunks on the
+reproduction question. Quote-rail human-approval removed (migration 085,
+tightened `quote_verifier.py`) — full detail: CLAUDE.md Settled decisions
+#18/#19. Full narrative for both: git log (`4557e5c`/`e223c98`,
+`0cfffd0`/`4cc5484`) and CLAUDE.md's Landmines/Settled-decisions sections.
+
+**Still not fully proven at scale:** a real queue+worker run previously hit
+local connection-pool exhaustion (`:5432` session pooler capped at 15), read
+as a local-dev artifact, not a code regression.
 
 **Still live (product).**
 
-- **Answer path:** ONE path now (async; chat.py deleted). `serving_enabled`
-  TRUE = live and unpaused; pooler :6543 in prod; 100-dial concurrency still
-  unproven at scale (unrelated to this session's local pooler exhaustion).
-- **Project 2 phase 1:** single-teacher lock + debate classifier; lock
-  rarely fires.
+- **Answer path:** ONE path (async; chat.py deleted). `serving_enabled` TRUE =
+  live and unpaused; pooler :6543 in prod; 100-dial concurrency unproven at
+  scale.
+- **Project 2 phase 1:** single-teacher lock + debate classifier; lock rarely
+  fires.
 - **Project 3 quote rail:** the only path now runs it; few approved quotes;
-  threshold 0.40.
-- **Position papers:** fence + exclusion + disclaimer fallback.
-- **Position layer one-hop:** matcher only; injection sequence open.
+  threshold 0.40; curation next targets Prince + visible non-book teachers
+  (Murray out — see above).
+- **Position papers:** fence + exclusion + disclaimer fallback; 4 of the 5
+  found editorial gaps now resolved with dated house positions.
+- **Position layer one-hop:** matcher only; injection sequence open; refresh
+  trigger + versioning policy now both decided (CLAUDE.md #21/#22), neither
+  built yet.
 - **Corpus:** props backfill complete; book chapters 8/53; counts query live.
 
 ---
@@ -89,28 +110,38 @@ which WERE pushed. Push is Alex's call, not yet requested.
 **Launch:** ~68s full reveal; async concurrency unproven at scale.
 
 - **#13** `ingest_helloao.py` unconverted (only remaining chokepoint script).
-- Guest→account, auth CTAs, v4 props prompt, Precept Austin citable-author
-  leak, **#14 apply** (prep done — renames + `jewish_perspectives` DROP still
-  need Alex), SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson
-  mistag, embedded third-party quote spans.
-- **Phase 1.3 flip** still open (inventory done; Settled #12 ⚠).
+- Guest→account, auth CTAs, v4 props prompt, **#14 apply** (prep done —
+  renames + `jewish_perspectives` DROP still need Alex), SP residuals, Hebrew
+  lexicon grant, Lewis/Tolkien/Wilson mistag, embedded third-party quote
+  spans.
+- **Phase 1.3 subset/execution** still open (policy settled 2026-08-01;
+  inventory done; corrected framing this session — see PLAN.md).
+- **Admin-panel notifications** — new build dependency (CLAUDE.md #21;
+  PLAN.md Horizon item 4) with no design yet.
+- **`five_fold_ministry.md`'s editorial marker** — unresolved, distinct
+  question (restored vs. never-ceased offices); needs Alex's call.
 
 ---
 
 ## Next
 
-1. **One-hop injection** (Opus-shaped, not mechanical): lookup position by
+1. **`five_fold_ministry.md` editorial decision** — the 5th marker this
+   session found but didn't guess at.
+2. **One-hop injection** (Opus-shaped, not mechanical): lookup position by
    key → feed PROPOSITIONS only into hardened answer path → review /
    concurrency / rollout. Matcher is ready; wiring is not.
-2. Async concurrency proof at 100-dial.
-3. Phase 1.3 **flip decision** (Ravenhill/Savchuk/Poonen subset? never
-   sentinel).
-4. **#14 apply** when Alex says rename / drop / both — use
+3. Async concurrency proof at 100-dial (before any speed-optimization work,
+   per this session's 20s-target decision).
+4. Phase 1.3 **subset/execution** (Ravenhill/Savchuk/Poonen — which subset,
+   never sentinel; policy itself is no longer the open part).
+5. **#14 apply** when Alex says rename / drop / both — use
    `docs/audits/plan14_housekeeping_prep_2026-08-07.md` as the checklist.
-5. Quote curation (chat.py wiring question is moot now — one path, always wired).
-6. Hygiene: #13 helloao; #16 feedback→flag keep/kill.
-7. If Alex wants real confidence in the queue+worker path at scale (not just
-   this session's local smoke test), a controlled run against a connection
-   pool that isn't capped at 15 would close the "not fully proven" gap above.
+6. **Quote curation — Derek Prince specifically** (rescoped this session;
+   Murray is out, all-book with zero non-book material). See PLAN.md Phase 4
+   for the full visible-teacher non-book breakdown.
+7. Hygiene: #13 helloao; #16 feedback→flag keep/kill.
+8. If Alex wants real confidence in the queue+worker path at scale, a
+   controlled run against a connection pool that isn't capped at 15 would
+   close the "not fully proven" gap above.
 
 SP: next #43 mobile sheet. Pass B: remount `UsageRing` in drawer.
