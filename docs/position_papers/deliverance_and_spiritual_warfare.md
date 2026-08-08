@@ -19,6 +19,14 @@ Jesus modeled both. He personally resisted the devil in the wilderness (Matthew 
 
 ---
 
+## A note on vocabulary: possession vs. oppression
+
+**[Alex's editorial decision, 2026-08-08]** Before going further, one distinction needs to be clear, because most of the confusion around this topic is a vocabulary problem, not a substance problem. The question people are actually asking when they say "can a Christian have a demon" is usually whether a Christian can be **possessed** — and "can a believer have a demon, versus only be oppressed" is a false split that obscures the real answer rather than clarifying it.
+
+Rhemata's position: **a genuine believer cannot be possessed** — possession meaning total ownership or control, the kind that overrides a person's own will entirely. **A genuine believer can genuinely be oppressed.** Oppression is not always merely external pressure at a distance — it can involve a real demonic foothold or presence operating in a specific area of a believer's life, something more than pressure from outside but nowhere near the total ownership possession implies. "Having a demon" in that limited, foothold sense is not the same claim as possession, and this paper uses "demonized" rather than "possessed" for exactly that reason. Keep this distinction in view through everything that follows — the substance of what the corpus says is more agreed than the raw vocabulary makes it look.
+
+---
+
 ## Jesus Made This Ordinary, Not Exceptional
 
 The Gospels do not treat deliverance as a rare or dramatic sideline to Jesus' real work. It is woven into the description of what His ministry simply was. Mark's summary of an early, representative day: He went through Galilee "preaching in their synagogues throughout Galilee, and casting out demons" (Mark 1:39). Acts summarizes His entire earthly ministry the same way: He "went about doing good and healing all who were oppressed by the devil" (Acts 10:38).
@@ -49,9 +57,7 @@ Scripture and the corpus material behind this teaching describe demonic activity
 
 This activity is not limited to strangers to the faith. A believer can carry a real, ongoing area of affliction — a besetting sin, a compulsion, an emotional wound that will not heal — that has a demonic component operating underneath it, distinct from ordinary temptation or the lingering pull of the flesh. Distinguishing the two matters, because the remedy is different: the flesh is put to death through the cross and ongoing sanctification; a demonic presence is not disciplined into submission, it is commanded to leave.
 
-### An open question this paper does not settle
-
-**[EDITORIAL DECISION NEEDED — ALEX]** The corpus is not unanimous on exactly how far this goes, and this paper deliberately does not adjudicate it. One live question inside the charismatic tradition — and inside this corpus specifically — is whether a genuine, Spirit-indwelt believer can have a demon actually residing in them, or whether a true believer can only be oppressed, harassed, or influenced from the outside, with indwelling reserved for the unconverted. The material sourced here leans toward the former without ever stating it as bluntly as that — it speaks of demons "occupying certain areas" of a believer's life and prefers the word "demonized" specifically to avoid the stronger claim of full possession, while still describing something more than external pressure. But no source in this corpus argues the opposing position in its own words; the strongest statement of that opposing view here is only reported secondhand, by a source arguing against it. Until you make a call on how this paper should state it, it should not be sharpened into a flat claim in either direction.
+This is the "having a demon" question named up front, in *A note on vocabulary: possession vs. oppression* — a real demonic foothold in a specific area, described here as being "demonized," is not the same claim as possession, and this paper does not sharpen it into more than that.
 
 ---
 
