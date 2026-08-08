@@ -62,7 +62,10 @@ as a local-dev artifact, not a code regression.
   fires.
 - **Project 3 quote rail:** the only path now runs it; few approved quotes;
   threshold 0.40; curation next targets Prince + visible non-book teachers
-  (Murray out).
+  (Murray out). Sub-chunk exclusion (translator footnotes, block quotes,
+  catechism Q&A sharing a chunk with real teacher material) landed this
+  session window via a separate commit (`a2f4573`/`6dba89a`, not this
+  session's own work — PLAN.md Phase 4 already reflects it).
 - **Position papers:** fence + exclusion + disclaimer fallback; 4 of 5
   found editorial gaps resolved with dated house positions.
 - **Position layer one-hop:** matcher only; injection sequence open; refresh
