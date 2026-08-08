@@ -271,9 +271,12 @@ SEQUENCE (2026-08-03)".
     evidence-injection wiring itself shipped 2026-08-08 (commit `eca8070`,
     `backend/app/services/stored_position_evidence.py` + `producer.py`) and
     is verified end-to-end with real generation on all six seeded topics —
-    zero stored-position-text leakage into any served answer. Full current
+    zero stored-position-text leakage into any served answer. Built and
+    verified, but **NOT pushed to origin as of 2026-08-08** — `producer.py`
+    is the live answer path serving 100% of traffic, so pushing deploys
+    this immediately; push is Alex's call, not yet given. Full current
     status, including what's still deliberately out of scope (production
-    concurrency/rollout): PLAN.md Phase 3 item 6.
+    concurrency/rollout): PLAN.md Phase 3 item 5.
     **Open Decisions #14 (refresh trigger) and #15 (replace-vs-version) are
     RESOLVED 2026-08-08 — see Settled decisions #21/#22 below.** This
     paragraph's own earlier "#14 now answered by... / #15 unchanged...
@@ -883,7 +886,14 @@ different row, per the hard rule above.
   delivery unaffected).
   Observed + faithfully mirrored, NOT fixed: the live `match_position_paper`
   over-matches "What is deliverance?" -> baptism house voice (a live-behaviour issue,
-  out of scope). `corpus_version()`'s one gap: an in-place admin re-chunk edit isn't
+  out of scope). **Confirmed safe against the one-hop stored-position injection
+  (2026-08-08 build, `eca8070`):** live-tested this same over-match firing on a
+  "how to pray effectively" phrasing that would otherwise have matched a stored
+  position — `producer.py`'s explicit precedence (a position-paper match always
+  wins) made the stored-position injection defer to the paper-fence path instead
+  of firing. Same pre-existing over-match, not a new failure mode; no fix needed,
+  recorded here only so a future session doesn't rediscover it as new.
+  `corpus_version()`'s one gap: an in-place admin re-chunk edit isn't
   reflected (reuse defaults OFF, so moot until reuse is enabled).
 
 - **The repo-root `nixpacks.toml` is the async worker service's build manifest —

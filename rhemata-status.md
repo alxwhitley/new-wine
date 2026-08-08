@@ -6,8 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-08 (session close: quote-rail sub-chunk exclusion
-Müller gap closed, PLAN.md Phase 4 entry collapsed per Standing Rule 13).
+Last verified: 2026-08-08 (session close: one-hop stored-position evidence
+injection built + verified, PLAN.md Phase 3 item 5 collapsed per Standing
+Rule 13; not yet pushed).
 
 **Session close:** `.claude/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -16,19 +17,31 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**This session (2026-08-08, quote-rail sub-chunk exclusion gap-close).**
-Closed the inline Müller quotation gap in the quote verifier. Added
-`muller_inline_quotation` detector to `backend/app/services/quote_subchunk_exclusion.py`
-(scoped to chunks mentioning "Muller", firing on long/all-caps single-quoted
-paragraphs), expanded regression tests in `scripts/test_quote_verifier.py`
-to cases 14–25 (25/25 passing), and documented residual risks (cross-chunk
-catechism continuation; `:—`/`writes:` false-exclusion) in
-`scripts/dry_run_subchunk_exclusion.py`. PLAN.md Phase 4 entry collapsed to
-a single DONE line per Standing Rule 13. Two commits already made: `ca984cb`
-(build), `c0c34c7` (docs). No DB writes this session.
+**This session (2026-08-08, one-hop stored-position evidence injection).**
+Built and wired `match_stored_position()` (already tested, previously
+inert) into `producer.py`'s `produce()`: on a match, the position's
+underlying propositions — never its rendered text — replace normal
+retrieval's chunk set, then run through the unchanged generation/
+verification/citation pipeline. New: `backend/app/services/
+stored_position_evidence.py` — re-applies the live license/visibility
+gate + commentary exclusion per evidence proposition at serve time (not
+trusted from build time, since `position_evidence` was only gate-filtered
+when the position was built). A build-time bug was found and fixed during
+verification: the position lookup originally required `requested_teacher_id
+IS NULL`, silently missing 4 of the 6 seeded positions (built via
+teacher-explicit asks, not topic-only ones). Verified end-to-end with real
+generation across all six OD #16 V1 topics — zero stored-position-text
+leakage into any served answer. 3 of 6 (fasting, deliverance, how to pray
+effectively) currently no-op to normal RAG because their sole evidence
+source, Vlad Savchuk, is still hidden (Phase 1.3) — expected, activates
+automatically once he's unhidden. Two commits: `eca8070` (build),
+`34f6b0b` (docs). **NOT pushed to origin** — `producer.py` serves 100% of
+live traffic; push is Alex's call, not yet given. No DB writes this
+session.
 
-**Prior sessions (2026-08-08, sessions 1-3; condensed — full detail: git
-log + PLAN.md/CLAUDE.md).** Sixteen governance/product decisions recorded
+**Prior sessions (2026-08-08, condensed — full detail: git log +
+PLAN.md/CLAUDE.md).** Quote-rail sub-chunk exclusion Müller gap closed
+(`ca984cb`/`c0c34c7`). Sixteen governance/product decisions recorded
 (position-layer governance, quote-rail scope, Manna rename — CLAUDE.md
 Settled decisions #20-27); 4 of 6 position-paper editorial markers
 resolved, `five_fold_ministry.md`'s left open for Alex. Quote-rail human
@@ -57,8 +70,11 @@ as a local-dev artifact, not a code regression.
   session's own work — PLAN.md Phase 4 already reflects it).
 - **Position papers:** fence + exclusion + disclaimer fallback; 4 of 5
   found editorial gaps resolved with dated house positions.
-- **Position layer one-hop:** matcher only; injection sequence open; refresh
-  trigger + versioning policy decided (CLAUDE.md #21/#22), neither built yet.
+- **Position layer one-hop:** matcher + evidence-injection wiring both built
+  and verified across all six seeded topics (commit `eca8070`), **NOT
+  pushed to origin** — push is Alex's call. 3 of 6 topics no-op today
+  (sole evidence source hidden, Phase 1.3). Refresh trigger + versioning
+  policy decided (CLAUDE.md #21/#22), neither built yet.
 - **Corpus ingestion:** every document-writing ingest script now routes
   through `shared_ingest` (Phase 5 #13 was the last). Props backfill
   complete; book chapters 8/53; counts query live.
@@ -86,9 +102,11 @@ as a local-dev artifact, not a code regression.
 
 1. **`five_fold_ministry.md` editorial decision** — the 5th marker a prior
    session found but didn't guess at.
-2. **One-hop injection** (Opus-shaped, not mechanical): lookup position by
-   key → feed PROPOSITIONS only into hardened answer path → review /
-   concurrency / rollout. Matcher is ready; wiring is not.
+2. **One-hop injection push decision** — built, locally committed
+   (`eca8070`/`34f6b0b`), verified end-to-end across all six seeded
+   topics; awaiting Alex's go-ahead to push (deploys immediately —
+   `producer.py` serves 100% of live traffic). Production concurrency/
+   rollout proof is the real remaining work once it's pushed.
 3. Async concurrency proof at 100-dial (before any speed-optimization work,
    per the 20s-target decision).
 4. Phase 1.3 **subset/execution** (Ravenhill/Savchuk/Poonen — which subset,
