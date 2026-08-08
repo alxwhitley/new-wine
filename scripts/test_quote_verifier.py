@@ -20,6 +20,12 @@ re-check that both quotes already approved in production still pass every
 tightened rule (they must, or the tightening would have silently
 invalidated real served content).
 
+Part 3 (added 2026-08-08 build): sub-chunk exclusion regression tests on
+real mixed chunks.
+
+Part 4 (added same session): close documented gaps -- inline Müller
+quotations without explicit markers, and catechism answer continuation.
+
 Run from project root: python3 scripts/test_quote_verifier.py
 """
 import sys
@@ -284,6 +290,78 @@ murray_commentary_candidate = (
 assert murray_commentary_candidate in nl181_content, "fixture error"
 result = verify_quote_candidate(db, NL_CHUNK_181, murray_commentary_candidate, MURRAY_SOURCE_ID)
 print("\n19. Murray commentary before the catechism insert:")
+check("valid == True", result.valid is True)
+check("rule == accepted", result.rule == "accepted")
+
+# ── Part 4: closing the two documented gaps ────────────────────────────────
+
+print()
+print("\nsub-chunk exclusion gap-closing suite (2026-08-08 build)")
+print("=" * 60)
+
+SOP_CHUNK_231 = "6c1fca7c-528e-40bd-8322-3b0e865e61ee"  # inline Müller, no marker
+SOP_CHUNK_233 = "1a604b76-2dc0-4f6b-a330-fa3556eecea4"  # inline Müller, no marker
+NL_CHUNK_182 = "51e8bc5c-f95c-426d-9d92-2d9f2c93c1c0"   # catechism answer continuation
+
+sop231_content = db.table("chunks").select("content").eq("id", SOP_CHUNK_231).limit(1).execute().data[0]["content"]
+sop233_content = db.table("chunks").select("content").eq("id", SOP_CHUNK_233).limit(1).execute().data[0]["content"]
+nl182_content = db.table("chunks").select("content").eq("id", NL_CHUNK_182).limit(1).execute().data[0]["content"]
+
+# 20. Inline Müller quotation in ch231 is refused.
+inline_muller_231 = (
+    "For it will not do, it is not possible, to live in sin, and at the same time, by\n"
+    "communion with God, to draw down from heaven everything one needs for the life that now\n"
+    "is."
+)
+assert inline_muller_231 in sop231_content, "fixture error"
+result = verify_quote_candidate(db, SOP_CHUNK_231, inline_muller_231, MURRAY_SOURCE_ID)
+print("\n20. Inline Müller quotation (School of Prayer ch231):")
+check("valid == False", result.valid is False)
+check("rule == subchunk_exclusion", result.rule == "subchunk_exclusion")
+
+# 21. Murray's own prose next to that inline quote is still allowed.
+murray_next_to_inline_231 = "This mode of living was not easy at first."
+assert murray_next_to_inline_231 in sop231_content, "fixture error"
+result = verify_quote_candidate(db, SOP_CHUNK_231, murray_next_to_inline_231, MURRAY_SOURCE_ID)
+print("\n21. Murray prose next to the inline Müller quotation:")
+check("valid == True", result.valid is True)
+check("rule == accepted", result.rule == "accepted")
+
+# 22. Inline Müller/Scripture quotation in ch233 is refused.
+inline_muller_233 = "Thou hast been faithful over few things; I will set thee over many things."
+assert inline_muller_233 in sop233_content, "fixture error"
+result = verify_quote_candidate(db, SOP_CHUNK_233, inline_muller_233, MURRAY_SOURCE_ID)
+print("\n22. Inline Müller/Scripture quotation (School of Prayer ch233):")
+check("valid == False", result.valid is False)
+check("rule == subchunk_exclusion", result.rule == "subchunk_exclusion")
+
+# 23. Murray prose after that inline quote is still allowed.
+murray_after_inline_233 = "And these things have happened for an ensample to us."
+assert murray_after_inline_233 in sop233_content, "fixture error"
+result = verify_quote_candidate(db, SOP_CHUNK_233, murray_after_inline_233, MURRAY_SOURCE_ID)
+print("\n23. Murray prose after the inline quotation:")
+check("valid == True", result.valid is True)
+check("rule == accepted", result.rule == "accepted")
+
+# 24. Catechism answer continuation in ch182 is refused.
+catechism_answer_182 = (
+    "It is not only to receive with a believing heart the whole suffering and dying of Christ,\n"
+    "and thereby to obtain forgiveness of sins and eternal life"
+)
+assert catechism_answer_182 in nl182_content, "fixture error"
+result = verify_quote_candidate(db, NL_CHUNK_182, catechism_answer_182, MURRAY_SOURCE_ID)
+print("\n24. Heidelberg Catechism answer continuation (New Life ch182):")
+check("valid == False", result.valid is False)
+check("rule == subchunk_exclusion", result.rule == "subchunk_exclusion")
+
+# 25. Murray commentary after the catechism answer is still allowed.
+murray_after_catechism_182 = (
+    "This deeply inward union with Jesus, even with His body and blood, is the great aim\n"
+    "of the Lord’s Supper."
+)
+assert murray_after_catechism_182 in nl182_content, "fixture error"
+result = verify_quote_candidate(db, NL_CHUNK_182, murray_after_catechism_182, MURRAY_SOURCE_ID)
+print("\n25. Murray commentary after the catechism answer:")
 check("valid == True", result.valid is True)
 check("rule == accepted", result.rule == "accepted")
 

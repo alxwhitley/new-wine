@@ -152,6 +152,43 @@ def main():
         for idx in [181, 182, 183, 184]:
             report_chunk("NL Heidelberg Catechism", NL, idx, "catechism Q&A insert")
 
+    print()
+    print("=" * 80)
+    print("SUMMARY: false-exclusion risk and residual gaps")
+    print("=" * 80)
+    print(
+        "Gap 1 (inline Müller quotations, School of Prayer ch231/ch233): CLOSED.\n"
+        "  New detector: long single-quoted paragraphs (>70 chars) or all-caps\n"
+        "  single-quoted phrases inside any chunk that mentions 'Muller'.\n"
+        "  False-exclusion risk: LOW within the George Müller chapter; every\n"
+        "  long/all-caps single quote inspected there is Müller material. Risk\n"
+        "  outside this chapter is nil because the detector only fires when the\n"
+        "  chunk mentions 'Muller'."
+    )
+    print()
+    print(
+        "Gap 2 (cross-chunk catechism continuation, New Life ch181->ch182):\n"
+        "  ch182 is ALREADY covered because the 'Heidelberg Catechism' marker\n"
+        "  also appears inside ch182's own text. The general case -- a chunk\n"
+        "  containing only an answer continuation with no marker in the same\n"
+        "  chunk -- is NOT safely closable without cross-chunk context or a\n"
+        "  schema change to store sub-chunk exclusion metadata. No such case\n"
+        "  exists in the currently flagged chunks, so this gap is left as a\n"
+        "  documented residual risk, not a fragile detector."
+    )
+    print()
+    print(
+        "General false-exclusion notes:\n"
+        "  - Translator-note detector only fires on the explicit '-- Translator'\n"
+        "    signature; very low risk.\n"
+        "  - Block-quotation detector keys on ':—' or 'writes:' markers; could\n"
+        "    catch a teacher's own colon-emdash point if the next line happens\n"
+        "    to start with a quotation mark.\n"
+        "  - Catechism detector keys on 'Heidelberg Catechism'/'Directory of\n"
+        "    Public Worship' markers and requires a 'What is it...?' question\n"
+        "    shape; bibliographic citations are not excluded."
+    )
+
 
 if __name__ == "__main__":
     main()

@@ -12,8 +12,11 @@ teacher's own words. No LLM/AI judgment call is used.
 
 Detected categories (expandable):
   - translator_note: a footnote signed "-- Translator".
-  - block_quotation: a block quotation introduced by an explicit "writes:—"
-    marker followed by an opening quotation mark.
+  - block_quotation: a block quotation introduced by an explicit ":—" or
+    "writes:" marker followed by an opening quotation mark.
+  - muller_inline_quotation: long single-quoted paragraphs in the George
+    Müller chapter of /With Christ in the School of Prayer/, where Murray
+    quotes Müller inline without the usual attribution marker.
   - catechism_quotation: a Heidelberg/Dutch Reformed catechism or directory
     quotation introduced by an explicit heading.
 
@@ -143,10 +146,52 @@ def _detect_block_quotation_spans(content: str) -> List[SubchunkSpan]:
     return spans
 
 
+# ---------------------------------------------------------------------------
+# Inline Müller quotations in the "George Muller" chapter
+# ---------------------------------------------------------------------------
+# Within the School of Prayer chapter on George Müller, Murray quotes
+# Müller's journals/letters as long single-quoted paragraphs without a
+# "writes:—" marker. Every long single-quoted span in this chapter is
+# Müller's own words (or, rarely, an all-caps institution name). We only
+# apply this inside chunks that actually mention Muller, so the false-
+# exclusion surface is limited to that chapter.
+_RE_MULLER_CHAPTER_MENTION = re.compile(r"\bMuller\b", re.IGNORECASE)
+_RE_LONG_SINGLE_QUOTE = re.compile(
+    r"([\u2018][^\u2019]{70,}[\u2019])",
+    re.DOTALL,
+)
+_RE_ALLCAPS_SINGLE_QUOTE = re.compile(
+    r"([\u2018][A-Z\s\-\n]+[\u2019])",
+)
+
+
+def _detect_muller_inline_spans(content: str) -> List[SubchunkSpan]:
+    """Detect inline Müller quotations in the George Müller chapter.
+
+    Conservative scope: only chunks that mention 'Muller'. Within those,
+    exclude long single-quoted paragraphs (>70 chars inside the quotes)
+    and all-caps single-quoted phrases (institution names). Short single
+    quotes, such as the Scripture citations ('Sell that thou hast...'),
+    are not excluded.
+    """
+    if not _RE_MULLER_CHAPTER_MENTION.search(content):
+        return []
+    spans = []
+    for m in _RE_LONG_SINGLE_QUOTE.finditer(content):
+        spans.append((m.start(1), m.end(1), "muller_inline_quotation"))
+    for m in _RE_ALLCAPS_SINGLE_QUOTE.finditer(content):
+        s, e = m.start(1), m.end(1)
+        # Avoid double-covering a span already caught by the long-quote regex.
+        if any(s >= es and e <= ee for es, ee, _ in spans):
+            continue
+        spans.append((s, e, "muller_inline_quotation"))
+    return spans
+
 
 # ---------------------------------------------------------------------------
 # Catechism / directory quotations
 # ---------------------------------------------------------------------------
+
 _RE_CATECHISM_MARKER = re.compile(
     r"(?:Heidelberg\s+Catechism|Der\s+Heidelbergische\s+Catechismus|"
     r"Directory\s+of\s+Public\s+Worship|Westminster\s+Confession|"
@@ -217,6 +262,7 @@ def detect_excluded_subspans(content: str) -> List[SubchunkSpan]:
     spans = []
     spans.extend(_detect_translator_note_spans(content))
     spans.extend(_detect_block_quotation_spans(content))
+    spans.extend(_detect_muller_inline_spans(content))
     spans.extend(_detect_catechism_spans(content))
     # Sort by start; merge overlapping/nested spans to keep the public list tidy.
     spans.sort(key=lambda s: (s[0], s[1]))
