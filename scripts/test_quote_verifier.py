@@ -219,6 +219,75 @@ check("Prince 'fasting' (approved, live) still passes", prince_fasting_result.va
       prince_fasting_result.reason)
 
 print()
+# ── Part 3: sub-chunk exclusion (2026-08-08 build) ──────────────────────────
+
+print()
+print("\nsub-chunk exclusion regression suite (2026-08-08 build)")
+print("=" * 60)
+
+# Real chunk IDs for the known mixed chunks flagged in the audit.
+LT_CHUNK_54 = "6633550a-694c-4a12-8274-5384c54a6210"  # translator footnote
+SOP_CHUNK_228 = "77b7aadb-98a4-4354-a61f-e6ac3d413787"  # Müller block quote at tail
+NL_CHUNK_181 = "431a215f-458d-4fa3-b73f-6d6cd6d30fd6"  # Heidelberg Catechism Q&A
+
+lt54_content = db.table("chunks").select("content").eq("id", LT_CHUNK_54).limit(1).execute().data[0]["content"]
+sop228_content = db.table("chunks").select("content").eq("id", SOP_CHUNK_228).limit(1).execute().data[0]["content"]
+nl181_content = db.table("chunks").select("content").eq("id", NL_CHUNK_181).limit(1).execute().data[0]["content"]
+
+# 14. Translator footnote candidate is refused.
+translator_footnote_candidate = "1 The Dutch version has: The cup of thanksgiving which we bless with thanksgiving. -- Translator"
+assert translator_footnote_candidate in lt54_content, "fixture error"
+result = verify_quote_candidate(db, LT_CHUNK_54, translator_footnote_candidate, MURRAY_SOURCE_ID)
+print("\n14. Candidate from a translator footnote:")
+check("valid == False", result.valid is False)
+check("rule == subchunk_exclusion", result.rule == "subchunk_exclusion")
+
+# 15. Teacher text next to the translator footnote is still allowed.
+teacher_after_footnote = "At the Supper, Jesus points us not only backward, but also forward."
+assert teacher_after_footnote in lt54_content, "fixture error"
+result = verify_quote_candidate(db, LT_CHUNK_54, teacher_after_footnote, MURRAY_SOURCE_ID)
+print("\n15. Teacher text after the translator footnote:")
+check("valid == True", result.valid is True)
+check("rule == accepted", result.rule == "accepted")
+
+# 16. Müller block-quotation candidate is refused.
+muller_quote_candidate = "He is the Teacher of His people."
+assert muller_quote_candidate in sop228_content, "fixture error"
+result = verify_quote_candidate(db, SOP_CHUNK_228, muller_quote_candidate, MURRAY_SOURCE_ID)
+print("\n16. Candidate from a Müller block quotation:")
+check("valid == False", result.valid is False)
+check("rule == subchunk_exclusion", result.rule == "subchunk_exclusion")
+
+# 17. Murray framing next to the Müller quote is still allowed.
+murray_framing_candidate = (
+    "The connection was dissolved in 1830 by\n"
+    "mutual consent, and he became the pastor of a small congregation at Teignmouth."
+)
+assert murray_framing_candidate in sop228_content, "fixture error"
+result = verify_quote_candidate(db, SOP_CHUNK_228, murray_framing_candidate, MURRAY_SOURCE_ID)
+print("\n17. Murray framing before the Müller quotation:")
+check("valid == True", result.valid is True)
+check("rule == accepted", result.rule == "accepted")
+
+# 18. Heidelberg Catechism Q&A candidate is refused.
+catechism_candidate = "What is it to eat the glorified body of Christ and to drink His shed blood?"
+assert catechism_candidate in nl181_content, "fixture error"
+result = verify_quote_candidate(db, NL_CHUNK_181, catechism_candidate, MURRAY_SOURCE_ID)
+print("\n18. Candidate from a Heidelberg Catechism Q&A insert:")
+check("valid == False", result.valid is False)
+check("rule == subchunk_exclusion", result.rule == "subchunk_exclusion")
+
+# 19. Murray commentary next to the catechism insert is still allowed.
+murray_commentary_candidate = (
+    "The\nbread is a participation in the body: the cup is a participation in the blood."
+)
+assert murray_commentary_candidate in nl181_content, "fixture error"
+result = verify_quote_candidate(db, NL_CHUNK_181, murray_commentary_candidate, MURRAY_SOURCE_ID)
+print("\n19. Murray commentary before the catechism insert:")
+check("valid == True", result.valid is True)
+check("rule == accepted", result.rule == "accepted")
+
+print()
 print("=" * 60)
 if failures:
     print("%d check(s) FAILED:" % len(failures))

@@ -11,9 +11,14 @@ candidate is accepted only if it passes ALL of:
   1. exact-substring match -- found, character-for-character, inside the
      content of exactly one committed chunk, never assembled across a chunk
      boundary, never accepted on a lookup failure.
-  2. exclusion zone -- the chunk must not be flagged
+  2. whole-chunk exclusion zone -- the chunk must not be flagged
      chunks.quote_ineligible_reason.
-  3. boundary proximity / sentence completeness -- the candidate must not
+  3. sub-chunk exclusion zone -- the candidate must not overlap an embedded
+     non-teacher span inside the chunk (translator footnotes, third-party
+     block quotations, catechism/directory inserts). Detected deterministically
+     by app.services.quote_subchunk_exclusion; see that module for the exact
+     pattern set and its conservative limits.
+  4. boundary proximity / sentence completeness -- the candidate must not
      sit flush against either edge of the chunk, must begin immediately
      after another sentence's terminal punctuation (never chunk position 0,
      which cannot be verified against whatever preceded this chunk), and
@@ -22,24 +27,30 @@ candidate is accepted only if it passes ALL of:
      decision #16, 2026-08-03 section) -- with no human catching a subtle
      mid-sentence trim, this errs toward refusing more real quotes, not
      fewer, at any boundary that cannot be positively confirmed clean.
-  4. speaker confirmation -- the attributed teacher_source_id must equal the
+  5. speaker confirmation -- the attributed teacher_source_id must equal the
      source document's own source_id. A strong content match is not
      confirmation -- this is the concrete, checkable form that rule takes
      for written, already-attributed documents (see the Savchuk case in
      CLAUDE.md Landmines, the case that motivated this rule).
 
-Checks 1, 2, and 4 are re-checked independently by the database itself
+Checks 1, 2, and 5 are re-checked independently by the database itself
 against the immutable captured snapshot, via the trg_enforce_quote_approval_
 gates trigger (migration 082, gate 4 revised by migration 085's speaker
-gate) -- that trigger is the authoritative backstop for those three. Check 3
-(boundary/sentence-completeness) is deliberately Python-only, an accepted
-narrower boundary (same posture as services/quotes.py's per-work quote-text
-cap) -- there is exactly one write path, create_and_approve_quote(), and it
-always runs this check before any INSERT is attempted.
+gate) -- that trigger is the authoritative backstop for those three. Checks 3
+(sub-chunk exclusion) and 4 (boundary/sentence-completeness) are deliberately
+Python-only, accepted narrower boundaries (same posture as services/quotes.py's
+per-work quote-text cap) -- there is exactly one write path,
+create_and_approve_quote(), and it always runs these checks before any INSERT
+is attempted.
 """
 from __future__ import annotations
 
 from typing import NamedTuple, Optional
+
+from app.services.quote_subchunk_exclusion import (
+    candidate_overlaps_excluded_subspan,
+    detect_excluded_subspans,
+)
 
 
 class QuoteVerification(NamedTuple):
@@ -148,6 +159,20 @@ def verify_quote_candidate(
 
     start = chunk_content.find(quote_text)
     end = start + len(quote_text)
+
+    # Sub-chunk exclusion: embedded non-teacher text (translator notes,
+    # third-party block quotations, catechism inserts) inside a chunk that
+    # also contains legitimate teacher material.
+    excluded_subspans = detect_excluded_subspans(chunk_content)
+    overlaps, sub_reason = candidate_overlaps_excluded_subspan(
+        chunk_content, quote_text, excluded_subspans
+    )
+    if overlaps:
+        return QuoteVerification(
+            False,
+            "candidate overlaps a sub-chunk exclusion zone (%s)" % sub_reason,
+            "subchunk_exclusion",
+        )
 
     if _is_near_chunk_boundary(chunk_content, start, end):
         return QuoteVerification(
