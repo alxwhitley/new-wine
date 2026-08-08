@@ -896,8 +896,13 @@ different row, per the hard rule above.
   landmine's blocker (d)). Pooler port residual closed 2026-08-07; remaining residual
   is a real concurrency window at the 100-dial.
 
-- `ingest_helloao.py` is not routed through `shared_ingest`. Fetches a live
-  API and is the real gap.
+- **RESOLVED 2026-08-08** — `ingest_helloao.py` now routes through
+  `shared_ingest.ingest_document()` (commit `929bc34`, PLAN.md Phase 5
+  #13). Verified via `--dry-run`, a real single-item write (independently
+  confirmed in the DB, then deleted), and a full unfiltered batch
+  (`attempted=198 stored=0 skipped=198 failed=0`, reconciled against the
+  live DB). The 0-stored result is a real, pre-existing corpus-content gap,
+  not a script defect — PLAN.md's Ongoing #27 correction has the detail.
 - **Never run a proposition-extraction pass against "all documents with zero
   propositions" — target a NAMED document set by ID.** That bare query returns
   the 2,176 permanently-excluded Precept Austin word-studies (locked out by name,

@@ -265,8 +265,9 @@ all-or-nothing rewrite). Chunk inserts must NOT include `page_number` or
 `source_hash`; neither column has ever existed live.
 
 Routed through `shared_ingest`: `ingest.py`, `ingest_magazine.py`,
-`ingest_preceptaustin.py`, `ingest_lexicon.py`. **Not routed:**
-`ingest_helloao.py`.
+`ingest_preceptaustin.py`, `ingest_lexicon.py`, `ingest_helloao.py`
+(commit `929bc34`, 2026-08-08 — chunk_fn override for one-chunk-per-verse,
+same pattern as lexicon's one-entry-one-chunk).
 
 | Script | Purpose |
 |---|---|
@@ -285,7 +286,7 @@ Routed through `shared_ingest`: `ingest.py`, `ingest_magazine.py`,
 | `ingest_lexicon.py` | STEPBible TBESG/TBESH/TFLSJ; one-entry-one-chunk |
 | `ingest_lexicon_runner.py` | Batching/pacing driver over `ingest_lexicon`, checkpointed slices |
 | `ingest_preceptaustin.py` | Precept Austin word studies; cross-pipeline reuse-by-title |
-| `ingest_helloao.py` | Live API fetch, resume-safe; own Supabase REST inserts |
+| `ingest_helloao.py` | Live API fetch, resume-safe; routed through `shared_ingest` (chunk_fn override: one chunk per verse) |
 | `ingest_bible.py` / `ingest_interlinear.py` / `ingest_tahot.py` | verses table |
 | `extract_magazine.py` | 3-pass Gemini/Groq extraction |
 | `scrape_youtube.py` | yt-dlp + Supabase dedupe (legacy path) |
