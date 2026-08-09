@@ -24,7 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / "backend" / "app" / ".env")
 
 DB_URL = os.environ["SUPABASE_DB_URL"]
-LEXICON_DIR = PROJECT_ROOT / "sources" / "lexicon"
+LEXICON_DIR = PROJECT_ROOT / "sources" / "stepbible"
 BATCH_SIZE = 1000
 
 TAGNT_FILES = [

@@ -15,7 +15,8 @@ Repo root: `/Users/alexwhitley/rhemata`
 sources/          # gitignored — raw/cleaned/ingested per pipeline
   youtube/        # raw → cleaned → ingested; ingest_queue.xlsx (Queue + HowToRun + source tabs)
   magazine/       # 01_to_extract → 02_extracted → 03_approved → 04_ingested → 05_archived
-  documents/      # non-copyrighted (sermons, papers)
+  stepbible/      # STEPBible TSVs + TAGNT interlinear files
+  inbox/          # non-copyrighted (sermons, papers)
 scripts/          # all ingestion + maintenance
   data/           # small committed reference data files (e.g. common_religious_vocab.json)
 migrations/       # SQL, run manually in Supabase SQL Editor

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Rhemata STEPBible Lexicon Ingestion Script
-Parses TBESG, TBESH, and TFLSJ TSV files from sources/lexicon/,
+Parses TBESG, TBESH, and TFLSJ TSV files from sources/stepbible/,
 embeds each lexical entry, and inserts into Supabase.
 
 Converted (#12) to route through shared_ingest.ingest_document() -- resolve/
@@ -47,7 +47,7 @@ import shared_ingest
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-LEXICON_DIR = PROJECT_ROOT / "sources" / "lexicon"
+LEXICON_DIR = PROJECT_ROOT / "sources" / "stepbible"
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]

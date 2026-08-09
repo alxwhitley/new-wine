@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Download public-domain PDFs (batches 1-3) into sources/documents/."""
+"""Download public-domain PDFs (batches 1-3) into sources/inbox/."""
 
 import requests
 from pathlib import Path
 
-DEST_DIR = Path(__file__).resolve().parent.parent / "sources" / "documents"
+DEST_DIR = Path(__file__).resolve().parent.parent / "sources" / "inbox"
 
 BOOKS = [
     # --- BATCH 1 (CCEL - Murray, Bounds, Torrey, Finney) ---

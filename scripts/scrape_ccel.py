@@ -3,7 +3,7 @@
 scrape_ccel.py — Download public domain PDFs from CCEL (Christian Classics Ethereal Library)
 
 Reads URLs from scripts/ccel_urls.txt, fetches each page, finds the PDF download link,
-and saves to sources/documents/ with filename format author_slug.pdf.
+and saves to sources/inbox/ with filename format author_slug.pdf.
 Skips files that already exist. Logs failures to logs/ccel_scrape.log.
 """
 
@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).resolve().parent.parent
 URLS_FILE = ROOT / "scripts" / "ccel_urls.txt"
-OUTPUT_DIR = ROOT / "sources" / "documents"
+OUTPUT_DIR = ROOT / "sources" / "inbox"
 LOG_DIR = ROOT / "logs"
 LOG_FILE = LOG_DIR / "ccel_scrape.log"
 

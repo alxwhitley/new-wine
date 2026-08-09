@@ -501,9 +501,9 @@ def main():
             sys.exit(1)
         scan_dirs = [source_dir]
     else:
-        # Default: scan sources/documents/, sources/youtube/cleaned/, sources/web/derek_prince/raw/
+        # Default: scan sources/inbox/, sources/youtube/cleaned/, sources/web/derek_prince/raw/
         scan_dirs = [
-            DOCS_FOLDER / "documents",
+            DOCS_FOLDER / "inbox",
             DOCS_FOLDER / "youtube" / "cleaned",
             DOCS_FOLDER / "web" / "derek_prince" / "raw",
         ]
