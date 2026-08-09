@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harness Contract v1 Replay Bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "packet",
+    "prior_state_event",
+    "dependency_states",
+    "worker_result",
+    "opus_verdict",
+    "validator_version",
+    "bundle_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1]
+    },
+    "packet": {
+      "$ref": "packet.schema.json"
+    },
+    "prior_state_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_state", "to_state", "event_at"],
+      "properties": {
+        "from_state": {
+          "type": "string",
+          "enum": [
+            "BLOCKED",
+            "READY",
+            "RUNNING",
+            "REVIEW",
+            "REVISE",
+            "ACCEPTED",
+            "QUARANTINED",
+            "HUMAN_REQUIRED"
+          ]
+        },
+        "to_state": {
+          "type": "string",
+          "enum": [
+            "BLOCKED",
+            "READY",
+            "RUNNING",
+            "REVIEW",
+            "REVISE",
+            "ACCEPTED",
+            "QUARANTINED",
+            "HUMAN_REQUIRED"
+          ]
+        },
+        "event_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      }
+    },
+    "dependency_states": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packet_id",
+          "state",
+          "evidence_id",
+          "upstream_packet_sha256",
+          "upstream_result_sha256",
+          "upstream_verdict_sha256",
+          "upstream_bundle_sha256"
+        ],
+        "properties": {
+          "packet_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": ["ACCEPTED"]
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "upstream_packet_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "upstream_result_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "upstream_verdict_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "upstream_bundle_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "worker_result": {
+      "$ref": "worker-result.schema.json"
+    },
+    "opus_verdict": {
+      "$ref": "opus-verdict.schema.json"
+    },
+    "validator_version": {
+      "type": "string",
+      "enum": ["1"]
+    },
+    "bundle_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

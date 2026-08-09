@@ -1,0 +1,359 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harness Contract v1 Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "packet_id",
+    "objective",
+    "dependency_ids",
+    "lane",
+    "assigned_worker",
+    "starting_revision",
+    "worktree",
+    "writable_paths",
+    "forbidden_surfaces",
+    "required_context",
+    "premise_checks",
+    "acceptance_criteria",
+    "verification_commands",
+    "budgets",
+    "network_policy",
+    "checkpoint_artifacts",
+    "rollback",
+    "human_stop_conditions",
+    "sonnet_reassignment_allowed",
+    "created_by",
+    "packet_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1]
+    },
+    "packet_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dependency_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "lane": {
+      "type": "string",
+      "enum": [
+        "kimi_implementation",
+        "sonnet_implementation",
+        "grok_verification",
+        "opus_judgment"
+      ]
+    },
+    "assigned_worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["worker_id", "provider", "model"],
+      "properties": {
+        "worker_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "starting_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "worktree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "branch"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "writable_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+      }
+    },
+    "forbidden_surfaces": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+      }
+    },
+    "required_context": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "premise_checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "command_id", "expected"],
+        "properties": {
+          "check_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion_id", "statement", "required_evidence_ids"],
+        "properties": {
+          "criterion_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_evidence_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "verification_commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command_id",
+          "argv",
+          "cwd",
+          "timeout_seconds",
+          "expected_exit_code",
+          "expected_evidence_ids"
+        ],
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          },
+          "expected_exit_code": {
+            "type": "integer"
+          },
+          "expected_evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_turns",
+        "wall_clock_seconds",
+        "retry_limit",
+        "max_output_bytes",
+        "cost_class",
+        "allowance_limit"
+      ],
+      "properties": {
+        "max_turns": {
+          "type": "integer"
+        },
+        "wall_clock_seconds": {
+          "type": "integer"
+        },
+        "retry_limit": {
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "type": "integer"
+        },
+        "cost_class": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high"]
+        },
+        "allowance_limit": {
+          "type": "integer"
+        }
+      }
+    },
+    "network_policy": {
+      "type": "string",
+      "enum": ["denied", "allowed"]
+    },
+    "checkpoint_artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["artifact_id", "path", "required_for_fallback"],
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+          },
+          "required_for_fallback": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "allowed_commands"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowed_commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["argv", "cwd"],
+            "properties": {
+              "argv": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "human_stop_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "sonnet_reassignment_allowed": {
+      "type": "boolean"
+    },
+    "created_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "session_id", "model"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["opus_judgment"]
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "packet_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}
