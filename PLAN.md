@@ -218,6 +218,13 @@ optional hygiene, not a correctness requirement. Full evidence:
 - Next eligible teachers: Savchuk, Ravenhill, Poonen — no batch scheduled
   until Queue item 4 decides extractor hardening (now informed by 20
   rejects across two batches, not 10).
+- **Confirmed 2026-08-09 (read-only): `--per-doc-limit=1` is an explicit,
+  working-as-designed cap, not incidental truncation** — the extractor
+  ranks every candidate across the whole document before capping to one.
+  No recorded reason for the value 1; raising it needs only a CLI flag on
+  a future run, no code change. Whether unused quotable material actually
+  exists in already-processed chunks was not checked — a separate
+  question from why the cap exists. Full detail: `rhemata-status.md`.
 - `QUOTE_TOPIC_SIMILARITY_THRESHOLD=0.40` remains provisional. Calibration needs
   real labeled traffic; do not tune from intuition or a synthetic-only set.
 - Book-type quote extraction remains tabled. Flat book chunks lack reliable
@@ -297,7 +304,7 @@ default remains in force until its trigger occurs.
 | 19 | Archaic commentary modernization | Hold | Licensing conversations plus a faithfulness-review design |
 | 20 | Generation-output verification guard | Accepted residual gap | Existing direct-contact false-flag diagnostic; no sixth judge variant |
 | 21 | Numeral-heading chapter detector | Leave unwired | A per-book validation strategy that survives both known regression classes |
-| 23 | Quote extractor hardening before next batch | No further bulk batch | Decide majority-Scripture and unbalanced-quote checks from Prince rejects |
+| 23 | Quote extractor hardening before next batch | No further bulk batch | Decide majority-Scripture/unbalanced-quote checks from 20 Prince rejects, and whether to raise the confirmed `--per-doc-limit=1` cap |
 | 24 | `pending` vs `draft` quote status | Preserve both for now | Compatibility audit and explicit migration plan |
 | 25 | Study-panel drag behavior | Swipe-only remains shipped | Alex decides whether drag-to-follow materially improves mobile use |
 | 26 | `jewish_perspectives` table | Leave in place | Alex explicitly approves a dedicated drop migration |

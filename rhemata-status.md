@@ -6,10 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-09 (trigger-teeth proof + 239-quote snapshot
-determination + full review of the remaining 247-document Prince batch;
-Prince non-book curation now complete across all 496 documents). No push to
-origin; `serving_enabled` untouched.
+Last verified: 2026-08-09 (Prince non-book curation complete across all 496
+documents, trigger-teeth proof, then a read-only check of the per-document
+extraction cap). No push to origin; `serving_enabled` untouched.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -19,71 +18,56 @@ Target ≤150 lines for this file.
 ## Current state
 
 **Derek Prince non-book quote curation — COMPLETE, all 496 documents
-attempted (2026-08-09).** Two extraction batches (249 docs, then the
-remaining 247, after the snapshot fix below), each independently
-re-verified against live chunk content and manually screened for the two
-defect classes the automated verifier can't catch (majority-verbatim-
-Scripture content; incoherent dangling fragments). **Combined: 477
-approved** (240 + 237), **20 rejected** (10 + 10, logged to
-`quote_verification_log`, left `pending` — schema has no `rejected`
-state), **1 untracked pre-run row** (`bc3f71fd…`) still out of scope and
-`pending`. Live re-query: Prince `approved`=477, `pending`=21 (20 rejects +
-1 untracked), system-wide approved=478. **Coverage gap, stated
-explicitly: 476/496 documents have ≥1 approved quote; 20 do not** — each
-of those 20's only extracted candidate was one of the 20 rejects.
-Extraction reached all 496; approval did not clear all 496.
+attempted (2026-08-09).** Two extraction batches (249, then the remaining
+247), each independently re-verified against live chunk content and
+manually screened for the two defect classes the automated verifier can't
+catch (majority-verbatim-Scripture content; incoherent dangling fragments).
+**Combined: 477 approved** (240 + 237), **20 rejected** (10 + 10, logged
+to `quote_verification_log`, left `pending` — schema has no `rejected`
+state), **1 untracked pre-run row** (`bc3f71fd…`) still out of scope.
+Live-re-queried: Prince `approved`=477, `pending`=21, system-wide
+approved=478. **Coverage gap, stated explicitly: 476/496 documents have
+≥1 approved quote; 20 do not** — each of those 20's only candidate was
+rejected. Extraction reached all 496; approval did not clear all 496.
 
-**Snapshot-capture fix, proven with teeth (2026-08-09).** Last session
-flagged that the extractor stored `quote_source_revisions.passage_text` as
-just the candidate span, not the full chunk — making the DB trigger's
-substring check a no-op. Fixed in commit `4e3a0d1` (now stores
-`chunks.content` verbatim). **Proof the fix has real teeth:** a rollback-
-only transaction test inserted a completely fabricated quote_text against
-a real, cleared document — under the OLD convention (`passage_text` =
-`quote_text`) the trigger let it through with no exception; under the
-FIXED convention (`passage_text` = real chunk content) the trigger
-correctly raised `quotes: quote_text is not an exact substring of its
-captured source passage`. Everything rolled back; zero residue confirmed
-by a follow-up query for the test marker string.
+**Snapshot-capture bug found and fixed, then proven with teeth.** The
+extractor was storing `quote_source_revisions.passage_text` as just the
+candidate span, not the full chunk — making the DB trigger's substring
+check a no-op. Fixed in commit `4e3a0d1`. **Proof:** a rollback-only
+transaction test inserted a fabricated quote_text two ways against a real
+document — the OLD convention let it through with no exception; the FIXED
+convention correctly raised the trigger's exact-substring rejection.
+Zero residue confirmed after rollback. **The 239 quotes approved before
+the fix were NOT regenerated** — their correctness already rests on
+`verify_quote_candidate()`'s independent live check at approval time, not
+the trigger's snapshot, and no live chunk-edit path exists today that
+would need the snapshot to catch drift. Regenerating is optional hygiene,
+not required — Alex's call.
 
-**The 239 pre-fix approved quotes — determination: do not need
-regenerating, Alex's call if he wants the hygiene fix anyway.** Factually,
-their snapshots ARE vacuous (passage_text=quote_text trivially self-
-matches, so the trigger would validate nothing if it ever re-fired on
-these rows). But their underlying correctness was already established
-through last session's independent re-verification against LIVE
-`chunks.content` via `verify_quote_candidate()` — a real, robust check,
-not a rubber stamp, done moments before each approval. The trigger's
-"immutable snapshot" purpose only matters for *future* drift (an admin
-later editing the source chunk) — not an active capability in this
-product today (no chunk-reuse/re-chunk mechanism is enabled). So: content
-correctness for these 239 does not depend on the snapshot fix; only their
-resistance to a hypothetical future edit does. Regenerating is a cheap,
-safe, optional consistency improvement — not fixed this session.
+**One-quote-per-document pattern investigated (2026-08-09, read-only, no
+changes).** Every one of the 247 new candidates was the sole quote for its
+document — confirmed as an **explicit, working-as-designed cap**, not
+incidental truncation: `DEFAULT_PER_DOC_LIMIT = 1`
+(`scripts/extract_quote_candidates_derek_prince.py:65`, `--per-doc-limit`).
+The algorithm ranks every candidate across the *entire* document globally
+before capping, so the one quote per document really is that document's
+single best-scoring candidate — not a first-match shortcut. No code
+comment or commit records why it was set to 1; the closest documented
+rationale is the original quote-rail design's "50–100 first-pass quotes"
+breadth-first framing (`docs/plan-archive.md`) — an inference, not a
+confirmed reason. Raising it needs only `--per-doc-limit N` on a future
+run (and likely `--max-attempts-per-doc` alongside it) — no code change.
+Not investigated: whether more genuinely quotable material is actually
+sitting unused in these chunks — a distinct question from why the cap
+exists, left for Alex to decide is worth asking.
 
-**Batch 2 review (247 candidates, `logs/extract_prince_20260809_160803.log`).**
-Same method as batch 1: `verify_quote_candidate()` re-run fresh against
-live chunk content for all 247 (247/247 passed), then a full systematic
-read of every double-newline candidate (71) plus a regex scan of every
-remaining single-paragraph candidate (176) for embedded-quotation spans,
-plus a genuine ~17% stratified side-by-side sample — found nothing beyond
-the two known classes. **10 rejected**: 6 majority-Scripture (e.g. an
-unmarked near-verbatim 1 John 5:6, and two full verses of 1 Thessalonians
-5:23 chained together with only connective words of Prince's own), 4
-incoherent-fragment (2 dangling open-quote fragments, 1 literal `"..."`
-ellipsis, 1 unmarked opener). **237 approved** — `document_quote_clearance`
-inserted per document (237 new), then `status→'approved'` through the
-real (now-fixed) DB trigger, 237/237 succeeded on first attempt (last
-session's `approved_at` bug did not recur).
+**Two flagged findings, not fixed, Alex's call:** (1) `pending` vs
+`draft` — two status values doing the same job. (2) The 239 pre-fix
+snapshots (addressed above).
 
-**Two flagged findings, still not fixed, Alex's call:** (1) `pending` vs
-`draft` — two status values doing the same job (`create_and_approve_quote()`
-never creates a `draft` row since 2026-08-08's auto-approval change). (2)
-The snapshot-capture bug above is now fixed for future writes; the 239
-pre-fix rows' snapshots are the residual, addressed above.
-
-**Confirmed this session:** no push to origin; `serving_enabled` untouched;
-no teacher other than Derek Prince touched; no book-type document touched.
+**Confirmed this session:** no push to origin; `serving_enabled`
+untouched; no teacher other than Derek Prince touched; no book-type
+document touched; no code changed by the cap investigation.
 
 **Still live (product).** ONE answer path (async; `serving_enabled` TRUE).
 Quote rail live. Hidden-teacher visibility flip (Ravenhill/Savchuk/Poonen,
@@ -109,14 +93,15 @@ decided.
 
 1. **`five_fold_ministry.md` editorial decision.**
 2. Async concurrency proof at 100-dial (before speed work).
-3. Decide extractor hardening (majority-Scripture + unbalanced-quote-mark
-   checks) before any next teacher batch — informed by 20 rejects now,
-   not 10. Savchuk/Ravenhill/Poonen are eligible next (unhidden 2026-08-09).
+3. Decide extractor hardening before any next batch — three independent
+   levers now on the table: majority-Scripture/unbalanced-quote checks
+   (20 rejects across two batches), the `--per-doc-limit=1` cap (raise or
+   keep), and whether it's worth checking if unused material exists in
+   already-processed chunks. Savchuk/Ravenhill/Poonen are eligible next.
 4. Decide the 1 untracked pending row (`bc3f71fd…`).
-5. Decide whether to regenerate the 239 pre-fix snapshots (optional
-   hygiene, not required — see determination above).
+5. Decide whether to regenerate the 239 pre-fix snapshots (optional).
 6. Decide whether the 20 zero-coverage Prince documents warrant a
-   targeted re-extraction attempt.
+   targeted re-extraction (possibly informed by item 3's per-doc-limit).
 7. **Human review of chapter-boundary proposals** (18 books) — Open
    Decision #21 still open.
 8. **Trail / Brooks one-offs** — review then decide visibility.
