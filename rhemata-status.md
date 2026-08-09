@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-09 (records-only session — reconciling a corpus census
-and a Derek Prince pending-quote extraction run, both done outside this
-session).
+Last verified: 2026-08-09 (reconciling a corpus census + Derek Prince
+pending-quote run done outside this session, then a live hidden-teacher
+visibility flip done in-session).
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -34,8 +34,31 @@ Target ≤150 lines for this file.
 - **The three hidden teachers** (Ravenhill 117 docs, Savchuk 126, Poonen 50):
   all three already have full chunk + proposition coverage. Poonen
   additionally has full `full_text` coverage; Ravenhill and Savchuk do not.
-  None have any quotes. Unhiding any of the three (Phase 1.3) is a pure
-  visibility flip — no proposition backfill is a prerequisite.
+  None have any quotes. **Flipped `hidden`→`shown` this session — see below.**
+
+**Hidden-teacher visibility flip (2026-08-09, in-session, DB-only).**
+Live re-check before the write matched the 2026-08-09 census exactly for all
+three (no drift). `UPDATE sources SET visibility='shown'` for exactly
+Ravenhill, Savchuk, Poonen (3 rows, confirmed by rowcount) —
+`license_status` (`unlicensed`), `retrievable` (`false`), the sentinel row,
+and the other 11 hidden sources were not touched. `safe_mode` is `off`, so
+the license gate now admits all three. **Verified against the real serving
+path**, not just the DB row — called `producer.produce()` directly (the
+exact function the async worker runs) with two real questions:
+- "Why does revival tarry" → real answer citing 3 distinct Ravenhill
+  documents, correctly attributed (`verified_references` confirms
+  `Leonard Ravenhill`).
+- "Deliverance from demonic oppression and spiritual warfare" →
+  independently confirmed via `match_stored_position()` that this hits the
+  `deliverance from demons and spiritual warfare` stored-position topic;
+  returned a real position-backed answer built entirely from Savchuk
+  evidence (15/15 citations `Vlad Savchuk`) — this topic was a no-op before
+  today (its sole evidence source was hidden). Also surfaced in the same
+  pass: PLAN.md's Phase 3 item 5 said the evidence-injection commit
+  (`eca8070`/`34f6b0b`) was "NOT pushed to origin" — that was stale; both
+  are confirmed on `origin/main`. Corrected in PLAN.md.
+**Rollback, if needed (seconds):** flip `visibility` back to `hidden` for
+the same 3 source ids; nothing else to undo.
 
 **Derek Prince pending-quote extraction (2026-08-09, Kimi).**
 `scripts/extract_quote_candidates_derek_prince.py` (migration 086 added
@@ -81,9 +104,8 @@ decided**.
 
 - Guest→account, auth CTAs, v4 props, **#14 drop `jewish_perspectives`**,
   SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
-- Phase 1.3 subset/execution still open — proposition coverage is confirmed
-  complete for all three hidden teachers (census above), so this is
-  mechanics-only (schema default + script defaults + the visibility-bit flip).
+- Phase 1.3: 3 of 14 hidden sources flipped (Ravenhill/Savchuk/Poonen, above).
+  11 remain hidden by design (sentinel + 10 empty shells, nothing to flip).
 - Admin-panel notifications — dependency of refresh (CLAUDE.md #21); no design.
 - `five_fold_ministry.md` editorial marker — needs Alex.
 
@@ -93,7 +115,8 @@ decided**.
 
 1. **`five_fold_ministry.md` editorial decision.**
 2. Async concurrency proof at 100-dial (before speed work).
-3. Phase 1.3 subset/execution (Ravenhill/Savchuk/Poonen) — visibility flip only.
+3. Quote curation for Ravenhill/Savchuk/Poonen — now unhidden and eligible,
+   not yet started (Prince curation remains the active thread).
 4. **#14 drop `jewish_perspectives`** when Alex says so.
 5. **Review/approve Derek Prince pending quotes** (250 candidates waiting;
    requires `document_quote_clearance`). Re-run the extractor with a higher
