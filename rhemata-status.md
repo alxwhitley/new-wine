@@ -6,9 +6,8 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-09 (reconciling a corpus census + Derek Prince
-pending-quote run done outside this session, then a live hidden-teacher
-visibility flip done in-session).
+Last verified: 2026-08-09 (Prince snapshot fix + remaining 247-document
+extraction in-session; no push to origin, `serving_enabled` untouched).
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -55,53 +54,32 @@ exact function the async worker runs) with two real questions:
   stale, both are on `origin/main`. Corrected in PLAN.md.
 **Rollback (seconds):** flip `visibility` back to `hidden` for the same 3 ids.
 
-**Derek Prince quote extraction + review (2026-08-09, Kimi extraction +
-in-session review/approval).** The extractor (migration 086's `pending`
-status) actually ran twice: an untracked live test inserted 1 row ~65s
-before the "official" logged run started, so the DB's 250 pending rows are
-NOT all one batch — **corrects the prior "250 candidates" figure**: only
-249 belong to `logs/extract_prince_20260809_080948.log` (249 docs, 0
-refusals, 0 errors, 247 unattempted); the 1 untracked row (`bc3f71fd…`)
-was left untouched this session (out of scope) and still sits `pending`,
-flagged for Alex.
+**Derek Prince quote extraction (2026-08-09).** Initial 249-document run
+(`logs/extract_prince_20260809_080948.log`) inserted 249 pending
+candidates; 239 were approved in-session, 10 were rejected (left at
+`pending`; schema has no `rejected` state), and 1 untracked row
+(`bc3f71fd…`) remained pending and out of scope.
 
-**All 249 logged candidates reviewed this session.** Fresh independent
-re-verification (`verify_quote_candidate()` against live chunk content,
-not the prior run's stored verdict): 249/249 passed. A full manual
-scan — 100% coverage for two failure classes the automated verifier can't
-catch, plus genuine side-by-side reading on a ~33% sample — found **10
-rejects**: 6 dominated by a verbatim Scripture quotation (risking KJV/NKJV
-wording being read as Prince's own voice) and 4 that open/close on an
-incoherent dangling fragment. Logged to `quote_verification_log`
-(`reviewer_judgment_majority_scripture` / `_incoherent_fragment`), left at
-`pending` (schema has no `rejected` state). **The other 239 approved** —
-`document_quote_clearance` inserted per document (238 new), then
-`status→'approved'` per row through the real DB trigger. Live re-query
-confirms: Prince approved = **240** (239 new + 1 pre-existing), system-wide
-approved = 241, Prince pending = 11 (10 rejects + the 1 out-of-scope row).
-Live on the serving path now. (Mid-review: the first approval attempt on
-all 239 failed a CHECK constraint — `approved_at` wasn't set alongside
-`approved_by` — logged as `db_trigger_failure`, fixed, retried clean;
-accurate history, not noise.) **Recommendation, not a decision:** the
-96% pass rate and the fact both defect classes are systematic suggest
-adding a "majority-known-Scripture" check and an "unbalanced quote mark"
-check to the extractor before re-running against the remaining 247 docs —
-Alex's call. Separately: ~80 rows in `quote_verification_log` are dry-run
-test noise from before dry-run logging was disabled — don't count them.
+**Snapshot fix (2026-08-09).**
+`scripts/extract_quote_candidates_derek_prince.py` was storing only the
+extracted candidate span in `quote_source_revisions.passage_text`, not the
+full source chunk. Fixed: the INSERT now stores `chunks.content` verbatim,
+matching migration 082's "immutable snapshot of exactly one chunk's text"
+intent and the behavior of `create_and_approve_quote()`. A live check of a
+freshly inserted row confirms `passage_text = chunks.content` exactly.
 
-**Two flagged findings, not fixed, Alex's call:** (1) **`pending` vs
-`draft`** — migration 086 added `pending` for "awaiting human review,"
-exactly what `draft` already meant before 2026-08-08's auto-approval change
-orphaned it (`create_and_approve_quote()` never creates a `draft` row
-anymore) — reusing `draft` looks like the right call in hindsight; two
-status values now do the same job. (2) **`quote_source_revisions.passage_text`
-snapshot convention** — the Prince extractor stored `passage_text = the
-candidate span itself`, not the full chunk `create_and_approve_quote()`
-captures, making the DB trigger's own substring check a no-op for these 249
-rows (a string is always a substring of itself); harmless here since the
-real gate is `verify_quote_candidate()`'s live re-check, but defeats
-migration 082's stated snapshot-immutability purpose. Recorded in
-CLAUDE.md's Landmines.
+**Remaining Derek Prince extraction (2026-08-09).** The fixed extractor was
+run against the 247 remaining non-book documents with no quote ceiling.
+Result: 247 documents attempted, 247 pending quotes inserted, 0 refusals,
+0 errors. All 496 Derek Prince non-book documents now have at least one
+quote candidate.
+
+**One open finding, Alex's call:** **`pending` vs `draft`** — migration 086
+added `pending` for "awaiting human review," exactly what `draft` already
+meant before 2026-08-08's auto-approval change orphaned it
+(`create_and_approve_quote()` never creates a `draft` row anymore) —
+reusing `draft` looks like the right call in hindsight; two status values
+now do the same job.
 
 **Confirmed this session:** no push to origin from the census, the Kimi
 run, or any of this session's DB work; `serving_enabled` untouched; no
@@ -135,9 +113,11 @@ decided**.
 3. Quote curation for Ravenhill/Savchuk/Poonen — now unhidden and eligible,
    not yet started (Prince curation remains the active thread).
 4. **#14 drop `jewish_perspectives`** when Alex says so.
-5. **Prince quote batch reviewed 2026-08-09 — 240 approved, live.** Next:
-   the 1 out-of-scope row (`bc3f71fd…`); harden extractor before rerun on
-   remaining 247 docs (recommended, not decided).
+5. **Prince non-book quote extraction complete 2026-08-09.** 240 approved
+   live, 10 rejected left `pending`, 1 untracked row (`bc3f71fd…`) still
+   `pending`. Snapshot bug fixed and remaining 247 docs extracted; all 496
+   non-book documents now have a candidate. Next: decide what to do with
+   the 11 pending rejects + 1 untracked row.
 6. **Human review of chapter-boundary proposals** (18 books) before any
    apply/wiring decision — Open Decision #21 still open.
 7. **Trail / Brooks one-offs** — review then decide visibility; script still

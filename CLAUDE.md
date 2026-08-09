@@ -723,29 +723,24 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- **`quote_source_revisions.passage_text` can be captured as just the
-  candidate span, not the full chunk — silently defeating the DB trigger's
-  own substring check for any row written that way.** Found 2026-08-09
-  reviewing `scripts/extract_quote_candidates_derek_prince.py`'s 249-row
-  batch: that script's INSERT stores `passage_text = <the extracted quote
+- **RESOLVED 2026-08-09 — `quote_source_revisions.passage_text` was
+  captured as just the candidate span, not the full chunk — silently
+  defeating the DB trigger's own substring check for any row written that
+  way.** Found 2026-08-09 reviewing
+  `scripts/extract_quote_candidates_derek_prince.py`'s 249-row batch: that
+  script's INSERT originally stored `passage_text = <the extracted quote
   text itself>`, unlike `create_and_approve_quote()`
   (`backend/app/services/quotes.py`), which stores the FULL chunk content.
   Migration 082's own header describes `quote_source_revisions` as "an
   immutable snapshot of exactly one chunk's text ... a later edit to a
   chunk must never retroactively change what an already-approved quote is
-  judged against" — reading `enforce_quote_approval_gates()`'s Gate 4
-  (`position(NEW.quote_text IN v_passage_text) = 0`) makes this look like a
-  real, live check. For any row where `passage_text == quote_text`
-  verbatim, it is a no-op: a string is always a substring of itself, so the
-  trigger cannot detect drift for these rows no matter what happens to the
-  underlying chunk later. **Not a live hole today** — the actual gate that
-  protected the 2026-08-09 batch was `verify_quote_candidate()`'s
-  independent re-check against LIVE `chunks.content` (`quote_verifier.py`,
-  called fresh during that session's review, not the trigger) — but a
-  future extraction script copying this INSERT shape would ship with a
-  vestigial-looking check that provides none of its stated protection.
-  Not fixed this session (records-only finding); see rhemata-status.md and
-  PLAN.md Phase 4 for the review this was found during.
+  judged against." Fixed the same session: the Prince extractor now stores
+  the full source chunk text in `passage_text`, matching the intended
+  snapshot convention. The remaining 247-document rerun and any future
+  rerun use the corrected snapshot. The original 249 rows written with the
+  span-only snapshot were reviewed/approved under `verify_quote_candidate()`'s
+  live re-check, so they remain safe, but their stored snapshots are
+  technically vestigial.
 - **RESOLVED 2026-08-07 — the Precept Austin "citable author" leak (PLAN.md
   Phase 2) is closed.** Root cause: `is_commentary_chunk()`
   (`backend/app/services/answer_toolbox.py`) only matched
