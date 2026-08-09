@@ -740,7 +740,20 @@ different row, per the hard rule above.
   rerun use the corrected snapshot. The original 249 rows written with the
   span-only snapshot were reviewed/approved under `verify_quote_candidate()`'s
   live re-check, so they remain safe, but their stored snapshots are
-  technically vestigial.
+  technically vestigial. **Verified, not assumed (2026-08-09, same-day
+  follow-up):** a rollback-only transaction test inserted an identical
+  fabricated `quote_text` two ways against a real, cleared document — under
+  the old convention (`passage_text = quote_text`) the trigger let it
+  through with no exception; under the fixed convention (`passage_text =
+  chunks.content`) the trigger correctly raised "quote_text is not an
+  exact substring of its captured source passage". Everything rolled back,
+  zero residue confirmed by a follow-up query. The 239 quotes approved
+  before this fix were deliberately NOT regenerated — their correctness
+  rests on `verify_quote_candidate()`'s independent live check at approval
+  time, not on the trigger's snapshot, and this product has no live
+  chunk-edit/reuse path today that the vestigial snapshot would need to
+  guard against. Regenerating them is optional hygiene, not required —
+  Alex's call.
 - **RESOLVED 2026-08-07 — the Precept Austin "citable author" leak (PLAN.md
   Phase 2) is closed.** Root cause: `is_commentary_chunk()`
   (`backend/app/services/answer_toolbox.py`) only matched

@@ -6,8 +6,10 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-09 (Prince snapshot fix + remaining 247-document
-extraction in-session; no push to origin, `serving_enabled` untouched).
+Last verified: 2026-08-09 (trigger-teeth proof + 239-quote snapshot
+determination + full review of the remaining 247-document Prince batch;
+Prince non-book curation now complete across all 496 documents). No push to
+origin; `serving_enabled` untouched.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -16,80 +18,78 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**Corpus census (2026-08-09, read-only, Grok).** Full report:
-`~/rhemata-analysis/corpus_census_2026-08-09.md`. Live-queried, corpus-wide
-(3,597 total documents):
-- Chunking near-universal (3,595/3,597); `full_text` almost entirely
-  missing (58/3,597, supersedes Phase 5 #7's stale "56 present" probe).
-- Propositions cover 864/3,597 docs corpus-wide — looks sparse, but the gap
-  is concentrated in commentary-type sources excluded by standing policy
-  (Precept Austin's `word_study` alone is 2,176 docs); every teacher with
-  real curatable material has complete coverage.
-- **Derek Prince**: 496 non-book documents, 100% chunked, 100%
-  proposition-covered. Before this session, exactly 1 quote existed for him
-  anywhere.
-- **The three hidden teachers** (Ravenhill 117 docs, Savchuk 126, Poonen 50):
-  all three already have full chunk + proposition coverage. Poonen
-  additionally has full `full_text` coverage; Ravenhill and Savchuk do not.
-  None have any quotes. **Flipped `hidden`→`shown` this session — see below.**
+**Derek Prince non-book quote curation — COMPLETE, all 496 documents
+attempted (2026-08-09).** Two extraction batches (249 docs, then the
+remaining 247, after the snapshot fix below), each independently
+re-verified against live chunk content and manually screened for the two
+defect classes the automated verifier can't catch (majority-verbatim-
+Scripture content; incoherent dangling fragments). **Combined: 477
+approved** (240 + 237), **20 rejected** (10 + 10, logged to
+`quote_verification_log`, left `pending` — schema has no `rejected`
+state), **1 untracked pre-run row** (`bc3f71fd…`) still out of scope and
+`pending`. Live re-query: Prince `approved`=477, `pending`=21 (20 rejects +
+1 untracked), system-wide approved=478. **Coverage gap, stated
+explicitly: 476/496 documents have ≥1 approved quote; 20 do not** — each
+of those 20's only extracted candidate was one of the 20 rejects.
+Extraction reached all 496; approval did not clear all 496.
 
-**Hidden-teacher visibility flip (2026-08-09, in-session, DB-only).**
-Live re-check before the write matched the 2026-08-09 census exactly for all
-three (no drift). `UPDATE sources SET visibility='shown'` for exactly
-Ravenhill, Savchuk, Poonen (3 rows, confirmed by rowcount) —
-`license_status` (`unlicensed`), `retrievable` (`false`), the sentinel row,
-and the other 11 hidden sources were not touched. `safe_mode` is `off`, so
-the license gate now admits all three. **Verified against the real serving
-path**, not just the DB row — called `producer.produce()` directly (the
-exact function the async worker runs) with two real questions:
-- "Why does revival tarry" → real answer citing 3 distinct Ravenhill
-  documents, correctly attributed (`verified_references` confirms
-  `Leonard Ravenhill`).
-- "Deliverance from demonic oppression and spiritual warfare" → confirmed
-  via `match_stored_position()` that this hits the deliverance
-  stored-position topic; returned a real position-backed answer built
-  entirely from Savchuk evidence (15/15 citations) — a no-op before today.
-  Also found in passing: PLAN.md's Phase 3 item 5 called the
-  evidence-injection commit (`eca8070`/`34f6b0b`) "NOT pushed to origin" —
-  stale, both are on `origin/main`. Corrected in PLAN.md.
-**Rollback (seconds):** flip `visibility` back to `hidden` for the same 3 ids.
+**Snapshot-capture fix, proven with teeth (2026-08-09).** Last session
+flagged that the extractor stored `quote_source_revisions.passage_text` as
+just the candidate span, not the full chunk — making the DB trigger's
+substring check a no-op. Fixed in commit `4e3a0d1` (now stores
+`chunks.content` verbatim). **Proof the fix has real teeth:** a rollback-
+only transaction test inserted a completely fabricated quote_text against
+a real, cleared document — under the OLD convention (`passage_text` =
+`quote_text`) the trigger let it through with no exception; under the
+FIXED convention (`passage_text` = real chunk content) the trigger
+correctly raised `quotes: quote_text is not an exact substring of its
+captured source passage`. Everything rolled back; zero residue confirmed
+by a follow-up query for the test marker string.
 
-**Derek Prince quote extraction (2026-08-09).** Initial 249-document run
-(`logs/extract_prince_20260809_080948.log`) inserted 249 pending
-candidates; 239 were approved in-session, 10 were rejected (left at
-`pending`; schema has no `rejected` state), and 1 untracked row
-(`bc3f71fd…`) remained pending and out of scope.
+**The 239 pre-fix approved quotes — determination: do not need
+regenerating, Alex's call if he wants the hygiene fix anyway.** Factually,
+their snapshots ARE vacuous (passage_text=quote_text trivially self-
+matches, so the trigger would validate nothing if it ever re-fired on
+these rows). But their underlying correctness was already established
+through last session's independent re-verification against LIVE
+`chunks.content` via `verify_quote_candidate()` — a real, robust check,
+not a rubber stamp, done moments before each approval. The trigger's
+"immutable snapshot" purpose only matters for *future* drift (an admin
+later editing the source chunk) — not an active capability in this
+product today (no chunk-reuse/re-chunk mechanism is enabled). So: content
+correctness for these 239 does not depend on the snapshot fix; only their
+resistance to a hypothetical future edit does. Regenerating is a cheap,
+safe, optional consistency improvement — not fixed this session.
 
-**Snapshot fix (2026-08-09).**
-`scripts/extract_quote_candidates_derek_prince.py` was storing only the
-extracted candidate span in `quote_source_revisions.passage_text`, not the
-full source chunk. Fixed: the INSERT now stores `chunks.content` verbatim,
-matching migration 082's "immutable snapshot of exactly one chunk's text"
-intent and the behavior of `create_and_approve_quote()`. A live check of a
-freshly inserted row confirms `passage_text = chunks.content` exactly.
+**Batch 2 review (247 candidates, `logs/extract_prince_20260809_160803.log`).**
+Same method as batch 1: `verify_quote_candidate()` re-run fresh against
+live chunk content for all 247 (247/247 passed), then a full systematic
+read of every double-newline candidate (71) plus a regex scan of every
+remaining single-paragraph candidate (176) for embedded-quotation spans,
+plus a genuine ~17% stratified side-by-side sample — found nothing beyond
+the two known classes. **10 rejected**: 6 majority-Scripture (e.g. an
+unmarked near-verbatim 1 John 5:6, and two full verses of 1 Thessalonians
+5:23 chained together with only connective words of Prince's own), 4
+incoherent-fragment (2 dangling open-quote fragments, 1 literal `"..."`
+ellipsis, 1 unmarked opener). **237 approved** — `document_quote_clearance`
+inserted per document (237 new), then `status→'approved'` through the
+real (now-fixed) DB trigger, 237/237 succeeded on first attempt (last
+session's `approved_at` bug did not recur).
 
-**Remaining Derek Prince extraction (2026-08-09).** The fixed extractor was
-run against the 247 remaining non-book documents with no quote ceiling.
-Result: 247 documents attempted, 247 pending quotes inserted, 0 refusals,
-0 errors. All 496 Derek Prince non-book documents now have at least one
-quote candidate.
+**Two flagged findings, still not fixed, Alex's call:** (1) `pending` vs
+`draft` — two status values doing the same job (`create_and_approve_quote()`
+never creates a `draft` row since 2026-08-08's auto-approval change). (2)
+The snapshot-capture bug above is now fixed for future writes; the 239
+pre-fix rows' snapshots are the residual, addressed above.
 
-**One open finding, Alex's call:** **`pending` vs `draft`** — migration 086
-added `pending` for "awaiting human review," exactly what `draft` already
-meant before 2026-08-08's auto-approval change orphaned it
-(`create_and_approve_quote()` never creates a `draft` row anymore) —
-reusing `draft` looks like the right call in hindsight; two status values
-now do the same job.
-
-**Confirmed this session:** no push to origin from the census, the Kimi
-run, or any of this session's DB work; `serving_enabled` untouched; no
-teacher other than Prince/Ravenhill/Savchuk/Poonen and no book-type
-document touched by any of it.
+**Confirmed this session:** no push to origin; `serving_enabled` untouched;
+no teacher other than Derek Prince touched; no book-type document touched.
 
 **Still live (product).** ONE answer path (async; `serving_enabled` TRUE).
-Quote rail live; books tabled for quote extraction. Position one-hop live on
-origin. Book chapter extraction still 8/53; Open Decision #21 still **not
-decided**.
+Quote rail live. Hidden-teacher visibility flip (Ravenhill/Savchuk/Poonen,
+2026-08-09) verified against the real serving path. Position one-hop live
+on origin. Book chapter extraction still 8/53; Open Decision #21 not
+decided.
 
 ---
 
@@ -97,12 +97,11 @@ decided**.
 
 **Launch:** ~68s full reveal; async concurrency unproven at 100-dial.
 
-- Guest→account, auth CTAs, v4 props, **#14 drop `jewish_perspectives`**,
+- Guest→account, auth CTAs, v4 props, `jewish_perspectives` drop,
   SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
-- Phase 1.3: 3 of 14 hidden sources flipped (Ravenhill/Savchuk/Poonen, above).
-  11 remain hidden by design (sentinel + 10 empty shells, nothing to flip).
-- Admin-panel notifications — dependency of refresh (CLAUDE.md #21); no design.
+- Admin-panel notifications — dependency of position-refresh; no design.
 - `five_fold_ministry.md` editorial marker — needs Alex.
+- 20 Prince documents with zero approved quotes (coverage gap above).
 
 ---
 
@@ -110,21 +109,19 @@ decided**.
 
 1. **`five_fold_ministry.md` editorial decision.**
 2. Async concurrency proof at 100-dial (before speed work).
-3. Quote curation for Ravenhill/Savchuk/Poonen — now unhidden and eligible,
-   not yet started (Prince curation remains the active thread).
-4. **#14 drop `jewish_perspectives`** when Alex says so.
-5. **Prince non-book quote extraction complete 2026-08-09.** 240 approved
-   live, 10 rejected left `pending`, 1 untracked row (`bc3f71fd…`) still
-   `pending`. Snapshot bug fixed and remaining 247 docs extracted; all 496
-   non-book documents now have a candidate. Next: decide what to do with
-   the 11 pending rejects + 1 untracked row.
-6. **Human review of chapter-boundary proposals** (18 books) before any
-   apply/wiring decision — Open Decision #21 still open.
-7. **Trail / Brooks one-offs** — review then decide visibility; script still
-   uncommitted if not yet landed.
-8. Hygiene: #16 feedback→flag keep/kill.
-9. Decide `pending` vs `draft` quote-status consolidation (flagged above).
-10. Decide `quote_source_revisions.passage_text` snapshot-convention fix
-    (flagged above, CLAUDE.md Landmines).
+3. Decide extractor hardening (majority-Scripture + unbalanced-quote-mark
+   checks) before any next teacher batch — informed by 20 rejects now,
+   not 10. Savchuk/Ravenhill/Poonen are eligible next (unhidden 2026-08-09).
+4. Decide the 1 untracked pending row (`bc3f71fd…`).
+5. Decide whether to regenerate the 239 pre-fix snapshots (optional
+   hygiene, not required — see determination above).
+6. Decide whether the 20 zero-coverage Prince documents warrant a
+   targeted re-extraction attempt.
+7. **Human review of chapter-boundary proposals** (18 books) — Open
+   Decision #21 still open.
+8. **Trail / Brooks one-offs** — review then decide visibility.
+9. Decide `pending` vs `draft` quote-status consolidation.
+10. `jewish_perspectives` drop — needs Alex's explicit approval + a
+    dedicated DB-write session.
 
 SP: #43 swipe-to-close shipped; full drag-to-follow-with-peek not shipped.
