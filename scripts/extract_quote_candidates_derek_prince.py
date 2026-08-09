@@ -286,6 +286,15 @@ def main():
             f"(default {DEFAULT_MAX_ATTEMPTS_PER_DOC})"
         ),
     )
+    parser.add_argument(
+        "--doc-ids-file",
+        type=str,
+        default=None,
+        help=(
+            "Path to a file containing UUID document ids (one per line). "
+            "If provided, only those documents are processed."
+        ),
+    )
     args = parser.parse_args()
 
     supabase_db = get_supabase()
@@ -314,6 +323,14 @@ def main():
         (PRINCE_SOURCE_ID,),
     )
     docs = cur.fetchall()
+    if args.doc_ids_file:
+        allowed_ids = set(Path(args.doc_ids_file).read_text().split())
+        docs = [d for d in docs if str(d[0]) in allowed_ids]
+        logger.info(
+            "Restricted scope to %d documents from %s",
+            len(docs),
+            args.doc_ids_file,
+        )
     logger.info(
         "Scope: %d Derek Prince non-book documents (%d sermon + %d magazine_article)",
         len(docs),
@@ -363,9 +380,11 @@ def main():
 
             # Gather top-scoring candidates across all eligible chunks.
             all_candidates: List[Tuple[str, int, str, int]] = []  # (chunk_id, chunk_index, text, score)
+            chunk_content_by_id: dict[str, str] = {}
             for chunk_id, chunk_index, content, ineligible_reason in chunks:
                 if not content or ineligible_reason:
                     continue
+                chunk_content_by_id[chunk_id] = content
                 for start, end, text, score in generate_candidates(content):
                     all_candidates.append((chunk_id, chunk_index, text, score))
 
@@ -401,14 +420,14 @@ def main():
                         )
                         continue
     
-                    # Capture immutable snapshot and insert as PENDING.
+                    # Capture immutable snapshot (full source chunk text) and insert as PENDING.
                     cur.execute(
                         """
                         INSERT INTO quote_source_revisions (chunk_id, passage_text, captured_by)
                         VALUES (%s, %s, %s)
                         RETURNING id
                         """,
-                        (chunk_id, text, admin_user_id),
+                        (chunk_id, chunk_content_by_id[chunk_id], admin_user_id),
                     )
                     revision_id = cur.fetchone()[0]
                     reviewer_note = (
