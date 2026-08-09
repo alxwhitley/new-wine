@@ -7,7 +7,8 @@ table counts are NOT recorded here — query the live DB, and treat any count
 seen elsewhere as unverified.
 
 Last verified: 2026-08-09 (push + deploy of two Kimi-session commits; live
-site healthy).
+site healthy). Same-day follow-up DB-write session added two hidden one-off
+sources — no deploy involved, live-site status unchanged.
 
 **Session close:** `.claude/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -16,17 +17,35 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**This session (2026-08-09, push + tracking-doc update).**
-Pushed two Kimi-session commits that were ahead of `origin/main`:
-- Mobile bottom-sheet source panel (`frontend/components/rhemata/source-panel.tsx`,
-  commit `c37200e`, PLAN.md #38) — grab handle + swipe-to-close on mobile,
-  desktop branch unchanged.
-- Folder renames (`sources/lexicon/` → `sources/stepbible/`, `sources/documents/`
-  → `sources/inbox/`, commit `37fbc08`, PLAN.md #14 rename portion) — 5 scripts +
-  `ARCHITECTURE.md` updated, local directories renamed.
-Deploy verified: Railway `rhemata` service and `answer-worker` both Online,
-Vercel deployment live, `https://rhemata.app` loads with no console errors.
-No DB writes this session.
+**This session (2026-08-09, one-off Ryle Ch. XXI source/document add — DB
+write).** Added two hidden, `public_domain` sources for the two credited
+extracts inside J.C. Ryle's *Holiness* Ch. XXI ("Extracts from Old
+Writers"): Robert Trail (`7243551c-9c9f-4edd-ab9f-ff3deb8bb52e`, aliases
+"Robert Trail"/"Robert Traill") and Thomas Brooks
+(`8d87f5da-2899-4cab-b130-54b0477f19c9`). One document each — "Concerning
+Sanctification" (7 chunks) and "The Necessity of Holiness" (6 chunks) —
+ingested through `shared_ingest.ingest_document()`
+(`scripts/register_ryle_ch21_extracts_2026-08-09.py`, uncommitted). Text
+reconstructed from the Ryle document's chunks 569-581 with the chunker's
+80-token overlap deduplicated (`documents.full_text` is NULL for this doc,
+so a raw newline-join of the raw chunks would have duplicated text at every
+boundary). **Zero propositions on both, correctly** — `license_status=
+'public_domain'` means Invariant 11's gate skips extraction by design; kept
+PD as factually accurate rather than mislabeling `unlicensed` to force
+propositions, and Alex confirmed no propositions are needed. Both
+`visibility='hidden'` — **not reviewed for serving yet, do not flip without
+Alex's explicit call.** Source Ryle document
+(`3f05746a-c848-4ecc-9cea-6e1b1559a5dd`) untouched — reverified still 592
+chunks after this session's writes.
+
+**Prior session (2026-08-09, push + tracking-doc update).** Pushed two
+Kimi-session commits that were ahead of `origin/main`: mobile bottom-sheet
+source panel (`frontend/components/rhemata/source-panel.tsx`, commit
+`c37200e`, PLAN.md #38) and folder renames (`sources/lexicon/` →
+`sources/stepbible/`, `sources/documents/` → `sources/inbox/`, commit
+`37fbc08`, PLAN.md #14 rename portion). Deploy verified: Railway `rhemata`
+service and `answer-worker` both Online, Vercel deployment live,
+`https://rhemata.app` loads with no console errors.
 
 **Prior sessions (2026-08-08, condensed — full detail: git log +
 PLAN.md/CLAUDE.md).** Quote-rail sub-chunk exclusion Müller gap closed
@@ -102,7 +121,9 @@ as a local-dev artifact, not a code regression.
    with zero non-book material). See PLAN.md Phase 4 for the full
    visible-teacher non-book breakdown.
 6. Hygiene: #16 feedback→flag keep/kill (Alex's call, not urgent).
-7. If Alex wants real confidence in the queue+worker path at scale, a
+7. **Robert Trail / Thomas Brooks one-off sources** (Ryle Ch. XXI extracts) —
+   currently `hidden`, pending Alex's review before any visibility flip.
+8. If Alex wants real confidence in the queue+worker path at scale, a
    controlled run against a connection pool that isn't capped at 15 would
    close the "not fully proven" gap above.
 
