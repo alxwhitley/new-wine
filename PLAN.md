@@ -197,8 +197,12 @@ passed.
 |---|---|---|
 | Opus specifies scheduling, retry classification, fallback semantics, and morning reconciliation. | Implement durable queue/journal/checkpoint behavior with crash-resume tests. | Build deterministic failure fixtures: timeout, malformed output, quota exhaustion, test failure, and interrupted process. |
 
-**Status — 2026-08-10: the decision/bookkeeping layer is built, tested, and
-independently reviewed. The coordinator's live run loop is NOT built. Read
+**Status — 2026-08-10: O3's decision layer plus coordinator slices P5A–P5C
+are built, tested, and independently accepted on
+`codex/o3-p5-coordinator-loop`. Enrollment/attempt claims, bounded synthetic
+invocation, trusted verdict ingestion, terminal seals, REVISE requeue, and
+seal-before-promotion now exist. P5D recovery/fallback/reconciliation and P5E
+synthetic commissioning remain; no real provider has been commissioned. Read
 the boxes below literally — do not read this as "O3 complete."**
 
 **Exit criteria:**
@@ -234,24 +238,16 @@ the boxes below literally — do not read this as "O3 complete."**
   the CLI exit code treats both as failure so an automated morning check
   can't miss either).
 
-**What is missing, stated plainly, not as a trailing caveat (final O3
-integration gate, defect D2): no coordinator MAIN LOOP exists anywhere in
-this repo.** Nothing enrolls a packet, invokes a real Kimi/Sonnet/Grok
-worker, or journals a live `ATTEMPT_STARTED`/`ATTEMPT_FINISHED` against
-real work. No code writes `queue.json`, a per-packet `state/<id>.json`
-cache, a terminal seal, a reassignment record, or a `RUN_ENDED` event.
-`invoke.py`, named in the original design's own sequencing table, was never
-implemented. Concretely demonstrated, not theoretical: with no seal writer,
-dependency promotion (`classify_runtime.promote_dependencies`) can never
-actually fire for any dependent packet in this build — confirmed by live
-reproduction, now flagged by the reconciliation report itself
-(`promotion_stalled`) rather than silently passing. Everything built and
-reviewed this session is the decision layer a future coordinator loop would
-call — queue state machine, dependency tracking, retry classification,
-quarantine, fallback confirmation, crash-safe fold/recovery, and morning
-reconciliation — genuinely correct and tested against ~90 adversarial
-fixtures, but inert until that loop exists. Building it is separate,
-substantial future work, not a continuation of this session's scope.
+**What is missing, stated plainly:** P5D must finish restart-safe fallback,
+immutable reassignment records, reconciliation, and read-only status; P5E must
+commission the whole loop with disposable synthetic adapters. Before P5D,
+four independently reproduced defects need separate bounded remediation:
+enrollment can report success after appending a chronology-invalid event;
+invocation cleanup can signal a recycled PID after reaping; derived queue
+entries are ordered by packet ID while their validator requires enqueue order;
+and the P5A worker-claim path remains pathname-based rather than bound to the
+pinned state-root identity introduced by P5C. Real Kimi/Sonnet commissioning
+remains `HUMAN_REQUIRED` until its subprocess sandbox is independently proven.
 
 Also carried forward, not blocking, not hidden: six of design section
 10.2's nine scheduling/transition replay checks (classification-decision
@@ -264,22 +260,11 @@ per-packet staleness cache (design 1.4) have no producer anywhere, disclosed
 in both `reconcile.py`'s and `classify_runtime.py`'s module docstrings and
 in every reconciliation report's own `unverified_invariants` attention item.
 
-Evidence: `scripts/harness_contracts/v1/{journal,queue_state,seal,claim,
-classification,provider_evidence,reassignment,reconciliation,packet_state}.py`
-+ 10 new schemas under `schemas/harness/v1/`; `scripts/harness_coordinator/v1/
-{store,locks,recovery,scheduler,classify_runtime,reconcile,replay_schedule,
-cli}.py`; 391 passing harness self-tests (168 pre-existing O2 + 223 new O3),
-`.claude/harness-selftest/test_o3_{json_schemas,crash_recovery,locks,
-scheduling,classification,reconciliation}.py`. Built via Kimi (opencode)
-until confirmed quota-exhausted (`401 Insufficient Balance`, non-retryable),
-then Claude Sonnet 5 as the pre-authorized fallback worker, with Claude Opus
-5 as sole planning/architecture/review authority throughout — every
-sub-packet (P1 contracts, P2 durable store, P3 scheduler, P3-runtime
-transitions, P4 reconciliation+replay) and the final integration gate
-independently reached Opus `ACCEPT` after real, sometimes multi-round
-adversarial review (21 review rounds total across the build). Branch
-`codex/o3-queue-resume-quarantine`, two commits (build-only, then this
-docs-only update) — not merged to `main`, not pushed.
+Evidence: accepted O3 foundation plus P5A `7a78541`, P5B `c700b97`, and P5C
+`028372e`; 591 O2/O3 harness tests pass in the controller run (104 focused
+P5C), with all three legacy hook scripts passing. P5C reached fresh Opus
+`ACCEPT` after six adversarial revision gates. No branch was pushed and no
+database, provider, deployment, or governed content action occurred.
 
 ### O4 — Isolate Git and filesystem ownership
 

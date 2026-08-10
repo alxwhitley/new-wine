@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-10 (O3 harness build committed on its own branch,
-worktree, not merged to main; no coordinator run loop exists yet). No push
-to origin; `serving_enabled` untouched.
+Last verified: 2026-08-10 (O3 coordinator P5A–P5C committed on
+`codex/o3-p5-coordinator-loop`; not merged or pushed). No production writes,
+provider commissioning, deployment, or `serving_enabled` change.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -17,43 +17,31 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**O3 (durable queue/resume/retry/quarantine/fallback/reconciliation harness)
-— decision layer built, tested, reviewed; coordinator run loop NOT built
-(2026-08-10).** Work happened entirely in
-`.worktrees/o3-queue-resume-quarantine`, branch
-`codex/o3-queue-resume-quarantine` — never merged, never pushed; main's own
-checkout is untouched. Three commits on that branch: `463650e` (prior
-checkpoint: P1 contracts, P2 durable store, P3 scheduler), `1051755`
-(this session: P3-runtime-transitions + P4 reconciliation/replay + 3
-integration-gate fixes), `d22c4ab` (docs: PLAN.md's O3 entry, on that
-branch only — main's `PLAN.md` still shows O3 unstarted until merge).
-391 harness self-tests passing (168 pre-existing O2 + 223 new O3). 21
-independent Opus review rounds across the whole build (P1 ×4, P2 ×3,
-P3-scheduler ×2, P3-runtime ×5, P4 ×5, final integration gate ×2), every
-round found and fixed real defects — never a rubber stamp. Built via Kimi
-until confirmed quota-exhausted (401 Insufficient Balance), then Sonnet 5
-as the pre-authorized fallback worker; Grok was not invoked (no access in
-this environment — recorded honestly, not fabricated).
+**O3 coordinator P5A–P5C — built, committed, and independently accepted.**
+Branch `codex/o3-p5-coordinator-loop`, not merged or pushed. Build commits:
+`7a78541` (safe enrollment and durable attempt start), `c700b97` (bounded
+synthetic invocation and recovery-safe process sidecars), and `028372e`
+(trusted verdict ingestion, review ownership/recovery, terminal seals,
+REVISE requeue, and seal-before-promotion). The controller's final gate passed
+591 O2/O3 tests, including 104 focused P5C tests; three legacy harness scripts
+also pass. Fresh Opus returned `ACCEPT` for each slice. P5C binds its complete
+artifact lifecycle to one pinned, no-follow state-root identity.
 
-**What's real:** durable journal (position-based torn-tail recovery, no
-silent repair), deterministic packet scheduling, dependency BLOCKED→READY
-promotion logic, crash-safe fold/recovery (all 3 documented crash points +
-idempotent double-restart), retry classification with a 4-guard
-provider-exhaustion confirmation (a fabricated exhaustion signal is
-provably rejected), quarantine isolation (one bad packet never blocks
-independent ready ones), and a morning reconciliation report + read-only
-replay CLI — genuinely correct and adversarially tested (~90 named
-fixtures), all of it inert until something drives it live.
+**Not complete:** P5D (fallback/reassignment/reconciliation/status) and P5E
+(disposable synthetic end-to-end commissioning) remain. No real Kimi, Sonnet,
+Claude, or Grok worker was commissioned. Real-provider commissioning remains
+blocked until a subprocess sandbox and command policy are independently
+proven.
 
-**What's missing, stated plainly — no coordinator main loop exists
-anywhere in this repo.** Nothing enrolls a packet or invokes a real
-worker; `queue.json`, a per-packet state cache, terminal seals, and
-reassignment records have no writer; `invoke.py` from the original design
-sequencing was never built. Concretely demonstrated: with no seal writer,
-dependency promotion can never actually fire in this build — now surfaced
-by the report itself (`promotion_stalled`) rather than reading healthy.
-Full detail: `PLAN.md`'s O3 entry **on the O3 branch** (`d22c4ab`) — read
-it there, not on main, until merged.
+**Required pre-P5D remediation, each as a separate bounded fix:**
+
+- Enrollment can report success after a chronology-invalid journal append is
+  later treated as a torn tail.
+- Invocation cleanup can signal a recycled PID after the process was reaped.
+- Derived queue entries are ordered by packet ID while validation requires
+  ascending enqueue sequence.
+- P5A worker claims still use pathname lifecycle operations rather than P5C's
+  pinned state-root identity.
 
 **Derek Prince non-book quote curation — COMPLETE as of 2026-08-09,**
 unrelated prior session, untouched by O3. 477/496 documents approved, 20
@@ -76,18 +64,16 @@ still 8/53; Open Decision #21 not decided.
 - Admin-panel notifications — dependency of position-refresh; no design.
 - `five_fold_ministry.md` editorial marker — needs Alex.
 - 20 Prince documents with zero approved quotes (2026-08-09).
-- **O3 branch not merged** — Alex's call whether/when to merge
-  `codex/o3-queue-resume-quarantine`, and whether the coordinator run loop
-  (`invoke.py` + writers for queue/state-cache/seals/reassignment records)
-  is scoped as a follow-on session before or after merge.
+- **O3 coordinator branch not merged** — P5A–P5C are committed on
+  `codex/o3-p5-coordinator-loop`; four pre-P5D remediations remain above.
 
 ---
 
 ## Next
 
-1. **O3 merge decision** — review the branch, decide merge timing, and
-   scope the coordinator-run-loop session (separate, substantial work;
-   not a continuation of what's already built).
+1. **Fresh O3 session:** fix the four pre-P5D defects in separate commits,
+   rerun the full harness gate, then build P5D and P5E. Decide merge timing
+   only after synthetic commissioning passes.
 2. **`five_fold_ministry.md` editorial decision.**
 3. Async concurrency proof at 100-dial (before speed work).
 4. Decide extractor hardening before any next Prince-style batch —
