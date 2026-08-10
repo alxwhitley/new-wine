@@ -39,12 +39,20 @@ class CoordinatorAlreadyRunning(Exception):
 
 
 class IntegrityError(Exception):
-    """Fatal integrity error during recovery."""
+    """Fatal integrity error during recovery.
 
-    def __init__(self, code: str, message: str) -> None:
+    ``packet_id`` is optional and additive (existing 2-arg call sites are
+    unaffected) -- set by raise sites that know which single packet an
+    error concerns (e.g. a terminal-seal disagreement), so a caller like
+    ``reconcile.build_reconciliation_report`` can attribute the failure
+    to a specific packet instead of only reporting "the fold broke."
+    """
+
+    def __init__(self, code: str, message: str, packet_id: Optional[str] = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.packet_id = packet_id
 
 
 class RecoveryReport:
@@ -581,18 +589,22 @@ def _fold_journal(
                 continue
             pid = name[:-len(".seal.json")]
             seal_path = os.path.join(seal_dir, name)
-            with open(seal_path, "rb") as f:
-                seal = json.loads(f.read().decode("utf-8"))
+            try:
+                with open(seal_path, "rb") as f:
+                    seal = json.loads(f.read().decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise IntegrityError("TERMINAL_SEAL_MISMATCH", f"Seal for {pid} is not valid JSON: {exc}", packet_id=pid)
             seal_result = validate_terminal_seal(seal)
             if not seal_result["valid"]:
-                raise IntegrityError("TERMINAL_SEAL_MISMATCH", f"Seal for {pid} is invalid: {seal_result['errors'][0]['message']}")
+                raise IntegrityError("TERMINAL_SEAL_MISMATCH", f"Seal for {pid} is invalid: {seal_result['errors'][0]['message']}", packet_id=pid)
             pkt = packets.get(pid)
             if pkt is None:
-                raise IntegrityError("TERMINAL_SEAL_MISMATCH", f"Seal exists for unenrolled packet {pid}")
+                raise IntegrityError("TERMINAL_SEAL_MISMATCH", f"Seal exists for unenrolled packet {pid}", packet_id=pid)
             if pkt["state"] != seal.get("terminal_state"):
                 raise IntegrityError(
                     "TERMINAL_SEAL_MISMATCH",
                     f"Seal state {seal.get('terminal_state')} does not match fold state {pkt['state']} for {pid}",
+                    packet_id=pid,
                 )
             pkt["terminal_seal_sha256"] = seal.get("seal_sha256")
             sealed_packets.add(pid)
@@ -999,7 +1011,19 @@ def _make_event(
     packet_id: Optional[str] = None,
     intent_id: Optional[str] = None,
     payload: Optional[Dict[str, Any]] = None,
+    from_state: Optional[str] = None,
+    to_state: Optional[str] = None,
+    cause: str = "none",
 ) -> Dict[str, Any]:
+    """Build a canonically-hashed journal event envelope.
+
+    ``from_state``/``to_state``/``cause`` default to the no-transition shape
+    every O3-P2 call site uses (RUN_STARTED, LOCK_RECLAIMED,
+    INTENT_ABANDONED, JOURNAL_TAIL_TRUNCATED never carry a real edge) --
+    adding them as optional, defaulted parameters here is additive and
+    changes no existing call site's behavior. O3-P3R's real STATE_TRANSITION/
+    ATTEMPT_FINISHED events are the first callers to supply them.
+    """
     event_id = f"{run_id}-{seq}"
     event: Dict[str, Any] = {
         "schema_version": 1,
@@ -1012,9 +1036,9 @@ def _make_event(
         "state_root_id": state_root_id,
         "packet_id": packet_id,
         "intent_id": intent_id,
-        "from_state": None,
-        "to_state": None,
-        "cause": "none",
+        "from_state": from_state,
+        "to_state": to_state,
+        "cause": cause,
         "payload": payload or {
             "packet": None,
             "attempt": None,

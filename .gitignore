@@ -22,6 +22,12 @@ logs/
 # Isolated git worktrees for session-scoped implementation work
 .worktrees/
 
+# O3 harness coordinator's durable state root (design 1.10's reserved-path
+# rule) — journal, locks, terminal seals, reports. Never real-checkout
+# state (tests always use tempfile.mkdtemp()); local-only if a real
+# overnight run's state root ever lands under the repo instead of /tmp.
+.harness/
+
 # Subagent-driven-development scratch state (progress ledger, briefs, reports)
 .superpowers/
 

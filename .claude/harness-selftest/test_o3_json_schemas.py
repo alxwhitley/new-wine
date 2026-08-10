@@ -2276,5 +2276,220 @@ class TestProviderExhaustionChronologyReplay(unittest.TestCase):
         )
 
 
+_O3_NEW_SCHEMA_FILES = (
+    "attempt-outcome.schema.json",
+    "claim.schema.json",
+    "journal-event.schema.json",
+    "packet-state.schema.json",
+    "provider-evidence.schema.json",
+    "provider-signals.schema.json",
+    "queue.schema.json",
+    "reassignment.schema.json",
+    "reconciliation-report.schema.json",
+    "terminal-seal.schema.json",
+)
+
+
+def _find_open_objects(node: Any, path: str = "$") -> List[str]:
+    """Recursively find every JSON Schema object-type node (has
+    "properties") that does NOT declare additionalProperties: false --
+    H1's "closed schemas" fixture. Walks properties/items/oneOf/anyOf/
+    allOf, the shapes these schemas actually use."""
+    open_paths: List[str] = []
+    if not isinstance(node, dict):
+        return open_paths
+    if "properties" in node and node.get("additionalProperties") is not False:
+        open_paths.append(path)
+    for key in ("properties",):
+        for prop_name, prop_schema in (node.get(key) or {}).items():
+            open_paths.extend(_find_open_objects(prop_schema, f"{path}.{prop_name}"))
+    if "items" in node:
+        open_paths.extend(_find_open_objects(node["items"], f"{path}[]"))
+    for key in ("oneOf", "anyOf", "allOf"):
+        for i, sub in enumerate(node.get(key) or []):
+            open_paths.extend(_find_open_objects(sub, f"{path}/{key}[{i}]"))
+    return open_paths
+
+
+class TestO3SchemasWellFormedAndClosed(unittest.TestCase):
+    """H1: every new JSON Schema exists, parses, and has
+    additionalProperties: false at every object level -- closed schemas,
+    consistent with this codebase's fail-closed posture everywhere else."""
+
+    def test_every_new_schema_file_exists_and_parses(self):
+        for filename in _O3_NEW_SCHEMA_FILES:
+            with self.subTest(filename=filename):
+                schema = _load_schema(filename)
+                self.assertIsInstance(schema, dict)
+                self.assertIn("type", schema)
+
+    def test_every_new_schema_is_closed_at_every_object_level(self):
+        for filename in _O3_NEW_SCHEMA_FILES:
+            with self.subTest(filename=filename):
+                schema = _load_schema(filename)
+                open_paths = _find_open_objects(schema)
+                self.assertEqual(open_paths, [], f"{filename} has open (additionalProperties != false) object(s) at: {open_paths}")
+
+
+class TestO3RuntimeSchemaParity(unittest.TestCase):
+    """H2: required-field parity between each new Python validator's
+    accepted shape and its corresponding schema -- if these drift, a
+    payload the runtime validator accepts (or rejects) could silently
+    diverge from what the schema on disk claims, defeating the whole
+    point of having both."""
+
+    def test_journal_event_top_level_fields_match_schema(self):
+        schema = _load_schema("journal-event.schema.json")
+        schema_props = set(schema["properties"].keys())
+        from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+        from harness_contracts.v1.journal import validate_journal_event
+
+        # A minimal, fully-populated RUN_STARTED event, hand-declared --
+        # the protection is that validate_journal_event must accept it
+        # AS VALID below before this test trusts its field set for the
+        # parity comparison; an invalid instance would fail the
+        # assertTrue first, never reaching (and never falsely passing)
+        # the schema-parity assertion.
+        run_payload = {
+            "coordinator": {"coordinator_id": "c", "boot_id": "b", "hostname": "h", "pid": 1},
+            "trust_roots": {"reviewer_sessions_path": "x", "reviewer_sessions_sha256": "0" * 64, "provider_signals_path": "y", "provider_signals_sha256": "0" * 64},
+            "contract_versions": {"packet": 1, "worker_result": 1, "verdict": 1, "replay": 1, "journal": 1, "queue": 1, "claim": 1, "attempt_outcome": 1, "provider_evidence": 1, "reassignment": 1, "reconciliation": 1},
+            "end_reason": None, "end_detail": None, "disabled_lanes": [],
+        }
+        event = {
+            "schema_version": 1, "seq": 1, "event_id": "e1", "event_type": "RUN_STARTED",
+            "event_at": "2026-08-10T00:00:00Z", "coordinator_id": "c", "run_id": "r",
+            "state_root_id": "s", "packet_id": None, "intent_id": None,
+            "from_state": None, "to_state": None, "cause": "none",
+            "payload": {"packet": None, "attempt": None, "artifacts": [], "classification": None, "transition_detail": None, "recovery": None, "run": run_payload, "report": None},
+            "prev_event_sha256": "0" * 64, "event_sha256": "",
+        }
+        event["event_sha256"] = compute_sha256(canonical_bytes(event, omit={"event_sha256"}))
+        result = validate_journal_event(event, prev_event=None, state_root_id="s")
+        self.assertTrue(result["valid"], result.get("errors"))
+        self.assertEqual(set(event.keys()), schema_props, "journal.py's accepted top-level fields diverged from journal-event.schema.json's properties")
+
+    def test_reconciliation_report_top_level_fields_match_schema(self):
+        schema = _load_schema("reconciliation-report.schema.json")
+        schema_props = set(schema["properties"].keys())
+        from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+        from harness_contracts.v1.reconciliation import validate_reconciliation_report
+
+        report = {
+            "schema_version": 1, "report_id": "r1", "generated_at": "2026-08-10T00:00:00Z",
+            "coordinator_id": "c", "run_id": "run-1", "state_root_id": "s",
+            "journal_head": {"seq": 0, "event_sha256": "0" * 64},
+            "inventory_total": 0,
+            "by_state": {"READY": 0, "BLOCKED": 0, "RUNNING": 0, "REVIEW": 0, "REVISE": 0, "ACCEPTED": 0, "QUARANTINED": 0, "HUMAN_REQUIRED": 0},
+            "packets": [], "activity": {
+                "attempts_started_total": 0, "infra_retries_total": 0, "revise_verdicts_total": 0,
+                "revise_cycles_total": 0, "reassignments_total": 0, "results_recorded_total": 0,
+                "verdicts_recorded_total": 0, "intents_abandoned_total": 0, "locks_reclaimed_total": 0,
+            },
+            "attention_required": [],
+            "integrity": {
+                "journal_chain_valid": True, "state_cache_in_sync": True, "duplicate_packet_ids": [],
+                "omitted_packet_ids": [], "unenrolled_dependencies": [], "seal_mismatches": [],
+                "accounting_violations": [], "preserved_evidence_mismatches": [],
+            },
+            "reconciliation": {
+                "sum_of_by_state": 0, "packets_array_length": 0, "distinct_packet_ids": 0,
+                "equals_inventory_total": True, "all_invariants_passed": True,
+            },
+            "content_sha256": "", "report_sha256": "",
+        }
+        report["content_sha256"] = compute_sha256(canonical_bytes(
+            report, omit={"report_id", "generated_at", "coordinator_id", "run_id", "report_sha256", "content_sha256"},
+        ))
+        report["report_sha256"] = compute_sha256(canonical_bytes(report, omit={"report_sha256"}))
+        result = validate_reconciliation_report(report)
+        self.assertTrue(result["valid"], result.get("errors"))
+        self.assertEqual(set(report.keys()), schema_props, "reconcile.py's built report fields diverged from reconciliation-report.schema.json's properties")
+
+    def test_reconciliation_report_packet_row_fields_match_schema(self):
+        """reconcile.py's own row shape (17 fields, including the
+        retry_limit extension) must match the schema's per-packet-row
+        object -- proven by driving the REAL runtime validator
+        (validate_reconciliation_report -> _validate_packet_row), not by
+        comparing a hand-written dict to the schema (which has no teeth
+        against drift in either the validator's required set or the
+        producer -- confirmed by mutation testing during the final O3
+        integration gate review: adding a field to both reconcile.py's
+        row AND reconciliation.py's validator, while leaving the schema
+        untouched, passed a dict-comparison version of this test).
+        Removing each schema property one at a time from an otherwise-
+        valid row and confirming the validator rejects it (MISSING_FIELD)
+        proves the schema's properties are a SUBSET of what the validator
+        requires; adding one foreign field and confirming rejection
+        (UNKNOWN_FIELD) proves nothing beyond the schema's properties is
+        silently accepted. Together: the real validator's accepted shape
+        equals the schema's declared shape, verified by exercising the
+        validator's actual behavior, not by hand-copying its private
+        `required` set (not exported) into this test."""
+        from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+        from harness_contracts.v1.reconciliation import validate_reconciliation_report
+
+        schema = _load_schema("reconciliation-report.schema.json")
+        row_schema = schema["properties"]["packets"]["items"]
+        schema_row_props = set(row_schema["properties"].keys())
+
+        valid_row = {
+            "packet_id": "p1", "state": "READY", "lane": "kimi_implementation", "enqueue_seq": 1,
+            "attempts_started": 0, "infra_retries_used": 0, "revise_cycles_used": 0, "revise_verdicts": 0,
+            "reassignment_used": False, "open_attempt": None, "last_event_seq": 1, "last_event_sha256": "0" * 64,
+            "quarantine_reason": None, "human_required_reasons": [], "blocked_on": [], "attention_codes": [],
+            "retry_limit": 2,
+        }
+        self.assertEqual(set(valid_row.keys()), schema_row_props, "sanity: this test's own fixture must start aligned with the schema")
+
+        def _report_with_row(row: Dict[str, Any]) -> Dict[str, Any]:
+            report = {
+                "schema_version": 1, "report_id": "r1", "generated_at": "2026-08-10T00:00:00Z",
+                "coordinator_id": "c", "run_id": "run-1", "state_root_id": "s",
+                "journal_head": {"seq": 0, "event_sha256": "0" * 64},
+                "inventory_total": 1,
+                "by_state": {"READY": 1, "BLOCKED": 0, "RUNNING": 0, "REVIEW": 0, "REVISE": 0, "ACCEPTED": 0, "QUARANTINED": 0, "HUMAN_REQUIRED": 0},
+                "packets": [row], "activity": {
+                    "attempts_started_total": 0, "infra_retries_total": 0, "revise_verdicts_total": 0,
+                    "revise_cycles_total": 0, "reassignments_total": 0, "results_recorded_total": 0,
+                    "verdicts_recorded_total": 0, "intents_abandoned_total": 0, "locks_reclaimed_total": 0,
+                },
+                "attention_required": [],
+                "integrity": {
+                    "journal_chain_valid": True, "state_cache_in_sync": True, "duplicate_packet_ids": [],
+                    "omitted_packet_ids": [], "unenrolled_dependencies": [], "seal_mismatches": [],
+                    "accounting_violations": [], "preserved_evidence_mismatches": [],
+                },
+                "reconciliation": {
+                    "sum_of_by_state": 1, "packets_array_length": 1, "distinct_packet_ids": 1,
+                    "equals_inventory_total": True, "all_invariants_passed": True,
+                },
+                "content_sha256": "", "report_sha256": "",
+            }
+            report["content_sha256"] = compute_sha256(canonical_bytes(
+                report, omit={"report_id", "generated_at", "coordinator_id", "run_id", "report_sha256", "content_sha256"},
+            ))
+            report["report_sha256"] = compute_sha256(canonical_bytes(report, omit={"report_sha256"}))
+            return report
+
+        # Sanity: the unmutated row genuinely validates.
+        result = validate_reconciliation_report(_report_with_row(valid_row))
+        self.assertTrue(result["valid"], result.get("errors"))
+
+        # Every schema property is genuinely REQUIRED by the real validator.
+        for prop in sorted(schema_row_props):
+            with self.subTest(missing=prop):
+                mutated = dict(valid_row)
+                del mutated[prop]
+                result = validate_reconciliation_report(_report_with_row(mutated))
+                self.assertFalse(result["valid"], f"validator accepted a row missing schema property {prop!r}")
+
+        # Nothing beyond the schema's properties is silently accepted.
+        extra = dict(valid_row)
+        extra["not_in_schema_or_validator"] = True
+        result = validate_reconciliation_report(_report_with_row(extra))
+        self.assertFalse(result["valid"], "validator silently accepted a field not in the schema")
+
+
 if __name__ == "__main__":
     unittest.main()
