@@ -1,15 +1,19 @@
-"""One bounded P5 coordinator selection/claim iteration (no invocation)."""
+"""One bounded P5 coordinator iteration: review, seal, promote, select, claim."""
 
+import errno
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.packet import validate_packet
+from harness_coordinator.v1.classify_runtime import promote_dependencies, requeue_revise
 from harness_coordinator.v1.locks import create_claim, read_claim
-from harness_coordinator.v1.paths import safe_state_path
+from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event, run_started_recovery
+from harness_coordinator.v1.review import resolve_pending_reviews
 from harness_coordinator.v1.scheduler import select_next
+from harness_coordinator.v1.seals_runtime import complete_terminal_seals, open_state_root
 from harness_coordinator.v1.store import JournalHeadMoved, atomic_replace, append_journal, read_journal
 
 
@@ -19,27 +23,27 @@ def attempt_session_id(run_id: str, packet_id: str, attempt: int) -> str:
 
 
 def _load_enrolled_packet(state_root: str, packet_id: str, packet: Dict[str, Any],
-                          journal_events: List[Dict[str, Any]]) -> Dict[str, Any]:
+                          journal_events: List[Dict[str, Any]], handle=None) -> Dict[str, Any]:
+    if handle is None:
+        with open_state_root(state_root) as scoped:
+            return _load_enrolled_packet(state_root, packet_id, packet, journal_events, handle=scoped)
     enroll_event = next(e for e in journal_events if e.get("event_type") == "PACKET_ENROLLED" and e.get("packet_id") == packet_id)
     recorded = enroll_event["payload"]["packet"]
-    expected_rel = f"packets/{packet_id}.json"
-    if recorded.get("packet_path") != expected_rel:
+    parts = ("packets", f"{validate_harness_id(packet_id)}.json")
+    if recorded.get("packet_path") != "/".join(parts):
         raise ValueError("enrolled packet path does not match canonical packet artifact")
-    lexical_path = os.path.join(os.path.realpath(state_root), "packets", f"{packet_id}.json")
-    if os.path.islink(lexical_path):
-        raise ValueError("enrolled packet artifact is a symlink")
-    path = safe_state_path(state_root, "packets", identifier=packet_id, identifier_suffix=".json")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(path, flags)
     try:
-        raw = b""
-        while True:
-            chunk = os.read(fd, 65536)
-            if not chunk:
-                break
-            raw += chunk
-    finally:
-        os.close(fd)
+        raw = handle.read(parts)
+    except OSError as exc:
+        # The pinned no-follow read refuses a symlinked artifact or a
+        # non-directory parent at the OS level; the caller contract for this
+        # function is a ValueError naming the refusal, so translate rather
+        # than leak an errno.
+        if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise ValueError("enrolled packet artifact is a symlink or escapes its directory") from exc
+        raise
+    if raw is None:
+        raise ValueError("enrolled packet artifact is missing")
     body = json.loads(raw.decode("utf-8"))
     if raw != canonical_bytes(body):
         raise ValueError("enrolled packet artifact is not canonical")
@@ -138,23 +142,126 @@ def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events:
     return intent_id
 
 
+def _maintenance(handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
+                 folded: Dict[str, Dict[str, Any]], coordinator_id: str, run_id: str,
+                 now: str) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]], Dict[str, Any]]:
+    """Seal terminal packets, then promote dependents, then requeue REVISE.
+
+    The order is load-bearing, not stylistic: ``promote_dependencies`` reads
+    each dependency's terminal seal to build its ``satisfied_by`` citation and
+    defers silently when one is absent, so promotion before sealing is a
+    guaranteed no-op -- the exact condition the accepted build reports as
+    ``promotion_stalled``.
+
+    The fold is only recomputed when something actually changed. A caller may
+    legitimately supply state that no phase touches, and re-deriving it from an
+    empty journal would silently discard it.
+    """
+    journal_path = os.path.join(state_root, "journal.ndjson")
+    lock_path = os.path.join(state_root, "locks", "journal.wlock")
+
+    sealed = complete_terminal_seals(state_root, journal_events, folded, now, handle=handle)
+    if sealed:
+        folded, _ = _fold_journal(state_root, journal_events)
+
+    before = len(journal_events)
+    # ``promote_dependencies`` is an accepted O3 primitive that operates by
+    # pathname and is deliberately not duplicated. Root identity is verified
+    # immediately before and after it, so a swap around the call halts the
+    # iteration instead of being silently followed.
+    handle.verify_identity()
+    journal_events, promotion_attention = promote_dependencies(
+        state_root, journal_path, lock_path, journal_events, folded,
+        coordinator_id, run_id, state_root_id, now)
+    handle.verify_identity()
+    if len(journal_events) != before:
+        folded, _ = _fold_journal(state_root, journal_events)
+
+    before = len(journal_events)
+    # ``requeue_revise`` is an accepted O3 primitive that writes the journal by
+    # pathname, exactly like ``promote_dependencies`` above, and gets the same
+    # immediate before/after identity guards.
+    handle.verify_identity()
+    journal_events, budget_exhausted = requeue_revise(
+        journal_path, lock_path, journal_events, folded,
+        coordinator_id, run_id, state_root_id, now)
+    handle.verify_identity()
+    if len(journal_events) != before:
+        folded, _ = _fold_journal(state_root, journal_events)
+
+    return journal_events, folded, {"sealed": sealed, "promotion_attention": promotion_attention,
+                                    "revise_budget_exhausted": budget_exhausted}
+
+
 def run_once(state_root: str, coordinator_id: str, run_id: str,
              trusted_process_context: Dict[str, Any], now: str,
              disabled_lanes: List[str] = None) -> Dict[str, Any]:
-    """Recover, deterministically select, claim at most one packet, return."""
-    report = run_started_recovery(state_root=state_root, coordinator_id=coordinator_id,
-                                  run_id=run_id, trusted_process_context=trusted_process_context, now=now)
-    try:
-        packet_id = select_next(report.derived_states, disabled_lanes or [], now)
-        if packet_id is None:
-            return {"status": "no_eligible_work", "packet_id": None}
-        intent_id = claim_and_start_attempt(state_root=state_root, state_root_id=report.state_root_id,
-                                            journal_events=report.journal_events, packet_id=packet_id,
-                                            packet=report.derived_states[packet_id], coordinator_id=coordinator_id,
-                                            run_id=run_id, trusted_process_context=trusted_process_context, now=now)
-        return {"status": "claimed", "packet_id": packet_id, "intent_id": intent_id}
-    finally:
-        report.release_singleton()
+    """Recover, resolve reviews, seal, promote, then claim at most one packet.
+
+    Maintenance runs twice by design. The first pass completes work a previous
+    interrupted run left behind (a verdict committed but never sealed, a sealed
+    dependency whose dependents never promoted). The second pass seals and
+    promotes whatever this iteration's own reviews just made terminal, so an
+    ACCEPT and its dependents' promotion land in the same bounded iteration
+    rather than waiting for the next one.
+    """
+    # One pinned state-root identity for the whole iteration. It is opened
+    # BEFORE recovery -- which is accepted code operating by pathname -- and
+    # re-verified immediately after, so a root renamed or replaced during
+    # recovery halts before any P5C write rather than being written through.
+    with open_state_root(state_root) as handle:
+        report = run_started_recovery(state_root=state_root, coordinator_id=coordinator_id,
+                                      run_id=run_id, trusted_process_context=trusted_process_context, now=now)
+        try:
+            handle.verify_identity()
+            return _run_iteration(handle, state_root, report, coordinator_id, run_id,
+                                  trusted_process_context, now, disabled_lanes)
+        finally:
+            report.release_singleton()
+
+
+def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id: str,
+                   trusted_process_context: Dict[str, Any], now: str,
+                   disabled_lanes: List[str]) -> Dict[str, Any]:
+    """One bounded iteration, every P5C artifact operation sharing one handle."""
+    journal_events = getattr(report, "journal_events", [])
+    state_root_id = getattr(report, "state_root_id", None)
+    folded = report.derived_states
+    review_outcomes: List[Dict[str, Any]] = []
+    review_attention: List[Dict[str, Any]] = []
+    first = second = {"sealed": [], "promotion_attention": [], "revise_budget_exhausted": []}
+
+    # Every durable phase is skipped without an identified state root. A
+    # real RecoveryReport always carries one; a caller-supplied minimal
+    # report models no durable state, and journaling an event stamped with
+    # a null state_root_id would write a contract-invalid record that
+    # read_journal would later refuse to load.
+    if state_root_id is not None:
+        journal_events, folded, first = _maintenance(
+            handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now)
+
+        before = len(journal_events)
+        journal_events, review_outcomes, review_attention = resolve_pending_reviews(
+            state_root, state_root_id, journal_events, folded, coordinator_id, run_id,
+            trusted_process_context, now, handle=handle)
+        if len(journal_events) != before:
+            folded, _ = _fold_journal(state_root, journal_events)
+
+        journal_events, folded, second = _maintenance(
+            handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now)
+
+    packet_id = select_next(folded, disabled_lanes or [], now)
+    if packet_id is None:
+        return {"status": "no_eligible_work", "packet_id": None}
+    intent_id = claim_and_start_attempt(state_root=state_root, state_root_id=state_root_id,
+                                        journal_events=journal_events, packet_id=packet_id,
+                                        packet=folded[packet_id], coordinator_id=coordinator_id,
+                                        run_id=run_id, trusted_process_context=trusted_process_context, now=now)
+    return {"status": "claimed", "packet_id": packet_id, "intent_id": intent_id,
+            "reviews": review_outcomes, "review_attention": review_attention,
+            "sealed": first["sealed"] + second["sealed"],
+            "promotion_attention": first["promotion_attention"] + second["promotion_attention"],
+            "revise_budget_exhausted": first["revise_budget_exhausted"] + second["revise_budget_exhausted"]}
 
 
 __all__ = ["attempt_session_id", "claim_and_start_attempt", "claim_packet", "run_once"]
