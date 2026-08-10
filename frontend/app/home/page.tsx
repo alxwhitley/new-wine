@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import BetaGate from "@/components/auth/BetaGate";
 import LoginModal from "@/components/auth/LoginModal";
 import { FooterNav } from "@/components/marketing/footer-nav";
+import { MannaDawnHero } from "@/components/marketing/manna-dawn-hero";
 import { isFullNavEnabled } from "@/lib/chat-only-beta-flag";
 
 /* ── Inline-style color tokens (mockups only — page uses Tailwind classes) ── */
@@ -380,24 +381,7 @@ export default function HomePage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section className="pt-[130px] pb-16 px-6 text-center max-w-[860px] mx-auto">
-        <div className="inline-flex items-center gap-1.5 border border-border rounded-full px-3.5 py-1 text-[.72rem] font-semibold tracking-[.12em] uppercase text-muted-foreground mb-6">
-          <span className="w-[5px] h-[5px] rounded-full bg-primary shrink-0" />
-          Now in beta
-        </div>
-        <h1 className="font-serif text-[clamp(2.4rem,5.5vw,4.2rem)] font-semibold leading-[1.12] tracking-[-0.025em] mb-5 text-card-foreground text-balance">
-          Faithful answers from sources you can trust.
-        </h1>
-        <p className="text-lg text-muted-foreground max-w-[580px] mx-auto mb-8 leading-[1.75]">
-          Rhemata is an AI-assisted Bible study tool that answers from trusted sources rooted in the charismatic tradition — now in early beta, and looking for testers.
-        </p>
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Button size="lg" onClick={openAuthGate}>Become a test user</Button>
-          <Button variant="outline" size="lg" asChild>
-            <Link href="/">Try it free — no account needed</Link>
-          </Button>
-        </div>
-      </section>
+      <MannaDawnHero onPrimaryAction={openAuthGate} />
 
       {/* ── MARQUEE ── */}
       <Marquee />
