@@ -177,12 +177,19 @@ self-test scripts passed after merge.
 |---|---|---|
 | Opus defines schemas, authority boundaries, state transitions, and invalid-state behavior. | Implement parser/validator plus fixtures and tests. | Produce adversarial malformed packets and verify deterministic rejection messages. |
 
-**Exit criteria:**
+**Exit criteria — passed 2026-08-09:**
 
-- [ ] Invalid or incomplete packets fail closed before any worker starts.
-- [ ] File ownership, dependency, budget, and verification fields are required.
-- [ ] Worker results and Opus verdicts are structured and replayable.
-- [ ] `ACCEPT` is impossible without recorded acceptance evidence.
+- [x] Invalid or incomplete packets fail closed before any worker starts.
+- [x] File ownership, dependency, budget, and verification fields are required.
+- [x] Worker results and Opus verdicts are structured and replayable.
+- [x] `ACCEPT` is impossible without recorded acceptance evidence.
+
+Evidence: strict v1 packet, worker-result, Opus-verdict, and replay-bundle
+schemas under `schemas/harness/v1/`; runtime validators and canonical replay
+logic under `scripts/harness_contracts/v1/`; and 168 passing O2 harness
+self-tests. Fresh Opus adversarial review returned `ACCEPT` after fully rehashed
+malformed-bundle checks; all three pre-existing harness self-test scripts also
+passed.
 
 ### O3 — Add queue, resume, and quarantine behavior
 
