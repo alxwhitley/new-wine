@@ -73,6 +73,15 @@ test("hero component keeps copy semantic and has no fabricated app controls", ()
   assert.doesNotMatch(source, /style=\{\{/);
 });
 
+test("hero uses the versioned predawn master asset", () => {
+  const source = readFileSync(
+    new URL("../components/marketing/manna-dawn-hero.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /manna-predawn-master\.png/);
+});
+
 test("home page clips horizontal overflow without breaking sticky descendants", () => {
   const source = readFileSync(
     new URL("../app/home/page.tsx", import.meta.url),
