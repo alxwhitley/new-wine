@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-09 (Prince non-book curation complete across all 496
-documents, trigger-teeth proof, then a read-only check of the per-document
-extraction cap). No push to origin; `serving_enabled` untouched.
+Last verified: 2026-08-10 (O3 harness build committed on its own branch,
+worktree, not merged to main; no coordinator run loop exists yet). No push
+to origin; `serving_enabled` untouched.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -17,63 +17,53 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**Derek Prince non-book quote curation — COMPLETE, all 496 documents
-attempted (2026-08-09).** Two extraction batches (249, then the remaining
-247), each independently re-verified against live chunk content and
-manually screened for the two defect classes the automated verifier can't
-catch (majority-verbatim-Scripture content; incoherent dangling fragments).
-**Combined: 477 approved** (240 + 237), **20 rejected** (10 + 10, logged
-to `quote_verification_log`, left `pending` — schema has no `rejected`
-state), **1 untracked pre-run row** (`bc3f71fd…`) still out of scope.
-Live-re-queried: Prince `approved`=477, `pending`=21, system-wide
-approved=478. **Coverage gap, stated explicitly: 476/496 documents have
-≥1 approved quote; 20 do not** — each of those 20's only candidate was
-rejected. Extraction reached all 496; approval did not clear all 496.
+**O3 (durable queue/resume/retry/quarantine/fallback/reconciliation harness)
+— decision layer built, tested, reviewed; coordinator run loop NOT built
+(2026-08-10).** Work happened entirely in
+`.worktrees/o3-queue-resume-quarantine`, branch
+`codex/o3-queue-resume-quarantine` — never merged, never pushed; main's own
+checkout is untouched. Three commits on that branch: `463650e` (prior
+checkpoint: P1 contracts, P2 durable store, P3 scheduler), `1051755`
+(this session: P3-runtime-transitions + P4 reconciliation/replay + 3
+integration-gate fixes), `d22c4ab` (docs: PLAN.md's O3 entry, on that
+branch only — main's `PLAN.md` still shows O3 unstarted until merge).
+391 harness self-tests passing (168 pre-existing O2 + 223 new O3). 21
+independent Opus review rounds across the whole build (P1 ×4, P2 ×3,
+P3-scheduler ×2, P3-runtime ×5, P4 ×5, final integration gate ×2), every
+round found and fixed real defects — never a rubber stamp. Built via Kimi
+until confirmed quota-exhausted (401 Insufficient Balance), then Sonnet 5
+as the pre-authorized fallback worker; Grok was not invoked (no access in
+this environment — recorded honestly, not fabricated).
 
-**Snapshot-capture bug found and fixed, then proven with teeth.** The
-extractor was storing `quote_source_revisions.passage_text` as just the
-candidate span, not the full chunk — making the DB trigger's substring
-check a no-op. Fixed in commit `4e3a0d1`. **Proof:** a rollback-only
-transaction test inserted a fabricated quote_text two ways against a real
-document — the OLD convention let it through with no exception; the FIXED
-convention correctly raised the trigger's exact-substring rejection.
-Zero residue confirmed after rollback. **The 239 quotes approved before
-the fix were NOT regenerated** — their correctness already rests on
-`verify_quote_candidate()`'s independent live check at approval time, not
-the trigger's snapshot, and no live chunk-edit path exists today that
-would need the snapshot to catch drift. Regenerating is optional hygiene,
-not required — Alex's call.
+**What's real:** durable journal (position-based torn-tail recovery, no
+silent repair), deterministic packet scheduling, dependency BLOCKED→READY
+promotion logic, crash-safe fold/recovery (all 3 documented crash points +
+idempotent double-restart), retry classification with a 4-guard
+provider-exhaustion confirmation (a fabricated exhaustion signal is
+provably rejected), quarantine isolation (one bad packet never blocks
+independent ready ones), and a morning reconciliation report + read-only
+replay CLI — genuinely correct and adversarially tested (~90 named
+fixtures), all of it inert until something drives it live.
 
-**One-quote-per-document pattern investigated (2026-08-09, read-only, no
-changes).** Every one of the 247 new candidates was the sole quote for its
-document — confirmed as an **explicit, working-as-designed cap**, not
-incidental truncation: `DEFAULT_PER_DOC_LIMIT = 1`
-(`scripts/extract_quote_candidates_derek_prince.py:65`, `--per-doc-limit`).
-The algorithm ranks every candidate across the *entire* document globally
-before capping, so the one quote per document really is that document's
-single best-scoring candidate — not a first-match shortcut. No code
-comment or commit records why it was set to 1; the closest documented
-rationale is the original quote-rail design's "50–100 first-pass quotes"
-breadth-first framing (`docs/plan-archive.md`) — an inference, not a
-confirmed reason. Raising it needs only `--per-doc-limit N` on a future
-run (and likely `--max-attempts-per-doc` alongside it) — no code change.
-Not investigated: whether more genuinely quotable material is actually
-sitting unused in these chunks — a distinct question from why the cap
-exists, left for Alex to decide is worth asking.
+**What's missing, stated plainly — no coordinator main loop exists
+anywhere in this repo.** Nothing enrolls a packet or invokes a real
+worker; `queue.json`, a per-packet state cache, terminal seals, and
+reassignment records have no writer; `invoke.py` from the original design
+sequencing was never built. Concretely demonstrated: with no seal writer,
+dependency promotion can never actually fire in this build — now surfaced
+by the report itself (`promotion_stalled`) rather than reading healthy.
+Full detail: `PLAN.md`'s O3 entry **on the O3 branch** (`d22c4ab`) — read
+it there, not on main, until merged.
 
-**Two flagged findings, not fixed, Alex's call:** (1) `pending` vs
-`draft` — two status values doing the same job. (2) The 239 pre-fix
-snapshots (addressed above).
-
-**Confirmed this session:** no push to origin; `serving_enabled`
-untouched; no teacher other than Derek Prince touched; no book-type
-document touched; no code changed by the cap investigation.
+**Derek Prince non-book quote curation — COMPLETE as of 2026-08-09,**
+unrelated prior session, untouched by O3. 477/496 documents approved, 20
+still have zero approved quotes (their only candidate was rejected) —
+Alex's open call whether that's worth a targeted re-extraction. Full
+detail in git history of this file (commit `e04940a`).
 
 **Still live (product).** ONE answer path (async; `serving_enabled` TRUE).
-Quote rail live. Hidden-teacher visibility flip (Ravenhill/Savchuk/Poonen,
-2026-08-09) verified against the real serving path. Position one-hop live
-on origin. Book chapter extraction still 8/53; Open Decision #21 not
-decided.
+Quote rail live. Position one-hop live on origin. Book chapter extraction
+still 8/53; Open Decision #21 not decided.
 
 ---
 
@@ -85,28 +75,32 @@ decided.
   SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
 - Admin-panel notifications — dependency of position-refresh; no design.
 - `five_fold_ministry.md` editorial marker — needs Alex.
-- 20 Prince documents with zero approved quotes (coverage gap above).
+- 20 Prince documents with zero approved quotes (2026-08-09).
+- **O3 branch not merged** — Alex's call whether/when to merge
+  `codex/o3-queue-resume-quarantine`, and whether the coordinator run loop
+  (`invoke.py` + writers for queue/state-cache/seals/reassignment records)
+  is scoped as a follow-on session before or after merge.
 
 ---
 
 ## Next
 
-1. **`five_fold_ministry.md` editorial decision.**
-2. Async concurrency proof at 100-dial (before speed work).
-3. Decide extractor hardening before any next batch — three independent
-   levers now on the table: majority-Scripture/unbalanced-quote checks
-   (20 rejects across two batches), the `--per-doc-limit=1` cap (raise or
-   keep), and whether it's worth checking if unused material exists in
-   already-processed chunks. Savchuk/Ravenhill/Poonen are eligible next.
-4. Decide the 1 untracked pending row (`bc3f71fd…`).
-5. Decide whether to regenerate the 239 pre-fix snapshots (optional).
-6. Decide whether the 20 zero-coverage Prince documents warrant a
-   targeted re-extraction (possibly informed by item 3's per-doc-limit).
-7. **Human review of chapter-boundary proposals** (18 books) — Open
+1. **O3 merge decision** — review the branch, decide merge timing, and
+   scope the coordinator-run-loop session (separate, substantial work;
+   not a continuation of what's already built).
+2. **`five_fold_ministry.md` editorial decision.**
+3. Async concurrency proof at 100-dial (before speed work).
+4. Decide extractor hardening before any next Prince-style batch —
+   majority-Scripture/unbalanced-quote checks, the `--per-doc-limit=1`
+   cap (raise or keep), whether unused material exists in already-
+   processed chunks. Savchuk/Ravenhill/Poonen eligible next.
+5. Decide whether the 20 zero-coverage Prince documents warrant a
+   targeted re-extraction.
+6. **Human review of chapter-boundary proposals** (18 books) — Open
    Decision #21 still open.
-8. **Trail / Brooks one-offs** — review then decide visibility.
-9. Decide `pending` vs `draft` quote-status consolidation.
-10. `jewish_perspectives` drop — needs Alex's explicit approval + a
-    dedicated DB-write session.
+7. **Trail / Brooks one-offs** — review then decide visibility.
+8. Decide `pending` vs `draft` quote-status consolidation.
+9. `jewish_perspectives` drop — needs Alex's explicit approval + a
+   dedicated DB-write session.
 
 SP: #43 swipe-to-close shipped; full drag-to-follow-with-peek not shipped.
