@@ -69,7 +69,8 @@
     },
     "packet_id": {
       "type": ["string", "null"],
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
     },
     "intent_id": {
       "type": ["string", "null"],
@@ -178,7 +179,8 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
               }
             },
             "sonnet_reassignment_allowed": {

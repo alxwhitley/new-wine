@@ -74,6 +74,7 @@ from harness_contracts.v1.packet import validate_packet
 from harness_contracts.v1.seal import validate_terminal_seal
 
 from harness_coordinator.v1.recovery import IntegrityError, _last_seq, _make_event
+from harness_coordinator.v1.paths import safe_state_path
 from harness_coordinator.v1.store import append_journal
 
 
@@ -395,7 +396,12 @@ def _resolve_one_open_attempt(
         e.get("event_type") == "WORKER_RESULT_RECORDED" and e.get("intent_id") == intent_id
         for e in journal_events
     )
-    outcome_path = os.path.join(state_root, "results", packet_id, str(attempt), "attempt_outcome.json")
+    outcome_path = safe_state_path(
+        state_root,
+        "results",
+        identifier=packet_id,
+        suffix=os.path.join(str(attempt), "attempt_outcome.json"),
+    )
     provider_evidence = provider_evidence_by_packet.get(packet_id)
 
     if has_result_recorded:
@@ -688,7 +694,13 @@ def _promote_one_dependency(
     # auditable satisfied_by citation.
     satisfied_by: List[Dict[str, Any]] = []
     for dep_id in deps:
-        seal_path = os.path.join(state_root, "state", "terminal", f"{dep_id}.seal.json")
+        seal_path = safe_state_path(
+            state_root,
+            "state",
+            "terminal",
+            identifier=dep_id,
+            identifier_suffix=".seal.json",
+        )
         seal = _read_json(seal_path)
         if seal is None:
             # Benign: design 3.5 step 13 ("create any missing terminal

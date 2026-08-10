@@ -1,6 +1,7 @@
 """Packet schema validation for harness contract v1."""
 
 import json
+import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
@@ -60,6 +61,13 @@ GOVERNED_PATHS = {
 
 RE_SHA256 = r"^[0-9a-f]{64}$"
 RE_REVISION = r"^[0-9a-f]{40}$"
+RE_HARNESS_ID = r"^[a-z0-9][a-z0-9._-]{0,127}$"
+HARNESS_ID_PATTERN = re.compile(RE_HARNESS_ID)
+
+
+def is_harness_id(value: Any) -> bool:
+    """Return whether value is safe for identity and filesystem use."""
+    return isinstance(value, str) and HARNESS_ID_PATTERN.fullmatch(value) is not None
 
 
 def is_repo_relative_path(path: str) -> bool:
@@ -200,8 +208,14 @@ def _validate_packet_object(v: _PacketValidator) -> None:
         v.add("INVALID_VALUE", "/schema_version", "schema_version must be 1")
 
     # Strings
-    for field in ("packet_id", "objective"):
-        v.check_non_empty_string(value[field], f"/{field}")
+    v.check_non_empty_string(value["objective"], "/objective")
+    if not is_harness_id(value["packet_id"]):
+        v.add(
+            "INVALID_FORMAT",
+            "/packet_id",
+            "Must match ^[a-z0-9][a-z0-9._-]{0,127}$",
+            phase="format",
+        )
 
     # dependency_ids: array of non-empty strings, may be empty
     deps = value["dependency_ids"]
@@ -210,8 +224,13 @@ def _validate_packet_object(v: _PacketValidator) -> None:
         v.add("INVALID_TYPE", "/dependency_ids", "Expected array")
     else:
         for i, dep in enumerate(deps):
-            if not isinstance(dep, str) or dep.strip() == "":
-                v.add("INVALID_VALUE", f"/dependency_ids/{i}", "Dependency ID must be a non-empty string")
+            if not is_harness_id(dep):
+                v.add(
+                    "INVALID_FORMAT",
+                    f"/dependency_ids/{i}",
+                    "Must match ^[a-z0-9][a-z0-9._-]{0,127}$",
+                    phase="format",
+                )
             elif isinstance(packet_id, str) and dep == packet_id:
                 v.add("SELF_DEPENDENCY", f"/dependency_ids/{i}", "Packet cannot depend on itself")
 

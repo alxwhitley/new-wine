@@ -25,6 +25,7 @@ from harness_contracts.v1.seal import TERMINAL_STATES, validate_terminal_seal
 from harness_contracts.v1.transition import validate_transition
 
 from harness_coordinator.v1.locks import read_claim, reclaim_lock
+from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 from harness_coordinator.v1.store import (
     JournalChainBroken,
     atomic_replace,
@@ -343,10 +344,16 @@ def _handle_torn_tail(
     state_root_id: str,
     now: str,
 ) -> None:
+    validate_harness_id(run_id, "/run_id")
     torn_dir = os.path.join(state_root, "journal.torn")
     os.makedirs(torn_dir, exist_ok=True)
-    tail_path = os.path.join(torn_dir, f"{run_id}.bytes")
-    tail_rel = os.path.relpath(tail_path, state_root)
+    tail_path = safe_state_path(
+        state_root,
+        "journal.torn",
+        identifier=run_id,
+        identifier_suffix=".bytes",
+    )
+    tail_rel = os.path.relpath(tail_path, os.path.realpath(state_root))
     atomic_replace(tail_path, torn_tail, coordinator_id=coordinator_id, nonce=str(uuid.uuid4()))
 
     # Truncate journal to valid prefix.
@@ -424,6 +431,11 @@ def _fold_journal(
         event_type = event.get("event_type")
         cause = event.get("cause")
         packet_id = event.get("packet_id")
+        if packet_id is not None:
+            try:
+                validate_harness_id(packet_id, "/packet_id")
+            except ValueError as exc:
+                raise IntegrityError("INVALID_FORMAT", str(exc)) from exc
         from_state = event.get("from_state")
         to_state = event.get("to_state")
 
@@ -469,6 +481,16 @@ def _fold_journal(
             payload = event.get("payload") or {}
             packet_payload = payload.get("packet") or {}
             packet_id = event.get("packet_id")
+            for index, dependency_id in enumerate(
+                packet_payload.get("dependency_ids") or []
+            ):
+                try:
+                    validate_harness_id(
+                        dependency_id,
+                        f"/payload/packet/dependency_ids/{index}",
+                    )
+                except ValueError as exc:
+                    raise IntegrityError("INVALID_FORMAT", str(exc)) from exc
             if packet_id in packets:
                 raise IntegrityError("DUPLICATE_ID", f"Packet {packet_id} already enrolled")
             lane = packet_payload.get("lane")
@@ -588,7 +610,20 @@ def _fold_journal(
             if not name.endswith(".seal.json"):
                 continue
             pid = name[:-len(".seal.json")]
-            seal_path = os.path.join(seal_dir, name)
+            try:
+                seal_path = safe_state_path(
+                    state_root,
+                    "state",
+                    "terminal",
+                    identifier=pid,
+                    identifier_suffix=".seal.json",
+                )
+            except ValueError as exc:
+                raise IntegrityError(
+                    "TERMINAL_SEAL_MISMATCH",
+                    f"Seal path for {pid} escapes state root: {exc}",
+                    packet_id=pid,
+                ) from exc
             try:
                 with open(seal_path, "rb") as f:
                     seal = json.loads(f.read().decode("utf-8"))
@@ -903,7 +938,12 @@ def _resolve_pending_intents(
         # prior_claim BEFORE moving the file, identically to step 8 --
         # mutating the state root with no journal record is itself the
         # auditability violation D0.1 exists to prevent.
-        lock_file = os.path.join(state_root, "locks", f"{packet_id}.lock.json")
+        lock_file = safe_state_path(
+            state_root,
+            "locks",
+            identifier=packet_id,
+            identifier_suffix=".lock.json",
+        )
         if os.path.exists(lock_file):
             lock_record = read_claim(lock_file)
             lock_validation = validate_claim(lock_record)

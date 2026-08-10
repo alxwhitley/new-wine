@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.journal import validate_journal_event
+from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 
 
 class JournalChainBroken(Exception):
@@ -36,6 +37,8 @@ def atomic_replace(path: str, data: bytes, coordinator_id: str, nonce: str) -> N
     cannot cross filesystems.
     """
     directory = os.path.dirname(path)
+    validate_harness_id(coordinator_id, "/coordinator_id")
+    validate_harness_id(nonce, "/nonce")
     tmp = f"{path}.tmp.{coordinator_id}.{os.getpid()}.{nonce}"
     fd = -1
     created = False
@@ -228,7 +231,7 @@ def sweep_orphans(state_root: str, run_id: str) -> List[str]:
     """
     import fnmatch
 
-    sweep_dir = os.path.join(state_root, "sweep", run_id)
+    sweep_dir = safe_state_path(state_root, "sweep", identifier=run_id)
     os.makedirs(sweep_dir, exist_ok=True)
     moved: List[str] = []
     for root, _dirs, files in os.walk(state_root):

@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from harness_contracts.v1.canonical import canonical_bytes
 from harness_contracts.v1.claim import classify_claim
+from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 
 
 def create_claim(lock_path: str, record: Dict[str, Any]) -> None:
@@ -55,11 +56,16 @@ def reclaim_lock(lock_path: str, run_id: str, classification: str) -> None:
     packet_id = record.get("packet_id")
     if not packet_id:
         raise ValueError("Claim record missing packet_id")
+    validate_harness_id(packet_id)
 
     state_root = os.path.dirname(os.path.dirname(lock_path))
-    dst_dir = os.path.join(state_root, "locks", "reclaimed", run_id)
+    dst_dir = safe_state_path(
+        state_root, "locks", "reclaimed", identifier=run_id
+    )
     os.makedirs(dst_dir, exist_ok=True)
-    dst = os.path.join(dst_dir, f"{packet_id}.lock.json")
+    dst = safe_state_path(
+        dst_dir, identifier=packet_id, identifier_suffix=".lock.json"
+    )
     if os.path.exists(dst):
         raise FileExistsError(f"Reclaimed lock destination already exists: {dst}")
 

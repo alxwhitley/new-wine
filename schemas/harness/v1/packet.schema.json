@@ -34,7 +34,8 @@
     },
     "packet_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
     },
     "objective": {
       "type": "string",
@@ -44,7 +45,8 @@
       "type": "array",
       "items": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
       }
     },
     "lane": {

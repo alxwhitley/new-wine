@@ -14,6 +14,7 @@ from harness_contracts.v1.packet import (
     _matches,
     _normalize_relative_path,
     _PacketValidator,
+    is_harness_id,
     is_repo_relative_path,
 )
 from harness_contracts.v1.transition import VALID_TRANSITIONS, validate_transition
@@ -328,8 +329,13 @@ def _validate_journal_event_object(
         if packet_id is not None:
             v.add("INVALID_VALUE", "/packet_id", f"{event_type} event must have packet_id null", phase="value")
     else:
-        if not isinstance(packet_id, str) or packet_id.strip() == "":
-            v.add("INVALID_VALUE", "/packet_id", f"{event_type} event requires a non-empty packet_id", phase="value")
+        if not is_harness_id(packet_id):
+            v.add(
+                "INVALID_FORMAT",
+                "/packet_id",
+                f"{event_type} event requires a safe harness packet_id",
+                phase="format",
+            )
 
     intent_id = value.get("intent_id")
     intent_required_types = {
@@ -549,8 +555,13 @@ def _validate_payload_packet(v: _PacketValidator, packet: Dict[str, Any], path: 
         v.add("INVALID_TYPE", f"{path}/dependency_ids", "Expected array", phase="scalar")
     else:
         for i, dep in enumerate(deps):
-            if not isinstance(dep, str) or dep.strip() == "":
-                v.add("INVALID_VALUE", f"{path}/dependency_ids/{i}", "Dependency ID must be a non-empty string", phase="value")
+            if not is_harness_id(dep):
+                v.add(
+                    "INVALID_FORMAT",
+                    f"{path}/dependency_ids/{i}",
+                    "Dependency ID must be a safe harness identifier",
+                    phase="format",
+                )
 
     sra = packet.get("sonnet_reassignment_allowed")
     if not isinstance(sra, bool):

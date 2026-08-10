@@ -55,6 +55,7 @@ from harness_contracts.v1.reconciliation import compute_reconciliation, validate
 from harness_contracts.v1.seal import validate_terminal_seal
 
 from harness_coordinator.v1.recovery import IntegrityError, _fold_journal, _last_seq, _make_event
+from harness_coordinator.v1.paths import safe_state_path
 from harness_coordinator.v1.store import append_journal, read_journal
 
 
@@ -123,7 +124,21 @@ def _check_seal_consistency(state_root: str, packets_by_id: Dict[str, Any]) -> L
         if not name.endswith(".seal.json"):
             continue
         pid = name[: -len(".seal.json")]
-        seal_path = os.path.join(seal_dir, name)
+        try:
+            seal_path = safe_state_path(
+                state_root,
+                "state",
+                "terminal",
+                identifier=pid,
+                identifier_suffix=".seal.json",
+            )
+        except ValueError:
+            findings.append({
+                "packet_id": pid,
+                "code": "TERMINAL_SEAL_MISMATCH",
+                "detail": f"Seal path for {pid} escapes state root",
+            })
+            continue
         try:
             with open(seal_path, "rb") as f:
                 seal = json.loads(f.read().decode("utf-8"))
@@ -488,9 +503,15 @@ def emit_reconciliation_report(
     if not result["valid"]:
         raise IntegrityError("INVALID_VALUE", f"Refusing to emit an invalid reconciliation report: {result['errors'][0]['message']}")
 
-    report_path_rel = os.path.join("reports", f"{report['report_id']}.json")
+    report_path = safe_state_path(
+        state_root,
+        "reports",
+        identifier=report["report_id"],
+        identifier_suffix=".json",
+    )
+    report_path_rel = os.path.relpath(report_path, os.path.realpath(state_root))
     os.makedirs(os.path.join(state_root, "reports"), exist_ok=True)
-    atomic_replace(os.path.join(state_root, report_path_rel), canonical_bytes(report), coordinator_id=coordinator_id, nonce=report["report_id"])
+    atomic_replace(report_path, canonical_bytes(report), coordinator_id=coordinator_id, nonce=report["report_id"])
 
     event = _make_event(
         seq=(_last_seq(journal_events) + 1),
