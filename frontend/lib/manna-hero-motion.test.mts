@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -58,4 +59,16 @@ test("reduced motion keeps copy visible and disables transforms", () => {
     foregroundScale: 1,
     foregroundY: 0,
   });
+});
+
+test("hero component keeps copy semantic and has no fabricated app controls", () => {
+  const source = readFileSync(
+    new URL("../components/marketing/manna-dawn-hero.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /<h1/);
+  assert.match(source, /aria-label="Manna application preview placeholder"/);
+  assert.doesNotMatch(source, /Welcome back|Ask anything|Research|Support Ops/);
+  assert.doesNotMatch(source, /style=\{\{/);
 });
