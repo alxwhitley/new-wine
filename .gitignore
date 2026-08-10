@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.readonly-analysis
 __pycache__/
 *.pyc
 .venv/
@@ -88,6 +89,15 @@ position_calibration_review/
 # Storage was always intercepted this session, never written. Same
 # rationale as the review queues above — local-only, not for git history.
 book_chapter_live_proof_review/
+
+# Overnight corpus data-quality sweep (read-only, rhemata_readonly_analysis).
+# Progressive findings JSONL/MD + calibration report; may contain excerpts
+# of copyrighted corpus text. Local-only, not for git history.
+corpus_data_quality_review/
+
+# Non-teacher span proposals (read-only follow-on to type-5 sweep).
+# Verbatim corpus excerpts for human review only; nothing applied.
+non_teacher_span_proposals/
 
 # Phase 2 teacher-name guard live-run artifact (local, regenerated on demand)
 scripts/teacher_name_guard_live_results.json
