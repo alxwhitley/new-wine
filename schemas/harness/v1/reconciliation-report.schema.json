@@ -1,0 +1,420 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harness Contract v1 Reconciliation Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "generated_at",
+    "coordinator_id",
+    "run_id",
+    "state_root_id",
+    "journal_head",
+    "inventory_total",
+    "by_state",
+    "packets",
+    "activity",
+    "attention_required",
+    "integrity",
+    "reconciliation",
+    "content_sha256",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1]
+    },
+    "report_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "coordinator_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state_root_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "journal_head": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "event_sha256"
+      ],
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "inventory_total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "by_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "BLOCKED",
+        "READY",
+        "RUNNING",
+        "REVIEW",
+        "REVISE",
+        "ACCEPTED",
+        "QUARANTINED",
+        "HUMAN_REQUIRED"
+      ],
+      "properties": {
+        "BLOCKED": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "READY": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "RUNNING": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "REVIEW": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "REVISE": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ACCEPTED": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "QUARANTINED": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "HUMAN_REQUIRED": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "packets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packet_id",
+          "state",
+          "lane",
+          "enqueue_seq",
+          "attempts_started",
+          "infra_retries_used",
+          "revise_cycles_used",
+          "revise_verdicts",
+          "reassignment_used",
+          "open_attempt",
+          "last_event_seq",
+          "last_event_sha256",
+          "quarantine_reason",
+          "human_required_reasons",
+          "blocked_on",
+          "attention_codes",
+          "retry_limit"
+        ],
+        "properties": {
+          "packet_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "BLOCKED",
+              "READY",
+              "RUNNING",
+              "REVIEW",
+              "REVISE",
+              "ACCEPTED",
+              "QUARANTINED",
+              "HUMAN_REQUIRED"
+            ]
+          },
+          "lane": {
+            "type": "string",
+            "enum": [
+              "kimi_implementation",
+              "sonnet_implementation",
+              "grok_verification",
+              "opus_judgment"
+            ]
+          },
+          "enqueue_seq": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "attempts_started": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "infra_retries_used": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revise_cycles_used": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revise_verdicts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reassignment_used": {
+            "type": "boolean"
+          },
+          "open_attempt": {
+            "type": ["integer", "null"],
+            "minimum": 1
+          },
+          "last_event_seq": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "last_event_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "quarantine_reason": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "human_required_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "blocked_on": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "attention_codes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "retry_limit": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempts_started_total",
+        "infra_retries_total",
+        "revise_verdicts_total",
+        "revise_cycles_total",
+        "reassignments_total",
+        "results_recorded_total",
+        "verdicts_recorded_total",
+        "intents_abandoned_total",
+        "locks_reclaimed_total"
+      ],
+      "properties": {
+        "attempts_started_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "infra_retries_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revise_verdicts_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revise_cycles_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reassignments_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "results_recorded_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verdicts_recorded_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "intents_abandoned_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locks_reclaimed_total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "attention_required": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packet_id",
+          "code",
+          "detail"
+        ],
+        "properties": {
+          "packet_id": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "journal_chain_valid",
+        "state_cache_in_sync",
+        "duplicate_packet_ids",
+        "omitted_packet_ids",
+        "unenrolled_dependencies",
+        "seal_mismatches",
+        "accounting_violations",
+        "preserved_evidence_mismatches"
+      ],
+      "properties": {
+        "journal_chain_valid": {
+          "type": "boolean"
+        },
+        "state_cache_in_sync": {
+          "type": "boolean"
+        },
+        "duplicate_packet_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "omitted_packet_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "unenrolled_dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "seal_mismatches": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "accounting_violations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "preserved_evidence_mismatches": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sum_of_by_state",
+        "packets_array_length",
+        "distinct_packet_ids",
+        "equals_inventory_total",
+        "all_invariants_passed"
+      ],
+      "properties": {
+        "sum_of_by_state": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "packets_array_length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "distinct_packet_ids": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "equals_inventory_total": {
+          "type": "boolean"
+        },
+        "all_invariants_passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "content_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "report_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

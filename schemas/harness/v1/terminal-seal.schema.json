@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harness Contract v1 Terminal Seal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "packet_id",
+    "packet_sha256",
+    "terminal_state",
+    "sealing_event_seq",
+    "sealing_event_sha256",
+    "sealed_at",
+    "quarantine_reason",
+    "human_required_reasons",
+    "upstream_digests",
+    "seal_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1]
+    },
+    "packet_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "packet_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "terminal_state": {
+      "type": "string",
+      "enum": ["ACCEPTED", "QUARANTINED", "HUMAN_REQUIRED"]
+    },
+    "sealing_event_seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sealing_event_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sealed_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "quarantine_reason": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "human_required_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "upstream_digests": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "packet_sha256",
+        "result_sha256",
+        "verdict_sha256",
+        "bundle_sha256"
+      ],
+      "properties": {
+        "packet_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "result_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "verdict_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "bundle_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "seal_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

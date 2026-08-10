@@ -40,6 +40,13 @@ ERROR_CODES = [
     "UNAUTHORIZED_REVIEWER",
     "PROVENANCE_MISMATCH",
     "CHRONOLOGY_VIOLATION",
+    "JOURNAL_CHAIN_BROKEN",
+    "JOURNAL_HEAD_MOVED",
+    "SEQUENCE_GAP",
+    "CLAIM_CONFLICT",
+    "TERMINAL_SEAL_MISMATCH",
+    "RECONCILIATION_MISMATCH",
+    "RESERVED_STATE_PATH",
 ]
 
 _ERROR_CODE_ORDER = {code: i for i, code in enumerate(ERROR_CODES)}
@@ -60,8 +67,10 @@ PHASE_RANK = {
     "path_authority": 4,
     "cross_field": 5,
     "cross_object": 6,
+    "chain": 6,
     "transition": 7,
     "evidence_accept": 8,
+    "reconciliation": 9,
 }
 
 
