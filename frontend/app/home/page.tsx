@@ -354,7 +354,7 @@ export default function HomePage() {
 
   return (
     <>
-    <div className="bg-background text-foreground min-h-screen font-sans antialiased overflow-x-hidden">
+    <div className="bg-background text-foreground min-h-screen font-sans antialiased overflow-x-clip">
 
       {/* ── NAV ── */}
       {/* h-14 becomes the content box (via padding), not the outer box —

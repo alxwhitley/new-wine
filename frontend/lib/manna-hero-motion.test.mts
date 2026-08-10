@@ -72,3 +72,13 @@ test("hero component keeps copy semantic and has no fabricated app controls", ()
   assert.doesNotMatch(source, /Welcome back|Ask anything|Research|Support Ops/);
   assert.doesNotMatch(source, /style=\{\{/);
 });
+
+test("home page clips horizontal overflow without breaking sticky descendants", () => {
+  const source = readFileSync(
+    new URL("../app/home/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /overflow-x-clip/);
+  assert.doesNotMatch(source, /overflow-x-hidden/);
+});
