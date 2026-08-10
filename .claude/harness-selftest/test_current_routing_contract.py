@@ -9,18 +9,76 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 ACTIVE_ROOT = Path(os.environ.get("RHEMATA_ACTIVE_ROOT", REPO))
-GUARD_PATH = ACTIVE_ROOT / ".Codex" / "hooks" / "guard_pretooluse.py"
-EXECUTOR_PATH = ACTIVE_ROOT / ".Codex" / "agents" / "executor.toml"
-REVIEWER_PATH = ACTIVE_ROOT / ".Codex" / "agents" / "planner-reviewer.toml"
-GATE_PATH = ACTIVE_ROOT / ".Codex" / "hooks" / "deterministic_gate.py"
+CODEX_GUARD_PATH = ACTIVE_ROOT / ".codex" / "hooks" / "guard_pretooluse.py"
+CLAUDE_GUARD_PATH = ACTIVE_ROOT / ".claude" / "hooks" / "guard_pretooluse.py"
+GUARD_PATH = CODEX_GUARD_PATH
+EXECUTOR_PATH = ACTIVE_ROOT / ".codex" / "agents" / "executor.toml"
+REVIEWER_PATH = ACTIVE_ROOT / ".codex" / "agents" / "planner-reviewer.toml"
+GATE_PATH = ACTIVE_ROOT / ".codex" / "hooks" / "deterministic_gate.py"
 
 
-def load_guard():
-    spec = importlib.util.spec_from_file_location("guard_pretooluse", GUARD_PATH)
+def load_guard(path=GUARD_PATH):
+    spec = importlib.util.spec_from_file_location(
+        f"guard_pretooluse_{path.parent.parent.name}", path
+    )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def test_both_configured_hooks_enforce_current_repo_only_boundary():
+    for path in (CODEX_GUARD_PATH, CLAUDE_GUARD_PATH):
+        guard = load_guard(path)
+        assert not hasattr(guard, "check_rule_10_freeze")
+        assert guard.check_production_db_boundary(
+            "python3 scripts/ingest_magazine.py --dry-run"
+        ) is None
+        for command in (
+            "python3 scripts/ingest_magazine.py",
+            "python3 scripts/backfill_topics.py",
+            "python3 scripts/migrate_sources.py",
+            "python3 scripts/seed_sources.py",
+            "python3 scripts/restore_sources.py",
+            "python3 scripts/run_full_backfill.py",
+            "python3 scripts/run_queue_ingest.py",
+            "python3 scripts/apply_migration_085.py",
+            'psql "$SUPABASE_DB_URL" -c "UPDATE sources SET visibility=shown"',
+        ):
+            assert guard.check_production_db_boundary(command) is not None
+        assert guard.check_production_db_boundary(
+            "python3 scripts/ingest_magazine.py --dry-run; "
+            "python3 scripts/ingest_magazine.py"
+        ) is not None
+        assert guard.check_production_db_boundary(
+            "python3 scripts/ingest_magazine.py --dry-run | "
+            "python3 scripts/ingest_magazine.py"
+        ) is not None
+        assert guard.check_production_db_boundary(
+            'echo --dry-run | psql "$DB" -c "UPDATE sources SET x=1"'
+        ) is not None
+        assert guard.check_production_db_boundary(
+            "python3 scripts/ingest_magazine.py --dry-run=false"
+        ) is not None
+        assert guard.check_production_db_boundary(
+            "python3 -m scripts.run_queue_ingest"
+        ) is not None
+        assert guard.check_production_db_boundary(
+            'echo "UPDATE sources SET x=1" | psql "$DB"'
+        ) is not None
+        assert guard.check_production_db_boundary(
+            'psql "$DB" --dry-run -c "UPDATE sources SET x=1"'
+        ) is not None
+        assert guard.check_production_db_boundary(
+            'psql "$SUPABASE_DB_URL" -c "SELECT count(*) FROM sources"'
+        ) is None
+
+
+def test_settings_wire_the_two_explicit_hook_surfaces():
+    claude_settings = (ACTIVE_ROOT / ".claude" / "settings.json").read_text()
+    codex_settings = (ACTIVE_ROOT / ".codex" / "hooks.json").read_text()
+    assert ".claude/hooks/guard_pretooluse.py" in claude_settings
+    assert ".codex/hooks/guard_pretooluse.py" in codex_settings
 
 
 def check(condition: bool, label: str) -> None:

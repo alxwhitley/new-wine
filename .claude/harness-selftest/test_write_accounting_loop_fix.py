@@ -87,7 +87,7 @@ def run_pretooluse(scratch_dir, payload):
 
     if tool_name == "Bash":
         command = tool_input.get("command", "") or ""
-        for c in (guard.check_destructive_git, guard.check_rule_10_freeze):
+        for c in (guard.check_destructive_git, guard.check_production_db_boundary):
             if c(command):
                 return False
         if guard.is_write_class(tool_name, tool_input):

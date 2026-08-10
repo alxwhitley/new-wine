@@ -17,9 +17,9 @@ Enforces:
   2. Read-and-propose only on the five governed files: denies Edit/Write whose
      target is CLAUDE.md, PLAN.md, POSITIONING.md, DESIGN.md, or
      rhemata-status.md, for the two subagents, unconditionally.
-  3. PLAN.md Standing Rule 10 freeze: denies real (non-dry-run/non-test)
-     invocation of the five PLAN.md-roadmap-#8-13 unconverted ingest scripts
-     for the executor.
+  3. CLAUDE.md Session Routing: denies recognizable production DB write
+     commands for guarded agents. This is task-class based, not a stale list of
+     allegedly unconverted scripts.
 
 Session #5.5, Phase 3 piece 1 (2026-07-10) -- Approach B recording, NOT
 gating yet: on every ALLOWED write-class call from a guarded agent, append a
@@ -81,18 +81,31 @@ DESTRUCTIVE_GIT = re.compile(
     r"\bgit\s+(commit\b|push\b|reset\s+--hard\b|checkout\s+--\b)"
 )
 
-# PLAN.md roadmap #8-13 is authoritative (2026-07-10 call: supersedes the older
-# 4-script list in CLAUDE.md's propositions-per-script section, which is stale).
-# ingest_preceptaustin.py removed 2026-07-13 (#9 conversion). ingest_magazine.py
-# is ALSO already converted (#8) but deliberately left in this list -- Open
-# Flag #1 (rhemata-status.md) already covers this exact staleness and says not
-# to fix it piecemeal mid-conversion; that's its own harness session.
-UNCONVERTED_INGEST_SCRIPTS = re.compile(
-    r"\b(ingest_magazine\.py|ingest_lexicon\.py|"
-    r"ingest_helloao\.py)\b"
+DRY_RUN_FLAG = re.compile(r"(?:^|\s)--(?:dry-run|test)(?=\s|$)")
+
+# Harness sessions are repo-only. Block recognizable non-dry-run production
+# data commands by operation class instead of maintaining a list of scripts
+# believed to be unconverted. This deliberately over-blocks ambiguous commands;
+# the correct route for a real write is a separately authorized plain session.
+PRODUCTION_DATA_SCRIPT = re.compile(
+    r"(?:^|[\s/])[\w.-]*(?:ingest|backfill|migrate|migration|restore|seed|populate)"
+    r"[\w.-]*\.(?:py|js|sh)\b",
+    re.IGNORECASE,
 )
 
-DRY_RUN_FLAG = re.compile(r"--dry-run|--test\b")
+PRODUCTION_DATA_MODULE = re.compile(
+    r"(?:^|\s)-m\s+[\w.]*(?:ingest|backfill|migrate|migration|restore|seed|populate)"
+    r"[\w.]*\b",
+    re.IGNORECASE,
+)
+
+DIRECT_DB_CLIENT = re.compile(
+    r"\b(?:psql|psycopg2|execute_sql|apply_migration)\b", re.IGNORECASE
+)
+MUTATING_SQL_VERB = re.compile(
+    r"\b(?:INSERT|UPDATE|DELETE|UPSERT|ALTER|DROP|MERGE|CREATE|TRUNCATE)\b",
+    re.IGNORECASE,
+)
 
 # Session #5.5 Phase 3 piece 1: write-class Bash detection. NEW, first-pass --
 # see module docstring for known gaps (can't see inside a script; over-fires
@@ -232,8 +245,9 @@ SCRIPT_INVOCATION_PATTERN = re.compile(
 )
 
 # Piece B (#5.5 exit condition (a), 2026-07-13): known write-capable scripts,
-# same allow-listing shape as UNCONVERTED_INGEST_SCRIPTS above but for the
-# opposite purpose -- these are scripts SAFE to run for real that DO write,
+# known write-capable scripts are recorded directly instead of falling into
+# the script-invocation blind spot. Recognition is not authorization: real
+# production execution remains blocked by check_production_db_boundary().
 # so a non-dry-run invocation should be recorded directly as a write instead
 # of falling into the "script ran, contents unseen" blind spot. Starts with
 # ingest.py (the one converted chokepoint script); extend this set only
@@ -339,16 +353,26 @@ def check_mcp_write(tool_name: str):
     return None
 
 
-def check_rule_10_freeze(command: str):
-    m = UNCONVERTED_INGEST_SCRIPTS.search(command)
-    if m and not DRY_RUN_FLAG.search(command):
+def check_production_db_boundary(command: str):
+    if DIRECT_DB_CLIENT.search(command) and MUTATING_SQL_VERB.search(command):
         return (
-            f"PLAN.md Standing Rule 10 freeze: '{m.group(1)}' is one of the five "
-            "PLAN.md roadmap #8-13 scripts not yet converted through "
-            "shared_ingest.py. New-source ingests through unconverted scripts "
-            "are frozen until the chokepoint band clears. Re-run with "
-            "--dry-run/--test, or stop and report the blocker instead."
+            "CLAUDE.md Session Routing: production database work ('direct DB mutation') "
+            "never runs through the repo-only harness. Direct mutating SQL has no "
+            "harness dry-run exemption and requires a separately authorized "
+            "plain-script session."
         )
+    for segment in re.split(r"(?:&&|\|\||(?<!\|)\|(?!\|)|;|\n)", command):
+        script = PRODUCTION_DATA_SCRIPT.search(segment)
+        module = PRODUCTION_DATA_MODULE.search(segment)
+        if (script or module) and not DRY_RUN_FLAG.search(segment):
+            target_match = script or module
+            target = target_match.group(0).strip()
+            return (
+                f"CLAUDE.md Session Routing: production database work ('{target}') "
+                "never runs through the repo-only harness. A dry run/test may run "
+                "here; any real ingest, backfill, migration, seed, restore, or direct "
+                "DB mutation requires a separately authorized plain-script session."
+            )
     return None
 
 
@@ -499,7 +523,7 @@ def main() -> None:
 
     if tool_name == "Bash":
         command = tool_input.get("command", "") or ""
-        for check in (check_destructive_git, check_rule_10_freeze):
+        for check in (check_destructive_git, check_production_db_boundary):
             reason = check(command)
             if reason:
                 deny(reason)

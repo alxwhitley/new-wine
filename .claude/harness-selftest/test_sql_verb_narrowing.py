@@ -81,7 +81,7 @@ def run_pretooluse(scratch_dir, payload):
 
     if tool_name == "Bash":
         command = tool_input.get("command", "") or ""
-        for c in (guard.check_destructive_git, guard.check_rule_10_freeze):
+        for c in (guard.check_destructive_git, guard.check_production_db_boundary):
             if c(command):
                 return False
         if guard.is_write_class(tool_name, tool_input):
@@ -156,13 +156,14 @@ def scenario_b():
     psql_cmd = 'psql "$SUPABASE_DB_URL" -c "ALTER TABLE sources ADD COLUMN retrievable boolean;"'
     check("B1a: is_write_class() is True for a genuine psql ALTER TABLE execution",
           guard.is_write_class("Bash", {"command": psql_cmd}) is True)
-    run_pretooluse(scratch, {
+    allowed = run_pretooluse(scratch, {
         "session_id": session_id, "agent_id": agent_id, "agent_type": "executor",
         "tool_name": "Bash", "tool_input": {"command": psql_cmd},
     })
     n = write_class_record_count(scratch, session_id)
-    check("B1b: real PreToolUse path records this psql call as a write",
-          n == 1, detail=f"got {n} write-class record(s)")
+    check("B1b: real PreToolUse path denies this production psql call before execution",
+          allowed is False and n == 0,
+          detail=f"allowed={allowed}, got {n} write-class record(s)")
     shutil.rmtree(scratch, ignore_errors=True)
 
     # B2: a known write-capable script invocation -- untouched, out of scope.
@@ -172,13 +173,14 @@ def scenario_b():
     script_cmd = "python3 scripts/ingest.py"
     check("B2a: is_known_write_script_invocation() is still True for `python3 scripts/ingest.py`",
           guard.is_known_write_script_invocation(script_cmd) is True)
-    run_pretooluse(scratch, {
+    allowed = run_pretooluse(scratch, {
         "session_id": session_id, "agent_id": agent_id, "agent_type": "executor",
         "tool_name": "Bash", "tool_input": {"command": script_cmd},
     })
     n = write_class_record_count(scratch, session_id)
-    check("B2b: real PreToolUse path still records this known write-script invocation as a write",
-          n == 1, detail=f"got {n} write-class record(s)")
+    check("B2b: real PreToolUse path denies this production ingest before execution",
+          allowed is False and n == 0,
+          detail=f"allowed={allowed}, got {n} write-class record(s)")
     shutil.rmtree(scratch, ignore_errors=True)
 
     # B3: narrowing can't be used as a bypass -- a genuine mutating
