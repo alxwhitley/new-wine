@@ -26,6 +26,7 @@ function writeMotionVariables(root: HTMLElement, reducedMotion: boolean): void {
   root.style.setProperty("--manna-copy-y", `${values.copyY}px`);
   root.style.setProperty("--manna-product-scale", String(values.productScale));
   root.style.setProperty("--manna-product-y", `${values.productY}vh`);
+  root.style.setProperty("--manna-foreground-opacity", String(values.foregroundOpacity));
   root.style.setProperty("--manna-foreground-scale", String(values.foregroundScale));
   root.style.setProperty("--manna-foreground-y", `${values.foregroundY}%`);
 }
@@ -63,10 +64,11 @@ export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
       <div className={styles.stickyFrame}>
         <Image
           className={styles.background}
-          src="/images/hero/manna-predawn-master.png"
+          src="/images/hero/manna-predawn-clean-plate.png"
           alt=""
           fill
           priority
+          unoptimized
           sizes="100vw"
         />
 

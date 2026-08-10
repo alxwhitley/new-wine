@@ -21,8 +21,9 @@ test("returns the approved start, midpoint, and end transforms", () => {
     copyY: 0,
     productScale: 0.82,
     productY: 34,
+    foregroundOpacity: 0,
     foregroundScale: 1,
-    foregroundY: 0,
+    foregroundY: 12,
   });
 
   assert.deepEqual(getMannaHeroTransforms(0.5), {
@@ -32,8 +33,9 @@ test("returns the approved start, midpoint, and end transforms", () => {
     copyY: -12,
     productScale: 0.91,
     productY: 17,
+    foregroundOpacity: 0.78,
     foregroundScale: 1.04,
-    foregroundY: -2,
+    foregroundY: 4,
   });
 
   assert.deepEqual(getMannaHeroTransforms(1), {
@@ -43,6 +45,7 @@ test("returns the approved start, midpoint, and end transforms", () => {
     copyY: -24,
     productScale: 1,
     productY: 0,
+    foregroundOpacity: 0.78,
     foregroundScale: 1.08,
     foregroundY: -4,
   });
@@ -56,6 +59,7 @@ test("reduced motion keeps copy visible and disables transforms", () => {
     copyY: 0,
     productScale: 1,
     productY: 0,
+    foregroundOpacity: 0.78,
     foregroundScale: 1,
     foregroundY: 0,
   });
@@ -79,7 +83,8 @@ test("hero uses the versioned predawn master asset", () => {
     "utf8",
   );
 
-  assert.match(source, /manna-predawn-master\.png/);
+  assert.match(source, /manna-predawn-clean-plate\.png/);
+  assert.match(source, /unoptimized/);
 });
 
 test("home page clips horizontal overflow without breaking sticky descendants", () => {

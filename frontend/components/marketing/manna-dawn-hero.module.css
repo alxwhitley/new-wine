@@ -5,8 +5,9 @@
   --manna-copy-y: 0px;
   --manna-product-scale: 0.82;
   --manna-product-y: 34vh;
+  --manna-foreground-opacity: 0;
   --manna-foreground-scale: 1;
-  --manna-foreground-y: 0%;
+  --manna-foreground-y: 12%;
   position: relative;
   height: 190vh;
   min-height: 72rem;
@@ -120,10 +121,12 @@
 
 .foreground {
   z-index: 3;
+  opacity: var(--manna-foreground-opacity);
   object-position: 50% 50%;
   transform: translate3d(0, var(--manna-foreground-y), 0)
     scale(var(--manna-foreground-scale));
   transform-origin: 50% 100%;
+  will-change: opacity, transform;
 }
 
 @media (max-width: 767px) {
