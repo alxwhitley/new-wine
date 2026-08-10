@@ -1,406 +1,573 @@
-# Rhemata — Master Plan (v6.1 · outcome-driven)
+# Rhemata — Master Plan (v7.0 · build to ingestion-ready beta)
 
-> **Purpose:** this file answers four questions only: what outcome is being
-> pursued, what blocks it, what happens next, and what still needs Alex's
-> decision. Build history and superseded reasoning live in
-> `docs/plan-archive.md`; current implementation detail lives in
-> `ARCHITECTURE.md`; session state lives in `rhemata-status.md`.
+> **For agentic workers:** REQUIRED SUB-SKILL: use
+> `superpowers:subagent-driven-development` or
+> `superpowers:executing-plans` when executing approved build packets. Packet
+> checkboxes are evidence gates, not permission for production writes.
+
+**Goal:** reach an ingestion-ready platform, then complete the private-beta
+product while approved corpus production runs concurrently.
+
+**Architecture:** a resumable coordinator dispatches bounded, isolated packets
+to Claude Code, Kimi through OpenCode Go, and Grok. Claude Opus 5 is the sole
+judgment/integration layer; Kimi is the primary worker, Claude Sonnet 5 is its
+confirmed-exhaustion fallback, and Grok handles bounded research and mechanical
+verification.
+
+**Tech stack:** existing Rhemata application and scripts, Git worktrees, Claude
+Code subscription CLI, OpenCode Go subscription CLI, Grok subscription CLI,
+and deterministic Python orchestration. No model API integration is required.
+
+### Global constraints
+
+- Preserve all `CLAUDE.md` invariants and the hard rules in `AGENTS.md`.
+- Never run production DB writes through the agent harness.
+- Never infer doctrinal, licensing, destructive, deployment, or migration
+  authority from a work packet.
+- Keep build commits and docs/records commits separate.
+- Do not touch unrelated user changes in the dirty worktree.
+
+> **Purpose:** build everything required to reach a stable ingestion-ready
+> platform, then finish the beta product while corpus extraction and ingestion
+> run in parallel. When both post-benchmark tracks pass, Rhemata is ready for a
+> private beta launch.
 >
-> **Authority:** `CLAUDE.md` owns invariants and settled decisions. This plan
-> may sequence those decisions but may not reopen or silently reinterpret them.
-> Counts and deployment state are evidence, not durable facts: re-query before
-> acting when they are load-bearing.
+> **Authority:** `CLAUDE.md` owns invariants and settled decisions.
+> `ARCHITECTURE.md` owns current implementation detail. `rhemata-status.md`
+> owns current session state. Historical and superseded reasoning belongs in
+> `docs/plan-archive.md`.
+>
+> **Reading rule:** this file is ordered. The build plan ends before the final
+> extraction-and-ingestion section. Work in that final section is corpus
+> production, not unfinished platform construction.
 
 ---
 
-## Product outcome and current milestone
+## Outcome
 
 Rhemata (future product name: **Manna**) helps a discerning Spirit-filled lay
 believer get a fresh, cited answer grounded in real named teachers, then move
 toward those teachers, Scripture, and a local church rather than treating the
 product as a spiritual authority.
 
-**Current milestone: backend/infra complete, ingestion becomes the normal
-operating mode.** This is an engineering readiness milestone, not a launch and
-not a claim that the corpus is complete.
+The immediate objective is a **private-beta launch candidate**, reached in two
+stages:
 
-### Milestone exit criteria
+1. Complete the platform foundation and pass the **ingestion-ready benchmark**.
+2. Run two independent tracks concurrently:
+   - **Product track:** finish and validate the private-beta experience.
+   - **Corpus track:** extract, ingest, reconcile, and curate approved material.
 
-The milestone is complete only when all of the following are evidenced:
+The launch candidate exists only when both tracks pass their exit criteria.
+Neither a polished product with an inadequate corpus nor a rich corpus on an
+unproven product qualifies.
 
-- **Serving:** the sole async answer path survives a controlled production-like
-  concurrency window at the 100-generation dial without lost jobs, duplicate
-  billing, skipped verification, or unbounded queue growth.
-- **Correctness:** every served path preserves the ranked failure-mode order in
-  `CLAUDE.md`; no known answer path bypasses license/visibility, commentary,
-  attribution, citation, or position-paper guards.
-- **Ingestion:** every document-writing ingest path routes through
-  `shared_ingest.ingest_document()`; a dry run, one-item proof, batch accounting,
-  and DB reconciliation are standard and documented.
-- **Recoverability:** production DB backup/PITR status is known, and the restore
-  plan has an owner and a tested scope. If a full-project restore cannot be
-  tested before this milestone, that limitation must be explicitly accepted by
-  Alex rather than silently waived.
-- **Operability:** production dependencies are reproducible; failures are visible;
-  the remaining known gaps are either closed, explicitly accepted, or moved to a
-  later trigger with an owner.
-- **Records:** `PLAN.md`, `CLAUDE.md`, `ARCHITECTURE.md`, and
-  `rhemata-status.md` agree about live architecture and policy.
-
-### Explicit non-gates
-
-These do **not** block this milestone: completing the corpus; book quote
-extraction; the Manna rebrand; public signup; the Tier 2 legal/admin package;
-future commentary enrichment; the owned verse-anchored synthesis initiative;
-or speculative product features in the Horizon.
+```text
+Overnight enablement → Foundation build → Ingestion-ready benchmark
+                                             ├─ Product beta build ─────┐
+                                             └─ Corpus production ──────┤
+                                                                        ↓
+                                                        Private-beta launch gate
+```
 
 ---
 
-## Now — ordered execution queue
+## Execution model
 
-Only this section defines near-term order. A later item may be researched early,
-but it does not displace an earlier gate without updating this plan.
+### Model roles
 
-### 1. Prove the 100-generation dial
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| **Claude Opus 5 is the judgment layer.** It plans packets, approves parallelism, reviews evidence, resolves conflicts, and returns `ACCEPT`, `REVISE`, `QUARANTINE`, or `HUMAN_REQUIRED`. Claude Sonnet 5 becomes a worker only after confirmed Kimi exhaustion or for a packet explicitly reserved for Claude. | **Primary implementation worker.** It processes eligible build packets through the pinned OpenCode Go Kimi model until confirmed allowance exhaustion. It never makes final architectural, theological, licensing, production-write, or launch judgments. | **Parallel research and verification worker.** It handles inventories, read-only diagnostics, test/log analysis, cross-checks, and other mechanical work with objective outputs. It does not make architectural, theological, licensing, or production-write decisions. |
 
-**Why first:** horizontal scale is the last unproven claim at the center of the
-async architecture. Latency optimization before this test risks optimizing the
-wrong bottleneck.
+### Worker fallback
 
-**Scope:** design and run a bounded, production-representative concurrency
-window. Confirm provider RPM/ITPM/OTPM headroom before the run; define abort and
-rollback conditions; do not expose real users to an uncontrolled experiment.
+```text
+Kimi worker
+  └─ confirmed quota/rate-limit exhaustion
+       └─ checkpoint packet and requeue to Claude Sonnet 5
+            └─ Claude Opus 5 independently judges the result
+```
 
-**Acceptance criteria:**
+- Ordinary test failures, coding errors, ambiguous output, or permission
+  failures do not count as quota exhaustion.
+- A partially completed Kimi packet may move to Sonnet only after its changed
+  files, journal, last passing checkpoint, and remaining acceptance criteria
+  are recorded.
+- If Sonnet is also unavailable, the packet is quarantined and the queue moves
+  to other independent work. The harness never retries indefinitely.
+- Opus does not approve its own unreviewed implementation. If Opus must perform
+  emergency implementation, a separate Opus review session or Alex supplies
+  the judgment gate.
 
-- [ ] The test plan fixes request mix, worker count, ramp shape, duration,
-  provider limits, cost ceiling, success thresholds, and abort conditions.
+### What “parallel” means
+
+- Work in the same row may run at the same time only when the packets have
+  disjoint file ownership and no unresolved dependency between them.
+- A blank or “wait” cell means the lane must not invent work to stay busy.
+- Database writes, migrations, deploys, governed-document changes, doctrinal
+  choices, and unresolved product decisions are never parallelized implicitly.
+- Parallel workers use isolated worktrees. No worker edits the user's current
+  dirty worktree.
+- Only Opus may accept a packet for integration. Command success alone never
+  means completion.
+
+### Required packet contract
+
+Every overnight packet must declare all of the following before dispatch:
+
+- unique packet ID, objective, dependency IDs, and assigned lane;
+- permitted worktree, writable file allowlist, and forbidden surfaces;
+- required context files and exact starting revision;
+- acceptance criteria and deterministic verification commands;
+- maximum turns, wall-clock limit, retry limit, and expected cost class;
+- whether network access is allowed;
+- checkpoint artifacts and structured result schema;
+- rollback method and conditions requiring `HUMAN_REQUIRED`;
+- whether the packet may be reassigned from Kimi to Sonnet.
+
+Packet states are:
+
+```text
+BLOCKED → READY → RUNNING → REVIEW → ACCEPTED
+                     ├──────────────→ REVISE → READY
+                     ├──────────────→ QUARANTINED
+                     └──────────────→ HUMAN_REQUIRED
+```
+
+The durable journal records worker, provider/model, timestamps, attempts,
+changed files, commands, exit codes, test evidence, fallback reason, Opus
+verdict, and integration revision.
+
+---
+
+## Phase 0 — Prepare for long unattended runs
+
+This phase comes first because longer runs must come from a resumable queue of
+bounded packets, not one large prompt. Its output is a safe repo-only harness;
+it is not an autonomous production operator.
+
+### O1 — Refresh the harness constitution
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus compares `CLAUDE.md`, `PLAN.md`, `HARNESS.md`, agent definitions, and hooks; settles the new authority and review contract. | Inventory stale instructions in the executor/reviewer definitions and propose bounded edits in an isolated worktree. | Read-only inventory of obsolete line references, frozen-script lists, hidden-default assumptions, and routing references. |
+
+**Exit criteria — passed 2026-08-09:**
+
+- [x] Reviewer/executor instructions point to current governing sections, not
+  stale line numbers or retired policies.
+- [x] The obsolete ingest-freeze list is reconciled with the converted scripts.
+  The hook now blocks recognizable production-write commands by task class
+  while allowing dry runs, rather than freezing three scripts by name.
+- [x] Harness agents no longer hard-code the retired hidden-default policy.
+  They defer visibility behavior to F3 and return `HUMAN_REQUIRED` on ambiguity;
+  schema, registration, and `ARCHITECTURE.md` alignment remains F3 build work.
+- [x] Repo-only harness work and plain-script production DB work remain a hard
+  separation.
+
+Evidence: `HARNESS.md`, active local `.Codex/agents/*.toml` and
+`.Codex/hooks/*.py`, plus
+`.claude/harness-selftest/test_current_routing_contract.py`. All three harness
+self-test scripts passed after merge.
+
+### O2 — Build the machine-readable packet and verdict contracts
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus defines schemas, authority boundaries, state transitions, and invalid-state behavior. | Implement parser/validator plus fixtures and tests. | Produce adversarial malformed packets and verify deterministic rejection messages. |
+
+**Exit criteria:**
+
+- [ ] Invalid or incomplete packets fail closed before any worker starts.
+- [ ] File ownership, dependency, budget, and verification fields are required.
+- [ ] Worker results and Opus verdicts are structured and replayable.
+- [ ] `ACCEPT` is impossible without recorded acceptance evidence.
+
+### O3 — Add queue, resume, and quarantine behavior
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus specifies scheduling, retry classification, fallback semantics, and morning reconciliation. | Implement durable queue/journal/checkpoint behavior with crash-resume tests. | Build deterministic failure fixtures: timeout, malformed output, quota exhaustion, test failure, and interrupted process. |
+
+**Exit criteria:**
+
+- [ ] Restarting the coordinator neither loses nor double-runs accepted work.
+- [ ] Retryable infrastructure failures are distinct from worker-quality
+  failures and quota exhaustion.
+- [ ] Confirmed Kimi exhaustion requeues eligible packets to Sonnet 5 exactly
+  once without discarding the Kimi checkpoint.
+- [ ] One quarantined packet does not block independent ready packets.
+- [ ] The morning report reconciles ready / running / reviewed / accepted /
+  revised / quarantined / human-required packets.
+
+### O4 — Isolate Git and filesystem ownership
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus approves the integration order and rejects overlapping ownership. | Exercise implementation packets in dedicated worktrees with file allowlists. | Audit changed-file manifests, unexpected untracked files, secret-like diffs, and cross-worktree leakage. |
+
+**Exit criteria:**
+
+- [ ] Each write-capable packet receives its own named branch and worktree.
+- [ ] A worker is stopped if it changes a path outside its allowlist.
+- [ ] The harness never stages, commits, pushes, merges, deletes, or cleans the
+  user's unrelated work.
+- [ ] Build commits and docs/records commits remain separate.
+- [ ] Integration conflicts become `HUMAN_REQUIRED`; they are not resolved by
+  overwriting another lane.
+
+### O5 — Add budgets and hard stops
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus sets packet risk classes and permitted autonomy for each class. | Implement turn, time, retry, output-size, and queue-wide limits. | Verify stop behavior and that logs contain no credential values or prompt payloads that should remain private. |
+
+**Exit criteria:**
+
+- [ ] Every command has a wall-clock limit and every packet has an attempt cap.
+- [ ] Provider allowance errors use a bounded backoff and then fallback/pause;
+  no lane loops against a depleted subscription.
+- [ ] Production DB writes, migrations, deployment, destructive Git/filesystem
+  actions, doctrinal content, licensing determinations, and unapproved scope
+  expansion stop for Alex.
+- [ ] The coordinator can finish a useful night even when one provider becomes
+  unavailable.
+
+### O6 — Rehearse before trusting overnight mode
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus runs the final review and issues the harness readiness verdict. | Complete a disposable multi-packet repo-only rehearsal including a simulated Kimi→Sonnet handoff. | Independently reconcile journal state, changed files, tests, failure classifications, and morning report totals. |
+
+**Exit criteria:**
+
+- [ ] At least two independent packets run concurrently without file collision.
+- [ ] Crash/resume, worker failure, quota fallback, quarantine, and human-stop
+  paths are demonstrated with fixtures.
+- [ ] No production database, deployment, or governed document is changed.
+- [ ] Alex can determine what happened, what changed, what passed, and what
+  needs attention from one morning report.
+
+---
+
+## Phase 1 — Foundation build to the ingestion-ready benchmark
+
+These waves are ordered. Within a wave, the columns show the maximum safe
+parallelism after Opus has issued packets with disjoint ownership.
+
+### F1 — Prove the 100-generation dial
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus designs the bounded production-representative test, fixes success/abort/cost thresholds, and judges the evidence. Claude handles architecture-sensitive test instrumentation if needed. | Build repo-only load tooling, deterministic fixtures, and reconciliation output after the test contract is approved. | Establish read-only baselines and independently analyze queue wait, generation time, p50/p95, throttling, worker utilization, and terminal outcomes. |
+
+**Exit criteria:**
+
+- [ ] Request mix, worker count, ramp shape, duration, provider limits, cost
+  ceiling, success thresholds, abort conditions, and rollback are fixed first.
 - [ ] At the 100 dial, every accepted submission reconciles to one terminal job
   outcome; no job is lost or permanently stranded.
 - [ ] Single-flight behavior, per-caller metering, persistence, retry behavior,
-  and verification are checked under concurrency—not inferred from unit tests.
-- [ ] Queue wait, generation time, end-to-end p50/p95, error rate, provider
-  throttling, and worker utilization are captured.
-- [ ] A hard reconciliation reports submitted / deduplicated / completed /
-  refused / errored / timed out / persisted.
+  and verification are tested under concurrency.
+- [ ] Submitted / deduplicated / completed / refused / errored / timed out /
+  persisted counts reconcile.
+- [ ] Evidence determines whether the next constraint is worker count, provider
+  limits, query/generation cost, or the 20-second latency target.
 
-**Decision after evidence:** only then choose whether the next constraint is
-worker count, provider limits, query/generation cost, or answer latency. The
-latency target remains **20 seconds**; it is a target, not a milestone gate until
-the concurrency evidence shows speed is the limiting risk.
+### F2 — Close recoverability and dependency reproducibility
 
-### 2. Close recoverability and reproducibility gaps
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus owns the backup/restore risk judgment and approves any dependency pin changes. | In parallel, pin proven production-relevant dependency divergences and validate a clean build. | Inventory authoritative backup/PITR facts and independently compare local, backend, worker, and Railway dependency/runtime manifests. |
 
-This is one readiness checkpoint with two independent strands.
+**Exit criteria:**
 
-**2A — backup / restore**
+- [ ] Supabase backup/PITR status, retention, restore granularity, owner, RTO/RPO,
+  and exclusions are recorded from an authoritative surface.
+- [ ] The safest available restore scope is tested. If full-project disaster
+  restore cannot be proven, Alex explicitly accepts, upgrades, or defers it.
+- [ ] Production-relevant versions that caused divergence, especially
+  `pydantic` and `starlette`, are deterministic.
+- [ ] Backend and worker Python-version differences are intentional and
+  documented.
+- [ ] Clean-environment backend and admin-auth smoke tests pass.
 
-- [ ] Determine Supabase project-level backup and PITR status through an
-  authoritative account/project surface.
-- [ ] Record retention, restore granularity, responsible owner, expected RTO/RPO,
-  and what is not covered.
-- [ ] Test the safest available restore scope. Record-level restore was proven
-  2026-07-24; full-project disaster restore and staging remain unproven.
-- [ ] If credentials or plan tier prevent proof, bring Alex an explicit accept /
-  upgrade / defer decision with consequences.
+### F3 — Finish the ingestion-default contract
 
-**2B — deterministic production dependencies**
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus settles the exact visible-default policy and exceptions, then reviews every schema/registration change. | Implement consistent defaults and registration behavior with tests after the policy is fixed. | Inventory every registration path and verify that license, retrievability, serving SQL, sentinel, alias, empty-shell, and Tier 2 behavior did not drift. |
 
-- [ ] Pin the production-relevant transitive versions that have already caused
-  local/Railway divergence, especially `pydantic` and `starlette`.
-- [ ] Rebuild in a clean Python environment and run backend/admin-auth smoke
-  tests before deployment.
-- [ ] Confirm worker and backend manifests intentionally use their documented
-  Python versions; resolve any mismatch between docs and manifests.
+**Exit criteria:**
 
-### 3. Finish the ingestion-default contract
+- [ ] Newly registered source classes default to `shown` under a written rule;
+  sentinel, unresolved alias, empty shell, and Tier 2 exceptions are explicit.
+- [ ] Schema and registration paths agree without weakening `license_status`,
+  `retrievable`, or serving-gate SQL.
+- [ ] One dry run and one isolated real registration pass through the actual
+  chokepoint and reconcile source/document/chunk/proposition state.
+- [ ] `ARCHITECTURE.md` is updated in the separate docs close so policy and code
+  agree.
 
-The chokepoint conversion is complete. The remaining work is to make the
-settled “new material defaults visible” policy true without weakening the live
-license gate.
+### F4 — Resolve the remaining pre-benchmark quality decisions
 
-**Known state (re-check before write):** Ravenhill, Savchuk, and Poonen were
-flipped to `shown` on 2026-08-09; the sentinel remains hidden; the other hidden
-rows observed then were empty shells. Schema and registration defaults still
-say `hidden`, and `ARCHITECTURE.md` still documents fail-closed registration.
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus makes evidence-based keep/hold/kill recommendations; Alex decides any product-risk expansion. | Implement only a narrowly approved deterministic guard, if the evidence calls for one. | Run the queued read-only false-flag diagnostic and quantify the 20 Prince rejection classes without making theological judgments. |
 
-**Acceptance criteria:**
+**Required decisions:**
 
-- [ ] Define precisely which newly registered source classes default to
-  `shown`, including how the sentinel, unresolved aliases, empty shells, and
-  Tier 2 legal review behave.
-- [ ] Update schema/defaults and every registration path consistently; do not
-  alter `license_status`, `retrievable`, or the serving-gate SQL by accident.
-- [ ] Prove one dry run and one isolated real registration through the actual
-  chokepoint, then reconcile the resulting source/document/chunk/proposition
-  state.
-- [ ] Update `ARCHITECTURE.md` in the same session so policy and code agree.
+- [ ] **Generation-output verification:** accept the residual risk, retain a
+  narrow deterministic check, or define evidence sufficient to reopen it. Do
+  not build a sixth probabilistic judge by default.
+- [ ] **System-prompt review timing:** decide whether review is required at the
+  ingestion-ready benchmark or before private-beta expansion.
+- [ ] **Quote hardening:** decide majority-Scripture and unbalanced-quotation
+  guards, plus whether to change the proven `--per-doc-limit=1` cap, before any
+  further teacher batch.
 
-### 4. Decide the remaining pre-milestone quality work
+### F5 — Prove operability and sole-path integrity
 
-Run a short evidence pass, then make three explicit keep/hold/kill calls. These
-are not invitations to build first.
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus reviews the ranked failure modes and runs the final architecture judgment. | Close only evidenced repo-level observability or recovery gaps found by the audit. | Trace every served and ingest path read-only; produce bypass, dependency, and failure-visibility inventories. |
 
-1. **Generation-output verification (Decision 20):** run the already-queued
-   read-only false-flag diagnostic against known-good positions. Do not build a
-   sixth model-judge variant. Choose: accept the residual risk, retain a narrow
-   deterministic check, or define new evidence that would justify reopening.
-2. **System-prompt review timing (Decision 18):** review only after the three
-   answer-source shapes and concurrency behavior are stable; otherwise the
-   review target is moving. Decide whether this is required before milestone
-   close or before private beta expansion.
-3. **Quote extraction hardening:** before another bulk extraction, decide
-   whether to add deterministic majority-Scripture and unbalanced-quotation
-   checks based on the 20 Prince review rejects (two batches). No further teacher batch until
-   that decision is recorded.
+**Exit criteria:**
 
-### 5. Declare the milestone or record the exceptions
+- [ ] No known answer path bypasses license/visibility, commentary, attribution,
+  citation, position-paper, or verification guards.
+- [ ] Every document-writing ingest path routes through
+  `shared_ingest.ingest_document()`.
+- [ ] Failure logs identify packet/job/source and support reconciliation without
+  exposing secrets.
+- [ ] Remaining gaps are closed, explicitly accepted by Alex, or deferred with
+  an owner and trigger.
 
-- [ ] Re-run each exit criterion against repo, deployment, and live DB evidence.
-- [ ] List any consciously accepted residual risk with owner and revisit trigger.
-- [ ] Move completed narratives to `docs/plan-archive.md`; leave only concise
-  evidence pointers here.
-- [ ] Update `rhemata-status.md` and make the required docs-only close commit,
-  separate from build commits.
+### F6 — Declare the ingestion-ready benchmark
 
----
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus re-evaluates every benchmark criterion, records exceptions, and issues `PASS` or `HUMAN_REQUIRED`. | Wait; fix only a rejected packet explicitly returned by Opus. | Independently reproduce counts, test results, changed-path audit, and deployment/DB evidence freshness. |
 
-## Active workstreams outside the critical path
+The benchmark passes only when all are true:
 
-These may proceed when they do not compete with the ordered queue. They do not
-define milestone completion.
+- [ ] **Serving:** the 100-generation proof passes without lost jobs, duplicate
+  billing, skipped verification, or unbounded queue growth.
+- [ ] **Correctness:** sole-path and ranked failure-mode invariants hold.
+- [ ] **Ingestion:** the shared chokepoint, dry-run, one-item proof, accounting,
+  and reconciliation contract is operational.
+- [ ] **Recoverability:** backup/PITR and restore posture is proven or explicitly
+  accepted by Alex.
+- [ ] **Operability:** dependencies reproduce and failures are diagnosable.
+- [ ] **Harness:** the repo-only overnight rehearsal passes.
+- [ ] **Records:** `PLAN.md`, `CLAUDE.md`, `ARCHITECTURE.md`, and
+  `rhemata-status.md` agree in a separate docs-only close.
 
-### Corpus ingestion
-
-- **New Wine (#26):** 167 raw PDFs were unprocessed as of the 2026-08-08
-  inventory; 9 had already been ingested. Recount before batching.
-- **HelloAO (#27):** conversion is complete. Twelve missing book/commentary
-  combinations lack verse-level content or expose only chapter introductions.
-  Supporting introductions requires a new chapter-level data/chunk contract;
-  it is not a retry of the existing script.
-- **Reference datasets (#28):** openbible.info cross-references, Strong's, TIPNR,
-  and similar datasets each need a source-specific legal and ingestion plan.
-- **PD books / Pentecostal archives (#29):** title-level public-domain checks are
-  required for near-boundary works; the legal line changes each January 1.
-- **Owned verse-anchored synthesis (#30/#31):** not designed and not schedulable
-  until sufficient source material and a written spec exist.
-
-Every batch follows Standing Rules 1–4 below. Corpus counts never become durable
-truth in this file.
-
-### Quote rail curation
-
-**Derek Prince non-book curation complete (2026-08-09).** All 496 documents
-attempted across two batches (249, then the remaining 247); every candidate
-independently reverified against live chunk content and manually screened
-for majority-Scripture and incoherent-fragment defects, the two classes the
-automated verifier cannot catch. Combined: **477 approved**, 20 rejected
-(logged to `quote_verification_log`, left `pending`), 1 untracked pre-run
-row left outside scope. **476/496 documents carry ≥1 approved quote — 20 do
-not**, because their sole extracted candidate was rejected: extraction
-reached all 496 documents, approval did not clear all 496.
-
-A snapshot-capture bug was found and fixed mid-session:
-`quote_source_revisions.passage_text` was storing only the candidate span,
-not the full chunk, making the DB trigger's substring check a no-op
-(CLAUDE.md Landmines). Fixed in commit `4e3a0d1`; the fix's real effect was
-proven with a rollback-only transaction test — a fabricated quote passed
-under the old convention and was correctly rejected under the fixed one.
-**The 239 quotes approved before the fix were NOT regenerated.**
-Determination: each was already independently re-verified against LIVE
-chunk content by a separate mechanism (`verify_quote_candidate()`) at
-approval time, so their current correctness is unaffected — the snapshot's
-only remaining job is protecting against *future* chunk-content drift,
-which this product has no live mechanism for today. Regenerating them is
-optional hygiene, not a correctness requirement. Full evidence:
-`rhemata-status.md`.
-
-- Next eligible teachers: Savchuk, Ravenhill, Poonen — no batch scheduled
-  until Queue item 4 decides extractor hardening (now informed by 20
-  rejects across two batches, not 10).
-- **Confirmed 2026-08-09 (read-only): `--per-doc-limit=1` is an explicit,
-  working-as-designed cap, not incidental truncation** — the extractor
-  ranks every candidate across the whole document before capping to one.
-  No recorded reason for the value 1; raising it needs only a CLI flag on
-  a future run, no code change. Whether unused quotable material actually
-  exists in already-processed chunks was not checked — a separate
-  question from why the cap exists. Full detail: `rhemata-status.md`.
-- `QUOTE_TOPIC_SIMILARITY_THRESHOLD=0.40` remains provisional. Calibration needs
-  real labeled traffic; do not tune from intuition or a synthetic-only set.
-- Book-type quote extraction remains tabled. Flat book chunks lack reliable
-  body/apparatus and chapter boundaries; human proposals for 18 high-confidence
-  books do not resolve Decision 21 or make the detector safe.
-- `quotes.status='pending'` and `'draft'` currently express the same waiting
-  state. Consolidation is a schema/API migration, not cosmetic cleanup; decide
-  compatibility and data migration before acting.
-
-### Position layer
-
-The one-hop stored-position evidence path is built, pushed, and live. Rendered
-position text is never served; underlying propositions enter the normal guarded
-answer path. V1 contains six seed topics. Durable expansion is deferred pending
-real usage.
-
-Before expansion, design the scheduled refresh mechanism and its dependency on
-an admin notification surface. Meaningful shifts escalate; routine drift may
-update silently; version history is retained; no runtime dominance override is
-added. These are settled decisions, not open design options.
-
-### Inline Study Panel
-
-- **#42.5 Phase 2:** floating overlay v3 needs one authenticated production pass;
-  local doubles are insufficient.
-- **#43:** swipe-to-close is shipped. Alex must decide whether that reduced scope
-  is final or whether drag-to-follow-with-peek remains desired.
-
-### Chokepoint residuals
-
-- **`documents.full_text` (#7):** 3,539/3,597 documents were missing it in the
-  2026-08-09 census. Before calling this a backfill, identify concrete consumers,
-  storage/cost, reconstruction fidelity from chunks, resumability, and rollback.
-  If no current consumer needs it, defer explicitly rather than sweeping the DB.
-- **`jewish_perspectives` (#14):** two rows, zero runtime references at last
-  check. Dropping it requires Alex's explicit approval and a dedicated DB-write
-  session; otherwise leave it inert.
-- **Feedback-to-flag (#16):** thumbs feedback exists, but there is no proposition
-  link or automatic eligibility change. Keep/kill depends on the fuller product
-  design in Horizon 3; never make a thumbs-down directly mutate theological
-  evidence without a reviewable intermediate state.
+Passing this benchmark freezes platform-building as the default activity.
+Subsequent engineering must either serve the beta product track below or fix a
+demonstrated regression. Corpus work may now run continuously under the final
+section's separate rules.
 
 ---
 
-## Tier 2 gate — before public signup or more than ~20 beta users
+## Phase 2 — Product track: build the private beta
 
-Crossing either trigger requires a fresh census and all applicable items below.
-This is a launch gate, not near-term active work.
+This remains build work. It runs concurrently with the corpus-production
+section only after F6 passes.
 
-- [ ] STEPBible CC-BY-NC use and attribution audited (#32).
-- [ ] openbible.info attribution exists on every surface that serves its data
-  (#33); if no cross-reference surface ships, record the item as not applicable.
+### B1 — Freeze the private-beta product contract
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus converts `PRODUCT.md`, `POSITIONING.md`, current UI behavior, and settled decisions into a testable beta contract; Alex approves user-facing scope. | Inventory implementation gaps against the approved contract. | Independently inventory routes, surfaces, authentication states, and unresolved copy/assets without proposing scope expansion. |
+
+**Exit criteria:** audience, entry path, supported answer flows, honest-empty
+behavior, citation/source navigation, study panel, account boundary, feedback,
+privacy posture, and explicit non-goals have testable acceptance criteria.
+
+### B2 — Complete the core user journey
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus owns answer-path, safety, and architectural judgment; Claude implements sensitive slices. | Implement bounded UI/backend gaps outside protected judgment surfaces. | Build route/state matrices and verify happy, empty, refused, errored, retry, and unauthenticated states. |
+
+**Exit criteria:** a beta user can enter, ask, receive an honest guarded answer,
+inspect citations/evidence, reach named teachers or Scripture, and recover from
+every expected terminal state without a dead end.
+
+### B3 — Finish study, source, and outward-navigation surfaces
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus judges whether the experience reinforces the product's outward-moving purpose. | Complete approved panel/source-card/navigation gaps, including authenticated production behavior. | Run responsive, accessibility, link-target, and state-coverage audits. |
+
+**Exit criteria:** the Inline Study Panel has an authenticated production pass;
+swipe-only remains the default unless Alex explicitly reopens drag-to-follow;
+citations and teacher/source destinations work on supported mobile and desktop
+sizes.
+
+### B4 — Complete private-beta administration and supportability
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus defines the minimum safe operator workflow and reviews identity/data effects. | Implement approved bounded admin, deletion, and contributor-state gaps. | Verify role boundaries, mobile navigation, empty/error states, and auditability using non-destructive fixtures. |
+
+**Exit criteria:** contributor activity is actionable; pending states are
+visible where still relevant; account deletion is real and verified; admin
+navigation is usable; support can identify failures without direct database
+guesswork.
+
+### B5 — Security, privacy, and abuse readiness
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus owns threat-model and launch-risk judgment. | Implement approved bounded mitigations with tests. | Run read-only surface inventory and mechanical abuse/authorization test matrices. |
+
+**Exit criteria:** guest limits, authenticated authorization, deletion,
+retention-sensitive data, logging hygiene, secret handling, and common abuse
+paths are tested; no unresolved high-severity finding remains.
+
+### B6 — Beta UX, accessibility, and performance pass
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus adjudicates product tradeoffs and regressions. | Fix isolated, approved frontend/backend defects. | Run browser matrices for responsive layout, keyboard access, focus, screen-reader semantics, loading/error states, and measured performance. |
+
+**Exit criteria:** core flows pass supported mobile/desktop browsers and WCAG
+essentials; measured regressions are fixed or explicitly accepted; the product
+does not imply unsupported authority, certainty, or corpus completeness.
+
+### B7 — Product-track release candidate
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus runs the release review, confirms rollback/monitoring, and issues the product-track verdict. | Fix only rejected release packets. | Independently reproduce the end-to-end test matrix, release artifact/version, known-issue list, and smoke checks. |
+
+**Product-track exit criteria:**
+
+- [ ] All agreed private-beta journeys pass in a production-like environment.
+- [ ] Monitoring, operator response, rollback, and user-support ownership exist.
+- [ ] No open blocker affects answer integrity, identity/data safety, core
+  navigation, or recoverability.
+- [ ] Known non-blockers have owner, consequence, and revisit trigger.
+- [ ] A final deploy still requires Alex's explicit approval.
+
+---
+
+## Private-beta convergence gate
+
+The private beta is launch-ready only when:
+
+- [ ] F6 ingestion-ready benchmark is still valid against the release revision.
+- [ ] B7 product-track release candidate passes.
+- [ ] The corpus track below passes its beta corpus acceptance criteria.
+- [ ] A live census confirms shown sources, documents, chunks, propositions,
+  quotes, licenses, and retrievability; counts are not copied from old notes.
+- [ ] Representative answer/evidence review covers the corpus shapes actually
+  launching.
+- [ ] Tier 2 conditions are either not triggered or fully satisfied.
+- [ ] Alex approves the deployment and private-beta audience.
+
+### Tier 2 gate — before public signup or more than ~20 beta users
+
+- [ ] STEPBible CC-BY-NC use and attribution audited.
+- [ ] openbible.info attribution exists on every surface that serves its data;
+  if no such surface ships, record not applicable.
 - [ ] Every shown SermonIndex-derived source is reviewed for visibility/legal
-  posture (#34).
-- [ ] DMCA agent and documented takedown procedure exist (#35).
-- [ ] Guest-limit abuse coverage is tested, not inferred (#36).
-- [ ] Admin minimums are complete (#37): actionable contributor activity,
-  pending-state visibility where still relevant, real account-deletion workflow,
-  and usable mobile navigation. Split these into independent tasks before build.
-- [ ] The 100-dial serving proof and quote verifier remain valid against the
-  deployed version at launch time.
+  posture.
+- [ ] DMCA agent and documented takedown procedure exist.
+- [ ] Guest-limit abuse coverage is tested, not inferred.
+- [ ] Admin minimums remain complete against the deployed revision.
+- [ ] The 100-dial serving proof and quote verifier remain valid.
 
 ---
 
 ## Open decisions — Alex required
 
-Only genuinely unresolved choices belong here. “Deferred” means the current
-default remains in force until its trigger occurs.
-
-| ID | Decision | Current default | Evidence/trigger needed |
+| ID | Decision | Current default | Trigger/evidence |
 |---|---|---|---|
-| 1 | Cold storage vs visibility gate | Visibility gate; deletion parked | Revisit only for final hardening or legal need |
-| 3 | Near-1930 public-domain works | Do not ingest until title-level verification | Publication evidence per title; annual Jan 1 recheck |
-| 10 | Precept Austin word-study rewriting | Do not rewrite | A faithfulness method that avoids meaning drift; separate from retrieval reintroduction |
-| 11 | Hebrew lexicon permission (TBESH) | Blocked | Written permission from Online Bible; Greek datasets unaffected |
-| 18 | System-prompt review timing | Hold | Queue item 4 after answer shapes/concurrency stabilize |
-| 19 | Archaic commentary modernization | Hold | Licensing conversations plus a faithfulness-review design |
-| 20 | Generation-output verification guard | Accepted residual gap | Existing direct-contact false-flag diagnostic; no sixth judge variant |
-| 21 | Numeral-heading chapter detector | Leave unwired | A per-book validation strategy that survives both known regression classes |
-| 23 | Quote extractor hardening before next batch | No further bulk batch | Decide majority-Scripture/unbalanced-quote checks from 20 Prince rejects, and whether to raise the confirmed `--per-doc-limit=1` cap |
-| 24 | `pending` vs `draft` quote status | Preserve both for now | Compatibility audit and explicit migration plan |
-| 25 | Study-panel drag behavior | Swipe-only remains shipped | Alex decides whether drag-to-follow materially improves mobile use |
-| 26 | `jewish_perspectives` table | Leave in place | Alex explicitly approves a dedicated drop migration |
-
-Previously listed items that are not decisions have been removed from this
-table: quote serving is structurally on the sole async path; the admin shell is
-settled as a modal; Tier 1→2 is a trigger/gate; the V1 topic list is adopted.
-Resolved-decision reasoning remains in `CLAUDE.md` and `docs/plan-archive.md`.
+| 1 | Cold storage vs visibility gate | Visibility gate; deletion parked | Final hardening or legal need |
+| 3 | Near-1930 public-domain works | Do not ingest | Title-level publication evidence; annual January 1 recheck |
+| 10 | Precept Austin word-study rewriting | Do not rewrite | Faithfulness method that avoids meaning drift |
+| 11 | Hebrew lexicon permission (TBESH) | Blocked | Written permission from Online Bible |
+| 18 | System-prompt review timing | Hold | F4 after answer shapes and concurrency stabilize |
+| 19 | Archaic commentary modernization | Hold | Licensing plus side-by-side faithfulness-review design |
+| 20 | Generation-output verification guard | Accept residual gap | F4 diagnostic; no sixth judge without new evidence |
+| 21 | Numeral-heading chapter detector | Leave unwired | Per-book validation surviving both known regressions |
+| 23 | Quote hardening before next batch | No further teacher batch | F4 decision from 20 Prince rejects and cap evidence |
+| 24 | `pending` vs `draft` quote status | Preserve both | Compatibility audit and migration plan |
+| 25 | Study-panel drag behavior | Swipe-only | Alex finds material mobile benefit |
+| 26 | `jewish_perspectives` table | Leave in place | Explicit approval for a dedicated drop migration |
 
 ---
 
 ## Horizon — captured, not scheduled
 
-These ideas require a fresh spec before implementation. Their presence here is
-not approval to build.
+These require a fresh specification and do not authorize construction:
 
-1. **Manna rebrand and full UI redesign.** Naming is settled; code, repo,
-   domain, copy, and visual migration are not scoped. Trigger: backend/infra
-   milestone complete and Alex explicitly begins product Phase 2.
-2. **Commentary enrichment.** Verse-linked quotes plus faithful modernization of
-   public-domain commentary. Requires ingestion-time verse anchors and a
-   side-by-side faithfulness review; never infer altered doctrine.
-3. **Feedback-to-actionable-content flags.** A thumbs-down should create a
-   reviewable content flag with evidence provenance—not directly disable a
-   proposition. Needs identity, granularity, notification, adjudication,
-   rollback, and audit-log design.
-4. **Consent-based search analytics and corpus-gap alerts.** Requires explicit
-   per-user consent, retention/deletion policy, an admin notification system,
-   and a definition of the honest-empty event.
-5. **Specific follow-up questions.** Must help the user reach Scripture or a
-   named teacher, not increase time-in-app; measure useful outward navigation,
-   not clicks alone.
-6. **Long-conversation handoff.** Soft nudge twice, then a hard stop was the
-   captured concept. Before build, define a token-based trigger, summary
-   provenance, user control, privacy/retention, failure behavior, and whether a
-   hard stop is actually warranted.
-7. **Precept Austin retrieval reintroduction.** Current hard exclusion remains.
-   Any future experiment must be isolated, measurable for meaning drift, and
-   must not weaken permanent quote/paraphrase exclusions.
-8. **Book structure.** Decide whether reliable per-book boundaries are worth
-   building. The 18 human-reviewed proposals are evidence inputs, not an
-   automatic migration plan.
-9. **Admin notification system.** Shared dependency for position refresh,
-   feedback flags, and consented corpus-gap alerts. Define event types,
-   severity, deduplication, read/resolved state, retention, and ownership before
-   building any dependent feature separately.
+1. Manna code/repository/domain/copy/visual migration.
+2. Verse-linked commentary enrichment with side-by-side modernization review.
+3. Feedback-to-reviewable-content flags; never direct eligibility mutation.
+4. Consent-based search analytics and corpus-gap alerts.
+5. Specific follow-up questions that move users outward, not increase time-in-app.
+6. Long-conversation handoff with token trigger, provenance, privacy, and user control.
+7. Isolated Precept Austin retrieval experiment without weakening exclusions.
+8. Reliable per-book structure and attribution boundaries.
+9. Shared admin notification system for position drift and content review events.
 
 ### Not doing
 
-- No stored/pre-reviewed answer catalog and no human review gate on serving.
+- No stored/pre-reviewed answer catalog or human review gate on serving.
 - No sixth probabilistic claim-support judge without new evidence.
 - No teacher taxonomy or theological-family labels.
-- No synthetic content feed or retention-maximizing roadmap.
-- No quote extraction from flat book chunks until attribution boundaries are
-  trustworthy.
+- No synthetic feed or retention-maximizing roadmap.
+- No quote extraction from flat book chunks without trustworthy boundaries.
 - No new YouTube ingestion unless Alex explicitly reopens it.
 - No direct feedback-to-eligibility mutation.
 
 ---
 
-## Standing session rules
+## Standing rules
 
-1. Read `CLAUDE.md` and this file in full before non-trivial writes. Load other
+1. Read `CLAUDE.md` and this file in full before non-trivial writes; load other
    canonical docs by task surface.
 2. Run read-only diagnostics and confirm the premise before build work.
 3. Before a full batch, complete a dry run and one isolated real-item proof.
 4. Every batch ends with attempted / stored / errored / skipped reconciliation,
    independently checked against the live DB.
-5. Long jobs use resumable, timestamped logs with a bounded cost and abort plan.
+5. Long jobs use resumable timestamped logs, checkpoints, bounded retries,
+   explicit cost/allowance limits, and abort behavior.
 6. Any corpus-scale LLM run gets a cost estimate before execution; $50 is the
    ceiling unless Alex explicitly approves more.
-7. Database-write sessions use the plain-script path, never the harness.
-   Repo-only multi-step builds use the harness contract in `CLAUDE.md`/`HARNESS.md`.
-8. Preserve user work in a dirty tree. Git runs from the repo root.
+7. Production DB-write sessions use the plain-script path, never the agent
+   harness. The harness may build and test those scripts against fixtures but
+   may not execute the production write.
+8. Preserve user work in a dirty tree. Git runs from the repo root. Parallel
+   writers use isolated worktrees and disjoint file ownership.
 9. Build commits and docs/records commits are always separate.
 10. Shipping a fix includes correcting canonical records in the same session.
 11. Closed work collapses to one evidence pointer; history belongs in
-    `docs/plan-archive.md`, not the active queue.
+    `docs/plan-archive.md`.
 12. Answers paraphrase and cite; verified verbatim text is served only through
-    the quote component. Never claim the free prose channel makes fabrication
-    impossible.
-13. Side-by-side answer/evidence review—not blind reading—is the required manual
-    method for generation leakage checks.
-14. Use cheaper mechanical tooling only for non-judgment work. Never delegate
-    theological, answer-path, DB-write, or failure-mode judgment to it.
+    the quote component.
+13. Side-by-side answer/evidence review, not blind reading, is the manual method
+    for generation leakage checks.
+14. Mechanical workers never receive theological, answer-path, licensing,
+    production-write, or failure-mode judgment authority.
+15. No worker result is complete until Opus records a verdict with evidence.
+16. Destructive filesystem/Git actions, pushes, deploys, migrations, production
+    writes, doctrinal content, and material scope changes require Alex.
 
 ---
 
 ## Completed foundation — terse index
 
-The detailed build record, old item numbers, killed designs, and decision history
-are in `docs/plan-archive.md`. Current foundations include:
+Full history is in `docs/plan-archive.md`. Current foundations include:
 
 - shared-ingest chokepoint, alias/sentinel model, all-or-nothing writes, and
   proposition provenance;
-- full proposition backfill and safe repeated-title chapter extraction subset;
+- proposition backfill and safe repeated-title chapter extraction subset;
 - sole durable async answer path with metering, persistence, worker deployment,
   and transaction-pooler configuration;
 - inline study panel, source panels, and teacher-card content gate;
@@ -408,13 +575,130 @@ are in `docs/plan-archive.md`. Current foundations include:
   position matcher, and one-hop evidence injection;
 - commentary/Precept answer exclusion and grounded citation verification;
 - quote schema, deterministic verifier, selection, frontend rail, sub-chunk
-  exclusion, automatic verifier-gated approval, and complete Derek Prince
-  non-book curation (477 approved across all 496 documents attempted);
-- Ravenhill, Savchuk, and Poonen Tier 1 visibility flip, verified on the real
-  serving path.
+  exclusion, automatic verifier-gated approval, and Derek Prince non-book
+  curation (477 approved across 496 documents attempted);
+- Ravenhill, Savchuk, and Poonen Tier 1 visibility flip verified on the serving
+  path.
 
 ---
 
-*v6.1 removes completed narratives and resolved choices from the active sequence,
-defines the backend/infra milestone, and converts vague residuals into evidence-
-based gates. Git and `docs/plan-archive.md` remain the provenance record.*
+# After the build plan — extraction and ingestion only
+
+Everything below begins as continuous corpus production after F6 passes. It is
+deliberately outside the build plan. If a source reveals a missing platform
+capability, quarantine that source and open a separately approved build packet;
+do not quietly turn an ingestion run into product development.
+
+## Corpus-track operating contract
+
+The corpus lane uses deterministic, resumable scripts for production writes.
+The three-model harness may prepare manifests, perform read-only diagnostics,
+review samples, and analyze reconciliation evidence, but it does not execute
+production DB writes.
+
+| Claude Code | Kimi via OpenCode Go | Grok |
+|---|---|---|
+| Opus approves source eligibility, sampling plans, exceptions, and final corpus acceptance. Claude may prepare/review scripts but production writes remain plain-script sessions. | Prepare bounded source manifests, extraction proposals, normalization fixtures, and non-judgment transformations until allowance exhaustion; Sonnet fallback applies. | Inventory files/metadata, validate checksums and counts, inspect logs, compare dry-run/write results, and independently reconcile DB counts. |
+
+Every source moves through:
+
+```text
+legal/source approval
+→ immutable inventory and checksum manifest
+→ parser/extractor fixture tests
+→ dry run
+→ one isolated real-item write
+→ reconciliation and content sampling
+→ bounded resumable batch
+→ independent DB reconciliation
+→ representative answer/evidence review
+→ corpus acceptance or quarantine
+```
+
+No stage may be skipped because another source previously passed it.
+
+## A1 — Establish the beta corpus manifest
+
+- [ ] Define the minimum source/teacher/content-shape coverage required for
+  private beta; corpus size alone is not the acceptance measure.
+- [ ] Re-query live source/document/chunk/proposition/quote/license/visibility
+  state and attach timestamps.
+- [ ] Classify every candidate source as ready, needs legal evidence, needs
+  parser work, needs human content judgment, or blocked.
+- [ ] Fix batch order, sampling rate, expected counts, cost estimate, storage
+  estimate, and quarantine path before processing.
+
+## A2 — New Wine
+
+Known historical evidence: 167 raw PDFs were unprocessed and 9 ingested at the
+2026-08-08 inventory. Recount from source files and the live DB before acting.
+
+- [ ] Create an immutable manifest with file identity/checksum and DB match.
+- [ ] Dry-run all files and classify parser/extraction failures.
+- [ ] Complete one isolated write and reconcile every table touched.
+- [ ] Run bounded resumable batches with attempted / stored / errored / skipped
+  totals and no silent duplicates.
+- [ ] Review representative extracted content and served answer evidence before
+  marking the source accepted for beta.
+
+## A3 — Existing converted sources and missing combinations
+
+- [ ] Reconcile Ravenhill, Savchuk, and Poonen visibility and actual retrievable
+  content before further quote work.
+- [ ] Run further teacher quote extraction only after Decision 23 is closed.
+- [ ] Preserve the distinction between “document received a candidate” and
+  “document has an approved quote.”
+- [ ] For HelloAO, keep the 12 missing book/commentary combinations quarantined:
+  verse-level content is absent or only chapter introductions exist. Supporting
+  introductions requires a separately approved chapter-level build contract.
+
+## A4 — Reference datasets
+
+OpenBible cross-references, Strong's, TIPNR, STEP-derived data, and similar
+sources each require their own legal, attribution, schema-fit, ingestion, and
+serving-surface evidence. Approval of one dataset never transfers to another.
+
+- [ ] Record exact upstream version, license, attribution text, retrieval date,
+  checksum, transformation, and serving surfaces.
+- [ ] Prove source-specific dry run, isolated write, rollback, and reconciliation.
+- [ ] Verify required attribution on every surface before the data becomes shown.
+
+## A5 — Public-domain books and Pentecostal archives
+
+- [ ] Perform title-level publication/legal verification, especially near the
+  moving January 1 public-domain boundary.
+- [ ] Preserve edition and page/provenance metadata sufficient for attribution.
+- [ ] Do not extract quotes from flat book chunks until body/apparatus and
+  chapter boundaries are trustworthy under Decision 21.
+- [ ] Quarantine OCR or structural failures by title; do not lower global
+  correctness rules to increase throughput.
+
+## A6 — Owned verse-anchored synthesis
+
+This is not eligible for ingestion until enough source material exists and Alex
+approves a written specification covering provenance, attribution, doctrinal
+review, update/version behavior, and serving boundaries. It is listed here only
+to prevent it from being mistaken for routine extraction.
+
+## Corpus-track beta acceptance
+
+- [ ] The beta manifest's required teachers, source types, and representative
+  user-question areas have sufficient retrievable evidence or an explicitly
+  honest-empty product behavior.
+- [ ] Every accepted source has current license/visibility evidence and required
+  attribution.
+- [ ] Every production batch has immutable input identity, resumable logs, hard
+  reconciliation, and sampled content-quality evidence.
+- [ ] No unresolved parser, OCR, attribution, boundary, or theological-review
+  defect was hidden by aggregate success counts.
+- [ ] Representative answers cite and accurately reflect each launching corpus
+  shape under side-by-side evidence review.
+- [ ] Opus issues the corpus-track verdict; Alex resolves every
+  `HUMAN_REQUIRED` licensing or theological judgment.
+
+---
+
+*v7.0 makes the ingestion-ready benchmark the boundary between foundation work
+and continuous corpus production, adds explicit Claude/Kimi/Grok parallel lanes,
+pins Opus 5 as judgment authority, defines Kimi→Sonnet fallback, and places all
+extraction and ingestion work after the build plan.*
