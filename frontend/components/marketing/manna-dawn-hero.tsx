@@ -64,7 +64,7 @@ export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
       <div className={styles.stickyFrame}>
         <Image
           className={styles.background}
-          src="/images/hero/manna-predawn-clean-plate.png"
+          src="/images/hero/manna-predawn-minimal-v2.png"
           alt=""
           fill
           priority

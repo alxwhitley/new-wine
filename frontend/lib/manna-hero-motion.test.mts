@@ -83,7 +83,7 @@ test("hero uses the versioned predawn master asset", () => {
     "utf8",
   );
 
-  assert.match(source, /manna-predawn-clean-plate\.png/);
+  assert.match(source, /manna-predawn-minimal-v2\.png/);
   assert.match(source, /unoptimized/);
 });
 
