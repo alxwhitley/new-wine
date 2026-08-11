@@ -710,6 +710,10 @@ def _fold_journal(
             attempt = attempt_payload.get("attempt")
             intent_id = event.get("intent_id")
             if isinstance(attempt, int) and not isinstance(attempt, bool) and attempt >= 1:
+                preflight_intent = pkt["attempt_intents"].get(attempt)
+                if preflight_intent is not None and preflight_intent != intent_id:
+                    raise _workspace_fold_error(
+                        "workspace baseline intent disagrees with ATTEMPT_STARTED", packet_id, packets)
                 pkt["attempt_intents"][attempt] = intent_id
             pkt["last_event_seq"] = event["seq"]
             pkt["last_event_sha256"] = event["event_sha256"]
@@ -728,6 +732,19 @@ def _fold_journal(
             intent_id = event.get("intent_id")
             matching_attempts = [attempt for attempt, known_intent in pkt["attempt_intents"].items()
                                  if known_intent == intent_id]
+            # O4 writes the immutable baseline while the packet is still
+            # READY.  Bind it to the deterministic next attempt before
+            # ATTEMPT_STARTED so a crash before that transition folds back to
+            # READY, while a later start must use that exact intent.
+            if (event_type == "WORKSPACE_BASELINE_RECORDED"
+                    and pkt.get("state") == "READY" and not matching_attempts):
+                attempt = pkt["attempts_started"] + 1
+                expected_intent = "attempt-%s-%s" % (packet_id, attempt)
+                if intent_id != expected_intent:
+                    raise _workspace_fold_error(
+                        "workspace preflight intent disagrees", packet_id, packets)
+                pkt["attempt_intents"][attempt] = intent_id
+                matching_attempts = [attempt]
             if len(matching_attempts) != 1:
                 raise _workspace_fold_error(
                     "workspace evidence intent disagrees", packet_id, packets)

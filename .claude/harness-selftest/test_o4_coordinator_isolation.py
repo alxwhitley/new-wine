@@ -28,7 +28,8 @@ def _git(path: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-def _state_with_registered_worktree(tmp_path: Path, packet_id: str):
+def _state_with_registered_worktree(tmp_path: Path, packet_id: str,
+                                    repository_root: str = None):
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init")
@@ -43,6 +44,7 @@ def _state_with_registered_worktree(tmp_path: Path, packet_id: str):
     packet = _packet(packet_id, worktree=os.path.realpath(worktree))
     packet["starting_revision"] = _git(worktree, "rev-parse", "HEAD")
     packet["worktree"]["branch"] = "codex/o4-packet"
+    packet["repository_root"] = repository_root or os.path.realpath(repo)
     packet["packet_sha256"] = compute_sha256(canonical_bytes(packet, omit={"packet_sha256"}))
     state_root = os.path.realpath(tmp_path / "state")
     os.makedirs(os.path.join(state_root, "locks"))
@@ -100,7 +102,9 @@ def test_worker_is_never_called_until_baseline_event_is_durable(tmp_path: Path, 
         events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
         assert torn is None
         event = next(event for event in events if event["event_type"] == "WORKSPACE_BASELINE_RECORDED")
+        started = next(event for event in events if event["event_type"] == "ATTEMPT_STARTED")
         assert event["packet_id"] == packet["packet_id"]
+        assert event["seq"] < started["seq"]
         assert event["payload"]["artifacts"][0]["path"] == f"workspace/{packet['packet_id']}/attempt-{packet['packet_id']}-1.baseline.json"
         raise RuntimeError("stop after gate assertion")
 
@@ -108,6 +112,62 @@ def test_worker_is_never_called_until_baseline_event_is_durable(tmp_path: Path, 
     with pytest.raises(RuntimeError, match="stop after gate assertion"):
         run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW, worker_adapters={packet["packet_id"]: object()})
     assert invoked["value"]
+
+
+def test_coordinator_rejects_foreign_operator_repository_before_worker(tmp_path: Path,
+                                                                        monkeypatch) -> None:
+    """The root bound into a packet must be operator-provided, not worktree-derived."""
+    from harness_coordinator.v1.workspace_evidence import WorkspaceEvidenceError
+
+    foreign = tmp_path / "foreign-repository"
+    foreign.mkdir()
+    _git(foreign, "init")
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(
+        tmp_path, "o4-foreign-root", repository_root=os.path.realpath(foreign))
+    monkeypatch.setattr(
+        "harness_coordinator.v1.coordinator.invoke_worker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("worker must not run")),
+    )
+
+    with pytest.raises(WorkspaceEvidenceError) as caught:
+        run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+                 worker_adapters={packet["packet_id"]: object()})
+
+    assert caught.value.code == "WORKTREE_IDENTITY_COMMON_DIR"
+    events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    assert not any(event["event_type"] == "ATTEMPT_STARTED" for event in events)
+
+
+def test_preflight_refusal_keeps_packet_ready_without_durable_running_attempt(
+        tmp_path: Path, monkeypatch) -> None:
+    """A preflight refusal is a stable READY state, never a stranded RUNNING attempt."""
+    import harness_coordinator.v1.coordinator as coordinator
+    from harness_coordinator.v1.workspace_evidence import WorkspaceEvidenceError
+
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-preflight-ready")
+    monkeypatch.setattr(
+        coordinator, "ensure_attempt_baseline",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            WorkspaceEvidenceError("WORKTREE_IDENTITY_COMMON_DIR", "foreign root")),
+    )
+    monkeypatch.setattr(
+        coordinator, "invoke_worker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("worker must not run")),
+    )
+
+    with pytest.raises(WorkspaceEvidenceError) as caught:
+        run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+                 worker_adapters={packet["packet_id"]: object()})
+
+    assert caught.value.code == "WORKTREE_IDENTITY_COMMON_DIR"
+    events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "READY"
+    assert folded[packet["packet_id"]]["open_attempt"] is None
+    assert folded[packet["packet_id"]]["attempts_started"] == 0
+    assert not any(event["event_type"] == "ATTEMPT_STARTED" for event in events)
 
 
 def test_postflight_does_not_publish_integration_before_accepted_terminal_seal(tmp_path: Path) -> None:
@@ -613,6 +673,96 @@ def test_workspace_postflight_journal_contract_requires_one_hashed_artifact() ->
     assert not validate_journal_event(event)["valid"]
 
 
+@pytest.mark.parametrize("event_type, kind", [
+    ("WORKSPACE_BASELINE_RECORDED", "workspace_baseline"),
+    ("WORKSPACE_POSTFLIGHT_RECORDED", "workspace_postflight"),
+    ("INTEGRATION_MANIFEST_RECORDED", "workspace_integration"),
+])
+def test_every_workspace_event_kind_has_runtime_and_json_schema_parity(
+        event_type: str, kind: str) -> None:
+    """Each O4 journal event accepts exactly the matching workspace artifact kind."""
+    from harness_contracts.v1.journal import ARTIFACT_KINDS, validate_journal_event
+    from harness_coordinator.v1.recovery import _make_event
+
+    packet_id = "o4-schema-" + kind.rsplit("_", 1)[-1]
+    intent_id = "attempt-" + packet_id + "-1"
+    artifact = {
+        "kind": kind, "artifact_id": kind,
+        "path": "workspace/%s/%s.evidence.json" % (packet_id, intent_id),
+        "sha256": "a" * 64, "content_sha256": "b" * 64, "byte_length": 1,
+    }
+    event = _make_event(
+        1, event_type, "coord-o4", "run-o4", "state-o4", None,
+        "2026-08-11T00:00:00Z", packet_id=packet_id, intent_id=intent_id,
+        from_state=None, to_state=None, cause="none",
+        payload={"packet": None, "attempt": None, "artifacts": [artifact],
+                 "classification": None, "transition_detail": None, "recovery": None,
+                 "run": None, "report": None},
+    )
+    assert validate_journal_event(event)["valid"]
+
+    schema = json.loads(
+        (Path(__file__).parents[2] / "schemas/harness/v1/journal-event.schema.json").read_text())
+    schema_kinds = set(schema["properties"]["payload"]["properties"]["artifacts"]
+                       ["items"]["properties"]["kind"]["enum"])
+    assert schema_kinds == ARTIFACT_KINDS
+    conditional = next(
+        rule for rule in schema["allOf"]
+        if rule["if"]["properties"]["event_type"].get("const") == event_type
+    )
+    assert (conditional["then"]["properties"]["payload"]["properties"]["artifacts"]
+            ["items"]["properties"]["kind"]) == {"const": kind}
+
+
+def test_staged_packet_change_is_retained_and_human_required(tmp_path: Path) -> None:
+    """Any Git-index mutation is a coordinator-enforced hard stop, even in allowlist scope."""
+    state_root, _repo, worktree, packet = _state_with_registered_worktree(tmp_path, "o4-staged-index")
+    marker = tmp_path / "staged-marker.txt"
+    worker = tmp_path / "stage-worker.py"
+    worker.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, os, subprocess\n"
+        "os.makedirs('scripts', exist_ok=True)\n"
+        "open('scripts/o4-staged-index.py', 'w').write('staged\\n')\n"
+        "subprocess.run(['git', 'add', 'scripts/o4-staged-index.py'], check=True)\n"
+        "open(os.environ['SYNTHETIC_MARKER_PATH'], 'w').write('invoked\\n')\n"
+        "with os.fdopen(int(os.environ['HARNESS_RESULT_FD']), 'w') as output:\n"
+        "    json.dump(json.loads(os.environ['SYNTHETIC_RESULT']), output, sort_keys=True, separators=(',', ':'))\n",
+        encoding="utf-8",
+    )
+    worker.chmod(0o755)
+    session = "session-%s-%s-1" % (RUN_ID, packet["packet_id"])
+    result = _worker_result(packet, session, attempt=1)
+    result["changed_files"] = [{
+        "path": "scripts/o4-staged-index.py", "status": "added",
+        "before_sha256": None, "after_sha256": compute_sha256(b"staged\n"),
+    }]
+    result["result_sha256"] = compute_sha256(canonical_bytes(result, omit={"result_sha256"}))
+    adapter = WorkerAdapter(
+        argv=(str(worker),),
+        env={"SYNTHETIC_MARKER_PATH": str(marker),
+             "SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":"))},
+    )
+
+    run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+             worker_adapters={packet["packet_id"]: adapter})
+
+    postflight = json.loads(Path(
+        state_root, "workspace", packet["packet_id"],
+        "attempt-%s-1.postflight.json" % packet["packet_id"],
+    ).read_text(encoding="utf-8"))
+    assert postflight["acceptance_allowed"] is False
+    assert postflight["scope_findings"] == [{
+        "code": "ALLOWLIST_VIOLATION_INDEX", "path": "scripts/o4-staged-index.py",
+    }]
+    events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "HUMAN_REQUIRED"
+    assert marker.read_text(encoding="utf-8") == "invoked\n"
+    assert (worktree / "scripts/o4-staged-index.py").read_text(encoding="utf-8") == "staged\n"
+
+
 def test_integration_manifest_journal_contract_requires_one_hashed_artifact() -> None:
     """The integration candidate is durable evidence, not an unjournaled file."""
     from harness_contracts.v1.journal import validate_journal_event
@@ -884,10 +1034,26 @@ def test_five_point_workspace_crash_resume_matrix(
         monkeypatch.setattr(coordinator, "ensure_attempt_baseline", real_baseline)
         monkeypatch.setattr(coordinator, "_record_workspace_postflight", real_postflight)
         monkeypatch.setattr(coordinator, "append_journal", real_append)
+        resume_adapter = adapter
+        if crash_point in {"before_baseline_artifact", "after_baseline_artifact_before_event"}:
+            # No attempt had started, so the resumed run owns the first
+            # session identity and needs a result bound to that identity.
+            result = _commission_result(
+                packet, f"session-o4-crash-resume-{packet['packet_id']}-1", attempt=1)
+            resume_adapter = WorkerAdapter(argv=(str(worker),), env={
+                "SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":")),
+                "SYNTHETIC_MARKER_PATH": str(marker),
+            })
         resumed = run_once(
             state_root, COORD_ID, "o4-crash-resume", _context(), "2026-08-10T01:12:00Z",
-            worker_adapters={packet["packet_id"]: adapter})
-        assert resumed["status"] == "no_eligible_work"
+            worker_adapters={packet["packet_id"]: resume_adapter})
+        if crash_point in {"before_baseline_artifact", "after_baseline_artifact_before_event"}:
+            # O4 preflight now precedes the durable RUNNING transition, so a
+            # crash at either baseline boundary leaves the packet READY and
+            # the resumed coordinator performs its first invocation.
+            assert resumed["status"] == "completed_attempt"
+        else:
+            assert resumed["status"] == "no_eligible_work"
 
     if crash_point == "after_postflight_event_before_integration":
         first = run_once(
@@ -1099,6 +1265,7 @@ def test_disposable_two_packet_o4_commissioning_reconciles_exactly(tmp_path: Pat
         packet = _packet(packet_id, worktree=os.path.realpath(worktree))
         packet["starting_revision"] = starting_revision
         packet["worktree"]["branch"] = branch
+        packet["repository_root"] = os.path.realpath(repo)
         packet["packet_sha256"] = compute_sha256(canonical_bytes(
             packet, omit={"packet_sha256"}))
         packets.append(packet)

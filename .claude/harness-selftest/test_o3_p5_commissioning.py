@@ -52,15 +52,19 @@ def _registered_worktrees(tmp_path, *names):
         path = tmp_path / ("worktree-" + name)
         _git(repo, "branch", branch)
         _git(repo, "worktree", "add", str(path), branch)
-        worktrees.append((os.path.realpath(str(path)), branch, _git(path, "rev-parse", "HEAD")))
+        worktrees.append((
+            os.path.realpath(str(path)), branch, _git(path, "rev-parse", "HEAD"),
+            os.path.realpath(str(repo)),
+        ))
     return worktrees
 
 
 def _registered_packet(packet_id, worktree):
-    path, branch, revision = worktree
+    path, branch, revision, repository_root = worktree
     packet = _packet(packet_id, worktree=path)
     packet["worktree"]["branch"] = branch
     packet["starting_revision"] = revision
+    packet["repository_root"] = repository_root
     from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
     packet["packet_sha256"] = compute_sha256(canonical_bytes(packet, omit={"packet_sha256"}))
     return packet

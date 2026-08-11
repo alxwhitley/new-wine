@@ -36,7 +36,7 @@ from harness_coordinator.v1.seals_runtime import (
 from harness_coordinator.v1.store import JournalHeadMoved, atomic_replace, append_journal, read_journal
 from harness_coordinator.v1.workspace_evidence import (
     WorkspaceEvidenceError, build_postflight, build_postflight_failure,
-    discover_repo_root, ensure_attempt_baseline, load_attempt_baseline,
+    ensure_attempt_baseline, load_attempt_baseline,
     publish_workspace_artifact, validate_postflight_binding,
 )
 
@@ -53,7 +53,12 @@ def _record_workspace_baseline(
     *, revalidate: bool = True,
 ) -> None:
     """Durably bind the immutable O4 baseline before a worker is invoked."""
-    repo_root = discover_repo_root(packet["worktree"]["path"])
+    repo_root = packet.get("repository_root")
+    if not isinstance(repo_root, str) or not repo_root:
+        raise WorkspaceEvidenceError(
+            "WORKTREE_IDENTITY_REPOSITORY",
+            "Packet lacks an operator-provided repository root",
+        )
     packet_id = packet["packet_id"]
     active_packets = []
     for active_id, active_state in folded.items():
@@ -845,27 +850,39 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
     if packet_id is None:
         result = {"status": "no_eligible_work", "packet_id": None}
     else:
+        adapter = adapters.get(packet_id) or adapters.get(folded[packet_id]["lane"])
+        packet_body = None
+        preflight_intent_id = None
+        attempt = None
+        if adapter is not None:
+            # The O4 baseline is intentionally durable while the packet still
+            # folds to READY.  A crash or refusal here therefore cannot strand
+            # a RUNNING attempt without its pre-invocation evidence.
+            attempt = folded[packet_id].get("attempts_started", 0) + 1
+            preflight_intent_id = f"attempt-{packet_id}-{attempt}"
+            packet_body = _load_enrolled_packet(
+                state_root, packet_id, folded[packet_id], journal_events, handle=handle)
+            _record_workspace_baseline(
+                handle, state_root, state_root_id, journal_events, folded, packet_body,
+                preflight_intent_id, coordinator_id, run_id, now, protected_worktree_path)
         intent_id = claim_and_start_attempt(state_root=state_root, state_root_id=state_root_id,
                                             journal_events=journal_events, packet_id=packet_id,
                                             packet=folded[packet_id], coordinator_id=coordinator_id,
                                             run_id=run_id, trusted_process_context=trusted_process_context,
                                             now=now, handle=handle)
+        if preflight_intent_id is not None and intent_id != preflight_intent_id:
+            raise RuntimeError("attempt identity changed after workspace preflight")
         result = {"status": "claimed", "packet_id": packet_id, "intent_id": intent_id,
                   "reviews": review_outcomes, "review_attention": review_attention,
                   "sealed": first["sealed"] + second["sealed"],
                   "promotion_attention": first["promotion_attention"] + second["promotion_attention"],
                   "revise_budget_exhausted": first["revise_budget_exhausted"] + second["revise_budget_exhausted"]}
-        adapter = adapters.get(packet_id) or adapters.get(folded[packet_id]["lane"])
         if adapter is not None:
-            attempt = folded[packet_id].get("attempts_started", 0) + 1
-            packet_body = _load_enrolled_packet(
-                state_root, packet_id, folded[packet_id], journal_events, handle=handle)
+            assert attempt is not None
+            assert packet_body is not None
             invocation_packet = dict(packet_body)
             invocation_packet["attempt"] = attempt
             session_id = attempt_session_id(run_id, packet_id, attempt)
-            _record_workspace_baseline(
-                handle, state_root, state_root_id, journal_events, folded, packet_body,
-                intent_id, coordinator_id, run_id, now, protected_worktree_path)
             handle.verify_identity()
             invocation = invoke_worker(
                 state_root, state_root_id, invocation_packet, intent_id, session_id,

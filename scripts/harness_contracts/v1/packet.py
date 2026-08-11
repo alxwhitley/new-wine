@@ -172,6 +172,7 @@ def _validate_packet_object(v: _PacketValidator) -> None:
         "lane",
         "assigned_worker",
         "starting_revision",
+        "repository_root",
         "worktree",
         "writable_paths",
         "forbidden_surfaces",
@@ -188,6 +189,7 @@ def _validate_packet_object(v: _PacketValidator) -> None:
         "created_by",
         "packet_sha256",
     }
+    optional = {"repository_root"}
 
     value = v.value
 
@@ -196,7 +198,7 @@ def _validate_packet_object(v: _PacketValidator) -> None:
         if key not in allowed:
             v.add("UNKNOWN_FIELD", f"/{key}", f"Unknown field '{key}'")
 
-    for key in allowed:
+    for key in allowed - optional:
         if key not in value:
             v.add("MISSING_FIELD", f"/{key}", f"Missing required field '{key}'")
 
@@ -258,6 +260,17 @@ def _validate_packet_object(v: _PacketValidator) -> None:
     # starting_revision
     if not _matches(value["starting_revision"], RE_REVISION):
         v.add("INVALID_FORMAT", "/starting_revision", "Must be 40-character lowercase SHA-1 hex")
+
+    # repository_root is an optional compatibility extension for packets that
+    # predate O4.  A coordinator must require it before write-capable O4
+    # execution, but allowing absent roots here preserves validation of legacy
+    # packet artifacts under the otherwise closed top-level schema.
+    if "repository_root" in value:
+        root = value["repository_root"]
+        if not isinstance(root, str) or root.strip() == "":
+            v.add("INVALID_VALUE", "/repository_root", "Repository root must be a non-empty string")
+        elif not root.startswith("/"):
+            v.add("INVALID_VALUE", "/repository_root", "Repository root must be absolute")
 
     # worktree
     _validate_worktree(v, value["worktree"], "/worktree")

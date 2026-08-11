@@ -578,7 +578,7 @@ def test_build_postflight_denies_every_scope_violation(
     baseline = {"worktree_identity": identity, "packet_snapshot": {"entries": []},
                 "protected_snapshot": None}
     current = {"entries": [{
-        "path": change["path"], "kind": change["kind"], "index_status": "A",
+        "path": change["path"], "kind": change["kind"], "index_status": None,
         "worktree_status": None, "mode": "100644", "object_id": None, "content_sha256": None,
     }]}
     monkeypatch.setattr(workspace_evidence, "inspect_worktree", lambda *_args: identity)

@@ -81,6 +81,11 @@
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
     },
+    "repository_root": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/"
+    },
     "worktree": {
       "type": "object",
       "additionalProperties": false,

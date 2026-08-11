@@ -119,6 +119,15 @@ def inspect_worktree(
     """Return pinned identity evidence for one registered, non-detached worktree."""
     canonical_repo_root = _canonical_directory(repo_root)
     canonical_worktree = _canonical_directory(worktree_path)
+    # Authenticate the independently supplied repository root before treating
+    # its worktree registry as authoritative.  A foreign repository may have
+    # no matching registration at all, but its distinct common directory is
+    # the stable reason this packet cannot run there.
+    canonical_common_dir = _git_common_dir(canonical_worktree)
+    if _git_common_dir(canonical_repo_root) != canonical_common_dir:
+        raise WorkspaceEvidenceError(
+            "WORKTREE_IDENTITY_COMMON_DIR", "Repository and worktree common directories differ"
+        )
     try:
         records = _parse_worktree_records(
             _run_git(canonical_repo_root, ["worktree", "list", "--porcelain", "-z"])
@@ -138,11 +147,6 @@ def inspect_worktree(
             "Expected exactly one registration for %s" % canonical_worktree,
         )
     record = matching[0]
-    canonical_common_dir = _git_common_dir(canonical_worktree)
-    if _git_common_dir(canonical_repo_root) != canonical_common_dir:
-        raise WorkspaceEvidenceError(
-            "WORKTREE_IDENTITY_COMMON_DIR", "Repository and worktree common directories differ"
-        )
     branch = record.get("branch")
     if not branch:
         raise WorkspaceEvidenceError(
@@ -573,6 +577,11 @@ def _scope_findings(packet: Dict[str, Any], changes: List[Dict[str, Any]]) -> Li
         path = change["path"]
         if (normalize_repo_relative_path(path) is None or not path):
             code = "ALLOWLIST_VIOLATION_ESCAPED"
+        elif change.get("index_status") is not None:
+            # A worker must never mutate the Git index.  This is independent
+            # of path ownership: even an otherwise allowlisted staged change
+            # requires human inspection and is left intact for the operator.
+            code = "ALLOWLIST_VIOLATION_INDEX"
         elif change.get("kind") == "symlink":
             code = "ALLOWLIST_VIOLATION_SYMLINK"
         elif change.get("kind") == "submodule":

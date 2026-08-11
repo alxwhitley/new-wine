@@ -289,7 +289,9 @@
                   "journal_tail",
                   "stdout",
                   "stderr",
-                  "workspace_baseline"
+                  "workspace_baseline",
+                  "workspace_postflight",
+                  "workspace_integration"
                 ]
               },
               "artifact_id": {
