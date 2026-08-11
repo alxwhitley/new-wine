@@ -72,6 +72,23 @@ def run_replay(state_root: str, state_root_id: str) -> Dict[str, Any]:
     return replay_schedule(state_root, state_root_id)
 
 
+def run_status(state_root: str, state_root_id: str) -> Dict[str, Any]:
+    """Return a concise read-only projection; never emit or repair state."""
+    report = build_reconciliation_report(
+        state_root, state_root_id, "status-read-only", "status-read-only",
+        f"status-{uuid.uuid4()}", _now())
+    return {
+        "error": False,
+        "state_root_id": state_root_id,
+        "journal_head": report["journal_head"],
+        "inventory_total": report["inventory_total"],
+        "by_state": report["by_state"],
+        "attention_required": report["attention_required"],
+        "integrity": report["integrity"],
+        "reconciliation": report["reconciliation"],
+    }
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="harness-coordinator",
@@ -88,6 +105,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     replay_parser = subparsers.add_parser("replay", help="Replay scheduling/transition decisions from durable state (read-only).")
     replay_parser.add_argument("--state-root", required=True, help="Explicit path to the harness state root.")
     replay_parser.add_argument("--state-root-id", required=True, help="Expected state_root_id (from MANIFEST.json).")
+
+    status_parser = subparsers.add_parser("status", help="Print concise durable status (read-only).")
+    status_parser.add_argument("--state-root", required=True)
+    status_parser.add_argument("--state-root-id", required=True)
 
     args = parser.parse_args(argv)
 
@@ -108,6 +129,20 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 1
         print(json.dumps(result, sort_keys=True, indent=2))
         return 0 if result["replay_passed"] else 1
+
+    if args.command == "status":
+        try:
+            result = run_status(args.state_root, args.state_root_id)
+        except Exception as exc:  # noqa: BLE001 -- machine-readable diagnostic boundary
+            print(json.dumps(_error_payload(exc), sort_keys=True, indent=2))
+            return 1
+        print(json.dumps(result, sort_keys=True, indent=2))
+        if not result["reconciliation"]["all_invariants_passed"]:
+            return 1
+        if any(item.get("code") in _NEEDS_HUMAN_ATTENTION_CODES
+               for item in result["attention_required"]):
+            return 1
+        return 0
 
     parser.error(f"unknown command: {args.command}")
     return 2

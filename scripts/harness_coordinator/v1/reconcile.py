@@ -12,37 +12,21 @@ Two entry points, deliberately separate:
   the report in memory, returns it. No filesystem write, no journal
   append. This is what the read-only CLI (``cli.py``) uses exclusively.
 - ``emit_reconciliation_report`` additionally writes the report to disk
-  and journals a RECONCILIATION_EMITTED event -- for a future coordinator
-  loop (not this packet's CLI) that wants the report durably recorded.
+  and journals a RECONCILIATION_EMITTED event for each bounded coordinator
+  run. The read-only CLI never calls it.
 
 D0.4 (no implicit clock, no implicit randomness): every function here
 takes ``now``/``report_id`` as explicit arguments; nothing in this module
 calls ``datetime.now()`` or ``uuid.uuid4()`` itself.
 
-**Known, disclosed gap -- ``integrity.state_cache_in_sync`` and
-``integrity.preserved_evidence_mismatches`` are placeholders, not
-independently verified.** Design 1.4's per-packet ``state/<pid>.json``
-staleness cache and design 7.2's ``assert_preserved()`` re-hash check are
-BOTH referenced by the design but were never built in ANY prior accepted
-round (P1 through P3R) -- confirmed by grep: no code anywhere in this
-repo writes a ``state/<packet_id>.json`` cache file, and
-``assert_preserved`` exists only as a comment in ``classify_runtime.py``,
-never as a real function. This is not a P4-introduced gap; P4 is simply
-the first packet whose job is to REPORT on these two invariants, which
-surfaced that their producers don't exist. Given that, this module keeps
-the schema-required fields at their weakest legitimate values
-(``state_cache_in_sync=True``, ``preserved_evidence_mismatches=[]``) --
-NOT because either was checked and passed, but because there is nothing
-to check them against yet. Read ``all_invariants_passed=True`` as "every
-invariant this build can currently verify passed," not as design 9's
-full I1-I12 guarantee. Every report also carries an ``unverified_invariants``
-``attention_required`` item naming this plainly -- a disclosure that lives
-only in this docstring is invisible to whoever actually reads a report at
-7am, not just to whoever reads the source; it must be visible in the
-artifact itself. Flagged explicitly for the final O3 integration gate:
-either build the two missing producers, or make this limitation a
-permanent, loudly-documented product decision -- silently trusting these
-two fields is the one option this disclosure exists to rule out.
+``integrity.preserved_evidence_mismatches`` is now independently rebuilt
+from each immutable reassignment record through ``assert_preserved`` using
+the same pinned state-root handle as the rest of the report. The remaining
+disclosed limitation is ``integrity.state_cache_in_sync``: no prior packet
+writes the optional ``state/<packet_id>.json`` projection, so that field
+remains the schema-required placeholder and the report carries an explicit
+``unverified_invariants`` attention item rather than silently claiming it
+was checked.
 """
 
 import json
@@ -54,12 +38,16 @@ from harness_contracts.v1.journal import ZERO_SHA256
 from harness_contracts.v1.reconciliation import compute_reconciliation, validate_reconciliation_report
 from harness_contracts.v1.seal import validate_terminal_seal
 
-from harness_coordinator.v1.recovery import IntegrityError, _fold_journal, _last_seq, _make_event
-from harness_coordinator.v1.paths import safe_state_path
+from harness_coordinator.v1.recovery import (
+    IntegrityError, _direct_state_root_path, _fold_journal, _last_seq, _make_event,
+)
+from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
+from harness_coordinator.v1.reassignment_runtime import assert_preserved
+from harness_coordinator.v1.seals_runtime import open_state_root
 from harness_coordinator.v1.store import append_journal, read_journal
 
 
-def _read_manifest_read_only(state_root: str, expected_state_root_id: str) -> Dict[str, Any]:
+def _read_manifest_read_only(state_root: str, expected_state_root_id: str, handle=None) -> Dict[str, Any]:
     """Read and validate MANIFEST.json WITHOUT the init-on-absent side
     effect ``recovery._read_or_init_manifest`` has (that function writes
     a fresh MANIFEST.json via ``atomic_replace`` when one is missing --
@@ -69,10 +57,12 @@ def _read_manifest_read_only(state_root: str, expected_state_root_id: str) -> Di
     initialized by a real coordinator run), never silently treated as
     "nothing to reconcile yet"."""
     manifest_path = os.path.join(state_root, "MANIFEST.json")
-    if not os.path.exists(manifest_path):
+    raw = handle.read(("MANIFEST.json",)) if handle is not None else None
+    if handle is None and os.path.exists(manifest_path):
+        with open(manifest_path, "rb") as f:
+            raw = f.read()
+    if raw is None:
         raise IntegrityError("INVALID_VALUE", f"No MANIFEST.json at {manifest_path} -- state root was never initialized by a coordinator run")
-    with open(manifest_path, "rb") as f:
-        raw = f.read()
     try:
         manifest = json.loads(raw.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -96,7 +86,7 @@ def _read_manifest_read_only(state_root: str, expected_state_root_id: str) -> Di
     return manifest
 
 
-def _check_seal_consistency(state_root: str, packets_by_id: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _check_seal_consistency(state_root: str, packets_by_id: Dict[str, Any], handle=None) -> List[Dict[str, Any]]:
     """Mirror ``_fold_journal``'s step-5 seal-consistency semantics
     (orphan seal, invalid seal JSON, state disagreement) but NEVER raise
     and NEVER abort -- return every finding, so one bad seal doesn't
@@ -117,21 +107,26 @@ def _check_seal_consistency(state_root: str, packets_by_id: Dict[str, Any]) -> L
     with ``_fold_journal``'s step 5 by hand; if that check's semantics
     ever change, this must change too."""
     findings: List[Dict[str, Any]] = []
-    seal_dir = os.path.join(state_root, "state", "terminal")
-    if not os.path.isdir(seal_dir):
-        return findings
-    for name in sorted(os.listdir(seal_dir)):
+    if handle is not None:
+        try:
+            with handle.directory(("state", "terminal")) as seal_fd:
+                names = sorted(os.listdir(seal_fd))
+        except FileNotFoundError:
+            return findings
+    else:
+        seal_dir = os.path.join(state_root, "state", "terminal")
+        if not os.path.isdir(seal_dir):
+            return findings
+        names = sorted(os.listdir(seal_dir))
+    for name in names:
         if not name.endswith(".seal.json"):
             continue
         pid = name[: -len(".seal.json")]
         try:
+            validate_harness_id(pid)
             seal_path = safe_state_path(
-                state_root,
-                "state",
-                "terminal",
-                identifier=pid,
-                identifier_suffix=".seal.json",
-            )
+                state_root, "state", "terminal", identifier=pid,
+                identifier_suffix=".seal.json")
         except ValueError:
             findings.append({
                 "packet_id": pid,
@@ -140,8 +135,12 @@ def _check_seal_consistency(state_root: str, packets_by_id: Dict[str, Any]) -> L
             })
             continue
         try:
-            with open(seal_path, "rb") as f:
-                seal = json.loads(f.read().decode("utf-8"))
+            if handle is not None:
+                raw = handle.read(("state", "terminal", name))
+            else:
+                with open(seal_path, "rb") as seal_file:
+                    raw = seal_file.read()
+            seal = json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             findings.append({"packet_id": pid, "code": "TERMINAL_SEAL_MISMATCH", "detail": f"Seal for {pid} is not valid JSON: {exc}"})
             continue
@@ -158,6 +157,22 @@ def _check_seal_consistency(state_root: str, packets_by_id: Dict[str, Any]) -> L
     return findings
 
 
+def _read_journal_pinned(handle, state_root_id: str):
+    """Run the accepted journal parser over an FD pinned beneath the root."""
+    try:
+        journal_fd = os.open(
+            "journal.ndjson", os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=handle.fd)
+    except FileNotFoundError:
+        return [], None
+    try:
+        fd_root = "/proc/self/fd" if os.path.isdir("/proc/self/fd") else "/dev/fd"
+        return read_journal(
+            os.path.join(fd_root, str(journal_fd)), state_root_id=state_root_id)
+    finally:
+        os.close(journal_fd)
+
+
 def build_reconciliation_report(
     state_root: str,
     state_root_id: str,
@@ -165,6 +180,7 @@ def build_reconciliation_report(
     run_id: str,
     report_id: str,
     now: str,
+    handle=None,
 ) -> Dict[str, Any]:
     """Pure: read durable state, compute and return a full reconciliation
     report (design section 9.1's schema). Never writes anything.
@@ -214,10 +230,17 @@ def build_reconciliation_report(
     byte-identical across repeated calls -- design 9.2's report
     determinism (fixture G8).
     """
-    _read_manifest_read_only(state_root, state_root_id)
+    if handle is None:
+        with open_state_root(_direct_state_root_path(state_root)) as pinned:
+            return build_reconciliation_report(
+                state_root, state_root_id, coordinator_id, run_id, report_id, now,
+                handle=pinned)
+
+    handle.verify_identity()
+    _read_manifest_read_only(state_root, state_root_id, handle=handle)
 
     journal_path = os.path.join(state_root, "journal.ndjson")
-    journal_events, torn_tail = read_journal(journal_path, state_root_id=state_root_id)
+    journal_events, torn_tail = _read_journal_pinned(handle, state_root_id)
     journal_chain_valid = torn_tail is None
     # A journal with zero real events and no torn tail is not a
     # legitimate "nothing happened yet" state: the only creation point
@@ -251,7 +274,7 @@ def build_reconciliation_report(
     # Fold against a phantom (non-existent) seal directory so a bad seal
     # can never abort the fold -- see this function's docstring and
     # _check_seal_consistency's docstring for the full reasoning.
-    _inventory_fold_root = os.path.join(state_root, ".o3-reconcile-inventory-fold-root")
+    _inventory_fold_root = "/dev/null"
     seal_mismatches: List[str] = []
     fold_failure_attention: List[Dict[str, Any]] = []
     try:
@@ -266,7 +289,7 @@ def build_reconciliation_report(
         fold_failure_attention.append({"packet_id": None, "code": "fold_failed", "detail": f"journal fold raised {exc.code}: {exc.message}"})
 
     if fold_ok:
-        for finding in _check_seal_consistency(state_root, packets_by_id):
+        for finding in _check_seal_consistency(state_root, packets_by_id, handle=handle):
             pid = finding["packet_id"]
             if pid and pid not in seal_mismatches:
                 seal_mismatches.append(pid)
@@ -307,17 +330,14 @@ def build_reconciliation_report(
             # classify_runtime.promote_dependencies requires each
             # dependency's TERMINAL SEAL to exist before it will promote
             # (design 3.5 step 13, its own auditable satisfied_by
-            # citation), and defers quietly, with zero events, if any
-            # seal is missing -- see that module's own "Known, disclosed
-            # caller obligation" docstring. No producer of terminal seals
-            # exists in this build (see the final O3 integration gate
-            # report), so this is currently the PERMANENT state for every
-            # dependent packet, not a transient one-pass-behind race.
+            # citation), and defers quietly, with zero events, if any seal is
+            # missing. P5C now repairs seals before promotion, so a packet
+            # still in this shape after maintenance needs explicit attention.
             # Must never be silently green: without this, blocked_on==[]
             # gives this packet zero attention codes and the report reads
             # fully healthy while real work is permanently stuck.
             attention_codes.append("promotion_stalled")
-            attention_required.append({"packet_id": pid, "code": "promotion_stalled", "detail": f"{pid}'s dependencies are all ACCEPTED but it is still BLOCKED -- promotion is deferred pending a terminal seal that nothing in this build currently writes"})
+            attention_required.append({"packet_id": pid, "code": "promotion_stalled", "detail": f"{pid}'s dependencies are all ACCEPTED but it is still BLOCKED -- promotion remains deferred despite terminal-seal maintenance"})
         retry_limit = pkt.get("retry_limit")
         attempts_started = pkt.get("attempts_started", 0)
         if isinstance(retry_limit, int) and not isinstance(retry_limit, bool):
@@ -365,17 +385,31 @@ def build_reconciliation_report(
         attention_required.append({"packet_id": None, "code": "journal_chain_invalid", "detail": "journal failed to validate cleanly"})
     attention_required.extend(missing_journal_attention)
     attention_required.extend(fold_failure_attention)
-    # H3/H4's disclosed gap (see module docstring) surfaced IN the report
-    # itself, not only in source -- nobody doing morning triage reads
-    # reconcile.py. Always present, every report; purely informational
-    # (does not affect all_invariants_passed -- these two fields are
-    # placeholders in every report this build produces, not a failure of
-    # THIS particular run).
+    # The remaining state-cache disclosure (see module docstring) is surfaced
+    # IN the report itself, not only in source. It is informational and does
+    # not affect all_invariants_passed because no state-cache producer exists.
     attention_required.append({
         "packet_id": None,
         "code": "unverified_invariants",
-        "detail": "state_cache_in_sync and preserved_evidence_mismatches are placeholders, not independently verified -- their producers (a per-packet state cache, assert_preserved()) do not exist in this build",
+        "detail": "state_cache_in_sync remains a placeholder; reassignment preserved evidence is independently checked when present",
     })
+
+    preserved_mismatches: List[str] = []
+    for pid, packet in sorted(packets_by_id.items()):
+        if not packet.get("reassignment_used"):
+            continue
+        raw = handle.read(("reassignments", f"{validate_harness_id(pid)}.json"))
+        if raw is None:
+            preserved_mismatches.append(f"{pid}:reassignment:EVIDENCE_MISSING")
+            continue
+        try:
+            record = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            preserved_mismatches.append(f"{pid}:reassignment:INVALID_JSON")
+            continue
+        for mismatch in assert_preserved(handle, record):
+            preserved_mismatches.append(
+                f"{pid}:{mismatch['kind']}:{mismatch['code']}")
 
     activity = {
         "attempts_started_total": counters.get("attempts_started_total", 0),
@@ -408,7 +442,7 @@ def build_reconciliation_report(
             "unenrolled_dependencies": sorted(unenrolled_dependencies),
             "seal_mismatches": seal_mismatches,
             "accounting_violations": [],
-            "preserved_evidence_mismatches": [],
+            "preserved_evidence_mismatches": preserved_mismatches,
         },
         "attention_required": attention_required,
         "enrolled_packet_ids": enrolled_ids,
@@ -473,6 +507,7 @@ def build_reconciliation_report(
         report, omit={"report_id", "generated_at", "coordinator_id", "run_id", "report_sha256", "content_sha256"},
     ))
     report["report_sha256"] = compute_sha256(canonical_bytes(report, omit={"report_sha256"}))
+    handle.verify_identity()
     return report
 
 
@@ -486,6 +521,7 @@ def emit_reconciliation_report(
     run_id: str,
     state_root_id: str,
     now: str,
+    handle=None,
 ) -> List[Dict[str, Any]]:
     """Write ``report`` to ``reports/<report_id>.json`` and journal
     RECONCILIATION_EMITTED. Not used by the read-only CLI -- for a future
@@ -503,15 +539,48 @@ def emit_reconciliation_report(
     if not result["valid"]:
         raise IntegrityError("INVALID_VALUE", f"Refusing to emit an invalid reconciliation report: {result['errors'][0]['message']}")
 
+    committed = next((
+        event for event in journal_events
+        if event.get("event_type") == "RECONCILIATION_EMITTED"
+        and (((event.get("payload") or {}).get("report") or {}).get("report_id")
+             == report["report_id"])
+    ), None)
+    if committed is not None:
+        binding = ((committed.get("payload") or {}).get("report") or {})
+        if handle is not None:
+            existing = handle.read(("reports", f"{validate_harness_id(report['report_id'])}.json"))
+        else:
+            existing = None
+            committed_path = safe_state_path(state_root, suffix=binding.get("report_path"))
+            if os.path.exists(committed_path):
+                with open(committed_path, "rb") as source:
+                    existing = source.read()
+        try:
+            committed_report = json.loads(existing.decode("utf-8")) if existing is not None else None
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise IntegrityError("INVALID_JSON", "committed reconciliation artifact is invalid") from exc
+        if (committed_report is None
+                or existing != canonical_bytes(committed_report)
+                or not validate_reconciliation_report(committed_report)["valid"]
+                or binding.get("report_sha256") != committed_report.get("report_sha256")
+                or binding.get("content_sha256") != committed_report.get("content_sha256")
+                or binding.get("report_path") != f"reports/{report['report_id']}.json"):
+            raise IntegrityError("EVIDENCE_HASH_MISMATCH", "committed reconciliation artifact disagrees")
+        return journal_events
+
     report_path = safe_state_path(
         state_root,
         "reports",
         identifier=report["report_id"],
         identifier_suffix=".json",
     )
-    report_path_rel = os.path.relpath(report_path, os.path.realpath(state_root))
-    os.makedirs(os.path.join(state_root, "reports"), exist_ok=True)
-    atomic_replace(report_path, canonical_bytes(report), coordinator_id=coordinator_id, nonce=report["report_id"])
+    report_path_rel = f"reports/{report['report_id']}.json"
+    if handle is None:
+        os.makedirs(os.path.join(state_root, "reports"), exist_ok=True)
+        atomic_replace(report_path, canonical_bytes(report), coordinator_id=coordinator_id, nonce=report["report_id"])
+    else:
+        handle.publish(("reports", f"{validate_harness_id(report['report_id'])}.json"),
+                       canonical_bytes(report))
 
     event = _make_event(
         seq=(_last_seq(journal_events) + 1),
@@ -539,6 +608,10 @@ def emit_reconciliation_report(
             },
         },
     )
+    if handle is not None:
+        handle.verify_identity()
     append_journal(journal_path, event, lock_path, expected_head=journal_events[-1] if journal_events else None)
+    if handle is not None:
+        handle.verify_identity()
     journal_events.append(event)
     return journal_events

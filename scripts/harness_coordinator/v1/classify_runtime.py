@@ -75,6 +75,12 @@ from harness_contracts.v1.seal import validate_terminal_seal
 
 from harness_coordinator.v1.recovery import IntegrityError, _last_seq, _make_event
 from harness_coordinator.v1.paths import safe_state_path
+from harness_coordinator.v1.reassignment_runtime import (
+    ReassignmentConflict,
+    build_reassignment_record,
+    load_and_validate_attempt_evidence,
+    publish_reassignment,
+)
 from harness_coordinator.v1.store import append_journal
 
 
@@ -171,6 +177,8 @@ def _finish_attempt(
     run_id: str,
     state_root_id: str,
     now: str,
+    handle=None,
+    available_lanes: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Classify (via O3-P1's classify_attempt, never reimplemented) and
     journal ATTEMPT_FINISHED with the correct edge/cause.
@@ -193,11 +201,43 @@ def _finish_attempt(
     )
     attempt_class = classification["attempt_class"]
     cause = classification["cause"]
+    validated_worker_result = None
+    if attempt_class == "PROVIDER_EXHAUSTED" and handle is not None:
+        started_event = next(
+            (event for event in reversed(journal_events)
+             if event.get("event_type") == "ATTEMPT_STARTED"
+             and event.get("packet_id") == packet_id
+             and (((event.get("payload") or {}).get("attempt") or {}).get("attempt") == attempt)),
+            None)
+        origin_run = next(
+            (event for event in reversed(journal_events)
+             if event.get("event_type") == "RUN_STARTED"
+             and started_event is not None
+             and event.get("run_id") == started_event.get("run_id")),
+            None)
+        try:
+            if started_event is None or origin_run is None:
+                raise ReassignmentConflict("originating attempt/run evidence is missing")
+            validated_worker_result, provider_evidence, stdout_bytes, stderr_bytes = (
+                load_and_validate_attempt_evidence(
+                    handle, packet_id, pkt["packet_sha256"], attempt,
+                    outcome_record, started_event, origin_run))
+            classification = classify_attempt(
+                outcome_record, {}, provider_evidence, signal_registry,
+                stdout_bytes=stdout_bytes, stderr_bytes=stderr_bytes)
+            attempt_class = classification["attempt_class"]
+            cause = classification["cause"]
+        except ReassignmentConflict:
+            attempt_class = "CONTRACT_INVALID"
+            cause = "exhaustion_unconfirmed"
 
     if attempt_class == "INFRA_RETRYABLE" and budget_exhausted:
         cause = "attempt_budget_exhausted"
     elif attempt_class == "PROVIDER_EXHAUSTED":
         cause = _resolve_reassignment_cause(pkt)
+        if cause == "provider_exhausted_reassignment" and available_lanes is not None:
+            if "sonnet_implementation" not in available_lanes:
+                cause = "fallback_not_permitted"
     elif (
         attempt_class == "CONTRACT_INVALID"
         and outcome_record.get("outcome") == "CHECKPOINTED"
@@ -225,6 +265,30 @@ def _finish_attempt(
     raw_result = outcome_record.get("raw_result") or {}
     if raw_result.get("path"):
         result_sha256 = raw_result.get("sha256")
+
+    reassignment_sha256 = None
+    if cause == "provider_exhausted_reassignment" and handle is not None:
+        if provider_evidence is None:
+            raise ReassignmentConflict("confirmed fallback requires pinned provider evidence")
+        raw_path = (outcome_record.get("raw_result") or {}).get("path")
+        if not raw_path:
+            raise ReassignmentConflict("confirmed fallback requires a worker result")
+        worker_result = validated_worker_result
+        if worker_result is None:
+            raise ReassignmentConflict("fallback worker result was not authenticated")
+        # The range's last digest binds the global journal head immediately
+        # before ATTEMPT_FINISHED; filtering to packet-local events would
+        # permit intervening durable work to be omitted from preservation.
+        packet_events = journal_events
+        evidence_path = f"results/{packet_id}/{attempt}/provider_evidence.json"
+        outcome_path = f"results/{packet_id}/{attempt}/attempt_outcome.json"
+        record = build_reassignment_record(
+            pkt, worker_result, provider_evidence, outcome_record, packet_events,
+            next_event_seq=_last_seq(journal_events) + 1, now=now, attempt=attempt,
+            paths={"worker_result": raw_path, "provider_evidence": evidence_path,
+                   "attempt_outcome": outcome_path},
+        )
+        reassignment_sha256, _ = publish_reassignment(handle, record)
 
     event = _make_event(
         seq=(_last_seq(journal_events) + 1),
@@ -255,7 +319,7 @@ def _finish_attempt(
                 "human_required_reasons": human_required_reasons,
                 "result_sha256": result_sha256,
                 "provider_evidence_sha256": outcome_record.get("provider_evidence_sha256"),
-                "reassignment_record_sha256": None,
+                "reassignment_record_sha256": reassignment_sha256,
                 "outcome_summary": {
                     "exit_code": (outcome_record.get("invocation") or {}).get("exit_code"),
                     "signal": (outcome_record.get("invocation") or {}).get("signal"),
@@ -291,6 +355,8 @@ def resolve_open_attempts(
     run_id: str,
     state_root_id: str,
     now: str,
+    available_lanes: Optional[List[str]] = None,
+    handle=None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Design 3.5 step 10: resolve every packet whose fold state is
     RUNNING, using exactly the durable evidence the design names.
@@ -338,6 +404,7 @@ def resolve_open_attempts(
             journal_events = _resolve_one_open_attempt(
                 state_root, journal_path, lock_path, journal_events, packet_id, packets,
                 provider_evidence_by_packet, signal_registry, coordinator_id, run_id, state_root_id, now,
+                available_lanes, handle,
             )
         except IntegrityError as exc:
             attention.append({"packet_id": packet_id, "code": exc.code, "message": exc.message})
@@ -357,6 +424,8 @@ def _resolve_one_open_attempt(
     run_id: str,
     state_root_id: str,
     now: str,
+    available_lanes: Optional[List[str]] = None,
+    handle=None,
 ) -> List[Dict[str, Any]]:
     pkt = packets[packet_id]
     if pkt.get("state") != "RUNNING":
@@ -414,6 +483,7 @@ def _resolve_one_open_attempt(
         journal_events = _finish_attempt(
             state_root, journal_path, lock_path, journal_events, packet_id, intent_id, attempt, pkt, started_worker,
             outcome_record, provider_evidence, signal_registry, coordinator_id, run_id, state_root_id, now,
+            handle, available_lanes,
         )
         return journal_events
 
@@ -466,6 +536,7 @@ def _resolve_one_open_attempt(
         journal_events = _finish_attempt(
             state_root, journal_path, lock_path, journal_events, packet_id, intent_id, attempt, pkt, started_worker,
             outcome_record, provider_evidence, signal_registry, coordinator_id, run_id, state_root_id, now,
+            handle, available_lanes,
         )
         return journal_events
 

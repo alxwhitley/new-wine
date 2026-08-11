@@ -7,11 +7,16 @@ from typing import Any, Dict, List, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.packet import validate_packet
-from harness_coordinator.v1.classify_runtime import promote_dependencies, requeue_revise
+from harness_coordinator.v1.classify_runtime import (
+    promote_dependencies,
+    requeue_revise,
+    resolve_open_attempts,
+)
 from harness_coordinator.v1.locks import create_claim_at, read_claim_at
 from harness_coordinator.v1.paths import validate_harness_id
 from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event, run_started_recovery
 from harness_coordinator.v1.review import resolve_pending_reviews
+from harness_coordinator.v1.reconcile import build_reconciliation_report, emit_reconciliation_report
 from harness_coordinator.v1.scheduler import select_next
 from harness_coordinator.v1.seals_runtime import complete_terminal_seals, open_state_root
 from harness_coordinator.v1.store import JournalHeadMoved, atomic_replace, append_journal, read_journal
@@ -261,6 +266,36 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
     # a null state_root_id would write a contract-invalid record that
     # read_journal would later refuse to load.
     if state_root_id is not None:
+        provider_evidence = {}
+        for packet_id, packet in folded.items():
+            attempt = packet.get("open_attempt")
+            if packet.get("state") != "RUNNING" or attempt is None:
+                continue
+            raw = handle.read(("results", packet_id, str(attempt), "provider_evidence.json"))
+            if raw is not None:
+                try:
+                    provider_evidence[packet_id] = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    # Per-packet classification will quarantine the claimed
+                    # fallback as unconfirmed; malformed evidence must not
+                    # abort independent work in the iteration.
+                    continue
+        registry_raw = handle.read(("trust", "provider_signals.json"))
+        signal_registry = json.loads(registry_raw.decode("utf-8")) if registry_raw else None
+        available_lanes = [lane for lane in ("kimi_implementation", "sonnet_implementation")
+                           if lane not in (disabled_lanes or [])]
+        before = len(journal_events)
+        handle.verify_identity()
+        journal_events, attempt_attention = resolve_open_attempts(
+            state_root, os.path.join(state_root, "journal.ndjson"),
+            os.path.join(state_root, "locks", "journal.wlock"), journal_events,
+            folded, provider_evidence, signal_registry, coordinator_id, run_id,
+            state_root_id, now, available_lanes=available_lanes, handle=handle)
+        handle.verify_identity()
+        review_attention.extend(attempt_attention)
+        if len(journal_events) != before:
+            folded, _ = _fold_journal(state_root, journal_events)
+
         journal_events, folded, first = _maintenance(
             handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now)
 
@@ -276,17 +311,38 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
 
     packet_id = select_next(folded, disabled_lanes or [], now)
     if packet_id is None:
-        return {"status": "no_eligible_work", "packet_id": None}
-    intent_id = claim_and_start_attempt(state_root=state_root, state_root_id=state_root_id,
-                                        journal_events=journal_events, packet_id=packet_id,
-                                        packet=folded[packet_id], coordinator_id=coordinator_id,
-                                        run_id=run_id, trusted_process_context=trusted_process_context,
-                                        now=now, handle=handle)
-    return {"status": "claimed", "packet_id": packet_id, "intent_id": intent_id,
-            "reviews": review_outcomes, "review_attention": review_attention,
-            "sealed": first["sealed"] + second["sealed"],
-            "promotion_attention": first["promotion_attention"] + second["promotion_attention"],
-            "revise_budget_exhausted": first["revise_budget_exhausted"] + second["revise_budget_exhausted"]}
+        result = {"status": "no_eligible_work", "packet_id": None}
+    else:
+        intent_id = claim_and_start_attempt(state_root=state_root, state_root_id=state_root_id,
+                                            journal_events=journal_events, packet_id=packet_id,
+                                            packet=folded[packet_id], coordinator_id=coordinator_id,
+                                            run_id=run_id, trusted_process_context=trusted_process_context,
+                                            now=now, handle=handle)
+        result = {"status": "claimed", "packet_id": packet_id, "intent_id": intent_id,
+                  "reviews": review_outcomes, "review_attention": review_attention,
+                  "sealed": first["sealed"] + second["sealed"],
+                  "promotion_attention": first["promotion_attention"] + second["promotion_attention"],
+                  "revise_budget_exhausted": first["revise_budget_exhausted"] + second["revise_budget_exhausted"]}
+
+    if state_root_id is None or not os.path.exists(os.path.join(state_root, "MANIFEST.json")):
+        return result
+    report_id = f"reconciliation-{compute_sha256(run_id.encode('utf-8'))[:32]}"
+    handle.verify_identity()
+    report = build_reconciliation_report(
+        state_root, state_root_id, coordinator_id, run_id, report_id, now,
+        handle=handle)
+    handle.verify_identity()
+    journal_events = emit_reconciliation_report(
+        state_root, os.path.join(state_root, "journal.ndjson"),
+        os.path.join(state_root, "locks", "journal.wlock"), journal_events,
+        report, coordinator_id, run_id, state_root_id, now, handle=handle)
+    result["reconciliation"] = {
+        "report_id": report_id, "report_sha256": report["report_sha256"],
+        "content_sha256": report["content_sha256"],
+        "all_invariants_passed": report["reconciliation"]["all_invariants_passed"],
+        "attention_codes": sorted({item["code"] for item in report["attention_required"]}),
+    }
+    return result
 
 
 __all__ = ["attempt_session_id", "claim_and_start_attempt", "claim_packet", "run_once"]

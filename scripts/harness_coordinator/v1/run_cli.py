@@ -9,6 +9,7 @@ import sys
 from typing import List, Optional
 
 from harness_coordinator.v1.coordinator import run_once
+from harness_coordinator.v1.cli import _NEEDS_HUMAN_ATTENTION_CODES
 
 
 def derive_local_process_context(coordinator_id: str, now: str):
@@ -36,8 +37,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--now", required=True)
     args = parser.parse_args(argv)
     context = derive_local_process_context(args.coordinator_id, args.now)
-    result = run_once(args.state_root, args.coordinator_id, args.run_id, context, args.now)
+    try:
+        result = run_once(args.state_root, args.coordinator_id, args.run_id, context, args.now)
+    except Exception as exc:  # noqa: BLE001 - write CLI still emits one machine-readable result
+        print(json.dumps({"error": True, "code": getattr(exc, "code", type(exc).__name__),
+                          "message": getattr(exc, "message", str(exc))}, sort_keys=True))
+        return 1
     print(json.dumps(result, sort_keys=True))
+    reconciliation = result.get("reconciliation") or {}
+    # Compatibility for injected/unit callers that predate P5D. A real
+    # RecoveryReport always produces reconciliation before returning.
+    if not reconciliation:
+        return 1 if os.path.exists(os.path.join(args.state_root, "MANIFEST.json")) else 0
+    if not reconciliation.get("all_invariants_passed", False):
+        return 1
+    if set(reconciliation.get("attention_codes") or []) & _NEEDS_HUMAN_ATTENTION_CODES:
+        return 1
     return 0
 
 
