@@ -853,16 +853,21 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
         if selected_adapter is None and folded[packet_id].get("packet_sha256") is not None:
             selected_packet = _load_enrolled_packet(
                 state_root, packet_id, folded[packet_id], journal_events, handle=handle)
-            waiting_for_adapter = (
-                isinstance(selected_packet.get("repository_root"), str)
-                and bool(selected_packet.get("writable_paths"))
-            )
+            waiting_for_adapter = bool(selected_packet.get("writable_paths"))
     if waiting_for_adapter:
-        # O4's root binding is the compatibility boundary for a packet which
-        # needs workspace preflight. Without an adapter there is no
+        # A nonempty writable allowlist is the compatibility-independent
+        # boundary for workspace preflight. Without an adapter there is no
         # authorized invocation to guard, so preserve READY rather than
         # creating a durable claim/RUNNING attempt.
-        result = {"status": "awaiting_worker_adapter", "packet_id": packet_id}
+        result = {
+            "status": "awaiting_worker_adapter", "packet_id": packet_id,
+            "reviews": review_outcomes, "review_attention": review_attention,
+            "sealed": first["sealed"] + second["sealed"],
+            "promotion_attention": (
+                first["promotion_attention"] + second["promotion_attention"]),
+            "revise_budget_exhausted": (
+                first["revise_budget_exhausted"] + second["revise_budget_exhausted"]),
+        }
     elif packet_id is None:
         result = {"status": "no_eligible_work", "packet_id": None}
     else:

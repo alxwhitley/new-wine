@@ -643,16 +643,17 @@ def test_run_once_reviews_then_seals_then_promotes(tmp_path):
                                           identifier="pkt-dep", identifier_suffix=".seal.json"))
     assert outcome["sealed"] == ["pkt-dep"]
 
-    # One bounded iteration carries the dependent all the way: BLOCKED ->
-    # READY on the promotion the fresh seal unblocked, then READY -> RUNNING
-    # on the claim, because it is now the only eligible packet.
+    # One bounded iteration promotes the dependent from BLOCKED to READY.  As
+    # a write-capable packet it cannot be claimed until an adapter is present,
+    # because O4 workspace preflight must precede ATTEMPT_STARTED.
     promotions = [e for e in events if e["event_type"] == "STATE_TRANSITION"
                   and e["packet_id"] == "pkt-child" and e["cause"] == "dependencies_satisfied"]
     assert len(promotions) == 1
     assert (promotions[0]["from_state"], promotions[0]["to_state"]) == ("BLOCKED", "READY")
     assert promotions[0]["payload"]["transition_detail"]["satisfied_by"][0]["packet_id"] == "pkt-dep"
-    assert folded["pkt-child"]["state"] == "RUNNING"
-    assert outcome["status"] == "claimed"
+    assert folded["pkt-child"]["state"] == "READY"
+    assert folded["pkt-child"]["attempts_started"] == 0
+    assert outcome["status"] == "awaiting_worker_adapter"
     assert outcome["packet_id"] == "pkt-child"
 
 

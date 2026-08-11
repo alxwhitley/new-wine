@@ -29,7 +29,8 @@ def _git(path: Path, *args: str) -> str:
 
 
 def _state_with_registered_worktree(tmp_path: Path, packet_id: str,
-                                    repository_root: str = None):
+                                    repository_root: str = None,
+                                    include_repository_root: bool = True):
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init")
@@ -44,7 +45,8 @@ def _state_with_registered_worktree(tmp_path: Path, packet_id: str,
     packet = _packet(packet_id, worktree=os.path.realpath(worktree))
     packet["starting_revision"] = _git(worktree, "rev-parse", "HEAD")
     packet["worktree"]["branch"] = "codex/o4-packet"
-    packet["repository_root"] = repository_root or os.path.realpath(repo)
+    if include_repository_root:
+        packet["repository_root"] = repository_root or os.path.realpath(repo)
     packet["packet_sha256"] = compute_sha256(canonical_bytes(packet, omit={"packet_sha256"}))
     state_root = os.path.realpath(tmp_path / "state")
     os.makedirs(os.path.join(state_root, "locks"))
@@ -186,6 +188,44 @@ def test_write_packet_waits_for_adapter_before_foreign_root_preflight_refusal(
         "ATTEMPT_STARTED", "WORKSPACE_BASELINE_RECORDED",
     } for event in events)
     assert invoked["value"] is False
+
+
+def test_legacy_write_packet_waits_for_adapter_before_missing_root_refusal(
+        tmp_path: Path, monkeypatch) -> None:
+    """Rootless legacy compatibility never permits a new write attempt."""
+    from harness_coordinator.v1.workspace_evidence import WorkspaceEvidenceError
+
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(
+        tmp_path, "o4-legacy-await-adapter", include_repository_root=False)
+    monkeypatch.setattr(
+        "harness_coordinator.v1.coordinator.invoke_worker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("worker must not run")),
+    )
+
+    waiting = run_once(
+        state_root, COORD_ID, "o4-legacy-await-1", _context(), T_NOW,
+        worker_adapters={})
+    assert waiting["status"] == "awaiting_worker_adapter"
+    assert waiting["packet_id"] == packet["packet_id"]
+
+    with pytest.raises(WorkspaceEvidenceError) as caught:
+        run_once(
+            state_root, COORD_ID, "o4-legacy-await-2", _context(),
+            "2026-08-10T01:12:00Z",
+            worker_adapters={packet["packet_id"]: object()})
+    assert caught.value.code == "WORKTREE_IDENTITY_REPOSITORY"
+
+    events, torn = read_journal(
+        Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "READY"
+    assert folded[packet["packet_id"]]["open_attempt"] is None
+    assert folded[packet["packet_id"]]["attempts_started"] == 0
+    assert not any(event["event_type"] in {
+        "ATTEMPT_STARTED", "WORKSPACE_BASELINE_RECORDED",
+    } for event in events)
 
 
 def test_preflight_refusal_keeps_packet_ready_without_durable_running_attempt(
