@@ -739,3 +739,8 @@ def _normalize_relative_path(path: str) -> Optional[str]:
     if not stack:
         return ""
     return "/".join(stack)
+
+
+def normalize_repo_relative_path(path: str) -> Optional[str]:
+    """Public O2 path-authority normalization; one implementation only."""
+    return _normalize_relative_path(path)
