@@ -2,11 +2,124 @@
 
 import json
 import os
-from typing import Any, Dict
+import stat
+from typing import Any, Dict, List
 
 from harness_contracts.v1.canonical import canonical_bytes
-from harness_contracts.v1.claim import classify_claim
+from harness_contracts.v1.claim import classify_claim, validate_claim
 from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
+
+
+def _claim_name(packet_id: str) -> str:
+    return f"{validate_harness_id(packet_id)}.lock.json"
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    remaining = data
+    while remaining:
+        remaining = remaining[os.write(fd, remaining):]
+
+
+def _read_regular_at(directory_fd: int, name: str) -> bytes:
+    fd = os.open(
+        name,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+        dir_fd=directory_fd,
+    )
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError(f"claim slot {name!r} is not a regular file")
+        chunks = []
+        while True:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                return b"".join(chunks)
+            chunks.append(chunk)
+    finally:
+        os.close(fd)
+
+
+def _parse_claim(raw: bytes) -> Dict[str, Any]:
+    parsed = json.loads(raw.decode("utf-8"))
+    if not isinstance(parsed, dict):
+        raise ValueError("Claim record root is not an object")
+    return parsed
+
+
+def create_claim_at(handle, packet_id: str, record: Dict[str, Any]) -> None:
+    """Create a canonical claim through a pinned state-root handle."""
+    name = _claim_name(packet_id)
+    data = canonical_bytes(record)
+    with handle.directory(("locks",), create=True) as locks_fd:
+        fd = os.open(
+            name,
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=locks_fd,
+        )
+        try:
+            _write_all(fd, data)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.fsync(locks_fd)
+
+
+def read_claim_at(handle, packet_id: str) -> Dict[str, Any]:
+    """Read a regular claim through the pinned root, never following links."""
+    with handle.directory(("locks",)) as locks_fd:
+        return _parse_claim(_read_regular_at(locks_fd, _claim_name(packet_id)))
+
+
+def list_worker_claim_ids(handle) -> List[str]:
+    """List canonical worker-claim IDs from the pinned locks directory."""
+    try:
+        with handle.directory(("locks",)) as locks_fd:
+            packet_ids = []
+            for name in os.listdir(locks_fd):
+                if not name.endswith(".lock.json"):
+                    continue
+                packet_id = name[:-len(".lock.json")]
+                if _claim_name(packet_id) != name:
+                    raise ValueError(f"non-canonical worker claim name: {name!r}")
+                info = os.stat(name, dir_fd=locks_fd, follow_symlinks=False)
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError(f"worker claim {name!r} is not a regular file")
+                packet_ids.append(packet_id)
+            return sorted(packet_ids)
+    except FileNotFoundError:
+        return []
+
+
+def reclaim_lock_at(handle, packet_id: str, run_id: str, classification: str,
+                    expected_claim_sha256: str) -> None:
+    """Exclusively archive an unchanged claim through pinned directory FDs."""
+    if classification not in {"STALE_PRIOR_BOOT", "STALE_SAME_BOOT"}:
+        raise ValueError(
+            f"reclaim_lock_at called with non-reclaimable classification: {classification}"
+        )
+    validate_harness_id(run_id)
+    name = _claim_name(packet_id)
+    with handle.directory(("locks",)) as source_fd:
+        record = _parse_claim(_read_regular_at(source_fd, name))
+        validation = validate_claim(record)
+        if not validation["valid"]:
+            raise ValueError(
+                f"Claim changed after reclaim evidence was recorded: "
+                f"{validation['errors'][0]['message']}"
+            )
+        if record.get("packet_id") != packet_id:
+            raise ValueError("Claim record packet_id disagrees with its slot")
+        if record.get("claim_sha256") != expected_claim_sha256:
+            raise ValueError("Claim changed after reclaim evidence was recorded")
+        with handle.directory(("locks", "reclaimed", run_id), create=True) as destination_fd:
+            # linkat is the portable exclusive publication primitive here:
+            # unlike rename it cannot overwrite an immutable archive slot.
+            os.link(name, name, src_dir_fd=source_fd, dst_dir_fd=destination_fd,
+                    follow_symlinks=False)
+            os.fsync(destination_fd)
+            os.unlink(name, dir_fd=source_fd)
+            os.fsync(source_fd)
 
 
 def create_claim(lock_path: str, record: Dict[str, Any]) -> None:
@@ -35,10 +148,7 @@ def read_claim(lock_path: str) -> Dict[str, Any]:
     """
     with open(lock_path, "rb") as f:
         raw = f.read()
-    parsed = json.loads(raw.decode("utf-8"))
-    if not isinstance(parsed, dict):
-        raise ValueError("Claim record root is not an object")
-    return parsed
+    return _parse_claim(raw)
 
 
 def reclaim_lock(lock_path: str, run_id: str, classification: str) -> None:
@@ -72,4 +182,7 @@ def reclaim_lock(lock_path: str, run_id: str, classification: str) -> None:
     os.replace(lock_path, dst)
 
 
-__all__ = ["create_claim", "read_claim", "reclaim_lock", "classify_claim"]
+__all__ = [
+    "create_claim", "create_claim_at", "read_claim", "read_claim_at",
+    "list_worker_claim_ids", "reclaim_lock", "reclaim_lock_at", "classify_claim",
+]

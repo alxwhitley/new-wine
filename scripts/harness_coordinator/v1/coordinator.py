@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Tuple
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.packet import validate_packet
 from harness_coordinator.v1.classify_runtime import promote_dependencies, requeue_revise
-from harness_coordinator.v1.locks import create_claim, read_claim
-from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
+from harness_coordinator.v1.locks import create_claim_at, read_claim_at
+from harness_coordinator.v1.paths import validate_harness_id
 from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event, run_started_recovery
 from harness_coordinator.v1.review import resolve_pending_reviews
 from harness_coordinator.v1.scheduler import select_next
@@ -61,8 +61,14 @@ def _load_enrolled_packet(state_root: str, packet_id: str, packet: Dict[str, Any
 
 
 def claim_packet(state_root: str, packet_id: str, packet: Dict[str, Any], coordinator_id: str,
-                 run_id: str, trusted_process_context: Dict[str, Any], now: str) -> Dict[str, Any]:
+                 run_id: str, trusted_process_context: Dict[str, Any], now: str,
+                 handle=None) -> Dict[str, Any]:
     """Create the intent-scoped O_EXCL claim for one selected packet."""
+    if handle is None:
+        os.makedirs(state_root, exist_ok=True)
+        with open_state_root(state_root) as scoped:
+            return claim_packet(state_root, packet_id, packet, coordinator_id, run_id,
+                                trusted_process_context, now, handle=scoped)
     attempt = packet.get("attempts_started", 0) + 1
     intent_id = f"attempt-{packet_id}-{attempt}"
     record = {
@@ -74,17 +80,27 @@ def claim_packet(state_root: str, packet_id: str, packet: Dict[str, Any], coordi
         "lane": packet["lane"], "worktree_path": None, "claim_sha256": "",
     }
     record["claim_sha256"] = compute_sha256(canonical_bytes(record, omit={"claim_sha256"}))
-    lock_path = safe_state_path(state_root, "locks", identifier=packet_id, identifier_suffix=".lock.json")
-    create_claim(lock_path, record)
+    handle.verify_identity()
+    create_claim_at(handle, packet_id, record)
+    handle.verify_identity()
     return record
 
 
 def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
                             packet_id: str, packet: Dict[str, Any], coordinator_id: str,
-                            run_id: str, trusted_process_context: Dict[str, Any], now: str) -> str:
+                            run_id: str, trusted_process_context: Dict[str, Any], now: str,
+                            handle=None) -> str:
     """Durably perform lock -> pending intent -> ATTEMPT_STARTED -> projection."""
-    packet_body = _load_enrolled_packet(state_root, packet_id, packet, journal_events)
-    claim = claim_packet(state_root, packet_id, packet, coordinator_id, run_id, trusted_process_context, now)
+    if handle is None:
+        with open_state_root(state_root) as scoped:
+            return claim_and_start_attempt(
+                state_root, state_root_id, journal_events, packet_id, packet,
+                coordinator_id, run_id, trusted_process_context, now, handle=scoped)
+    packet_body = _load_enrolled_packet(
+        state_root, packet_id, packet, journal_events, handle=handle)
+    claim = claim_packet(
+        state_root, packet_id, packet, coordinator_id, run_id,
+        trusted_process_context, now, handle=handle)
     intent_id = claim["intent_id"]
     queue = _build_derived_queue(_fold_journal(state_root, journal_events)[0], state_root_id,
                                  journal_events[-1] if journal_events else None)
@@ -94,8 +110,10 @@ def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events:
         "boot_id": trusted_process_context["boot_id"], "pid": trusted_process_context["pid"],
     }]
     queue["queue_sha256"] = compute_sha256(canonical_bytes(queue, omit={"queue_sha256"}))
+    handle.verify_identity()
     atomic_replace(os.path.join(state_root, "queue.json"), canonical_bytes(queue), coordinator_id,
                    f"pending-{run_id}-{claim['attempt']}")
+    handle.verify_identity()
 
     assigned = packet_body["assigned_worker"]
     attempt_payload = {
@@ -115,19 +133,22 @@ def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events:
                                      "classification": None, "transition_detail": None, "recovery": None,
                                      "run": None, "report": None})
         try:
+            handle.verify_identity()
             append_journal(journal_path, event, os.path.join(state_root, "locks", "journal.wlock"), expected_head=prev)
+            handle.verify_identity()
             break
         except JournalHeadMoved:
             moves += 1
             if moves >= 8:
                 raise RuntimeError("ATTEMPT_STARTED journal head kept moving; pending intent preserved for recovery")
+            handle.verify_identity()
             fresh, torn = read_journal(journal_path, state_root_id=state_root_id)
+            handle.verify_identity()
             if torn is not None:
                 raise RuntimeError("torn journal during ATTEMPT_STARTED; pending intent preserved for recovery")
             folded, _ = _fold_journal(state_root, fresh)
             current = folded.get(packet_id)
-            lock_path = safe_state_path(state_root, "locks", identifier=packet_id, identifier_suffix=".lock.json")
-            lock = read_claim(lock_path)
+            lock = read_claim_at(handle, packet_id)
             if current is None or current.get("state") != "READY" or current.get("open_attempt") is not None:
                 raise RuntimeError("packet no longer READY; pending intent preserved for recovery")
             if lock.get("intent_id") != intent_id or lock.get("claim_sha256") != claim["claim_sha256"]:
@@ -137,8 +158,10 @@ def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events:
     journal_events.append(event)
     folded, _ = _fold_journal(state_root, journal_events)
     cleared = _build_derived_queue(folded, state_root_id, event)
+    handle.verify_identity()
     atomic_replace(os.path.join(state_root, "queue.json"), canonical_bytes(cleared), coordinator_id,
                    f"committed-{run_id}-{claim['attempt']}")
+    handle.verify_identity()
     return intent_id
 
 
@@ -211,7 +234,8 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
     # recovery halts before any P5C write rather than being written through.
     with open_state_root(state_root) as handle:
         report = run_started_recovery(state_root=state_root, coordinator_id=coordinator_id,
-                                      run_id=run_id, trusted_process_context=trusted_process_context, now=now)
+                                      run_id=run_id, trusted_process_context=trusted_process_context,
+                                      now=now, handle=handle)
         try:
             handle.verify_identity()
             return _run_iteration(handle, state_root, report, coordinator_id, run_id,
@@ -256,7 +280,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
     intent_id = claim_and_start_attempt(state_root=state_root, state_root_id=state_root_id,
                                         journal_events=journal_events, packet_id=packet_id,
                                         packet=folded[packet_id], coordinator_id=coordinator_id,
-                                        run_id=run_id, trusted_process_context=trusted_process_context, now=now)
+                                        run_id=run_id, trusted_process_context=trusted_process_context,
+                                        now=now, handle=handle)
     return {"status": "claimed", "packet_id": packet_id, "intent_id": intent_id,
             "reviews": review_outcomes, "review_attention": review_attention,
             "sealed": first["sealed"] + second["sealed"],

@@ -24,7 +24,12 @@ from harness_contracts.v1.queue_state import validate_queue
 from harness_contracts.v1.seal import TERMINAL_STATES, validate_terminal_seal
 from harness_contracts.v1.transition import validate_transition
 
-from harness_coordinator.v1.locks import read_claim, reclaim_lock
+from harness_coordinator.v1.locks import (
+    list_worker_claim_ids,
+    read_claim_at,
+    reclaim_lock_at,
+)
+from harness_coordinator.v1.seals_runtime import open_state_root
 from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 from harness_coordinator.v1.store import (
     JournalChainBroken,
@@ -54,6 +59,57 @@ class IntegrityError(Exception):
         self.code = code
         self.message = message
         self.packet_id = packet_id
+
+
+def _direct_state_root_path(state_root: str) -> str:
+    """Normalize only macOS's fixed /var -> /private/var system alias.
+
+    ``realpath`` is deliberately forbidden here: it would also follow a
+    caller-controlled final or parent symlink before the no-follow handle had
+    a chance to reject it. The suffix is copied lexically and every component
+    beneath ``/private/var`` is still opened by ``open_state_root`` with
+    ``O_NOFOLLOW``.
+    """
+    if state_root == "/var" or state_root.startswith("/var/"):
+        try:
+            if os.path.islink("/var") and os.readlink("/var") == "private/var":
+                return "/private/var" + state_root[len("/var"):]
+        except OSError:
+            pass
+    return state_root
+
+
+def _ensure_state_root_nofollow(state_root: str) -> None:
+    """Create a missing direct-call root without following any component."""
+    if not os.path.isabs(state_root):
+        raise ValueError(f"state root must be an absolute path: {state_root!r}")
+    fd = os.open("/", os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        for component in state_root.split("/"):
+            if component == "":
+                continue
+            if component in (".", ".."):
+                raise ValueError(
+                    f"state root must be lexically canonical: {state_root!r}")
+            try:
+                child = os.open(
+                    component,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) |
+                    getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=fd,
+                )
+            except FileNotFoundError:
+                os.mkdir(component, 0o700, dir_fd=fd)
+                child = os.open(
+                    component,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) |
+                    getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=fd,
+                )
+            os.close(fd)
+            fd = child
+    finally:
+        os.close(fd)
 
 
 class RecoveryReport:
@@ -108,6 +164,7 @@ def run_started_recovery(
     run_id: str,
     trusted_process_context: Dict[str, Any],
     now: str,
+    handle=None,
 ) -> RecoveryReport:
     """Execute RUN_STARTED recovery steps 1-9 and return a report.
 
@@ -117,12 +174,26 @@ def run_started_recovery(
         JournalChainBroken: propagated from ``read_journal`` for non-final
             corruption (caller should exit non-zero).
     """
-    os.makedirs(state_root, exist_ok=True)
+    if handle is None:
+        # Legacy direct callers on macOS commonly receive /var/... from
+        # tempfile even though the kernel canonical directory is
+        # /private/var/....  Normalize only this compatibility entry. The
+        # live run_once path supplies its already-strict pinned handle and
+        # never reaches this branch.
+        canonical_root = _direct_state_root_path(state_root)
+        _ensure_state_root_nofollow(canonical_root)
+        with open_state_root(canonical_root) as scoped:
+            return run_started_recovery(
+                canonical_root, coordinator_id, run_id, trusted_process_context, now,
+                handle=scoped)
+    handle.verify_identity()
 
     # Step 1: acquire singleton coordinator flock non-blocking.
+    handle.verify_identity()
     singleton_path = os.path.join(state_root, "locks", "coordinator.singleton")
     os.makedirs(os.path.dirname(singleton_path), exist_ok=True)
     singleton_fd = os.open(singleton_path, os.O_CREAT | os.O_RDWR, 0o600)
+    handle.verify_identity()
     try:
         fcntl.flock(singleton_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -138,21 +209,30 @@ def run_started_recovery(
 
     try:
         # Step 2: read/validate MANIFEST.json (initialize if absent).
+        handle.verify_identity()
         manifest = _read_or_init_manifest(state_root, now)
+        handle.verify_identity()
         state_root_id = manifest["state_root_id"]
 
         # Step 3: validate trust registries and record digests.
+        handle.verify_identity()
         trust_digests = _validate_trust_roots(state_root)
+        handle.verify_identity()
 
         # Step 4: validate the journal; handle torn tail.
         journal_path = os.path.join(state_root, "journal.ndjson")
         lock_path = os.path.join(state_root, "locks", "journal.wlock")
+        handle.verify_identity()
         journal_events, torn_tail = read_journal(journal_path, state_root_id=state_root_id)
+        handle.verify_identity()
 
         torn_tail_handled = False
         if torn_tail is not None:
+            handle.verify_identity()
             _handle_torn_tail(state_root, journal_path, lock_path, journal_events, torn_tail, coordinator_id, run_id, state_root_id, now)
+            handle.verify_identity()
             journal_events, _ = read_journal(journal_path, state_root_id=state_root_id)
+            handle.verify_identity()
             torn_tail_handled = True
 
         # Step 5: fold the journal.
@@ -169,19 +249,25 @@ def run_started_recovery(
             trust_digests,
             counters.get("disabled_lanes", []),
         )
+        handle.verify_identity()
         append_journal(
             journal_path,
             run_started_event,
             lock_path,
             expected_head=journal_events[-1] if journal_events else None,
         )
+        handle.verify_identity()
         journal_events.append(run_started_event)
 
         # Step 7: sweep orphan tmp files.
+        handle.verify_identity()
         sweep_orphans(state_root, run_id)
+        handle.verify_identity()
 
         # Step 8: reconcile locks.
+        handle.verify_identity()
         pending_intents_at_step8 = _read_pending_intents(state_root, state_root_id)
+        handle.verify_identity()
         pending_intent_ids = {
             i.get("intent_id") for i in pending_intents_at_step8 if isinstance(i, dict) and i.get("intent_id")
         }
@@ -196,13 +282,18 @@ def run_started_recovery(
             now,
             trusted_process_context,
             pending_intent_ids,
+            handle,
         )
+        handle.verify_identity()
         journal_events, _ = read_journal(journal_path, state_root_id=state_root_id)
+        handle.verify_identity()
 
         # Step 9: resolve pending intents. Re-read tolerantly (defect 3) --
         # queue.json is a rebuildable cache and step 8 may have changed
         # what's committed since it was first read.
+        handle.verify_identity()
         pending_intents_at_step9 = _read_pending_intents(state_root, state_root_id)
+        handle.verify_identity()
         abandoned_intents, reclaimed_at_step9 = _resolve_pending_intents(
             state_root,
             journal_path,
@@ -214,9 +305,12 @@ def run_started_recovery(
             now,
             trusted_process_context,
             pending_intents_at_step9,
+            handle,
         )
         reclaimed_locks = reclaimed_locks + reclaimed_at_step9
+        handle.verify_identity()
         journal_events, _ = read_journal(journal_path, state_root_id=state_root_id)
+        handle.verify_identity()
 
         # Build derived queue projection from the fold.
         derived_queue = _build_derived_queue(
@@ -742,22 +836,18 @@ def _reconcile_locks(
     now: str,
     trusted_process_context: Dict[str, Any],
     pending_intent_ids: Any,
+    handle=None,
 ) -> List[str]:
-    locks_dir = os.path.join(state_root, "locks")
-    if not os.path.isdir(locks_dir):
-        return []
-
+    if handle is None:
+        with open_state_root(state_root) as scoped:
+            return _reconcile_locks(
+                state_root, journal_path, lock_path, journal_events,
+                coordinator_id, run_id, state_root_id, now,
+                trusted_process_context, pending_intent_ids, scoped)
     reclaimed: List[str] = []
-    lock_files = []
-    for name in os.listdir(locks_dir):
-        if not name.endswith(".lock.json"):
-            continue
-        full = os.path.join(locks_dir, name)
-        if os.path.isfile(full):
-            lock_files.append(full)
-
-    for lock_file in lock_files:
-        record = read_claim(lock_file)
+    for packet_id_from_name in list_worker_claim_ids(handle):
+        record = read_claim_at(handle, packet_id_from_name)
+        lock_file = f"locks/{packet_id_from_name}.lock.json"
         validation = validate_claim(record)
         if not validation["valid"]:
             raise IntegrityError("INVALID_VALUE", f"Lock {lock_file} invalid: {validation['errors'][0]['message']}")
@@ -784,7 +874,7 @@ def _reconcile_locks(
             packet_id = record["packet_id"]
             prior_claim = {
                 "claim_sha256": record["claim_sha256"],
-                "path": os.path.relpath(lock_file, state_root),
+                "path": lock_file,
                 "classification": status,
                 "coordinator_id": record["coordinator_id"],
                 "pid": record["pid"],
@@ -818,7 +908,9 @@ def _reconcile_locks(
                     "report": None,
                 },
             )
+            handle.verify_identity()
             append_journal(journal_path, event, lock_path, expected_head=journal_events[-1] if journal_events else None)
+            handle.verify_identity()
             journal_events.append(event)
 
             intent_id = record.get("intent_id")
@@ -858,10 +950,14 @@ def _reconcile_locks(
                     "report": None,
                 },
             )
+            handle.verify_identity()
             append_journal(journal_path, abandon_event, lock_path, expected_head=journal_events[-1] if journal_events else None)
+            handle.verify_identity()
             journal_events.append(abandon_event)
 
-            reclaim_lock(lock_file, run_id, status)
+            handle.verify_identity()
+            reclaim_lock_at(
+                handle, packet_id, run_id, status, record["claim_sha256"])
             reclaimed.append(packet_id)
 
     return reclaimed
@@ -878,7 +974,14 @@ def _resolve_pending_intents(
     now: str,
     trusted_process_context: Dict[str, Any],
     pending_intents: List[Dict[str, Any]],
+    handle=None,
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
+    if handle is None:
+        with open_state_root(state_root) as scoped:
+            return _resolve_pending_intents(
+                state_root, journal_path, lock_path, journal_events,
+                coordinator_id, run_id, state_root_id, now,
+                trusted_process_context, pending_intents, scoped)
     committed_intent_ids = {
         e.get("intent_id")
         for e in journal_events
@@ -893,6 +996,60 @@ def _resolve_pending_intents(
             continue
 
         packet_id = intent.get("packet_id")
+        lock_file = f"locks/{validate_harness_id(packet_id)}.lock.json"
+        try:
+            lock_record = read_claim_at(handle, packet_id)
+        except FileNotFoundError:
+            lock_record = None
+        reclaim_record = None
+        reclaim_status = None
+        if lock_record is not None:
+            lock_validation = validate_claim(lock_record)
+            if lock_validation["valid"] and lock_record.get("intent_id") == intent_id:
+                classification = classify_claim(lock_record, trusted_process_context)
+                if classification["status"] in {"STALE_PRIOR_BOOT", "STALE_SAME_BOOT"}:
+                    reclaim_record = lock_record
+                    reclaim_status = classification["status"]
+
+        # Audit order is load-bearing: record the exact claim to be reclaimed,
+        # then record abandonment of its intent, and only then move the bytes.
+        if reclaim_record is not None:
+            prior_claim = {
+                "claim_sha256": reclaim_record["claim_sha256"],
+                "path": lock_file,
+                "classification": reclaim_status,
+                "coordinator_id": reclaim_record["coordinator_id"],
+                "pid": reclaim_record["pid"],
+                "boot_id": reclaim_record["boot_id"],
+                "hostname": reclaim_record["hostname"],
+            }
+            reclaim_event = _make_event(
+                seq=(_last_seq(journal_events) + 1),
+                event_type="LOCK_RECLAIMED",
+                coordinator_id=coordinator_id,
+                run_id=run_id,
+                state_root_id=state_root_id,
+                prev_event=journal_events[-1] if journal_events else None,
+                event_at=now,
+                packet_id=packet_id,
+                payload={
+                    "packet": None, "attempt": None, "artifacts": [],
+                    "classification": None, "transition_detail": None,
+                    "recovery": {
+                        "abandoned_intent_id": None, "abandoned_at_stage": None,
+                        "consecutive_abandonments": None, "prior_claim": prior_claim,
+                        "truncation": None, "review_failure": None,
+                    },
+                    "run": None, "report": None,
+                },
+            )
+            handle.verify_identity()
+            append_journal(
+                journal_path, reclaim_event, lock_path,
+                expected_head=journal_events[-1] if journal_events else None)
+            handle.verify_identity()
+            journal_events.append(reclaim_event)
+
         event = _make_event(
             seq=(_last_seq(journal_events) + 1),
             event_type="INTENT_ABANDONED",
@@ -921,76 +1078,17 @@ def _resolve_pending_intents(
                 "report": None,
             },
         )
+        handle.verify_identity()
         append_journal(journal_path, event, lock_path, expected_head=journal_events[-1] if journal_events else None)
+        handle.verify_identity()
         journal_events.append(event)
         abandoned.append(intent)
-
-        # Defect 7 + Opus round-2 finding 1: never bypass classify_claim
-        # with a hardcoded classification, AND never select the lock to
-        # reclaim by packet_id alone -- a packet can have an unrelated,
-        # genuinely-live lock (e.g. a committed open attempt) at the same
-        # canonical path while THIS specific intent_id is the one being
-        # abandoned. Only reclaim if the on-disk lock's own intent_id
-        # actually matches the abandoned intent; otherwise this lock
-        # belongs to different, still-live work and must be left alone
-        # entirely (exactly defect 5's rule, enforced here too). A
-        # reclaim, when it does apply, must journal LOCK_RECLAIMED with
-        # prior_claim BEFORE moving the file, identically to step 8 --
-        # mutating the state root with no journal record is itself the
-        # auditability violation D0.1 exists to prevent.
-        lock_file = safe_state_path(
-            state_root,
-            "locks",
-            identifier=packet_id,
-            identifier_suffix=".lock.json",
-        )
-        if os.path.exists(lock_file):
-            lock_record = read_claim(lock_file)
-            lock_validation = validate_claim(lock_record)
-            if lock_validation["valid"] and lock_record.get("intent_id") == intent_id:
-                lock_classification = classify_claim(lock_record, trusted_process_context)
-                lock_status = lock_classification["status"]
-                if lock_status in {"STALE_PRIOR_BOOT", "STALE_SAME_BOOT"}:
-                    prior_claim = {
-                        "claim_sha256": lock_record["claim_sha256"],
-                        "path": os.path.relpath(lock_file, state_root),
-                        "classification": lock_status,
-                        "coordinator_id": lock_record["coordinator_id"],
-                        "pid": lock_record["pid"],
-                        "boot_id": lock_record["boot_id"],
-                        "hostname": lock_record["hostname"],
-                    }
-                    reclaim_event = _make_event(
-                        seq=(_last_seq(journal_events) + 1),
-                        event_type="LOCK_RECLAIMED",
-                        coordinator_id=coordinator_id,
-                        run_id=run_id,
-                        state_root_id=state_root_id,
-                        prev_event=journal_events[-1] if journal_events else None,
-                        event_at=now,
-                        packet_id=packet_id,
-                        payload={
-                            "packet": None,
-                            "attempt": None,
-                            "artifacts": [],
-                            "classification": None,
-                            "transition_detail": None,
-                            "recovery": {
-                                "abandoned_intent_id": None,
-                                "abandoned_at_stage": None,
-                                "consecutive_abandonments": None,
-                                "prior_claim": prior_claim,
-                                "truncation": None,
-                                "review_failure": None,
-                            },
-                            "run": None,
-                            "report": None,
-                        },
-                    )
-                    append_journal(journal_path, reclaim_event, lock_path, expected_head=journal_events[-1] if journal_events else None)
-                    journal_events.append(reclaim_event)
-                    reclaim_lock(lock_file, run_id, lock_status)
-                    reclaimed.append(packet_id)
+        if reclaim_record is not None:
+            handle.verify_identity()
+            reclaim_lock_at(
+                handle, packet_id, run_id, reclaim_status,
+                reclaim_record["claim_sha256"])
+            reclaimed.append(packet_id)
 
     return abandoned, reclaimed
 
