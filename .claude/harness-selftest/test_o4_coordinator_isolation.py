@@ -735,7 +735,7 @@ def test_workspace_baseline_journal_contract_rejects_wrong_artifact_shapes(shape
     event["event_sha256"] = compute_sha256(canonical_bytes(event, omit={"event_sha256"}))
     schema = json.loads((Path(__file__).parents[2] / "schemas/harness/v1/journal-event.schema.json").read_text())
     assert not validate_journal_event(event)["valid"]
-    assert len(schema["allOf"]) == 4
+    assert len(schema["allOf"]) == 5
     assert schema["allOf"][0]["then"]["properties"]["payload"]["properties"]["artifacts"]["items"]["properties"]["kind"] == {"const": "workspace_baseline"}
 
 

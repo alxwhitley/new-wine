@@ -9,17 +9,23 @@ state so the caller can continue.
 import fcntl
 import json
 import os
+import stat
 import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.claim import classify_claim, validate_claim
+from harness_contracts.v1.execution_plan import (
+    ExecutionPlanContractError,
+    authenticate_execution_plan_bytes,
+)
 from harness_contracts.v1.journal import (
     CAUSE_EDGES,
     ZERO_SHA256,
     validate_journal_event,
 )
 from harness_contracts.v1.provider_evidence import validate_provider_signals_registry
+from harness_contracts.v1.packet import validate_packet
 from harness_contracts.v1.queue_state import validate_queue
 from harness_contracts.v1.seal import TERMINAL_STATES, validate_terminal_seal
 from harness_contracts.v1.transition import validate_transition
@@ -55,7 +61,12 @@ class IntegrityError(Exception):
     """
 
     def __init__(self, code: str, message: str, packet_id: Optional[str] = None) -> None:
-        super().__init__(message)
+        # ``str(exc)`` carries the code for every code uniformly, so a bare
+        # ``pytest.raises(match=...)`` or a logged traceback names the failure
+        # class.  ``self.message`` stays the RAW message: consumers such as
+        # ``reconcile``'s attention records and ``replay_schedule``'s
+        # divergences format ``code`` themselves and would otherwise double it.
+        super().__init__("%s: %s" % (code, message))
         self.code = code
         self.message = message
         self.packet_id = packet_id
@@ -586,6 +597,7 @@ def _fold_journal(
     journal_events: List[Dict[str, Any]],
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
     packets: Dict[str, Dict[str, Any]] = {}
+    bound_plans_by_run: Dict[str, Dict[str, Any]] = {}
     counters = {
         "attempts_started_total": 0,
         "infra_retries_total": 0,
@@ -601,7 +613,7 @@ def _fold_journal(
 
     state_changing_types = {"PACKET_ENROLLED", "STATE_TRANSITION", "ATTEMPT_STARTED", "ATTEMPT_FINISHED", "VERDICT_RECORDED"}
 
-    for event in journal_events:
+    for event_index, event in enumerate(journal_events):
         event_type = event.get("event_type")
         cause = event.get("cause")
         packet_id = event.get("packet_id")
@@ -612,6 +624,31 @@ def _fold_journal(
                 raise IntegrityError("INVALID_FORMAT", str(exc)) from exc
         from_state = event.get("from_state")
         to_state = event.get("to_state")
+
+        if event_type == "EXECUTION_PLAN_BOUND":
+            run_id = event.get("run_id")
+            if not isinstance(run_id, str) or not run_id:
+                raise IntegrityError("PLAN_IDENTITY_INVALID", "execution plan binding has an invalid run_id")
+            if any(
+                prior.get("event_type") == "ATTEMPT_STARTED" and prior.get("run_id") == run_id
+                for prior in journal_events[:event_index]
+            ):
+                raise IntegrityError("PLAN_IDENTITY_LATE_BIND", "execution plan binding occurred after an attempt claim")
+            # Recovery has a concrete state root, unlike reconciliation's
+            # phantom inventory fold and replay's phantom prefix-fold root.
+            # Plan authentication and plan-scope membership both read
+            # immutable artifacts from that root, so a phantom-root fold is
+            # an inventory pass, not an authentication pass -- exactly how
+            # the workspace-evidence branch below already treats it.
+            if os.path.isdir(state_root):
+                plan = _authenticate_bound_execution_plan(state_root, event)
+                existing_plan = bound_plans_by_run.get(run_id)
+                if existing_plan is not None and existing_plan != plan:
+                    raise IntegrityError("PLAN_IDENTITY_CONFLICT", "run has conflicting execution plan bindings")
+                bound_plans_by_run[run_id] = plan
+                for known_packet in packets.values():
+                    if known_packet.get("run_id") == run_id:
+                        _validate_plan_packet_binding(state_root, plan, known_packet)
 
         if event_type in state_changing_types:
             if event_type == "PACKET_ENROLLED":
@@ -667,14 +704,34 @@ def _fold_journal(
                     raise IntegrityError("INVALID_FORMAT", str(exc)) from exc
             if packet_id in packets:
                 raise IntegrityError("DUPLICATE_ID", f"Packet {packet_id} already enrolled")
+            plan = bound_plans_by_run.get(event.get("run_id"))
+            # Same phantom-root convention as the plan-binding branch above:
+            # ``_validate_plan_packet_binding`` reads the enrolled packet's
+            # immutable artifact, which only a concrete state root has.
+            if plan is not None and os.path.isdir(state_root):
+                _validate_plan_packet_binding(
+                    state_root,
+                    plan,
+                    {
+                        "packet_id": packet_id,
+                        "packet_sha256": packet_payload.get("packet_sha256"),
+                        "dependency_ids": list(packet_payload.get("dependency_ids") or []),
+                        "packet_path": packet_payload.get("packet_path"),
+                    },
+                )
             lane = packet_payload.get("lane")
             packets[packet_id] = {
                 "packet_id": packet_id,
+                "run_id": event.get("run_id"),
                 "enqueue_seq": event["seq"],
                 "state": to_state,
                 "lane": lane,
                 "dependency_ids": list(packet_payload.get("dependency_ids") or []),
                 "packet_sha256": packet_payload.get("packet_sha256"),
+                # Persisted so the retro plan-scope check performed when a
+                # binding event arrives AFTER enrollment passes the same
+                # record shape this branch's own enrollment-time call builds.
+                "packet_path": packet_payload.get("packet_path"),
                 "retry_limit": packet_payload.get("retry_limit"),
                 "sonnet_reassignment_allowed": packet_payload.get("sonnet_reassignment_allowed"),
                 "attempts_started": 0,
@@ -899,6 +956,101 @@ def _fold_journal(
     # Step 5 only checks existing seals for consistency; missing terminal seals
     # are created later by step 13 (owned by O3-P3).
     return packets, counters
+
+
+def _authenticate_bound_execution_plan(state_root: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    """Authenticate the immutable plan artifact named by one binding event."""
+    binding = ((event.get("payload") or {}).get("execution_plan"))
+    required = {"plan_id", "plan_sha256", "plan_path", "packet_count"}
+    if not isinstance(binding, dict) or set(binding) != required:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", "execution plan binding payload is not closed")
+    plan_id = binding.get("plan_id")
+    try:
+        validate_harness_id(plan_id, "/payload/execution_plan/plan_id")
+        expected_path = safe_state_path(
+            state_root, "plans", identifier=plan_id, identifier_suffix=".json"
+        )
+    except ValueError as exc:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", str(exc)) from exc
+    if binding.get("plan_path") != "plans/%s.json" % plan_id:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", "execution plan binding path is not canonical")
+    try:
+        raw = _read_regular_nofollow(expected_path)
+    except FileNotFoundError as exc:
+        raise IntegrityError("PLAN_IDENTITY_ARTIFACT_MISSING", "bound execution plan artifact is missing") from exc
+    except OSError as exc:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", "bound execution plan artifact cannot be safely read") from exc
+    try:
+        plan = authenticate_execution_plan_bytes(raw)
+    except ExecutionPlanContractError as exc:
+        raise IntegrityError(exc.code, exc.message) from exc
+    if plan.get("plan_id") != plan_id:
+        raise IntegrityError("PLAN_IDENTITY_CONFLICT", "bound plan artifact plan_id disagrees with journal")
+    if plan.get("plan_sha256") != binding.get("plan_sha256"):
+        raise IntegrityError("PLAN_IDENTITY_CONFLICT", "bound plan artifact digest disagrees with journal")
+    if len(plan.get("packets", [])) != binding.get("packet_count"):
+        raise IntegrityError("PLAN_IDENTITY_CONFLICT", "bound plan packet count disagrees with journal")
+    return plan
+
+
+def _validate_plan_packet_binding(
+    state_root: str, plan: Dict[str, Any], enrolled: Dict[str, Any]
+) -> None:
+    """Prove an enrolled packet is one authenticated member of ``plan``."""
+    packet_id = enrolled.get("packet_id")
+    expected = None
+    for packet in plan.get("packets", []):
+        if packet.get("packet_id") == packet_id:
+            expected = packet
+            break
+    if expected is None:
+        raise IntegrityError("PLAN_SCOPE_PACKET_OUTSIDE_PLAN", "enrolled packet is outside bound execution plan", packet_id)
+    if enrolled.get("packet_sha256") != expected.get("packet_sha256"):
+        raise IntegrityError("PLAN_SCOPE_PACKET_DIGEST_MISMATCH", "enrolled packet digest disagrees with bound execution plan", packet_id)
+    # Ordered, not set, comparison on purpose: the plan authenticates a
+    # deterministic enrollment order, so dependency ORDER is part of plan
+    # identity and a reordering is a different plan, not the same one.
+    if enrolled.get("dependency_ids") != expected.get("dependencies"):
+        raise IntegrityError("PLAN_SCOPE_PACKET_DEPENDENCY_MISMATCH", "enrolled packet dependencies disagree with bound execution plan", packet_id)
+    if enrolled.get("packet_path") != "packets/%s.json" % packet_id:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_PATH", "enrolled packet artifact path is not canonical", packet_id)
+
+    try:
+        packet_path = safe_state_path(
+            state_root, "packets", identifier=packet_id, identifier_suffix=".json"
+        )
+        raw = _read_regular_nofollow(packet_path)
+    except FileNotFoundError as exc:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_MISSING", "enrolled packet artifact is missing", packet_id) from exc
+    except (OSError, ValueError) as exc:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_INVALID", "enrolled packet artifact cannot be safely read", packet_id) from exc
+    try:
+        packet = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_INVALID", "enrolled packet artifact is invalid JSON", packet_id) from exc
+    result = validate_packet(packet)
+    if not result["valid"] or raw != canonical_bytes(packet):
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_INVALID", "enrolled packet artifact is not canonical and authenticated", packet_id)
+    if packet.get("packet_id") != packet_id:
+        raise IntegrityError("PLAN_SCOPE_PACKET_DIGEST_MISMATCH", "packet artifact identity disagrees with enrollment", packet_id)
+    if packet.get("packet_sha256") != expected.get("packet_sha256"):
+        raise IntegrityError("PLAN_SCOPE_PACKET_DIGEST_MISMATCH", "packet artifact digest disagrees with bound execution plan", packet_id)
+
+
+def _read_regular_nofollow(path: str) -> bytes:
+    """Read one artifact without accepting a symlinked terminal path."""
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("artifact is not a regular file")
+        chunks = []
+        while True:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                return b"".join(chunks)
+            chunks.append(chunk)
+    finally:
+        os.close(fd)
 
 
 def _build_run_started_event(

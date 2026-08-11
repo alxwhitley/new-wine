@@ -51,7 +51,8 @@
         "RECONCILIATION_EMITTED",
         "WORKSPACE_BASELINE_RECORDED",
         "WORKSPACE_POSTFLIGHT_RECORDED",
-        "INTEGRATION_MANIFEST_RECORDED"
+        "INTEGRATION_MANIFEST_RECORDED",
+        "EXECUTION_PLAN_BOUND"
       ]
     },
     "event_at": {
@@ -811,6 +812,36 @@
               "type": "boolean"
             }
           }
+        },
+        "execution_plan": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "plan_sha256",
+            "plan_path",
+            "packet_count"
+          ],
+          "properties": {
+            "plan_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+            },
+            "plan_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "plan_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+            },
+            "packet_count": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
         }
       }
     },
@@ -935,6 +966,39 @@
                   }
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "EXECUTION_PLAN_BOUND"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["execution_plan"],
+            "properties": {
+              "execution_plan": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "execution_plan": {"type": "null"}
             }
           }
         }

@@ -38,6 +38,7 @@ JOURNAL_EVENT_TYPES = {
     "WORKSPACE_BASELINE_RECORDED",
     "WORKSPACE_POSTFLIGHT_RECORDED",
     "INTEGRATION_MANIFEST_RECORDED",
+    "EXECUTION_PLAN_BOUND",
 }
 
 TRANSITION_CAUSES = {
@@ -124,6 +125,7 @@ CAUSES_BY_EVENT_TYPE: Dict[str, Set[str]] = {
     "WORKSPACE_BASELINE_RECORDED": {"none"},
     "WORKSPACE_POSTFLIGHT_RECORDED": {"none"},
     "INTEGRATION_MANIFEST_RECORDED": {"none"},
+    "EXECUTION_PLAN_BOUND": {"none"},
 }
 
 # Payload sub-objects that must be non-null for each event type.
@@ -143,6 +145,7 @@ PAYLOAD_NON_NULL_BY_TYPE: Dict[str, Set[str]] = {
     "WORKSPACE_BASELINE_RECORDED": set(),
     "WORKSPACE_POSTFLIGHT_RECORDED": set(),
     "INTEGRATION_MANIFEST_RECORDED": set(),
+    "EXECUTION_PLAN_BOUND": {"execution_plan"},
 }
 
 ARTIFACT_KINDS = {
@@ -337,7 +340,7 @@ def _validate_journal_event_object(
         v.add("EVIDENCE_HASH_MISMATCH", "/state_root_id", "state_root_id does not match manifest", phase="cross_field")
 
     packet_id = value.get("packet_id")
-    if event_type in {"RUN_STARTED", "RUN_ENDED", "JOURNAL_TAIL_TRUNCATED", "RECONCILIATION_EMITTED"}:
+    if event_type in {"RUN_STARTED", "RUN_ENDED", "JOURNAL_TAIL_TRUNCATED", "RECONCILIATION_EMITTED", "EXECUTION_PLAN_BOUND"}:
         if packet_id is not None:
             v.add("INVALID_VALUE", "/packet_id", f"{event_type} event must have packet_id null", phase="value")
     else:
@@ -469,8 +472,9 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         v.add("INVALID_TYPE", "/payload", "Expected object", phase="scalar")
         return
     required_keys = {"packet", "attempt", "artifacts", "classification", "transition_detail", "recovery", "run", "report"}
+    allowed_keys = required_keys | {"execution_plan"}
     for key in payload:
-        if key not in required_keys:
+        if key not in allowed_keys:
             v.add("UNKNOWN_FIELD", f"/payload/{key}", f"Unknown field '{key}'")
     for key in required_keys:
         if key not in payload:
@@ -492,6 +496,13 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         elif should_be_non_null and not is_non_null:
             v.add("MISSING_FIELD", f"/payload/{key}", f"{event_type} event requires {key} to be non-null", phase="unknown_missing")
 
+    execution_plan = payload.get("execution_plan")
+    if event_type == "EXECUTION_PLAN_BOUND":
+        if not isinstance(execution_plan, dict):
+            v.add("MISSING_FIELD", "/payload/execution_plan", "EXECUTION_PLAN_BOUND requires execution_plan to be non-null", phase="unknown_missing")
+    elif execution_plan is not None:
+        v.add("INVALID_VALUE", "/payload/execution_plan", f"{event_type} event must have execution_plan null or absent", phase="value")
+
     if isinstance(payload.get("artifacts"), list):
         _validate_artifacts(v, payload["artifacts"], "/payload/artifacts")
 
@@ -509,6 +520,29 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         _validate_payload_run(v, payload["run"], "/payload/run")
     if "report" in non_null and isinstance(payload.get("report"), dict):
         _validate_payload_report(v, payload["report"], "/payload/report")
+    if "execution_plan" in non_null and isinstance(payload.get("execution_plan"), dict):
+        _validate_payload_execution_plan(v, payload["execution_plan"], "/payload/execution_plan")
+
+
+def _validate_payload_execution_plan(v: _PacketValidator, binding: Dict[str, Any], path: str) -> None:
+    """Validate the O5 immutable plan-binding payload and nothing else."""
+    allowed = {"plan_id", "plan_sha256", "plan_path", "packet_count"}
+    for key in binding:
+        if key not in allowed:
+            v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
+    for key in allowed:
+        if key not in binding:
+            v.add("MISSING_FIELD", f"{path}/{key}", f"Missing required field '{key}'")
+    if v.errors:
+        return
+    if not is_harness_id(binding.get("plan_id")):
+        v.add("INVALID_FORMAT", f"{path}/plan_id", "plan_id must be a safe harness identifier", phase="format")
+    _check_sha256(v, binding.get("plan_sha256"), f"{path}/plan_sha256")
+    plan_path = binding.get("plan_path")
+    normalized = _check_repo_relative_path(v, plan_path, f"{path}/plan_path")
+    if normalized is not None and normalized != f"plans/{binding.get('plan_id')}.json":
+        v.add("INVALID_VALUE", f"{path}/plan_path", "plan_path must be the canonical plan artifact path", phase="value")
+    _check_int(v, binding.get("packet_count"), f"{path}/packet_count", positive=True)
 
 
 def _validate_artifacts(v: _PacketValidator, artifacts: List[Any], path: str) -> None:
