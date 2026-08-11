@@ -46,6 +46,157 @@ def test_invalid_item_preflights_entire_batch_before_any_write(tmp_path):
     assert not (tmp_path / "packets").exists()
 
 
+def test_stale_enrollment_time_is_rejected_before_any_publication(tmp_path):
+    from harness_coordinator.v1.enroll import PacketPreflightError, enroll_packets
+    from harness_coordinator.v1.store import read_journal
+
+    args = (str(tmp_path), "srid-1", "coord-1", "run-1")
+    enroll_packets(*args, "2026-08-10T00:00:02Z", [_packet("packet-1")])
+    journal_before = (tmp_path / "journal.ndjson").read_bytes()
+    queue_before = (tmp_path / "queue.json").read_bytes()
+
+    with pytest.raises(PacketPreflightError) as exc_info:
+        enroll_packets(*args, "2026-08-10T00:00:01Z", [_packet("packet-2")])
+
+    assert any(error["code"] == "CHRONOLOGY_VIOLATION" for error in exc_info.value.errors)
+    assert (tmp_path / "journal.ndjson").read_bytes() == journal_before
+    assert (tmp_path / "queue.json").read_bytes() == queue_before
+    assert not (tmp_path / "packets" / "packet-2.json").exists()
+    events, torn = read_journal(str(tmp_path / "journal.ndjson"), state_root_id="srid-1")
+    assert torn is None
+    assert [event.get("packet_id") for event in events] == ["packet-1"]
+
+
+def test_stale_time_precedes_mixed_batch_rejection_evidence(tmp_path):
+    from harness_coordinator.v1.enroll import PacketPreflightError, enroll_packets
+
+    args = (str(tmp_path), "srid-1", "coord-1", "run-1")
+    enroll_packets(*args, "2026-08-10T00:00:02Z", [_packet("packet-1")])
+    journal_before = (tmp_path / "journal.ndjson").read_bytes()
+    queue_before = (tmp_path / "queue.json").read_bytes()
+    (tmp_path / "packets" / "packet-3.json").write_bytes(b"conflicting bytes")
+
+    with pytest.raises(PacketPreflightError) as exc_info:
+        enroll_packets(
+            *args,
+            "2026-08-10T00:00:01Z",
+            [_packet("packet-2"), _packet("packet-3")],
+        )
+
+    assert any(error["code"] == "CHRONOLOGY_VIOLATION" for error in exc_info.value.errors)
+    assert (tmp_path / "journal.ndjson").read_bytes() == journal_before
+    assert (tmp_path / "queue.json").read_bytes() == queue_before
+    assert not (tmp_path / "packets" / "packet-2.json").exists()
+    assert not (tmp_path / "rejected").exists()
+
+
+def test_equal_enrollment_time_is_allowed(tmp_path):
+    from harness_coordinator.v1.enroll import enroll_packets
+    from harness_coordinator.v1.store import read_journal
+
+    args = (str(tmp_path), "srid-1", "coord-1", "run-1", "2026-08-10T00:00:00Z")
+    assert enroll_packets(*args, [_packet("packet-1")]) == {
+        "enrolled": ["packet-1"],
+        "skipped": [],
+    }
+    assert enroll_packets(*args, [_packet("packet-2")]) == {
+        "enrolled": ["packet-2"],
+        "skipped": [],
+    }
+    events, torn = read_journal(str(tmp_path / "journal.ndjson"), state_root_id="srid-1")
+    assert torn is None
+    assert [event.get("packet_id") for event in events] == ["packet-1", "packet-2"]
+
+
+def test_two_packet_batch_with_one_timestamp_remains_valid(tmp_path):
+    from harness_coordinator.v1.enroll import enroll_packets
+    from harness_coordinator.v1.store import read_journal
+
+    result = enroll_packets(
+        str(tmp_path),
+        "srid-1",
+        "coord-1",
+        "run-1",
+        "2026-08-10T00:00:00Z",
+        [_packet("packet-1"), _packet("packet-2")],
+    )
+
+    assert result == {"enrolled": ["packet-1", "packet-2"], "skipped": []}
+    events, torn = read_journal(str(tmp_path / "journal.ndjson"), state_root_id="srid-1")
+    assert torn is None
+    assert [event.get("packet_id") for event in events] == ["packet-1", "packet-2"]
+
+
+def test_cas_refresh_revalidates_chronology_against_new_head(tmp_path, monkeypatch):
+    import harness_coordinator.v1.enroll as enroll
+    from harness_coordinator.v1.recovery import _make_event
+    from harness_coordinator.v1.store import JournalHeadMoved, read_journal
+
+    args = (str(tmp_path), "srid-1", "coord-1", "run-1")
+    enroll.enroll_packets(*args, "2026-08-10T00:00:00Z", [_packet("packet-1")])
+    original_events, torn = read_journal(
+        str(tmp_path / "journal.ndjson"), state_root_id="srid-1"
+    )
+    assert torn is None
+    packet = _packet("packet-3")
+    intervening = _make_event(
+        2,
+        "PACKET_ENROLLED",
+        "coord-other",
+        "run-other",
+        "srid-1",
+        original_events[-1],
+        "2026-08-10T00:00:02Z",
+        packet_id="packet-3",
+        intent_id="enroll-packet-3-2",
+        to_state="READY",
+        cause="enrollment",
+        payload={
+            "packet": {
+                "packet_sha256": packet["packet_sha256"],
+                "packet_path": "packets/packet-3.json",
+                "lane": packet["lane"],
+                "dependency_ids": [],
+                "sonnet_reassignment_allowed": True,
+                "retry_limit": 2,
+                "enqueue_seq": 2,
+            },
+            "attempt": None,
+            "artifacts": [],
+            "classification": None,
+            "transition_detail": None,
+            "recovery": None,
+            "run": None,
+            "report": None,
+        },
+    )
+    real_append = enroll.append_journal
+
+    def move_once(*call_args, **call_kwargs):
+        monkeypatch.setattr(enroll, "append_journal", real_append)
+        raise JournalHeadMoved(intervening)
+
+    real_read = enroll.read_journal
+
+    def read_with_intervening(path, state_root_id=None):
+        if path == str(tmp_path / "journal.ndjson"):
+            return original_events + [intervening], None
+        return real_read(path, state_root_id=state_root_id)
+
+    monkeypatch.setattr(enroll, "append_journal", move_once)
+    monkeypatch.setattr(enroll, "read_journal", read_with_intervening)
+
+    with pytest.raises(enroll.PacketPreflightError) as exc_info:
+        enroll.enroll_packets(*args, "2026-08-10T00:00:01Z", [_packet("packet-2")])
+
+    assert any(error["code"] == "CHRONOLOGY_VIOLATION" for error in exc_info.value.errors)
+    actual_events, actual_torn = real_read(
+        str(tmp_path / "journal.ndjson"), state_root_id="srid-1"
+    )
+    assert actual_torn is None
+    assert [event.get("packet_id") for event in actual_events] == ["packet-1"]
+
+
 def test_identical_duplicate_is_noop_and_conflicting_duplicate_is_rejected(tmp_path):
     from harness_coordinator.v1.enroll import ConflictingEnrollment, enroll_packets
     args = (str(tmp_path), "srid-1", "coord-1", "run-1", "2026-08-10T00:00:00Z")

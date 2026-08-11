@@ -2,9 +2,10 @@
 
 import os
 import errno
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+from harness_contracts.v1.journal import validate_journal_event
 from harness_contracts.v1.packet import validate_packet
 from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event
@@ -19,6 +20,68 @@ class PacketPreflightError(ValueError):
 
 class ConflictingEnrollment(ValueError):
     pass
+
+
+def _enrollment_payload(
+    packet: Dict[str, Any],
+    digest: str,
+    packet_path: str,
+    state_root: str,
+    seq: int,
+) -> Dict[str, Any]:
+    return {
+        "packet": {
+            "packet_sha256": digest,
+            "packet_path": os.path.relpath(packet_path, os.path.realpath(state_root)),
+            "lane": packet["lane"],
+            "dependency_ids": packet["dependency_ids"],
+            "sonnet_reassignment_allowed": packet["sonnet_reassignment_allowed"],
+            "retry_limit": packet["budgets"]["retry_limit"],
+            "enqueue_seq": seq,
+        },
+        "attempt": None,
+        "artifacts": [],
+        "classification": None,
+        "transition_detail": None,
+        "recovery": None,
+        "run": None,
+        "report": None,
+    }
+
+
+def _validated_enrollment_event(
+    seq: int,
+    coordinator_id: str,
+    run_id: str,
+    state_root_id: str,
+    prev: Optional[Dict[str, Any]],
+    now: str,
+    packet_id: str,
+    to_state: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    event = _make_event(
+        seq,
+        "PACKET_ENROLLED",
+        coordinator_id,
+        run_id,
+        state_root_id,
+        prev,
+        now,
+        packet_id=packet_id,
+        intent_id=f"enroll-{packet_id}-{seq}",
+        to_state=to_state,
+        cause="enrollment",
+        payload={**payload, "packet": {**payload["packet"], "enqueue_seq": seq}},
+    )
+    validation = validate_journal_event(
+        event,
+        prev_event=prev,
+        state_root_id=state_root_id,
+    )
+    if not validation["valid"]:
+        raise PacketPreflightError(validation["errors"])
+    return event
 
 
 def preflight_packets(packets: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -101,6 +164,34 @@ def enroll_packets(
                 rejections.append({"packet_id": packet_id, "reason": "artifact_bytes_conflict", "existing_packet_sha256": existing.get("packet_sha256") if existing else None, "offered_packet_sha256": digest})
                 continue
         decisions.append({**item, "packet_path": lexical_packet_path, "existing": existing})
+    # Validate the complete prospective journal suffix before the first
+    # packet artifact or rejection evidence is published.  The journal
+    # contract remains the sole timestamp/chain authority; this is the same
+    # validation used on reads.
+    prospective_prev = events[-1] if events else None
+    for item in decisions:
+        if item["existing"] is not None:
+            continue
+        prospective_seq = prospective_prev["seq"] + 1 if prospective_prev else 1
+        prospective_payload = _enrollment_payload(
+            item["packet"],
+            item["packet_sha256"],
+            item["packet_path"],
+            state_root,
+            prospective_seq,
+        )
+        prospective_prev = _validated_enrollment_event(
+            prospective_seq,
+            coordinator_id,
+            run_id,
+            state_root_id,
+            prospective_prev,
+            now,
+            item["packet_id"],
+            "BLOCKED" if item["packet"]["dependency_ids"] else "READY",
+            prospective_payload,
+        )
+
     if rejections:
         for rejection in rejections:
             _preserve_rejection(state_root, coordinator_id, rejection)
@@ -140,22 +231,20 @@ def enroll_packets(
             raise
         prev = events[-1] if events else None
         seq = prev["seq"] + 1 if prev else 1
-        payload = {
-            "packet": {
-                "packet_sha256": digest, "packet_path": os.path.relpath(packet_path, os.path.realpath(state_root)),
-                "lane": packet["lane"], "dependency_ids": packet["dependency_ids"],
-                "sonnet_reassignment_allowed": packet["sonnet_reassignment_allowed"],
-                "retry_limit": packet["budgets"]["retry_limit"], "enqueue_seq": seq,
-            },
-            "attempt": None, "artifacts": [], "classification": None,
-            "transition_detail": None, "recovery": None, "run": None, "report": None,
-        }
+        payload = _enrollment_payload(packet, digest, packet_path, state_root, seq)
         cas_moves = 0
         while True:
-            event = _make_event(seq, "PACKET_ENROLLED", coordinator_id, run_id, state_root_id, prev, now,
-                                packet_id=packet_id, intent_id=f"enroll-{packet_id}-{seq}",
-                                to_state="BLOCKED" if packet["dependency_ids"] else "READY",
-                                cause="enrollment", payload={**payload, "packet": {**payload["packet"], "enqueue_seq": seq}})
+            event = _validated_enrollment_event(
+                seq,
+                coordinator_id,
+                run_id,
+                state_root_id,
+                prev,
+                now,
+                packet_id,
+                "BLOCKED" if packet["dependency_ids"] else "READY",
+                payload,
+            )
             try:
                 append_journal(journal_path, event, journal_lock, expected_head=prev)
                 break
