@@ -13,6 +13,9 @@
 - Python 3.9: use `Optional[str]`, never `str | None`.
 - O4 is repo-only: no production DB/network access, provider commissioning, deployment, migration, push, or governed-content edit.
 - Workers and coordinator never stage, commit, merge, rebase, clean, delete, or resolve conflicts.
+- For this supervised build only, implementer/reviewer subagents never stage or
+  commit; after a clean independent review, the explicitly authorized primary
+  controller stages the task allowlist and creates the task commit.
 - The operator provisions packet branches/worktrees; O4 validates but never creates or removes them.
 - Direct Git/filesystem evidence is authoritative; worker `changed_files` is untrusted corroboration.
 - Out-of-scope or uncertain changes remain intact and route to `HUMAN_REQUIRED`; never auto-revert.
@@ -42,6 +45,7 @@
 
 **Files:**
 - Create: `scripts/harness_coordinator/v1/workspace_evidence.py`
+- Modify: `scripts/harness_contracts/v1/packet.py`
 - Create: `.claude/harness-selftest/test_o4_workspace_evidence.py`
 
 **Interfaces:**
@@ -153,7 +157,7 @@ PYTHONPATH=scripts:.claude/harness-selftest python3 -m pytest \
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit Task 1**
+- [ ] **Step 7: Controller commits Task 1 after independent review**
 
 ```bash
 git add scripts/harness_coordinator/v1/workspace_evidence.py \
@@ -241,7 +245,7 @@ PYTHONPATH=scripts:.claude/harness-selftest python3 -m pytest \
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit Task 2**
+- [ ] **Step 7: Controller commits Task 2 after independent review**
 
 ```bash
 git add scripts/harness_coordinator/v1/workspace_evidence.py \
@@ -317,7 +321,7 @@ PYTHONPATH=scripts:.claude/harness-selftest python3 -m pytest \
 
 Expected: all pass.
 
-- [ ] **Step 8: Commit Task 3**
+- [ ] **Step 8: Controller commits Task 3 after independent review**
 
 ```bash
 git add scripts/harness_coordinator/v1/workspace_evidence.py \
@@ -378,7 +382,7 @@ PYTHONPATH=scripts:.claude/harness-selftest python3 -m pytest \
 
 Expected: all pass and repository mutation assertions hold.
 
-- [ ] **Step 6: Commit Task 4**
+- [ ] **Step 6: Controller commits Task 4 after independent review**
 
 ```bash
 git add scripts/harness_coordinator/v1/integration_analysis.py \
@@ -445,7 +449,7 @@ git diff --check main...HEAD
 
 Expected: every command exits 0. Record exact test totals, commands, changed-file audit, non-actions, and residual limitations in `docs/audits/o4_git_filesystem_isolation_2026-08-11.md`.
 
-- [ ] **Step 7: Commit commissioning evidence separately from build commits**
+- [ ] **Step 7: Controller commits commissioning evidence separately after independent review**
 
 ```bash
 git add scripts/harness_coordinator/v1/recovery.py \
