@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.packet import validate_packet
+from harness_contracts.v1.replay import validate_replay_bundle
 from harness_coordinator.v1.classify_runtime import (
     promote_dependencies,
     requeue_revise,
@@ -16,13 +17,22 @@ from harness_coordinator.v1.locks import create_claim_at, read_claim_at
 from harness_coordinator.v1.invoke import (
     WorkerAdapter, invoke_worker, load_completed_invocation, persist_invocation_outcome,
 )
+from harness_coordinator.v1.integration_analysis import (
+    analyze_integration, build_integration_manifest,
+)
 from harness_coordinator.v1.paths import validate_harness_id
 from harness_coordinator.v1.process_sidecar import terminate_sidecar_process
 from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event, run_started_recovery
-from harness_coordinator.v1.review import resolve_pending_reviews
+from harness_coordinator.v1.review import (
+    _dependency_context, load_trusted_reviewer_sessions, resolve_pending_reviews,
+)
 from harness_coordinator.v1.reconcile import build_reconciliation_report, emit_reconciliation_report
 from harness_coordinator.v1.scheduler import select_next
-from harness_coordinator.v1.seals_runtime import complete_terminal_seals, open_state_root
+from harness_coordinator.v1.seals_runtime import (
+    SealContradiction, _bundle_from_event, authenticate_seal, build_terminal_seal,
+    committing_terminal_event, complete_terminal_seals, open_state_root, seal_binding,
+    terminal_seal_parts,
+)
 from harness_coordinator.v1.store import JournalHeadMoved, atomic_replace, append_journal, read_journal
 from harness_coordinator.v1.workspace_evidence import (
     WorkspaceEvidenceError, build_postflight, build_postflight_failure,
@@ -191,6 +201,177 @@ def _record_workspace_postflight(
     return artifact
 
 
+def _record_workspace_integration(
+    handle, packet: Dict[str, Any], postflight: Dict[str, Any], analysis: Dict[str, Any],
+) -> None:
+    """Publish one accepted, postflight-bound integration evidence artifact."""
+    artifact = build_integration_manifest(packet, postflight, analysis)
+    parts = ("workspace", packet["packet_id"], f"{postflight['intent_id']}.integration.json")
+    existing = handle.read(parts)
+    if existing is not None:
+        try:
+            persisted = json.loads(existing.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INVALID", "Integration manifest is not valid JSON") from exc
+        if existing != canonical_bytes(persisted) or persisted != artifact:
+            raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_MISMATCH", "Integration manifest disagrees")
+        return
+    publish_workspace_artifact(handle, parts, artifact)
+
+
+def _accepted_replay_evidence(handle, packet_id: str, packet: Dict[str, Any],
+                              packet_state: Dict[str, Any], journal_events: List[Dict[str, Any]],
+                              folded: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Authenticate the exact accepted replay bundle and its terminal seal."""
+    if packet_state.get("state") != "ACCEPTED":
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Packet is not accepted")
+    parts = terminal_seal_parts(packet_id)
+    raw = handle.read(parts)
+    if raw is None:
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted packet has no terminal seal")
+    try:
+        seal = authenticate_seal(raw, packet_id, "/".join(parts))
+        expected_seal = build_terminal_seal(handle, journal_events, packet_id, packet_state, seal["sealed_at"])
+    except (SealContradiction, KeyError) as exc:
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted terminal seal is not trustworthy") from exc
+    if (seal.get("terminal_state") != "ACCEPTED" or seal_binding(seal) != seal_binding(expected_seal)
+            or seal.get("packet_sha256") != packet.get("packet_sha256")):
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted terminal seal disagrees")
+    try:
+        committing = committing_terminal_event(journal_events, packet_id, "ACCEPTED")
+        if (seal.get("sealing_event_seq") != committing.get("seq")
+                or seal.get("sealing_event_sha256") != committing.get("event_sha256")):
+            raise SealContradiction("seal does not bind the accepted verdict event")
+        bundle = _bundle_from_event(handle, committing, packet_id)
+    except SealContradiction as exc:
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay evidence is unavailable") from exc
+    bundle_packet = bundle.get("packet")
+    worker_result = bundle.get("worker_result")
+    verdict = bundle.get("opus_verdict")
+    upstream = seal.get("upstream_digests") or {}
+    if (bundle_packet != packet or not isinstance(worker_result, dict) or not isinstance(verdict, dict)
+            or verdict.get("verdict") != "ACCEPT" or verdict.get("next_state") != "ACCEPTED"
+            or bundle.get("bundle_sha256") != upstream.get("bundle_sha256")
+            or worker_result.get("result_sha256") != upstream.get("result_sha256")
+            or verdict.get("verdict_sha256") != upstream.get("verdict_sha256")):
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay evidence disagrees")
+    try:
+        _dependency_states, provenance = _dependency_context(handle, packet, journal_events, folded)
+        replay_validation = validate_replay_bundle(
+            bundle, provenance, load_trusted_reviewer_sessions(handle))
+    except Exception as exc:
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay context is unavailable") from exc
+    if not replay_validation["valid"]:
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay evidence is invalid")
+    evidence_ids = sorted({item.get("evidence_id") for item in worker_result.get("evidence", [])
+                           if isinstance(item, dict) and item.get("kind") == "verification"
+                           and isinstance(item.get("evidence_id"), str) and item.get("evidence_id")})
+    return {
+        "attempt": worker_result.get("attempt"),
+        "verification_evidence_ids": evidence_ids,
+        "accepted_replay": {
+            "replay_bundle_sha256": bundle["bundle_sha256"],
+            "verdict_sha256": verdict["verdict_sha256"],
+            "terminal_seal_sha256": seal["seal_sha256"],
+        },
+    }
+
+
+def _integration_analysis_for_context(packet: Dict[str, Any], postflight: Dict[str, Any],
+                                      context: Any, replay: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Require operator-supplied integration context; never invent a base."""
+    identity = postflight.get("worktree_identity")
+    if not isinstance(identity, dict) or not isinstance(identity.get("repo_root"), str):
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INVALID", "Postflight identity is invalid")
+    base = context.get("integration_base") if isinstance(context, dict) else None
+    target = context.get("integration_target_path") if isinstance(context, dict) else None
+    if not isinstance(base, str) or not base:
+        return None
+    elif target is not None and not isinstance(target, str):
+        analysis = {
+            "schema_version": 1, "starting_revision": packet["starting_revision"],
+            "integration_base": base, "packet_changed_paths": [item["path"] for item in postflight["derived_changes"]],
+            "integration_base_changed_paths": [], "integration_target_path": None,
+            "integration_target_status": "UNVERIFIABLE", "decision": "HUMAN_REQUIRED",
+            "reason_codes": ["INTEGRATION_CONTEXT_INVALID"], "required_human_action": True,
+        }
+    else:
+        analysis = analyze_integration(identity["repo_root"], packet["starting_revision"], base,
+                                       postflight["derived_changes"], target)
+    if not postflight.get("acceptance_allowed"):
+        analysis["reason_codes"] = sorted(set(analysis["reason_codes"]) | {"INTEGRATION_POSTFLIGHT_INELIGIBLE"})
+        analysis["decision"] = "HUMAN_REQUIRED"
+        analysis["required_human_action"] = True
+    analysis.update(replay)
+    return analysis
+
+
+def _publish_accepted_integrations(handle, state_root: str, journal_events: List[Dict[str, Any]],
+                                   folded: Dict[str, Dict[str, Any]], integration_context_by_packet: Optional[Mapping[str, Any]]) -> None:
+    """Publish only accepted/sealed packet integration evidence, including recovery."""
+    contexts = integration_context_by_packet or {}
+    for packet_id, packet_state in sorted(folded.items()):
+        if packet_state.get("state") != "ACCEPTED":
+            continue
+        packet = _load_enrolled_packet(state_root, packet_id, packet_state, journal_events, handle=handle)
+        replay = _accepted_replay_evidence(handle, packet_id, packet, packet_state, journal_events, folded)
+        attempt = replay.get("attempt")
+        if not isinstance(attempt, int) or attempt < 1:
+            raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay has invalid attempt")
+        intent_id = f"attempt-{packet_id}-{attempt}"
+        postflight_path = ("workspace", packet_id, f"{intent_id}.postflight.json")
+        raw = handle.read(postflight_path)
+        if raw is None:
+            raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay has no postflight")
+        try:
+            candidate = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted postflight is invalid") from exc
+        postflight = validate_postflight_binding(handle, packet, intent_id, candidate)["artifact"]
+        recorded = [event for event in journal_events
+                    if event.get("event_type") == "WORKSPACE_POSTFLIGHT_RECORDED"
+                    and event.get("packet_id") == packet_id and event.get("intent_id") == intent_id]
+        expected = {
+            "kind": "workspace_postflight", "artifact_id": "workspace_postflight",
+            "path": "/".join(postflight_path), "sha256": postflight["artifact_sha256"],
+            "content_sha256": postflight["content_sha256"],
+        }
+        recorded_artifacts = ((recorded[-1].get("payload") or {}).get("artifacts") or []) if recorded else []
+        if (len(recorded) != 1 or len(recorded_artifacts) != 1
+                or any(recorded_artifacts[0].get(key) != value for key, value in expected.items())):
+            raise WorkspaceEvidenceError(
+                "WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted postflight journal binding disagrees")
+        integration_parts = ("workspace", packet_id, f"{intent_id}.integration.json")
+        existing = handle.read(integration_parts)
+        if existing is not None:
+            try:
+                persisted = json.loads(existing.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INVALID", "Integration manifest is not valid JSON") from exc
+            persisted_analysis = {
+                "starting_revision": persisted.get("starting_revision"),
+                "integration_base": persisted.get("integration_base"),
+                "integration_target_path": persisted.get("integration_target_path"),
+                "integration_target_status": persisted.get("integration_target_status"),
+                "packet_changed_paths": [item.get("path") for item in postflight["derived_changes"]],
+                "decision": persisted.get("decision"), "reason_codes": persisted.get("reason_codes"),
+                "required_human_action": persisted.get("required_human_action"),
+                "verification_evidence_ids": persisted.get("verification_evidence_ids"),
+                "accepted_replay": persisted.get("accepted_replay"),
+            }
+            if (persisted_analysis["accepted_replay"] != replay["accepted_replay"]
+                    or persisted_analysis["verification_evidence_ids"]
+                    != replay["verification_evidence_ids"]):
+                raise WorkspaceEvidenceError(
+                    "WORKSPACE_INTEGRATION_MISMATCH", "Integration manifest replay binding disagrees")
+            _record_workspace_integration(handle, packet, postflight, persisted_analysis)
+            continue
+        analysis = _integration_analysis_for_context(packet, postflight, contexts.get(packet_id), replay)
+        if analysis is None:
+            continue
+        _record_workspace_integration(handle, packet, postflight, analysis)
+
+
 def _load_enrolled_packet(state_root: str, packet_id: str, packet: Dict[str, Any],
                           journal_events: List[Dict[str, Any]], handle=None) -> Dict[str, Any]:
     if handle is None:
@@ -336,7 +517,7 @@ def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events:
 
 def _maintenance(handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
                  folded: Dict[str, Dict[str, Any]], coordinator_id: str, run_id: str,
-                 now: str) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]], Dict[str, Any]]:
+                 now: str, integration_context_by_packet: Optional[Mapping[str, Any]] = None) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]], Dict[str, Any]]:
     """Seal terminal packets, then promote dependents, then requeue REVISE.
 
     The order is load-bearing, not stylistic: ``promote_dependencies`` reads
@@ -355,6 +536,8 @@ def _maintenance(handle, state_root: str, state_root_id: str, journal_events: Li
     sealed = complete_terminal_seals(state_root, journal_events, folded, now, handle=handle)
     if sealed:
         folded, _ = _fold_journal(state_root, journal_events)
+    _publish_accepted_integrations(
+        handle, state_root, journal_events, folded, integration_context_by_packet)
 
     before = len(journal_events)
     # ``promote_dependencies`` is an accepted O3 primitive that operates by
@@ -389,7 +572,8 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
              trusted_process_context: Dict[str, Any], now: str,
              disabled_lanes: List[str] = None,
              worker_adapters: Optional[Mapping[str, WorkerAdapter]] = None,
-             protected_worktree_path: Optional[str] = None) -> Dict[str, Any]:
+             protected_worktree_path: Optional[str] = None,
+             integration_context_by_packet: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """Recover, resolve reviews, seal, promote, then claim at most one packet.
 
     Maintenance runs twice by design. The first pass completes work a previous
@@ -411,7 +595,8 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
             handle.verify_identity()
             return _run_iteration(handle, state_root, report, coordinator_id, run_id,
                                   trusted_process_context, now, disabled_lanes,
-                                  worker_adapters, protected_worktree_path)
+                                  worker_adapters, protected_worktree_path,
+                                  integration_context_by_packet)
         finally:
             report.release_singleton()
 
@@ -420,7 +605,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                    trusted_process_context: Dict[str, Any], now: str,
                    disabled_lanes: List[str],
                    worker_adapters: Optional[Mapping[str, WorkerAdapter]],
-                   protected_worktree_path: Optional[str]) -> Dict[str, Any]:
+                   protected_worktree_path: Optional[str],
+                   integration_context_by_packet: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """One bounded iteration, every P5C artifact operation sharing one handle."""
     journal_events = getattr(report, "journal_events", [])
     state_root_id = getattr(report, "state_root_id", None)
@@ -582,7 +768,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             folded, _ = _fold_journal(state_root, journal_events)
 
         journal_events, folded, first = _maintenance(
-            handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now)
+            handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now,
+            integration_context_by_packet)
 
         before = len(journal_events)
         journal_events, review_outcomes, review_attention = resolve_pending_reviews(
@@ -592,7 +779,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             folded, _ = _fold_journal(state_root, journal_events)
 
         journal_events, folded, second = _maintenance(
-            handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now)
+            handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now,
+            integration_context_by_packet)
 
     packet_id = select_next(folded, disabled_lanes or [], now)
     if packet_id is None:
@@ -640,7 +828,7 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             folded, _ = _fold_journal(state_root, journal_events)
             journal_events, folded, after_worker = _maintenance(
                 handle, state_root, state_root_id, journal_events, folded,
-                coordinator_id, run_id, now)
+                coordinator_id, run_id, now, integration_context_by_packet)
             result.update({
                 "status": "completed_attempt",
                 "reviews": review_outcomes,

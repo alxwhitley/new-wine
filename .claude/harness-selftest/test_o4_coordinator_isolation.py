@@ -16,8 +16,9 @@ from harness_coordinator.v1.seals_runtime import open_state_root
 from harness_coordinator.v1.store import read_journal
 from test_o3_p5_review import (
     COORD_ID, RUN_ID, STATE_ROOT_ID, T_ENROLL, T_NOW, _packet, _worker_result, _write_manifest,
-    _write_trust_roots,
+    _deposit, _verdict, _write_trust_roots,
 )
+from test_o3_p5_commissioning import _commission_result
 
 
 def _git(path: Path, *args: str) -> str:
@@ -107,6 +108,156 @@ def test_worker_is_never_called_until_baseline_event_is_durable(tmp_path: Path, 
     with pytest.raises(RuntimeError, match="stop after gate assertion"):
         run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW, worker_adapters={packet["packet_id"]: object()})
     assert invoked["value"]
+
+
+def test_postflight_does_not_publish_integration_before_accepted_terminal_seal(tmp_path: Path) -> None:
+    """Fails if rejected or unreviewed work is labelled an integration candidate."""
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-integration")
+    result = _commission_result(packet, f"session-{RUN_ID}-{packet['packet_id']}-1", attempt=1)
+    worker = Path(__file__).with_name("synthetic_p5_worker.py").resolve()
+    adapter = WorkerAdapter(
+        argv=(str(worker),), env={"SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":")),
+                                 "SYNTHETIC_MARKER_PATH": str(tmp_path / "marker.txt")},
+    )
+    run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+             worker_adapters={packet["packet_id"]: adapter})
+    path = Path(state_root, "workspace", packet["packet_id"],
+                f"attempt-{packet['packet_id']}-1.integration.json")
+    assert not path.exists()
+
+
+def test_accepted_packet_without_operator_context_stays_pending_until_context_arrives(tmp_path: Path) -> None:
+    """Fails if missing context permanently consumes an accepted integration slot."""
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-integration-context")
+    result = _commission_result(packet, f"session-{RUN_ID}-{packet['packet_id']}-1", attempt=1)
+    worker = Path(__file__).with_name("synthetic_p5_worker.py").resolve()
+    adapter = WorkerAdapter(
+        argv=(str(worker),), env={"SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":")),
+                                 "SYNTHETIC_MARKER_PATH": str(tmp_path / "marker.txt")},
+    )
+    run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+             worker_adapters={packet["packet_id"]: adapter})
+    _deposit(state_root, packet["packet_id"], 1, _verdict(packet, result))
+    run_once(state_root, COORD_ID, "o4-context-review", _context(), "2026-08-10T01:12:00Z",
+             integration_context_by_packet={})
+    events, _ = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "ACCEPTED", [event["event_type"] for event in events]
+    path = Path(state_root, "workspace", packet["packet_id"],
+                f"attempt-{packet['packet_id']}-1.integration.json")
+    assert not path.exists()
+    run_once(
+        state_root, COORD_ID, "o4-context-supplied", _context(), "2026-08-10T01:13:00Z",
+        integration_context_by_packet={packet["packet_id"]: {
+            "integration_base": packet["starting_revision"],
+        }},
+    )
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+    assert artifact["decision"] == "CLEAN_CANDIDATE"
+    assert artifact["integration_base"] == packet["starting_revision"]
+
+
+def test_accepted_packet_uses_explicit_operator_base_not_starting_revision(tmp_path: Path) -> None:
+    """Fails if recovery publication silently replaces the supplied operator base."""
+    state_root, repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-integration-base")
+    (repo / "allowed").mkdir()
+    (repo / "allowed" / "b.py").write_text("integration\n", encoding="utf-8")
+    _git(repo, "add", "allowed/b.py")
+    _git(repo, "commit", "-m", "integration base")
+    integration_base = _git(repo, "rev-parse", "HEAD")
+    result = _commission_result(packet, f"session-{RUN_ID}-{packet['packet_id']}-1", attempt=1)
+    worker = Path(__file__).with_name("synthetic_p5_worker.py").resolve()
+    adapter = WorkerAdapter(
+        argv=(str(worker),), env={"SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":")),
+                                 "SYNTHETIC_MARKER_PATH": str(tmp_path / "marker.txt")},
+    )
+    run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+             worker_adapters={packet["packet_id"]: adapter})
+    _deposit(state_root, packet["packet_id"], 1, _verdict(packet, result))
+    run_once(
+        state_root, COORD_ID, "o4-base-review", _context(), "2026-08-10T01:12:00Z",
+        integration_context_by_packet={packet["packet_id"]: {
+            "integration_base": integration_base, "integration_target_path": str(repo),
+        }},
+    )
+    events, _ = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "ACCEPTED", [event["event_type"] for event in events]
+    path = Path(state_root, "workspace", packet["packet_id"],
+                f"attempt-{packet['packet_id']}-1.integration.json")
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+    assert artifact["integration_base"] == integration_base
+    assert artifact["integration_base"] != packet["starting_revision"]
+    assert artifact["decision"] == "CLEAN_CANDIDATE"
+    assert artifact["verification_evidence_ids"] == ["ev-1"]
+    assert artifact["worktree_identity"]["worktree_path"] == packet["worktree"]["path"]
+    assert artifact["worktree_identity"]["branch"] == "refs/heads/" + packet["worktree"]["branch"]
+    assert artifact["integration_target_path"] == os.path.realpath(str(repo))
+    assert artifact["integration_target_status"] == "CLEAN"
+    before_recovery = path.read_bytes()
+    run_once(state_root, COORD_ID, "o4-base-recovery", _context(), "2026-08-10T01:13:00Z",
+             integration_context_by_packet={})
+    assert path.read_bytes() == before_recovery
+
+
+@pytest.mark.parametrize("target", ["", 17])
+def test_accepted_packet_with_malformed_target_context_stays_human_required(
+        tmp_path: Path, target) -> None:
+    """Fails if a bad optional target aborts maintenance or becomes a clean candidate."""
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-bad-target")
+    result = _commission_result(packet, f"session-{RUN_ID}-{packet['packet_id']}-1", attempt=1)
+    worker = Path(__file__).with_name("synthetic_p5_worker.py").resolve()
+    adapter = WorkerAdapter(
+        argv=(str(worker),), env={"SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":")),
+                                 "SYNTHETIC_MARKER_PATH": str(tmp_path / "marker.txt")},
+    )
+    run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+             worker_adapters={packet["packet_id"]: adapter})
+    _deposit(state_root, packet["packet_id"], 1, _verdict(packet, result))
+    run_once(
+        state_root, COORD_ID, "o4-bad-target-review", _context(), "2026-08-10T01:12:00Z",
+        integration_context_by_packet={packet["packet_id"]: {
+            "integration_base": packet["starting_revision"], "integration_target_path": target,
+        }},
+    )
+    artifact = json.loads(Path(state_root, "workspace", packet["packet_id"],
+                               f"attempt-{packet['packet_id']}-1.integration.json").read_text())
+    assert artifact["decision"] == "HUMAN_REQUIRED"
+    assert artifact["integration_target_path"] is None
+    assert artifact["integration_target_status"] == "UNVERIFIABLE"
+
+
+def test_accepted_packet_rejects_rehashed_postflight_that_disagrees_with_journal(tmp_path: Path) -> None:
+    """Fails if postflight facts can be replaced after their durable binding."""
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-integration-ineligible")
+    result = _commission_result(packet, f"session-{RUN_ID}-{packet['packet_id']}-1", attempt=1)
+    worker = Path(__file__).with_name("synthetic_p5_worker.py").resolve()
+    adapter = WorkerAdapter(
+        argv=(str(worker),), env={"SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":")),
+                                 "SYNTHETIC_MARKER_PATH": str(tmp_path / "marker.txt")},
+    )
+    run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+             worker_adapters={packet["packet_id"]: adapter})
+    postflight_path = Path(state_root, "workspace", packet["packet_id"],
+                           f"attempt-{packet['packet_id']}-1.postflight.json")
+    postflight = json.loads(postflight_path.read_text(encoding="utf-8"))
+    postflight["acceptance_allowed"] = False
+    postflight["content_sha256"] = compute_sha256(
+        canonical_bytes(postflight, omit={"content_sha256", "artifact_sha256"})
+    )
+    postflight["artifact_sha256"] = compute_sha256(canonical_bytes(postflight, omit={"artifact_sha256"}))
+    postflight_path.write_bytes(canonical_bytes(postflight))
+    _deposit(state_root, packet["packet_id"], 1, _verdict(packet, result))
+    from harness_coordinator.v1.workspace_evidence import WorkspaceEvidenceError
+    with pytest.raises(WorkspaceEvidenceError, match="postflight journal binding"):
+        run_once(
+            state_root, COORD_ID, "o4-ineligible-review", _context(), "2026-08-10T01:12:00Z",
+            integration_context_by_packet={packet["packet_id"]: {
+                "integration_base": packet["starting_revision"],
+            }},
+        )
+    assert not Path(state_root, "workspace", packet["packet_id"],
+                    f"attempt-{packet['packet_id']}-1.integration.json").exists()
 
 
 @pytest.mark.parametrize("shape", ["completed", "failed", "malformed", "interrupted", "timed_out"])
