@@ -79,9 +79,12 @@ invocation.
 6. Capture the packet-worktree baseline from Git-derived tracked changes,
    untracked files, index state, and submodule state. Ignored files are outside
    the packet change manifest but cannot satisfy declared evidence.
-7. If a protected user worktree is supplied, capture its tracked/untracked path
+7. Require the packet worktree baseline to be clean: no tracked, staged,
+   untracked, type-changed, or submodule changes. The separately protected user
+   worktree may be dirty and is never subjected to this clean-worktree rule.
+8. If a protected user worktree is supplied, capture its tracked/untracked path
    set and content fingerprints without reading file contents into an artifact.
-8. Persist a canonical, SHA-256-bound baseline artifact before invocation. A
+9. Persist a canonical, SHA-256-bound baseline artifact before invocation. A
    crash before that durable artifact exists leaves the packet `READY`; no worker
    may start.
 
@@ -201,22 +204,24 @@ Required scenarios:
    path cannot both own write scope.
 4. Allowed modification, creation, deletion, rename, mode change, staged change,
    and untracked file are derived accurately.
-5. An undeclared path, forbidden path, governed path, path escape, symlink, and
+5. A dirty packet worktree is refused before invocation, while a separately
+   protected dirty user worktree is accepted and fingerprinted.
+6. An undeclared path, forbidden path, governed path, path escape, symlink, and
    submodule drift prevent acceptance and are not reverted.
-6. Worker omissions, invented files, wrong statuses, and wrong digests are
+7. Worker omissions, invented files, wrong statuses, and wrong digests are
    detected against coordinator evidence.
-7. A protected dirty worktree with pre-existing tracked and untracked changes is
+8. A protected dirty worktree with pre-existing tracked and untracked changes is
    unchanged after an isolated packet; a simulated cross-worktree edit is caught.
-8. Secret-like additions are reported without persisting the matched value;
+9. Secret-like additions are reported without persisting the matched value;
    binary/oversized/unreadable additions route to human review.
-9. A descendant integration base with disjoint paths is `CLEAN_CANDIDATE`; path
+10. A descendant integration base with disjoint paths is `CLEAN_CANDIDATE`; path
    overlap, divergent ancestry, dirty target, or missing evidence is
    `HUMAN_REQUIRED`.
-10. Crash before baseline publication prevents invocation; crash after worker
+11. Crash before baseline publication prevents invocation; crash after worker
     exit resumes postflight without losing or duplicating evidence.
-11. Reconciliation rejects missing, altered, or cross-packet baseline/postflight
+12. Reconciliation rejects missing, altered, or cross-packet baseline/postflight
     artifacts.
-12. Existing O2/O3 tests and the three legacy harness self-tests remain green.
+13. Existing O2/O3 tests and the three legacy harness self-tests remain green.
 
 ## Acceptance criteria
 
