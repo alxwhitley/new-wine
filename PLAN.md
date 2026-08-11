@@ -201,11 +201,11 @@ passed.
 one-time fallback, reconciliation/status, and disposable synthetic end-to-end
 commissioning completed on `codex/o3-p5-coordinator-loop` (P5D `746bb05`, P5E
 `e16920b`, audit `docs/audits/o3_p5_synthetic_commissioning_2026-08-10.md` /
-`5322411`; 656 O2/O3 tests, final Opus `ACCEPT`). The branch is not merged or
-pushed. Real-provider commissioning remains `HUMAN_REQUIRED` pending a proven
-pre-execution sandbox; receipt recovery does not claim general exactly-once
-semantics before a receipt exists, and the optional state-cache invariant
-remains explicitly unverified.
+`5322411`; 656 O2/O3 tests, final Opus `ACCEPT`). Integrated locally into
+`main` at records close `b580915`; not pushed. Real-provider commissioning
+remains `HUMAN_REQUIRED` pending a proven pre-execution sandbox; receipt
+recovery does not claim general exactly-once semantics before a receipt exists,
+and the optional state-cache invariant remains explicitly unverified.
 
 ### O4 — Isolate Git and filesystem ownership
 

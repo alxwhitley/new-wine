@@ -6,8 +6,8 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-11 (O3 repo-only synthetic coordinator complete on
-`codex/o3-p5-coordinator-loop`; not merged or pushed). No production writes,
+Last verified: 2026-08-11 (O3 repo-only synthetic coordinator integrated
+locally into `main` at `b580915`; not pushed). No production writes,
 real-provider commissioning, deployment, or `serving_enabled` change.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
@@ -18,8 +18,8 @@ Target ≤150 lines for this file.
 ## Current state
 
 **O3 repo-only coordinator — complete, committed, synthetically commissioned,
-and independently accepted.** Branch `codex/o3-p5-coordinator-loop`, not
-merged or pushed. P5A–P5C: `7a78541`, `c700b97`, `028372e`; four bounded
+independently accepted, and integrated locally into `main`.** Integration is
+at `b580915`, not pushed. P5A–P5C: `7a78541`, `c700b97`, `028372e`; four bounded
 pre-P5D remediations: `c8a5c4c`, `65d908d`, `badc41c`, `cfb753e`; P5D:
 `746bb05`; P5E: `e16920b`; commissioning audit: `5322411`.
 
@@ -59,16 +59,14 @@ still 8/53; Open Decision #21 not decided.
 - Admin-panel notifications — dependency of position-refresh; no design.
 - `five_fold_ministry.md` editorial marker — needs Alex.
 - 20 Prince documents with zero approved quotes (2026-08-09).
-- **O3 coordinator branch not merged** — implementation and synthetic
-  commissioning are complete and accepted on `codex/o3-p5-coordinator-loop`.
 
 ---
 
 ## Next
 
-1. **Decide O3 branch integration timing.** Do not commission real providers
-   until Alex approves a separately proven subprocess sandbox and command
-   policy.
+1. **O4 Git/filesystem isolation.** Prove packet worktree ownership,
+   allowlist enforcement, dirty-work preservation, and fail-closed integration
+   conflicts before real-provider commissioning.
 2. **`five_fold_ministry.md` editorial decision.**
 3. Async concurrency proof at 100-dial (before speed work).
 4. Decide extractor hardening before any next Prince-style batch —
