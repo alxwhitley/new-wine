@@ -18,6 +18,7 @@
     "result_validation",
     "authority",
     "provider_evidence_sha256",
+    "workspace_postflight",
     "outcome",
     "fallback",
     "outcome_sha256"
@@ -266,12 +267,28 @@
             "minLength": 1,
             "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
           }
+        },
+        "hard_stop_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
         }
       }
     },
     "provider_evidence_sha256": {
       "type": ["string", "null"],
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "workspace_postflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packet_id", "intent_id", "path", "artifact_sha256", "content_sha256"],
+      "properties": {
+        "packet_id": {"type": "string", "minLength": 1},
+        "intent_id": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"},
+        "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
     },
     "outcome": {
       "type": "string",

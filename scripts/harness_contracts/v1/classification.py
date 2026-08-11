@@ -109,6 +109,7 @@ def _validate_attempt_outcome_object(v: _PacketValidator) -> None:
         "result_validation",
         "authority",
         "provider_evidence_sha256",
+        "workspace_postflight",
         "outcome",
         "fallback",
         "outcome_sha256",
@@ -147,6 +148,8 @@ def _validate_attempt_outcome_object(v: _PacketValidator) -> None:
     _validate_raw_result(v, value.get("raw_result"), "/raw_result")
     _validate_result_validation(v, value.get("result_validation"), "/result_validation")
     _validate_authority(v, value.get("authority"), "/authority")
+    _validate_workspace_postflight(v, value.get("workspace_postflight"), "/workspace_postflight",
+                                  value.get("packet_id"))
 
     pes = value.get("provider_evidence_sha256")
     if pes is not None and not _matches(pes, RE_SHA256):
@@ -287,7 +290,7 @@ def _validate_authority(v: _PacketValidator, authority: Any, path: str) -> None:
         return
     required = {"guard_denials", "undeclared_changed_paths", "governed_path_touches", "hard_stop_matches"}
     for key in authority:
-        if key not in required:
+        if key not in required | {"hard_stop_reasons"}:
             v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
     for key in required:
         if key not in authority:
@@ -317,13 +320,44 @@ def _validate_authority(v: _PacketValidator, authority: Any, path: str) -> None:
                 if key not in {"tool", "target_path", "rule_id"}:
                     v.add("UNKNOWN_FIELD", f"{p}/{key}", f"Unknown field '{key}'")
 
-    for key in ("undeclared_changed_paths", "governed_path_touches", "hard_stop_matches"):
+    for key in ("undeclared_changed_paths", "governed_path_touches", "hard_stop_matches", "hard_stop_reasons"):
+        if key == "hard_stop_reasons" and key not in authority:
+            continue
         arr = authority.get(key)
         if not isinstance(arr, list):
             v.add("INVALID_TYPE", f"{path}/{key}", "Expected array", phase="scalar")
         else:
             for i, pth in enumerate(arr):
-                _check_repo_relative_path(v, pth, f"{path}/{key}/{i}")
+                if key == "hard_stop_reasons":
+                    _check_non_empty_string(v, pth, f"{path}/{key}/{i}")
+                else:
+                    _check_repo_relative_path(v, pth, f"{path}/{key}/{i}")
+
+
+def _validate_workspace_postflight(v: _PacketValidator, value: Any, path: str,
+                                  packet_id: Any) -> None:
+    """Validate the immutable postflight binding carried by every outcome."""
+    if not isinstance(value, dict):
+        v.add("INVALID_TYPE", path, "Expected object", phase="scalar")
+        return
+    required = {"packet_id", "intent_id", "path", "artifact_sha256", "content_sha256"}
+    for key in value:
+        if key not in required:
+            v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
+    for key in required:
+        if key not in value:
+            v.add("MISSING_FIELD", f"{path}/{key}", f"Missing required field '{key}'")
+    if value.get("packet_id") != packet_id:
+        v.add("EVIDENCE_HASH_MISMATCH", f"{path}/packet_id", "Postflight packet_id disagrees with outcome", phase="cross_field")
+    for key in ("packet_id", "intent_id"):
+        _check_non_empty_string(v, value.get(key), f"{path}/{key}")
+    _check_repo_relative_path(v, value.get("path"), f"{path}/path")
+    _check_sha256(v, value.get("artifact_sha256"), f"{path}/artifact_sha256")
+    _check_sha256(v, value.get("content_sha256"), f"{path}/content_sha256")
+    if isinstance(value.get("packet_id"), str) and isinstance(value.get("intent_id"), str):
+        expected = f"workspace/{value['packet_id']}/{value['intent_id']}.postflight.json"
+        if value.get("path") != expected:
+            v.add("EVIDENCE_HASH_MISMATCH", f"{path}/path", "Postflight path disagrees with packet/intent", phase="cross_field")
 
 
 def _validate_fallback(v: _PacketValidator, fallback: Any, path: str) -> None:
@@ -376,8 +410,9 @@ def classify_attempt(
         or authority.get("undeclared_changed_paths")
         or authority.get("governed_path_touches")
         or authority.get("hard_stop_matches")
+        or authority.get("hard_stop_reasons")
     ):
-        cause = "authority_hard_stop" if (authority.get("hard_stop_matches") or authority.get("governed_path_touches")) else "authority_violation"
+        cause = "authority_hard_stop" if (authority.get("hard_stop_matches") or authority.get("governed_path_touches") or authority.get("hard_stop_reasons")) else "authority_violation"
         return _classification("AUTHORITY_VIOLATION", matched_rule="authority_violation", cause=cause)
 
     # 2. HUMAN_DECISION

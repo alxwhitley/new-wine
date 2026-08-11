@@ -49,7 +49,8 @@
         "LOCK_RECLAIMED",
         "JOURNAL_TAIL_TRUNCATED",
         "RECONCILIATION_EMITTED",
-        "WORKSPACE_BASELINE_RECORDED"
+        "WORKSPACE_BASELINE_RECORDED",
+        "WORKSPACE_POSTFLIGHT_RECORDED"
       ]
     },
     "event_at": {
@@ -843,8 +844,46 @@
             }
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "WORKSPACE_POSTFLIGHT_RECORDED"
+          }
+        }
       },
-      "else": {
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "artifacts": {
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "properties": {
+                    "kind": {"const": "workspace_postflight"},
+                    "artifact_id": {"const": "workspace_postflight"},
+                    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                  },
+                  "required": ["kind", "artifact_id", "content_sha256"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "not": {"enum": ["WORKSPACE_BASELINE_RECORDED", "WORKSPACE_POSTFLIGHT_RECORDED"]}
+          }
+        }
+      },
+      "then": {
         "properties": {
           "payload": {
             "properties": {
@@ -853,6 +892,7 @@
                   "not": {
                     "anyOf": [
                       {"properties": {"kind": {"const": "workspace_baseline"}}, "required": ["kind"]},
+                      {"properties": {"kind": {"const": "workspace_postflight"}}, "required": ["kind"]},
                       {"required": ["content_sha256"]}
                     ]
                   }

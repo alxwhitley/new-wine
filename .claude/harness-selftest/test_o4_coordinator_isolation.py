@@ -109,6 +109,39 @@ def test_worker_is_never_called_until_baseline_event_is_durable(tmp_path: Path, 
     assert invoked["value"]
 
 
+@pytest.mark.parametrize("shape", ["completed", "failed", "malformed", "interrupted", "timed_out"])
+def test_postflight_is_durable_before_each_worker_outcome_can_advance(
+        tmp_path: Path, monkeypatch, shape: str) -> None:
+    """Every terminal invocation shape crosses the durable postflight gate first."""
+    import harness_coordinator.v1.coordinator as coordinator
+    from harness_coordinator.v1.invoke import InvocationOutcome
+
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-postflight-gate")
+    result = _worker_result(packet, f"session-{shape}", attempt=1) if shape == "completed" else None
+    errors = {"malformed": ("INVALID_JSON",), "interrupted": ("INTERRUPTED",),
+              "timed_out": ("TIMED_OUT",)}.get(shape, ())
+    invocation = InvocationOutcome(
+        result=result, error_codes=errors, exit_code=1 if shape == "failed" else None, timed_out=shape == "timed_out",
+        output_exceeded=False, interrupted=shape == "interrupted", process_group_dead=True, pid=None,
+        stdout_path="", stderr_path="", result_path="", sidecar_path="", environment_keys=(),
+    )
+    monkeypatch.setattr(coordinator, "invoke_worker", lambda *_args, **_kwargs: invocation)
+
+    def assert_postflight(*_args, **_kwargs):
+        events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+        assert torn is None
+        postflight = next(event for event in events if event["event_type"] == "WORKSPACE_POSTFLIGHT_RECORDED")
+        artifact = postflight["payload"]["artifacts"][0]
+        assert artifact["kind"] == "workspace_postflight"
+        assert Path(state_root, artifact["path"]).exists()
+        raise RuntimeError(f"postflight recorded for {shape}")
+
+    monkeypatch.setattr(coordinator, "persist_invocation_outcome", assert_postflight)
+    with pytest.raises(RuntimeError, match=f"postflight recorded for {shape}"):
+        run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+                 worker_adapters={packet["packet_id"]: object()})
+
+
 def test_baseline_publication_failure_never_invokes_worker(tmp_path: Path, monkeypatch) -> None:
     import harness_coordinator.v1.coordinator as coordinator
 
@@ -261,6 +294,11 @@ def test_authenticated_receipt_recovers_dirty_allowed_worktree_without_reinvocat
     worker.chmod(0o755)
     session = attempt_session_id("dirty-receipt-run-1", packet["packet_id"], 1)
     result = _worker_result(packet, session, attempt=1)
+    result["changed_files"] = [{
+        "path": "scripts/o4-dirty-receipt.py", "status": "added",
+        "before_sha256": None, "after_sha256": compute_sha256(b"changed\n"),
+    }]
+    result["result_sha256"] = compute_sha256(canonical_bytes(result, omit={"result_sha256"}))
     adapter = WorkerAdapter(
         argv=(str(worker),),
         env={"SYNTHETIC_MARKER_PATH": str(marker), "SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":"))},
@@ -284,6 +322,83 @@ def test_authenticated_receipt_recovers_dirty_allowed_worktree_without_reinvocat
     assert recovered["status"] == "no_eligible_work"
     assert folded[packet["packet_id"]]["state"] == "REVIEW"
     assert marker.read_text(encoding="utf-8").splitlines() == ["invoked"]
+    outcome = json.loads(Path(state_root, "results", packet["packet_id"], "1", "attempt_outcome.json").read_text())
+    binding = outcome["workspace_postflight"]
+    assert binding["path"] == f"workspace/{packet['packet_id']}/attempt-{packet['packet_id']}-1.postflight.json"
+    assert binding["artifact_sha256"] == compute_sha256(
+        canonical_bytes(json.loads(Path(state_root, binding["path"]).read_text()), omit={"artifact_sha256"})
+    )
+    from harness_contracts.v1.classification import validate_attempt_outcome
+    assert validate_attempt_outcome(outcome)["valid"]
+    forged = dict(outcome)
+    forged["workspace_postflight"] = dict(binding, path="workspace/other/wrong.postflight.json")
+    forged["outcome_sha256"] = compute_sha256(canonical_bytes(forged, omit={"outcome_sha256"}))
+    assert any(item["code"] == "EVIDENCE_HASH_MISMATCH"
+               for item in validate_attempt_outcome(forged)["errors"])
+
+
+def test_path_independent_postflight_hard_stop_is_human_required() -> None:
+    """Capture failure cannot lose its stop condition when a packet owns no paths."""
+    from harness_contracts.v1.classification import classify_attempt
+
+    classification = classify_attempt({
+        "authority": {"guard_denials": [], "undeclared_changed_paths": [],
+                      "governed_path_touches": [], "hard_stop_matches": [],
+                      "hard_stop_reasons": ["workspace_postflight_capture_failed"]},
+        "result_validation": {"valid": False}, "outcome": "FAILED",
+        "raw_result": {"byte_length": 0, "path": None},
+        "invocation": {"timed_out": True, "signal": None, "exit_code": None},
+    }, {}, None, None)
+    assert classification["cause"] == "authority_hard_stop"
+
+
+def test_persisted_capture_failure_controls_empty_allowlist_resolution(tmp_path: Path) -> None:
+    """Persistence ignores a caller's forged acceptance and resolves the stored hard stop."""
+    from harness_contracts.v1.classification import classify_attempt
+    from harness_coordinator.v1.invoke import InvocationOutcome, persist_invocation_outcome
+    from harness_coordinator.v1.workspace_evidence import (
+        build_postflight_failure, ensure_attempt_baseline, load_attempt_baseline,
+        publish_workspace_artifact,
+    )
+
+    state_root, repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-empty-capture")
+    intent_id = "attempt-o4-empty-capture-1"
+    packet_empty = dict(packet)
+    packet_empty["writable_paths"] = []
+    packet_empty["attempt"] = 1
+    with open_state_root(state_root) as handle:
+        ensure_attempt_baseline(handle, packet, intent_id, str(repo), None, [])
+        baseline = load_attempt_baseline(handle, packet, intent_id)
+        failure = build_postflight_failure(packet_empty, intent_id, baseline)
+        binding = publish_workspace_artifact(
+            handle, ("workspace", packet["packet_id"], f"{intent_id}.postflight.json"), failure)
+        handle.publish(("invocations", intent_id, "stdout.bin"), b"")
+        handle.publish(("invocations", intent_id, "stderr.bin"), b"")
+        # These fields are deliberately caller-controlled noise.  The persisted
+        # canonical artifact remains fail-closed and is the only authority.
+        forged_caller_artifact = {
+            "content_sha256": binding["content_sha256"],
+            "artifact_sha256": binding["artifact_sha256"],
+            "acceptance_allowed": True,
+            "protected_findings": [],
+        }
+        outcome = persist_invocation_outcome(
+            handle, packet_empty, intent_id,
+            InvocationOutcome(
+                result=None, error_codes=("TIMED_OUT",), exit_code=None, timed_out=True,
+                output_exceeded=False, interrupted=False, process_group_dead=True, pid=None,
+                stdout_path="", stderr_path="", result_path="", sidecar_path="", environment_keys=(),
+            ),
+            WorkerAdapter(argv=("/bin/true",), env={}), COORD_ID, RUN_ID, T_NOW,
+            forged_caller_artifact,
+        )
+    assert outcome["workspace_postflight"] == {
+        "packet_id": packet["packet_id"], "intent_id": intent_id,
+        "path": f"workspace/{packet['packet_id']}/{intent_id}.postflight.json",
+        "artifact_sha256": binding["artifact_sha256"], "content_sha256": binding["content_sha256"],
+    }
+    assert outcome["authority"]["hard_stop_reasons"] == ["workspace_postflight_capture_failed"]
+    assert classify_attempt(outcome, {}, None, None)["cause"] == "authority_hard_stop"
 
 
 @pytest.mark.parametrize("shape", ["two_baselines", "nonbaseline_content_hash"])
@@ -320,17 +435,28 @@ def test_workspace_baseline_journal_contract_rejects_wrong_artifact_shapes(shape
     event["event_sha256"] = compute_sha256(canonical_bytes(event, omit={"event_sha256"}))
     schema = json.loads((Path(__file__).parents[2] / "schemas/harness/v1/journal-event.schema.json").read_text())
     assert not validate_journal_event(event)["valid"]
-    assert schema["allOf"] == [{
-        "if": {"properties": {"event_type": {"const": "WORKSPACE_BASELINE_RECORDED"}}},
-        "then": {"properties": {"payload": {"properties": {"artifacts": {
-            "minItems": 1, "maxItems": 1, "items": {"properties": {
-                "kind": {"const": "workspace_baseline"},
-                "artifact_id": {"const": "workspace_baseline"},
-                "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            }, "required": ["kind", "artifact_id", "content_sha256"]},
-        }}}}},
-        "else": {"properties": {"payload": {"properties": {"artifacts": {"items": {"not": {"anyOf": [
-            {"properties": {"kind": {"const": "workspace_baseline"}}, "required": ["kind"]},
-            {"required": ["content_sha256"]},
-        ]}}}}}}},
-    }]
+    assert len(schema["allOf"]) == 3
+    assert schema["allOf"][0]["then"]["properties"]["payload"]["properties"]["artifacts"]["items"]["properties"]["kind"] == {"const": "workspace_baseline"}
+
+
+def test_workspace_postflight_journal_contract_requires_one_hashed_artifact() -> None:
+    """The review gate cannot advance without a durable, self-identifying postflight."""
+    from harness_contracts.v1.journal import validate_journal_event
+    from harness_coordinator.v1.recovery import _make_event
+
+    artifact = {
+        "kind": "workspace_postflight", "artifact_id": "workspace_postflight",
+        "path": "workspace/o4-postflight/attempt-o4-postflight-1.postflight.json",
+        "sha256": "a" * 64, "content_sha256": "b" * 64, "byte_length": 1,
+    }
+    event = _make_event(
+        1, "WORKSPACE_POSTFLIGHT_RECORDED", "coord-o4", "run-o4", "state-o4", None,
+        "2026-08-11T00:00:00Z", packet_id="o4-postflight", intent_id="attempt-o4-postflight-1",
+        from_state=None, to_state=None, cause="none",
+        payload={"packet": None, "attempt": None, "artifacts": [artifact], "classification": None,
+                 "transition_detail": None, "recovery": None, "run": None, "report": None},
+    )
+    assert validate_journal_event(event)["valid"]
+    event["payload"]["artifacts"].append(dict(artifact, artifact_id="duplicate"))
+    event["event_sha256"] = compute_sha256(canonical_bytes(event, omit={"event_sha256"}))
+    assert not validate_journal_event(event)["valid"]

@@ -12,6 +12,7 @@ from harness_coordinator.v1.enroll import enroll_packets
 from harness_coordinator.v1.invoke import WorkerAdapter
 from harness_coordinator.v1.recovery import _fold_journal
 from harness_coordinator.v1.store import read_journal
+from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from test_o3_p5_review import (
     COORD_ID, RUN_ID, STATE_ROOT_ID, T_ENROLL, T_NOW,
     _deposit, _packet, _verdict, _worker_result, _write_manifest, _write_trust_roots,
@@ -67,13 +68,25 @@ def _registered_packet(packet_id, worktree):
 
 def _adapter(packet, run_id, marker, attempt=1):
     session = attempt_session_id(run_id, packet["packet_id"], attempt)
-    result = _worker_result(
+    result = _commission_result(
         packet, session, attempt=attempt,
         dependency_evidence=tuple(packet.get("dependency_ids") or ()))
     return WorkerAdapter(
         argv=(WORKER,),
         env={"SYNTHETIC_RESULT": json.dumps(result, sort_keys=True, separators=(",", ":")),
              "SYNTHETIC_MARKER_PATH": marker})
+
+
+def _commission_result(packet, session, attempt=1, dependency_evidence=()):
+    """The disposable worker writes precisely the one file its result claims."""
+    result = _worker_result(packet, session, attempt=attempt, dependency_evidence=dependency_evidence)
+    content = f"synthetic {packet['packet_id']} {attempt}\n".encode("utf-8")
+    result["changed_files"] = [{
+        "path": f"scripts/{packet['packet_id']}.py", "status": "added",
+        "before_sha256": None, "after_sha256": compute_sha256(content),
+    }]
+    result["result_sha256"] = compute_sha256(canonical_bytes(result, omit={"result_sha256"}))
+    return result
 
 
 def _review(verdict):
@@ -91,7 +104,7 @@ def test_real_run_once_invokes_synthetic_worker_and_reaches_review(tmp_path):
     packet = _registered_packet("commission-root", _registered_worktrees(tmp_path, "root")[0])
     enroll_packets(state_root, STATE_ROOT_ID, COORD_ID, RUN_ID, T_ENROLL, [packet])
     session = attempt_session_id(RUN_ID, packet["packet_id"], 1)
-    result = _worker_result(packet, session, attempt=1)
+    result = _commission_result(packet, session, attempt=1)
     marker = str(tmp_path / "worker-markers.txt")
     adapter = WorkerAdapter(
         argv=(WORKER,),
@@ -134,7 +147,7 @@ def test_dependency_chain_reaches_terminal_through_synthetic_runtime(tmp_path):
         state_root, COORD_ID, "commission-run-1", _context(), T_NOW,
         worker_adapters={"commission-parent": _adapter(root_packet, "commission-run-1", marker)})
     assert first["packet_id"] == "commission-parent"
-    parent_result = _worker_result(
+    parent_result = _commission_result(
         root_packet, attempt_session_id("commission-run-1", "commission-parent", 1), attempt=1)
     _deposit(state_root, "commission-parent", 1, _review(_verdict(root_packet, parent_result)))
 
@@ -145,7 +158,7 @@ def test_dependency_chain_reaches_terminal_through_synthetic_runtime(tmp_path):
                                      state_root_id=STATE_ROOT_ID)
     interim_folded, _ = _fold_journal(state_root, interim_events)
     assert second["packet_id"] == "commission-child", (second, interim_folded)
-    child_result = _worker_result(
+    child_result = _commission_result(
         child_packet, attempt_session_id("commission-run-2", "commission-child", 1), attempt=1,
         dependency_evidence=("commission-parent",))
     _deposit(state_root, "commission-child", 1, _review(_verdict(child_packet, child_result)))
@@ -379,7 +392,7 @@ def test_crash_after_verdict_resumes_sealing_without_duplicate_verdict(tmp_path,
         state_root, COORD_ID, "postverdict-run-1", _context(), T_NOW,
         worker_adapters={packet["packet_id"]: _adapter(
             packet, "postverdict-run-1", marker)})
-    result = _worker_result(
+    result = _commission_result(
         packet, attempt_session_id("postverdict-run-1", packet["packet_id"], 1), attempt=1)
     _deposit(state_root, packet["packet_id"], 1, _review(_verdict(packet, result)))
     real_complete = coordinator_module.complete_terminal_seals

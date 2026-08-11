@@ -24,7 +24,11 @@ from harness_coordinator.v1.reconcile import build_reconciliation_report, emit_r
 from harness_coordinator.v1.scheduler import select_next
 from harness_coordinator.v1.seals_runtime import complete_terminal_seals, open_state_root
 from harness_coordinator.v1.store import JournalHeadMoved, atomic_replace, append_journal, read_journal
-from harness_coordinator.v1.workspace_evidence import discover_repo_root, ensure_attempt_baseline
+from harness_coordinator.v1.workspace_evidence import (
+    WorkspaceEvidenceError, build_postflight, build_postflight_failure,
+    discover_repo_root, ensure_attempt_baseline, load_attempt_baseline,
+    publish_workspace_artifact, validate_postflight_binding,
+)
 
 
 def attempt_session_id(run_id: str, packet_id: str, attempt: int) -> str:
@@ -96,6 +100,95 @@ def _record_workspace_baseline(
     )
     handle.verify_identity()
     journal_events.append(event)
+
+
+def _record_workspace_postflight(
+    handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
+    packet: Dict[str, Any], intent_id: str, worker_result: Optional[Dict[str, Any]],
+    coordinator_id: str, run_id: str, now: str,
+) -> Dict[str, Any]:
+    """Publish and journal the authoritative postflight before review can begin."""
+    packet_id = packet["packet_id"]
+    parts = ("workspace", packet_id, f"{intent_id}.postflight.json")
+    existing = handle.read(parts)
+    if existing is not None:
+        try:
+            artifact = json.loads(existing.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise WorkspaceEvidenceError("WORKSPACE_POSTFLIGHT_INVALID", "Postflight is not valid JSON") from exc
+        if (existing != canonical_bytes(artifact)
+                or set(artifact) != {
+                    "schema_version", "artifact_kind", "packet_id", "packet_sha256", "intent_id",
+                    "worktree_identity", "packet_snapshot", "protected_snapshot", "writable_paths",
+                    "forbidden_surfaces", "derived_changes", "scope_findings", "worker_manifest_findings",
+                    "protected_findings", "secret_findings", "acceptance_allowed", "content_sha256", "artifact_sha256",
+                }
+                or artifact.get("artifact_kind") != "workspace_postflight"
+                or artifact.get("packet_id") != packet_id or artifact.get("intent_id") != intent_id):
+            raise WorkspaceEvidenceError("WORKSPACE_POSTFLIGHT_INVALID", "Postflight artifact is invalid")
+        content_sha256 = compute_sha256(canonical_bytes(artifact, omit={"content_sha256", "artifact_sha256"}))
+        copy = dict(artifact)
+        copy["content_sha256"] = content_sha256
+        artifact_sha256 = compute_sha256(canonical_bytes(copy, omit={"artifact_sha256"}))
+        if artifact.get("content_sha256") != content_sha256 or artifact.get("artifact_sha256") != artifact_sha256:
+            raise WorkspaceEvidenceError("WORKSPACE_POSTFLIGHT_INVALID", "Postflight hashes disagree")
+        binding = {"artifact_path": "/".join(parts), "content_sha256": content_sha256,
+                   "artifact_sha256": artifact_sha256}
+    else:
+        baseline = load_attempt_baseline(handle, packet, intent_id)
+        try:
+            artifact = build_postflight(packet, intent_id, baseline, worker_result)
+        except Exception:
+            # Evidence uncertainty must fail closed as HUMAN_REQUIRED; never
+            # reinterpret postflight failure as an ordinary retryable worker
+            # outcome or expose a low-level filesystem/Git error in the artifact.
+            artifact = build_postflight_failure(packet, intent_id, baseline)
+        binding = publish_workspace_artifact(handle, parts, artifact)
+        raw = handle.read(parts)
+        if raw is None:
+            raise WorkspaceEvidenceError("WORKSPACE_POSTFLIGHT_MISSING", "Published postflight disappeared")
+        artifact = json.loads(raw.decode("utf-8"))
+    matching = [
+        event for event in journal_events
+        if event.get("event_type") == "WORKSPACE_POSTFLIGHT_RECORDED"
+        and event.get("packet_id") == packet_id and event.get("intent_id") == intent_id
+    ]
+    validated_postflight = validate_postflight_binding(handle, packet, intent_id, artifact)
+    artifact = validated_postflight["artifact"]
+    binding = {
+        "artifact_path": validated_postflight["binding"]["path"],
+        "artifact_sha256": validated_postflight["binding"]["artifact_sha256"],
+        "content_sha256": validated_postflight["binding"]["content_sha256"],
+    }
+    expected = {"kind": "workspace_postflight", "artifact_id": "workspace_postflight",
+                "path": binding["artifact_path"], "sha256": binding["artifact_sha256"],
+                "content_sha256": binding["content_sha256"]}
+    if matching:
+        artifacts = (matching[-1].get("payload") or {}).get("artifacts") or []
+        if len(artifacts) != 1 or any(artifacts[0].get(key) != value for key, value in expected.items()):
+            raise WorkspaceEvidenceError("WORKSPACE_POSTFLIGHT_MISMATCH", "Postflight journal binding disagrees")
+        return artifact
+    raw = handle.read(parts)
+    if raw is None:
+        raise WorkspaceEvidenceError("WORKSPACE_POSTFLIGHT_MISSING", "Published postflight disappeared")
+    previous = journal_events[-1] if journal_events else None
+    event = _make_event(
+        (previous["seq"] + 1) if previous else 1, "WORKSPACE_POSTFLIGHT_RECORDED",
+        coordinator_id, run_id, state_root_id, previous, now, packet_id=packet_id, intent_id=intent_id,
+        from_state=None, to_state=None, cause="none",
+        payload={"packet": None, "attempt": None, "artifacts": [{
+            "kind": "workspace_postflight", "artifact_id": "workspace_postflight",
+            "path": binding["artifact_path"], "sha256": binding["artifact_sha256"],
+            "content_sha256": binding["content_sha256"], "byte_length": len(raw),
+        }], "classification": None, "transition_detail": None, "recovery": None,
+                 "run": None, "report": None},
+    )
+    handle.verify_identity()
+    append_journal(os.path.join(state_root, "journal.ndjson"), event,
+                   os.path.join(state_root, "locks", "journal.wlock"), expected_head=previous)
+    handle.verify_identity()
+    journal_events.append(event)
+    return artifact
 
 
 def _load_enrolled_packet(state_root: str, packet_id: str, packet: Dict[str, Any],
@@ -407,9 +500,13 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                     handle, state_root_id, invocation_packet, started["intent_id"],
                     session_id, adapter)
                 if completed is not None:
+                    postflight = _record_workspace_postflight(
+                        handle, state_root, state_root_id, journal_events, invocation_packet,
+                        started["intent_id"], completed.result, started["coordinator_id"],
+                        started["run_id"], now)
                     persist_invocation_outcome(
                         handle, invocation_packet, started["intent_id"], completed,
-                        adapter, started["coordinator_id"], started["run_id"], now)
+                        adapter, started["coordinator_id"], started["run_id"], now, postflight)
                 elif (not baseline_was_journaled
                       and baseline_exists
                       and not receipt_present
@@ -417,9 +514,13 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                     invocation = invoke_worker(
                         state_root, state_root_id, invocation_packet, started["intent_id"],
                         session_id, adapter, allowed_worktree=packet_body["worktree"]["path"])
+                    postflight = _record_workspace_postflight(
+                        handle, state_root, state_root_id, journal_events, invocation_packet,
+                        started["intent_id"], invocation.result, started["coordinator_id"],
+                        started["run_id"], now)
                     persist_invocation_outcome(
                         handle, invocation_packet, started["intent_id"], invocation,
-                        adapter, started["coordinator_id"], started["run_id"], now)
+                        adapter, started["coordinator_id"], started["run_id"], now, postflight)
             if (not receipt_present
                     and handle.read(invocation_parts + ("process.json",)) is not None):
                 with handle.directory(("invocations", started["intent_id"])) as intent_fd:
@@ -429,6 +530,45 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                 if not dead:
                     raise RuntimeError(
                         f"cannot prove prior worker dead for {packet_id} attempt {attempt}")
+        # A receipt/outcome recovered from a prior coordinator process may be
+        # encountered before an operator adapter is available. Postflight is
+        # still mandatory before the generic O3 resolver can journal a worker
+        # result or transition the packet, so seal it from the durable result
+        # artifact rather than depending on a reinvocation.
+        for packet_id, packet in sorted(folded.items()):
+            attempt = packet.get("open_attempt")
+            if packet.get("state") != "RUNNING" or attempt is None:
+                continue
+            outcome_raw = handle.read(("results", packet_id, str(attempt), "attempt_outcome.json"))
+            if outcome_raw is None:
+                continue
+            started = next((
+                event for event in reversed(journal_events)
+                if event.get("event_type") == "ATTEMPT_STARTED" and event.get("packet_id") == packet_id
+                and (((event.get("payload") or {}).get("attempt") or {}).get("attempt") == attempt)
+            ), None)
+            if started is None:
+                continue
+            already_recorded = any(
+                event.get("event_type") == "WORKSPACE_POSTFLIGHT_RECORDED"
+                and event.get("packet_id") == packet_id and event.get("intent_id") == started["intent_id"]
+                for event in journal_events)
+            if already_recorded:
+                continue
+            packet_body = _load_enrolled_packet(
+                state_root, packet_id, packet, journal_events, handle=handle)
+            worker_result = None
+            result_raw = handle.read(("results", packet_id, str(attempt), "worker-result.json"))
+            if result_raw is not None:
+                try:
+                    candidate = json.loads(result_raw.decode("utf-8"))
+                    if result_raw == canonical_bytes(candidate):
+                        worker_result = candidate
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    pass
+            _record_workspace_postflight(
+                handle, state_root, state_root_id, journal_events, packet_body,
+                started["intent_id"], worker_result, coordinator_id, run_id, now)
         before = len(journal_events)
         handle.verify_identity()
         journal_events, attempt_attention = resolve_open_attempts(
@@ -484,9 +624,12 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                 state_root, state_root_id, invocation_packet, intent_id, session_id,
                 adapter, allowed_worktree=packet_body["worktree"]["path"])
             handle.verify_identity()
+            postflight = _record_workspace_postflight(
+                handle, state_root, state_root_id, journal_events, invocation_packet,
+                intent_id, invocation.result, coordinator_id, run_id, now)
             persist_invocation_outcome(
                 handle, invocation_packet, intent_id, invocation, adapter,
-                coordinator_id, run_id, now)
+                coordinator_id, run_id, now, postflight)
             folded, _ = _fold_journal(state_root, journal_events)
             journal_events, attempt_attention = resolve_open_attempts(
                 state_root, os.path.join(state_root, "journal.ndjson"),

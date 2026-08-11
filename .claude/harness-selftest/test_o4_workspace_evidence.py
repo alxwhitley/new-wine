@@ -8,11 +8,15 @@ from pathlib import Path
 
 import pytest
 
+from harness_contracts.v1.canonical import canonical_bytes
 from harness_coordinator.v1 import workspace_evidence
 from harness_coordinator.v1.workspace_evidence import (
     WorkspaceEvidenceError,
     capture_snapshot,
+    compare_worker_manifest,
+    derive_changes,
     inspect_worktree,
+    scan_secret_like_additions,
     snapshot_sha256,
 )
 
@@ -388,3 +392,256 @@ def test_read_only_packet_does_not_claim_write_ownership() -> None:
     active = _conflicting_packet(packet, "equal_path", state="RUNNING")
     active["writable_paths"] = []
     validate_ownership(packet, [active])
+
+
+def test_derived_changes_are_authoritative_and_worker_manifest_must_agree() -> None:
+    """Coordinator evidence, not a worker claim, determines every changed path."""
+    baseline = {"entries": [{
+        "path": "allowed/old.py", "kind": "tracked", "index_status": None,
+        "worktree_status": None, "mode": "100644", "object_id": "a" * 40,
+        "content_sha256": "a" * 64,
+    }]}
+    current = {"entries": [
+        {
+            "path": "allowed/old.py", "kind": "tracked", "index_status": None,
+            "worktree_status": "M", "mode": "100755", "object_id": "a" * 40,
+            "content_sha256": "b" * 64,
+        },
+        {
+            "path": "allowed/new.py", "kind": "untracked", "index_status": None,
+            "worktree_status": None, "mode": "100644", "object_id": None,
+            "content_sha256": "c" * 64,
+        },
+    ]}
+    derived = derive_changes(baseline, current)
+    assert derived == [
+        {"path": "allowed/new.py", "status": "added", "before_sha256": None,
+         "after_sha256": "c" * 64, "mode_changed": False,
+         "index_status": None, "worktree_status": None, "kind": "untracked"},
+        {"path": "allowed/old.py", "status": "modified", "before_sha256": "a" * 64,
+         "after_sha256": "b" * 64, "mode_changed": True,
+         "index_status": None, "worktree_status": "M", "kind": "tracked"},
+    ]
+    claimed = [{key: change[key] for key in ("path", "status", "before_sha256", "after_sha256")}
+               for change in derived]
+    assert compare_worker_manifest(derived, claimed) == []
+    omitted = compare_worker_manifest(derived, claimed[:1])
+    assert omitted == [{"code": "WORKER_MANIFEST_MISMATCH_OMITTED", "path": "allowed/old.py"}]
+    invented = compare_worker_manifest(derived, claimed + [{
+        "path": "allowed/invented.py", "status": "added", "before_sha256": None,
+        "after_sha256": None,
+    }])
+    assert invented == [{"code": "WORKER_MANIFEST_MISMATCH_INVENTED", "path": "allowed/invented.py"}]
+    wrong = list(claimed)
+    wrong[0] = dict(wrong[0], after_sha256="d" * 64)
+    assert compare_worker_manifest(derived, wrong) == [
+        {"code": "WORKER_MANIFEST_MISMATCH_AFTER_DIGEST", "path": "allowed/new.py"}
+    ]
+    for field, code in (("status", "WORKER_MANIFEST_MISMATCH_STATUS"),
+                        ("before_sha256", "WORKER_MANIFEST_MISMATCH_BEFORE_DIGEST")):
+        mismatched = list(claimed)
+        mismatched[1] = dict(mismatched[1], **{field: "deleted" if field == "status" else None})
+        assert compare_worker_manifest(derived, mismatched) == [{"code": code, "path": "allowed/old.py"}]
+
+
+def test_secret_scan_records_only_safe_metadata(repo_fixture: RepoFixture) -> None:
+    """Secret-like additions never put the matching value in the artifact."""
+    target = repo_fixture.packet_worktree / "allowed" / "new.py"
+    target.write_text("a = 1\nAPI_KEY = 'fixture-secret-never-persisted'\n", encoding="utf-8")
+    findings = scan_secret_like_additions(str(repo_fixture.packet_worktree), [{
+        "path": "allowed/new.py", "status": "added", "before_sha256": None,
+        "after_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+    }])
+    assert findings == [{
+        "code": "SECRET_LIKE_DIFF_PATTERN", "rule_id": "api_key_assignment",
+        "path": "allowed/new.py", "line": 2,
+    }]
+    assert b"fixture-secret-never-persisted" not in canonical_bytes({"findings": findings})
+
+
+def test_clean_baseline_deletion_is_deleted_not_modified() -> None:
+    """A porcelain D entry remains a deletion when the clean baseline has no row."""
+    deleted = {
+        "path": "allowed/gone.py", "kind": "tracked", "index_status": None,
+        "worktree_status": "D", "mode": None, "object_id": "a" * 40,
+        "content_sha256": None,
+    }
+    assert derive_changes({"entries": []}, {"entries": [deleted]})[0]["status"] == "deleted"
+
+
+@pytest.mark.parametrize("shape, expected_status, expected_mode_changed", [
+    ("deleted", "deleted", False),
+    ("renamed", "renamed", False),
+    ("mode", "modified", True),
+    ("tracked", "modified", False),
+])
+def test_real_git_postflight_change_semantics(
+        repo_fixture: RepoFixture, shape: str, expected_status: str, expected_mode_changed: bool) -> None:
+    """Deletion, rename, and M status semantics use Git's actual raw modes."""
+    path = repo_fixture.make_change(shape)
+    changes = derive_changes({"entries": []}, capture_snapshot(str(repo_fixture.packet_worktree)))
+    workspace_evidence._hydrate_mode_changes(
+        str(repo_fixture.packet_worktree), repo_fixture.packet_revision, changes)
+    row = next(change for change in changes if change["path"] == path)
+    assert row["status"] == expected_status
+    assert row["mode_changed"] is expected_mode_changed
+    if shape == "renamed":
+        assert any(change["path"] == "allowed/rename-old.txt" and change["status"] == "deleted"
+                   for change in changes)
+
+
+def test_secret_scan_fails_closed_without_nofollow(repo_fixture: RepoFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Platforms without O_NOFOLLOW require review instead of following additions."""
+    target = repo_fixture.packet_worktree / "allowed" / "new.py"
+    target.write_text("plain\n", encoding="utf-8")
+    monkeypatch.delattr(workspace_evidence.os, "O_NOFOLLOW", raising=False)
+    findings = scan_secret_like_additions(str(repo_fixture.packet_worktree), [{
+        "path": "allowed/new.py", "status": "added", "before_sha256": None,
+        "after_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+    }])
+    assert findings == [{
+        "code": "SECRET_LIKE_DIFF_REVIEW_REQUIRED", "path": "allowed/new.py",
+        "reason": "nofollow_unavailable",
+    }]
+
+
+@pytest.mark.parametrize("name, line, rule_id", [
+    ("private.py", "-----BEGIN PRIVATE KEY-----", "private_key_header"),
+    ("api.py", "API_KEY = 'value'", "api_key_assignment"),
+    ("bearer.py", "Authorization: Bearer token-value", "bearer_token"),
+    ("cloud.py", "value = AKIA" + "A" * 16, "cloud_credential_prefix"),
+])
+def test_secret_scan_covers_each_stable_rule(
+        repo_fixture: RepoFixture, name: str, line: str, rule_id: str) -> None:
+    target = repo_fixture.packet_worktree / "allowed" / name
+    target.write_text("safe\n" + line + "\n", encoding="utf-8")
+    findings = scan_secret_like_additions(str(repo_fixture.packet_worktree), [{
+        "path": f"allowed/{name}", "status": "added", "before_sha256": None,
+        "after_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+    }])
+    assert findings == [{"code": "SECRET_LIKE_DIFF_PATTERN", "rule_id": rule_id,
+                        "path": f"allowed/{name}", "line": 2}]
+    assert line.encode() not in canonical_bytes({"findings": findings})
+
+
+@pytest.mark.parametrize("shape", ["binary", "large", "unreadable", "symlink"])
+def test_secret_scan_requires_review_for_unscannable_additions(
+        repo_fixture: RepoFixture, monkeypatch: pytest.MonkeyPatch, shape: str) -> None:
+    target = repo_fixture.packet_worktree / "allowed" / f"{shape}.dat"
+    if shape == "binary":
+        target.write_bytes(b"\xff\x00")
+    elif shape == "large":
+        target.write_text("too large\n", encoding="utf-8")
+    elif shape == "unreadable":
+        target.write_text("unreadable\n", encoding="utf-8")
+        monkeypatch.setattr(workspace_evidence.os, "open", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("blocked")))
+    else:
+        target.symlink_to("base.txt")
+    findings = scan_secret_like_additions(str(repo_fixture.packet_worktree), [{
+        "path": f"allowed/{shape}.dat", "status": "added", "before_sha256": None,
+        "after_sha256": None,
+    }], maximum_bytes=1 if shape == "large" else 1048576)
+    assert findings[0]["code"] == "SECRET_LIKE_DIFF_REVIEW_REQUIRED"
+    assert findings[0]["path"] == f"allowed/{shape}.dat"
+
+
+@pytest.mark.parametrize("change, expected", [
+    ({"path": "outside.py", "kind": "tracked"}, "ALLOWLIST_VIOLATION_UNDECLARED"),
+    ({"path": "forbidden/a.py", "kind": "tracked"}, "ALLOWLIST_VIOLATION_FORBIDDEN"),
+    ({"path": "PLAN.md", "kind": "tracked"}, "ALLOWLIST_VIOLATION_GOVERNED"),
+    ({"path": "../escape.py", "kind": "tracked"}, "ALLOWLIST_VIOLATION_ESCAPED"),
+    ({"path": "allowed/link", "kind": "symlink"}, "ALLOWLIST_VIOLATION_SYMLINK"),
+    ({"path": "allowed/module", "kind": "submodule"}, "ALLOWLIST_VIOLATION_SUBMODULE"),
+])
+def test_scope_matrix_rejects_every_disallowed_change(change: dict, expected: str) -> None:
+    packet = {"writable_paths": ["allowed"], "forbidden_surfaces": ["forbidden"]}
+    findings = workspace_evidence._scope_findings(packet, [change])
+    assert findings == [{"code": expected, "path": change["path"]}]
+    assert workspace_evidence._scope_findings(
+        {"writable_paths": [], "forbidden_surfaces": []}, [{"path": "allowed/a.py", "kind": "tracked"}]
+    ) == [{"code": "ALLOWLIST_VIOLATION_UNDECLARED", "path": "allowed/a.py"}]
+
+
+@pytest.mark.parametrize("change, expected", [
+    ({"path": "outside.py", "kind": "tracked"}, "ALLOWLIST_VIOLATION_UNDECLARED"),
+    ({"path": "forbidden/a.py", "kind": "tracked"}, "ALLOWLIST_VIOLATION_FORBIDDEN"),
+    ({"path": "PLAN.md", "kind": "tracked"}, "ALLOWLIST_VIOLATION_GOVERNED"),
+    ({"path": "../escape.py", "kind": "tracked"}, "ALLOWLIST_VIOLATION_ESCAPED"),
+    ({"path": "allowed/link", "kind": "symlink"}, "ALLOWLIST_VIOLATION_SYMLINK"),
+    ({"path": "allowed/module", "kind": "submodule"}, "ALLOWLIST_VIOLATION_SUBMODULE"),
+])
+def test_build_postflight_denies_every_scope_violation(
+        monkeypatch: pytest.MonkeyPatch, change: dict, expected: str) -> None:
+    """The final artifact, not only the helper finding, disallows every scope breach."""
+    identity = {"schema_version": 1, "repo_root": "/repo", "worktree_path": "/worktree",
+                "common_dir": "/repo/.git", "branch": "refs/heads/codex/o4", "head": "a" * 40}
+    baseline = {"worktree_identity": identity, "packet_snapshot": {"entries": []},
+                "protected_snapshot": None}
+    current = {"entries": [{
+        "path": change["path"], "kind": change["kind"], "index_status": "A",
+        "worktree_status": None, "mode": "100644", "object_id": None, "content_sha256": None,
+    }]}
+    monkeypatch.setattr(workspace_evidence, "inspect_worktree", lambda *_args: identity)
+    monkeypatch.setattr(workspace_evidence, "capture_snapshot", lambda *_args: current)
+    monkeypatch.setattr(workspace_evidence, "_hydrate_before_digests", lambda *_args: None)
+    monkeypatch.setattr(workspace_evidence, "_hydrate_mode_changes", lambda *_args: None)
+    monkeypatch.setattr(workspace_evidence, "scan_secret_like_additions", lambda *_args: [])
+    packet = {"packet_id": "o4-scope", "packet_sha256": "b" * 64,
+              "writable_paths": ["allowed"], "forbidden_surfaces": ["forbidden"]}
+    postflight = workspace_evidence.build_postflight(packet, "attempt-o4-scope-1", baseline, None)
+    assert postflight["acceptance_allowed"] is False
+    assert postflight["scope_findings"] == [{"code": expected, "path": change["path"]}]
+
+
+def test_scope_violation_is_recorded_without_removing_worker_file(repo_fixture: RepoFixture) -> None:
+    """Postflight rejects an out-of-scope addition but never mutates worker output."""
+    identity = inspect_worktree(str(repo_fixture.root), str(repo_fixture.packet_worktree),
+                                "codex/packet-a", repo_fixture.packet_revision)
+    baseline = {"worktree_identity": identity,
+                "packet_snapshot": capture_snapshot(str(repo_fixture.packet_worktree)),
+                "protected_snapshot": None}
+    outside = repo_fixture.packet_worktree / "outside" / "worker-output.py"
+    outside.write_text("retained\n", encoding="utf-8")
+    packet = {"packet_id": "o4-scope-preserve", "packet_sha256": "c" * 64,
+              "writable_paths": ["allowed"], "forbidden_surfaces": []}
+    postflight = workspace_evidence.build_postflight(
+        packet, "attempt-o4-scope-preserve-1", baseline, None)
+    assert postflight["acceptance_allowed"] is False
+    assert any(item["path"] == "outside/worker-output.py"
+               for item in postflight["scope_findings"])
+    assert outside.read_text(encoding="utf-8") == "retained\n"
+
+
+def test_protected_snapshot_preserves_preexisting_dirt_then_reports_new_drift(repo_fixture: RepoFixture) -> None:
+    """Only changes after preflight trigger protected tracked/untracked findings."""
+    protected = repo_fixture.root
+    (protected / "allowed" / "base.txt").write_text("preexisting\n", encoding="utf-8")
+    (protected / "preexisting-untracked.txt").write_text("preexisting\n", encoding="utf-8")
+    baseline = {"protected_snapshot": {
+        "worktree_path": str(protected), "snapshot": capture_snapshot(str(protected)),
+    }}
+    assert workspace_evidence._protected_findings(baseline) == []
+    (protected / "allowed" / "base.txt").write_text("postflight\n", encoding="utf-8")
+    (protected / "new-untracked.txt").write_text("new\n", encoding="utf-8")
+    assert workspace_evidence._protected_findings(baseline) == [
+        {"code": "PROTECTED_WORKTREE_CHANGED_MODIFIED", "path": "allowed/base.txt"},
+        {"code": "PROTECTED_WORKTREE_CHANGED_ADDED", "path": "new-untracked.txt"},
+    ]
+
+
+def test_full_postflight_artifact_never_contains_literal_secret(repo_fixture: RepoFixture) -> None:
+    """The canonical full artifact retains only secret finding metadata."""
+    secret = "fixture-secret-must-not-persist"
+    path = repo_fixture.packet_worktree / "allowed" / "new.py"
+    path.write_text(f"API_KEY = '{secret}'\n", encoding="utf-8")
+    identity = inspect_worktree(str(repo_fixture.root), str(repo_fixture.packet_worktree),
+                                "codex/packet-a", repo_fixture.packet_revision)
+    packet = {"packet_id": "o4-secret", "packet_sha256": "a" * 64,
+              "writable_paths": ["allowed"], "forbidden_surfaces": []}
+    baseline = {"worktree_identity": identity, "packet_snapshot": {"entries": []},
+                "protected_snapshot": None}
+    worker = {"changed_files": [{"path": "allowed/new.py", "status": "added",
+                                  "before_sha256": None,
+                                  "after_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}]}
+    postflight = workspace_evidence.build_postflight(packet, "attempt-o4-secret-1", baseline, worker)
+    assert b"fixture-secret-must-not-persist" not in canonical_bytes(postflight)

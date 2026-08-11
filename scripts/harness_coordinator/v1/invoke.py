@@ -64,24 +64,23 @@ class InvocationOutcome:
     environment_keys: Tuple[str, ...]
 
 
-def _under(path: str, parent: str) -> bool:
-    normalized = os.path.normpath(path)
-    base = os.path.normpath(parent)
-    return normalized == base or normalized.startswith(base + os.sep)
+def _claimed_paths_violate_packet(packet: Dict[str, Any], result: Dict[str, Any]) -> bool:
+    """Retain an invocation diagnostic; postflight is the acceptance authority."""
+    def under(path: str, parent: str) -> bool:
+        normalized, base = os.path.normpath(path), os.path.normpath(parent)
+        return normalized == base or normalized.startswith(base + os.sep)
 
-
-def _result_paths_allowed(packet: Dict[str, Any], result: Dict[str, Any]) -> bool:
     writable = packet.get("writable_paths", [])
     forbidden = packet.get("forbidden_surfaces", [])
     for changed in result.get("changed_files", []):
         path = changed.get("path") if isinstance(changed, dict) else None
         if not isinstance(path, str):
-            return False
-        if any(_under(path, item) or _under(item, path) for item in forbidden):
-            return False
-        if not any(_under(path, item) for item in writable):
-            return False
-    return True
+            return True
+        if any(under(path, item) or under(item, path) for item in forbidden):
+            return True
+        if not any(under(path, item) for item in writable):
+            return True
+    return False
 
 
 def _bounded_read_regular(dir_fd: int, name: str, maximum: int, expected_identity: Tuple[int, int]) -> bytes:
@@ -347,9 +346,12 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
                                       worker.get("model"), worker.get("lane"))
                             if actual != expected:
                                 errors.append("RESULT_IDENTITY_MISMATCH")
-                            elif not _result_paths_allowed(packet, value):
-                                errors.append("FORBIDDEN_PATH")
                             else:
+                                # Only the coordinator's Git postflight is authoritative
+                                # for changed-path scope. A worker's manifest remains a
+                                # claim that postflight compares after completion.
+                                if _claimed_paths_violate_packet(packet, value):
+                                    errors.append("FORBIDDEN_PATH")
                                 result = value
             except (OSError, ValueError):
                 errors.append("RESULT_PATH_UNSAFE")
@@ -415,7 +417,8 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
 
 def persist_invocation_outcome(handle, packet: Dict[str, Any], intent_id: str,
                                invocation: InvocationOutcome, adapter: WorkerAdapter,
-                               coordinator_id: str, run_id: str, now: str) -> Dict[str, Any]:
+                               coordinator_id: str, run_id: str, now: str,
+                               postflight: Dict[str, Any]) -> Dict[str, Any]:
     """Publish coordinator-owned attempt evidence, with outcome last.
 
     ``attempt_outcome.json`` is the durable completion marker consumed by
@@ -423,6 +426,11 @@ def persist_invocation_outcome(handle, packet: Dict[str, Any], intent_id: str,
     root; worker-supplied paths are never accepted.
     """
     packet_id = validate_harness_id(packet["packet_id"], "/packet_id")
+    from harness_coordinator.v1.workspace_evidence import validate_postflight_binding
+
+    validated_postflight = validate_postflight_binding(handle, packet, intent_id, postflight)
+    persisted_postflight = validated_postflight["artifact"]
+    postflight_binding = validated_postflight["binding"]
     attempt = packet["attempt"]
     base = ("results", packet_id, str(attempt))
     invocation_base = ("invocations", validate_harness_id(intent_id, "/intent_id"))
@@ -441,6 +449,36 @@ def persist_invocation_outcome(handle, packet: Dict[str, Any], intent_id: str,
     if result_raw is not None:
         handle.publish(base + ("worker-result.json",), result_raw)
     errors = list(invocation.error_codes)
+    authority = {"guard_denials": [], "undeclared_changed_paths": [],
+                 "governed_path_touches": [], "hard_stop_matches": [],
+                 "hard_stop_reasons": []}
+    if not persisted_postflight.get("acceptance_allowed", False):
+        scope = persisted_postflight.get("scope_findings") or []
+        authority["undeclared_changed_paths"] = sorted({
+            item.get("path") for item in scope
+            if isinstance(item, dict) and isinstance(item.get("path"), str)
+            and item.get("code") != "ALLOWLIST_VIOLATION_GOVERNED"
+        })
+        authority["governed_path_touches"] = sorted({
+            item.get("path") for item in scope
+            if isinstance(item, dict) and item.get("code") == "ALLOWLIST_VIOLATION_GOVERNED"
+            and isinstance(item.get("path"), str)
+        })
+        hard_stop_paths = []
+        for key in ("worker_manifest_findings", "protected_findings", "secret_findings"):
+            hard_stop_paths.extend(
+                item.get("path") for item in (persisted_postflight.get(key) or [])
+                if isinstance(item, dict) and isinstance(item.get("path"), str) and item.get("path")
+        )
+        if not hard_stop_paths:
+            hard_stop_paths = list(persisted_postflight.get("writable_paths") or [])[:1]
+        authority["hard_stop_matches"] = sorted(set(hard_stop_paths))
+        capture_unverifiable = any(
+            item.get("code") == "PROTECTED_WORKTREE_CHANGED_UNVERIFIABLE"
+            for item in (persisted_postflight.get("protected_findings") or []) if isinstance(item, dict)
+        )
+        if capture_unverifiable or not hard_stop_paths:
+            authority["hard_stop_reasons"] = ["workspace_postflight_capture_failed"]
     record = {
         "schema_version": 1,
         "packet_id": packet_id,
@@ -465,9 +503,9 @@ def persist_invocation_outcome(handle, packet: Dict[str, Any], intent_id: str,
                        "byte_length": len(result_raw) if result_raw is not None else 0},
         "result_validation": {"present": result is not None, "valid": result is not None,
                               "error_codes": errors, "error_count": len(errors)},
-        "authority": {"guard_denials": [], "undeclared_changed_paths": [],
-                      "governed_path_touches": [], "hard_stop_matches": []},
+        "authority": authority,
         "provider_evidence_sha256": None,
+        "workspace_postflight": postflight_binding,
         "outcome": result.get("outcome") if result is not None else "FAILED",
         "fallback": result.get("fallback") if result is not None else None,
         "outcome_sha256": "",
