@@ -35,6 +35,7 @@ JOURNAL_EVENT_TYPES = {
     "LOCK_RECLAIMED",
     "JOURNAL_TAIL_TRUNCATED",
     "RECONCILIATION_EMITTED",
+    "WORKSPACE_BASELINE_RECORDED",
 }
 
 TRANSITION_CAUSES = {
@@ -118,6 +119,7 @@ CAUSES_BY_EVENT_TYPE: Dict[str, Set[str]] = {
     "LOCK_RECLAIMED": {"none"},
     "JOURNAL_TAIL_TRUNCATED": {"none"},
     "RECONCILIATION_EMITTED": {"none"},
+    "WORKSPACE_BASELINE_RECORDED": {"none"},
 }
 
 # Payload sub-objects that must be non-null for each event type.
@@ -134,6 +136,7 @@ PAYLOAD_NON_NULL_BY_TYPE: Dict[str, Set[str]] = {
     "LOCK_RECLAIMED": {"recovery"},
     "JOURNAL_TAIL_TRUNCATED": {"recovery"},
     "RECONCILIATION_EMITTED": {"report"},
+    "WORKSPACE_BASELINE_RECORDED": set(),
 }
 
 ARTIFACT_KINDS = {
@@ -149,6 +152,7 @@ ARTIFACT_KINDS = {
     "journal_tail",
     "stdout",
     "stderr",
+    "workspace_baseline",
 }
 
 STAGES = {
@@ -346,6 +350,7 @@ def _validate_journal_event_object(
         "PACKET_ENROLLED",
         "STATE_TRANSITION",
         "INTENT_ABANDONED",
+        "WORKSPACE_BASELINE_RECORDED",
     }
     if event_type in intent_required_types:
         if not isinstance(intent_id, str) or intent_id.strip() == "":
@@ -419,6 +424,7 @@ def _validate_journal_event_object(
                 phase="transition",
             )
 
+    v._journal_event_type = event_type
     payload = value.get("payload")
     _validate_payload(v, payload, event_type)
 
@@ -503,8 +509,9 @@ def _validate_artifacts(v: _PacketValidator, artifacts: List[Any], path: str) ->
             v.add("INVALID_TYPE", p, "Expected object", phase="scalar")
             continue
         required = {"kind", "artifact_id", "path", "sha256", "byte_length"}
+        allowed = required | {"content_sha256"}
         for key in art:
-            if key not in required:
+            if key not in allowed:
                 v.add("UNKNOWN_FIELD", f"{p}/{key}", f"Unknown field '{key}'")
         for key in required:
             if key not in art:
@@ -525,6 +532,30 @@ def _validate_artifacts(v: _PacketValidator, artifacts: List[Any], path: str) ->
             _check_sha256(v, art["sha256"], f"{p}/sha256")
         if "byte_length" in art:
             _check_int(v, art["byte_length"], f"{p}/byte_length", nonneg=True)
+        if art.get("kind") == "workspace_baseline":
+            _check_sha256(v, art.get("content_sha256"), f"{p}/content_sha256")
+
+    if not isinstance(artifacts, list):
+        return
+    baseline_event = getattr(v, "_journal_event_type", None) == "WORKSPACE_BASELINE_RECORDED"
+    if baseline_event:
+        if len(artifacts) != 1:
+            v.add("INVALID_VALUE", path, "WORKSPACE_BASELINE_RECORDED requires exactly one artifact", phase="value")
+            return
+        artifact = artifacts[0] if isinstance(artifacts[0], dict) else {}
+        if artifact.get("kind") != "workspace_baseline":
+            v.add("INVALID_VALUE", f"{path}/0/kind", "Baseline event requires workspace_baseline artifact", phase="value")
+        if artifact.get("artifact_id") != "workspace_baseline":
+            v.add("INVALID_VALUE", f"{path}/0/artifact_id", "Baseline event requires workspace_baseline artifact_id", phase="value")
+        _check_sha256(v, artifact.get("content_sha256"), f"{path}/0/content_sha256")
+    else:
+        for index, artifact in enumerate(artifacts):
+            if not isinstance(artifact, dict):
+                continue
+            if artifact.get("kind") == "workspace_baseline":
+                v.add("INVALID_VALUE", f"{path}/{index}/kind", "workspace_baseline belongs only to baseline events", phase="value")
+            if "content_sha256" in artifact:
+                v.add("INVALID_VALUE", f"{path}/{index}/content_sha256", "content_sha256 belongs only to baseline artifacts", phase="value")
 
 
 def _validate_payload_packet(v: _PacketValidator, packet: Dict[str, Any], path: str) -> None:

@@ -325,3 +325,66 @@ def test_snapshot_is_canonical_and_complete(repo_fixture: RepoFixture) -> None:
         "untracked",
         "submodule",
     }
+
+
+def _ownership_packet() -> dict:
+    return {
+        "packet_id": "packet-current",
+        "worktree": {"path": "/tmp/o4-worktree-current", "branch": "codex/o4-current"},
+        "writable_paths": ["scripts/harness_coordinator/v1/workspace_evidence.py"],
+    }
+
+
+def _conflicting_packet(packet: dict, field: str, state: str) -> dict:
+    active = {
+        "packet_id": "packet-active",
+        "state": state,
+        "worktree": {"path": "/tmp/o4-worktree-other", "branch": "codex/o4-other"},
+        "writable_paths": ["scripts/harness_coordinator/v1/other.py"],
+    }
+    if field == "same_worktree":
+        active["worktree"]["path"] = packet["worktree"]["path"]
+    elif field == "same_branch":
+        active["worktree"]["branch"] = packet["worktree"]["branch"]
+    elif field == "equal_path":
+        active["writable_paths"] = list(packet["writable_paths"])
+    elif field == "parent_path":
+        active["writable_paths"] = ["scripts/harness_coordinator"]
+    elif field == "child_path":
+        active["writable_paths"] = ["scripts/harness_coordinator/v1/workspace_evidence.py/helper.py"]
+    else:
+        raise AssertionError("unknown ownership conflict field")
+    return active
+
+
+@pytest.mark.parametrize("field", [
+    "same_worktree", "same_branch", "equal_path", "parent_path", "child_path",
+])
+def test_nonterminal_write_ownership_conflicts(field: str) -> None:
+    """Fails until nonterminal write ownership is checked before invocation."""
+    from harness_coordinator.v1.workspace_evidence import validate_ownership
+
+    packet = _ownership_packet()
+    active = _conflicting_packet(packet, field, state="RUNNING")
+    with pytest.raises(WorkspaceEvidenceError) as caught:
+        validate_ownership(packet, [active])
+    assert caught.value.code.startswith("OWNERSHIP_CONFLICT_")
+
+
+@pytest.mark.parametrize("state", ["ACCEPTED", "QUARANTINED", "HUMAN_REQUIRED"])
+def test_terminal_packets_do_not_conflict_with_write_ownership(state: str) -> None:
+    """Terminal packets release their declared write ownership."""
+    from harness_coordinator.v1.workspace_evidence import validate_ownership
+
+    packet = _ownership_packet()
+    validate_ownership(packet, [_conflicting_packet(packet, "equal_path", state=state)])
+
+
+def test_read_only_packet_does_not_claim_write_ownership() -> None:
+    """An empty writable-path list remains a read-only lane for conflict purposes."""
+    from harness_coordinator.v1.workspace_evidence import validate_ownership
+
+    packet = _ownership_packet()
+    active = _conflicting_packet(packet, "equal_path", state="RUNNING")
+    active["writable_paths"] = []
+    validate_ownership(packet, [active])

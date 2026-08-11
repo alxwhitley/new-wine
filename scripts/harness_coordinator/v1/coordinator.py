@@ -24,11 +24,78 @@ from harness_coordinator.v1.reconcile import build_reconciliation_report, emit_r
 from harness_coordinator.v1.scheduler import select_next
 from harness_coordinator.v1.seals_runtime import complete_terminal_seals, open_state_root
 from harness_coordinator.v1.store import JournalHeadMoved, atomic_replace, append_journal, read_journal
+from harness_coordinator.v1.workspace_evidence import discover_repo_root, ensure_attempt_baseline
 
 
 def attempt_session_id(run_id: str, packet_id: str, attempt: int) -> str:
     """Durable worker-session identity; P5B must consume this exact value."""
     return f"session-{run_id}-{packet_id}-{attempt}"
+
+
+def _record_workspace_baseline(
+    handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
+    folded: Dict[str, Dict[str, Any]], packet: Dict[str, Any], intent_id: str,
+    coordinator_id: str, run_id: str, now: str, protected_worktree_path: Optional[str],
+    *, revalidate: bool = True,
+) -> None:
+    """Durably bind the immutable O4 baseline before a worker is invoked."""
+    repo_root = discover_repo_root(packet["worktree"]["path"])
+    packet_id = packet["packet_id"]
+    active_packets = []
+    for active_id, active_state in folded.items():
+        if active_state.get("state") not in {"READY", "RUNNING", "REVIEW", "REVISE"}:
+            continue
+        active_body = _load_enrolled_packet(
+            state_root, active_id, active_state, journal_events, handle=handle)
+        active_body["state"] = active_state["state"]
+        active_packets.append(active_body)
+    binding = ensure_attempt_baseline(
+        handle, packet, intent_id, repo_root, protected_worktree_path, active_packets,
+        revalidate=revalidate)
+    matching = [
+        event for event in journal_events
+        if event.get("event_type") == "WORKSPACE_BASELINE_RECORDED"
+        and event.get("packet_id") == packet_id
+        and event.get("intent_id") == intent_id
+    ]
+    if matching:
+        artifact = (matching[-1].get("payload") or {}).get("artifacts") or []
+        expected = {
+            "kind": "workspace_baseline", "artifact_id": "workspace_baseline",
+            "path": binding["artifact_path"], "sha256": binding["artifact_sha256"],
+            "content_sha256": binding["content_sha256"],
+        }
+        if len(artifact) != 1 or any(artifact[0].get(key) != value for key, value in expected.items()):
+            from harness_coordinator.v1.recovery import IntegrityError
+            raise IntegrityError("WORKSPACE_BASELINE_MISMATCH", "Workspace baseline journal binding disagrees", packet_id)
+        return
+    raw = handle.read(tuple(binding["artifact_path"].split("/")))
+    if raw is None:
+        from harness_coordinator.v1.recovery import IntegrityError
+        raise IntegrityError("WORKSPACE_BASELINE_MISSING", "Published workspace baseline disappeared", packet_id)
+    previous = journal_events[-1] if journal_events else None
+    event = _make_event(
+        (previous["seq"] + 1) if previous else 1, "WORKSPACE_BASELINE_RECORDED",
+        coordinator_id, run_id, state_root_id, previous, now, packet_id=packet_id,
+        intent_id=intent_id, from_state=None, to_state=None, cause="none",
+        payload={
+            "packet": None, "attempt": None,
+            "artifacts": [{
+                "kind": "workspace_baseline", "artifact_id": "workspace_baseline",
+                "path": binding["artifact_path"], "sha256": binding["artifact_sha256"],
+                "content_sha256": binding["content_sha256"], "byte_length": len(raw),
+            }],
+            "classification": None, "transition_detail": None, "recovery": None,
+            "run": None, "report": None,
+        },
+    )
+    handle.verify_identity()
+    append_journal(
+        os.path.join(state_root, "journal.ndjson"), event,
+        os.path.join(state_root, "locks", "journal.wlock"), expected_head=previous,
+    )
+    handle.verify_identity()
+    journal_events.append(event)
 
 
 def _load_enrolled_packet(state_root: str, packet_id: str, packet: Dict[str, Any],
@@ -228,7 +295,8 @@ def _maintenance(handle, state_root: str, state_root_id: str, journal_events: Li
 def run_once(state_root: str, coordinator_id: str, run_id: str,
              trusted_process_context: Dict[str, Any], now: str,
              disabled_lanes: List[str] = None,
-             worker_adapters: Optional[Mapping[str, WorkerAdapter]] = None) -> Dict[str, Any]:
+             worker_adapters: Optional[Mapping[str, WorkerAdapter]] = None,
+             protected_worktree_path: Optional[str] = None) -> Dict[str, Any]:
     """Recover, resolve reviews, seal, promote, then claim at most one packet.
 
     Maintenance runs twice by design. The first pass completes work a previous
@@ -250,7 +318,7 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
             handle.verify_identity()
             return _run_iteration(handle, state_root, report, coordinator_id, run_id,
                                   trusted_process_context, now, disabled_lanes,
-                                  worker_adapters)
+                                  worker_adapters, protected_worktree_path)
         finally:
             report.release_singleton()
 
@@ -258,7 +326,8 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
 def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id: str,
                    trusted_process_context: Dict[str, Any], now: str,
                    disabled_lanes: List[str],
-                   worker_adapters: Optional[Mapping[str, WorkerAdapter]]) -> Dict[str, Any]:
+                   worker_adapters: Optional[Mapping[str, WorkerAdapter]],
+                   protected_worktree_path: Optional[str]) -> Dict[str, Any]:
     """One bounded iteration, every P5C artifact operation sharing one handle."""
     journal_events = getattr(report, "journal_events", [])
     state_root_id = getattr(report, "state_root_id", None)
@@ -310,6 +379,7 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             receipt_present = (
                 handle.read(invocation_parts + ("completion.json",)) is not None
                 or handle.read(invocation_parts + ("completion.pending",)) is not None)
+            sidecar_present = handle.read(invocation_parts + ("process.json",)) is not None
             adapter = adapters.get(packet_id) or adapters.get(packet.get("lane"))
             if receipt_present and adapter is None:
                 raise RuntimeError(
@@ -321,12 +391,34 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                 invocation_packet["attempt"] = attempt
                 session_id = (((started.get("payload") or {}).get("attempt") or {})
                               .get("worker", {}).get("session_id"))
+                baseline_was_journaled = any(
+                    event.get("event_type") == "WORKSPACE_BASELINE_RECORDED"
+                    and event.get("packet_id") == packet_id
+                    and event.get("intent_id") == started["intent_id"]
+                    for event in journal_events
+                )
+                _record_workspace_baseline(
+                    handle, state_root, state_root_id, journal_events, folded,
+                    packet_body, started["intent_id"], coordinator_id, run_id, now,
+                    protected_worktree_path,
+                    revalidate=not (baseline_was_journaled and (receipt_present or sidecar_present)))
+                baseline_exists = True
                 completed = load_completed_invocation(
                     handle, state_root_id, invocation_packet, started["intent_id"],
                     session_id, adapter)
                 if completed is not None:
                     persist_invocation_outcome(
                         handle, invocation_packet, started["intent_id"], completed,
+                        adapter, started["coordinator_id"], started["run_id"], now)
+                elif (not baseline_was_journaled
+                      and baseline_exists
+                      and not receipt_present
+                      and not sidecar_present):
+                    invocation = invoke_worker(
+                        state_root, state_root_id, invocation_packet, started["intent_id"],
+                        session_id, adapter, allowed_worktree=packet_body["worktree"]["path"])
+                    persist_invocation_outcome(
+                        handle, invocation_packet, started["intent_id"], invocation,
                         adapter, started["coordinator_id"], started["run_id"], now)
             if (not receipt_present
                     and handle.read(invocation_parts + ("process.json",)) is not None):
@@ -384,6 +476,9 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             invocation_packet = dict(packet_body)
             invocation_packet["attempt"] = attempt
             session_id = attempt_session_id(run_id, packet_id, attempt)
+            _record_workspace_baseline(
+                handle, state_root, state_root_id, journal_events, folded, packet_body,
+                intent_id, coordinator_id, run_id, now, protected_worktree_path)
             handle.verify_identity()
             invocation = invoke_worker(
                 state_root, state_root_id, invocation_packet, intent_id, session_id,

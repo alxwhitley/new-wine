@@ -48,7 +48,8 @@
         "INTENT_ABANDONED",
         "LOCK_RECLAIMED",
         "JOURNAL_TAIL_TRUNCATED",
-        "RECONCILIATION_EMITTED"
+        "RECONCILIATION_EMITTED",
+        "WORKSPACE_BASELINE_RECORDED"
       ]
     },
     "event_at": {
@@ -285,7 +286,8 @@
                   "reconciliation_report",
                   "journal_tail",
                   "stdout",
-                  "stderr"
+                  "stderr",
+                  "workspace_baseline"
                 ]
               },
               "artifact_id": {
@@ -304,6 +306,10 @@
               "byte_length": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "content_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             }
           }
@@ -808,5 +814,54 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "WORKSPACE_BASELINE_RECORDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "artifacts": {
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "properties": {
+                    "kind": {"const": "workspace_baseline"},
+                    "artifact_id": {"const": "workspace_baseline"},
+                    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                  },
+                  "required": ["kind", "artifact_id", "content_sha256"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "artifacts": {
+                "items": {
+                  "not": {
+                    "anyOf": [
+                      {"properties": {"kind": {"const": "workspace_baseline"}}, "required": ["kind"]},
+                      {"required": ["content_sha256"]}
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

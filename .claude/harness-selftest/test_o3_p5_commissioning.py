@@ -28,6 +28,43 @@ def _context(coordinator_id=COORD_ID):
             "live_coordinator_ids": {coordinator_id}, "now": T_NOW}
 
 
+def _git(path, *args):
+    return subprocess.run(
+        ["git", *args], cwd=str(path), check=True, text=True, capture_output=True,
+        env={"PATH": os.environ["PATH"], "LANG": "C", "GIT_CONFIG_NOSYSTEM": "1"},
+    ).stdout.strip()
+
+
+def _registered_worktrees(tmp_path, *names):
+    """Create disposable registered packet worktrees without changing assertions."""
+    repo = tmp_path / "packet-repo"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "O3 Test")
+    _git(repo, "config", "user.email", "o3@example.test")
+    (repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    _git(repo, "commit", "-m", "base")
+    worktrees = []
+    for name in names:
+        branch = "codex/%s" % name
+        path = tmp_path / ("worktree-" + name)
+        _git(repo, "branch", branch)
+        _git(repo, "worktree", "add", str(path), branch)
+        worktrees.append((os.path.realpath(str(path)), branch, _git(path, "rev-parse", "HEAD")))
+    return worktrees
+
+
+def _registered_packet(packet_id, worktree):
+    path, branch, revision = worktree
+    packet = _packet(packet_id, worktree=path)
+    packet["worktree"]["branch"] = branch
+    packet["starting_revision"] = revision
+    from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+    packet["packet_sha256"] = compute_sha256(canonical_bytes(packet, omit={"packet_sha256"}))
+    return packet
+
+
 def _adapter(packet, run_id, marker, attempt=1):
     session = attempt_session_id(run_id, packet["packet_id"], attempt)
     result = _worker_result(
@@ -48,12 +85,10 @@ def _review(verdict):
 
 def test_real_run_once_invokes_synthetic_worker_and_reaches_review(tmp_path):
     state_root = os.path.realpath(str(tmp_path / "state"))
-    worktree = os.path.realpath(str(tmp_path / "worktree"))
     os.makedirs(os.path.join(state_root, "locks"))
-    os.makedirs(worktree)
     _write_manifest(state_root)
     _write_trust_roots(state_root)
-    packet = _packet("commission-root", worktree=worktree)
+    packet = _registered_packet("commission-root", _registered_worktrees(tmp_path, "root")[0])
     enroll_packets(state_root, STATE_ROOT_ID, COORD_ID, RUN_ID, T_ENROLL, [packet])
     session = attempt_session_id(RUN_ID, packet["packet_id"], 1)
     result = _worker_result(packet, session, attempt=1)
@@ -85,13 +120,12 @@ def test_dependency_chain_reaches_terminal_through_synthetic_runtime(tmp_path):
     os.makedirs(os.path.join(state_root, "locks"))
     _write_manifest(state_root)
     _write_trust_roots(state_root)
-    root_worktree = os.path.realpath(str(tmp_path / "root-worktree"))
-    child_worktree = os.path.realpath(str(tmp_path / "child-worktree"))
-    os.makedirs(root_worktree)
-    os.makedirs(child_worktree)
-    root_packet = _packet("commission-parent", worktree=root_worktree)
-    child_packet = _packet("commission-child", dependencies=["commission-parent"],
-                           worktree=child_worktree)
+    root_worktree, child_worktree = _registered_worktrees(tmp_path, "parent", "child")
+    root_packet = _registered_packet("commission-parent", root_worktree)
+    child_packet = _registered_packet("commission-child", child_worktree)
+    child_packet["dependency_ids"] = ["commission-parent"]
+    from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+    child_packet["packet_sha256"] = compute_sha256(canonical_bytes(child_packet, omit={"packet_sha256"}))
     enroll_packets(state_root, STATE_ROOT_ID, COORD_ID, RUN_ID, T_ENROLL,
                    [root_packet, child_packet])
     marker = str(tmp_path / "chain-markers.txt")
@@ -148,12 +182,10 @@ def test_dependency_chain_reaches_terminal_through_synthetic_runtime(tmp_path):
 
 def _single_packet_state(tmp_path, packet_id):
     state_root = os.path.realpath(str(tmp_path / f"state-{packet_id}"))
-    worktree = os.path.realpath(str(tmp_path / f"worktree-{packet_id}"))
     os.makedirs(os.path.join(state_root, "locks"))
-    os.makedirs(worktree)
     _write_manifest(state_root)
     _write_trust_roots(state_root)
-    packet = _packet(packet_id, worktree=worktree)
+    packet = _registered_packet(packet_id, _registered_worktrees(tmp_path, packet_id)[0])
     enroll_packets(state_root, STATE_ROOT_ID, COORD_ID, RUN_ID, T_ENROLL, [packet])
     return state_root, packet
 

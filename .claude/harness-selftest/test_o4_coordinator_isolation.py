@@ -1,0 +1,336 @@
+"""O4 baseline gate tests with disposable Git worktrees only."""
+
+import json
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+from harness_coordinator.v1.coordinator import run_once
+from harness_coordinator.v1.enroll import enroll_packets
+from harness_coordinator.v1.invoke import WorkerAdapter
+from harness_coordinator.v1.recovery import _fold_journal
+from harness_coordinator.v1.seals_runtime import open_state_root
+from harness_coordinator.v1.store import read_journal
+from test_o3_p5_review import (
+    COORD_ID, RUN_ID, STATE_ROOT_ID, T_ENROLL, T_NOW, _packet, _worker_result, _write_manifest,
+    _write_trust_roots,
+)
+
+
+def _git(path: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=path, check=True, text=True, capture_output=True,
+        env={"PATH": os.environ["PATH"], "LANG": "C", "GIT_CONFIG_NOSYSTEM": "1"},
+    ).stdout.strip()
+
+
+def _state_with_registered_worktree(tmp_path: Path, packet_id: str):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "O4 Test")
+    _git(repo, "config", "user.email", "o4@example.test")
+    (repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    _git(repo, "commit", "-m", "base")
+    _git(repo, "branch", "codex/o4-packet")
+    worktree = tmp_path / "packet-worktree"
+    _git(repo, "worktree", "add", str(worktree), "codex/o4-packet")
+    packet = _packet(packet_id, worktree=os.path.realpath(worktree))
+    packet["starting_revision"] = _git(worktree, "rev-parse", "HEAD")
+    packet["worktree"]["branch"] = "codex/o4-packet"
+    packet["packet_sha256"] = compute_sha256(canonical_bytes(packet, omit={"packet_sha256"}))
+    state_root = os.path.realpath(tmp_path / "state")
+    os.makedirs(os.path.join(state_root, "locks"))
+    _write_manifest(state_root)
+    _write_trust_roots(state_root)
+    enroll_packets(state_root, STATE_ROOT_ID, COORD_ID, RUN_ID, T_ENROLL, [packet])
+    return state_root, repo, worktree, packet
+
+
+def _context():
+    return {
+        "coordinator_id": COORD_ID, "hostname": "o4-host", "boot_id": "o4-boot",
+        "pid": os.getpid(), "live_coordinator_ids": {COORD_ID}, "now": T_NOW,
+    }
+
+
+def test_ensure_attempt_baseline_publishes_exact_canonical_artifact(tmp_path: Path) -> None:
+    from harness_coordinator.v1.workspace_evidence import ensure_attempt_baseline
+
+    state_root, repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-baseline")
+    with open_state_root(state_root) as handle:
+        binding = ensure_attempt_baseline(
+            handle, packet, "attempt-o4-baseline-1", str(repo), None, []
+        )
+        raw = handle.read(tuple(binding["artifact_path"].split("/")))
+    artifact = json.loads(raw.decode("utf-8"))
+    assert raw == canonical_bytes(artifact)
+    assert set(artifact) == {
+        "schema_version", "artifact_kind", "packet_id", "packet_sha256", "intent_id",
+        "worktree_identity", "packet_snapshot", "protected_snapshot", "writable_paths",
+        "forbidden_surfaces", "content_sha256", "artifact_sha256",
+    }
+    assert artifact["packet_snapshot"]["entries"] == []
+    assert artifact["packet_id"] == packet["packet_id"]
+    assert artifact["packet_sha256"] == packet["packet_sha256"]
+    assert artifact["intent_id"] == "attempt-o4-baseline-1"
+    assert artifact["content_sha256"] == compute_sha256(
+        canonical_bytes(artifact, omit={"content_sha256", "artifact_sha256"})
+    )
+    assert artifact["artifact_sha256"] == compute_sha256(
+        canonical_bytes(artifact, omit={"artifact_sha256"})
+    )
+
+
+def test_worker_is_never_called_until_baseline_event_is_durable(tmp_path: Path, monkeypatch) -> None:
+    import harness_coordinator.v1.coordinator as coordinator
+
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-gate")
+    invoked = {"value": False}
+
+    def assert_gate(*_args, **_kwargs):
+        invoked["value"] = True
+        path = Path(state_root, "workspace", packet["packet_id"], f"attempt-{packet['packet_id']}-1.baseline.json")
+        assert path.exists()
+        events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+        assert torn is None
+        event = next(event for event in events if event["event_type"] == "WORKSPACE_BASELINE_RECORDED")
+        assert event["packet_id"] == packet["packet_id"]
+        assert event["payload"]["artifacts"][0]["path"] == f"workspace/{packet['packet_id']}/attempt-{packet['packet_id']}-1.baseline.json"
+        raise RuntimeError("stop after gate assertion")
+
+    monkeypatch.setattr(coordinator, "invoke_worker", assert_gate)
+    with pytest.raises(RuntimeError, match="stop after gate assertion"):
+        run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW, worker_adapters={packet["packet_id"]: object()})
+    assert invoked["value"]
+
+
+def test_baseline_publication_failure_never_invokes_worker(tmp_path: Path, monkeypatch) -> None:
+    import harness_coordinator.v1.coordinator as coordinator
+
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-publication-failure")
+    monkeypatch.setattr(
+        coordinator, "ensure_attempt_baseline",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("baseline publication failed")),
+    )
+    monkeypatch.setattr(
+        coordinator, "invoke_worker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("worker must not run")),
+    )
+    with pytest.raises(RuntimeError, match="baseline publication failed"):
+        run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW, worker_adapters={packet["packet_id"]: object()})
+
+
+def test_unverifiable_worktree_fails_closed_before_worker_invocation(tmp_path: Path, monkeypatch) -> None:
+    import harness_coordinator.v1.coordinator as coordinator
+    from harness_coordinator.v1.workspace_evidence import WorkspaceEvidenceError
+
+    state_root = os.path.realpath(tmp_path / "non-git-state")
+    worktree = os.path.realpath(tmp_path / "non-git-worktree")
+    os.makedirs(os.path.join(state_root, "locks"))
+    os.makedirs(worktree)
+    _write_manifest(state_root)
+    _write_trust_roots(state_root)
+    packet = _packet("o4-non-git", worktree=worktree)
+    enroll_packets(state_root, STATE_ROOT_ID, COORD_ID, RUN_ID, T_ENROLL, [packet])
+    monkeypatch.setattr(
+        coordinator, "invoke_worker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("worker must not run")),
+    )
+    with pytest.raises(WorkspaceEvidenceError) as caught:
+        run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW,
+                 worker_adapters={packet["packet_id"]: object()})
+    assert caught.value.code == "WORKTREE_IDENTITY_REPOSITORY"
+
+
+def test_crash_after_baseline_artifact_before_journal_reuses_same_attempt(tmp_path: Path, monkeypatch) -> None:
+    """A published-but-unjournaled baseline resumes before the same invocation."""
+    import harness_coordinator.v1.coordinator as coordinator
+
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-crash")
+    real_append = coordinator.append_journal
+
+    def crash_baseline_append(*args, **kwargs):
+        event = args[1]
+        if event["event_type"] == "WORKSPACE_BASELINE_RECORDED":
+            raise RuntimeError("after baseline artifact")
+        return real_append(*args, **kwargs)
+
+    monkeypatch.setattr(coordinator, "append_journal", crash_baseline_append)
+    monkeypatch.setattr(
+        coordinator, "invoke_worker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("worker must not run before journal")),
+    )
+    with pytest.raises(RuntimeError, match="after baseline artifact"):
+        run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW, worker_adapters={packet["packet_id"]: object()})
+    baseline_dir = Path(state_root, "workspace", packet["packet_id"])
+    assert [path.name for path in baseline_dir.iterdir()] == [f"attempt-{packet['packet_id']}-1.baseline.json"]
+
+    monkeypatch.setattr(coordinator, "append_journal", real_append)
+    resumed = {"intent_id": None}
+
+    def assert_same_attempt(*args, **_kwargs):
+        resumed["intent_id"] = args[3]
+        raise RuntimeError("same attempt invoked")
+
+    monkeypatch.setattr(
+        coordinator, "invoke_worker",
+        assert_same_attempt,
+    )
+    with pytest.raises(RuntimeError, match="same attempt invoked"):
+        run_once(state_root, COORD_ID, "resumed-run", _context(), "2026-08-10T01:12:00Z",
+                 worker_adapters={packet["packet_id"]: object()})
+    assert resumed["intent_id"] == f"attempt-{packet['packet_id']}-1"
+    assert [path.name for path in baseline_dir.iterdir()] == [f"attempt-{packet['packet_id']}-1.baseline.json"]
+    events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    assert len([event for event in events if event["event_type"] == "WORKSPACE_BASELINE_RECORDED"]) == 1
+
+
+def test_reused_baseline_rejects_packet_worktree_drift(tmp_path: Path) -> None:
+    from harness_coordinator.v1.recovery import IntegrityError
+    from harness_coordinator.v1.workspace_evidence import ensure_attempt_baseline
+
+    state_root, repo, worktree, packet = _state_with_registered_worktree(tmp_path, "o4-worktree-drift")
+    with open_state_root(state_root) as handle:
+        ensure_attempt_baseline(handle, packet, "attempt-o4-worktree-drift-1", str(repo), None, [])
+        (worktree / "tracked.txt").write_text("drift\n", encoding="utf-8")
+        with pytest.raises(IntegrityError, match="baseline"):
+            ensure_attempt_baseline(handle, packet, "attempt-o4-worktree-drift-1", str(repo), None, [])
+
+
+def test_reused_baseline_rejects_extra_top_level_field(tmp_path: Path) -> None:
+    from harness_coordinator.v1.recovery import IntegrityError
+    from harness_coordinator.v1.workspace_evidence import ensure_attempt_baseline
+
+    state_root, repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-extra-field")
+    intent = "attempt-o4-extra-field-1"
+    with open_state_root(state_root) as handle:
+        binding = ensure_attempt_baseline(handle, packet, intent, str(repo), None, [])
+    path = Path(state_root, binding["artifact_path"])
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+    artifact["unexpected"] = "tampered"
+    artifact["content_sha256"] = compute_sha256(
+        canonical_bytes(artifact, omit={"content_sha256", "artifact_sha256"})
+    )
+    artifact["artifact_sha256"] = compute_sha256(canonical_bytes(artifact, omit={"artifact_sha256"}))
+    path.write_bytes(canonical_bytes(artifact))
+    with open_state_root(state_root) as handle:
+        with pytest.raises(IntegrityError, match="field set"):
+            ensure_attempt_baseline(handle, packet, intent, str(repo), None, [])
+
+
+def test_reused_baseline_rejects_protected_worktree_drift(tmp_path: Path) -> None:
+    from harness_coordinator.v1.recovery import IntegrityError
+    from harness_coordinator.v1.workspace_evidence import ensure_attempt_baseline
+
+    state_root, repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-protected-drift")
+    protected = tmp_path / "protected"
+    _git(repo, "branch", "codex/o4-protected")
+    _git(repo, "worktree", "add", str(protected), "codex/o4-protected")
+    with open_state_root(state_root) as handle:
+        ensure_attempt_baseline(handle, packet, "attempt-o4-protected-drift-1", str(repo), str(protected), [])
+        (protected / "tracked.txt").write_text("protected drift\n", encoding="utf-8")
+        with pytest.raises(IntegrityError, match="baseline"):
+            ensure_attempt_baseline(handle, packet, "attempt-o4-protected-drift-1", str(repo), str(protected), [])
+
+
+def test_authenticated_receipt_recovers_dirty_allowed_worktree_without_reinvocation(
+        tmp_path: Path, monkeypatch) -> None:
+    """Post-worker receipt recovery must not compare dirty output to the clean baseline."""
+    import harness_coordinator.v1.coordinator as coordinator
+    from harness_coordinator.v1.coordinator import attempt_session_id
+
+    state_root, _repo, worktree, packet = _state_with_registered_worktree(tmp_path, "o4-dirty-receipt")
+    worker = tmp_path / "dirty-worker.py"
+    marker = tmp_path / "dirty-worker-marker.txt"
+    worker.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, os\n"
+        "os.makedirs('scripts', exist_ok=True)\n"
+        "open('scripts/o4-dirty-receipt.py', 'w').write('changed\\n')\n"
+        "open(os.environ['SYNTHETIC_MARKER_PATH'], 'a').write('invoked\\n')\n"
+        "with os.fdopen(int(os.environ['HARNESS_RESULT_FD']), 'w') as output:\n"
+        "    json.dump(json.loads(os.environ['SYNTHETIC_RESULT']), output, sort_keys=True, separators=(',', ':'))\n",
+        encoding="utf-8",
+    )
+    worker.chmod(0o755)
+    session = attempt_session_id("dirty-receipt-run-1", packet["packet_id"], 1)
+    result = _worker_result(packet, session, attempt=1)
+    adapter = WorkerAdapter(
+        argv=(str(worker),),
+        env={"SYNTHETIC_MARKER_PATH": str(marker), "SYNTHETIC_RESULT": json.dumps(result, separators=(",", ":"))},
+    )
+    real_persist = coordinator.persist_invocation_outcome
+    monkeypatch.setattr(
+        coordinator, "persist_invocation_outcome",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("after receipt")),
+    )
+    with pytest.raises(RuntimeError, match="after receipt"):
+        run_once(state_root, COORD_ID, "dirty-receipt-run-1", _context(), T_NOW,
+                 worker_adapters={packet["packet_id"]: adapter})
+    assert (worktree / "scripts/o4-dirty-receipt.py").exists()
+    monkeypatch.setattr(coordinator, "persist_invocation_outcome", real_persist)
+
+    recovered = run_once(
+        state_root, COORD_ID, "dirty-receipt-run-2", _context(), "2026-08-10T01:12:00Z",
+        worker_adapters={packet["packet_id"]: adapter})
+    events, _ = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    folded, _ = _fold_journal(state_root, events)
+    assert recovered["status"] == "no_eligible_work"
+    assert folded[packet["packet_id"]]["state"] == "REVIEW"
+    assert marker.read_text(encoding="utf-8").splitlines() == ["invoked"]
+
+
+@pytest.mark.parametrize("shape", ["two_baselines", "nonbaseline_content_hash"])
+def test_workspace_baseline_journal_contract_rejects_wrong_artifact_shapes(shape: str) -> None:
+    from harness_contracts.v1.journal import validate_journal_event
+    from harness_coordinator.v1.recovery import _make_event
+
+    artifact = {
+        "kind": "workspace_baseline", "artifact_id": "workspace_baseline",
+        "path": "workspace/o4-parity/attempt-o4-parity-1.baseline.json",
+        "sha256": "a" * 64, "content_sha256": "b" * 64, "byte_length": 1,
+    }
+    event = _make_event(
+        1, "WORKSPACE_BASELINE_RECORDED", "coord-o4", "run-o4", "state-o4", None,
+        "2026-08-11T00:00:00Z", packet_id="o4-parity", intent_id="attempt-o4-parity-1",
+        from_state=None, to_state=None, cause="none",
+        payload={"packet": None, "attempt": None, "artifacts": [artifact], "classification": None,
+                 "transition_detail": None, "recovery": None, "run": None, "report": None},
+    )
+    if shape == "two_baselines":
+        event["payload"]["artifacts"].append(dict(artifact, artifact_id="workspace_baseline_2"))
+    else:
+        event["event_type"] = "RUN_STARTED"
+        event["packet_id"] = None
+        event["intent_id"] = None
+        event["payload"]["run"] = {
+            "coordinator": {"coordinator_id": "coord-o4", "boot_id": "boot", "hostname": "host", "pid": 1},
+            "trust_roots": {}, "contract_versions": {"packet": 1, "worker_result": 1, "verdict": 1,
+                "replay": 1, "journal": 1, "queue": 1, "claim": 1, "attempt_outcome": 1,
+                "provider_evidence": 1, "reassignment": 1, "reconciliation": 1},
+            "end_reason": None, "end_detail": None, "disabled_lanes": [],
+        }
+        event["payload"]["artifacts"] = [dict(artifact, kind="stdout")]
+    event["event_sha256"] = compute_sha256(canonical_bytes(event, omit={"event_sha256"}))
+    schema = json.loads((Path(__file__).parents[2] / "schemas/harness/v1/journal-event.schema.json").read_text())
+    assert not validate_journal_event(event)["valid"]
+    assert schema["allOf"] == [{
+        "if": {"properties": {"event_type": {"const": "WORKSPACE_BASELINE_RECORDED"}}},
+        "then": {"properties": {"payload": {"properties": {"artifacts": {
+            "minItems": 1, "maxItems": 1, "items": {"properties": {
+                "kind": {"const": "workspace_baseline"},
+                "artifact_id": {"const": "workspace_baseline"},
+                "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            }, "required": ["kind", "artifact_id", "content_sha256"]},
+        }}}}},
+        "else": {"properties": {"payload": {"properties": {"artifacts": {"items": {"not": {"anyOf": [
+            {"properties": {"kind": {"const": "workspace_baseline"}}, "required": ["kind"]},
+            {"required": ["content_sha256"]},
+        ]}}}}}}},
+    }]

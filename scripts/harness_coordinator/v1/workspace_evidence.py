@@ -1,6 +1,7 @@
 """Coordinator-owned Git worktree identity evidence for O4."""
 
 import hashlib
+import json
 import os
 import stat
 import subprocess
@@ -75,6 +76,17 @@ def _git_common_dir(worktree_path: str) -> str:
     if not os.path.isabs(common_dir):
         common_dir = os.path.join(worktree_path, common_dir)
     return os.path.realpath(common_dir)
+
+
+def discover_repo_root(worktree_path: str) -> str:
+    """Return a worktree's Git top level, refusing unverifiable worktrees."""
+    try:
+        root = _run_git(worktree_path, ["rev-parse", "--show-toplevel"])
+    except (OSError, subprocess.SubprocessError):
+        raise WorkspaceEvidenceError(
+            "WORKTREE_IDENTITY_REPOSITORY", "Could not resolve the packet worktree Git repository"
+        )
+    return _canonical_directory(root.decode("utf-8", "surrogateescape").strip())
 
 
 def _parse_worktree_records(raw: bytes) -> List[Dict[str, str]]:
@@ -351,3 +363,190 @@ def capture_snapshot(worktree_path: str) -> Dict[str, Any]:
     }
     snapshot["snapshot_sha256"] = snapshot_sha256(snapshot)
     return snapshot
+
+
+_ACTIVE_OWNERSHIP_STATES = {"READY", "RUNNING", "REVIEW", "REVISE"}
+_BASELINE_TOP_LEVEL_KEYS = {
+    "schema_version", "artifact_kind", "packet_id", "packet_sha256", "intent_id",
+    "worktree_identity", "packet_snapshot", "protected_snapshot", "writable_paths",
+    "forbidden_surfaces", "content_sha256", "artifact_sha256",
+}
+
+
+def paths_overlap(a: str, b: str) -> bool:
+    """Return whether normalized repository-relative prefixes overlap."""
+    left = normalize_repo_relative_path(a)
+    right = normalize_repo_relative_path(b)
+    if left is None or right is None or left == "" or right == "":
+        raise WorkspaceEvidenceError(
+            "OWNERSHIP_CONFLICT_PATH", "Ownership paths must be normalized repository-relative paths"
+        )
+    return left == right or left.startswith(right + "/") or right.startswith(left + "/")
+
+
+def _packet_is_write_capable(packet: Dict[str, Any]) -> bool:
+    return bool(packet.get("writable_paths"))
+
+
+def validate_ownership(packet: Dict[str, Any], active_packets: List[Dict[str, Any]]) -> None:
+    """Fail closed when a nonterminal write packet overlaps an existing owner."""
+    if not _packet_is_write_capable(packet):
+        return
+    packet_id = packet.get("packet_id")
+    worktree = packet.get("worktree") or {}
+    current_path = os.path.realpath(str(worktree.get("path", "")))
+    current_branch = worktree.get("branch")
+    current_paths = packet.get("writable_paths") or []
+    for active in active_packets:
+        if active.get("packet_id") == packet_id:
+            continue
+        if active.get("state") not in _ACTIVE_OWNERSHIP_STATES or not _packet_is_write_capable(active):
+            continue
+        other_worktree = active.get("worktree") or {}
+        if current_path and current_path == os.path.realpath(str(other_worktree.get("path", ""))):
+            raise WorkspaceEvidenceError(
+                "OWNERSHIP_CONFLICT_WORKTREE", "A nonterminal packet already owns this worktree"
+            )
+        if current_branch and current_branch == other_worktree.get("branch"):
+            raise WorkspaceEvidenceError(
+                "OWNERSHIP_CONFLICT_BRANCH", "A nonterminal packet already owns this branch"
+            )
+        for current in current_paths:
+            for other in active.get("writable_paths") or []:
+                if paths_overlap(current, other):
+                    raise WorkspaceEvidenceError(
+                        "OWNERSHIP_CONFLICT_PATH", "A nonterminal packet already owns an overlapping path"
+                    )
+
+
+def build_baseline(
+    packet: Dict[str, Any], repo_root: str, protected_worktree_path: Optional[str],
+    active_packets: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Collect authoritative pre-invocation evidence without publishing it."""
+    validate_ownership(packet, active_packets)
+    worktree = packet["worktree"]
+    identity = inspect_worktree(
+        repo_root, worktree["path"], worktree["branch"], packet["starting_revision"]
+    )
+    packet_snapshot = capture_snapshot(worktree["path"])
+    if packet_snapshot["entries"]:
+        raise WorkspaceEvidenceError(
+            "WORKTREE_SNAPSHOT_DIRTY", "Packet worktree must be clean before invocation"
+        )
+    protected_snapshot = (
+        capture_snapshot(protected_worktree_path) if protected_worktree_path is not None else None
+    )
+    return {
+        "worktree_identity": identity,
+        "packet_snapshot": packet_snapshot,
+        "protected_snapshot": protected_snapshot,
+    }
+
+
+def _workspace_artifact_hashes(artifact: Dict[str, Any]) -> Tuple[str, str]:
+    content_sha256 = compute_sha256(
+        canonical_bytes(artifact, omit={"content_sha256", "artifact_sha256"})
+    )
+    copy = dict(artifact)
+    copy["content_sha256"] = content_sha256
+    artifact_sha256 = compute_sha256(canonical_bytes(copy, omit={"artifact_sha256"}))
+    return content_sha256, artifact_sha256
+
+
+def _validated_workspace_artifact(
+    raw: bytes, expected_packet_id: str, expected_intent_id: str
+) -> Dict[str, Any]:
+    from harness_coordinator.v1.recovery import IntegrityError
+
+    try:
+        artifact = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise IntegrityError("WORKSPACE_BASELINE_INVALID", "Workspace baseline is not valid JSON") from exc
+    if not isinstance(artifact, dict) or raw != canonical_bytes(artifact):
+        raise IntegrityError("WORKSPACE_BASELINE_INVALID", "Workspace baseline is not canonical")
+    if set(artifact) != _BASELINE_TOP_LEVEL_KEYS:
+        raise IntegrityError("WORKSPACE_BASELINE_INVALID", "Workspace baseline has an invalid field set")
+    if (artifact.get("schema_version") != 1
+            or artifact.get("artifact_kind") != "workspace_baseline"
+            or artifact.get("packet_id") != expected_packet_id
+            or artifact.get("intent_id") != expected_intent_id):
+        raise IntegrityError("WORKSPACE_BASELINE_MISMATCH", "Workspace baseline identity disagrees")
+    content_sha256, artifact_sha256 = _workspace_artifact_hashes(artifact)
+    if (artifact.get("content_sha256") != content_sha256
+            or artifact.get("artifact_sha256") != artifact_sha256):
+        raise IntegrityError("WORKSPACE_BASELINE_MISMATCH", "Workspace baseline hashes disagree")
+    return artifact
+
+
+def publish_workspace_artifact(
+    handle, relative_parts: Tuple[str, ...], artifact: Dict[str, Any]
+) -> Dict[str, str]:
+    """Publish one immutable canonical workspace artifact through the pinned root."""
+    artifact = dict(artifact)
+    content_sha256, artifact_sha256 = _workspace_artifact_hashes(artifact)
+    artifact["content_sha256"] = content_sha256
+    artifact["artifact_sha256"] = artifact_sha256
+    raw = canonical_bytes(artifact)
+    handle.publish(relative_parts, raw)
+    return {
+        "artifact_path": "/".join(relative_parts),
+        "artifact_sha256": artifact_sha256,
+        "content_sha256": content_sha256,
+    }
+
+
+def ensure_attempt_baseline(
+    handle, packet: Dict[str, Any], intent_id: str, repo_root: str,
+    protected_worktree_path: Optional[str], active_packets: List[Dict[str, Any]], *,
+    revalidate: bool = True,
+) -> Dict[str, Any]:
+    """Load a valid existing baseline or build and publish the one immutable baseline."""
+    from harness_coordinator.v1.paths import validate_harness_id
+
+    packet_id = validate_harness_id(packet["packet_id"], "/packet_id")
+    intent_id = validate_harness_id(intent_id, "/intent_id")
+    parts = ("workspace", packet_id, f"{intent_id}.baseline.json")
+    existing = handle.read(parts)
+    if existing is not None:
+        artifact = _validated_workspace_artifact(existing, packet_id, intent_id)
+        if artifact.get("packet_sha256") != packet.get("packet_sha256"):
+            from harness_coordinator.v1.recovery import IntegrityError
+            raise IntegrityError("WORKSPACE_BASELINE_MISMATCH", "Workspace baseline packet hash disagrees")
+        if revalidate:
+            try:
+                current = build_baseline(packet, repo_root, protected_worktree_path, active_packets)
+            except WorkspaceEvidenceError as exc:
+                from harness_coordinator.v1.recovery import IntegrityError
+                raise IntegrityError("WORKSPACE_BASELINE_DRIFT", "Workspace baseline preflight drifted") from exc
+            expected = {
+                "worktree_identity": current["worktree_identity"],
+                "packet_snapshot": current["packet_snapshot"],
+                "protected_snapshot": current["protected_snapshot"],
+                "writable_paths": sorted(packet["writable_paths"]),
+                "forbidden_surfaces": sorted(packet["forbidden_surfaces"]),
+            }
+            if any(artifact.get(key) != value for key, value in expected.items()):
+                from harness_coordinator.v1.recovery import IntegrityError
+                raise IntegrityError("WORKSPACE_BASELINE_DRIFT", "Workspace baseline evidence drifted")
+        return {
+            "artifact_path": "/".join(parts),
+            "artifact_sha256": artifact["artifact_sha256"],
+            "content_sha256": artifact["content_sha256"],
+        }
+    baseline = build_baseline(packet, repo_root, protected_worktree_path, active_packets)
+    artifact = {
+        "schema_version": 1,
+        "artifact_kind": "workspace_baseline",
+        "packet_id": packet_id,
+        "packet_sha256": packet["packet_sha256"],
+        "intent_id": intent_id,
+        "worktree_identity": baseline["worktree_identity"],
+        "packet_snapshot": baseline["packet_snapshot"],
+        "protected_snapshot": baseline["protected_snapshot"],
+        "writable_paths": sorted(packet["writable_paths"]),
+        "forbidden_surfaces": sorted(packet["forbidden_surfaces"]),
+        "content_sha256": "",
+        "artifact_sha256": "",
+    }
+    return publish_workspace_artifact(handle, parts, artifact)
