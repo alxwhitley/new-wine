@@ -19,6 +19,36 @@ CLASSIFICATIONS = {
 CHANNELS = {"stdout", "stderr"}
 MATCH_KINDS = {"substring", "exit_code"}
 
+# O5 provider capacity observation.  Subscriptions are capacity-constrained
+# services, so the authenticated evidence path records OBSERVED PROVIDER
+# STATE -- never an estimated dollar spend, and never anything that could
+# carry a secret.  The field set below is closed on purpose: raw headers,
+# credentials, response bodies, subscription identifiers, and prompt content
+# have no representable slot here, so they cannot be persisted even by a
+# caller that wants to.
+CAPACITY_STATES = {
+    "AVAILABLE",
+    "RATE_LIMITED",
+    "ALLOWANCE_EXHAUSTED",
+    "UNAVAILABLE",
+}
+
+CAPACITY_OBSERVATION_FIELDS = {
+    "provider",
+    "model_id",
+    "state",
+    "observed_at",
+    "reset_at",
+    "evidence_sha256",
+}
+
+# An exact provider model identifier, in canonical lowercase form.  Aliases
+# and catalog display names cannot match, so a runtime catalog rename can
+# never resolve onto a plan-pinned route.  ``execution_plan._MODEL_ID`` is
+# the same expression for the same reason; consolidate the two the next time
+# that module is in scope.
+RE_MODEL_ID = r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+
 REASON_TO_CLASSIFICATION = {
     "confirmed_quota_exhaustion": "CONFIRMED_QUOTA_EXHAUSTION",
     "confirmed_rate_limit_exhaustion": "CONFIRMED_RATE_LIMIT_EXHAUSTION",
@@ -82,8 +112,68 @@ def validate_provider_evidence(value: Any) -> Dict[str, Any]:
     return invalid_result(sort_errors(v.errors))
 
 
+def validate_provider_capacity_observation(value: Any) -> Dict[str, Any]:
+    """Validate one closed, authenticated provider capacity observation.
+
+    This is the only shape through which observed provider capacity may enter
+    the coordinator.  Worker prose, stderr text, and guessed reset times are
+    untrusted and have no representation here: a reset time is accepted only
+    as an explicit ``reset_at``, and ``null`` means "no authenticated reset
+    time exists", never "assume one".
+    """
+    if isinstance(value, (str, bytes, bytearray)):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            return invalid_result([error("INVALID_JSON", "", f"JSON decode error: {exc}", phase="json_decode")])
+    if not isinstance(value, dict):
+        return invalid_result([error("ROOT_NOT_OBJECT", "", "Capacity observation root is not an object", phase="root_type")])
+
+    v = _PacketValidator(value)
+    _validate_capacity_observation_object(v, value, "")
+    if not v.errors:
+        return valid_result()
+    return invalid_result(sort_errors(v.errors))
+
+
+def _validate_capacity_observation_object(v: _PacketValidator, observation: Any, path: str) -> None:
+    """Collect capacity-observation errors into ``v`` at ``path``."""
+    if not isinstance(observation, dict):
+        v.add("INVALID_TYPE", path or "/", "Expected object", phase="scalar")
+        return
+    for key in observation:
+        if key not in CAPACITY_OBSERVATION_FIELDS:
+            v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
+    for key in CAPACITY_OBSERVATION_FIELDS:
+        if key not in observation:
+            v.add("MISSING_FIELD", f"{path}/{key}", f"Missing required field '{key}'")
+    if v.errors:
+        return
+
+    _check_non_empty_string(v, observation.get("provider"), f"{path}/provider")
+    model_id = observation.get("model_id")
+    if not _matches(model_id, RE_MODEL_ID):
+        v.add("INVALID_FORMAT", f"{path}/model_id", "model_id must be a canonical lowercase model identifier", phase="format")
+    v.check_enum(observation.get("state"), CAPACITY_STATES, f"{path}/state")
+    _check_rfc3339(v, observation.get("observed_at"), f"{path}/observed_at")
+    reset_at = observation.get("reset_at")
+    if reset_at is not None:
+        _check_rfc3339(v, reset_at, f"{path}/reset_at")
+    _check_sha256(v, observation.get("evidence_sha256"), f"{path}/evidence_sha256")
+
+    observed_at = observation.get("observed_at")
+    if (_matches(observed_at, RE_RFC3339) and _matches(reset_at, RE_RFC3339)
+            and reset_at < observed_at):
+        v.add(
+            "CHRONOLOGY_VIOLATION",
+            f"{path}/reset_at",
+            "reset_at must not precede observed_at",
+            phase="cross_field",
+        )
+
+
 def _validate_provider_evidence_object(v: _PacketValidator) -> None:
-    allowed = {
+    required = {
         "schema_version",
         "evidence_id",
         "packet_id",
@@ -99,15 +189,21 @@ def _validate_provider_evidence_object(v: _PacketValidator) -> None:
         "classification",
         "evidence_sha256",
     }
+    # ``capacity`` is optional so every pre-O5 evidence record stays valid;
+    # when present it must be the same closed observation the journal records.
+    allowed = required | {"capacity"}
     value = v.value
     for key in value:
         if key not in allowed:
             v.add("UNKNOWN_FIELD", f"/{key}", f"Unknown field '{key}'")
-    for key in allowed:
+    for key in required:
         if key not in value:
             v.add("MISSING_FIELD", f"/{key}", f"Missing required field '{key}'")
     if v.errors:
         return
+
+    if "capacity" in value and value.get("capacity") is not None:
+        _validate_capacity_observation_object(v, value["capacity"], "/capacity")
 
     if value.get("schema_version") != 1:
         v.add("INVALID_VALUE", "/schema_version", "schema_version must be 1", phase="value")

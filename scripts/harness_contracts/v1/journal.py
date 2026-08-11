@@ -7,6 +7,12 @@ from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.claim import CLAIM_CLASSIFICATIONS
 from harness_contracts.v1.classification import ATTEMPT_CLASSES
 from harness_contracts.v1.errors import PHASE_RANK, error, invalid_result, sort_errors, valid_result
+# ``execution_plan`` imports only canonical/packet at module scope (its own
+# journal import is function-local, inside ``bind_execution_plan``), so this
+# direction is acyclic.  Importing the class vocabulary keeps one definition
+# of the capability classes rather than a second hand-kept copy here.
+from harness_contracts.v1.execution_plan import CAPABILITY_CLASSES
+from harness_contracts.v1.provider_evidence import CAPACITY_STATES, RE_MODEL_ID
 from harness_contracts.v1.packet import (
     LANES,
     PACKET_STATES,
@@ -39,6 +45,61 @@ JOURNAL_EVENT_TYPES = {
     "WORKSPACE_POSTFLIGHT_RECORDED",
     "INTEGRATION_MANIFEST_RECORDED",
     "EXECUTION_PLAN_BOUND",
+    "PROVIDER_CAPACITY_RECORDED",
+    "PROVIDER_BACKOFF_SCHEDULED",
+    "MODEL_FALLBACK_SELECTED",
+    "PACKET_PAUSED",
+}
+
+# O5 stop-reason vocabulary, from the approved design's stable families.  It
+# is closed: an unknown reason code fails validation here and in the JSON
+# Schema, so no ad hoc reason string can reach a durable event.
+BUDGET_REASON_CODES = {
+    # PACKET_BUDGET_* -- plan limits, derived from the journal before a claim.
+    "PACKET_BUDGET_ATTEMPTS_EXHAUSTED",
+    "PACKET_BUDGET_RETRIES_EXHAUSTED",
+    "PACKET_BUDGET_REVISIONS_EXHAUSTED",
+    # PROVIDER_ALLOWANCE_* -- observed subscription capacity, never spend.
+    "PROVIDER_ALLOWANCE_EXHAUSTED",
+    "PROVIDER_ALLOWANCE_UNAVAILABLE",
+    "PROVIDER_ALLOWANCE_RESET_PENDING",
+    # PROVIDER_BACKOFF_* -- the plan's bounded, finite retry schedule.
+    "PROVIDER_BACKOFF_PENDING",
+    "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+    # MODEL_ROUTE_* -- plan-pinned routing outcomes and refusals.
+    "MODEL_ROUTE_SELECTED",
+    "MODEL_ROUTE_FALLBACK_SELECTED",
+    "MODEL_ROUTE_DISABLED",
+    "MODEL_ROUTE_UNQUALIFIED",
+    "MODEL_ROUTE_NOT_IN_PLAN",
+    "MODEL_ROUTE_CROSS_CLASS_FALLBACK",
+    "MODEL_ROUTE_FALLBACK_CYCLE",
+    "MODEL_ROUTE_REVIEWER_IDENTITY_CONFLICT",
+    # Terminal families shared with the wider stop vocabulary.
+    "NO_CAPABLE_MODEL_AVAILABLE",
+    "HUMAN_AUTHORITY_REQUIRED",
+    "BUDGET_EVIDENCE_INVALID",
+    "PLAN_SCOPE_PACKET_OUTSIDE_PLAN",
+    "PLAN_SCOPE_PACKET_DIGEST_MISMATCH",
+}
+
+# Each O5 budget event carries exactly one closed payload object, under its
+# own payload key.  Every other event type must leave that key null/absent.
+BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE = {
+    "PROVIDER_CAPACITY_RECORDED": "provider_capacity",
+    "PROVIDER_BACKOFF_SCHEDULED": "provider_backoff",
+    "MODEL_FALLBACK_SELECTED": "model_fallback",
+    "PACKET_PAUSED": "packet_pause",
+}
+
+BUDGET_PAYLOAD_KEYS = frozenset(BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE.values())
+
+# Provider capacity and its backoff schedule are provider-scoped facts, not
+# packet-scoped ones; fallback selection and pause are decisions about one
+# packet and carry its id.
+PROVIDER_SCOPED_EVENT_TYPES = {
+    "PROVIDER_CAPACITY_RECORDED",
+    "PROVIDER_BACKOFF_SCHEDULED",
 }
 
 TRANSITION_CAUSES = {
@@ -126,6 +187,10 @@ CAUSES_BY_EVENT_TYPE: Dict[str, Set[str]] = {
     "WORKSPACE_POSTFLIGHT_RECORDED": {"none"},
     "INTEGRATION_MANIFEST_RECORDED": {"none"},
     "EXECUTION_PLAN_BOUND": {"none"},
+    "PROVIDER_CAPACITY_RECORDED": {"none"},
+    "PROVIDER_BACKOFF_SCHEDULED": {"none"},
+    "MODEL_FALLBACK_SELECTED": {"none"},
+    "PACKET_PAUSED": {"none"},
 }
 
 # Payload sub-objects that must be non-null for each event type.
@@ -146,6 +211,10 @@ PAYLOAD_NON_NULL_BY_TYPE: Dict[str, Set[str]] = {
     "WORKSPACE_POSTFLIGHT_RECORDED": set(),
     "INTEGRATION_MANIFEST_RECORDED": set(),
     "EXECUTION_PLAN_BOUND": {"execution_plan"},
+    "PROVIDER_CAPACITY_RECORDED": set(),
+    "PROVIDER_BACKOFF_SCHEDULED": set(),
+    "MODEL_FALLBACK_SELECTED": set(),
+    "PACKET_PAUSED": set(),
 }
 
 ARTIFACT_KINDS = {
@@ -340,7 +409,9 @@ def _validate_journal_event_object(
         v.add("EVIDENCE_HASH_MISMATCH", "/state_root_id", "state_root_id does not match manifest", phase="cross_field")
 
     packet_id = value.get("packet_id")
-    if event_type in {"RUN_STARTED", "RUN_ENDED", "JOURNAL_TAIL_TRUNCATED", "RECONCILIATION_EMITTED", "EXECUTION_PLAN_BOUND"}:
+    if event_type in ({"RUN_STARTED", "RUN_ENDED", "JOURNAL_TAIL_TRUNCATED",
+                       "RECONCILIATION_EMITTED", "EXECUTION_PLAN_BOUND"}
+                      | PROVIDER_SCOPED_EVENT_TYPES):
         if packet_id is not None:
             v.add("INVALID_VALUE", "/packet_id", f"{event_type} event must have packet_id null", phase="value")
     else:
@@ -472,7 +543,7 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         v.add("INVALID_TYPE", "/payload", "Expected object", phase="scalar")
         return
     required_keys = {"packet", "attempt", "artifacts", "classification", "transition_detail", "recovery", "run", "report"}
-    allowed_keys = required_keys | {"execution_plan"}
+    allowed_keys = required_keys | {"execution_plan"} | set(BUDGET_PAYLOAD_KEYS)
     for key in payload:
         if key not in allowed_keys:
             v.add("UNKNOWN_FIELD", f"/payload/{key}", f"Unknown field '{key}'")
@@ -503,6 +574,8 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
     elif execution_plan is not None:
         v.add("INVALID_VALUE", "/payload/execution_plan", f"{event_type} event must have execution_plan null or absent", phase="value")
 
+    _validate_budget_payloads(v, payload, event_type)
+
     if isinstance(payload.get("artifacts"), list):
         _validate_artifacts(v, payload["artifacts"], "/payload/artifacts")
 
@@ -522,6 +595,168 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         _validate_payload_report(v, payload["report"], "/payload/report")
     if "execution_plan" in non_null and isinstance(payload.get("execution_plan"), dict):
         _validate_payload_execution_plan(v, payload["execution_plan"], "/payload/execution_plan")
+
+
+def _validate_closed_payload(
+    v: _PacketValidator,
+    value: Any,
+    path: str,
+    spec: Dict[str, Any],
+) -> bool:
+    """Validate one closed payload object against an exact field spec.
+
+    ``spec`` maps every permitted key to a ``(v, value, path)`` checker.  Key
+    membership -- unknown keys, missing keys -- is decided here, once, so each
+    new closed payload declares its fields exactly once instead of re-spelling
+    the same membership loop.  Returns whether the per-field checks ran.
+    """
+    if not isinstance(value, dict):
+        v.add("INVALID_TYPE", path, "Expected object", phase="scalar")
+        return False
+    for key in value:
+        if key not in spec:
+            v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
+    for key in spec:
+        if key not in value:
+            v.add("MISSING_FIELD", f"{path}/{key}", f"Missing required field '{key}'")
+    if v.errors:
+        return False
+    for key in sorted(spec):
+        spec[key](v, value.get(key), f"{path}/{key}")
+    return True
+
+
+def _check_model_id(v: _PacketValidator, value: Any, path: str) -> bool:
+    if not _matches(value, RE_MODEL_ID):
+        v.add("INVALID_FORMAT", path, "Must be a canonical lowercase model identifier", phase="format")
+        return False
+    return True
+
+
+def _check_optional_rfc3339(v: _PacketValidator, value: Any, path: str) -> bool:
+    if value is None:
+        return True
+    return _check_rfc3339(v, value, path)
+
+
+def _check_enum_factory(allowed: Set[str], label: str):
+    def check(v: _PacketValidator, value: Any, path: str) -> bool:
+        return v.check_enum(value, allowed, path)
+
+    check.__name__ = "_check_" + label
+    return check
+
+
+_check_reason_code = _check_enum_factory(BUDGET_REASON_CODES, "reason_code")
+_check_capability_class = _check_enum_factory(CAPABILITY_CLASSES, "capability_class")
+_check_capacity_state = _check_enum_factory(CAPACITY_STATES, "capacity_state")
+
+
+def _check_harness_id(v: _PacketValidator, value: Any, path: str) -> bool:
+    if not is_harness_id(value):
+        v.add("INVALID_FORMAT", path, "Must be a safe harness identifier", phase="format")
+        return False
+    return True
+
+
+def _check_nonneg_int(v: _PacketValidator, value: Any, path: str) -> bool:
+    return _check_int(v, value, path, nonneg=True)
+
+
+def _check_evidence_id_list(v: _PacketValidator, value: Any, path: str) -> bool:
+    if not isinstance(value, list):
+        v.add("INVALID_TYPE", path, "Expected array", phase="scalar")
+        return False
+    seen: Set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or item.strip() == "":
+            v.add("INVALID_VALUE", f"{path}/{index}", "Evidence id must be a non-empty string", phase="value")
+        elif item in seen:
+            v.add("DUPLICATE_ID", f"{path}/{index}", "Duplicate evidence id", phase="uniqueness")
+        else:
+            seen.add(item)
+    if value != sorted(value, key=lambda item: item if isinstance(item, str) else ""):
+        v.add("INVALID_VALUE", path, "Evidence ids must be sorted for deterministic bytes", phase="value")
+    return True
+
+
+# One closed field spec per O5 budget payload.  Nothing here can hold raw
+# headers, credentials, response bodies, subscription identifiers, or prompt
+# content -- there is no key for any of them.
+BUDGET_PAYLOAD_SPECS: Dict[str, Dict[str, Any]] = {
+    "provider_capacity": {
+        "provider": _check_non_empty_string,
+        "model_id": _check_model_id,
+        "state": _check_capacity_state,
+        "observed_at": _check_rfc3339,
+        "reset_at": _check_optional_rfc3339,
+        "evidence_sha256": _check_sha256,
+    },
+    "provider_backoff": {
+        "provider": _check_non_empty_string,
+        "model_id": _check_model_id,
+        "reason_code": _check_reason_code,
+        "next_eligible_at": _check_rfc3339,
+        "retry_index": _check_nonneg_int,
+        "evidence_sha256": _check_sha256,
+    },
+    "model_fallback": {
+        "capability_class": _check_capability_class,
+        "from_route_id": _check_harness_id,
+        "to_route_id": _check_harness_id,
+        "provider": _check_non_empty_string,
+        "model_id": _check_model_id,
+        "reason_code": _check_reason_code,
+    },
+    "packet_pause": {
+        "reason_code": _check_reason_code,
+        "capability_class": _check_capability_class,
+        "next_eligible_at": _check_optional_rfc3339,
+        "evidence_ids": _check_evidence_id_list,
+    },
+}
+
+
+def _validate_budget_payloads(v: _PacketValidator, payload: Dict[str, Any], event_type: str) -> None:
+    """Bind each O5 budget payload key to exactly one event type."""
+    for source_type in sorted(BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE):
+        key = BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE[source_type]
+        body = payload.get(key)
+        if event_type == source_type:
+            if body is None:
+                v.add(
+                    "MISSING_FIELD",
+                    f"/payload/{key}",
+                    f"{event_type} requires {key} to be non-null",
+                    phase="unknown_missing",
+                )
+                continue
+            _validate_closed_payload(v, body, f"/payload/{key}", BUDGET_PAYLOAD_SPECS[key])
+            if key == "provider_capacity" and isinstance(body, dict):
+                observed_at, reset_at = body.get("observed_at"), body.get("reset_at")
+                if (_matches(observed_at, RE_RFC3339) and _matches(reset_at, RE_RFC3339)
+                        and reset_at < observed_at):
+                    v.add(
+                        "CHRONOLOGY_VIOLATION",
+                        f"/payload/{key}/reset_at",
+                        "reset_at must not precede observed_at",
+                        phase="cross_field",
+                    )
+            if key == "model_fallback" and isinstance(body, dict):
+                if body.get("from_route_id") == body.get("to_route_id"):
+                    v.add(
+                        "INVALID_FALLBACK",
+                        f"/payload/{key}/to_route_id",
+                        "A fallback hop must differ from the route it replaces",
+                        phase="cross_field",
+                    )
+        elif body is not None:
+            v.add(
+                "INVALID_VALUE",
+                f"/payload/{key}",
+                f"{event_type} event must have {key} null or absent",
+                phase="value",
+            )
 
 
 def _validate_payload_execution_plan(v: _PacketValidator, binding: Dict[str, Any], path: str) -> None:
