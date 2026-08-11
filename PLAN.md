@@ -197,74 +197,15 @@ passed.
 |---|---|---|
 | Opus specifies scheduling, retry classification, fallback semantics, and morning reconciliation. | Implement durable queue/journal/checkpoint behavior with crash-resume tests. | Build deterministic failure fixtures: timeout, malformed output, quota exhaustion, test failure, and interrupted process. |
 
-**Status — 2026-08-10: O3's decision layer plus coordinator slices P5A–P5C
-are built, tested, and independently accepted on
-`codex/o3-p5-coordinator-loop`. Enrollment/attempt claims, bounded synthetic
-invocation, trusted verdict ingestion, terminal seals, REVISE requeue, and
-seal-before-promotion now exist. P5D recovery/fallback/reconciliation and P5E
-synthetic commissioning remain; no real provider has been commissioned. Read
-the boxes below literally — do not read this as "O3 complete."**
-
-**Exit criteria:**
-
-- [x] Restarting the coordinator neither loses nor double-runs accepted work
-  — proven at the LOGIC level only (crash-fold/recovery functions, 33
-  dedicated crash-recovery tests covering all three documented crash points
-  plus idempotent double-restart), never yet exercised by a live running
-  coordinator process, because none exists (see below).
-- [x] Retryable infrastructure failures are distinct from worker-quality
-  failures and quota exhaustion — `classify_attempt`'s full precedence
-  table, all four provider-exhaustion guards independently adversarially
-  tested (a fabricated/inconsistent exhaustion signal is provably
-  rejected), exact retry-budget bound proven.
-- [ ] Confirmed Kimi exhaustion requeues eligible packets to Sonnet 5 exactly
-  once without discarding the Kimi checkpoint — the STATE half is real and
-  tested (lane flip, `reassignment_used`, quarantine-not-loop on a second
-  exhaustion). Two of the four designed barriers against a duplicate
-  reassignment are NOT reachable: nothing anywhere writes a
-  `reassignments/<packet_id>.json` record, so the `O_EXCL` barrier and the
-  packet-digest barrier have no runtime path to protect. Not checked off.
-- [x] One quarantined packet does not block independent ready packets —
-  built, tested, independently reproduced live by two separate review
-  rounds.
-- [x] The morning report reconciles ready / running / reviewed / accepted /
-  revised / quarantined / human-required packets — built
-  (`scripts/harness_coordinator/v1/reconcile.py` + a read-only replay CLI),
-  391 tests, five independent Opus review rounds on this piece alone. Also
-  flags `promotion_stalled` / `attempt_budget_exhausted` /
-  `dependency_terminal_not_accepted` as operator-facing attention even when
-  the durable state is internally self-consistent (`all_invariants_passed`
-  stays true for those — a genuinely stuck packet is not a corruption, but
-  the CLI exit code treats both as failure so an automated morning check
-  can't miss either).
-
-**What is missing, stated plainly:** P5D must finish restart-safe fallback,
-immutable reassignment records, reconciliation, and read-only status; P5E must
-commission the whole loop with disposable synthetic adapters. Before P5D,
-four independently reproduced defects need separate bounded remediation:
-enrollment can report success after appending a chronology-invalid event;
-invocation cleanup can signal a recycled PID after reaping; derived queue
-entries are ordered by packet ID while their validator requires enqueue order;
-and the P5A worker-claim path remains pathname-based rather than bound to the
-pinned state-root identity introduced by P5C. Real Kimi/Sonnet commissioning
-remains `HUMAN_REQUIRED` until its subprocess sandbox is independently proven.
-
-Also carried forward, not blocking, not hidden: six of design section
-10.2's nine scheduling/transition replay checks (classification-decision
-replay, artifact-digest verification, promotion-vs-dependency cross-check,
-verdict-bundle replay, and the invariant re-check at journal head — five
-named, one more moot pending backoff) are unbuilt and honestly documented
-in `replay_schedule.py`'s own module docstring; `INFRA_BACKOFF_SECONDS`
-(design 5.4) is itself unbuilt; `assert_preserved()` (design 7.2) and a
-per-packet staleness cache (design 1.4) have no producer anywhere, disclosed
-in both `reconcile.py`'s and `classify_runtime.py`'s module docstrings and
-in every reconciliation report's own `unverified_invariants` attention item.
-
-Evidence: accepted O3 foundation plus P5A `7a78541`, P5B `c700b97`, and P5C
-`028372e`; 591 O2/O3 harness tests pass in the controller run (104 focused
-P5C), with all three legacy hook scripts passing. P5C reached fresh Opus
-`ACCEPT` after six adversarial revision gates. No branch was pushed and no
-database, provider, deployment, or governed content action occurred.
+**DONE — 2026-08-11:** Repo-only coordinator, crash recovery, quarantine,
+one-time fallback, reconciliation/status, and disposable synthetic end-to-end
+commissioning completed on `codex/o3-p5-coordinator-loop` (P5D `746bb05`, P5E
+`e16920b`, audit `docs/audits/o3_p5_synthetic_commissioning_2026-08-10.md` /
+`5322411`; 656 O2/O3 tests, final Opus `ACCEPT`). The branch is not merged or
+pushed. Real-provider commissioning remains `HUMAN_REQUIRED` pending a proven
+pre-execution sandbox; receipt recovery does not claim general exactly-once
+semantics before a receipt exists, and the optional state-cache invariant
+remains explicitly unverified.
 
 ### O4 — Isolate Git and filesystem ownership
 

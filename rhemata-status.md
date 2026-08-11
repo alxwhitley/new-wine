@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-10 (O3 coordinator P5A–P5C committed on
+Last verified: 2026-08-11 (O3 repo-only synthetic coordinator complete on
 `codex/o3-p5-coordinator-loop`; not merged or pushed). No production writes,
-provider commissioning, deployment, or `serving_enabled` change.
+real-provider commissioning, deployment, or `serving_enabled` change.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -17,31 +17,26 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**O3 coordinator P5A–P5C — built, committed, and independently accepted.**
-Branch `codex/o3-p5-coordinator-loop`, not merged or pushed. Build commits:
-`7a78541` (safe enrollment and durable attempt start), `c700b97` (bounded
-synthetic invocation and recovery-safe process sidecars), and `028372e`
-(trusted verdict ingestion, review ownership/recovery, terminal seals,
-REVISE requeue, and seal-before-promotion). The controller's final gate passed
-591 O2/O3 tests, including 104 focused P5C tests; three legacy harness scripts
-also pass. Fresh Opus returned `ACCEPT` for each slice. P5C binds its complete
-artifact lifecycle to one pinned, no-follow state-root identity.
+**O3 repo-only coordinator — complete, committed, synthetically commissioned,
+and independently accepted.** Branch `codex/o3-p5-coordinator-loop`, not
+merged or pushed. P5A–P5C: `7a78541`, `c700b97`, `028372e`; four bounded
+pre-P5D remediations: `c8a5c4c`, `65d908d`, `badc41c`, `cfb753e`; P5D:
+`746bb05`; P5E: `e16920b`; commissioning audit: `5322411`.
 
-**Not complete:** P5D (fallback/reassignment/reconciliation/status) and P5E
-(disposable synthetic end-to-end commissioning) remain. No real Kimi, Sonnet,
-Claude, or Grok worker was commissioned. Real-provider commissioning remains
-blocked until a subprocess sandbox and command policy are independently
-proven.
+Final controller evidence: 656 O2/O3 tests passed, including 11 focused P5E
+commissioning tests; three legacy harness scripts, scoped compilation, and
+diff checks passed. Fresh Opus returned final `ACCEPT`. Disposable tests cover
+the real coordinator path from enrollment through worker result, REVIEW,
+trusted verdict, terminal seal, dependency promotion, reconciliation, crash
+resume, separate singleton/claim contention, and deterministic `--once`.
 
-**Required pre-P5D remediation, each as a separate bounded fix:**
-
-- Enrollment can report success after a chronology-invalid journal append is
-  later treated as a torn tail.
-- Invocation cleanup can signal a recycled PID after the process was reaped.
-- Derived queue entries are ordered by packet ID while validation requires
-  ascending enqueue sequence.
-- P5A worker claims still use pathname lifecycle operations rather than P5C's
-  pinned state-root identity.
+**Still intentionally blocked:** no real Kimi, Sonnet, Claude, or Grok worker
+was commissioned. Real-provider commissioning remains `HUMAN_REQUIRED` until
+an independently proven pre-execution sandbox constrains filesystem, command,
+environment, and network access. Synthetic receipt recovery does not claim
+general exactly-once semantics for arbitrary external effects before a receipt
+can exist. The optional per-packet state-cache invariant remains explicitly
+unverified in reconciliation; immutable reassignment preservation is verified.
 
 **Derek Prince non-book quote curation — COMPLETE as of 2026-08-09,**
 unrelated prior session, untouched by O3. 477/496 documents approved, 20
@@ -64,16 +59,16 @@ still 8/53; Open Decision #21 not decided.
 - Admin-panel notifications — dependency of position-refresh; no design.
 - `five_fold_ministry.md` editorial marker — needs Alex.
 - 20 Prince documents with zero approved quotes (2026-08-09).
-- **O3 coordinator branch not merged** — P5A–P5C are committed on
-  `codex/o3-p5-coordinator-loop`; four pre-P5D remediations remain above.
+- **O3 coordinator branch not merged** — implementation and synthetic
+  commissioning are complete and accepted on `codex/o3-p5-coordinator-loop`.
 
 ---
 
 ## Next
 
-1. **Fresh O3 session:** fix the four pre-P5D defects in separate commits,
-   rerun the full harness gate, then build P5D and P5E. Decide merge timing
-   only after synthetic commissioning passes.
+1. **Decide O3 branch integration timing.** Do not commission real providers
+   until Alex approves a separately proven subprocess sandbox and command
+   policy.
 2. **`five_fold_ministry.md` editorial decision.**
 3. Async concurrency proof at 100-dial (before speed work).
 4. Decide extractor hardening before any next Prince-style batch —
