@@ -133,6 +133,7 @@ Affected recovery/reconciliation/schema/O4 files: 235 passed in 36.94s
 Fix Round 3 focused selection: 10 passed, 61 deselected in 1.46s
 Fix Round 3 affected recovery/reconciliation/schema/O4 files: 236 passed in 36.67s
 Fix Round 3 full prescribed O2/O3/O4 suite: 796 passed in 62.85s
+Final whole-branch corrections: 804 passed in 70.53s
 Final crash/commissioning/fold-attribution subset: 10 passed in 10.16s
 py_compile scripts/harness_contracts/v1/*.py scripts/harness_coordinator/v1/*.py: exit 0
 git diff --check main...HEAD: exit 0
@@ -159,3 +160,17 @@ touched.
 
 This is O4's sequential commissioning, not O6's concurrent multi-packet
 rehearsal. It makes no concurrency-readiness claim.
+
+## Final independent review closeout
+
+Whole-branch review initially found four trust-boundary gaps: repository-root
+self-validation, preflight after `ATTEMPT_STARTED`, journal schema/runtime
+artifact-kind drift, and acceptance of staged changes. Bounded corrections
+closed all four. Follow-up review exposed the deferred-adapter form of the
+preflight ordering defect, including rootless legacy packet artifacts; the
+final gate now treats every nonempty writable allowlist as write-capable and
+keeps such packets `READY` until an adapter can run preflight. Exact-tree
+controller verification completed with 804 passing O2/O3/O4 tests, compilation
+and diff checks clean, and all three legacy guards passing. Independent review
+returned Spec PASS, Quality PASS, `ACCEPT`, with no Critical or Important
+findings.

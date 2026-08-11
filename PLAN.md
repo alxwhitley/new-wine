@@ -213,15 +213,17 @@ and the optional state-cache invariant remains explicitly unverified.
 |---|---|---|
 | Opus approves the integration order and rejects overlapping ownership. | Exercise implementation packets in dedicated worktrees with file allowlists. | Audit changed-file manifests, unexpected untracked files, secret-like diffs, and cross-worktree leakage. |
 
-**Exit criteria:**
-
-- [ ] Each write-capable packet receives its own named branch and worktree.
-- [ ] A worker is stopped if it changes a path outside its allowlist.
-- [ ] The harness never stages, commits, pushes, merges, deletes, or cleans the
-  user's unrelated work.
-- [ ] Build commits and docs/records commits remain separate.
-- [ ] Integration conflicts become `HUMAN_REQUIRED`; they are not resolved by
-  overwriting another lane.
+**DONE — 2026-08-11:** Git/worktree identity, independently bound repository
+roots, exclusive write ownership, clean baselines, authoritative postflight
+manifests, staged/out-of-allowlist/secret-like change refusal, protected dirty
+worktree preservation, mutation-free integration analysis, and crash-safe
+evidence reconciliation are implemented on `codex/o4-git-isolation` through
+`7ab9f15`. Commissioning evidence is recorded in
+`docs/audits/o4_git_filesystem_isolation_2026-08-11.md`; 804 O2/O3/O4 tests,
+scoped compilation, diff checks, and all three legacy guards passed. Final
+independent review returned Spec PASS, Quality PASS, `ACCEPT`. The harness does
+not stage, commit, push, merge, clean, delete, or resolve conflicts; uncertainty
+routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 
 ### O5 — Add budgets and hard stops
 

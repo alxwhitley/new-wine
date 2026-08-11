@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-11 (O3 repo-only synthetic coordinator integrated
-locally into `main` at `b580915`; not pushed). No production writes,
-real-provider commissioning, deployment, or `serving_enabled` change.
+Last verified: 2026-08-11 (O4 Git/filesystem isolation accepted on
+`codex/o4-git-isolation` at `7ab9f15`; not merged or pushed). No production
+writes, real-provider commissioning, deployment, or `serving_enabled` change.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
 Target ≤150 lines for this file.
@@ -17,18 +17,19 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**O3 repo-only coordinator — complete, committed, synthetically commissioned,
-independently accepted, and integrated locally into `main`.** Integration is
-at `b580915`, not pushed. P5A–P5C: `7a78541`, `c700b97`, `028372e`; four bounded
-pre-P5D remediations: `c8a5c4c`, `65d908d`, `badc41c`, `cfb753e`; P5D:
-`746bb05`; P5E: `e16920b`; commissioning audit: `5322411`.
+**O4 Git/filesystem isolation — complete, committed, synthetically
+commissioned, and independently accepted on `codex/o4-git-isolation`.** Final
+build commit is `7ab9f15`; the branch is not merged or pushed. O3 remains
+integrated locally into `main` at `b580915`, also not pushed.
 
-Final controller evidence: 656 O2/O3 tests passed, including 11 focused P5E
-commissioning tests; three legacy harness scripts, scoped compilation, and
-diff checks passed. Fresh Opus returned final `ACCEPT`. Disposable tests cover
-the real coordinator path from enrollment through worker result, REVIEW,
-trusted verdict, terminal seal, dependency promotion, reconciliation, crash
-resume, separate singleton/claim contention, and deterministic `--once`.
+Final controller evidence: 804 O2/O3/O4 tests passed; scoped compilation, diff
+checks, and all three legacy harness guards passed. Independent final review
+returned Spec PASS, Quality PASS, `ACCEPT`. The coordinator now binds an
+operator-supplied repository root, baselines before a write attempt can become
+`RUNNING`, derives postflight changes from Git, refuses staged, forbidden,
+out-of-allowlist, secret-like, protected-tree, or evidence-inconsistent changes,
+and emits mutation-free integration advice. Rootless legacy artifacts remain
+readable but cannot authorize a new write attempt.
 
 **Still intentionally blocked:** no real Kimi, Sonnet, Claude, or Grok worker
 was commissioned. Real-provider commissioning remains `HUMAN_REQUIRED` until
@@ -64,9 +65,8 @@ still 8/53; Open Decision #21 not decided.
 
 ## Next
 
-1. **O4 Git/filesystem isolation.** Prove packet worktree ownership,
-   allowlist enforcement, dirty-work preservation, and fail-closed integration
-   conflicts before real-provider commissioning.
+1. **O5 budgets and hard stops.** Add turn, wall-clock, retry, output-size,
+   provider-allowance, and queue-wide limits before overnight rehearsal.
 2. **`five_fold_ministry.md` editorial decision.**
 3. Async concurrency proof at 100-dial (before speed work).
 4. Decide extractor hardening before any next Prince-style batch —
