@@ -1001,7 +1001,11 @@ def _build_derived_queue(
     last_event: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     entries = []
-    for packet_id in sorted(derived_states.keys()):
+    ordered_packet_ids = sorted(
+        derived_states,
+        key=lambda packet_id: (derived_states[packet_id]["enqueue_seq"], packet_id),
+    )
+    for packet_id in ordered_packet_ids:
         pkt = derived_states[packet_id]
         entries.append({
             "packet_id": packet_id,

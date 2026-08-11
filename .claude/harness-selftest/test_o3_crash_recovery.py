@@ -204,6 +204,89 @@ def test_atomic_replace_writes_file_atomically():
     assert not any(".tmp." in name for name in os.listdir(state_root))
 
 
+def test_derived_queue_writer_orders_entries_by_enqueue_sequence():
+    from harness_contracts.v1.queue_state import validate_queue
+    from harness_coordinator.v1.recovery import _build_derived_queue
+
+    def packet_state(enqueue_seq: int) -> Dict[str, Any]:
+        return {
+            "enqueue_seq": enqueue_seq,
+            "state": "READY",
+            "lane": "kimi_implementation",
+            "dependency_ids": [],
+            "packet_sha256": "a" * 64,
+            "attempts_started": 0,
+            "infra_retries_used": 0,
+            "revise_cycles_used": 0,
+            "revise_verdicts": 0,
+            "reassignment_used": False,
+            "open_attempt": None,
+            "earliest_next_attempt_at": None,
+            "last_event_seq": enqueue_seq,
+            "terminal_seal_sha256": None,
+        }
+
+    queue = _build_derived_queue(
+        {
+            "a-later": packet_state(2),
+            "z-first": packet_state(1),
+        },
+        "srid-1",
+        None,
+    )
+
+    assert [entry["packet_id"] for entry in queue["entries"]] == [
+        "z-first",
+        "a-later",
+    ]
+    assert validate_queue(queue, state_root_id="srid-1")["valid"]
+
+
+def test_folded_enrollment_order_produces_contract_valid_queue(tmp_path):
+    from harness_contracts.v1.queue_state import validate_queue
+    from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal
+
+    events = []
+    for seq, packet_id in ((1, "z-first"), (2, "a-later")):
+        packet_payload = _make_packet_payload(
+            packet_id=packet_id,
+            packet_path=f"packets/{packet_id}.json",
+            enqueue_seq=seq,
+        )
+        event = _make_event(
+            seq,
+            "PACKET_ENROLLED",
+            "coord-1",
+            "run-1",
+            "srid-1",
+            events[-1] if events else None,
+            packet_id=packet_id,
+            intent_id=f"enroll-{packet_id}-{seq}",
+            to_state="READY",
+            cause="enrollment",
+            payload={
+                "packet": packet_payload,
+                "attempt": None,
+                "artifacts": [],
+                "classification": None,
+                "transition_detail": None,
+                "recovery": None,
+                "run": None,
+                "report": None,
+            },
+        )
+        events.append(event)
+
+    folded, _ = _fold_journal(str(tmp_path), events)
+    queue = _build_derived_queue(folded, "srid-1", events[-1])
+
+    assert [entry["packet_id"] for entry in queue["entries"]] == [
+        "z-first",
+        "a-later",
+    ]
+    assert validate_queue(queue, state_root_id="srid-1")["valid"]
+
+
 def test_append_journal_appends_and_enforces_cas():
     state_root = tempfile.mkdtemp()
     journal_path = os.path.join(state_root, "journal.ndjson")
