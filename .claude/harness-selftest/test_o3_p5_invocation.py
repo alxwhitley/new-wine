@@ -24,6 +24,7 @@ from harness_coordinator.v1.process_sidecar import (
     _linux_stat_starttime,
     process_start_identity,
     read_sidecar,
+    terminate_process_group,
     terminate_sidecar_process,
     write_sidecar,
 )
@@ -198,6 +199,90 @@ def test_sidecar_is_self_hashed_and_tamper_detected(tmp_path):
         read_sidecar(str(path))
 
 
+def test_process_group_termination_refuses_recycled_leader(monkeypatch):
+    import harness_coordinator.v1.process_sidecar as process_sidecar
+
+    signals = []
+    monkeypatch.setattr(
+        process_sidecar, "process_start_identity", lambda _pid: "replacement-identity"
+    )
+    monkeypatch.setattr(
+        process_sidecar.os, "killpg", lambda pgid, sig: signals.append((pgid, sig))
+    )
+
+    assert terminate_process_group(
+        4242, .0, expected_leader_identity="original-identity"
+    )
+    assert signals == []
+
+
+def test_process_group_termination_rechecks_identity_before_kill(monkeypatch):
+    import harness_coordinator.v1.process_sidecar as process_sidecar
+
+    identities = iter(["original-identity", "replacement-identity"])
+    signals = []
+    monkeypatch.setattr(
+        process_sidecar, "process_start_identity", lambda _pid: next(identities)
+    )
+    monkeypatch.setattr(
+        process_sidecar.os, "killpg", lambda pgid, sig: signals.append((pgid, sig))
+    )
+
+    assert terminate_process_group(
+        4242, .0, expected_leader_identity="original-identity"
+    )
+    assert signals == [(4242, signal.SIGTERM)]
+
+
+def test_sidecar_termination_rechecks_identity_at_signal_boundary(monkeypatch, tmp_path):
+    import harness_coordinator.v1.process_sidecar as process_sidecar
+    import subprocess
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        start_new_session=True,
+    )
+    path = tmp_path / "process.json"
+    directory_fd = None
+    try:
+        sidecar = write_sidecar(
+            str(path), "root-id", "pkt-p5b", 1, "intent", process.pid, process.pid
+        )
+        identities = iter(
+            [sidecar["process_start_identity"], "replacement-identity"]
+        )
+        signals = []
+        monkeypatch.setattr(
+            process_sidecar, "process_start_identity", lambda _pid: next(identities)
+        )
+        monkeypatch.setattr(
+            process_sidecar.os, "killpg", lambda pgid, sig: signals.append((pgid, sig))
+        )
+        monkeypatch.setattr(process_sidecar, "_group_is_live", lambda _pgid: False)
+        directory_fd = os.open(
+            str(tmp_path),
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+
+        assert terminate_sidecar_process(
+            directory_fd,
+            path.name,
+            "root-id",
+            "pkt-p5b",
+            1,
+            "intent",
+            grace_seconds=.1,
+        )
+        assert signals == []
+        assert process.poll() is None
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
 def test_orphan_recovery_requires_matching_process_and_attempt_identity(tmp_path):
     import subprocess
     process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True)
@@ -286,6 +371,32 @@ def test_exception_after_popen_kills_child(monkeypatch, tmp_path):
     assert marker.exists()
     with pytest.raises(ProcessLookupError):
         os.kill(int(marker.read_text()), 0)
+
+
+def test_invocation_cleanup_uses_sidecar_process_identity(monkeypatch, tmp_path):
+    import harness_coordinator.v1.invoke as invoke_module
+    import harness_coordinator.v1.process_sidecar as process_sidecar
+
+    real_write_sidecar = invoke_module.write_sidecar
+
+    def write_then_simulate_reuse(*args, **kwargs):
+        sidecar = real_write_sidecar(*args, **kwargs)
+        monkeypatch.setattr(
+            process_sidecar,
+            "process_start_identity",
+            lambda _pid: "replacement-identity",
+        )
+
+        def refuse_signal(_pgid, _signal):
+            raise PermissionError("recycled process group was signaled")
+
+        monkeypatch.setattr(process_sidecar.os, "killpg", refuse_signal)
+        return sidecar
+
+    monkeypatch.setattr(invoke_module, "write_sidecar", write_then_simulate_reuse)
+
+    _, _, outcome = _invoke(tmp_path, "import time; time.sleep(.1)")
+    assert "RESULT_MISSING" in outcome.error_codes
 
 
 @pytest.mark.parametrize("key", ["LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "PYTHONPATH", "ARBITRARY"])

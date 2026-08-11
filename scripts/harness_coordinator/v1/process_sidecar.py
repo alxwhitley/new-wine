@@ -154,8 +154,18 @@ def _group_is_live(pgid: int) -> bool:
     return False
 
 
-def terminate_process_group(pgid: int, grace_seconds: float) -> bool:
+def _leader_was_replaced(pgid: int, expected: Optional[str]) -> bool:
+    if expected is None:
+        return False
+    current = process_start_identity(pgid)
+    return current is not None and current != expected
+
+
+def terminate_process_group(pgid: int, grace_seconds: float,
+                            expected_leader_identity: Optional[str] = None) -> bool:
     """TERM, then KILL if required, returning only after group death."""
+    if _leader_was_replaced(pgid, expected_leader_identity):
+        return True
     try:
         os.killpg(pgid, signal.SIGTERM)
     except ProcessLookupError:
@@ -165,6 +175,8 @@ def terminate_process_group(pgid: int, grace_seconds: float) -> bool:
         if not _group_is_live(pgid):
             return True
         time.sleep(.01)
+    if _leader_was_replaced(pgid, expected_leader_identity):
+        return True
     try:
         os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
@@ -197,7 +209,11 @@ def terminate_sidecar_process(intent_dir_fd: int, basename: str, expected_state_
             return False
     except ProcessLookupError:
         return False
-    return terminate_process_group(sidecar["pgid"], grace_seconds)
+    return terminate_process_group(
+        sidecar["pgid"],
+        grace_seconds,
+        expected_leader_identity=sidecar["process_start_identity"],
+    )
 
 
 __all__ = ["process_start_identity", "read_sidecar", "terminate_process_group",

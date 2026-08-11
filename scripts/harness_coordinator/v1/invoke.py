@@ -168,6 +168,7 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
     executable_fd = worktree_fd = root_fd = inv_fd = artifact_fd = None
     stdout_fd = stderr_fd = result_fd = None
     selector = process = None
+    process_identity = None
     artifact_dir = stdout_path = stderr_path = result_path = sidecar_path = ""
     result_identity = None
     environment: Dict[str, str] = {}
@@ -214,8 +215,17 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
         os.set_blocking(process.stderr.fileno(), False)
         selector.register(process.stdout, selectors.EVENT_READ, stdout_fd)
         selector.register(process.stderr, selectors.EVENT_READ, stderr_fd)
-        write_sidecar("process.json", state_root_id, packet_id, packet["attempt"], intent_id,
-                      process.pid, os.getpgid(process.pid), dir_fd=artifact_fd)
+        sidecar = write_sidecar(
+            "process.json",
+            state_root_id,
+            packet_id,
+            packet["attempt"],
+            intent_id,
+            process.pid,
+            os.getpgid(process.pid),
+            dir_fd=artifact_fd,
+        )
+        process_identity = sidecar["process_start_identity"]
         deadline = time.monotonic() + timeout_seconds
         while process.poll() is None:
             for key, _ in selector.select(.01):
@@ -239,11 +249,19 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
             if output_exceeded:
                 break
         if process.poll() is None:
-            group_dead = terminate_process_group(process.pid, terminate_grace_seconds)
+            group_dead = terminate_process_group(
+                process.pid,
+                terminate_grace_seconds,
+                expected_leader_identity=process_identity,
+            )
             process.wait(timeout=3)
         else:
             process.wait()
-        group_dead = terminate_process_group(process.pid, terminate_grace_seconds)
+        group_dead = terminate_process_group(
+            process.pid,
+            terminate_grace_seconds,
+            expected_leader_identity=process_identity,
+        )
         if not group_dead:
             raise RuntimeError("worker process group survived completion cleanup")
         for key in list(selector.get_map().values()):
@@ -311,7 +329,11 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
                                     tuple(sorted(environment)))
     finally:
         if process is not None:
-            group_dead = terminate_process_group(process.pid, terminate_grace_seconds)
+            group_dead = terminate_process_group(
+                process.pid,
+                terminate_grace_seconds,
+                expected_leader_identity=process_identity,
+            )
             if process.poll() is None:
                 process.wait(timeout=3)
             if not group_dead:
