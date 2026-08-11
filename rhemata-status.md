@@ -6,8 +6,8 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-11 (O4 Git/filesystem isolation accepted on
-`codex/o4-git-isolation` at `7ab9f15`; not merged or pushed). No production
+Last verified: 2026-08-11 (O5 Task 1 implemented but awaiting independent
+review on `codex/o5-budgets-hard-stops`; live uncommitted diff). No production
 writes, real-provider commissioning, deployment, or `serving_enabled` change.
 
 **Session close:** `.agents/skills/session-close/SKILL.md` (not always-loaded).
@@ -17,19 +17,26 @@ Target ≤150 lines for this file.
 
 ## Current state
 
-**O4 Git/filesystem isolation — complete, committed, synthetically
-commissioned, and independently accepted on `codex/o4-git-isolation`.** Final
-build commit is `7ab9f15`; the branch is not merged or pushed. O3 remains
-integrated locally into `main` at `b580915`, also not pushed.
+**O5 budgets and hard stops — in progress on
+`codex/o5-budgets-hard-stops`.** O4 is complete, accepted, pushed as
+`origin/codex/o4-git-isolation`, and fast-forwarded into local `main` at
+`d554554`; it is not merged to remote `main`. O5 design `59cf7f2` and detailed
+plan `18bf213` are committed. Runs are designed to stop at an authenticated
+finite plan, finish an active attempt before graceful provider/queue stops,
+enforce immediate command/output safety limits, and use capability-class model
+fallbacks. Fable 5 is the active design model; GPT-5.6 Sol `max` is a disabled
+design fallback pending Alex's evaluation. OpenCode Go and Terra/Sonnet serve
+implementation routes; Sol/Fable/Grok serve qualified review/audit routes.
 
-Final controller evidence: 804 O2/O3/O4 tests passed; scoped compilation, diff
-checks, and all three legacy harness guards passed. Independent final review
-returned Spec PASS, Quality PASS, `ACCEPT`. The coordinator now binds an
-operator-supplied repository root, baselines before a write attempt can become
-`RUNNING`, derives postflight changes from Git, refuses staged, forbidden,
-out-of-allowlist, secret-like, protected-tree, or evidence-inconsistent changes,
-and emits mutation-free integration advice. Rootless legacy artifacts remain
-readable but cannot authorize a new write attempt.
+Task 1 (execution-plan contract and binding) is implemented but uncommitted in
+the isolated worktree. Changed scope: execution-plan schema/validator/tests,
+contract exports, journal schema/runtime, and recovery binding. Implementer
+evidence is green: 18 O5 contract tests, 92 O2/O3 schema tests, 64 O3
+enrollment/recovery tests, scoped compilation, JSON parsing, and diff checks.
+The independent reviewer was interrupted before returning a verdict. Task 1 is
+therefore not accepted: Claude Code must review the live diff before any commit.
+Durable task paths and exact continuation instructions are in
+`.superpowers/sdd/2026-08-11-o5-budgets-hard-stops/progress.md`.
 
 **Still intentionally blocked:** no real Kimi, Sonnet, Claude, or Grok worker
 was commissioned. Real-provider commissioning remains `HUMAN_REQUIRED` until
@@ -65,8 +72,12 @@ still 8/53; Open Decision #21 not decided.
 
 ## Next
 
-1. **O5 budgets and hard stops.** Add turn, wall-clock, retry, output-size,
-   provider-allowance, and queue-wide limits before overnight rehearsal.
+1. **Resume O5 Task 1 review.** Worktree:
+   `/private/tmp/rhemata-o3-verify.7NOGWb`; branch:
+   `codex/o5-budgets-hard-stops`. Dispatch a fresh high-reasoning reviewer over
+   the seven-file live diff using the Task 1 brief/report. On `ACCEPT`, the
+   controller commits `feat: bind coordinator runs to execution plans`, then
+   executes Tasks 2–5 sequentially from the committed O5 plan.
 2. **`five_fold_ministry.md` editorial decision.**
 3. Async concurrency proof at 100-dial (before speed work).
 4. Decide extractor hardening before any next Prince-style batch —

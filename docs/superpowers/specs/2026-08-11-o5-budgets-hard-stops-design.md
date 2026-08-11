@@ -1,7 +1,7 @@
 # O5 Budgets and Hard Stops — Design
 
 Date: 2026-08-11
-Status: approved conversational design; written-spec review pending
+Status: approved by Alex on 2026-08-11
 Branch: `codex/o5-budgets-hard-stops`
 
 ## Purpose

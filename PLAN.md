@@ -231,6 +231,14 @@ routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 |---|---|---|
 | Opus sets packet risk classes and permitted autonomy for each class. | Implement turn, time, retry, output-size, and queue-wide limits. | Verify stop behavior and that logs contain no credential values or prompt payloads that should remain private. |
 
+**IN PROGRESS — 2026-08-11:** Approved design `59cf7f2` and implementation
+plan `18bf213` are on `codex/o5-budgets-hard-stops`. Task 1's authenticated
+execution-plan contract is implemented in a live uncommitted seven-file diff;
+its focused 18 + 92 + 64 tests, compilation, JSON parsing, and diff check pass.
+Independent Task 1 review was interrupted before verdict, so the work is not
+accepted or committed. Resume from the plan-scoped SDD ledger and review Task 1
+before continuing Tasks 2–5.
+
 **Exit criteria:**
 
 - [ ] Every command has a wall-clock limit and every packet has an attempt cap.
