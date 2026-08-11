@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
+from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+from harness_contracts.v1.classification import validate_attempt_outcome
 from harness_contracts.v1.worker_result import validate_worker_result
 from harness_coordinator.v1.paths import validate_harness_id
 from harness_coordinator.v1.process_sidecar import terminate_process_group, write_sidecar
@@ -99,6 +101,32 @@ def _bounded_read_regular(dir_fd: int, name: str, maximum: int, expected_identit
         os.close(fd)
 
 
+def _adapter_sha256(adapter: WorkerAdapter) -> str:
+    return compute_sha256(canonical_bytes(
+        {"argv": list(adapter.argv), "env": dict(adapter.env)}))
+
+
+def _publish_completion_receipt(dir_fd: int, receipt: Dict[str, Any]) -> None:
+    data = canonical_bytes(receipt)
+    pending = "completion.pending"
+    final = "completion.json"
+    fd = os.open(pending, os.O_CREAT | os.O_EXCL | os.O_WRONLY |
+                 getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=dir_fd)
+    try:
+        remaining = data
+        while remaining:
+            written = os.write(fd, remaining)
+            remaining = remaining[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.link(pending, final, src_dir_fd=dir_fd, dst_dir_fd=dir_fd,
+            follow_symlinks=False)
+    os.fsync(dir_fd)
+    os.unlink(pending, dir_fd=dir_fd)
+    os.fsync(dir_fd)
+
+
 def _secure_artifact_dir(state_root: str, intent_id: str) -> Tuple[str, int, int, int]:
     os.makedirs(state_root, mode=0o700, exist_ok=True)
     root_info = os.lstat(state_root)
@@ -125,6 +153,11 @@ def _secure_artifact_dir(state_root: str, intent_id: str) -> Tuple[str, int, int
 
 def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
     return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+
+
+def _fd_identity(fd: int) -> Tuple[int, int]:
+    info = os.fstat(fd)
+    return info.st_dev, info.st_ino
 
 
 def _canonical_aliases_intact(state_root: str, root_fd: int, inv_fd: int,
@@ -327,6 +360,39 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
                                     timed_out, output_exceeded, interrupted, group_dead, process.pid,
                                     *public_paths,
                                     tuple(sorted(environment)))
+        stdout_raw = _bounded_read_regular(
+            artifact_fd, "stdout.bin", output_limit_bytes,
+            _fd_identity(stdout_fd))
+        stderr_raw = _bounded_read_regular(
+            artifact_fd, "stderr.bin", output_limit_bytes,
+            _fd_identity(stderr_fd))
+        try:
+            captured_result = _bounded_read_regular(
+                artifact_fd, "worker-result.json", result_limit_bytes, result_identity)
+        except (OSError, ValueError, OverflowError):
+            captured_result = None
+        receipt = {
+            "schema_version": 1, "state_root_id": state_root_id,
+            "packet_id": packet_id, "packet_sha256": packet["packet_sha256"],
+            "attempt": packet["attempt"], "intent_id": intent_id,
+            "attempt_session_id": attempt_session_id,
+            "adapter_sha256": _adapter_sha256(adapter),
+            "exit_code": outcome.exit_code, "timed_out": outcome.timed_out,
+            "output_exceeded": outcome.output_exceeded,
+            "interrupted": outcome.interrupted,
+            "process_group_dead": outcome.process_group_dead,
+            "pid": outcome.pid, "error_codes": list(outcome.error_codes),
+            "stdout": {"sha256": compute_sha256(stdout_raw), "byte_length": len(stdout_raw)},
+            "stderr": {"sha256": compute_sha256(stderr_raw), "byte_length": len(stderr_raw)},
+            "result": {"sha256": (compute_sha256(captured_result)
+                                  if captured_result is not None else None),
+                       "byte_length": (len(captured_result) if captured_result is not None else 0),
+                       "present": captured_result is not None, "valid": result is not None},
+            "receipt_sha256": "",
+        }
+        receipt["receipt_sha256"] = compute_sha256(
+            canonical_bytes(receipt, omit={"receipt_sha256"}))
+        _publish_completion_receipt(artifact_fd, receipt)
     finally:
         if process is not None:
             group_dead = terminate_process_group(
@@ -347,4 +413,155 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
     return outcome
 
 
-__all__ = ["InvocationOutcome", "WorkerAdapter", "invoke_worker"]
+def persist_invocation_outcome(handle, packet: Dict[str, Any], intent_id: str,
+                               invocation: InvocationOutcome, adapter: WorkerAdapter,
+                               coordinator_id: str, run_id: str, now: str) -> Dict[str, Any]:
+    """Publish coordinator-owned attempt evidence, with outcome last.
+
+    ``attempt_outcome.json`` is the durable completion marker consumed by
+    restart recovery. Every source artifact is read through the pinned state
+    root; worker-supplied paths are never accepted.
+    """
+    packet_id = validate_harness_id(packet["packet_id"], "/packet_id")
+    attempt = packet["attempt"]
+    base = ("results", packet_id, str(attempt))
+    invocation_base = ("invocations", validate_harness_id(intent_id, "/intent_id"))
+    stdout = handle.read(invocation_base + ("stdout.bin",))
+    stderr = handle.read(invocation_base + ("stderr.bin",))
+    if stdout is None or stderr is None:
+        raise ValueError("invocation capture is missing from the pinned state root")
+    stdout_path = "/".join(base + ("stdout.bin",))
+    stderr_path = "/".join(base + ("stderr.bin",))
+    handle.publish(base + ("stdout.bin",), stdout)
+    handle.publish(base + ("stderr.bin",), stderr)
+
+    result = invocation.result
+    result_raw = canonical_bytes(result) if result is not None else None
+    result_path = "/".join(base + ("worker-result.json",)) if result_raw is not None else None
+    if result_raw is not None:
+        handle.publish(base + ("worker-result.json",), result_raw)
+    errors = list(invocation.error_codes)
+    record = {
+        "schema_version": 1,
+        "packet_id": packet_id,
+        "packet_sha256": packet["packet_sha256"],
+        "attempt": attempt,
+        "coordinator_id": coordinator_id,
+        "run_id": run_id,
+        "lane": packet["lane"],
+        "invocation": {
+            "argv": list(adapter.argv), "cwd": ".", "started_at": now,
+            "finished_at": now, "exit_code": invocation.exit_code,
+            "signal": (-invocation.exit_code if invocation.exit_code is not None
+                       and invocation.exit_code < 0 else None),
+            "timed_out": invocation.timed_out, "wall_clock_seconds": 0,
+        },
+        "stdout": {"path": stdout_path, "sha256": compute_sha256(stdout),
+                   "byte_length": len(stdout)},
+        "stderr": {"path": stderr_path, "sha256": compute_sha256(stderr),
+                   "byte_length": len(stderr)},
+        "raw_result": {"path": result_path,
+                       "sha256": result.get("result_sha256") if result is not None else None,
+                       "byte_length": len(result_raw) if result_raw is not None else 0},
+        "result_validation": {"present": result is not None, "valid": result is not None,
+                              "error_codes": errors, "error_count": len(errors)},
+        "authority": {"guard_denials": [], "undeclared_changed_paths": [],
+                      "governed_path_touches": [], "hard_stop_matches": []},
+        "provider_evidence_sha256": None,
+        "outcome": result.get("outcome") if result is not None else "FAILED",
+        "fallback": result.get("fallback") if result is not None else None,
+        "outcome_sha256": "",
+    }
+    record["outcome_sha256"] = compute_sha256(
+        canonical_bytes(record, omit={"outcome_sha256"}))
+    validation = validate_attempt_outcome(record)
+    if not validation["valid"]:
+        raise ValueError(
+            f"coordinator-built attempt outcome is invalid: {validation['errors'][0]['message']}")
+    handle.publish(base + ("attempt_outcome.json",), canonical_bytes(record))
+    return record
+
+
+def load_completed_invocation(handle, state_root_id: str, packet: Dict[str, Any],
+                              intent_id: str, attempt_session_id: str,
+                              adapter: WorkerAdapter) -> Optional[InvocationOutcome]:
+    """Authenticate and reconstruct one durably completed invocation."""
+    parts = ("invocations", validate_harness_id(intent_id, "/intent_id"))
+    raw = handle.read(parts + ("completion.json",))
+    pending = False
+    if raw is None:
+        raw = handle.read(parts + ("completion.pending",))
+        pending = raw is not None
+    if raw is None:
+        return None
+    try:
+        receipt = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("invocation completion receipt is invalid JSON") from exc
+    if raw != canonical_bytes(receipt):
+        raise ValueError("invocation completion receipt is not canonical")
+    declared = receipt.get("receipt_sha256")
+    if declared != compute_sha256(canonical_bytes(receipt, omit={"receipt_sha256"})):
+        raise ValueError("invocation completion receipt self-hash mismatch")
+    expected = (
+        state_root_id, packet["packet_id"], packet["packet_sha256"], packet["attempt"],
+        intent_id, attempt_session_id, _adapter_sha256(adapter), True)
+    actual = (
+        receipt.get("state_root_id"), receipt.get("packet_id"),
+        receipt.get("packet_sha256"), receipt.get("attempt"),
+        receipt.get("intent_id"), receipt.get("attempt_session_id"),
+        receipt.get("adapter_sha256"), receipt.get("process_group_dead"))
+    if actual != expected:
+        raise ValueError("invocation completion receipt identity mismatch")
+
+    captures = {}
+    for name in ("stdout", "stderr"):
+        capture = handle.read(parts + (f"{name}.bin",))
+        pointer = receipt.get(name) or {}
+        if (capture is None or len(capture) != pointer.get("byte_length")
+                or compute_sha256(capture) != pointer.get("sha256")):
+            raise ValueError(f"invocation completion {name} mismatch")
+        captures[name] = capture
+    result_pointer = receipt.get("result") or {}
+    result_raw = None
+    if result_pointer.get("present"):
+        result_raw = handle.read(parts + ("worker-result.json",))
+        if (result_raw is None or len(result_raw) != result_pointer.get("byte_length")
+                or compute_sha256(result_raw) != result_pointer.get("sha256")):
+            raise ValueError("invocation completion result mismatch")
+    result = None
+    if result_pointer.get("valid"):
+        if result_raw is None:
+            raise ValueError("valid invocation receipt has no worker result")
+        try:
+            candidate = json.loads(result_raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("completed worker result is invalid JSON") from exc
+        validation = validate_worker_result(candidate)
+        if not validation["valid"] or result_raw != canonical_bytes(candidate):
+            raise ValueError("completed worker result is contract-invalid")
+        assigned = packet["assigned_worker"]
+        worker = candidate.get("worker") or {}
+        if ((candidate.get("packet_id"), candidate.get("packet_sha256"), candidate.get("attempt"),
+             worker.get("session_id"), worker.get("worker_id"), worker.get("provider"),
+             worker.get("model"), worker.get("lane")) !=
+                (packet["packet_id"], packet["packet_sha256"], packet["attempt"],
+                 attempt_session_id, assigned["worker_id"], assigned["provider"],
+                 assigned["model"], packet["lane"])):
+            raise ValueError("completed worker result identity mismatch")
+        result = candidate
+    artifact_dir = os.path.join(handle.path, *parts)
+    if pending:
+        handle.publish(parts + ("completion.json",), raw)
+        handle.unlink(parts + ("completion.pending",), predicate=lambda current: current == raw)
+    return InvocationOutcome(
+        result, tuple(receipt.get("error_codes") or ()), receipt.get("exit_code"),
+        bool(receipt.get("timed_out")), bool(receipt.get("output_exceeded")),
+        bool(receipt.get("interrupted")), True, receipt.get("pid"),
+        os.path.join(artifact_dir, "stdout.bin"), os.path.join(artifact_dir, "stderr.bin"),
+        os.path.join(artifact_dir, "worker-result.json"),
+        os.path.join(artifact_dir, "process.json"), tuple())
+
+
+__all__ = ["InvocationOutcome", "WorkerAdapter", "invoke_worker",
+           "load_completed_invocation", "persist_invocation_outcome"]

@@ -81,8 +81,7 @@ def _bound_evidence(tmp_path):
                "coordinator_id": "coord-1", "run_id": "run-1",
                "payload": {"attempt": {"attempt": 1, "lane": "kimi_implementation",
                                          "worker": {**packet["assigned_worker"],
-                                                    "session_id": "session-1",
-                                                    "lane": "kimi_implementation"}}}}
+                                                    "session_id": "session-1"}}}}
     run_started = {"event_type": "RUN_STARTED", "coordinator_id": "coord-1", "run_id": "run-1",
                    "payload": {"run": {"coordinator": {"coordinator_id": "coord-1",
                                                          "boot_id": "boot-1", "hostname": "host-1",
@@ -164,7 +163,7 @@ def _exhaustion_finish_fixture(tmp_path):
         "transition_detail": None, "recovery": None, "run": run_payload, "report": None})
     attempt_payload = {"attempt": 1, "lane": "kimi_implementation",
                        "worker": {**packet["assigned_worker"], "session_id": "session-1",
-                                  "lane": "kimi_implementation"},
+                                  },
                        "claim_sha256": None, "worktree_path": packet["worktree"]["path"]}
     started = _make_event(
         2, "ATTEMPT_STARTED", prev_event=run_event, packet_id=packet["packet_id"],
@@ -445,7 +444,7 @@ def test_confirmed_exhaustion_publishes_before_digest_bound_transition(tmp_path)
         "transition_detail": None, "recovery": None, "run": run_payload, "report": None})
     started_payload = {"attempt": 1, "lane": "kimi_implementation",
                        "worker": {**packet["assigned_worker"], "session_id": "session-1",
-                                  "lane": "kimi_implementation"},
+                                  },
                        "claim_sha256": None, "worktree_path": packet["worktree"]["path"]}
     started_event = _make_event(
         2, "ATTEMPT_STARTED", prev_event=run_event, packet_id=packet["packet_id"],

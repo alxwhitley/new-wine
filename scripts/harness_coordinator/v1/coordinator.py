@@ -3,7 +3,7 @@
 import errno
 import json
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.packet import validate_packet
@@ -13,7 +13,11 @@ from harness_coordinator.v1.classify_runtime import (
     resolve_open_attempts,
 )
 from harness_coordinator.v1.locks import create_claim_at, read_claim_at
+from harness_coordinator.v1.invoke import (
+    WorkerAdapter, invoke_worker, load_completed_invocation, persist_invocation_outcome,
+)
 from harness_coordinator.v1.paths import validate_harness_id
+from harness_coordinator.v1.process_sidecar import terminate_sidecar_process
 from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event, run_started_recovery
 from harness_coordinator.v1.review import resolve_pending_reviews
 from harness_coordinator.v1.reconcile import build_reconciliation_report, emit_reconciliation_report
@@ -223,7 +227,8 @@ def _maintenance(handle, state_root: str, state_root_id: str, journal_events: Li
 
 def run_once(state_root: str, coordinator_id: str, run_id: str,
              trusted_process_context: Dict[str, Any], now: str,
-             disabled_lanes: List[str] = None) -> Dict[str, Any]:
+             disabled_lanes: List[str] = None,
+             worker_adapters: Optional[Mapping[str, WorkerAdapter]] = None) -> Dict[str, Any]:
     """Recover, resolve reviews, seal, promote, then claim at most one packet.
 
     Maintenance runs twice by design. The first pass completes work a previous
@@ -244,18 +249,21 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
         try:
             handle.verify_identity()
             return _run_iteration(handle, state_root, report, coordinator_id, run_id,
-                                  trusted_process_context, now, disabled_lanes)
+                                  trusted_process_context, now, disabled_lanes,
+                                  worker_adapters)
         finally:
             report.release_singleton()
 
 
 def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id: str,
                    trusted_process_context: Dict[str, Any], now: str,
-                   disabled_lanes: List[str]) -> Dict[str, Any]:
+                   disabled_lanes: List[str],
+                   worker_adapters: Optional[Mapping[str, WorkerAdapter]]) -> Dict[str, Any]:
     """One bounded iteration, every P5C artifact operation sharing one handle."""
     journal_events = getattr(report, "journal_events", [])
     state_root_id = getattr(report, "state_root_id", None)
     folded = report.derived_states
+    adapters = worker_adapters or {}
     review_outcomes: List[Dict[str, Any]] = []
     review_attention: List[Dict[str, Any]] = []
     first = second = {"sealed": [], "promotion_attention": [], "revise_budget_exhausted": []}
@@ -284,6 +292,51 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
         signal_registry = json.loads(registry_raw.decode("utf-8")) if registry_raw else None
         available_lanes = [lane for lane in ("kimi_implementation", "sonnet_implementation")
                            if lane not in (disabled_lanes or [])]
+        for packet_id, packet in sorted(folded.items()):
+            attempt = packet.get("open_attempt")
+            if packet.get("state") != "RUNNING" or attempt is None:
+                continue
+            if handle.read(("results", packet_id, str(attempt), "attempt_outcome.json")) is not None:
+                continue
+            started = next((
+                event for event in reversed(journal_events)
+                if event.get("event_type") == "ATTEMPT_STARTED"
+                and event.get("packet_id") == packet_id
+                and (((event.get("payload") or {}).get("attempt") or {}).get("attempt") == attempt)
+            ), None)
+            if started is None:
+                continue
+            invocation_parts = ("invocations", started["intent_id"])
+            receipt_present = (
+                handle.read(invocation_parts + ("completion.json",)) is not None
+                or handle.read(invocation_parts + ("completion.pending",)) is not None)
+            adapter = adapters.get(packet_id) or adapters.get(packet.get("lane"))
+            if receipt_present and adapter is None:
+                raise RuntimeError(
+                    f"completed invocation for {packet_id} requires its operator adapter to resume")
+            if adapter is not None:
+                packet_body = _load_enrolled_packet(
+                    state_root, packet_id, packet, journal_events, handle=handle)
+                invocation_packet = dict(packet_body)
+                invocation_packet["attempt"] = attempt
+                session_id = (((started.get("payload") or {}).get("attempt") or {})
+                              .get("worker", {}).get("session_id"))
+                completed = load_completed_invocation(
+                    handle, state_root_id, invocation_packet, started["intent_id"],
+                    session_id, adapter)
+                if completed is not None:
+                    persist_invocation_outcome(
+                        handle, invocation_packet, started["intent_id"], completed,
+                        adapter, started["coordinator_id"], started["run_id"], now)
+            if (not receipt_present
+                    and handle.read(invocation_parts + ("process.json",)) is not None):
+                with handle.directory(("invocations", started["intent_id"])) as intent_fd:
+                    dead = terminate_sidecar_process(
+                        intent_fd, "process.json", state_root_id, packet_id, attempt,
+                        started["intent_id"])
+                if not dead:
+                    raise RuntimeError(
+                        f"cannot prove prior worker dead for {packet_id} attempt {attempt}")
         before = len(journal_events)
         handle.verify_identity()
         journal_events, attempt_attention = resolve_open_attempts(
@@ -323,6 +376,43 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                   "sealed": first["sealed"] + second["sealed"],
                   "promotion_attention": first["promotion_attention"] + second["promotion_attention"],
                   "revise_budget_exhausted": first["revise_budget_exhausted"] + second["revise_budget_exhausted"]}
+        adapter = adapters.get(packet_id) or adapters.get(folded[packet_id]["lane"])
+        if adapter is not None:
+            attempt = folded[packet_id].get("attempts_started", 0) + 1
+            packet_body = _load_enrolled_packet(
+                state_root, packet_id, folded[packet_id], journal_events, handle=handle)
+            invocation_packet = dict(packet_body)
+            invocation_packet["attempt"] = attempt
+            session_id = attempt_session_id(run_id, packet_id, attempt)
+            handle.verify_identity()
+            invocation = invoke_worker(
+                state_root, state_root_id, invocation_packet, intent_id, session_id,
+                adapter, allowed_worktree=packet_body["worktree"]["path"])
+            handle.verify_identity()
+            persist_invocation_outcome(
+                handle, invocation_packet, intent_id, invocation, adapter,
+                coordinator_id, run_id, now)
+            folded, _ = _fold_journal(state_root, journal_events)
+            journal_events, attempt_attention = resolve_open_attempts(
+                state_root, os.path.join(state_root, "journal.ndjson"),
+                os.path.join(state_root, "locks", "journal.wlock"), journal_events,
+                folded, {}, signal_registry, coordinator_id, run_id, state_root_id, now,
+                available_lanes=available_lanes, handle=handle)
+            review_attention.extend(attempt_attention)
+            folded, _ = _fold_journal(state_root, journal_events)
+            journal_events, folded, after_worker = _maintenance(
+                handle, state_root, state_root_id, journal_events, folded,
+                coordinator_id, run_id, now)
+            result.update({
+                "status": "completed_attempt",
+                "reviews": review_outcomes,
+                "review_attention": review_attention,
+                "sealed": result["sealed"] + after_worker["sealed"],
+                "promotion_attention": (result["promotion_attention"]
+                                        + after_worker["promotion_attention"]),
+                "revise_budget_exhausted": (result["revise_budget_exhausted"]
+                                            + after_worker["revise_budget_exhausted"]),
+            })
 
     if state_root_id is None or not os.path.exists(os.path.join(state_root, "MANIFEST.json")):
         return result

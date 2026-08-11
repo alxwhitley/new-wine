@@ -112,7 +112,10 @@ def load_and_validate_attempt_evidence(
         raise ReassignmentConflict("worker result identity or digest mismatch")
     if worker_result.get("packet_sha256") != outcome_record.get("packet_sha256"):
         raise ReassignmentConflict("worker result packet digest mismatch")
-    if worker_result.get("worker") != worker:
+    result_worker = worker_result.get("worker") or {}
+    if ({key: result_worker.get(key) for key in ("worker_id", "session_id", "provider", "model")}
+            != worker
+            or result_worker.get("lane") != attempt_payload.get("lane")):
         raise ReassignmentConflict("worker result worker identity mismatch")
     result_fallback = worker_result.get("fallback")
     outcome_fallback = outcome_record.get("fallback")

@@ -68,12 +68,14 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
+from harness_contracts.v1.canonical import compute_sha256
 from harness_contracts.v1.classification import classify_attempt, validate_attempt_outcome
 from harness_contracts.v1.journal import CAUSE_EDGES
 from harness_contracts.v1.packet import validate_packet
 from harness_contracts.v1.seal import validate_terminal_seal
 
 from harness_coordinator.v1.recovery import IntegrityError, _last_seq, _make_event
+from harness_coordinator.v1.locks import complete_claim_at
 from harness_coordinator.v1.paths import safe_state_path
 from harness_coordinator.v1.reassignment_runtime import (
     ReassignmentConflict,
@@ -406,6 +408,15 @@ def resolve_open_attempts(
                 provider_evidence_by_packet, signal_registry, coordinator_id, run_id, state_root_id, now,
                 available_lanes, handle,
             )
+            if handle is not None:
+                finished = next((
+                    event for event in reversed(journal_events)
+                    if event.get("event_type") == "ATTEMPT_FINISHED"
+                    and event.get("packet_id") == packet_id
+                ), None)
+                if finished is not None:
+                    complete_claim_at(
+                        handle, packet_id, finished.get("intent_id"), run_id)
         except IntegrityError as exc:
             attention.append({"packet_id": packet_id, "code": exc.code, "message": exc.message})
     return journal_events, attention
@@ -503,6 +514,22 @@ def _resolve_one_open_attempt(
         # result was recorded that never actually was.
         raw_result_valid = bool((outcome_record.get("result_validation") or {}).get("valid"))
         if raw_result_valid:
+            artifacts = []
+            canonical_result_path = f"results/{packet_id}/{attempt}/worker-result.json"
+            if (outcome_record.get("raw_result") or {}).get("path") == canonical_result_path:
+                raw_worker_result = (handle.read(tuple(canonical_result_path.split("/")))
+                                     if handle is not None else None)
+                if raw_worker_result is None:
+                    raise IntegrityError(
+                        "EVIDENCE_MISSING",
+                        f"valid result for {packet_id} attempt {attempt} is missing")
+                artifacts = [{
+                    "kind": "worker_result",
+                    "artifact_id": f"worker-result-{packet_id}-{attempt}",
+                    "path": canonical_result_path,
+                    "sha256": compute_sha256(raw_worker_result),
+                    "byte_length": len(raw_worker_result),
+                }]
             wr_event = _make_event(
                 seq=(_last_seq(journal_events) + 1),
                 event_type="WORKER_RESULT_RECORDED",
@@ -522,7 +549,7 @@ def _resolve_one_open_attempt(
                         "claim_sha256": None,
                         "worktree_path": None,
                     },
-                    "artifacts": [],
+                    "artifacts": artifacts,
                     "classification": None,
                     "transition_detail": None,
                     "recovery": None,

@@ -5,7 +5,7 @@ import os
 import stat
 from typing import Any, Dict, List
 
-from harness_contracts.v1.canonical import canonical_bytes
+from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.claim import classify_claim, validate_claim
 from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 
@@ -120,6 +120,42 @@ def reclaim_lock_at(handle, packet_id: str, run_id: str, classification: str,
             os.fsync(destination_fd)
             os.unlink(name, dir_fd=source_fd)
             os.fsync(source_fd)
+
+
+def complete_claim_at(handle, packet_id: str, intent_id: str, run_id: str) -> bool:
+    """Archive a claim only after its exact intent durably finished."""
+    validate_harness_id(run_id)
+    name = _claim_name(packet_id)
+    if not isinstance(intent_id, str) or not intent_id:
+        raise ValueError("completed claim intent_id must be non-empty")
+    archive_name = (
+        f"{validate_harness_id(packet_id)}.{compute_sha256(intent_id.encode('utf-8'))[:32]}.lock.json")
+    try:
+        with handle.directory(("locks",)) as source_fd:
+            try:
+                raw = _read_regular_at(source_fd, name)
+            except FileNotFoundError:
+                return False
+            record = _parse_claim(raw)
+            validation = validate_claim(record)
+            if not validation["valid"]:
+                raise ValueError(
+                    f"completed claim is invalid: {validation['errors'][0]['message']}")
+            if record.get("packet_id") != packet_id or record.get("intent_id") != intent_id:
+                raise ValueError("completed claim identity disagrees with terminal attempt intent")
+            with handle.directory(("locks", "completed", run_id), create=True) as destination_fd:
+                try:
+                    os.link(name, archive_name, src_dir_fd=source_fd, dst_dir_fd=destination_fd,
+                            follow_symlinks=False)
+                except FileExistsError:
+                    if _read_regular_at(destination_fd, archive_name) != raw:
+                        raise ValueError("completed claim archive conflicts with prior evidence")
+                os.fsync(destination_fd)
+                os.unlink(name, dir_fd=source_fd)
+                os.fsync(source_fd)
+                return True
+    except FileNotFoundError:
+        return False
 
 
 def create_claim(lock_path: str, record: Dict[str, Any]) -> None:
