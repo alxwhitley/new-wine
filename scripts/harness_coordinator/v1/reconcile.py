@@ -39,7 +39,8 @@ from harness_contracts.v1.reconciliation import compute_reconciliation, validate
 from harness_contracts.v1.seal import validate_terminal_seal
 
 from harness_coordinator.v1.recovery import (
-    IntegrityError, _direct_state_root_path, _fold_journal, _last_seq, _make_event,
+    IntegrityError, WORKSPACE_STAGE_SPECS, _direct_state_root_path, _fold_journal, _last_seq,
+    _make_event, validate_workspace_stage_artifact,
 )
 from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
 from harness_coordinator.v1.reassignment_runtime import assert_preserved
@@ -173,6 +174,103 @@ def _read_journal_pinned(handle, state_root_id: str):
         os.close(journal_fd)
 
 
+def _declares_workspace_evidence_v1(event: Dict[str, Any]) -> bool:
+    versions = (((event.get("payload") or {}).get("run") or {})
+                .get("contract_versions") or {})
+    marker = versions.get("workspace_evidence")
+    return type(marker) is int and marker == 1
+
+
+def _workspace_evidence_attention(handle, journal_events: List[Dict[str, Any]],
+                                  packets_by_id: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Validate O4's immutable stage bindings from the pinned state root."""
+    stages = WORKSPACE_STAGE_SPECS
+    attention: List[Dict[str, Any]] = []
+    # The only O4 compatibility boundary is the authenticated RUN_STARTED
+    # contract version. Packet/artifact presence is not a version signal:
+    # legacy roots may have packet files, while missing O4 artifacts are
+    # exactly what reconciliation must detect.
+    o4_run_ids = {
+        event.get("run_id")
+        for event in journal_events
+        if event.get("event_type") == "RUN_STARTED"
+        and _declares_workspace_evidence_v1(event)
+    }
+    for packet_id, packet in sorted(packets_by_id.items()):
+        started = [event for event in journal_events if event.get("event_type") == "ATTEMPT_STARTED"
+                   and event.get("packet_id") == packet_id]
+        o4_intent_ids = {
+            start.get("intent_id") for start in started
+            if start.get("run_id") in o4_run_ids and isinstance(start.get("intent_id"), str)
+        }
+        for start in started:
+            intent_id = start.get("intent_id")
+            if not isinstance(intent_id, str):
+                continue
+            o4_required = start.get("run_id") in o4_run_ids
+            stage_events = {
+                event_type: [event for event in journal_events if event.get("event_type") == event_type
+                             and event.get("packet_id") == packet_id and event.get("intent_id") == intent_id]
+                for event_type in stages
+            }
+            required = ["WORKSPACE_BASELINE_RECORDED"] if o4_required else []
+            completed = any(event.get("event_type") == "ATTEMPT_FINISHED"
+                            and event.get("packet_id") == packet_id
+                            and event.get("intent_id") == intent_id
+                            for event in journal_events)
+            if completed and o4_required:
+                required.append("WORKSPACE_POSTFLIGHT_RECORDED")
+            for event_type in required:
+                if not stage_events[event_type]:
+                    code = ("workspace_baseline_missing" if event_type == "WORKSPACE_BASELINE_RECORDED"
+                            else "workspace_postflight_missing")
+                    attention.append({"packet_id": packet_id, "code": code,
+                                      "detail": "%s has no durable %s for %s" %
+                                      (packet_id, stages[event_type]["event_kind"], intent_id)})
+            for event_type, events in stage_events.items():
+                if not events:
+                    continue
+                kind, suffix = stages[event_type]["event_kind"], stages[event_type]["suffix"]
+                expected_path = "workspace/%s/%s%s" % (packet_id, intent_id, suffix)
+                artifact = (((events[0].get("payload") or {}).get("artifacts") or [None])[0])
+                bad = len(events) != 1 or not isinstance(artifact, dict)
+                if not bad:
+                    raw = handle.read(tuple(expected_path.split("/")))
+                    try:
+                        persisted = validate_workspace_stage_artifact(raw, packet, intent_id, event_type, artifact)
+                    except (IntegrityError, AttributeError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+                        bad = True
+                if bad:
+                    attention.append({"packet_id": packet_id, "code": "workspace_evidence_mismatch",
+                                      "detail": "%s has an invalid %s binding for %s" %
+                                      (packet_id, kind, intent_id)})
+                if event_type == "WORKSPACE_POSTFLIGHT_RECORDED" and not bad:
+                    for field, code in (("protected_findings", "protected_worktree_changed"),
+                                        ("scope_findings", "allowlist_violation"),
+                                        ("secret_findings", "secret_like_diff")):
+                        if persisted.get(field):
+                            attention.append({"packet_id": packet_id, "code": code,
+                                              "detail": "%s postflight recorded %s" % (packet_id, field)})
+                    if (packet.get("state") == "ACCEPTED"
+                            and (persisted.get("acceptance_allowed") is not True
+                                 or any(persisted.get(field) for field in (
+                                     "scope_findings", "worker_manifest_findings", "protected_findings",
+                                     "secret_findings")))):
+                        attention.append({"packet_id": packet_id, "code": "workspace_evidence_mismatch",
+                                          "detail": "%s is ACCEPTED without a passing postflight" % packet_id})
+                if event_type == "INTEGRATION_MANIFEST_RECORDED" and not bad:
+                    if persisted.get("decision") == "HUMAN_REQUIRED":
+                        attention.append({"packet_id": packet_id, "code": "integration_human_required",
+                                          "detail": "%s integration decision requires a human" % packet_id})
+        if (packet.get("state") == "ACCEPTED" and o4_intent_ids and not any(
+                event.get("event_type") == "WORKSPACE_POSTFLIGHT_RECORDED"
+                and event.get("packet_id") == packet_id
+                and event.get("intent_id") in o4_intent_ids for event in journal_events)):
+            attention.append({"packet_id": packet_id, "code": "integration_human_required",
+                              "detail": "%s is ACCEPTED without authenticated O4 postflight evidence" % packet_id})
+    return attention
+
+
 def build_reconciliation_report(
     state_root: str,
     state_root_id: str,
@@ -284,7 +382,7 @@ def build_reconciliation_report(
         # A genuine (non-seal) fold failure is itself the most important
         # thing the report can say -- never silently produce a
         # degraded/empty report instead.
-        packets_by_id, counters = {}, {}
+        packets_by_id, counters = getattr(exc, "partial_packets", {}), {}
         fold_ok = False
         fold_failure_attention.append({"packet_id": None, "code": "fold_failed", "detail": f"journal fold raised {exc.code}: {exc.message}"})
 
@@ -411,6 +509,18 @@ def build_reconciliation_report(
             preserved_mismatches.append(
                 f"{pid}:{mismatch['kind']}:{mismatch['code']}")
 
+    workspace_attention = _workspace_evidence_attention(handle, journal_events, packets_by_id)
+    attention_required.extend(workspace_attention)
+    workspace_codes_by_packet: Dict[str, List[str]] = {}
+    for item in workspace_attention:
+        packet_id = item.get("packet_id")
+        if packet_id is not None:
+            workspace_codes_by_packet.setdefault(packet_id, []).append(item["code"])
+    for row in rows:
+        for code in workspace_codes_by_packet.get(row["packet_id"], []):
+            if code not in row["attention_codes"]:
+                row["attention_codes"].append(code)
+
     activity = {
         "attempts_started_total": counters.get("attempts_started_total", 0),
         "infra_retries_total": counters.get("infra_retries_total", 0),
@@ -449,6 +559,8 @@ def build_reconciliation_report(
     }
 
     computed = compute_reconciliation(fold_data)
+    if workspace_attention:
+        computed["reconciliation"]["all_invariants_passed"] = False
     # Back-fill accounting_identity_violation into each affected row's
     # attention_codes now that compute_reconciliation (the sole I9 owner)
     # has answered. Deliberately keyed on the attention_required items

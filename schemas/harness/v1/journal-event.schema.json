@@ -50,7 +50,8 @@
         "JOURNAL_TAIL_TRUNCATED",
         "RECONCILIATION_EMITTED",
         "WORKSPACE_BASELINE_RECORDED",
-        "WORKSPACE_POSTFLIGHT_RECORDED"
+        "WORKSPACE_POSTFLIGHT_RECORDED",
+        "INTEGRATION_MANIFEST_RECORDED"
       ]
     },
     "event_at": {
@@ -735,6 +736,10 @@
                 "reconciliation": {
                   "type": "integer",
                   "enum": [1]
+                },
+                "workspace_evidence": {
+                  "type": "integer",
+                  "enum": [1]
                 }
               }
             },
@@ -850,6 +855,35 @@
       "if": {
         "properties": {
           "event_type": {
+            "const": "INTEGRATION_MANIFEST_RECORDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "artifacts": {
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "properties": {
+                    "kind": {"const": "workspace_integration"},
+                    "artifact_id": {"const": "workspace_integration"},
+                    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                  },
+                  "required": ["kind", "artifact_id", "content_sha256"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
             "const": "WORKSPACE_POSTFLIGHT_RECORDED"
           }
         }
@@ -879,7 +913,7 @@
       "if": {
         "properties": {
           "event_type": {
-            "not": {"enum": ["WORKSPACE_BASELINE_RECORDED", "WORKSPACE_POSTFLIGHT_RECORDED"]}
+            "not": {"enum": ["WORKSPACE_BASELINE_RECORDED", "WORKSPACE_POSTFLIGHT_RECORDED", "INTEGRATION_MANIFEST_RECORDED"]}
           }
         }
       },
@@ -893,6 +927,7 @@
                     "anyOf": [
                       {"properties": {"kind": {"const": "workspace_baseline"}}, "required": ["kind"]},
                       {"properties": {"kind": {"const": "workspace_postflight"}}, "required": ["kind"]},
+                      {"properties": {"kind": {"const": "workspace_integration"}}, "required": ["kind"]},
                       {"required": ["content_sha256"]}
                     ]
                   }

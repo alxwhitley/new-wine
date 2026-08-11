@@ -453,6 +453,11 @@ def _write_attempt_outcome(state_root, packet_id, attempt, outcome="COMPLETED", 
         "result_validation": {"present": byte_length > 0, "valid": byte_length > 0, "error_codes": [], "error_count": 0},
         "authority": {"guard_denials": [], "undeclared_changed_paths": [], "governed_path_touches": [], "hard_stop_matches": []},
         "provider_evidence_sha256": None,
+        "workspace_postflight": {
+            "packet_id": packet_id, "intent_id": f"intent-{attempt}",
+            "path": f"workspace/{packet_id}/intent-{attempt}.postflight.json",
+            "artifact_sha256": "0" * 64, "content_sha256": "0" * 64,
+        },
         "outcome": outcome,
         "fallback": None,
     }
@@ -764,6 +769,7 @@ def test_provider_exhausted_end_to_end_through_resolve_open_attempts():
         "result_validation": {"present": True, "valid": True, "error_codes": [], "error_count": 0},
         "authority": {"guard_denials": [], "undeclared_changed_paths": [], "governed_path_touches": [], "hard_stop_matches": []},
         "provider_evidence_sha256": "0" * 64,
+        "workspace_postflight": {"packet_id": "pkt-1", "intent_id": "intent-1", "path": "workspace/pkt-1/intent-1.postflight.json", "artifact_sha256": "0" * 64, "content_sha256": "0" * 64},
         "outcome": "CHECKPOINTED",
         "fallback": {"reason": "confirmed_rate_limit_exhaustion", "provider_evidence_id": "pe-1", "reassign_to": "sonnet_implementation"},
     }
@@ -840,6 +846,7 @@ def test_exhaustion_unconfirmed_when_worker_claims_but_guards_fail():
         "result_validation": {"present": True, "valid": True, "error_codes": [], "error_count": 0},
         "authority": {"guard_denials": [], "undeclared_changed_paths": [], "governed_path_touches": [], "hard_stop_matches": []},
         "provider_evidence_sha256": None,
+        "workspace_postflight": {"packet_id": "pkt-1", "intent_id": "intent-1", "path": "workspace/pkt-1/intent-1.postflight.json", "artifact_sha256": "0" * 64, "content_sha256": "0" * 64},
         "outcome": "CHECKPOINTED",
         "fallback": {"reason": "confirmed_rate_limit_exhaustion", "provider_evidence_id": "pe-missing", "reassign_to": "sonnet_implementation"},
     }
@@ -949,6 +956,7 @@ def test_provider_exhausted_sonnet_lane_quarantines_fallback_exhausted():
         "result_validation": {"present": True, "valid": True, "error_codes": [], "error_count": 0},
         "authority": {"guard_denials": [], "undeclared_changed_paths": [], "governed_path_touches": [], "hard_stop_matches": []},
         "provider_evidence_sha256": "0" * 64,
+        "workspace_postflight": {"packet_id": "pkt-1", "intent_id": "intent-1", "path": "workspace/pkt-1/intent-1.postflight.json", "artifact_sha256": "0" * 64, "content_sha256": "0" * 64},
         "outcome": "CHECKPOINTED",
         "fallback": {"reason": "confirmed_rate_limit_exhaustion", "provider_evidence_id": "pe-1", "reassign_to": "sonnet_implementation"},
     }

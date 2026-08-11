@@ -73,7 +73,13 @@ def _bound_evidence(tmp_path):
         "result_validation": {"present": True, "valid": True, "error_codes": [], "error_count": 0},
         "authority": {"guard_denials": [], "undeclared_changed_paths": [],
                       "governed_path_touches": [], "hard_stop_matches": []},
-        "provider_evidence_sha256": evidence["evidence_sha256"], "outcome": "CHECKPOINTED",
+        "provider_evidence_sha256": evidence["evidence_sha256"],
+        "workspace_postflight": {
+            "packet_id": packet["packet_id"], "intent_id": "attempt-%s-1" % packet["packet_id"],
+            "path": "workspace/%s/attempt-%s-1.postflight.json" % (packet["packet_id"], packet["packet_id"]),
+            "artifact_sha256": "0" * 64, "content_sha256": "0" * 64,
+        },
+        "outcome": "CHECKPOINTED",
         "fallback": result["fallback"], "outcome_sha256": "",
     }
     outcome["outcome_sha256"] = compute_sha256(canonical_bytes(outcome, omit={"outcome_sha256"}))

@@ -37,6 +37,7 @@ JOURNAL_EVENT_TYPES = {
     "RECONCILIATION_EMITTED",
     "WORKSPACE_BASELINE_RECORDED",
     "WORKSPACE_POSTFLIGHT_RECORDED",
+    "INTEGRATION_MANIFEST_RECORDED",
 }
 
 TRANSITION_CAUSES = {
@@ -122,6 +123,7 @@ CAUSES_BY_EVENT_TYPE: Dict[str, Set[str]] = {
     "RECONCILIATION_EMITTED": {"none"},
     "WORKSPACE_BASELINE_RECORDED": {"none"},
     "WORKSPACE_POSTFLIGHT_RECORDED": {"none"},
+    "INTEGRATION_MANIFEST_RECORDED": {"none"},
 }
 
 # Payload sub-objects that must be non-null for each event type.
@@ -140,6 +142,7 @@ PAYLOAD_NON_NULL_BY_TYPE: Dict[str, Set[str]] = {
     "RECONCILIATION_EMITTED": {"report"},
     "WORKSPACE_BASELINE_RECORDED": set(),
     "WORKSPACE_POSTFLIGHT_RECORDED": set(),
+    "INTEGRATION_MANIFEST_RECORDED": set(),
 }
 
 ARTIFACT_KINDS = {
@@ -157,6 +160,7 @@ ARTIFACT_KINDS = {
     "stderr",
     "workspace_baseline",
     "workspace_postflight",
+    "workspace_integration",
 }
 
 STAGES = {
@@ -356,6 +360,7 @@ def _validate_journal_event_object(
         "INTENT_ABANDONED",
         "WORKSPACE_BASELINE_RECORDED",
         "WORKSPACE_POSTFLIGHT_RECORDED",
+        "INTEGRATION_MANIFEST_RECORDED",
     }
     if event_type in intent_required_types:
         if not isinstance(intent_id, str) or intent_id.strip() == "":
@@ -537,15 +542,16 @@ def _validate_artifacts(v: _PacketValidator, artifacts: List[Any], path: str) ->
             _check_sha256(v, art["sha256"], f"{p}/sha256")
         if "byte_length" in art:
             _check_int(v, art["byte_length"], f"{p}/byte_length", nonneg=True)
-        if art.get("kind") in {"workspace_baseline", "workspace_postflight"}:
+        if art.get("kind") in {"workspace_baseline", "workspace_postflight", "workspace_integration"}:
             _check_sha256(v, art.get("content_sha256"), f"{p}/content_sha256")
 
     if not isinstance(artifacts, list):
         return
     workspace_event = getattr(v, "_journal_event_type", None)
-    if workspace_event in {"WORKSPACE_BASELINE_RECORDED", "WORKSPACE_POSTFLIGHT_RECORDED"}:
+    if workspace_event in {"WORKSPACE_BASELINE_RECORDED", "WORKSPACE_POSTFLIGHT_RECORDED", "INTEGRATION_MANIFEST_RECORDED"}:
         artifact_kind = ("workspace_baseline" if workspace_event == "WORKSPACE_BASELINE_RECORDED"
-                         else "workspace_postflight")
+                         else "workspace_postflight" if workspace_event == "WORKSPACE_POSTFLIGHT_RECORDED"
+                         else "workspace_integration")
         if len(artifacts) != 1:
             v.add("INVALID_VALUE", path, f"{workspace_event} requires exactly one artifact", phase="value")
             return
@@ -559,7 +565,7 @@ def _validate_artifacts(v: _PacketValidator, artifacts: List[Any], path: str) ->
         for index, artifact in enumerate(artifacts):
             if not isinstance(artifact, dict):
                 continue
-            if artifact.get("kind") in {"workspace_baseline", "workspace_postflight"}:
+            if artifact.get("kind") in {"workspace_baseline", "workspace_postflight", "workspace_integration"}:
                 v.add("INVALID_VALUE", f"{path}/{index}/kind", "workspace evidence belongs only to its matching event", phase="value")
             if "content_sha256" in artifact:
                 v.add("INVALID_VALUE", f"{path}/{index}/content_sha256", "content_sha256 belongs only to workspace evidence artifacts", phase="value")
@@ -920,13 +926,18 @@ def _validate_payload_run(v: _PacketValidator, run: Dict[str, Any], path: str) -
             "reassignment",
             "reconciliation",
         }
+        optional_versions = {"workspace_evidence"}
         for key in required_versions:
             if key not in contract_versions:
                 v.add("MISSING_FIELD", f"{path}/contract_versions/{key}", f"Missing required field '{key}'")
             elif contract_versions[key] != 1:
                 v.add("INVALID_VALUE", f"{path}/contract_versions/{key}", "Contract version must be 1", phase="value")
+        for key in optional_versions:
+            if (key in contract_versions
+                    and (type(contract_versions[key]) is not int or contract_versions[key] != 1)):
+                v.add("INVALID_VALUE", f"{path}/contract_versions/{key}", "Contract version must be 1", phase="value")
         for key in contract_versions:
-            if key not in required_versions:
+            if key not in required_versions | optional_versions:
                 v.add("UNKNOWN_FIELD", f"{path}/contract_versions/{key}", f"Unknown field '{key}'")
     else:
         v.add("INVALID_TYPE", f"{path}/contract_versions", "Expected object", phase="scalar")

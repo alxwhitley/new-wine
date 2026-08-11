@@ -61,6 +61,86 @@ class IntegrityError(Exception):
         self.packet_id = packet_id
 
 
+WORKSPACE_STAGE_SPECS = {
+    "WORKSPACE_BASELINE_RECORDED": {
+        "event_kind": "workspace_baseline", "artifact_kind": "workspace_baseline",
+        "suffix": ".baseline.json",
+        "fields": {"schema_version", "artifact_kind", "packet_id", "packet_sha256", "intent_id",
+                   "worktree_identity", "packet_snapshot", "protected_snapshot", "writable_paths",
+                   "forbidden_surfaces", "content_sha256", "artifact_sha256"},
+    },
+    "WORKSPACE_POSTFLIGHT_RECORDED": {
+        "event_kind": "workspace_postflight", "artifact_kind": "workspace_postflight",
+        "suffix": ".postflight.json",
+        "fields": {"schema_version", "artifact_kind", "packet_id", "packet_sha256", "intent_id",
+                   "worktree_identity", "packet_snapshot", "protected_snapshot", "writable_paths",
+                   "forbidden_surfaces", "derived_changes", "scope_findings", "worker_manifest_findings",
+                   "protected_findings", "secret_findings", "acceptance_allowed", "content_sha256",
+                   "artifact_sha256"},
+    },
+    "INTEGRATION_MANIFEST_RECORDED": {
+        "event_kind": "workspace_integration", "artifact_kind": "integration_manifest",
+        "suffix": ".integration.json",
+        "fields": {"schema_version", "artifact_kind", "packet_id", "packet_sha256", "intent_id",
+                   "starting_revision", "integration_base", "integration_target_path",
+                   "integration_target_status", "worktree_identity", "derived_changes",
+                   "verification_evidence_ids", "protected_tree_result", "secret_result", "decision",
+                   "reason_codes", "postflight", "accepted_replay", "required_human_action",
+                   "content_sha256", "artifact_sha256"},
+    },
+}
+
+
+def _workspace_fold_error(message: str, packet_id: Optional[str],
+                          packets: Dict[str, Dict[str, Any]]) -> IntegrityError:
+    """Return an attributable O4 fold failure without dropping packet rows."""
+    error = IntegrityError("WORKSPACE_EVIDENCE_MISMATCH", message, packet_id)
+    error.partial_packets = dict(packets)
+    return error
+
+
+def validate_workspace_stage_artifact(raw: bytes, packet: Dict[str, Any], intent_id: str,
+                                      event_type: str, binding: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate one O4 artifact and its journal binding without fallbacks."""
+    spec = WORKSPACE_STAGE_SPECS[event_type]
+    packet_id = packet["packet_id"]
+    expected_path = "workspace/%s/%s%s" % (packet_id, intent_id, spec["suffix"])
+    try:
+        artifact = json.loads(raw.decode("utf-8"))
+    except (AttributeError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise IntegrityError("WORKSPACE_EVIDENCE_MISMATCH", "workspace evidence artifact is unreadable", packet_id) from exc
+    if not isinstance(artifact, dict):
+        raise IntegrityError(
+            "WORKSPACE_EVIDENCE_MISMATCH",
+            "workspace evidence artifact root is not an object",
+            packet_id,
+        )
+    content_sha256 = compute_sha256(canonical_bytes(artifact, omit={"content_sha256", "artifact_sha256"}))
+    with_content = dict(artifact)
+    with_content["content_sha256"] = content_sha256
+    artifact_sha256 = compute_sha256(canonical_bytes(with_content, omit={"artifact_sha256"}))
+    if (raw != canonical_bytes(artifact)
+            or set(artifact) != spec["fields"]
+            or artifact.get("schema_version") != 1
+            or artifact.get("artifact_kind") != spec["artifact_kind"]
+            or artifact.get("packet_id") != packet_id
+            or artifact.get("packet_sha256") != packet.get("packet_sha256")
+            or artifact.get("intent_id") != intent_id
+            or artifact.get("content_sha256") != content_sha256
+            or artifact.get("artifact_sha256") != artifact_sha256
+            or binding.get("kind") != spec["event_kind"]
+            or binding.get("artifact_id") != spec["event_kind"]
+            or binding.get("path") != expected_path
+            or binding.get("content_sha256") != content_sha256
+            or binding.get("sha256") != artifact_sha256
+            or binding.get("byte_length") != len(raw)
+            or set(binding) != {
+                "kind", "artifact_id", "path", "sha256", "content_sha256", "byte_length",
+            }):
+        raise IntegrityError("WORKSPACE_EVIDENCE_MISMATCH", "workspace evidence artifact disagrees", packet_id)
+    return artifact
+
+
 def _direct_state_root_path(state_root: str) -> str:
     """Normalize only macOS's fixed /var -> /private/var system alias.
 
@@ -610,6 +690,8 @@ def _fold_journal(
                 "quarantine_reason": None,
                 "human_required_reasons": [],
                 "lane_history": [{"lane": lane, "since_event_seq": event["seq"]}],
+                "attempt_intents": {},
+                "workspace_evidence": {},
             }
 
         elif event_type == "ATTEMPT_STARTED":
@@ -625,12 +707,71 @@ def _fold_journal(
             pkt["state"] = "RUNNING"
             pkt["attempts_started"] += 1
             pkt["open_attempt"] = attempt_payload.get("attempt")
+            attempt = attempt_payload.get("attempt")
+            intent_id = event.get("intent_id")
+            if isinstance(attempt, int) and not isinstance(attempt, bool) and attempt >= 1:
+                pkt["attempt_intents"][attempt] = intent_id
             pkt["last_event_seq"] = event["seq"]
             pkt["last_event_sha256"] = event["event_sha256"]
             counters["attempts_started_total"] += 1
 
         elif event_type == "WORKER_RESULT_RECORDED":
             counters["results_recorded_total"] += 1
+
+        elif event_type in WORKSPACE_STAGE_SPECS:
+            pkt = packets.get(packet_id)
+            if pkt is None:
+                raise _workspace_fold_error(
+                    "workspace evidence for unknown packet", packet_id, packets)
+            spec = WORKSPACE_STAGE_SPECS[event_type]
+            artifact_kind, suffix = spec["event_kind"], spec["suffix"]
+            intent_id = event.get("intent_id")
+            matching_attempts = [attempt for attempt, known_intent in pkt["attempt_intents"].items()
+                                 if known_intent == intent_id]
+            if len(matching_attempts) != 1:
+                raise _workspace_fold_error(
+                    "workspace evidence intent disagrees", packet_id, packets)
+            attempt = matching_attempts[0]
+            expected_path = "workspace/%s/%s%s" % (packet_id, intent_id, suffix)
+            artifacts = (event.get("payload") or {}).get("artifacts") or []
+            if len(artifacts) != 1:
+                raise _workspace_fold_error(
+                    "workspace evidence requires one artifact", packet_id, packets)
+            artifact = artifacts[0]
+            if not isinstance(artifact, dict):
+                raise _workspace_fold_error(
+                    "workspace evidence binding disagrees", packet_id, packets)
+            # Recovery has a concrete state root, unlike reconciliation's
+            # phantom inventory fold. Bind the journal hash to the immutable
+            # canonical artifact before permitting this stage to count.
+            if os.path.isdir(state_root):
+                try:
+                    with open(os.path.join(state_root, expected_path), "rb") as source:
+                        raw = source.read()
+                    persisted = validate_workspace_stage_artifact(raw, pkt, intent_id, event_type, artifact)
+                except IntegrityError as exc:
+                    exc.partial_packets = packets
+                    raise
+                except (OSError, TypeError, ValueError) as exc:
+                    raise _workspace_fold_error(
+                        "workspace evidence artifact is unreadable", packet_id, packets) from exc
+            stage = artifact_kind
+            stages = pkt["workspace_evidence"].setdefault(attempt, {})
+            if stage in stages:
+                if stages[stage] != artifact:
+                    raise _workspace_fold_error(
+                        "workspace evidence duplicate disagrees", packet_id, packets)
+                continue
+            required_prior = {
+                "workspace_postflight": "workspace_baseline",
+                "workspace_integration": "workspace_postflight",
+            }.get(stage)
+            if required_prior is not None and required_prior not in stages:
+                raise _workspace_fold_error(
+                    "workspace evidence stage order disagrees", packet_id, packets)
+            stages[stage] = artifact
+            pkt["last_event_seq"] = event["seq"]
+            pkt["last_event_sha256"] = event["event_sha256"]
 
         elif event_type == "ATTEMPT_FINISHED":
             pkt = packets.get(packet_id)
@@ -789,6 +930,7 @@ def _build_run_started_event(
                     "provider_evidence": 1,
                     "reassignment": 1,
                     "reconciliation": 1,
+                    "workspace_evidence": 1,
                 },
                 "end_reason": None,
                 "end_detail": None,

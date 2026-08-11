@@ -202,9 +202,11 @@ def _record_workspace_postflight(
 
 
 def _record_workspace_integration(
-    handle, packet: Dict[str, Any], postflight: Dict[str, Any], analysis: Dict[str, Any],
+    handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
+    packet: Dict[str, Any], postflight: Dict[str, Any], analysis: Dict[str, Any],
+    coordinator_id: str, run_id: str, now: str,
 ) -> None:
-    """Publish one accepted, postflight-bound integration evidence artifact."""
+    """Publish and journal one accepted, postflight-bound integration artifact."""
     artifact = build_integration_manifest(packet, postflight, analysis)
     parts = ("workspace", packet["packet_id"], f"{postflight['intent_id']}.integration.json")
     existing = handle.read(parts)
@@ -215,8 +217,43 @@ def _record_workspace_integration(
             raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INVALID", "Integration manifest is not valid JSON") from exc
         if existing != canonical_bytes(persisted) or persisted != artifact:
             raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_MISMATCH", "Integration manifest disagrees")
+    else:
+        publish_workspace_artifact(handle, parts, artifact)
+        existing = handle.read(parts)
+    if existing is None:
+        raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_MISSING", "Published integration manifest disappeared")
+    binding = {
+        "kind": "workspace_integration", "artifact_id": "workspace_integration",
+        "path": "/".join(parts), "sha256": artifact["artifact_sha256"],
+        "content_sha256": artifact["content_sha256"], "byte_length": len(existing),
+    }
+    matching = [
+        event for event in journal_events
+        if event.get("event_type") == "INTEGRATION_MANIFEST_RECORDED"
+        and event.get("packet_id") == packet["packet_id"]
+        and event.get("intent_id") == postflight["intent_id"]
+    ]
+    if matching:
+        recorded = (matching[-1].get("payload") or {}).get("artifacts") or []
+        if len(matching) != 1 or len(recorded) != 1 or any(
+                recorded[0].get(key) != value for key, value in binding.items()):
+            raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_MISMATCH", "Integration manifest journal binding disagrees")
         return
-    publish_workspace_artifact(handle, parts, artifact)
+    previous = journal_events[-1] if journal_events else None
+    event = _make_event(
+        (previous["seq"] + 1) if previous else 1, "INTEGRATION_MANIFEST_RECORDED",
+        coordinator_id, run_id, state_root_id, previous, now,
+        packet_id=packet["packet_id"], intent_id=postflight["intent_id"],
+        from_state=None, to_state=None, cause="none",
+        payload={"packet": None, "attempt": None, "artifacts": [binding],
+                 "classification": None, "transition_detail": None, "recovery": None,
+                 "run": None, "report": None},
+    )
+    handle.verify_identity()
+    append_journal(os.path.join(state_root, "journal.ndjson"), event,
+                   os.path.join(state_root, "locks", "journal.wlock"), expected_head=previous)
+    handle.verify_identity()
+    journal_events.append(event)
 
 
 def _accepted_replay_evidence(handle, packet_id: str, packet: Dict[str, Any],
@@ -306,12 +343,21 @@ def _integration_analysis_for_context(packet: Dict[str, Any], postflight: Dict[s
     return analysis
 
 
-def _publish_accepted_integrations(handle, state_root: str, journal_events: List[Dict[str, Any]],
-                                   folded: Dict[str, Dict[str, Any]], integration_context_by_packet: Optional[Mapping[str, Any]]) -> None:
+def _publish_accepted_integrations(handle, state_root: str, state_root_id: str,
+                                   journal_events: List[Dict[str, Any]],
+                                   folded: Dict[str, Dict[str, Any]], coordinator_id: str,
+                                   run_id: str, now: str,
+                                   integration_context_by_packet: Optional[Mapping[str, Any]]) -> None:
     """Publish only accepted/sealed packet integration evidence, including recovery."""
     contexts = integration_context_by_packet or {}
     for packet_id, packet_state in sorted(folded.items()):
         if packet_state.get("state") != "ACCEPTED":
+            continue
+        # O3 packets predate O4 workspace evidence. Only a packet whose
+        # attempt actually crossed the durable postflight gate participates in
+        # integration-candidate publication.
+        if not any(event.get("event_type") == "WORKSPACE_POSTFLIGHT_RECORDED"
+                   and event.get("packet_id") == packet_id for event in journal_events):
             continue
         packet = _load_enrolled_packet(state_root, packet_id, packet_state, journal_events, handle=handle)
         replay = _accepted_replay_evidence(handle, packet_id, packet, packet_state, journal_events, folded)
@@ -364,12 +410,16 @@ def _publish_accepted_integrations(handle, state_root: str, journal_events: List
                     != replay["verification_evidence_ids"]):
                 raise WorkspaceEvidenceError(
                     "WORKSPACE_INTEGRATION_MISMATCH", "Integration manifest replay binding disagrees")
-            _record_workspace_integration(handle, packet, postflight, persisted_analysis)
+            _record_workspace_integration(
+                handle, state_root, state_root_id, journal_events, packet, postflight,
+                persisted_analysis, coordinator_id, run_id, now)
             continue
         analysis = _integration_analysis_for_context(packet, postflight, contexts.get(packet_id), replay)
         if analysis is None:
             continue
-        _record_workspace_integration(handle, packet, postflight, analysis)
+        _record_workspace_integration(
+            handle, state_root, state_root_id, journal_events, packet, postflight,
+            analysis, coordinator_id, run_id, now)
 
 
 def _load_enrolled_packet(state_root: str, packet_id: str, packet: Dict[str, Any],
@@ -537,7 +587,8 @@ def _maintenance(handle, state_root: str, state_root_id: str, journal_events: Li
     if sealed:
         folded, _ = _fold_journal(state_root, journal_events)
     _publish_accepted_integrations(
-        handle, state_root, journal_events, folded, integration_context_by_packet)
+        handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id,
+        now, integration_context_by_packet)
 
     before = len(journal_events)
     # ``promote_dependencies`` is an accepted O3 primitive that operates by
@@ -707,7 +758,15 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                     persist_invocation_outcome(
                         handle, invocation_packet, started["intent_id"], invocation,
                         adapter, started["coordinator_id"], started["run_id"], now, postflight)
-            if (not receipt_present
+            # A pre-worker crash resumes through this loop and may invoke the
+            # worker here.  Re-read the durable receipt after that invocation;
+            # the value captured before invocation is intentionally stale.
+            # Treating it as current would try to terminate the already-dead,
+            # successfully receipted process and strand the attempt.
+            receipt_present_now = (
+                handle.read(invocation_parts + ("completion.json",)) is not None
+                or handle.read(invocation_parts + ("completion.pending",)) is not None)
+            if (not receipt_present_now
                     and handle.read(invocation_parts + ("process.json",)) is not None):
                 with handle.directory(("invocations", started["intent_id"])) as intent_fd:
                     dead = terminate_sidecar_process(
