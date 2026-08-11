@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
-from harness_coordinator.v1.coordinator import run_once
+from harness_coordinator.v1.coordinator import claim_and_start_attempt, run_once
 from harness_coordinator.v1.enroll import enroll_packets
 from harness_coordinator.v1.invoke import WorkerAdapter
 from harness_coordinator.v1.recovery import _fold_journal
@@ -137,6 +137,55 @@ def test_coordinator_rejects_foreign_operator_repository_before_worker(tmp_path:
     events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
     assert torn is None
     assert not any(event["event_type"] == "ATTEMPT_STARTED" for event in events)
+
+
+def test_write_packet_waits_for_adapter_before_foreign_root_preflight_refusal(
+        tmp_path: Path, monkeypatch) -> None:
+    """An O4 write packet remains READY until its adapter can execute preflight."""
+    from harness_coordinator.v1.workspace_evidence import WorkspaceEvidenceError
+
+    foreign = tmp_path / "foreign-repository"
+    foreign.mkdir()
+    _git(foreign, "init")
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(
+        tmp_path, "o4-await-adapter", repository_root=os.path.realpath(foreign))
+    invoked = {"value": False}
+    monkeypatch.setattr(
+        "harness_coordinator.v1.coordinator.invoke_worker",
+        lambda *_args, **_kwargs: invoked.update(value=True),
+    )
+
+    waiting = run_once(
+        state_root, COORD_ID, "o4-await-adapter-1", _context(), T_NOW,
+        worker_adapters={})
+    assert waiting["status"] == "awaiting_worker_adapter"
+    assert waiting["packet_id"] == packet["packet_id"]
+    events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "READY"
+    assert folded[packet["packet_id"]]["open_attempt"] is None
+    assert folded[packet["packet_id"]]["attempts_started"] == 0
+    assert not any(event["event_type"] in {
+        "ATTEMPT_STARTED", "WORKSPACE_BASELINE_RECORDED",
+    } for event in events)
+
+    with pytest.raises(WorkspaceEvidenceError) as caught:
+        run_once(
+            state_root, COORD_ID, "o4-await-adapter-2", _context(),
+            "2026-08-10T01:12:00Z", worker_adapters={packet["packet_id"]: object()})
+
+    assert caught.value.code == "WORKTREE_IDENTITY_COMMON_DIR"
+    events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "READY"
+    assert folded[packet["packet_id"]]["open_attempt"] is None
+    assert folded[packet["packet_id"]]["attempts_started"] == 0
+    assert not any(event["event_type"] in {
+        "ATTEMPT_STARTED", "WORKSPACE_BASELINE_RECORDED",
+    } for event in events)
+    assert invoked["value"] is False
 
 
 def test_preflight_refusal_keeps_packet_ready_without_durable_running_attempt(
@@ -817,15 +866,24 @@ def test_accepted_integration_is_journaled_once_and_tampered_binding_fails_fold(
 
 
 def test_reconciliation_surfaces_missing_workspace_baseline(tmp_path: Path) -> None:
-    """A claimed O4 attempt cannot disappear from the morning report without preflight evidence."""
+    """A malformed claimed O4 attempt cannot disappear without preflight evidence."""
     from harness_contracts.v1.journal import validate_journal_event
     from harness_coordinator.v1.reconcile import (
         _declares_workspace_evidence_v1,
         build_reconciliation_report,
     )
 
-    state_root, _repo, _worktree, _packet = _state_with_registered_worktree(tmp_path, "o4-reconcile-baseline")
+    state_root, _repo, _worktree, packet = _state_with_registered_worktree(tmp_path, "o4-reconcile-baseline")
     run_once(state_root, COORD_ID, RUN_ID, _context(), T_NOW)
+    events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
+    assert torn is None
+    folded, _ = _fold_journal(state_root, events)
+    assert folded[packet["packet_id"]]["state"] == "READY"
+    with open_state_root(state_root) as handle:
+        claim_and_start_attempt(
+            state_root, STATE_ROOT_ID, events, packet["packet_id"],
+            folded[packet["packet_id"]], COORD_ID, RUN_ID,
+            _context(), "2026-08-10T01:12:00Z", handle=handle)
     events, torn = read_journal(Path(state_root, "journal.ndjson"), state_root_id=STATE_ROOT_ID)
     assert torn is None
     run_started = next(event for event in events if event["event_type"] == "RUN_STARTED")

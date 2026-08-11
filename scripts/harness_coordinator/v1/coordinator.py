@@ -847,7 +847,23 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             integration_context_by_packet)
 
     packet_id = select_next(folded, disabled_lanes or [], now)
-    if packet_id is None:
+    waiting_for_adapter = False
+    if packet_id is not None:
+        selected_adapter = adapters.get(packet_id) or adapters.get(folded[packet_id]["lane"])
+        if selected_adapter is None and folded[packet_id].get("packet_sha256") is not None:
+            selected_packet = _load_enrolled_packet(
+                state_root, packet_id, folded[packet_id], journal_events, handle=handle)
+            waiting_for_adapter = (
+                isinstance(selected_packet.get("repository_root"), str)
+                and bool(selected_packet.get("writable_paths"))
+            )
+    if waiting_for_adapter:
+        # O4's root binding is the compatibility boundary for a packet which
+        # needs workspace preflight. Without an adapter there is no
+        # authorized invocation to guard, so preserve READY rather than
+        # creating a durable claim/RUNNING attempt.
+        result = {"status": "awaiting_worker_adapter", "packet_id": packet_id}
+    elif packet_id is None:
         result = {"status": "no_eligible_work", "packet_id": None}
     else:
         adapter = adapters.get(packet_id) or adapters.get(folded[packet_id]["lane"])
