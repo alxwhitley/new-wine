@@ -8,8 +8,47 @@ from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.journal import validate_journal_event
 from harness_contracts.v1.packet import validate_packet
 from harness_coordinator.v1.paths import safe_state_path, validate_harness_id
-from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event
+from harness_coordinator.v1.recovery import (
+    IntegrityError, _build_derived_queue, _fold_journal, _make_event,
+    bound_execution_plan_for_run,
+)
 from harness_coordinator.v1.store import JournalHeadMoved, atomic_replace, append_journal, read_journal
+
+
+def _assert_plan_membership(plan, packet_id, packet_sha256, dependency_ids):
+    """Preflight-only O5 plan-scope check: declared fields against plan membership.
+
+    Mirrors ``recovery._validate_plan_packet_binding``'s membership/digest/
+    dependency checks, but deliberately never reads the packet artifact from
+    disk: at whole-batch preflight time (this function's only caller) the
+    artifact has not been published yet, so a disk read here would fail
+    closed even on a legitimate in-plan packet. ``_fold_journal``'s own
+    defensive re-check (already built, Task 1) independently re-validates
+    the published artifact bytes once they exist, so this narrower
+    preflight check does not weaken that guarantee -- it only adds an
+    earlier, cheaper refusal for the common case, so a bad enrollment
+    attempt never even reaches the journal.
+    """
+    expected = None
+    for row in plan.get("packets", []):
+        if row.get("packet_id") == packet_id:
+            expected = row
+            break
+    if expected is None:
+        raise IntegrityError(
+            "PLAN_SCOPE_PACKET_OUTSIDE_PLAN",
+            "packet is outside the bound execution plan", packet_id)
+    if packet_sha256 != expected.get("packet_sha256"):
+        raise IntegrityError(
+            "PLAN_SCOPE_PACKET_DIGEST_MISMATCH",
+            "packet digest disagrees with the bound execution plan", packet_id)
+    # Ordered, not set, comparison -- the plan authenticates a deterministic
+    # enrollment order, so dependency ORDER is part of plan identity, exactly
+    # as ``_validate_plan_packet_binding`` treats it.
+    if list(dependency_ids or []) != list(expected.get("dependencies") or []):
+        raise IntegrityError(
+            "PLAN_SCOPE_PACKET_DEPENDENCY_MISMATCH",
+            "packet dependencies disagree with the bound execution plan", packet_id)
 
 
 class PacketPreflightError(ValueError):
@@ -131,15 +170,29 @@ def enroll_packets(
         raise PacketPreflightError([{"code": "JOURNAL_TAIL_TORN", "path": "/journal", "message": "enrollment refuses a torn journal tail"}])
     folded, _ = _fold_journal(state_root, events)
 
+    # An O5 plan already bound to this run scopes what may enroll. Enrolment
+    # preceding binding stays legal (Task 1's dual-order guarantee; the
+    # retro check inside ``_fold_journal`` covers that direction), so a
+    # caller with no plan bound yet sees ``plan is None`` and every item
+    # below is exempt, exactly as before this check existed.
+    plan = bound_execution_plan_for_run(state_root, events, run_id)
+
     # Durable-state and target-artifact checks are part of the same whole-
     # batch preflight.  No packet, journal, projection, or rejection write is
-    # allowed until every later item has also passed these checks.
+    # allowed until every later item has also passed these checks -- plan
+    # membership included, checked first and BEFORE any artifact write, so a
+    # bad enrollment attempt against an already-bound plan never reaches the
+    # journal at all (unlike a bare reactive check, which would only catch
+    # it on a LATER fold, after the event was already durably appended).
     decisions: List[Dict[str, Any]] = []
     rejections: List[Dict[str, Any]] = []
     for item in prepared:
         packet_id = item["packet_id"]
         digest = item["packet_sha256"]
         existing = folded.get(packet_id)
+        if plan is not None and existing is None:
+            _assert_plan_membership(
+                plan, packet_id, digest, item["packet"]["dependency_ids"])
         if existing is not None and existing.get("packet_sha256") != digest:
             rejections.append({"packet_id": packet_id, "reason": "enrolled_digest_conflict", "existing_packet_sha256": existing.get("packet_sha256"), "offered_packet_sha256": digest})
             continue

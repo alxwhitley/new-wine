@@ -76,6 +76,24 @@ class IntegrityError(Exception):
         self.packet_id = packet_id
 
 
+# ``PACKET_PAUSED`` is schema-forbidden from transitioning packet state (its
+# ``from_state``/``to_state`` must both be null), so it cannot mark a paused
+# packet ineligible the way an ordinary state transition would. Reusing the
+# already-required ``earliest_next_attempt_at`` packet-state field --
+# already consulted by ``scheduler._is_eligible`` -- is how the fold makes a
+# paused/blocked packet genuinely ineligible for reselection without
+# inventing new schema. A real BACKOFF's own ``next_eligible_at`` is used
+# verbatim (see ``_fold_journal``'s ``PACKET_PAUSED`` branch); a pause with
+# no natural expiry (``PAUSE``/``STOP``/``HUMAN_REQUIRED``, e.g.
+# ``NO_CAPABLE_MODEL_AVAILABLE`` or the human-authority gate) gets this
+# sentinel instead. It is a timestamp safely beyond any plan's
+# ``wall_clock_safety_seconds`` ceiling (``execution_plan.
+# MAX_WALL_CLOCK_SAFETY_SECONDS`` is 86400 seconds, one day), so it reads as
+# "not eligible again within this run" without inventing a second,
+# never-clears sentinel value that could be confused with a real timestamp.
+_INDEFINITE_PAUSE_SENTINEL = "9999-12-31T23:59:59Z"
+
+
 WORKSPACE_STAGE_SPECS = {
     "WORKSPACE_BASELINE_RECORDED": {
         "event_kind": "workspace_baseline", "artifact_kind": "workspace_baseline",
@@ -890,6 +908,36 @@ def _fold_journal(
                 raise _workspace_fold_error(
                     "workspace evidence stage order disagrees", packet_id, packets)
             stages[stage] = artifact
+            pkt["last_event_seq"] = event["seq"]
+            pkt["last_event_sha256"] = event["event_sha256"]
+
+        elif event_type == "PACKET_PAUSED":
+            pkt = packets.get(packet_id)
+            if pkt is None:
+                # Unlike ATTEMPT_STARTED/ATTEMPT_FINISHED/STATE_TRANSITION,
+                # PACKET_PAUSED is not itself proof of a real prior
+                # enrollment the fold must have seen -- it is a pure
+                # capacity-event record, and reconcile's inventory fold and
+                # replay's prefix fold both run over phantom/partial slices
+                # that legitimately omit the PACKET_ENROLLED an event like
+                # this references (see
+                # ``test_phantom_root_folds_tolerate_the_new_budget_events``).
+                # A live coordinator run never actually reaches this branch
+                # for an unenrolled packet: ``_persist_budget_decision`` is
+                # only ever called with a packet ``select_next`` already drew
+                # from this SAME fold, so it is always present there.
+                continue
+            body = (event.get("payload") or {}).get("packet_pause") or {}
+            next_eligible = body.get("next_eligible_at")
+            # A real BACKOFF window is used verbatim; every other pause
+            # reason (PAUSE/STOP/HUMAN_REQUIRED, no natural expiry) gets the
+            # indefinite sentinel -- see the constant's own docstring above.
+            # This is a last-write-wins update, same convention as every
+            # other packet-scoped fold field: the most recent journal record
+            # for this packet is authoritative, whichever direction it moves.
+            pkt["earliest_next_attempt_at"] = (
+                next_eligible if isinstance(next_eligible, str) and next_eligible
+                else _INDEFINITE_PAUSE_SENTINEL)
             pkt["last_event_seq"] = event["seq"]
             pkt["last_event_sha256"] = event["event_sha256"]
 
