@@ -16,7 +16,8 @@ Consequences that callers may rely on:
   the plan.
 * **Fail closed.** A malformed plan, packet row, event, or provider snapshot
   produces ``STOP``/``BUDGET_EVIDENCE_INVALID`` rather than an exception, so
-  ambiguity can never be mistaken for permission.
+  ambiguity can never be mistaken for permission.  This holds even for input
+  that makes the plan validator itself raise -- see ``_plan_is_valid``.
 * **Nothing untrusted can grant budget.** Journal-derived usage and the folded
   row are reconciled by taking the LARGER usage; a folded row that reports
   less usage than the authenticated journal is an integrity finding, not a
@@ -163,6 +164,22 @@ def _shift(timestamp: str, seconds: int) -> Optional[str]:
 
 def _is_exact_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _plan_is_valid(plan: Dict[str, Any]) -> bool:
+    """Validate a plan without ever raising out of a decision.
+
+    ``validate_execution_plan`` still raises a raw ``TypeError`` on some legal
+    but hostile JSON -- ``"dependencies": null``, ``"capability_class": []``,
+    ``"human_stop_categories": [[]]`` -- all plausible hand-authoring slips.
+    That defect lives in the contract module and is recorded there for repair;
+    this module's unqualified "never raises, always fails closed" promise is
+    honoured here regardless of what the validator does.
+    """
+    try:
+        return bool(validate_execution_plan(plan)["valid"])
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +521,7 @@ def select_capable_route(
     if now is None:
         return _decision("STOP", "BUDGET_EVIDENCE_INVALID")
 
-    if not isinstance(plan, dict) or not validate_execution_plan(plan)["valid"]:
+    if not isinstance(plan, dict) or not _plan_is_valid(plan):
         return _decision("STOP", "BUDGET_EVIDENCE_INVALID")
 
     if (not isinstance(capability_class, str)
@@ -566,8 +583,11 @@ def select_capable_route(
                    if entry[1]["provider"] not in implementer_providers]
         if not diverse:
             # Every remaining reviewer shares the implementer's family.  Say so
-            # rather than quietly running a weaker review.
-            return _decision("HUMAN_REQUIRED", "HUMAN_AUTHORITY_REQUIRED",
+            # rather than quietly running a weaker review -- and say it with the
+            # SPECIFIC code, not the generic human-authority one the deployment
+            # and governed-content gates also emit, so a paused row records
+            # which of the two actually happened.
+            return _decision("HUMAN_REQUIRED", "MODEL_ROUTE_REVIEWER_IDENTITY_CONFLICT",
                              evidence_ids=evidence_ids)
         chosen = diverse[0]
 
@@ -595,7 +615,7 @@ def evaluate_preclaim(
     if now is None:
         return _decision("STOP", "BUDGET_EVIDENCE_INVALID")
 
-    if not isinstance(plan, dict) or not validate_execution_plan(plan)["valid"]:
+    if not isinstance(plan, dict) or not _plan_is_valid(plan):
         return _decision("STOP", "BUDGET_EVIDENCE_INVALID")
 
     if not isinstance(packet, dict):

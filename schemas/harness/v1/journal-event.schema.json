@@ -56,7 +56,9 @@
         "PROVIDER_CAPACITY_RECORDED",
         "PROVIDER_BACKOFF_SCHEDULED",
         "MODEL_FALLBACK_SELECTED",
-        "PACKET_PAUSED"
+        "PACKET_PAUSED",
+        "GRACEFUL_STOP_REQUESTED",
+        "GRACEFUL_STOP_EFFECTIVE"
       ]
     },
     "event_at": {
@@ -933,7 +935,8 @@
                 "PROVIDER_ALLOWANCE_RESET_PENDING",
                 "PROVIDER_ALLOWANCE_UNAVAILABLE",
                 "PROVIDER_BACKOFF_PENDING",
-                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED"
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
               ]
             },
             "next_eligible_at": {
@@ -1012,7 +1015,8 @@
                 "PROVIDER_ALLOWANCE_RESET_PENDING",
                 "PROVIDER_ALLOWANCE_UNAVAILABLE",
                 "PROVIDER_BACKOFF_PENDING",
-                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED"
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
               ]
             }
           }
@@ -1050,7 +1054,8 @@
                 "PROVIDER_ALLOWANCE_RESET_PENDING",
                 "PROVIDER_ALLOWANCE_UNAVAILABLE",
                 "PROVIDER_BACKOFF_PENDING",
-                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED"
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
               ]
             },
             "capability_class": {
@@ -1067,6 +1072,87 @@
             "next_eligible_at": {
               "type": ["string", "null"],
               "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "evidence_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "graceful_stop_request": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "plan_sha256",
+            "reason_code",
+            "evidence_ids"
+          ],
+          "properties": {
+            "plan_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "plan_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "PROVIDER_ALLOWANCE_EXHAUSTED",
+                "PROVIDER_ALLOWANCE_RESET_PENDING",
+                "PROVIDER_ALLOWANCE_UNAVAILABLE",
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
+              ]
+            },
+            "evidence_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "graceful_stop_effective": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "plan_sha256",
+            "reason_code",
+            "requested_event_id",
+            "evidence_ids"
+          ],
+          "properties": {
+            "plan_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "plan_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "PROVIDER_ALLOWANCE_EXHAUSTED",
+                "PROVIDER_ALLOWANCE_RESET_PENDING",
+                "PROVIDER_ALLOWANCE_UNAVAILABLE",
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
+              ]
+            },
+            "requested_event_id": {
+              "type": "string",
+              "minLength": 1
             },
             "evidence_ids": {
               "type": "array",
@@ -1370,6 +1456,74 @@
           "payload": {
             "properties": {
               "packet_pause": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "GRACEFUL_STOP_REQUESTED"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["graceful_stop_request"],
+            "properties": {
+              "graceful_stop_request": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "graceful_stop_request": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "GRACEFUL_STOP_EFFECTIVE"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["graceful_stop_effective"],
+            "properties": {
+              "graceful_stop_effective": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "graceful_stop_effective": {"type": "null"}
             }
           }
         }

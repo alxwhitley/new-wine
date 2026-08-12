@@ -49,6 +49,15 @@ JOURNAL_EVENT_TYPES = {
     "PROVIDER_BACKOFF_SCHEDULED",
     "MODEL_FALLBACK_SELECTED",
     "PACKET_PAUSED",
+    "GRACEFUL_STOP_REQUESTED",
+    "GRACEFUL_STOP_EFFECTIVE",
+}
+
+# A graceful run stop is a decision about the whole run, not about one packet:
+# the active attempt may finish, but no later packet may be claimed.
+GRACEFUL_STOP_EVENT_TYPES = {
+    "GRACEFUL_STOP_REQUESTED",
+    "GRACEFUL_STOP_EFFECTIVE",
 }
 
 # O5 stop-reason vocabulary, from the approved design's stable families.  It
@@ -66,6 +75,12 @@ BUDGET_REASON_CODES = {
     # PROVIDER_BACKOFF_* -- the plan's bounded, finite retry schedule.
     "PROVIDER_BACKOFF_PENDING",
     "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+    # Immediate process-safety limits.  These terminate a process group; see
+    # IMMEDIATE_STOP_REASON_CODES below for why they are never graceful.
+    "COMMAND_TIMEOUT",
+    "OUTPUT_LIMIT_EXCEEDED",
+    # The plan's run-level wall-clock backstop against an abandoned run.
+    "QUEUE_SAFETY_CEILING_REACHED",
     # MODEL_ROUTE_* -- plan-pinned routing outcomes and refusals.
     "MODEL_ROUTE_SELECTED",
     "MODEL_ROUTE_FALLBACK_SELECTED",
@@ -83,6 +98,36 @@ BUDGET_REASON_CODES = {
     "PLAN_SCOPE_PACKET_DIGEST_MISMATCH",
 }
 
+# Immediate process-safety limits terminate the worker's process group
+# because letting it finish would defeat the safety boundary.  They are NOT
+# graceful plan stops, and the two vocabularies below are disjoint on purpose:
+# a timeout or an output flood structurally cannot be recorded as a graceful
+# run stop, so no caller can quietly relabel a containment failure as an
+# orderly end to the plan.
+IMMEDIATE_STOP_REASON_CODES = {
+    "COMMAND_TIMEOUT",
+    "OUTPUT_LIMIT_EXCEEDED",
+}
+
+# The reason codes a capacity-family payload may carry -- PACKET_PAUSED,
+# PROVIDER_BACKOFF_SCHEDULED, MODEL_FALLBACK_SELECTED.  The immediate codes
+# are SUBTRACTED for the same reason the graceful vocabulary excludes them,
+# one surface over: those three events describe a bounded, resumable capacity
+# condition, and a reconciliation that partitions PACKET_PAUSED as a capacity
+# pause would silently count a containment failure as capacity if a timeout
+# or an output flood could ride on one.
+CAPACITY_EVENT_REASON_CODES = BUDGET_REASON_CODES - IMMEDIATE_STOP_REASON_CODES
+
+# The only reason codes a graceful stop event may carry: the plan's
+# wall-clock backstop and authenticated provider-capacity exhaustion.
+GRACEFUL_STOP_REASON_CODES = {
+    "QUEUE_SAFETY_CEILING_REACHED",
+    "PROVIDER_ALLOWANCE_EXHAUSTED",
+    "PROVIDER_ALLOWANCE_UNAVAILABLE",
+    "PROVIDER_ALLOWANCE_RESET_PENDING",
+    "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+}
+
 # Each O5 budget event carries exactly one closed payload object, under its
 # own payload key.  Every other event type must leave that key null/absent.
 BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE = {
@@ -90,6 +135,8 @@ BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE = {
     "PROVIDER_BACKOFF_SCHEDULED": "provider_backoff",
     "MODEL_FALLBACK_SELECTED": "model_fallback",
     "PACKET_PAUSED": "packet_pause",
+    "GRACEFUL_STOP_REQUESTED": "graceful_stop_request",
+    "GRACEFUL_STOP_EFFECTIVE": "graceful_stop_effective",
 }
 
 BUDGET_PAYLOAD_KEYS = frozenset(BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE.values())
@@ -191,6 +238,8 @@ CAUSES_BY_EVENT_TYPE: Dict[str, Set[str]] = {
     "PROVIDER_BACKOFF_SCHEDULED": {"none"},
     "MODEL_FALLBACK_SELECTED": {"none"},
     "PACKET_PAUSED": {"none"},
+    "GRACEFUL_STOP_REQUESTED": {"none"},
+    "GRACEFUL_STOP_EFFECTIVE": {"none"},
 }
 
 # Payload sub-objects that must be non-null for each event type.
@@ -215,6 +264,8 @@ PAYLOAD_NON_NULL_BY_TYPE: Dict[str, Set[str]] = {
     "PROVIDER_BACKOFF_SCHEDULED": set(),
     "MODEL_FALLBACK_SELECTED": set(),
     "PACKET_PAUSED": set(),
+    "GRACEFUL_STOP_REQUESTED": set(),
+    "GRACEFUL_STOP_EFFECTIVE": set(),
 }
 
 ARTIFACT_KINDS = {
@@ -411,7 +462,8 @@ def _validate_journal_event_object(
     packet_id = value.get("packet_id")
     if event_type in ({"RUN_STARTED", "RUN_ENDED", "JOURNAL_TAIL_TRUNCATED",
                        "RECONCILIATION_EMITTED", "EXECUTION_PLAN_BOUND"}
-                      | PROVIDER_SCOPED_EVENT_TYPES):
+                      | PROVIDER_SCOPED_EVENT_TYPES
+                      | GRACEFUL_STOP_EVENT_TYPES):
         if packet_id is not None:
             v.add("INVALID_VALUE", "/packet_id", f"{event_type} event must have packet_id null", phase="value")
     else:
@@ -647,9 +699,17 @@ def _check_enum_factory(allowed: Set[str], label: str):
     return check
 
 
-_check_reason_code = _check_enum_factory(BUDGET_REASON_CODES, "reason_code")
+# Deliberately NOT the whole of BUDGET_REASON_CODES: an immediate
+# process-safety code fails validation on a capacity-family payload rather
+# than being recorded as a bounded, resumable pause or backoff.
+_check_reason_code = _check_enum_factory(CAPACITY_EVENT_REASON_CODES, "reason_code")
 _check_capability_class = _check_enum_factory(CAPABILITY_CLASSES, "capability_class")
 _check_capacity_state = _check_enum_factory(CAPACITY_STATES, "capacity_state")
+# Deliberately NOT ``_check_reason_code``: a graceful stop accepts a strict
+# subset of the vocabulary, so an immediate process-safety code fails
+# validation here rather than being recorded as an orderly plan stop.
+_check_graceful_stop_reason_code = _check_enum_factory(
+    GRACEFUL_STOP_REASON_CODES, "graceful_stop_reason_code")
 
 
 def _check_harness_id(v: _PacketValidator, value: Any, path: str) -> bool:
@@ -712,6 +772,25 @@ BUDGET_PAYLOAD_SPECS: Dict[str, Dict[str, Any]] = {
         "reason_code": _check_reason_code,
         "capability_class": _check_capability_class,
         "next_eligible_at": _check_optional_rfc3339,
+        "evidence_ids": _check_evidence_id_list,
+    },
+    # Both graceful-stop payloads bind the stop to the plan whose ceiling or
+    # provider allowance produced it; the run identity comes from the event
+    # envelope.  There is no field for stdout, stderr, or any other command
+    # output, so a stop record cannot become a smuggling channel for it.
+    "graceful_stop_request": {
+        "plan_id": _check_harness_id,
+        "plan_sha256": _check_sha256,
+        "reason_code": _check_graceful_stop_reason_code,
+        "evidence_ids": _check_evidence_id_list,
+    },
+    "graceful_stop_effective": {
+        "plan_id": _check_harness_id,
+        "plan_sha256": _check_sha256,
+        "reason_code": _check_graceful_stop_reason_code,
+        # Names the request this stop completes, so a fold can never pair an
+        # effective stop with the wrong request.
+        "requested_event_id": _check_non_empty_string,
         "evidence_ids": _check_evidence_id_list,
     },
 }

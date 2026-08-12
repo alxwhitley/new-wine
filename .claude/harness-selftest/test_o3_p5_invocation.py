@@ -110,20 +110,39 @@ def test_malformed_and_schema_invalid_results_are_rejected(tmp_path):
 
 
 def test_timeout_kills_entire_process_group(tmp_path):
+    """The whole group, not just the direct child: a grandchild inherits the
+    worker's process group unless it detaches, so containment that stops one
+    level down is not containment."""
+    grandchild = "import time; time.sleep(60)"
+    child = (
+        "import subprocess, sys, time\n"
+        "g = subprocess.Popen([sys.executable, '-c', %r])\n"
+        "sys.stdout.write(str(g.pid) + chr(10)); sys.stdout.flush()\n"
+        "time.sleep(60)\n"
+    ) % grandchild
     code = """import os, subprocess, sys, time
-p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)'])
-open(os.environ['SYNTHETIC_MARKER_PATH'],'w').write(str(p.pid))
+p=subprocess.Popen([sys.executable,'-c',%r],stdout=subprocess.PIPE,text=True)
+grandchild=p.stdout.readline().strip()
+open(os.environ['SYNTHETIC_MARKER_PATH'],'w').write('%%d\\n%%s\\n' %% (p.pid, grandchild))
 time.sleep(60)
-"""
+""" % child
     marker = tmp_path / "child.pid"
     packet = _packet(tmp_path)
     session = attempt_session_id("run-p5b", packet["packet_id"], 1)
     adapter = WorkerAdapter(argv=(PYTHON_EXECUTABLE, "-c", code), env={"SYNTHETIC_MARKER_PATH": str(marker)})
     outcome = invoke_worker(str(tmp_path / "state"), "root-id", packet, "attempt-pkt-p5b-1", session, adapter, allowed_worktree=packet["worktree"]["path"], timeout_seconds=.5, terminate_grace_seconds=.1)
     assert outcome.timed_out and outcome.process_group_dead
-    child_pid = int(marker.read_text())
-    with pytest.raises(ProcessLookupError):
-        os.kill(child_pid, 0)
+    assert outcome.termination_reason == "COMMAND_TIMEOUT"
+    child_pid, grandchild_pid = [int(line) for line in marker.read_text().split()]
+    for pid in (child_pid, grandchild_pid):
+        for _ in range(300):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(.01)
+        else:
+            raise AssertionError("descendant %d survived the timeout" % pid)
 
 
 def test_output_cap_terminates_worker(tmp_path):

@@ -6,6 +6,7 @@ are left to packet O3-P3; this module returns a report describing the fold
 state so the caller can continue.
 """
 
+import datetime
 import fcntl
 import json
 import os
@@ -21,11 +22,14 @@ from harness_contracts.v1.execution_plan import (
 )
 from harness_contracts.v1.journal import (
     CAUSE_EDGES,
+    GRACEFUL_STOP_EVENT_TYPES,
+    GRACEFUL_STOP_REASON_CODES,
     ZERO_SHA256,
     validate_journal_event,
 )
+from harness_contracts.v1.worker_result import RE_RFC3339
 from harness_contracts.v1.provider_evidence import validate_provider_signals_registry
-from harness_contracts.v1.packet import validate_packet
+from harness_contracts.v1.packet import RE_SHA256, _matches, is_harness_id, validate_packet
 from harness_contracts.v1.queue_state import validate_queue
 from harness_contracts.v1.seal import TERMINAL_STATES, validate_terminal_seal
 from harness_contracts.v1.transition import validate_transition
@@ -598,6 +602,11 @@ def _fold_journal(
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
     packets: Dict[str, Dict[str, Any]] = {}
     bound_plans_by_run: Dict[str, Dict[str, Any]] = {}
+    # Graceful-stop state is journal-only: no artifact is read to decide it,
+    # so unlike plan authentication below it holds under the phantom-root
+    # folds that reconcile and replay perform.
+    stop_requested_runs: Set[str] = set()
+    stop_effective_runs: Set[str] = set()
     counters = {
         "attempts_started_total": 0,
         "infra_retries_total": 0,
@@ -624,6 +633,43 @@ def _fold_journal(
                 raise IntegrityError("INVALID_FORMAT", str(exc)) from exc
         from_state = event.get("from_state")
         to_state = event.get("to_state")
+
+        if event_type in GRACEFUL_STOP_EVENT_TYPES:
+            stop_run_id = event.get("run_id")
+            if not isinstance(stop_run_id, str) or not stop_run_id:
+                raise IntegrityError(
+                    "GRACEFUL_STOP_INVALID", "graceful stop event has an invalid run_id")
+            if event_type == "GRACEFUL_STOP_REQUESTED":
+                if stop_run_id in stop_effective_runs:
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_REQUEST_AFTER_EFFECTIVE",
+                        "run requested a graceful stop after one already took effect")
+                if stop_run_id in stop_requested_runs:
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_DUPLICATE_REQUEST",
+                        "run has more than one graceful stop request")
+                stop_requested_runs.add(stop_run_id)
+            else:
+                if stop_run_id not in stop_requested_runs:
+                    # An effective stop with no request is not reconstructable:
+                    # nothing records what the run was stopping for.
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_EFFECTIVE_WITHOUT_REQUEST",
+                        "graceful stop took effect without a recorded request")
+                if stop_run_id in stop_effective_runs:
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_DUPLICATE_EFFECTIVE",
+                        "run has more than one effective graceful stop")
+                stop_effective_runs.add(stop_run_id)
+
+        if event_type == "ATTEMPT_STARTED" and event.get("run_id") in stop_effective_runs:
+            # The one-extra-claim failure, caught durably rather than only at
+            # the pre-claim gate: once a run's stop is effective, a later
+            # ATTEMPT_STARTED in the same run cannot be replayed as legitimate.
+            raise IntegrityError(
+                "GRACEFUL_STOP_CLAIM_AFTER_STOP",
+                "packet claimed after the run's graceful stop took effect",
+                packet_id)
 
         if event_type == "EXECUTION_PLAN_BOUND":
             run_id = event.get("run_id")
@@ -991,6 +1037,299 @@ def _authenticate_bound_execution_plan(state_root: str, event: Dict[str, Any]) -
     if len(plan.get("packets", [])) != binding.get("packet_count"):
         raise IntegrityError("PLAN_IDENTITY_CONFLICT", "bound plan packet count disagrees with journal")
     return plan
+
+
+def bound_execution_plan_for_run(
+    state_root: str, journal_events: List[Dict[str, Any]], run_id: str
+) -> Optional[Dict[str, Any]]:
+    """Return the authenticated plan this run is bound to, if any.
+
+    Same phantom-root convention as the fold: authentication reads the
+    immutable plan artifact, which only a concrete state root has, so an
+    inventory or prefix fold root yields ``None`` rather than a failure.
+    """
+    if not os.path.isdir(state_root):
+        return None
+    binding_event = None
+    for event in journal_events:
+        if (event.get("event_type") == "EXECUTION_PLAN_BOUND"
+                and event.get("run_id") == run_id):
+            binding_event = event
+    if binding_event is None:
+        return None
+    return _authenticate_bound_execution_plan(state_root, binding_event)
+
+
+# ---------------------------------------------------------------------------
+# Durable graceful-stop state
+#
+# A graceful stop lets the active attempt reach a durable outcome and complete
+# mandatory O4 postflight, then stops the run before the next claim.  It is a
+# different thing from an immediate process-safety limit, which terminates a
+# process group; the reason vocabularies are disjoint so the two can never be
+# confused in the journal.
+# ---------------------------------------------------------------------------
+
+
+def graceful_stop_state(
+    journal_events: List[Dict[str, Any]], run_id: str
+) -> Dict[str, Any]:
+    """Fold one run's durable graceful-stop state. Pure; reads no artifact.
+
+    ``pending`` is the conservative state a restart must honour: the stop was
+    requested and has not yet taken effect, so recovery completes first and
+    the stop is made effective afterwards -- never dropped because a new
+    process did not observe the original condition.
+    """
+    requested = None
+    effective = None
+    for event in journal_events or []:
+        if event.get("run_id") != run_id:
+            continue
+        event_type = event.get("event_type")
+        if event_type == "GRACEFUL_STOP_REQUESTED":
+            requested = event
+        elif event_type == "GRACEFUL_STOP_EFFECTIVE":
+            effective = event
+    reason_code = None
+    for event in (effective, requested):
+        if event is None:
+            continue
+        body = ((event.get("payload") or {}).get(_stop_payload_key(event["event_type"]))
+                or {})
+        if isinstance(body.get("reason_code"), str):
+            reason_code = body["reason_code"]
+            break
+    return {
+        "requested": requested,
+        "effective": effective,
+        "pending": requested is not None and effective is None,
+        "stopped": effective is not None,
+        "reason_code": reason_code,
+    }
+
+
+def _stop_payload_key(event_type: str) -> str:
+    return ("graceful_stop_effective" if event_type == "GRACEFUL_STOP_EFFECTIVE"
+            else "graceful_stop_request")
+
+
+def _run_started_at(journal_events: List[Dict[str, Any]], run_id: str) -> Optional[str]:
+    """The authenticated start instant of ``run_id``, or None if unrecorded.
+
+    The EARLIEST RUN_STARTED wins: a restart appends another one for the same
+    run, and measuring elapsed time from the restart would let a run that
+    keeps crashing outlive its own backstop forever.
+
+    Earliest by VALUE, never by position in the list -- taking the first match
+    in list order would make a safety backstop depend on how the caller
+    happened to order its events, and every accepted instant here is
+    normalised fixed-width Z-terminated UTC, so ``min`` over the strings is
+    exactly ``min`` over the instants.
+    """
+    started = [
+        event.get("event_at") for event in journal_events or []
+        if event.get("event_type") == "RUN_STARTED"
+        and event.get("run_id") == run_id
+        and _matches_rfc3339(event.get("event_at"))
+    ]
+    return min(started) if started else None
+
+
+def _matches_rfc3339(value: Any) -> bool:
+    """Normalised, fixed-width, Z-terminated UTC, so string order is time order."""
+    return _matches(value, RE_RFC3339)
+
+
+def _parse_utc(value: str) -> datetime.datetime:
+    return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+
+
+def wall_clock_ceiling_reached(
+    journal_events: List[Dict[str, Any]],
+    run_id: str,
+    wall_clock_safety_seconds: Any,
+    now: Any,
+) -> bool:
+    """Has the plan's run-level wall-clock backstop elapsed?
+
+    This is a backstop against an abandoned run, NOT the definition of a
+    successful one: plan completion is.  It is evaluated against durable UTC
+    with explicit ordering validation, per the design -- a ``now`` earlier
+    than the authenticated run start is clock regression and fails closed
+    rather than being read as "time remains".
+    """
+    if isinstance(wall_clock_safety_seconds, bool) or not isinstance(
+            wall_clock_safety_seconds, int) or wall_clock_safety_seconds < 1:
+        raise IntegrityError(
+            "BUDGET_EVIDENCE_INVALID",
+            "wall_clock_safety_seconds must be a positive integer")
+    started_at = _run_started_at(journal_events, run_id)
+    if started_at is None:
+        # Nothing authenticates when this run began, so no elapsed time can be
+        # claimed against it.  The run is bounded by its other limits instead.
+        return False
+    if not _matches_rfc3339(now):
+        raise IntegrityError(
+            "CLOCK_EVIDENCE_INVALID", "now must be a normalised RFC3339 UTC instant")
+    if now < started_at:
+        raise IntegrityError(
+            "CLOCK_REGRESSION",
+            "now precedes the authenticated run start")
+    elapsed = (_parse_utc(now) - _parse_utc(started_at)).total_seconds()
+    return elapsed >= wall_clock_safety_seconds
+
+
+def _graceful_stop_binding(source: Dict[str, Any]) -> Dict[str, str]:
+    """The plan identity every graceful stop event is bound to.
+
+    ``source`` is anything carrying ``plan_id``/``plan_sha256`` -- a validated
+    execution plan, or a recorded ``graceful_stop_request`` payload, which
+    names the same two fields precisely so a stop's plan identity can be read
+    back off the journal instead of being supplied again.
+    """
+    if not isinstance(source, dict):
+        raise ValueError("a graceful stop must name the plan it stops")
+    plan_id, plan_sha256 = source.get("plan_id"), source.get("plan_sha256")
+    if not is_harness_id(plan_id) or not _matches(plan_sha256, RE_SHA256):
+        raise ValueError("a graceful stop must name an authenticated plan identity")
+    return {"plan_id": plan_id, "plan_sha256": plan_sha256}
+
+
+def _append_stop_event(
+    journal_path: str,
+    lock_path: str,
+    journal_events: List[Dict[str, Any]],
+    event_type: str,
+    body: Dict[str, Any],
+    coordinator_id: str,
+    run_id: str,
+    state_root_id: str,
+    now: str,
+    handle=None,
+) -> List[Dict[str, Any]]:
+    from harness_coordinator.v1.budget_runtime import budget_event_payload
+
+    previous = journal_events[-1] if journal_events else None
+    event = _make_event(
+        seq=(_last_seq(journal_events) + 1),
+        event_type=event_type,
+        coordinator_id=coordinator_id,
+        run_id=run_id,
+        state_root_id=state_root_id,
+        prev_event=previous,
+        event_at=now,
+        payload=budget_event_payload(event_type, body),
+    )
+    result = validate_journal_event(event, previous, state_root_id)
+    if not result["valid"]:
+        raise IntegrityError(
+            "GRACEFUL_STOP_INVALID",
+            "refusing to journal an invalid graceful stop event: %s"
+            % result["errors"][0]["message"])
+    if handle is not None:
+        handle.verify_identity()
+    append_journal(journal_path, event, lock_path, expected_head=previous)
+    if handle is not None:
+        handle.verify_identity()
+    journal_events.append(event)
+    return journal_events
+
+
+def request_graceful_stop(
+    journal_path: str,
+    lock_path: str,
+    journal_events: List[Dict[str, Any]],
+    plan: Dict[str, Any],
+    coordinator_id: str,
+    run_id: str,
+    state_root_id: str,
+    now: str,
+    reason_code: str,
+    evidence_ids: List[str],
+    handle=None,
+) -> List[Dict[str, Any]]:
+    """Record that this run must stop after its active attempt resolves.
+
+    Requesting is idempotent: a request already on record is returned as-is
+    rather than duplicated, so a retry or a restart cannot manufacture a
+    second stop for one run.
+    """
+    if reason_code not in GRACEFUL_STOP_REASON_CODES:
+        # An immediate process-safety code lands here: refused, not recorded.
+        # Terminating a runaway process group is not an orderly plan stop, and
+        # relabelling one as the other is exactly the confusion this vocabulary
+        # split exists to prevent.
+        raise ValueError(
+            "%s is not a graceful stop reason code" % (reason_code,))
+    binding = _graceful_stop_binding(plan)
+    state = graceful_stop_state(journal_events, run_id)
+    if state["stopped"]:
+        raise IntegrityError(
+            "GRACEFUL_STOP_REQUEST_AFTER_EFFECTIVE",
+            "run already has an effective graceful stop")
+    if state["pending"]:
+        return journal_events
+    body = dict(binding, reason_code=reason_code,
+                evidence_ids=sorted(set(evidence_ids or [])))
+    return _append_stop_event(
+        journal_path, lock_path, journal_events, "GRACEFUL_STOP_REQUESTED", body,
+        coordinator_id, run_id, state_root_id, now, handle=handle)
+
+
+def make_graceful_stop_effective(
+    journal_path: str,
+    lock_path: str,
+    journal_events: List[Dict[str, Any]],
+    coordinator_id: str,
+    run_id: str,
+    state_root_id: str,
+    now: str,
+    plan: Optional[Dict[str, Any]] = None,
+    handle=None,
+) -> List[Dict[str, Any]]:
+    """Close a requested stop, after recovery and postflight have completed.
+
+    Reason code, evidence ids AND PLAN IDENTITY are all read back off the
+    recorded request rather than supplied again, so an effective stop can
+    never claim a different reason -- or a different plan -- from the request
+    it completes.  Taking the binding from the journal is also what lets a
+    restart close a pending stop at all: the plan that produced the request is
+    on record even when this process was handed no plan argument and none was
+    ever bound into the journal.
+
+    ``plan`` is therefore optional, and when supplied it is CHECKED against
+    the recorded identity rather than preferred over it.  A disagreement is
+    ambiguity about which plan is being stopped, so it fails closed with
+    ``PLAN_IDENTITY_CONFLICT`` instead of silently writing the argument's
+    identity over the request's.
+    """
+    state = graceful_stop_state(journal_events, run_id)
+    request = state["requested"]
+    binding = None
+    if request is not None:
+        requested_body = (
+            (request.get("payload") or {}).get("graceful_stop_request") or {})
+        binding = _graceful_stop_binding(requested_body)
+        if plan is not None and _graceful_stop_binding(plan) != binding:
+            raise IntegrityError(
+                "PLAN_IDENTITY_CONFLICT",
+                "an effective graceful stop must name the same plan as the "
+                "request it completes")
+    if state["stopped"]:
+        return journal_events
+    if not state["pending"]:
+        raise ValueError(
+            "a graceful stop cannot take effect without a recorded request")
+    body = dict(
+        binding,
+        reason_code=requested_body.get("reason_code"),
+        requested_event_id=request.get("event_id"),
+        evidence_ids=sorted(set(requested_body.get("evidence_ids") or [])),
+    )
+    return _append_stop_event(
+        journal_path, lock_path, journal_events, "GRACEFUL_STOP_EFFECTIVE", body,
+        coordinator_id, run_id, state_root_id, now, handle=handle)
 
 
 def _validate_plan_packet_binding(

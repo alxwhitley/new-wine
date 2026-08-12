@@ -95,6 +95,15 @@ def execution_plan_sha256(plan: Dict[str, Any]) -> str:
     return compute_sha256(canonical_bytes(plan, omit={"plan_sha256"}))
 
 
+# KNOWN DEFECT (unrepaired): validate_execution_plan can raise a raw TypeError
+# instead of a structured {"valid": False, "errors": [...]} result for legal
+# but hostile shapes -- "dependencies": null, "capability_class": [], nested
+# lists inside "human_stop_categories". authenticate_execution_plan_bytes below
+# only catches UnicodeDecodeError/JSONDecodeError around the initial parse, so
+# the TypeError propagates unhandled rather than as ExecutionPlanContractError.
+# Still fails closed (blocks acceptance, not grants it) -- a contract-shape
+# defect, not a safety hole. budget_runtime.py's _plan_is_valid guards its own
+# callers against this; other callers of these two functions do not.
 def validate_execution_plan(value: Any) -> Dict[str, Any]:
     """Validate one closed execution plan without reading external artifacts."""
     if isinstance(value, (str, bytes, bytearray)):

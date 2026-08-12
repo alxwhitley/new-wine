@@ -22,7 +22,18 @@ from harness_coordinator.v1.integration_analysis import (
 )
 from harness_coordinator.v1.paths import validate_harness_id
 from harness_coordinator.v1.process_sidecar import terminate_sidecar_process
-from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event, run_started_recovery
+from harness_coordinator.v1.recovery import (
+    IntegrityError,
+    _build_derived_queue,
+    _fold_journal,
+    _make_event,
+    bound_execution_plan_for_run,
+    graceful_stop_state,
+    make_graceful_stop_effective,
+    request_graceful_stop,
+    run_started_recovery,
+    wall_clock_ceiling_reached,
+)
 from harness_coordinator.v1.review import (
     _dependency_context, load_trusted_reviewer_sessions, resolve_pending_reviews,
 )
@@ -44,6 +55,56 @@ from harness_coordinator.v1.workspace_evidence import (
 def attempt_session_id(run_id: str, packet_id: str, attempt: int) -> str:
     """Durable worker-session identity; P5B must consume this exact value."""
     return f"session-{run_id}-{packet_id}-{attempt}"
+
+
+def _plan_budgets_for(plan: Optional[Dict[str, Any]], packet_id: str) -> Optional[Dict[str, Any]]:
+    """The authenticated plan's budgets for one member packet, if bound.
+
+    ``None`` means no plan is bound to this run, in which case the invocation
+    keeps its own defaults.  A bound plan that does not contain the packet is
+    a plan-scope problem owned by the pre-claim gate, not something to paper
+    over with a permissive default here.
+    """
+    if plan is None:
+        return None
+    for row in plan.get("packets", []):
+        if row.get("packet_id") == packet_id:
+            return row.get("budgets")
+    return None
+
+
+def _ceiling_evidence_ids(journal_events: List[Dict[str, Any]], run_id: str) -> List[str]:
+    """Bounded identifiers for the events that fix this run's elapsed time.
+
+    The run start and the plan binding are what the backstop was computed
+    from, so they are what a later reader needs to recheck it. Identifiers
+    only -- never timings, output, or any part of a command.
+    """
+    evidence: List[str] = []
+    for event in journal_events:
+        if event.get("run_id") != run_id:
+            continue
+        if event.get("event_type") in ("RUN_STARTED", "EXECUTION_PLAN_BOUND"):
+            event_id = event.get("event_id")
+            if isinstance(event_id, str) and event_id:
+                evidence.append(event_id)
+    return evidence
+
+
+def _assert_no_graceful_stop(journal_events: List[Dict[str, Any]], run_id: str) -> None:
+    """Refuse a claim once this run's stop is effective or already pending.
+
+    Every pre-claim path passes through here, not only the iteration loop, so
+    a direct caller cannot add the one extra claim a graceful stop exists to
+    prevent.  ``pending`` counts: the stop was requested, the active attempt
+    may finish, but nothing new may start.
+    """
+    state = graceful_stop_state(journal_events, run_id)
+    if state["stopped"] or state["pending"]:
+        raise IntegrityError(
+            "GRACEFUL_STOP_IN_EFFECT",
+            "run %s has a graceful stop %s; no further packet may be claimed"
+            % (run_id, "in effect" if state["stopped"] else "pending"))
 
 
 def _record_workspace_baseline(
@@ -501,6 +562,9 @@ def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events:
             return claim_and_start_attempt(
                 state_root, state_root_id, journal_events, packet_id, packet,
                 coordinator_id, run_id, trusted_process_context, now, handle=scoped)
+    # Checked before the lock, the pending intent, and ATTEMPT_STARTED, so a
+    # stopped run creates no durable claim artifact at all.
+    _assert_no_graceful_stop(journal_events, run_id)
     packet_body = _load_enrolled_packet(
         state_root, packet_id, packet, journal_events, handle=handle)
     claim = claim_packet(
@@ -629,7 +693,8 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
              disabled_lanes: List[str] = None,
              worker_adapters: Optional[Mapping[str, WorkerAdapter]] = None,
              protected_worktree_path: Optional[str] = None,
-             integration_context_by_packet: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+             integration_context_by_packet: Optional[Mapping[str, Any]] = None,
+             execution_plan: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Recover, resolve reviews, seal, promote, then claim at most one packet.
 
     Maintenance runs twice by design. The first pass completes work a previous
@@ -638,6 +703,11 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
     promotes whatever this iteration's own reviews just made terminal, so an
     ACCEPT and its dependents' promotion land in the same bounded iteration
     rather than waiting for the next one.
+
+    ``execution_plan`` is the validated plan this run is bound to. When it is
+    omitted, an already-bound plan is authenticated from the journal instead;
+    when neither exists, the iteration behaves exactly as before, with no
+    plan-derived limits and no wall-clock backstop.
     """
     # One pinned state-root identity for the whole iteration. It is opened
     # BEFORE recovery -- which is accepted code operating by pathname -- and
@@ -652,7 +722,7 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
             return _run_iteration(handle, state_root, report, coordinator_id, run_id,
                                   trusted_process_context, now, disabled_lanes,
                                   worker_adapters, protected_worktree_path,
-                                  integration_context_by_packet)
+                                  integration_context_by_packet, execution_plan)
         finally:
             report.release_singleton()
 
@@ -662,7 +732,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                    disabled_lanes: List[str],
                    worker_adapters: Optional[Mapping[str, WorkerAdapter]],
                    protected_worktree_path: Optional[str],
-                   integration_context_by_packet: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+                   integration_context_by_packet: Optional[Mapping[str, Any]],
+                   execution_plan: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """One bounded iteration, every P5C artifact operation sharing one handle."""
     journal_events = getattr(report, "journal_events", [])
     state_root_id = getattr(report, "state_root_id", None)
@@ -671,6 +742,32 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
     review_outcomes: List[Dict[str, Any]] = []
     review_attention: List[Dict[str, Any]] = []
     first = second = {"sealed": [], "promotion_attention": [], "revise_budget_exhausted": []}
+    journal_path = os.path.join(state_root, "journal.ndjson")
+    journal_lock_path = os.path.join(state_root, "locks", "journal.wlock")
+
+    # The plan is resolved once, before anything is claimed or invoked. An
+    # explicit argument wins; otherwise a plan already bound to this run is
+    # authenticated from the journal, so its limits and its wall-clock
+    # backstop apply on a restart even when the caller did not re-supply it.
+    plan = execution_plan
+    if plan is None and state_root_id is not None:
+        plan = bound_execution_plan_for_run(state_root, journal_events, run_id)
+
+    # A stop condition observed BEFORE the attempt-resolution block below is
+    # recorded before that work runs: the design lets the active attempt reach
+    # a durable outcome, but the decision to stop is what must survive a crash
+    # in the middle of it. Making the stop EFFECTIVE waits until afterwards.
+    stop = graceful_stop_state(journal_events, run_id)
+    if state_root_id is not None and plan is not None and not (
+            stop["stopped"] or stop["pending"]):
+        if wall_clock_ceiling_reached(
+                journal_events, run_id, plan["wall_clock_safety_seconds"], now):
+            journal_events = request_graceful_stop(
+                journal_path, journal_lock_path, journal_events, plan,
+                coordinator_id, run_id, state_root_id, now,
+                "QUEUE_SAFETY_CEILING_REACHED",
+                _ceiling_evidence_ids(journal_events, run_id), handle=handle)
+            stop = graceful_stop_state(journal_events, run_id)
 
     # Every durable phase is skipped without an identified state root. A
     # real RecoveryReport always carries one; a caller-supplied minimal
@@ -755,7 +852,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                       and not sidecar_present):
                     invocation = invoke_worker(
                         state_root, state_root_id, invocation_packet, started["intent_id"],
-                        session_id, adapter, allowed_worktree=packet_body["worktree"]["path"])
+                        session_id, adapter, allowed_worktree=packet_body["worktree"]["path"],
+                        plan_budgets=_plan_budgets_for(plan, packet_id))
                     postflight = _record_workspace_postflight(
                         handle, state_root, state_root_id, journal_events, invocation_packet,
                         started["intent_id"], invocation.result, started["coordinator_id"],
@@ -836,15 +934,55 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             integration_context_by_packet)
 
         before = len(journal_events)
-        journal_events, review_outcomes, review_attention = resolve_pending_reviews(
+        # Extended, never rebound: attempt-level attention gathered above is
+        # part of what this iteration must report.  Rebinding the name here
+        # silently discarded it, so a packet whose evidence contradicted
+        # itself -- the exact case resolve_open_attempts isolates rather than
+        # aborting on -- came back to the caller as an empty list.
+        journal_events, review_outcomes, pending_attention = resolve_pending_reviews(
             state_root, state_root_id, journal_events, folded, coordinator_id, run_id,
             trusted_process_context, now, handle=handle)
+        review_attention.extend(pending_attention)
         if len(journal_events) != before:
             folded, _ = _fold_journal(state_root, journal_events)
 
         journal_events, folded, second = _maintenance(
             handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now,
             integration_context_by_packet)
+
+        # The active attempt has now reached a durable outcome and its O4
+        # postflight is recorded, so a requested stop may become effective.
+        # A restart that found the stop already requested lands here too: it
+        # completes recovery first, exactly as a fresh observation would, and
+        # never assumes the condition has passed.
+        stop = graceful_stop_state(journal_events, run_id)
+        if stop["pending"] and not _any_attempt_open(folded):
+            # ``plan`` is passed as a cross-check, not as the source of the
+            # stop's plan identity -- that comes from the recorded request, so
+            # this closes cleanly even on a restart that resolved no plan.
+            journal_events = make_graceful_stop_effective(
+                journal_path, journal_lock_path, journal_events,
+                coordinator_id, run_id, state_root_id, now, plan=plan,
+                handle=handle)
+            stop = graceful_stop_state(journal_events, run_id)
+
+    if stop["stopped"] or stop["pending"]:
+        # Selection is skipped entirely rather than filtered: a graceful stop
+        # must produce ZERO further ATTEMPT_STARTED events, and the surest way
+        # to guarantee that is never to reach the claim path at all.
+        return _finish_iteration(
+            handle, state_root, state_root_id, journal_events, coordinator_id, run_id, now,
+            {
+                "status": "graceful_stopped" if stop["stopped"] else "graceful_stop_pending",
+                "packet_id": None,
+                "stop_reason_code": stop["reason_code"],
+                "reviews": review_outcomes, "review_attention": review_attention,
+                "sealed": first["sealed"] + second["sealed"],
+                "promotion_attention": (
+                    first["promotion_attention"] + second["promotion_attention"]),
+                "revise_budget_exhausted": (
+                    first["revise_budget_exhausted"] + second["revise_budget_exhausted"]),
+            })
 
     packet_id = select_next(folded, disabled_lanes or [], now)
     waiting_for_adapter = False
@@ -907,7 +1045,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             handle.verify_identity()
             invocation = invoke_worker(
                 state_root, state_root_id, invocation_packet, intent_id, session_id,
-                adapter, allowed_worktree=packet_body["worktree"]["path"])
+                adapter, allowed_worktree=packet_body["worktree"]["path"],
+                plan_budgets=_plan_budgets_for(plan, packet_id))
             handle.verify_identity()
             postflight = _record_workspace_postflight(
                 handle, state_root, state_root_id, journal_events, invocation_packet,
@@ -937,6 +1076,24 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                                             + after_worker["revise_budget_exhausted"]),
             })
 
+    return _finish_iteration(handle, state_root, state_root_id, journal_events,
+                             coordinator_id, run_id, now, result)
+
+
+def _any_attempt_open(folded: Dict[str, Dict[str, Any]]) -> bool:
+    """Whether any packet still holds an unresolved attempt."""
+    return any(packet.get("state") == "RUNNING" and packet.get("open_attempt") is not None
+               for packet in folded.values())
+
+
+def _finish_iteration(handle, state_root: str, state_root_id: Optional[str],
+                      journal_events: List[Dict[str, Any]], coordinator_id: str,
+                      run_id: str, now: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    """Publish this iteration's reconciliation report and return the result.
+
+    Shared by every exit from the iteration, including the graceful-stop one:
+    a stopped run still owes an accurate report of where its packets landed.
+    """
     if state_root_id is None or not os.path.exists(os.path.join(state_root, "MANIFEST.json")):
         return result
     report_id = f"reconciliation-{compute_sha256(run_id.encode('utf-8'))[:32]}"

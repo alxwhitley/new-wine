@@ -653,7 +653,11 @@ def test_unavoidable_loss_of_reviewer_family_diversity_is_human_required():
     result = select_capable_route(
         _plan(routes=routes), "independent_review", events, {}, T_NOW)
     assert result["decision"] == "HUMAN_REQUIRED"
-    assert result["reason_code"] == "HUMAN_AUTHORITY_REQUIRED"
+    # The SPECIFIC code, not the generic HUMAN_AUTHORITY_REQUIRED that Task 4's
+    # deployment/governed-content gate will also emit: a PACKET_PAUSED row must
+    # distinguish "review lost family diversity" from "Alex must approve a
+    # deployment", which is exactly where reconciliation needs the difference.
+    assert result["reason_code"] == "MODEL_ROUTE_REVIEWER_IDENTITY_CONFLICT"
     assert result["route"] is None
 
 
@@ -1054,6 +1058,31 @@ def test_budget_runtime_module_is_structurally_pure():
     }, sorted(imported)
 
 
+def _field_mutated_plan(mutation):
+    """A plan that is legal JSON but hostile at the FIELD level.
+
+    Each of these is a plausible hand-authoring slip, and each one makes
+    ``validate_execution_plan`` raise a raw ``TypeError`` from the contract
+    module.  ``budget_runtime`` promises never to raise regardless.
+    """
+    plan = _plan()
+    if mutation == "null_dependencies":
+        plan["packets"][0]["dependencies"] = None
+    elif mutation == "list_capability_class":
+        plan["packets"][0]["capability_class"] = []
+    elif mutation == "nested_human_stop_categories":
+        plan["human_stop_categories"] = [[]]
+    elif mutation == "null_packets":
+        plan["packets"] = None
+    elif mutation == "null_routes":
+        plan["routes"] = None
+    elif mutation == "null_human_stop_categories":
+        plan["human_stop_categories"] = None
+    else:  # pragma: no cover - guards against a typo in the parametrization
+        raise AssertionError("unknown mutation %r" % (mutation,))
+    return _rehash(plan)
+
+
 @pytest.mark.parametrize("hostile", [
     None, [], "plan", 17, {"routes": {}}, {"packets": []},
 ])
@@ -1064,6 +1093,41 @@ def test_a_hostile_plan_never_raises_out_of_a_decision(hostile):
     assert evaluate_preclaim(hostile, _packet(), [], {}, T_NOW)["decision"] == "STOP"
     assert select_capable_route(
         hostile, "implementation", [], {}, T_NOW)["decision"] == "STOP"
+
+
+@pytest.mark.parametrize("mutation", [
+    "null_dependencies", "list_capability_class", "nested_human_stop_categories",
+    "null_packets", "null_routes", "null_human_stop_categories",
+])
+def test_a_field_level_hostile_plan_never_raises_out_of_a_decision(mutation):
+    """Top-level type confusion is not the only way a plan can be hostile."""
+    from harness_coordinator.v1.budget_runtime import (
+        evaluate_preclaim, select_capable_route)
+
+    hostile = _field_mutated_plan(mutation)
+
+    preclaim = evaluate_preclaim(hostile, _packet(), [], {}, T_NOW)
+    assert preclaim["decision"] == "STOP"
+    assert preclaim["reason_code"] == "BUDGET_EVIDENCE_INVALID"
+
+    routed = select_capable_route(hostile, "implementation", [], {}, T_NOW)
+    assert routed["decision"] == "STOP"
+    assert routed["reason_code"] == "BUDGET_EVIDENCE_INVALID"
+
+
+@pytest.mark.parametrize("mutation", [
+    "null_dependencies", "list_capability_class", "nested_human_stop_categories",
+])
+def test_the_field_level_hostile_plans_are_genuinely_hostile(mutation):
+    """Counterfactual: without the guard these inputs really do raise.
+
+    If the contract module is ever fixed so that it validates these cleanly,
+    this test fails loudly rather than leaving the guard above untested.
+    """
+    from harness_contracts.v1.execution_plan import validate_execution_plan
+
+    with pytest.raises(TypeError):
+        validate_execution_plan(_field_mutated_plan(mutation))
 
 
 @pytest.mark.parametrize("hostile", [
@@ -1434,7 +1498,8 @@ def test_budget_events_never_drive_a_state_transition():
 def test_runtime_and_json_schema_agree_on_the_o5_budget_vocabulary():
     from harness_contracts.v1.execution_plan import CAPABILITY_CLASSES
     from harness_contracts.v1.journal import (
-        BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE, BUDGET_REASON_CODES, JOURNAL_EVENT_TYPES)
+        BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE, CAPACITY_EVENT_REASON_CODES,
+        JOURNAL_EVENT_TYPES)
     from harness_contracts.v1.provider_evidence import CAPACITY_STATES
 
     schema = json.loads(SCHEMA_PATH.read_text())
@@ -1447,12 +1512,60 @@ def test_runtime_and_json_schema_agree_on_the_o5_budget_vocabulary():
 
     capacity = payload_properties["provider_capacity"]
     assert set(capacity["properties"]["state"]["enum"]) == CAPACITY_STATES
-    backoff = payload_properties["provider_backoff"]
-    assert set(backoff["properties"]["reason_code"]["enum"]) == BUDGET_REASON_CODES
     fallback = payload_properties["model_fallback"]
     assert set(fallback["properties"]["capability_class"]["enum"]) == CAPABILITY_CLASSES
-    pause = payload_properties["packet_pause"]
-    assert set(pause["properties"]["reason_code"]["enum"]) == BUDGET_REASON_CODES
+    # All three capacity-family payloads, and the JSON Schema has to agree with
+    # the runtime on each: a code the validator refuses but the schema accepts
+    # is a hole in whichever surface a future reader trusts.
+    for key in ("provider_backoff", "model_fallback", "packet_pause"):
+        assert set(payload_properties[key]["properties"]["reason_code"]["enum"]) == (
+            CAPACITY_EVENT_REASON_CODES)
+
+
+CAPACITY_REASON_EVENTS = ("PROVIDER_BACKOFF_SCHEDULED", "MODEL_FALLBACK_SELECTED",
+                          "PACKET_PAUSED")
+
+
+@pytest.mark.parametrize("event_type", CAPACITY_REASON_EVENTS)
+@pytest.mark.parametrize("immediate", ["COMMAND_TIMEOUT", "OUTPUT_LIMIT_EXCEEDED"])
+def test_an_immediate_limit_cannot_ride_on_a_capacity_event(event_type, immediate):
+    """The confusion the graceful/immediate split prevents, one surface over.
+
+    These three describe a bounded, resumable capacity condition, and
+    reconciliation partitions PACKET_PAUSED as a capacity pause -- so an
+    immediate containment failure carried on one would later be counted as
+    capacity, which is exactly the mislabelling the split exists to stop.
+    """
+    from harness_contracts.v1.journal import BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE
+
+    key = BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE[event_type]
+    body_fn, packet_id = O5_BUDGET_EVENTS[event_type]
+    event = _budget_event(event_type, dict(body_fn(), reason_code=immediate),
+                          packet_id=packet_id)
+
+    result = validate_journal_event(event, None, STATE_ROOT_ID)
+    assert result["valid"] is False
+    assert any(err["path"] == "/payload/%s/reason_code" % key
+               for err in result["errors"]), result["errors"]
+
+
+@pytest.mark.parametrize("event_type", CAPACITY_REASON_EVENTS)
+def test_capacity_events_still_accept_every_remaining_reason_code(event_type):
+    """The subtraction removes exactly two codes; it does not narrow the family."""
+    from harness_contracts.v1.journal import (
+        BUDGET_REASON_CODES, CAPACITY_EVENT_REASON_CODES,
+        IMMEDIATE_STOP_REASON_CODES)
+
+    assert CAPACITY_EVENT_REASON_CODES == (
+        BUDGET_REASON_CODES - IMMEDIATE_STOP_REASON_CODES)
+    assert not (CAPACITY_EVENT_REASON_CODES & IMMEDIATE_STOP_REASON_CODES)
+
+    body_fn, packet_id = O5_BUDGET_EVENTS[event_type]
+    for reason_code in sorted(CAPACITY_EVENT_REASON_CODES):
+        event = _budget_event(event_type, dict(body_fn(), reason_code=reason_code),
+                              packet_id=packet_id)
+        result = validate_journal_event(event, None, STATE_ROOT_ID)
+        assert result["valid"] is True, (reason_code, result["errors"])
 
 
 def test_new_schema_branches_are_appended_after_the_workspace_baseline_branch():
