@@ -14,6 +14,7 @@ from harness_contracts.v1.execution_plan import (
 )
 from harness_coordinator.v1.coordinator import run_once
 from harness_coordinator.v1.cli import _NEEDS_HUMAN_ATTENTION_CODES
+from harness_coordinator.v1.night_loop import run_night
 
 
 def derive_local_process_context(coordinator_id: str, now: str):
@@ -66,11 +67,19 @@ def _emit_error(exc: Exception) -> int:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="harness-coordinator-run")
-    parser.add_argument("--once", action="store_true", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--once", action="store_true",
+                      help="One bounded iteration (the commissioned runner).")
+    mode.add_argument("--until-morning", action="store_true",
+                      help="Repeat the one-step runner until morning or a stop file.")
     parser.add_argument("--state-root", required=True)
     parser.add_argument("--coordinator-id", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--now", required=True)
+    parser.add_argument("--morning-at",
+                        help="RFC3339 UTC instant that ends an --until-morning run.")
+    parser.add_argument("--stop-file",
+                        help="If this path exists, request a graceful stop.")
     parser.add_argument(
         "--execution-plan-path", required=True,
         help=("Path to an authenticated, canonical execution-plan artifact. "
@@ -90,11 +99,25 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     context = derive_local_process_context(args.coordinator_id, args.now)
     try:
-        result = run_once(args.state_root, args.coordinator_id, args.run_id, context, args.now,
-                          execution_plan=execution_plan)
+        if args.until_morning:
+            if not args.morning_at:
+                raise ValueError("--until-morning requires --morning-at")
+            stop_path = args.stop_file
+            result = run_night(
+                args.state_root, args.coordinator_id, args.run_id, context,
+                args.now, execution_plan,
+                morning_at=args.morning_at,
+                stop_check=(lambda: os.path.exists(stop_path)) if stop_path else None,
+            )
+        else:
+            result = run_once(args.state_root, args.coordinator_id, args.run_id, context, args.now,
+                              execution_plan=execution_plan)
     except Exception as exc:  # noqa: BLE001 - write CLI still emits one machine-readable result
         return _emit_error(exc)
     print(json.dumps(result, sort_keys=True))
+    if args.until_morning:
+        report = result.get("morning_report") or {}
+        return 0 if report.get("all_invariants_passed") else 1
     reconciliation = result.get("reconciliation") or {}
     # Compatibility for injected/unit callers that predate P5D. A real
     # RecoveryReport always produces reconciliation before returning.
