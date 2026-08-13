@@ -49,9 +49,13 @@ Peter states the standard directly for anyone shepherding God's people: "not dom
 
 ---
 
-## An unresolved question worth naming honestly
+## They Never Ceased — Only Neglected
 
-**[EDITORIAL DECISION NEEDED — ALEX]** The teaching behind this paper does not agree on one point: whether the five ministry offices were restored to the church after a genuine, extended absence, or whether they never actually stopped operating and were simply neglected by traditions that lost confidence in them. Some material describes a historical "restoration" of apostles and prophets, implying a real gap before they returned. Other material in this broader teaching tradition — including this paper's own companion paper on baptism in the Holy Spirit — argues the opposite: these gifts never ceased, they were only abandoned by traditions that stopped believing in them. "Restored after being gone" and "never gone, just ignored" are not the same claim, and this paper does not settle which one is right.
+**Rhemata's position, stated plainly.** The five ministry offices were not restored to the church after a genuine absence. They never stopped operating. Scripture marks no endpoint for them, and this paper's own companion teaching on the baptism of the Holy Spirit already makes the same case for the gifts that flow from that baptism: an argument built on silence — on a gap Scripture never actually names — is not sound ground to build a doctrine on. The same reasoning holds here, not as a separate claim but as the same claim applied to the offices themselves.
+
+What actually happened, era to era, was not disappearance and return. It was neglect and recovery. Long seasons of church history narrowed recognized ministry down to the two offices that look least supernatural — shepherd and teacher — while apostles, prophets, and evangelists kept functioning at the margins: in movements the institutional church didn't recognize, in believers walking in the function without ever being given the title, in seasons of revival that later generations rediscovered rather than watched being switched back on for the first time. A "restoration" movement is not God resupplying a gift He had withdrawn. It is the wider church catching back up to something Christ's ascension gift to His people had never actually taken back.
+
+This is not a claim that every era of church history had five publicly recognized office-holders in every congregation. The presence of a calling and the church's recognition of it are two different things. Long stretches of neglect are a record of the second, not the first — of a church that lost confidence in what these offices carried, not of the Spirit withholding them.
 
 ---
 

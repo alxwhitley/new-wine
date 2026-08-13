@@ -314,6 +314,188 @@ PROSPERITY_CONTRAST_GIFTS = (
 # BAPTISM_MATCH_THRESHOLD / TONGUES_MATCH_THRESHOLD.
 PROSPERITY_MATCH_THRESHOLD = 0.3856
 
+# divine_healing — calibrated 2026-08-13 (second round; PILLARS document_id
+# a real ingested document, distinct from the 2026-08-13-first-round
+# deliverance/prosperity pair above). Positive anchor deliberately excludes
+# any claim about WHY an individual prayer for healing does or doesn't
+# succeed -- that question (HEALING_MECHANICS_DEBATE, below) stays a
+# standing debate per Alex's 2026-08-01 ruling, and the paper's own "When
+# healing doesn't come" section explicitly declines to fully settle it
+# ("this paper is not going to paper over it with a tidy answer it doesn't
+# actually have settled"). The positive anchor sticks to what the paper
+# DOES settle: healing is real, biblically grounded in the atonement, and
+# available today.
+DIVINE_HEALING_ANCHOR_TITLE = "Divine Healing"
+DIVINE_HEALING_ANCHOR_DESCRIPTION = (
+    "Divine healing is God restoring a sick or injured human body by His "
+    "own direct, supernatural power — not primarily through medicine, "
+    "though God can and does work through it — flowing from His own "
+    "character as healer and from what Christ's atoning death accomplished "
+    "on the cross. Isaiah's prophecy that 'by his wounds we are healed' is "
+    "applied directly to Jesus' healing ministry and treated as an "
+    "already-accomplished part of the atonement, alongside the forgiveness "
+    "of sin, not a separate or lesser blessing. This includes the specific "
+    "gift of healing named among the gifts of the Spirit in 1 Corinthians "
+    "12:9. Healing is available to believers today as a normal, expected "
+    "part of following Him, not a rare exception reserved for the "
+    "unusually deserving, coming through means such as the prayer of "
+    "faith, the laying on of hands, and the spoken word."
+)
+# Rewritten to describe deliverance purely in its own terms, no healing
+# vocabulary at all -- the exact "own-goal" pattern the deliverance pillar's
+# own DELIVERANCE_CONTRAST_HEALING comment above documents finding and
+# fixing, applied here in the mirror direction before it could recur.
+DIVINE_HEALING_CONTRAST_DELIVERANCE = (
+    "Deliverance from a demonic spirit's grip on some part of a person's "
+    "life, and the ongoing spiritual warfare every believer is already in "
+    "against demonic rulers and authorities, exercised through the "
+    "authority believers have in Jesus' name — a specific ministry to the "
+    "demonic, not physical sickness or disease."
+)
+DIVINE_HEALING_CONTRAST_GIFTS_GENERAL = (
+    "Spiritual gifts of 1 Corinthians 12 as their own catalog and topic — "
+    "word of wisdom, word of knowledge, faith, working of miracles, "
+    "prophecy, discerning of spirits, tongues, and interpretation of "
+    "tongues — considered as a topic of spiritual gifts generally, not "
+    "physical healing specifically."
+)
+# Calibrated live below against real questions, including the specific
+# "why doesn't everyone get healed" / "is healing guaranteed" phrasing this
+# pillar must NOT capture (that stays with HEALING_MECHANICS_DEBATE).
+DIVINE_HEALING_MATCH_THRESHOLD = 0.30
+
+# gifts_of_the_spirit_overview — calibrated 2026-08-13. The broadest pillar
+# in the registry by design: its own positive anchor necessarily names
+# several specific gifts (healing, tongues, prophecy) since the paper's own
+# subject IS the catalog. This is deliberately NOT fought with narrow
+# wording -- an overview anchor that avoided naming the gifts it overviews
+# would stop matching genuine overview questions. Instead the collision risk
+# is handled two other ways: (1) every sibling pillar with a narrower,
+# more specific positive anchor (baptism, tongues, deliverance, healing,
+# prophecy) scores HIGHER pos_sim than this pillar's own broader anchor on
+# a question actually about that one specific gift -- verified live, not
+# assumed; (2) tie_break_priority is set to the LOWEST priority of any
+# pillar (see PILLARS below), so on any near-tie this pillar always loses
+# to the more specific one, mirroring how tongues already beats baptism on
+# tongues-specific questions.
+GIFTS_OVERVIEW_ANCHOR_TITLE = "Gifts of the Spirit — Overview"
+GIFTS_OVERVIEW_ANCHOR_DESCRIPTION = (
+    "The gifts of the Spirit, considered as a whole catalog: supernatural "
+    "enablements the Holy Spirit distributes across the whole body of "
+    "believers for the common good, not for private benefit or personal "
+    "status — including the nine gifts named in 1 Corinthians 12 (word of "
+    "wisdom, word of knowledge, faith, gifts of healing, working of "
+    "miracles, prophecy, discerning of spirits, tongues, and interpretation "
+    "of tongues) alongside other gifts such as serving, teaching, and "
+    "leading. No believer carries every gift, but every believer carries "
+    "something, sovereignly apportioned as the Spirit wills yet genuinely "
+    "to be desired and asked for. The laying on of hands is how gifts are "
+    "commonly recognized, released, and imparted from one believer to "
+    "another — a genuinely spiritual act named among the foundational "
+    "doctrines of the faith, to be handled with real seriousness rather "
+    "than treated as automatic or mechanical."
+)
+# The five-fold ministry OFFICES are explicitly, textually distinguished
+# from spiritual gifts by both this pillar's own source paper and the
+# five_fold_ministry paper itself ("A spiritual gift and a five-fold
+# calling are not the same kind of thing") -- a real corpus distinction,
+# not one invented for calibration convenience.
+GIFTS_OVERVIEW_CONTRAST_FIVEFOLD = (
+    "The five-fold ministry offices Christ gave the church — apostle, "
+    "prophet, evangelist, shepherd, and teacher — as distinct, ongoing "
+    "leadership callings issued by Christ to specific people, considered "
+    "as offices and church leadership structure, not as spiritual gifts "
+    "any believer may ask for and receive."
+)
+GIFTS_OVERVIEW_MATCH_THRESHOLD = 0.34
+
+# prophecy_and_the_prophetic — calibrated 2026-08-13. The positive anchor
+# mentions testing only in passing (the paper itself treats testing as
+# integral to what prophecy is), kept brief deliberately so it doesn't drift
+# toward PROPHETIC_ACCOUNTABILITY_DEBATE's own vocabulary ("how a word
+# should be tested, weighed, and held accountable") -- that debate is about
+# HOW accountability structures should work; this pillar is about WHAT
+# prophecy is, its purpose, and its availability to the whole church.
+PROPHECY_ANCHOR_TITLE = "Prophecy and the Prophetic"
+PROPHECY_ANCHOR_DESCRIPTION = (
+    "Prophecy is God speaking to His people beyond what the natural mind "
+    "could know on its own — a word, an impression, or a sense of God's "
+    "heart, spoken for the strengthening, encouragement, and comfort of "
+    "the church. Words of knowledge (supernatural insight into a fact "
+    "otherwise unknown) and words of wisdom (supernatural insight into "
+    "what to do with it) are closely related expressions of the same "
+    "Spirit as prophecy. The simple activity of prophesying is available "
+    "to any believer led by the Spirit, distinct from the more weighty, "
+    "ongoing office of a prophet. Scripture commands the church to "
+    "earnestly desire this gift."
+)
+# Deliberately does NOT list "word of wisdom, word of knowledge" among the
+# gifts named here (unlike the sibling contrast anchors in other pillars)
+# -- found live, 2026-08-13: this pillar's own source paper explicitly
+# treats those two as "closely related expressions of the same Spirit" as
+# prophecy, not a separate topic to contrast against. Naming them here
+# would be the exact "own-goal" pattern already documented and fixed
+# elsewhere in this file (BAPTISM_CONTRAST_SALVATION,
+# DELIVERANCE_CONTRAST_HEALING's first-pass bug) -- a contrast anchor
+# accidentally describing the pillar's own genuine territory as something
+# it is NOT.
+PROPHECY_CONTRAST_GIFTS_GENERAL = (
+    "Spiritual gifts of 1 Corinthians 12 as their own catalog and topic — "
+    "faith, gifts of healing, working of miracles, tongues, interpretation "
+    "of tongues, and discerning of spirits — considered broadly as a "
+    "topic of spiritual gifts, not prophecy specifically."
+)
+# Mirrors GIFTS_OVERVIEW_CONTRAST_FIVEFOLD's distinction from the other
+# side: the prophetic OFFICE (a five-fold calling) vs. the simple gift of
+# prophesying any believer may exercise -- the exact distinction
+# five_fold_ministry.md itself draws ("a distinct office from the gift of
+# prophesying available to any believer").
+PROPHECY_CONTRAST_OFFICE = (
+    "The five-fold ministry offices Christ gave the church, including the "
+    "distinct, ongoing office of a prophet, as leadership callings and "
+    "church governance structure — not the simple gift of prophesying "
+    "available to any Spirit-led believer in the moment."
+)
+PROPHECY_MATCH_THRESHOLD = 0.32
+
+# five_fold_ministry — calibrated 2026-08-13. APOSTOLIC_AUTHORITY_DEBATE
+# (standing, shared) already protects this pillar from over-matching
+# questions specifically about apostolic authority's boundaries and
+# accountability -- deliberately NOT given its own dedicated contrast
+# anchor beyond that shared one, matching how baptism/tongues/deliverance
+# rely on the shared HEALING_MECHANICS_DEBATE/PROPHETIC_ACCOUNTABILITY_DEBATE
+# rather than each duplicating a private copy. Verified live (see
+# calibration below) that "Do apostles still have authority over the
+# church today?" -- already a standing regression case in
+# test_position_paper_routing.py expecting None -- continues to correctly
+# NOT match this new pillar.
+FIVEFOLD_ANCHOR_TITLE = "The Five-Fold Ministry"
+FIVEFOLD_ANCHOR_DESCRIPTION = (
+    "The five-fold ministry is Christ's own provision of five distinct "
+    "leadership callings to His church after His ascension — apostle, "
+    "prophet, evangelist, shepherd, and teacher (Ephesians 4:11) — given "
+    "to equip the whole body of believers for ministry rather than to "
+    "perform ministry on their behalf. These are offices and callings, "
+    "issued by Christ rather than requested or earned, distinct from the "
+    "spiritual gifts any believer may ask for and receive."
+)
+FIVEFOLD_CONTRAST_GIFTS_GENERAL = (
+    "Spiritual gifts of 1 Corinthians 12 as their own catalog and topic — "
+    "word of wisdom, word of knowledge, faith, gifts of healing, working "
+    "of miracles, prophecy, tongues, interpretation of tongues, and "
+    "discerning of spirits — abilities any believer may ask for and "
+    "receive, considered as gifts rather than as ongoing leadership "
+    "offices Christ gave the church."
+)
+FIVEFOLD_CONTRAST_PROPHECY_GIFT = (
+    "The simple gift of prophesying available to any Spirit-led believer "
+    "in a local church gathering — a Spirit-given word spoken for "
+    "edification in a specific moment — considered on its own as a gift, "
+    "not the ongoing, recognized office of a prophet as one of Christ's "
+    "five leadership callings to the church."
+)
+FIVEFOLD_MATCH_THRESHOLD = 0.32
+
 # ── Standing debate-topic contrasts — SHARED across every pillar, current
 # and future (Alex's ruling, 2026-08-01, pulled forward from Phase 1 items
 # 1.5-1.7 per the Phase 0 report; eschatological timing added 2026-08-05):
@@ -429,6 +611,55 @@ PILLARS = [
         "match_threshold": PROSPERITY_MATCH_THRESHOLD,
         "voice_topic_name": "prosperity and faith teaching",
         "tie_break_priority": 3,
+    },
+    {
+        "pillar_key": "divine_healing",
+        "document_id": "1df5bc2d-849d-4781-b05b-6590bd54a9ef",
+        "positive_anchors": [DIVINE_HEALING_ANCHOR_TITLE, DIVINE_HEALING_ANCHOR_DESCRIPTION],
+        "contrast_anchors": [DIVINE_HEALING_CONTRAST_DELIVERANCE, DIVINE_HEALING_CONTRAST_GIFTS_GENERAL, GENERIC_CHRISTIAN_LIFE_CONTRAST],
+        "match_threshold": DIVINE_HEALING_MATCH_THRESHOLD,
+        "voice_topic_name": "divine healing",
+        "tie_break_priority": 4,
+    },
+    {
+        "pillar_key": "prophecy_and_the_prophetic",
+        "document_id": "3c5eed4c-81c7-4002-ac15-cfcc244cb745",
+        "positive_anchors": [PROPHECY_ANCHOR_TITLE, PROPHECY_ANCHOR_DESCRIPTION],
+        # TONGUES_CONTRAST_COMMUNION reused (not forked) -- found live,
+        # 2026-08-13: adding this pillar regressed test_position_paper_routing.py's
+        # G2 case ("How do I hear God's voice in daily life?"), previously
+        # protected only for tongues. Prophecy's own positive anchor ("God
+        # speaking to His people...") sits close to the same generic
+        # hear-God's-voice vocabulary tongues already needed a dedicated
+        # contrast for -- GENERIC_CHRISTIAN_LIFE_CONTRAST alone was not
+        # specific enough to catch it. Reusing the existing, already-proven
+        # anchor rather than writing a near-duplicate.
+        "contrast_anchors": [PROPHECY_CONTRAST_GIFTS_GENERAL, PROPHECY_CONTRAST_OFFICE, TONGUES_CONTRAST_COMMUNION, GENERIC_CHRISTIAN_LIFE_CONTRAST],
+        "match_threshold": PROPHECY_MATCH_THRESHOLD,
+        "voice_topic_name": "prophecy and the prophetic",
+        "tie_break_priority": 5,
+    },
+    {
+        "pillar_key": "five_fold_ministry",
+        "document_id": "204d50f3-7a6e-4687-a425-a482f2553cf1",
+        "positive_anchors": [FIVEFOLD_ANCHOR_TITLE, FIVEFOLD_ANCHOR_DESCRIPTION],
+        "contrast_anchors": [FIVEFOLD_CONTRAST_GIFTS_GENERAL, FIVEFOLD_CONTRAST_PROPHECY_GIFT, GENERIC_CHRISTIAN_LIFE_CONTRAST],
+        "match_threshold": FIVEFOLD_MATCH_THRESHOLD,
+        "voice_topic_name": "the five-fold ministry",
+        "tie_break_priority": 6,
+    },
+    {
+        "pillar_key": "gifts_of_the_spirit_overview",
+        "document_id": "ee6f4f23-88d9-4fb2-8b3d-11f75622799e",
+        "positive_anchors": [GIFTS_OVERVIEW_ANCHOR_TITLE, GIFTS_OVERVIEW_ANCHOR_DESCRIPTION],
+        "contrast_anchors": [GIFTS_OVERVIEW_CONTRAST_FIVEFOLD, GENERIC_CHRISTIAN_LIFE_CONTRAST],
+        "match_threshold": GIFTS_OVERVIEW_MATCH_THRESHOLD,
+        "voice_topic_name": "the gifts of the Spirit",
+        # Deliberately the LAST priority of any pillar -- see the
+        # GIFTS_OVERVIEW anchor comment above: this pillar is the broadest
+        # in the registry by design, so on any near-tie with a more
+        # specific sibling pillar, the specific pillar must win.
+        "tie_break_priority": 99,
     },
 ]
 
