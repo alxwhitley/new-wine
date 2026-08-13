@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-10
 
-**Status:** Approved design direction; awaiting written-spec review
+**Status:** Implemented prototype; initial-composition refinement approved
 
 **Surface:** Public marketing page hero at `/home`
 
@@ -78,9 +78,14 @@ generated independently, preserving geology, lighting, and perspective.
 - Navigation remains legible over the dark upper sky.
 - The Manna headline, supporting sentence, and primary and secondary actions
   occupy the quiet upper-center region.
-- The product placeholder is centered and only partially visible near the
-  bottom of the viewport.
-- Foreground terrain overlaps the placeholder's lower and lateral edges.
+- The product placeholder is centered with approximately its upper third
+  visible on initial load, making the product immediately legible while
+  preserving room for the scroll reveal.
+- The placeholder starts near `0.86` scale and approximately `15vh` higher than
+  the first prototype before continuing into the existing reveal choreography.
+- Foreground terrain overlaps the placeholder's lower and lateral edges, but is
+  shifted downward and rendered at approximately `75–80%` opacity so shrubs
+  frame rather than dominate the interface.
 - Copy must remain real HTML and must never be rendered into the landscape.
 
 Final Manna headline and supporting copy are deliberately outside this design.
