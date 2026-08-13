@@ -70,6 +70,15 @@ Overnight enablement → Foundation build → Ingestion-ready benchmark
                                                         Private-beta launch gate
 ```
 
+### Target launch date — changed 2026-08-13
+
+**October 2026.** This replaces the mid-2027 target used in prior planning
+(`docs/plan-archive.md`). **This is a major compression of the prior
+timeline, not a minor schedule adjustment.**
+
+**Reason:** market pressure from fast-moving AI tools, plus a conference in
+October 2026 that Alex wants to use as the launch venue.
+
 ---
 
 ## Execution model
