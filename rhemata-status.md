@@ -6,7 +6,7 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-13 (second session this date).
+Last verified: 2026-08-13 (third session this date).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -66,7 +66,23 @@ used this session in CLAUDE.md's Landmines section (top entry).
 **O3/O4 harness (2026-08-11, unchanged this session):** both accepted,
 integrated locally on `main`, NOT pushed (`b580915`/`7ab9f15`). Real-provider
 commissioning remains `HUMAN_REQUIRED` pending a proven pre-execution
-sandbox. See PLAN.md Phase 0 for O5/O6 status.
+sandbox.
+
+**O5 harness (this session, 2026-08-13): all 5 tasks built and committed,
+whole-branch review ACCEPT, NOT merged.** Full detail in PLAN.md's O5 entry
+and `docs/audits/o5_budgets_hard_stops_2026-08-11.md` (on branch
+`codex/o5-budgets-hard-stops`, build `4140764` + audit `82c59ee`, on top of
+`0f06f62`). Commissioning found and fixed 2 real defects in the Task 4
+baseline; 7 rounds of independent review then hardened Task 5's own new
+code before the final ACCEPT. Full O2-O5 suite: 1337 passed, 1 skipped, 0
+failed. **Still open, needs Alex:** merge `codex/o5-budgets-hard-stops` into
+`main` (or not), and — separately, only after that — the final PLAN.md/
+this-file records closeout the plan doc's own Step 6 describes. Neither was
+assumed or done this session. Disclosed residual: legacy lane-based
+reassignment escaping plan-pinned routing has a reconciliation-only
+detection backstop, not live prevention — a real follow-up task if live
+prevention is wanted. O6 (concurrent multi-packet rehearsal) is unaffected,
+still not started.
 
 **Derek Prince quote curation — complete 2026-08-09.** 477/496 approved, 20
 zero-coverage documents, Alex's open call on re-extraction.
@@ -91,8 +107,11 @@ PLAN.md, 2026-08-13.)
 
 ## Next
 
-1. **O5 budgets and hard stops.** Add turn, wall-clock, retry, output-size,
-   provider-allowance, and queue-wide limits before overnight rehearsal.
+1. **O5 merge/closeout decision (Alex).** `codex/o5-budgets-hard-stops` is
+   built, committed, and independently review-ACCEPTed — merge into `main`
+   and the final PLAN.md/rhemata-status.md closeout both wait on Alex's
+   explicit call, not assumed by any session. Then O6 (concurrent
+   multi-packet rehearsal) is next in the harness track.
 2. Decide extractor hardening before any next Prince-style batch —
    majority-Scripture/unbalanced-quote checks, the `--per-doc-limit=1`
    cap (raise or keep), whether unused material exists in already-

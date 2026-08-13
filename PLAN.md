@@ -248,15 +248,36 @@ routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 |---|---|---|
 | Opus sets packet risk classes and permitted autonomy for each class. | Implement turn, time, retry, output-size, and queue-wide limits. | Verify stop behavior and that logs contain no credential values or prompt payloads that should remain private. |
 
-**Exit criteria:**
+**Built, reviewed, NOT yet merged — 2026-08-13.** All 5 tasks (execution-plan
+binding, budget/routing decisions, invocation limits + graceful stop,
+coordinator plan-scope gating, reconciliation + commissioning) are committed
+on `codex/o5-budgets-hard-stops` (build `4140764`, audit `82c59ee`, on top of
+the accepted Task 4 baseline `0f06f62`). Task 5's own commissioning surfaced
+and fixed two real defects in the Task 4 baseline (a stale worker-identity
+comparison that made any plan-pinned fallback permanently stuck in REVIEW;
+a reconciliation-only detection backstop for legacy lane-based reassignment
+escaping plan-pinned routing — live prevention deliberately deferred, see
+the audit's Residual gaps). Hardened across seven rounds of independent
+adversarial review (each with fresh fixtures, not reused) before the final
+round returned Spec PASS, Quality PASS, `ACCEPT`. Full O2-O5 suite: 1337
+passed, 1 skipped, 0 failed. Full detail:
+`docs/audits/o5_budgets_hard_stops_2026-08-11.md` (in that worktree/branch,
+not yet on `main`).
 
-- [ ] Every command has a wall-clock limit and every packet has an attempt cap.
-- [ ] Provider allowance errors use a bounded backoff and then fallback/pause;
+**Not done yet:** merge into `main` and the final PLAN.md/`rhemata-status.md`
+records closeout both require Alex's explicit decision — neither assumed nor
+performed by the session that got the branch to ACCEPT. Until then this
+section stays the working record, not a DONE line.
+
+**Exit criteria — demonstrated by commissioning, not yet declared closed:**
+
+- [x] Every command has a wall-clock limit and every packet has an attempt cap.
+- [x] Provider allowance errors use a bounded backoff and then fallback/pause;
   no lane loops against a depleted subscription.
-- [ ] Production DB writes, migrations, deployment, destructive Git/filesystem
+- [x] Production DB writes, migrations, deployment, destructive Git/filesystem
   actions, doctrinal content, licensing determinations, and unapproved scope
   expansion stop for Alex.
-- [ ] The coordinator can finish a useful night even when one provider becomes
+- [x] The coordinator can finish a useful night even when one provider becomes
   unavailable.
 
 ### O6 — Rehearse before trusting overnight mode
