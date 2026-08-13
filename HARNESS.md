@@ -51,7 +51,8 @@ Routing). The harness may build and test scripts against fixtures, run dry runs,
 and perform read-only diagnostics needed by a repo build. It never applies a
 migration or runs a production ingest/backfill/write. Those actions use a
 separately authorized plain-script session. This is a task-class boundary, not
-a script-name freeze.
+a script-name freeze. Restated 2026-08-13: production database writes never
+run through the harness, day or night.
 
 **Judgment authority.** Opus is the default judgment/integration layer and
 plans bounded packets. Sonnet is the default reviewer and verdict-issuer for
@@ -64,12 +65,27 @@ there, and remains the reviewer of record for all existing completed O1–O4
 work — this does not retroactively change any past verdict. If Opus performs
 implementation itself, a separate Opus review session or Alex must judge it.
 
+**Review intensity.** Harness-tooling review is one round. Multi-round
+adversarial review is reserved for the answer path. A harness mistake
+shows up as a failed build or a discarded night's work, not a
+user-facing error.
+
+**Overnight scope.** The coordinator run loop is built (`ac53f76`):
+simulated workers through a full night. Real AI workers overnight is
+a separate milestone. The safety fence is deferred, not cancelled,
+and is not a launch blocker. The intended path to real overnight
+workers is a narrow file allowlist plus Alex reading the morning
+report daily for a week. **Revisit trigger:** the fence gets built if
+a real overnight run causes damage that cannot be recovered from git,
+or before any harness work reaches anything outside the repository.
+
 **Worker routing.** Kimi through OpenCode Go is the primary implementation
 worker for eligible packets. Confirmed provider quota/rate-limit exhaustion
 checkpoints and requeues an eligible packet to Claude Sonnet 5. Ordinary test,
 code, permission, or output failures do not trigger fallback. Grok is a
 second permitted builder, alongside Claude Code, for repo-only harness work
-(remaining O-series items — coordinator run loop, safety fence — and any
+(remaining repo-only multi-step harness builds; the run loop is done; the
+safety fence is deferred under the revisit trigger above — and any
 future repo-only multi-step harness build). This is a budget-driven swap,
 not a capability upgrade. Grok also still handles bounded research,
 inventories, log/test analysis, and mechanical verification. Grok's hard

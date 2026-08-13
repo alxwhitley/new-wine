@@ -464,9 +464,12 @@ not before, and not by default.
 | **Docs/records-only** | Task's only output is a change to `CLAUDE.md` / `PLAN.md` / `POSITIONING.md` / `DESIGN.md` / `rhemata-status.md`. | **Plain — chat proposes, terminal commits**, per the Project Knowledge Read Contract's propose→commit rule. | N/A — harness not used | N/A — harness not used | Structurally enforced, not just preferred: `guard_pretooluse.py` denies `Edit`/`Write` on all five governed files for any subagent — the harness physically cannot do this work. |
 
 **Harness builders and reviewers (settled 2026-08-13) — budget-driven swap,
-not a capability upgrade.** For this row — the remaining O-series items
-(coordinator run loop, safety fence) and any future repo-only multi-step
-harness build — Grok is a second permitted builder alongside Claude Code.
+not a capability upgrade.** For this row — remaining repo-only multi-step
+harness builds — Grok is a second permitted builder alongside Claude Code.
+The coordinator run loop is done (`ac53f76`, simulated workers). The
+safety fence is deferred, not cancelled: it gets built if a real
+overnight run causes damage that cannot be recovered from git, or before
+any harness work reaches anything outside the repository.
 Grok's existing hard restriction is unchanged and is restated here so it
 is not silently dropped: no theological content, no answer-accuracy path,
 no production database writes, no doctrinal or licensing judgment, ever.
@@ -746,19 +749,24 @@ different row, per the hard rule above.
     unblock a migration" — nullable provenance is exactly how Invariant
     10's hole opened in the first place.
 
-15. **Overnight harness runs may parallelize ingestion and app-build work in
-    two lanes only once the coordinator run loop and the safety fence (with
-    per-worker access permissions) are both built — never before.** Settled
-    2026-08-13. The two lanes are safe to run concurrently precisely because
-    they are disjoint: separate worktrees, separate file ownership;
-    ingestion never touches app code, and app builds never touch the corpus
-    write path. This does NOT relax the standing harness/DB-write
-    separation — production database writes still never run through the
-    harness itself, day or night, regardless of this decision. See
-    `PLAN.md`'s Phase 0 "Overnight unattended runs" note for the two
-    remaining blockers (coordinator run loop; safety fence with per-worker
-    permissions) — everything else in the harness (queue, scheduler, crash
-    recovery, reconciliation) is already built and tested.
+15. **Overnight harness runs may parallelize ingestion and app-build
+    work in two lanes.** Settled 2026-08-13; updated the same day.
+    The coordinator run loop is built (`ac53f76`, simulated workers
+    through a full night). The safety fence (per-worker access
+    permissions) is deferred, not cancelled, and is not a launch
+    blocker — the intended path to real overnight workers is a
+    narrow file allowlist plus Alex reading the morning report daily
+    for a week. **Revisit trigger:** the fence gets built if a real
+    overnight run causes damage that cannot be recovered from git, or
+    before any harness work reaches anything outside the repository.
+    Real AI workers running overnight is a separate milestone, still
+    blocked on that deferred fence. The two lanes are safe to run
+    concurrently because they are disjoint: separate worktrees,
+    separate file ownership; ingestion never touches app code, and
+    app builds never touch the corpus write path. This does NOT relax
+    the standing harness/DB-write separation — production database
+    writes still never run through the harness itself, day or night,
+    regardless of this decision.
 
 ---
 

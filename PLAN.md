@@ -98,8 +98,9 @@ October 2026 that Alex wants to use as the launch venue.
 > reviewer for Grok-built harness work is Sonnet.** Grok 4.6's 2026-08-12
 > release closed most of the capability gap with Kimi and Sonnet on agentic
 > coding benchmarks. This is a budget-driven role-table change, not a
-> capability upgrade: Grok may now build repo-only harness work (O-series
-> remaining items — coordinator run loop, safety fence — and any future
+> capability upgrade: Grok may now build repo-only harness work (remaining
+> repo-only multi-step harness builds; the coordinator run loop is done;
+> the safety fence is deferred — revisit trigger below — and any future
 > Session-Routing "Repo-only multi-step build") alongside Claude Code.
 > Sonnet (not Opus) is the default reviewer/verdict-issuer for harness work
 > Grok performs — same review contract already documented for Opus (no
@@ -266,28 +267,21 @@ routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 |---|---|---|
 | Sonnet is the default reviewer/verdict-issuer for any remaining Grok-built O5-class work (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes a packet there. The existing O5 ACCEPT stays an Opus verdict of record and is not retroactively reassigned. | Implement turn, time, retry, output-size, and queue-wide limits. Remaining repo-only implementation may also go to Grok. | May now *build* remaining repo-only O5-class work (including the coordinator run loop and safety fence), not only verify stop behavior. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
 
-**Built, reviewed, NOT yet merged — 2026-08-13.** All 5 tasks (execution-plan
-binding, budget/routing decisions, invocation limits + graceful stop,
-coordinator plan-scope gating, reconciliation + commissioning) are committed
-on `codex/o5-budgets-hard-stops` (build `4140764`, audit `82c59ee`, on top of
-the accepted Task 4 baseline `0f06f62`). Task 5's own commissioning surfaced
-and fixed two real defects in the Task 4 baseline (a stale worker-identity
-comparison that made any plan-pinned fallback permanently stuck in REVIEW;
-a reconciliation-only detection backstop for legacy lane-based reassignment
-escaping plan-pinned routing — live prevention deliberately deferred, see
-the audit's Residual gaps). Hardened across seven rounds of independent
-adversarial review (each with fresh fixtures, not reused) before the final
-round returned Spec PASS, Quality PASS, `ACCEPT`. Full O2-O5 suite: 1337
-passed, 1 skipped, 0 failed. Full detail:
-`docs/audits/o5_budgets_hard_stops_2026-08-11.md` (in that worktree/branch,
-not yet on `main`).
+**DONE — 2026-08-13:** Merged to `main` at `20ce143` (build `4140764`,
+audit `82c59ee`). All 5 tasks (execution-plan binding, budget/routing
+decisions, invocation limits + graceful stop, coordinator plan-scope
+gating, reconciliation + commissioning) are on `main`. Task 5's
+commissioning surfaced and fixed two real defects in the Task 4
+baseline (a stale worker-identity comparison that made any plan-pinned
+fallback permanently stuck in REVIEW; a reconciliation-only detection
+backstop for legacy lane-based reassignment escaping plan-pinned
+routing — live prevention still deferred, see the audit's Residual
+gaps). Hardened across seven rounds of independent adversarial review
+before the final round returned Spec PASS, Quality PASS, `ACCEPT`.
+Post-merge suite: 1337 passed, 1 skipped, 0 failed. Full detail:
+`docs/audits/o5_budgets_hard_stops_2026-08-11.md`.
 
-**Not done yet:** merge into `main` and the final PLAN.md/`rhemata-status.md`
-records closeout both require Alex's explicit decision — neither assumed nor
-performed by the session that got the branch to ACCEPT. Until then this
-section stays the working record, not a DONE line.
-
-**Exit criteria — demonstrated by commissioning, not yet declared closed:**
+**Exit criteria — demonstrated by commissioning:**
 
 - [x] Every command has a wall-clock limit and every packet has an attempt cap.
 - [x] Provider allowance errors use a bounded backoff and then fallback/pause;
@@ -302,7 +296,7 @@ section stays the working record, not a DONE line.
 
 | Claude Code | Kimi via OpenCode Go | Grok |
 |---|---|---|
-| Sonnet is the default reviewer/verdict-issuer for any O6 work Grok builds (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes the readiness verdict there, and remains the reviewer of record for completed O1–O4 work. | Complete a disposable multi-packet repo-only rehearsal including a simulated Kimi→Sonnet handoff. | May now *build* remaining repo-only O6 work (rehearsal implementation, coordinator run loop, safety fence) as well as independently reconcile journal state, changed files, tests, failure classifications, and morning report totals. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
+| Sonnet is the default reviewer/verdict-issuer for any O6 work Grok builds (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes the readiness verdict there, and remains the reviewer of record for completed O1–O4 work. | Complete a disposable multi-packet repo-only rehearsal including a simulated Kimi→Sonnet handoff. | May now *build* remaining repo-only O6 rehearsal work (concurrent multi-packet rehearsal, journal/file/test reconciliation, morning-report totals). The run loop is done (see overnight section). The safety fence is deferred, not cancelled — it gets built if a real overnight run causes damage that cannot be recovered from git, or before any harness work reaches anything outside the repository. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
 
 **Exit criteria:**
 
@@ -313,18 +307,41 @@ section stays the working record, not a DONE line.
 - [ ] Alex can determine what happened, what changed, what passed, and what
   needs attention from one morning report.
 
-### Overnight unattended runs — settled 2026-08-13
+### Overnight unattended runs — settled 2026-08-13; updated 2026-08-13
 
-**Remaining blockers before any overnight unattended run starts:** (a) the
-coordinator run loop, (b) the safety fence with per-worker access
-permissions. Everything else in the harness — queue, scheduler, crash
-recovery, reconciliation — is already built and tested (see O1–O4 above).
+**Run loop — DONE (`ac53f76`, not pushed).** Thin driver over the
+existing one-step runner: pulls work until morning, a stop signal, an
+empty queue, or a provider outage, then emits one morning report.
+Simulated workers only. One review round; four fixtures fired (full
+simulated night, two packets claimed, report emitted; crash after first
+claim, resume, no duplicate claim; provider exhausted, pause, no spin,
+zero new claims; clean stop, first packet finishes, second never
+starts). Full suite 1342 passed, 1 skipped. **"Run loop done" means
+simulated workers through a full night.** Real AI workers running
+overnight is a separate milestone, still blocked on the fence.
 
-**Parallel-lane decision:** once those two blockers close, ingestion work
-and app-build work run in two parallel overnight lanes. This is safe
-because the lanes are disjoint — separate worktrees, separate file
-ownership; ingestion never touches app code, and builds never touch the
-corpus write path. Production database writes still never run through the
+**Safety fence — DEFERRED, not cancelled, not a launch blocker.**
+Per-worker access permissions are not being built now. The intended
+path to real overnight workers is a narrow file allowlist plus Alex
+reading the morning report daily for a week, not a built enforcement
+surface. **Revisit trigger:** the fence gets built if a real overnight
+run causes damage that cannot be recovered from git, or before any
+harness work reaches anything outside the repository.
+
+**Review intensity (Alex, this session):** harness-tooling review is
+one round. Multi-round adversarial review stays reserved for the
+answer path, where a mistake reaches users. A harness mistake shows
+up as a failed build or a discarded night's work.
+
+**Unchanged:** production database writes never run through the
+harness, day or night.
+
+**Parallel-lane decision (unchanged):** once overnight unattended
+runs are in use, ingestion work and app-build work run in two
+parallel overnight lanes. This is safe because the lanes are
+disjoint — separate worktrees, separate file ownership; ingestion
+never touches app code, and builds never touch the corpus write
+path. Production database writes still never run through the
 harness itself, day or night, regardless of this change.
 
 ---
@@ -638,6 +655,10 @@ These require a fresh specification and do not authorize construction:
     no ACCEPT without recorded acceptance evidence.
 16. Destructive filesystem/Git actions, pushes, deploys, migrations, production
     writes, doctrinal content, and material scope changes require Alex.
+17. Harness-tooling review is one round. Multi-round adversarial
+    review is reserved for the answer path. A harness mistake is a
+    failed build or a discarded night's work, not a user-facing
+    theological or accuracy failure.
 
 ---
 
