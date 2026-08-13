@@ -87,7 +87,15 @@ October 2026 that Alex wants to use as the launch venue.
 
 | Claude Code | Kimi via OpenCode Go | Grok |
 |---|---|---|
-| **Claude Opus 5 is the judgment layer.** It plans packets, approves parallelism, reviews evidence, resolves conflicts, and returns `ACCEPT`, `REVISE`, `QUARANTINE`, or `HUMAN_REQUIRED`. Claude Sonnet 5 becomes a worker only after confirmed Kimi exhaustion or for a packet explicitly reserved for Claude. | **Primary implementation worker.** It processes eligible build packets through the pinned OpenCode Go Kimi model until confirmed allowance exhaustion. It never makes final architectural, theological, licensing, production-write, or launch judgments. | **Parallel research and verification worker.** It handles inventories, read-only diagnostics, test/log analysis, cross-checks, and other mechanical work with objective outputs. It does not make architectural, theological, licensing, or production-write decisions. |
+| **Claude Opus 5 is the judgment layer.** It plans packets, approves parallelism, reviews evidence, resolves conflicts, and returns `ACCEPT`, `REVISE`, `QUARANTINE`, or `HUMAN_REQUIRED`. Claude Sonnet 5 becomes a worker only after confirmed Kimi exhaustion or for a packet explicitly reserved for Claude. | **Primary implementation worker.** It processes eligible build packets through the pinned OpenCode Go Kimi model until confirmed allowance exhaustion. It never makes final architectural, theological, licensing, production-write, or launch judgments. | **Third implementation worker, on equal footing with Kimi and Sonnet for eligible build packets** — plus its existing role: inventories, read-only diagnostics, test/log analysis, cross-checks, and other mechanical work with objective outputs. It never makes final architectural, theological, licensing, production-write, or launch judgments — same as Kimi and Sonnet. |
+
+> **Settled 2026-08-13 — Grok promoted to a third implementation worker.**
+> Grok 4.6's 2026-08-12 release closed most of the capability gap with Kimi
+> and Sonnet on agentic coding benchmarks. This is a role-table change only:
+> Opus remains the sole judgment/integration layer, every packet Grok
+> produces still requires Opus review and an `ACCEPT`/`REVISE`/`QUARANTINE`/
+> `HUMAN_REQUIRED` verdict before it counts as complete, and the
+> judgment/review structure and packet contract are otherwise unchanged.
 
 ### Worker fallback
 
