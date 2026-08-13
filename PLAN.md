@@ -273,24 +273,10 @@ routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 These waves are ordered. Within a wave, the columns show the maximum safe
 parallelism after Opus has issued packets with disjoint ownership.
 
-### F1 — Prove the 100-generation dial
-
-| Claude Code | Kimi via OpenCode Go | Grok |
-|---|---|---|
-| Opus designs the bounded production-representative test, fixes success/abort/cost thresholds, and judges the evidence. Claude handles architecture-sensitive test instrumentation if needed. | Build repo-only load tooling, deterministic fixtures, and reconciliation output after the test contract is approved. | Establish read-only baselines and independently analyze queue wait, generation time, p50/p95, throttling, worker utilization, and terminal outcomes. |
-
-**Exit criteria:**
-
-- [ ] Request mix, worker count, ramp shape, duration, provider limits, cost
-  ceiling, success thresholds, abort conditions, and rollback are fixed first.
-- [ ] At the 100 dial, every accepted submission reconciles to one terminal job
-  outcome; no job is lost or permanently stranded.
-- [ ] Single-flight behavior, per-caller metering, persistence, retry behavior,
-  and verification are tested under concurrency.
-- [ ] Submitted / deduplicated / completed / refused / errored / timed out /
-  persisted counts reconcile.
-- [ ] Evidence determines whether the next constraint is worker count, provider
-  limits, query/generation cost, or the 20-second latency target.
+> **F1 (100-generation/100-user concurrency proof) removed 2026-08-13 —**
+> Alex explicitly declined a pre-launch load test. Removed outright, not
+> marked done and not skipped silently; the same removal also strikes the
+> proof from F6's benchmark pass criteria and from the Tier 2 gate below.
 
 ### F2 — Close recoverability and dependency reproducibility
 
@@ -369,8 +355,6 @@ parallelism after Opus has issued packets with disjoint ownership.
 
 The benchmark passes only when all are true:
 
-- [ ] **Serving:** the 100-generation proof passes without lost jobs, duplicate
-  billing, skipped verification, or unbounded queue growth.
 - [ ] **Correctness:** sole-path and ranked failure-mode invariants hold.
 - [ ] **Ingestion:** the shared chokepoint, dry-run, one-item proof, accounting,
   and reconciliation contract is operational.
@@ -496,7 +480,7 @@ The private beta is launch-ready only when:
 - [ ] DMCA agent and documented takedown procedure exist.
 - [ ] Guest-limit abuse coverage is tested, not inferred.
 - [ ] Admin minimums remain complete against the deployed revision.
-- [ ] The 100-dial serving proof and quote verifier remain valid.
+- [ ] The quote verifier remains valid.
 
 ---
 
