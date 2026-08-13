@@ -19,7 +19,7 @@ for this file.
 merged" line is false and is replaced, not annotated. Post-merge
 suite was 1337 passed, 1 skipped.
 
-**Coordinator run loop built at `ac53f76` (not pushed).** Thin
+**Coordinator run loop built at `ac53f76`.** Thin
 driver over the one-step runner; simulated workers only. One review
 round; four fixtures fired (full night, crash/resume, provider
 outage without spin, clean stop). Full suite 1342 passed, 1 skipped.
@@ -37,11 +37,6 @@ writes never run through the harness, day or night.
 Already true, unchanged: all 8 pillars live; one async answer path
 (`serving_enabled` TRUE); quote rail live; position one-hop live on
 origin. Auto Mode landmine still current.
-
-**Worktree note:** uncommitted Prince/quote edits remain in
-`CLAUDE.md`, `PLAN.md`, `quote_subchunk_exclusion.py`, and
-`extract_quote_candidates_derek_prince.py` from a different session.
-Left untouched.
 
 ---
 

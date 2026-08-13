@@ -265,7 +265,7 @@ routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 
 | Claude Code | Kimi via OpenCode Go | Grok |
 |---|---|---|
-| Sonnet is the default reviewer/verdict-issuer for any remaining Grok-built O5-class work (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes a packet there. The existing O5 ACCEPT stays an Opus verdict of record and is not retroactively reassigned. | Implement turn, time, retry, output-size, and queue-wide limits. Remaining repo-only implementation may also go to Grok. | May now *build* remaining repo-only O5-class work (including the coordinator run loop and safety fence), not only verify stop behavior. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
+| Sonnet is the default reviewer/verdict-issuer for any remaining Grok-built O5-class work (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes a packet there. The existing O5 ACCEPT stays an Opus verdict of record and is not retroactively reassigned. | Implement turn, time, retry, output-size, and queue-wide limits. Remaining repo-only implementation may also go to Grok. | O5 is closed on `main` (`20ce143`). The coordinator run loop is done (`ac53f76`). The safety fence is deferred (revisit trigger in Overnight section). Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
 
 **DONE — 2026-08-13:** Merged to `main` at `20ce143` (build `4140764`,
 audit `82c59ee`). All 5 tasks (execution-plan binding, budget/routing
@@ -309,7 +309,7 @@ Post-merge suite: 1337 passed, 1 skipped, 0 failed. Full detail:
 
 ### Overnight unattended runs — settled 2026-08-13; updated 2026-08-13
 
-**Run loop — DONE (`ac53f76`, not pushed).** Thin driver over the
+**Run loop — DONE (`ac53f76`).** Thin driver over the
 existing one-step runner: pulls work until morning, a stop signal, an
 empty queue, or a provider outage, then emits one morning report.
 Simulated workers only. One review round; four fixtures fired (full
