@@ -177,9 +177,18 @@ real data before any study-panel links are surfaced.
 
 `backend/app/services/position_papers.py` — a small, CLOSED, code-defined
 registry (`PILLARS`) of Alex's own first-party owned "house position papers."
-**Two pillars are live — `baptism_holy_spirit` and `speaking_in_tongues`;**
-the remaining six charismatic pillars are future work (drafts sit in
-`docs/position_papers/`, not yet registered).
+**Four pillars are live — `baptism_holy_spirit`, `speaking_in_tongues`,
+`deliverance_and_spiritual_warfare`, and `prosperity_and_faith_teaching`**
+(the latter two registered 2026-08-13, same fence/exclusion/fallback
+mechanism as the original two, no pillar-specific code path). Of the
+remaining four charismatic pillars: three (`divine_healing`,
+`gifts_of_the_spirit_overview`, `prophecy_and_the_prophetic`) have drafts
+in `docs/position_papers/` but failed first-pass calibration — each loses
+margin to a standing-debate contrast on its own core content and needs
+real iteration, not a quick fix, before registering; `five_fold_ministry`
+has an unresolved internal editorial question the draft flags itself
+(restoration-after-a-gap vs. never-ceased) and is blocked on Alex, not
+calibration.
 
 **Corrected 2026-08-06 (CLAUDE.md Settled decisions #8/#16/#17) — a position
 paper is constraining silent context, never a served answer.** Until this

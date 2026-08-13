@@ -666,8 +666,13 @@ different row, per the hard rule above.
     but it is **no longer the routine path it once was; it is now the
     exception path**, and (a)'s source-blindness is still not violated by
     it. (c) `docs/position_papers/` — draft papers for pillars not yet
-    shipped (6 of them; only baptism_holy_spirit and speaking_in_tongues are
-    registered/live). See ARCHITECTURE.md, "Position papers (fence + guarded
+    shipped. **Updated 2026-08-13: four pillars now registered/live**
+    (baptism_holy_spirit, speaking_in_tongues, deliverance_and_spiritual_warfare,
+    prosperity_and_faith_teaching); four remain in `docs/position_papers/` —
+    three (divine_healing, gifts_of_the_spirit_overview,
+    prophecy_and_the_prophetic) failed first-pass calibration and need real
+    iteration, one (five_fold_ministry) has an unresolved editorial question
+    blocked on Alex. See ARCHITECTURE.md, "Position papers (fence + guarded
     retrieval)."
 
 13. **Position scope is locked to exactly two values (`'teacher'` |
