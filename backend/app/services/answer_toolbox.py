@@ -77,8 +77,25 @@ SOURCE_KIND_FUSION_WEIGHTS = {
 }
 
 
+_COMMENTARY_EQUIVALENT_KINDS = frozenset({
+    "commentary",
+    # Precept Austin's word-study articles (source_kind="word_study",
+    # source_type="background") are third-party interpretive material, the
+    # same category as commentary -- study.py's CORPUS_SOURCE_KINDS already
+    # groups them with commentary as Study-Mode-searchable content. They
+    # were never actually caught by the "commentary" check above (found
+    # 2026-08-07 live: 33/67 retrieved chunks on an ordinary question were
+    # uncaught Precept Austin word_study chunks, several citation_mode=
+    # 'citable', reaching the pre-rerank pool). Hard-excluded here, same as
+    # commentary, not soft-weighted -- do not add "word_study" to
+    # SOURCE_KIND_FUSION_WEIGHTS instead, that would leave it competing for
+    # a citable slot rather than removing it.
+    "word_study",
+})
+
+
 def is_commentary_chunk(chunk: dict) -> bool:
-    """True if this chunk is commentary (answer path must never use it).
+    """True if this chunk is commentary-equivalent (answer path must never use it).
 
     Settled product decision #5 (2026-08-01): commentaries are excluded from
     answers; searchable only (Study Mode / dedicated commentary endpoints).
@@ -86,7 +103,7 @@ def is_commentary_chunk(chunk: dict) -> bool:
     elsewhere on this path.
     """
     sk = chunk.get("source_kind") or chunk.get("source_type") or ""
-    return sk == "commentary"
+    return sk in _COMMENTARY_EQUIVALENT_KINDS
 
 
 def exclude_commentary_chunks(chunks):
@@ -404,7 +421,7 @@ def _is_citable(chunk: dict) -> bool:
     return chunk.get("source_type") == "sermon"
 
 
-_NEIGHBOR_SKIP_KINDS = frozenset({"commentary", "lexicon"})
+_NEIGHBOR_SKIP_KINDS = frozenset({"commentary", "lexicon", "word_study"})
 
 
 def fetch_neighbor_chunks_batch(chunks: List[dict], seen_ids: set, db) -> List[dict]:

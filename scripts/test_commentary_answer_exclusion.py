@@ -69,6 +69,14 @@ def test_is_commentary_chunk():
         "lexicon is not commentary",
         not is_commentary_chunk({"source_kind": "lexicon"}),
     )
+    _check(
+        "word_study IS commentary-equivalent (Precept Austin leak, found 2026-08-07)",
+        is_commentary_chunk({"source_kind": "word_study", "source_type": "background"}),
+    )
+    _check(
+        "word_study excluded even when citation_mode=citable (the leak's exact shape)",
+        is_commentary_chunk({"source_kind": "word_study", "citation_mode": "citable"}),
+    )
 
 
 def test_exclude_commentary_chunks():
@@ -79,9 +87,10 @@ def test_exclude_commentary_chunks():
         {"id": "3", "source_type": "commentary", "content": "c"},
         {"id": "4", "source_kind": "book", "content": "d"},
         {"id": "5", "source_kind": "commentary", "content": "e"},
+        {"id": "6", "source_kind": "word_study", "source_type": "background", "content": "f"},
     ]
     out = exclude_commentary_chunks(chunks)
-    _check("drops all commentary", len(out) == 2)
+    _check("drops all commentary + word_study", len(out) == 2)
     _check("keeps sermon + book ids", [c["id"] for c in out] == ["1", "4"])
     _check("order preserved", out[0]["id"] == "1" and out[1]["id"] == "4")
     _check("idempotent", exclude_commentary_chunks(out) == out)
@@ -96,13 +105,14 @@ def test_score_dict_filter_mirrors_step_26():
         "b": (0.9, {"source_kind": "commentary"}),
         "c": (0.8, {"source_type": "commentary"}),
         "d": (0.7, {"source_kind": "book"}),
+        "e": (0.6, {"source_kind": "word_study", "citation_mode": "citable"}),
     }
     filtered = {
         cid: (score, chunk)
         for cid, (score, chunk) in all_scores.items()
         if not is_commentary_chunk(chunk)
     }
-    _check("commentary ids removed", set(filtered.keys()) == {"a", "d"})
+    _check("commentary + word_study ids removed", set(filtered.keys()) == {"a", "d"})
     _check("scores preserved", filtered["a"][0] == 1.0 and filtered["d"][0] == 0.7)
 
 
@@ -111,6 +121,10 @@ def test_fusion_weights_no_soft_commentary_path():
     _check(
         "commentary weight removed (hard exclude, not soft deprioritize)",
         "commentary" not in SOURCE_KIND_FUSION_WEIGHTS,
+    )
+    _check(
+        "word_study weight absent too (hard exclude, not soft deprioritize)",
+        "word_study" not in SOURCE_KIND_FUSION_WEIGHTS,
     )
     _check("book weight still present", SOURCE_KIND_FUSION_WEIGHTS.get("book") == 0.8)
     _check("lexicon weight still present", SOURCE_KIND_FUSION_WEIGHTS.get("lexicon") == 0.5)
