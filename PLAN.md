@@ -344,6 +344,18 @@ parallelism after Opus has issued packets with disjoint ownership.
   guards, plus whether to change the proven `--per-doc-limit=1` cap, before any
   further teacher batch.
 
+**Investigated 2026-08-13, generation-output verification stays open:**
+`backend/app/services/reference_verifier.py` is real, live, and wired into
+the sole answer path (`producer.py`) — a genuine deterministic guard, fail-
+closed throughout. But it closes **misattribution** (a real teacher's name
+credited with material never retrieved for that question — the mechanism
+CLAUDE.md's Settled decision #15 already documents as built), not
+**substance/claim-support** verification (whether a claim's content is
+actually backed by the retrieved evidence). The residual risk this decision
+is about is the latter, and it is still open; CLAUDE.md's Settled decisions
+#3/#4 record why a probabilistic claim-support checker stays HELD. Do not
+treat `reference_verifier.py`'s existence as closing this decision.
+
 ### F5 — Prove operability and sole-path integrity
 
 | Claude Code | Kimi via OpenCode Go | Grok |
@@ -508,7 +520,7 @@ The private beta is launch-ready only when:
 | 11 | Hebrew lexicon permission (TBESH) | Blocked | Written permission from Online Bible |
 | 18 | System-prompt review timing | Hold | F4 after answer shapes and concurrency stabilize |
 | 19 | Archaic commentary modernization | Hold | Licensing plus side-by-side faithfulness-review design |
-| 20 | Generation-output verification guard | Accept residual gap | F4 diagnostic; no sixth judge without new evidence |
+| 20 | Generation-output verification guard | Accept residual gap | F4 diagnostic; no sixth judge without new evidence — `reference_verifier.py` solves misattribution, not this (see F4 note, 2026-08-13) |
 | 21 | Numeral-heading chapter detector | Leave unwired | Per-book validation surviving both known regressions |
 | 23 | Quote hardening before next batch | No further teacher batch | F4 decision from 20 Prince rejects and cap evidence |
 | 24 | `pending` vs `draft` quote status | Preserve both | Compatibility audit and migration plan |
