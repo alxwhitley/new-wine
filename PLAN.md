@@ -266,6 +266,20 @@ routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 - [ ] Alex can determine what happened, what changed, what passed, and what
   needs attention from one morning report.
 
+### Overnight unattended runs — settled 2026-08-13
+
+**Remaining blockers before any overnight unattended run starts:** (a) the
+coordinator run loop, (b) the safety fence with per-worker access
+permissions. Everything else in the harness — queue, scheduler, crash
+recovery, reconciliation — is already built and tested (see O1–O4 above).
+
+**Parallel-lane decision:** once those two blockers close, ingestion work
+and app-build work run in two parallel overnight lanes. This is safe
+because the lanes are disjoint — separate worktrees, separate file
+ownership; ingestion never touches app code, and builds never touch the
+corpus write path. Production database writes still never run through the
+harness itself, day or night, regardless of this change.
+
 ---
 
 ## Phase 1 — Foundation build to the ingestion-ready benchmark

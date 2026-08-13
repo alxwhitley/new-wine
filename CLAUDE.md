@@ -719,6 +719,20 @@ different row, per the hard rule above.
     unblock a migration" — nullable provenance is exactly how Invariant
     10's hole opened in the first place.
 
+15. **Overnight harness runs may parallelize ingestion and app-build work in
+    two lanes only once the coordinator run loop and the safety fence (with
+    per-worker access permissions) are both built — never before.** Settled
+    2026-08-13. The two lanes are safe to run concurrently precisely because
+    they are disjoint: separate worktrees, separate file ownership;
+    ingestion never touches app code, and app builds never touch the corpus
+    write path. This does NOT relax the standing harness/DB-write
+    separation — production database writes still never run through the
+    harness itself, day or night, regardless of this decision. See
+    `PLAN.md`'s Phase 0 "Overnight unattended runs" note for the two
+    remaining blockers (coordinator run loop; safety fence with per-worker
+    permissions) — everything else in the harness (queue, scheduler, crash
+    recovery, reconciliation) is already built and tested.
+
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
