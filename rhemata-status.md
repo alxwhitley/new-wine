@@ -6,7 +6,7 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-13.
+Last verified: 2026-08-13 (second session this date).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -15,20 +15,38 @@ for this file.
 
 ## Current state
 
-**Position papers: 4 of 8 charismatic pillars now live** — baptism_holy_spirit,
-speaking_in_tongues, deliverance_and_spiritual_warfare,
-prosperity_and_faith_teaching. Latter two registered 2026-08-13 (commits
-`5ccc73c`/`8e1563e`, NOT pushed) via the same fence/exclusion/fallback
-mechanism as the original two, no pillar-specific code path. Full audit and
-calibration trail is in the commit messages; ARCHITECTURE.md's Position
-papers section is current. 3 pillars (divine_healing,
-gifts_of_the_spirit_overview, prophecy_and_the_prophetic) were attempted and
-found genuinely hard — each loses margin to a standing-debate contrast on
-its own core content, needs real iteration next round, not a quick fix.
-`five_fold_ministry` still blocked on Alex's own editorial call
-(restoration-after-a-gap vs. never-ceased-just-neglected).
+**Position papers: all 8 of 8 charismatic pillars now live** —
+baptism_holy_spirit, speaking_in_tongues, deliverance_and_spiritual_warfare,
+prosperity_and_faith_teaching, divine_healing, gifts_of_the_spirit_overview,
+prophecy_and_the_prophetic, five_fold_ministry. The final four (commits
+`a81bb67`/`10374e0`, pushed) closed out the registry the same way the first
+four were: ingested via the shared chokepoint under the house source,
+silent_context, then calibrated against real embeddings
+(`scripts/calibrate_new_pillars_2026-08-13.py`, 41 cases) and verified
+against the full pre-existing regression suite (0 regressions) plus the
+live end-to-end fence test. The three that had "failed first-pass
+calibration" got real fixes, not a quick patch — an own-goal contrast
+anchor (prophecy's own contrast list named gifts the paper claims as its
+own territory), a too-weak divine_healing anchor losing to both the
+healing-mechanics debate and the new gifts-overview pillar, and a
+regression the new prophecy pillar introduced against an existing tongues
+protection — see the commit message for the specific fixes.
+`five_fold_ministry`'s editorial question (restoration-after-a-gap vs.
+never-ceased) is resolved per Alex's ruling: the offices never ceased, only
+fell into neglect at times — consistent with how the baptism/gifts papers
+already treat this kind of continuity question. `docs/position_papers/` no
+longer holds any unregistered draft. Also checked and confirmed clean this
+session: no reference to Myles Munroe exists anywhere in the repo (the
+prosperity paper's tithing material stays fully unattributed, no
+exception); CLAUDE.md's stale "eca8070 not pushed" note is corrected —
+confirmed via git ancestry that it's on `origin/main` and live.
 
-**PLAN.md decisions this session (pushed except Grok promotion):** target
+**All pending commits pushed this session**, including 4 carried over from
+the prior session (`dac422f`/`5ccc73c`/`8e1563e`/`efb9fa6` — Grok
+promotion, the first two pillars going live, and the last session-close)
+plus this session's `a81bb67`/`10374e0`. Nothing outstanding on `main`.
+
+**PLAN.md decisions from the prior session (now pushed):** target
 launch date compressed to October 2026 (market pressure + an October
 conference venue); the F1 100-generation/100-user concurrency proof REMOVED
 entirely — Alex explicitly declined a pre-launch load test, this is decided,
@@ -67,10 +85,7 @@ PLAN.md, 2026-08-13.)
 - Guest→account, auth CTAs, v4 props, `jewish_perspectives` drop,
   SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
 - Admin-panel notifications — dependency of position-refresh; no design.
-- `five_fold_ministry.md` editorial marker — needs Alex.
 - 20 Prince documents with zero approved quotes (2026-08-09).
-- 3 position-paper pillars need real calibration iteration before
-  registering — see Current state above.
 
 ---
 
@@ -78,25 +93,17 @@ PLAN.md, 2026-08-13.)
 
 1. **O5 budgets and hard stops.** Add turn, wall-clock, retry, output-size,
    provider-allowance, and queue-wide limits before overnight rehearsal.
-2. **`five_fold_ministry.md` editorial decision** — needs Alex before any
-   calibration work starts on it.
-3. **Calibrate divine_healing / gifts_of_the_spirit_overview /
-   prophecy_and_the_prophetic** — each failed first-pass calibration
-   (loses margin to a standing-debate contrast on its own content); real
-   iteration needed, likely similar difficulty to what deliverance took.
-4. Decide extractor hardening before any next Prince-style batch —
+2. Decide extractor hardening before any next Prince-style batch —
    majority-Scripture/unbalanced-quote checks, the `--per-doc-limit=1`
    cap (raise or keep), whether unused material exists in already-
    processed chunks. Savchuk/Ravenhill/Poonen eligible next.
-5. Decide whether the 20 zero-coverage Prince documents warrant a
+3. Decide whether the 20 zero-coverage Prince documents warrant a
    targeted re-extraction.
-6. **Human review of chapter-boundary proposals** (18 books) — Open
+4. **Human review of chapter-boundary proposals** (18 books) — Open
    Decision #21 still open.
-7. **Trail / Brooks one-offs** — review then decide visibility.
-8. Decide `pending` vs `draft` quote-status consolidation.
-9. `jewish_perspectives` drop — needs Alex's explicit approval + a
+5. **Trail / Brooks one-offs** — review then decide visibility.
+6. Decide `pending` vs `draft` quote-status consolidation.
+7. `jewish_perspectives` drop — needs Alex's explicit approval + a
    dedicated DB-write session.
-10. Push pending commits (`dac422f`, `5ccc73c`, `8e1563e`) when Alex
-    approves.
 
 SP: #43 swipe-to-close shipped; full drag-to-follow-with-peek not shipped.
