@@ -10,6 +10,15 @@ Scope:
   source_type != 'book'
   source_kind != 'commentary'
 
+Per-document candidate volume (2026-08-13): the per-document cap is
+length-scaled, not a flat count. By default a document's target is
+round(word_count / WORDS_PER_QUOTE_TARGET), floor 1, soft ceiling
+MAX_QUOTES_PER_DOC_CEILING -- calibrated against this corpus's own real
+document lengths (382-14,662 words, median ~8,652) so a typical
+book-chapter-length document here lands close to 15 and a short document
+still gets at least 1 attempt. Pass --per-doc-limit / --max-attempts-per-doc
+explicitly to override the length-scaled defaults for all documents in a run.
+
 Run from repo root:
   python3 scripts/extract_quote_candidates_derek_prince.py --dry-run --limit 10
   python3 scripts/extract_quote_candidates_derek_prince.py --max-quotes 250
@@ -62,12 +71,27 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 PRINCE_SOURCE_ID = "17be391b-d025-4178-8543-3e84da675c5d"
 PRINCE_NAME = "Derek Prince"
 DEFAULT_MAX_QUOTES = 250
-DEFAULT_PER_DOC_LIMIT = 1
-DEFAULT_MAX_ATTEMPTS_PER_DOC = 8
+
+# Length-scaled per-document target (2026-08-13, replaces the flat
+# per-doc-limit=1 cap -- Alex's explicit decision). Calibrated against this
+# corpus's own real document-length distribution (382-14,662 words, median
+# ~8,652 across the 496 in-scope documents, measured live 2026-08-13): at
+# WORDS_PER_QUOTE_TARGET=580, the median document lands at ~15 quotes, a
+# 382-word document floors at 1, and the longest (~14.7k words) lands at ~25,
+# comfortably under the soft ceiling.
+WORDS_PER_QUOTE_TARGET = 580
+MAX_QUOTES_PER_DOC_CEILING = 30
+# How many candidates to verify per document before giving up, as a
+# multiple of the target. Historically (flat limit=1) 8 attempts found a
+# passing candidate almost every time; this keeps a similar per-quote
+# buffer at higher targets rather than a flat constant that would starve
+# a 15-quote target after 8 tries.
+ATTEMPTS_PER_QUOTE_TARGET = 6
+DEFAULT_MAX_ATTEMPTS_PER_DOC_FLOOR = 8
 
 # Sentence splitter: capture from non-whitespace start up to and including a
 # terminal punctuation mark and an optional closing quote/guillemet.
-_SENT_RE = re.compile(r"[^.!?]*[.!?]+[\"\'\u2019\u201d\u00bb]?")
+_SENT_RE = re.compile(r"[^.!?]*[.!?]+[\"\'’”»]?")
 
 # Candidates that begin with these words rarely stand alone out of context.
 _WEAK_START_WORDS = {
@@ -114,6 +138,20 @@ _TRANSITIONAL_PHRASES = {
     "read with me", "look at verse", "turn with me", "open your bibles",
 }
 
+# Long double-quote-delimited spans, regardless of what precedes them.
+# Confirmed empirically 2026-08-13: all 20 Derek Prince documents that had
+# produced zero approved quotes under the old flat per-doc-limit=1 cap had a
+# single surviving candidate dominated by a directly-quoted passage (usually
+# Scripture) -- a defect class the deterministic verifier's exact-substring/
+# boundary/speaker checks do not catch, because the quoted text really is an
+# exact, well-bounded substring spoken by the credited teacher; the problem
+# is that most of the candidate's own words are not the teacher's, they are
+# the passage's. This mirrors quote_subchunk_exclusion.py's block-quotation
+# detector but does not require its ":—"/"writes:" lead-in marker, since
+# Prince often opens a quotation with nothing more than "He says," or no
+# lead-in clause at all.
+_RE_LONG_DOUBLE_QUOTE = re.compile(r"[“\"][^”\"]{80,}?[”\"]", re.DOTALL)
+
 
 def _get_psycopg2_conn() -> connection:
     db_url = os.environ["SUPABASE_DB_URL"]
@@ -136,6 +174,28 @@ def _admin_user_id(cur) -> str:
     if not row:
         raise RuntimeError("no admin user found in user_roles")
     return row[0]
+
+
+def target_quotes_for_document(word_count: int) -> int:
+    """Length-scaled per-document quote target (2026-08-13).
+
+    round(word_count / WORDS_PER_QUOTE_TARGET), floored at 1 so every
+    document still gets one attempt, soft-capped at
+    MAX_QUOTES_PER_DOC_CEILING as a sanity valve (never realistically binds
+    against this corpus's own length distribution -- the longest in-scope
+    document lands around 25).
+    """
+    if word_count <= 0:
+        return 1
+    target = round(word_count / WORDS_PER_QUOTE_TARGET)
+    return max(1, min(target, MAX_QUOTES_PER_DOC_CEILING))
+
+
+def target_attempts_for_document(target_quotes: int) -> int:
+    """Attempt budget for a document's target -- a multiple of the target,
+    floored at the old flat default so a target=1 document keeps the same
+    8-attempt buffer it always had."""
+    return max(target_quotes * ATTEMPTS_PER_QUOTE_TARGET, DEFAULT_MAX_ATTEMPTS_PER_DOC_FLOOR)
 
 
 def split_sentences(text: str) -> List[Tuple[int, int, str]]:
@@ -192,6 +252,25 @@ def _score_candidate(text: str) -> int:
     if transitional_hits > 1:
         return -100
 
+    # Verse-per-line / poetic block formatting (any blank-line break inside a
+    # 120-500 char, 1-3-sentence candidate) is a strong, corpus-specific
+    # signal of quoted scripture text laid out one line per verse rather
+    # than the teacher's own flowing sentences -- confirmed empirically
+    # 2026-08-13: a candidate can be two consecutive Bible verses split by a
+    # single blank line with no quotation marks and no framing prose at all
+    # (e.g. 1 Peter 5:9-10), so even one occurrence is treated as
+    # disqualifying, not just a penalty. See _RE_LONG_DOUBLE_QUOTE's comment
+    # for the related quotation-mark-based signal.
+    if "\n\n" in text:
+        return -100
+
+    # Long double-quote-delimited spans -- almost always a directly quoted
+    # passage, not the teacher's own sentence, in this corpus.
+    quoted_chars = sum(len(m.group()) for m in _RE_LONG_DOUBLE_QUOTE.finditer(text))
+    quote_fraction = quoted_chars / length if length else 0.0
+    if quote_fraction > 0.40:
+        return -100
+
     score = 0
     if 150 <= length <= 320:
         score += 35
@@ -210,6 +289,8 @@ def _score_candidate(text: str) -> int:
     if "?" in text:
         score -= 5
     if transitional_hits:
+        score -= 10
+    if quote_fraction > 0.15:
         score -= 10
 
     return score
@@ -274,16 +355,23 @@ def main():
     parser.add_argument(
         "--per-doc-limit",
         type=int,
-        default=DEFAULT_PER_DOC_LIMIT,
-        help=f"Max pending quotes per document (default {DEFAULT_PER_DOC_LIMIT})",
+        default=None,
+        help=(
+            "Max pending quotes per document. Default: length-scaled per "
+            f"document (round(word_count / {WORDS_PER_QUOTE_TARGET}), floor 1, "
+            f"soft ceiling {MAX_QUOTES_PER_DOC_CEILING}). Pass an integer to "
+            "override with a flat cap for every document in this run."
+        ),
     )
     parser.add_argument(
         "--max-attempts-per-doc",
         type=int,
-        default=DEFAULT_MAX_ATTEMPTS_PER_DOC,
+        default=None,
         help=(
-            "Max candidates to verify per document before giving up "
-            f"(default {DEFAULT_MAX_ATTEMPTS_PER_DOC})"
+            "Max candidates to verify per document before giving up. "
+            f"Default: length-scaled (target * {ATTEMPTS_PER_QUOTE_TARGET}, "
+            f"floor {DEFAULT_MAX_ATTEMPTS_PER_DOC_FLOOR}). Pass an integer to "
+            "override with a flat cap for every document in this run."
         ),
     )
     parser.add_argument(
@@ -349,8 +437,6 @@ def main():
     refusal_count = 0
     seen_this_run: set = set()
 
-    now = datetime.now(timezone.utc).isoformat()
-
     for doc_idx, (doc_id, title, source_type, source_kind, topic_tags) in enumerate(docs, 1):
         try:
             if accepted_count >= args.max_quotes:
@@ -378,9 +464,23 @@ def main():
                 docs_with_zero += 1
                 continue
 
+            word_count = sum(
+                len(content.split()) for _, _, content, _ in chunks if content
+            )
+            doc_target = (
+                args.per_doc_limit
+                if args.per_doc_limit is not None
+                else target_quotes_for_document(word_count)
+            )
+            doc_max_attempts = (
+                args.max_attempts_per_doc
+                if args.max_attempts_per_doc is not None
+                else target_attempts_for_document(doc_target)
+            )
+
             # Gather top-scoring candidates across all eligible chunks.
             all_candidates: List[Tuple[str, int, str, int]] = []  # (chunk_id, chunk_index, text, score)
-            chunk_content_by_id: dict[str, str] = {}
+            chunk_content_by_id: dict = {}
             for chunk_id, chunk_index, content, ineligible_reason in chunks:
                 if not content or ineligible_reason:
                     continue
@@ -395,9 +495,9 @@ def main():
             for chunk_id, chunk_index, text, score in all_candidates:
                 if accepted_count >= args.max_quotes:
                     break
-                if doc_inserted >= args.per_doc_limit:
+                if doc_inserted >= doc_target:
                     break
-                if attempts >= args.max_attempts_per_doc:
+                if attempts >= doc_max_attempts:
                     break
                 if text in existing_texts or text in seen_this_run:
                     continue
@@ -419,7 +519,7 @@ def main():
                             text[:200],
                         )
                         continue
-    
+
                     # Capture immutable snapshot (full source chunk text) and insert as PENDING.
                     cur.execute(
                         """
@@ -456,14 +556,15 @@ def main():
                     accepted_count += 1
                     doc_inserted += 1
                     logger.info(
-                        "INSERTED pending quote %d/%d doc=%s chunk=%d score=%d",
+                        "INSERTED pending quote %d/%d doc=%s chunk=%d score=%d (target=%d)",
                         accepted_count,
                         args.max_quotes,
                         title,
-                            chunk_index,
-                            score,
+                        chunk_index,
+                        score,
+                        doc_target,
                     )
-    
+
                     # Log acceptance the same way the existing pipeline does.
                     _log_quote_decision(
                         supabase_db,
@@ -476,34 +577,42 @@ def main():
                         reason=None,
                         submitted_by=admin_user_id,
                     )
-            else:
-                refusal_count += 1
-                if args.dry_run:
-                    logger.info(
-                        "[DRY RUN] REFUSE doc=%s chunk=%d rule=%s reason=%s text=%r",
-                        title,
-                        chunk_index,
-                        verification.rule,
-                        verification.reason,
-                        text[:200],
-                    )
-                    continue
+                else:
+                    refusal_count += 1
+                    if args.dry_run:
+                        logger.info(
+                            "[DRY RUN] REFUSE doc=%s chunk=%d rule=%s reason=%s text=%r",
+                            title,
+                            chunk_index,
+                            verification.rule,
+                            verification.reason,
+                            text[:200],
+                        )
+                        continue
 
-                _log_quote_decision(
-                    supabase_db,
-                    chunk_id=chunk_id,
-                    document_id=doc_id,
-                    teacher_source_id=PRINCE_SOURCE_ID,
-                    quote_text=text,
-                    decision="refused",
-                    rule=verification.rule,
-                    reason=verification.reason,
-                    submitted_by=admin_user_id,
-                )
+                    _log_quote_decision(
+                        supabase_db,
+                        chunk_id=chunk_id,
+                        document_id=doc_id,
+                        teacher_source_id=PRINCE_SOURCE_ID,
+                        quote_text=text,
+                        decision="refused",
+                        rule=verification.rule,
+                        reason=verification.reason,
+                        submitted_by=admin_user_id,
+                    )
 
             if doc_inserted == 0:
                 docs_with_zero += 1
-                logger.info("[%d/%d] %s — zero candidates accepted", doc_idx, len(docs), title)
+                logger.info(
+                    "[%d/%d] %s — zero candidates accepted (target=%d, attempts=%d/%d)",
+                    doc_idx, len(docs), title, doc_target, attempts, doc_max_attempts,
+                )
+            else:
+                logger.info(
+                    "[%d/%d] %s — %d/%d quotes inserted (attempts=%d/%d)",
+                    doc_idx, len(docs), title, doc_inserted, doc_target, attempts, doc_max_attempts,
+                )
 
         except Exception as exc:
             errors += 1

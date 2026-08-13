@@ -147,6 +147,35 @@ def _detect_block_quotation_spans(content: str) -> List[SubchunkSpan]:
 
 
 # ---------------------------------------------------------------------------
+# Long marker-less quotations (typically direct Scripture citation)
+# ---------------------------------------------------------------------------
+# _detect_block_quotation_spans above only catches a quotation with an
+# explicit ":—"/"writes:" lead-in marker. Empirically (2026-08-13 -- the 20
+# Derek Prince documents that produced zero approved quotes despite passing
+# every check below, see CLAUDE.md/PLAN.md), a teacher very often opens a
+# quotation with nothing more than "He says," or no lead-in clause at all,
+# relying only on the quotation marks themselves. A double-quote-delimited
+# span this long is, in this corpus, almost always the quoted text of a
+# passage rather than the teacher's own sentence. Threshold matches
+# _MIN_BLOCK_QUOTE_LEN so short quoted phrases stay fair game.
+_RE_LONG_DOUBLE_QUOTE = re.compile(r"([“\"])([^”\"]{80,}?)([”\"])", re.DOTALL)
+
+
+def _detect_long_quotation_spans(content: str) -> List[SubchunkSpan]:
+    """Detect long double-quote-delimited spans regardless of lead-in marker.
+
+    Intentionally broader than _detect_block_quotation_spans: length alone
+    is the signal, because a teacher's own extended original sentences
+    essentially never run 80+ characters inside literal quotation marks in
+    this corpus -- that shape is characteristic of a quoted passage.
+    """
+    spans = []
+    for m in _RE_LONG_DOUBLE_QUOTE.finditer(content):
+        spans.append((m.start(), m.end(), "long_quotation"))
+    return spans
+
+
+# ---------------------------------------------------------------------------
 # Inline Müller quotations in the "George Muller" chapter
 # ---------------------------------------------------------------------------
 # Within the School of Prayer chapter on George Müller, Murray quotes
@@ -262,6 +291,7 @@ def detect_excluded_subspans(content: str) -> List[SubchunkSpan]:
     spans = []
     spans.extend(_detect_translator_note_spans(content))
     spans.extend(_detect_block_quotation_spans(content))
+    spans.extend(_detect_long_quotation_spans(content))
     spans.extend(_detect_muller_inline_spans(content))
     spans.extend(_detect_catechism_spans(content))
     # Sort by start; merge overlapping/nested spans to keep the public list tidy.
