@@ -1,0 +1,32 @@
+.frame {
+  display: grid;
+  width: 100%;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--marketing-rule, #2a2927);
+  border-radius: 0.75rem;
+  background: var(--marketing-product, #202020);
+  color: var(--marketing-muted, #aaa7a0);
+}
+
+.frame span {
+  padding: 1rem;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  line-height: 1.4;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.landscape {
+  aspect-ratio: 16 / 10;
+}
+
+.portrait {
+  aspect-ratio: 4 / 5;
+}
+
+.hero {
+  aspect-ratio: 16 / 10;
+}

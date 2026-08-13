@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { ProductImagePlaceholder } from "@/components/marketing/product-image-placeholder";
 import { getMannaHeroTransforms } from "@/lib/manna-hero-motion";
 
 import styles from "./manna-dawn-hero.module.css";
@@ -26,13 +26,11 @@ function writeMotionVariables(root: HTMLElement, reducedMotion: boolean): void {
   root.style.setProperty("--manna-copy-y", `${values.copyY}px`);
   root.style.setProperty("--manna-product-scale", String(values.productScale));
   root.style.setProperty("--manna-product-y", `${values.productY}vh`);
-  root.style.setProperty("--manna-foreground-opacity", String(values.foregroundOpacity));
-  root.style.setProperty("--manna-foreground-scale", String(values.foregroundScale));
-  root.style.setProperty("--manna-foreground-y", `${values.foregroundY}%`);
 }
 
 export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
   const rootRef = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -43,7 +41,14 @@ export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
 
     const update = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => writeMotionVariables(root, motion.matches));
+      frame = requestAnimationFrame(() => {
+        writeMotionVariables(root, motion.matches);
+        if (motion.matches) {
+          videoRef.current?.pause();
+        } else {
+          void videoRef.current?.play().catch(() => undefined);
+        }
+      });
     };
 
     update();
@@ -62,41 +67,34 @@ export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
   return (
     <section ref={rootRef} className={styles.root} aria-labelledby="manna-hero-title">
       <div className={styles.stickyFrame}>
-        <Image
+        <video
+          ref={videoRef}
           className={styles.background}
-          src="/images/hero/manna-predawn-minimal-v2.png"
-          alt=""
-          fill
-          priority
-          unoptimized
-          sizes="100vw"
+          src="/videos/upper-room-hero.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-hidden="true"
         />
 
         <div className={styles.copy}>
-          <div className={styles.eyebrow}><span />Now in beta</div>
-          <h1 id="manna-hero-title">Faithful answers from sources you can trust.</h1>
-          <p>Rhemata is an AI-assisted Bible study tool that answers from trusted sources rooted in the charismatic tradition — now in early beta, and looking for testers.</p>
+          <div className={styles.eyebrow}>Spirit-filled Bible study</div>
+          <h1 id="manna-hero-title">Go deeper with voices you can trust.</h1>
+          <p>UpperWord brings Scripture and trusted Spirit-filled teachers into one grounded study experience—with every answer connected to its sources.</p>
           <div className={styles.actions}>
-            <Button size="lg" onClick={onPrimaryAction}>Become a test user</Button>
-            <Button variant="outline" size="lg" asChild>
-              <Link href="/">Try it free — no account needed</Link>
+            <Button className={styles.primaryAction} size="lg" onClick={onPrimaryAction}>Try UpperWord</Button>
+            <Button className={styles.secondaryAction} variant="outline" size="lg" asChild>
+              <Link href="/sources">Explore the sources</Link>
             </Button>
           </div>
         </div>
 
-        <div
+        <ProductImagePlaceholder
           className={styles.productPlaceholder}
-          role="img"
-          aria-label="Manna application preview placeholder"
+          ratio="hero"
         />
 
-        <Image
-          className={styles.foreground}
-          src="/images/hero/manna-dawn-foreground.png"
-          alt=""
-          fill
-          sizes="100vw"
-        />
       </div>
     </section>
   );

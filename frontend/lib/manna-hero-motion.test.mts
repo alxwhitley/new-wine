@@ -21,9 +21,6 @@ test("returns the approved start, midpoint, and end transforms", () => {
     copyY: 0,
     productScale: 0.82,
     productY: 34,
-    foregroundOpacity: 0,
-    foregroundScale: 1,
-    foregroundY: 12,
   });
 
   assert.deepEqual(getMannaHeroTransforms(0.5), {
@@ -33,9 +30,6 @@ test("returns the approved start, midpoint, and end transforms", () => {
     copyY: -12,
     productScale: 0.91,
     productY: 17,
-    foregroundOpacity: 0.78,
-    foregroundScale: 1.04,
-    foregroundY: 4,
   });
 
   assert.deepEqual(getMannaHeroTransforms(1), {
@@ -45,9 +39,6 @@ test("returns the approved start, midpoint, and end transforms", () => {
     copyY: -24,
     productScale: 1,
     productY: 0,
-    foregroundOpacity: 0.78,
-    foregroundScale: 1.08,
-    foregroundY: -4,
   });
 });
 
@@ -59,9 +50,6 @@ test("reduced motion keeps copy visible and disables transforms", () => {
     copyY: 0,
     productScale: 1,
     productY: 0,
-    foregroundOpacity: 0.78,
-    foregroundScale: 1,
-    foregroundY: 0,
   });
 });
 
@@ -72,19 +60,29 @@ test("hero component keeps copy semantic and has no fabricated app controls", ()
   );
 
   assert.match(source, /<h1/);
-  assert.match(source, /aria-label="Manna application preview placeholder"/);
+  assert.match(source, /Spirit-filled Bible study/);
+  assert.match(source, /Go deeper with voices you can trust\./);
+  assert.match(source, /UpperWord brings Scripture and trusted Spirit-filled teachers/);
+  assert.match(source, />Try UpperWord</);
+  assert.match(source, /href="\/sources"/);
+  assert.match(source, />Explore the sources</);
+  assert.match(source, /ProductImagePlaceholder/);
   assert.doesNotMatch(source, /Welcome back|Ask anything|Research|Support Ops/);
   assert.doesNotMatch(source, /style=\{\{/);
 });
 
-test("hero uses the versioned predawn master asset", () => {
+test("hero uses the supplied upper-room video without the old landscape foreground", () => {
   const source = readFileSync(
     new URL("../components/marketing/manna-dawn-hero.tsx", import.meta.url),
     "utf8",
   );
 
-  assert.match(source, /manna-predawn-minimal-v2\.png/);
-  assert.match(source, /unoptimized/);
+  assert.match(source, /upper-room-hero\.mp4/);
+  assert.match(source, /autoPlay/);
+  assert.match(source, /muted/);
+  assert.match(source, /loop/);
+  assert.match(source, /playsInline/);
+  assert.doesNotMatch(source, /manna-dawn-foreground\.png/);
 });
 
 test("home page clips horizontal overflow without breaking sticky descendants", () => {
@@ -95,4 +93,46 @@ test("home page clips horizontal overflow without breaking sticky descendants", 
 
   assert.match(source, /overflow-x-clip/);
   assert.doesNotMatch(source, /overflow-x-hidden/);
+});
+
+test("marketing surface reuses neutral placeholders and removes obsolete mockups", () => {
+  const page = readFileSync(
+    new URL("../app/home/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const placeholder = readFileSync(
+    new URL(
+      "../components/marketing/product-image-placeholder.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(page, /home\.module\.css/);
+  assert.match(page, /ProductImagePlaceholder/g);
+  assert.match(page, /MannaDawnHero/);
+  assert.match(page, /BetaGate/);
+  assert.match(page, /LoginModal/);
+  assert.match(page, /Why It Matters/);
+  assert.match(page, /Ask Anything/);
+  assert.match(page, /The Library Behind It/);
+  assert.doesNotMatch(page, /MockSidebar|ChatMockup|StudyMockup|INTERLINEAR/);
+  assert.doesNotMatch(page, /gold-light|text-gold|💬|📖|🔡|📌|🏛️|🎙️/u);
+
+  assert.match(placeholder, /Product image coming soon/);
+  assert.match(placeholder, /aria-hidden="true"/);
+  assert.doesNotMatch(placeholder, /role="img"|aria-label/);
+});
+
+test("hero pauses its decorative video for reduced motion", () => {
+  const source = readFileSync(
+    new URL("../components/marketing/manna-dawn-hero.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /videoRef/);
+  assert.match(source, /motion\.matches/);
+  assert.match(source, /\.pause\(\)/);
+  assert.match(source, /\.play\(\)/);
+  assert.match(source, /ProductImagePlaceholder/);
 });
