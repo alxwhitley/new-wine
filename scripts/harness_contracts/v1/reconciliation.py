@@ -5,8 +5,30 @@ from typing import Any, Dict, List, Optional, Set
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.errors import error, invalid_result, sort_errors, valid_result
+from harness_contracts.v1.execution_plan import CAPABILITY_CLASSES
 from harness_contracts.v1.packet import PACKET_STATES, RE_SHA256, _matches, _PacketValidator
+from harness_contracts.v1.provider_evidence import CAPACITY_STATES
 from harness_contracts.v1.worker_result import RE_RFC3339
+
+
+# O5 Task 5: the closed six-way terminal-disposition partition every plan
+# member packet must land in exactly once. Deliberately NOT the same set as
+# PACKET_STATES: a disposition is a REPORT-level classification derived from
+# fold state plus plan/pause evidence (see reconcile.py's
+# ``_o5_disposition``), not a raw packet state -- READY/RUNNING/BLOCKED
+# packets are never a disposition value on their own, they resolve to
+# ``paused_provider``/``blocked_human``/``never_started`` or are left
+# unresolved (``None``), which deliberately produces a sum shortfall against
+# ``planned`` rather than being silently folded into an existing bucket.
+PLAN_DISPOSITIONS = {
+    "accepted", "resting_revise", "quarantined",
+    "paused_provider", "blocked_human", "never_started",
+}
+
+PLAN_TOTAL_KEYS = (
+    "planned", "attempted", "accepted", "resting_revise",
+    "quarantined", "paused_provider", "blocked_human", "never_started",
+)
 
 
 def validate_reconciliation_report(value: Any) -> Dict[str, Any]:
@@ -42,6 +64,9 @@ def _validate_reconciliation_report_object(v: _PacketValidator) -> None:
         "attention_required",
         "integrity",
         "reconciliation",
+        "plan_totals",
+        "attempted_packet_ids",
+        "all_invariants_passed",
         "content_sha256",
         "report_sha256",
     }
@@ -130,6 +155,20 @@ def _validate_reconciliation_report_object(v: _PacketValidator) -> None:
     else:
         v.add("INVALID_TYPE", "/reconciliation", "Expected object", phase="scalar")
 
+    _validate_plan_totals(v, value.get("plan_totals"), "/plan_totals")
+
+    attempted_ids = value.get("attempted_packet_ids")
+    if attempted_ids is not None:
+        if not isinstance(attempted_ids, list):
+            v.add("INVALID_TYPE", "/attempted_packet_ids", "Expected array or null", phase="scalar")
+        else:
+            for i, pid in enumerate(attempted_ids):
+                if not isinstance(pid, str) or pid.strip() == "":
+                    v.add("INVALID_VALUE", f"/attempted_packet_ids/{i}", "Must be a non-empty string", phase="value")
+
+    if not isinstance(value.get("all_invariants_passed"), bool):
+        v.add("INVALID_TYPE", "/all_invariants_passed", "Expected boolean", phase="scalar")
+
     for key in ("content_sha256", "report_sha256"):
         _check_sha256(v, value.get(key), f"/{key}")
 
@@ -173,6 +212,14 @@ def _validate_packet_row(v: _PacketValidator, row: Any, path: str) -> None:
         "blocked_on",
         "attention_codes",
         "retry_limit",
+        "plan_id",
+        "plan_sha256",
+        "capability_class",
+        "route_history",
+        "budget_usage",
+        "provider_backoff_state",
+        "stop_reasons",
+        "disposition",
     }
     for key in row:
         if key not in required:
@@ -236,6 +283,136 @@ def _validate_packet_row(v: _PacketValidator, row: Any, path: str) -> None:
     retry_limit = row.get("retry_limit")
     if isinstance(retry_limit, bool) or not isinstance(retry_limit, int) or retry_limit < 1:
         v.add("INVALID_VALUE", f"{path}/retry_limit", "Must be a positive integer", phase="value")
+
+    _validate_o5_row_extension(v, row, path)
+
+
+def _validate_o5_row_extension(v: _PacketValidator, row: Dict[str, Any], path: str) -> None:
+    """Task 5's O5 row extension: plan identity, capability class, route
+    history, budget usage, provider/backoff state, stop reasons, and exactly
+    one terminal disposition. Every field here is nullable in the exact same
+    place (a packet outside a bound plan, or a report with no O5 plan bound
+    at all) -- a pre-O5 journal must validate identically to before, just
+    with these fields present and null rather than absent, so no existing
+    caller reading an unbound-plan report has to change shape."""
+    plan_id = row.get("plan_id")
+    if plan_id is not None and (not isinstance(plan_id, str) or plan_id.strip() == ""):
+        v.add("INVALID_VALUE", f"{path}/plan_id", "Must be a non-empty string or null", phase="value")
+
+    plan_sha256 = row.get("plan_sha256")
+    if plan_sha256 is not None and not _matches(plan_sha256, RE_SHA256):
+        v.add("INVALID_FORMAT", f"{path}/plan_sha256", "Must be 64-character lowercase SHA-256 hex or null", phase="format")
+
+    capability_class = row.get("capability_class")
+    if capability_class is not None and capability_class not in CAPABILITY_CLASSES:
+        v.add("INVALID_ENUM", f"{path}/capability_class", f"Value must be one of {sorted(CAPABILITY_CLASSES)} or null")
+
+    route_history = row.get("route_history")
+    if not isinstance(route_history, list):
+        v.add("INVALID_TYPE", f"{path}/route_history", "Expected array", phase="scalar")
+    else:
+        for i, hop in enumerate(route_history):
+            hop_path = f"{path}/route_history/{i}"
+            if not isinstance(hop, dict):
+                v.add("INVALID_TYPE", hop_path, "Expected object", phase="scalar")
+                continue
+            hop_required = {"seq", "event_type", "provider", "model_id", "reason_code"}
+            for key in hop:
+                if key not in hop_required:
+                    v.add("UNKNOWN_FIELD", f"{hop_path}/{key}", f"Unknown field '{key}'")
+            for key in hop_required:
+                if key not in hop:
+                    v.add("MISSING_FIELD", f"{hop_path}/{key}", f"Missing required field '{key}'")
+            if any(err["path"].startswith(hop_path) for err in v.errors):
+                continue
+            seq = hop.get("seq")
+            if isinstance(seq, bool) or not isinstance(seq, int) or seq < 1:
+                v.add("INVALID_VALUE", f"{hop_path}/seq", "Must be a positive integer", phase="value")
+            v.check_enum(hop.get("event_type"), {"ATTEMPT_STARTED", "MODEL_FALLBACK_SELECTED"}, f"{hop_path}/event_type")
+            for key in ("provider", "model_id"):
+                val = hop.get(key)
+                if not isinstance(val, str) or val.strip() == "":
+                    v.add("INVALID_VALUE", f"{hop_path}/{key}", "Must be a non-empty string", phase="value")
+            reason_code = hop.get("reason_code")
+            if reason_code is not None and (not isinstance(reason_code, str) or reason_code.strip() == ""):
+                v.add("INVALID_VALUE", f"{hop_path}/reason_code", "Must be a non-empty string or null", phase="value")
+
+    budget_usage = row.get("budget_usage")
+    if budget_usage is not None:
+        if not isinstance(budget_usage, dict):
+            v.add("INVALID_TYPE", f"{path}/budget_usage", "Expected object or null", phase="scalar")
+        else:
+            bu_keys = {
+                "attempt_limit", "retry_limit", "revision_limit",
+                "attempts_started", "infra_retries_used", "revise_cycles_used",
+            }
+            for key in budget_usage:
+                if key not in bu_keys:
+                    v.add("UNKNOWN_FIELD", f"{path}/budget_usage/{key}", f"Unknown field '{key}'")
+            for key in bu_keys:
+                if key not in budget_usage:
+                    v.add("MISSING_FIELD", f"{path}/budget_usage/{key}", f"Missing required field '{key}'")
+                else:
+                    val = budget_usage[key]
+                    if isinstance(val, bool) or not isinstance(val, int) or val < 0:
+                        v.add("INVALID_VALUE", f"{path}/budget_usage/{key}", "Must be a non-negative integer", phase="value")
+
+    backoff_state = row.get("provider_backoff_state")
+    if backoff_state is not None:
+        if not isinstance(backoff_state, dict):
+            v.add("INVALID_TYPE", f"{path}/provider_backoff_state", "Expected object or null", phase="scalar")
+        else:
+            pb_keys = {"provider", "model_id", "state", "reset_at"}
+            for key in backoff_state:
+                if key not in pb_keys:
+                    v.add("UNKNOWN_FIELD", f"{path}/provider_backoff_state/{key}", f"Unknown field '{key}'")
+            for key in pb_keys:
+                if key not in backoff_state:
+                    v.add("MISSING_FIELD", f"{path}/provider_backoff_state/{key}", f"Missing required field '{key}'")
+            if "provider" in backoff_state:
+                val = backoff_state.get("provider")
+                if not isinstance(val, str) or val.strip() == "":
+                    v.add("INVALID_VALUE", f"{path}/provider_backoff_state/provider", "Must be a non-empty string", phase="value")
+            if "model_id" in backoff_state:
+                val = backoff_state.get("model_id")
+                if not isinstance(val, str) or val.strip() == "":
+                    v.add("INVALID_VALUE", f"{path}/provider_backoff_state/model_id", "Must be a non-empty string", phase="value")
+            if "state" in backoff_state:
+                v.check_enum(backoff_state.get("state"), CAPACITY_STATES, f"{path}/provider_backoff_state/state")
+            if "reset_at" in backoff_state:
+                reset_at = backoff_state.get("reset_at")
+                if reset_at is not None and not _matches(reset_at, RE_RFC3339):
+                    v.add("INVALID_FORMAT", f"{path}/provider_backoff_state/reset_at", "Must be RFC3339 UTC timestamp or null", phase="format")
+
+    stop_reasons = row.get("stop_reasons")
+    if not isinstance(stop_reasons, list):
+        v.add("INVALID_TYPE", f"{path}/stop_reasons", "Expected array", phase="scalar")
+    else:
+        for i, reason in enumerate(stop_reasons):
+            if not isinstance(reason, str) or reason.strip() == "":
+                v.add("INVALID_VALUE", f"{path}/stop_reasons/{i}", "Must be a non-empty string", phase="value")
+
+    disposition = row.get("disposition")
+    if disposition is not None and disposition not in PLAN_DISPOSITIONS:
+        v.add("INVALID_ENUM", f"{path}/disposition", f"Value must be one of {sorted(PLAN_DISPOSITIONS)} or null")
+
+
+def _validate_plan_totals(v: _PacketValidator, value: Any, path: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        v.add("INVALID_TYPE", path, "Expected object or null", phase="scalar")
+        return
+    for key in value:
+        if key not in PLAN_TOTAL_KEYS:
+            v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
+    for key in PLAN_TOTAL_KEYS:
+        if key not in value:
+            v.add("MISSING_FIELD", f"{path}/{key}", f"Missing required field '{key}'")
+        else:
+            val = value[key]
+            if isinstance(val, bool) or not isinstance(val, int) or val < 0:
+                v.add("INVALID_VALUE", f"{path}/{key}", "Must be a non-negative integer", phase="value")
 
 
 def _validate_activity(v: _PacketValidator, activity: Any, path: str) -> None:
@@ -333,8 +510,56 @@ def compute_reconciliation(fold_data: Dict[str, Any]) -> Dict[str, Any]:
       - integrity: pre-computed integrity issue lists
       - attention_required: list of attention items
       - enrolled_packet_ids: Set[str] of PACKET_ENROLLED packet_ids (required for I5)
+
+    O5 Task 5 additions, both OPTIONAL -- a caller that supplies neither gets
+    byte-for-byte the pre-O5 behaviour this function always had:
+      - plan_scope: {"bound": bool, "planned_packet_ids": List[str],
+        "authentication_error": Optional[str]}. ``bound`` False (the
+        default) means no execution plan governs this run; ``plan_totals``/
+        ``attempted_packet_ids`` are then reported as ``None`` and no O5
+        check runs. ``authentication_error`` set means the bound plan
+        itself failed authentication (e.g. a corrupted/cyclic artifact) --
+        this is reported as its own attention item and fails the run's O5
+        invariant closed without attempting a partition.
+      - o5_violations: List[{"packet_id": Optional[str], "code": str,
+        "detail": str}], precomputed by the caller (reconcile.py) for every
+        O5-specific fail-closed finding this engine does not itself derive
+        (route-not-authorized reassignments, budget-limit overruns, foreign/
+        missing plan members, forged evidence references, and so on).
+      - workspace_attention: List[dict], precomputed by the caller
+        (reconcile.py's ``_workspace_evidence_attention``) for every O4
+        workspace-isolation finding (missing baseline/postflight, allowlist
+        violation, secret-like diff, protected-worktree change). A non-empty
+        list here fails ``all_invariants_passed`` closed, exactly like
+        ``o5_violations`` -- this is the SAME computation that feeds both
+        ``reconciliation.all_invariants_passed`` and the top-level mirror
+        field below, so the two can never disagree by construction. This
+        replaces a prior design where the caller overrode only the nested
+        field AFTER calling this function, which let the top-level mirror
+        go stale whenever workspace_attention alone was the failing
+        condition -- do not reintroduce a second, out-of-band override site.
+
+    Each row in ``packets`` is expected to already carry Task 5's row
+    extension (``plan_id``, ``plan_sha256``, ``capability_class``,
+    ``route_history``, ``budget_usage``, ``provider_backoff_state``,
+    ``stop_reasons``, ``disposition``) -- this engine reads ``disposition``
+    and ``attempts_started`` to build ``plan_totals`` but does not itself
+    derive the other extension fields (that is reconcile.py's assembly
+    job, not this invariant engine's). Any row missing one of these keys is
+    defensively backfilled to its null/empty default here, so a caller that
+    predates O5 (or a hand-built test fixture) still gets a schema-valid,
+    O5-shaped report rather than a KeyError or a report the JSON Schema
+    would reject.
     """
     packets = list(fold_data.get("packets") or [])
+    _O5_ROW_DEFAULTS = {
+        "plan_id": None, "plan_sha256": None, "capability_class": None,
+        "route_history": [], "budget_usage": None, "provider_backoff_state": None,
+        "stop_reasons": [], "disposition": None,
+    }
+    for row in packets:
+        for key, default in _O5_ROW_DEFAULTS.items():
+            row.setdefault(key, default)
     inventory_total = len(packets)
 
     # I7: all eight states present, even at zero.
@@ -394,6 +619,87 @@ def compute_reconciliation(fold_data: Dict[str, Any]) -> Dict[str, Any]:
                 integrity["accounting_violations"].append(pid)
             attention_required.append({"packet_id": pid, "code": "retry_budget_exceeded", "detail": "attempts_started > retry_limit + 1"})
 
+    # O5 Task 5: plan-scoped terminal-disposition partition. Disjoint from
+    # I1-I12 above -- those concern fold-level bookkeeping identities that
+    # hold whether or not any execution plan is bound; this concerns
+    # whether every PLAN MEMBER packet has reached exactly one closed
+    # terminal disposition. See ``PLAN_DISPOSITIONS``'s module docstring for
+    # why a packet with no resolvable disposition is left OUT of every
+    # bucket (a sum shortfall against ``planned``) rather than guessed into
+    # one -- that is what "fails closed" means for this specific invariant.
+    plan_scope = fold_data.get("plan_scope") or {}
+    plan_bound = bool(plan_scope.get("bound"))
+    plan_totals: Optional[Dict[str, int]] = None
+    attempted_packet_ids: Optional[List[str]] = None
+    o5_ok = True
+
+    if plan_bound:
+        authentication_error = plan_scope.get("authentication_error")
+        if authentication_error:
+            o5_ok = False
+            attention_required.append({
+                "packet_id": None, "code": "plan_identity_invalid",
+                "detail": str(authentication_error),
+            })
+        else:
+            planned_ids = sorted(set(plan_scope.get("planned_packet_ids") or []))
+            rows_by_id = {row.get("packet_id"): row for row in packets}
+            totals = {key: 0 for key in PLAN_TOTAL_KEYS}
+            totals["planned"] = len(planned_ids)
+            attempted_ids_list: List[str] = []
+            for pid in planned_ids:
+                row = rows_by_id.get(pid)
+                if row is None:
+                    # A declared plan member with no fold row at all (never
+                    # enrolled) is not "never_started" -- that means known
+                    # but not yet worked on. It is its own, worse finding
+                    # (the caller is expected to have already appended a
+                    # ``plan_member_never_enrolled`` item to o5_violations);
+                    # here it simply contributes to no bucket, so the sum
+                    # invariant below reports the shortfall on its own.
+                    continue
+                if row.get("attempts_started", 0) > 0:
+                    attempted_ids_list.append(pid)
+                disposition = row.get("disposition")
+                if disposition in PLAN_DISPOSITIONS:
+                    totals[disposition] += 1
+            attempted_packet_ids = sorted(attempted_ids_list)
+            totals["attempted"] = len(attempted_packet_ids)
+            six_way_sum = sum(
+                totals[key] for key in (
+                    "accepted", "resting_revise", "quarantined",
+                    "paused_provider", "blocked_human", "never_started",
+                )
+            )
+            if six_way_sum != totals["planned"]:
+                o5_ok = False
+                attention_required.append({
+                    "packet_id": None, "code": "plan_disposition_partition_incomplete",
+                    "detail": (
+                        "sum of accepted+resting_revise+quarantined+paused_provider"
+                        "+blocked_human+never_started (%d) != planned (%d)"
+                        % (six_way_sum, totals["planned"])
+                    ),
+                })
+            plan_totals = totals
+
+        o5_violations = list(fold_data.get("o5_violations") or [])
+        if o5_violations:
+            o5_ok = False
+            for item in o5_violations:
+                attention_required.append(dict(item))
+
+    # O4 workspace-isolation findings (missing baseline/postflight, allowlist
+    # violation, secret-like diff, protected-worktree change). This list is
+    # already folded into ``attention_required`` by the caller before this
+    # function runs; it is read again here, separately, so its presence can
+    # participate in the SAME ``all_invariants_passed`` computation that
+    # feeds both the nested and top-level fields below -- see this
+    # function's docstring for why that single-computation shape is
+    # required, not merely tidy.
+    workspace_attention = list(fold_data.get("workspace_attention") or [])
+    workspace_ok = not workspace_attention
+
     all_invariants_passed = (
         sum(by_state.values()) == inventory_total
         and len(packets) == inventory_total
@@ -408,6 +714,8 @@ def compute_reconciliation(fold_data: Dict[str, Any]) -> Dict[str, Any]:
         and not integrity["seal_mismatches"]
         and not integrity["accounting_violations"]
         and not integrity["preserved_evidence_mismatches"]
+        and o5_ok
+        and workspace_ok
     )
 
     report = {
@@ -431,6 +739,15 @@ def compute_reconciliation(fold_data: Dict[str, Any]) -> Dict[str, Any]:
             "equals_inventory_total": sum(by_state.values()) == inventory_total and len(packets) == inventory_total and len(row_ids) == inventory_total,
             "all_invariants_passed": all_invariants_passed,
         },
+        "plan_totals": plan_totals,
+        "attempted_packet_ids": attempted_packet_ids,
+        # Top-level mirror of the SAME value computed above -- single source
+        # of truth (this assignment), never a second independent
+        # computation. Existing callers reading the nested
+        # ``reconciliation.all_invariants_passed`` field are completely
+        # unaffected; this exists so a caller that only wants "did
+        # everything check out, O5 included" can read one flat field.
+        "all_invariants_passed": all_invariants_passed,
     }
 
     report["content_sha256"] = compute_sha256(

@@ -176,6 +176,33 @@ def _assigned_worker_override(
     return overridden
 
 
+def _attempt_started_worker(
+    journal_events: List[Dict[str, Any]], packet_id: str, attempt: Any,
+) -> Optional[Dict[str, str]]:
+    """The ATTEMPT_STARTED-recorded ``worker`` identity for one specific attempt.
+
+    Ground truth for what a given attempt was actually assigned -- a prior
+    iteration's pre-claim gate fallback route (``_assigned_worker_override``
+    above), or the packet's own default when no override applied -- never the
+    enrolled packet's own (possibly stale) static default. Returns ``None``
+    when no matching ATTEMPT_STARTED exists or its recorded worker is
+    incomplete, so a caller can fall back to the packet's own
+    ``assigned_worker`` exactly as before this existed.
+    """
+    started = next((
+        event for event in reversed(journal_events)
+        if event.get("event_type") == "ATTEMPT_STARTED"
+        and event.get("packet_id") == packet_id
+        and (((event.get("payload") or {}).get("attempt") or {}).get("attempt") == attempt)
+    ), None)
+    if started is None:
+        return None
+    worker = ((started.get("payload") or {}).get("attempt") or {}).get("worker") or {}
+    if not {"worker_id", "provider", "model"} <= set(worker):
+        return None
+    return {"worker_id": worker["worker_id"], "provider": worker["provider"], "model": worker["model"]}
+
+
 def _record_model_fallback(
     handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
     plan: Dict[str, Any], packet_id: str, capability_class: str, decision: Dict[str, Any],
@@ -587,8 +614,17 @@ def _accepted_replay_evidence(handle, packet_id: str, packet: Dict[str, Any],
         raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay evidence disagrees")
     try:
         _dependency_states, provenance = _dependency_context(handle, packet, journal_events, folded)
+        # Same reasoning as review.py's ``_decide`` -- ``bundle["packet"]``
+        # stays the packet's static enrollment-time default (it must, for
+        # the seal/self-hash checks above), so a packet that reached
+        # ACCEPTED via a plan-pinned fallback route needs the same
+        # ATTEMPT_STARTED-recorded worker identity supplied alongside the
+        # bundle here, or this re-validation would spuriously reject an
+        # already-legitimately-accepted fallback packet during promotion.
+        trusted_attempt_worker = _attempt_started_worker(
+            journal_events, packet_id, worker_result.get("attempt"))
         replay_validation = validate_replay_bundle(
-            bundle, provenance, load_trusted_reviewer_sessions(handle))
+            bundle, provenance, load_trusted_reviewer_sessions(handle), trusted_attempt_worker)
     except Exception as exc:
         raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay context is unavailable") from exc
     if not replay_validation["valid"]:

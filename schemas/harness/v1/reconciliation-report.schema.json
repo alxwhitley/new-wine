@@ -18,6 +18,9 @@
     "attention_required",
     "integrity",
     "reconciliation",
+    "plan_totals",
+    "attempted_packet_ids",
+    "all_invariants_passed",
     "content_sha256",
     "report_sha256"
   ],
@@ -138,7 +141,15 @@
           "human_required_reasons",
           "blocked_on",
           "attention_codes",
-          "retry_limit"
+          "retry_limit",
+          "plan_id",
+          "plan_sha256",
+          "capability_class",
+          "route_history",
+          "budget_usage",
+          "provider_backoff_state",
+          "stop_reasons",
+          "disposition"
         ],
         "properties": {
           "packet_id": {
@@ -230,6 +241,88 @@
           "retry_limit": {
             "type": "integer",
             "minimum": 1
+          },
+          "plan_id": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plan_sha256": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "capability_class": {
+            "type": ["string", "null"],
+            "enum": [
+              "design_judgment",
+              "planning_architecture",
+              "implementation",
+              "independent_review",
+              "adversarial_audit",
+              "mechanical_check",
+              null
+            ]
+          },
+          "route_history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["seq", "event_type", "provider", "model_id", "reason_code"],
+              "properties": {
+                "seq": {"type": "integer", "minimum": 1},
+                "event_type": {
+                  "type": "string",
+                  "enum": ["ATTEMPT_STARTED", "MODEL_FALLBACK_SELECTED"]
+                },
+                "provider": {"type": "string", "minLength": 1},
+                "model_id": {"type": "string", "minLength": 1},
+                "reason_code": {"type": ["string", "null"], "minLength": 1}
+              }
+            }
+          },
+          "budget_usage": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": [
+              "attempt_limit", "retry_limit", "revision_limit",
+              "attempts_started", "infra_retries_used", "revise_cycles_used"
+            ],
+            "properties": {
+              "attempt_limit": {"type": "integer", "minimum": 0},
+              "retry_limit": {"type": "integer", "minimum": 0},
+              "revision_limit": {"type": "integer", "minimum": 0},
+              "attempts_started": {"type": "integer", "minimum": 0},
+              "infra_retries_used": {"type": "integer", "minimum": 0},
+              "revise_cycles_used": {"type": "integer", "minimum": 0}
+            }
+          },
+          "provider_backoff_state": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["provider", "model_id", "state", "reset_at"],
+            "properties": {
+              "provider": {"type": "string", "minLength": 1},
+              "model_id": {"type": "string", "minLength": 1},
+              "state": {
+                "type": "string",
+                "enum": ["AVAILABLE", "RATE_LIMITED", "ALLOWANCE_EXHAUSTED", "UNAVAILABLE"]
+              },
+              "reset_at": {
+                "type": ["string", "null"],
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+              }
+            }
+          },
+          "stop_reasons": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "disposition": {
+            "type": ["string", "null"],
+            "enum": [
+              "accepted", "resting_revise", "quarantined",
+              "paused_provider", "blocked_human", "never_started", null
+            ]
           }
         }
       }
@@ -407,6 +500,34 @@
           "type": "boolean"
         }
       }
+    },
+    "plan_totals": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "planned", "attempted", "accepted", "resting_revise",
+        "quarantined", "paused_provider", "blocked_human", "never_started"
+      ],
+      "properties": {
+        "planned": {"type": "integer", "minimum": 0},
+        "attempted": {"type": "integer", "minimum": 0},
+        "accepted": {"type": "integer", "minimum": 0},
+        "resting_revise": {"type": "integer", "minimum": 0},
+        "quarantined": {"type": "integer", "minimum": 0},
+        "paused_provider": {"type": "integer", "minimum": 0},
+        "blocked_human": {"type": "integer", "minimum": 0},
+        "never_started": {"type": "integer", "minimum": 0}
+      }
+    },
+    "attempted_packet_ids": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "all_invariants_passed": {
+      "type": "boolean"
     },
     "content_sha256": {
       "type": "string",

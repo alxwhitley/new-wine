@@ -905,7 +905,29 @@ def _decide(handle, state_root: str, state_root_id: str, journal_events: List[Di
     bundle, provenance = assemble_replay_bundle(handle, packet, worker_result, verdict, now,
                                                 journal_events, folded)
 
-    bundle_result = validate_replay_bundle(bundle, provenance, trusted_sessions)
+    # The bundle's own ``packet`` field must stay byte-identical to the
+    # enrolled artifact (its self-hash and downstream terminal-seal binding
+    # depend on that), so it always carries the packet's static, pre-plan
+    # ``assigned_worker`` default -- never the plan-pinned fallback route a
+    # prior iteration's pre-claim gate may have chosen for THIS attempt
+    # (``coordinator.py``'s ``_assigned_worker_override``, applied to the
+    # durable ATTEMPT_STARTED record and to the actual invocation, but never
+    # written back onto the packet artifact). ``attempt_payload["worker"]``
+    # is that same ATTEMPT_STARTED record already loaded by
+    # ``_current_attempt`` above -- the ground truth for who this specific
+    # attempt actually ran as -- so it is handed to the validator alongside
+    # the bundle, not folded into it, exactly like ``provenance``/
+    # ``trusted_sessions`` above.
+    attempt_worker = attempt_payload.get("worker") or {}
+    trusted_attempt_worker = None
+    if {"worker_id", "provider", "model"} <= set(attempt_worker):
+        trusted_attempt_worker = {
+            "worker_id": attempt_worker["worker_id"],
+            "provider": attempt_worker["provider"],
+            "model": attempt_worker["model"],
+        }
+
+    bundle_result = validate_replay_bundle(bundle, provenance, trusted_sessions, trusted_attempt_worker)
     if not bundle_result["valid"]:
         codes = [e["code"] for e in bundle_result["errors"]]
         _preserve_refusal(handle, packet_id, verdict, codes)

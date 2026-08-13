@@ -13,6 +13,7 @@ from harness_coordinator.v1.invoke import WorkerAdapter
 from harness_coordinator.v1.recovery import _fold_journal
 from harness_coordinator.v1.store import read_journal
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+from test_o5_execution_plan import _valid_plan
 from test_o3_p5_review import (
     COORD_ID, RUN_ID, STATE_ROOT_ID, T_ENROLL, T_NOW,
     _deposit, _packet, _verdict, _worker_result, _write_manifest, _write_trust_roots,
@@ -451,12 +452,18 @@ def test_write_cli_once_returns_deterministic_success_for_empty_roots(
         os.makedirs(os.path.join(root, "locks"))
         _write_manifest(root)
         _write_trust_roots(root)
+        # A real run_once() call now requires an authenticated execution
+        # plan -- nothing in this empty-root scenario enrolls the plan's
+        # packets, so it stays "no_eligible_work" regardless of plan content.
+        plan_path = tmp_path / f"empty-cli-{index}-plan.json"
+        plan_path.write_bytes(canonical_bytes(_valid_plan()))
         monkeypatch.setattr(
             run_cli_module, "derive_local_process_context",
             lambda coordinator_id, now: _context(coordinator_id))
         exit_code = run_cli_module.main([
             "--once", "--state-root", root, "--coordinator-id", "coord-cli",
-            "--run-id", "run-cli", "--now", T_NOW])
+            "--run-id", "run-cli", "--now", T_NOW,
+            "--execution-plan-path", str(plan_path)])
         assert exit_code == 0
         outputs.append(json.loads(capsys.readouterr().out))
     assert outputs[0] == outputs[1]

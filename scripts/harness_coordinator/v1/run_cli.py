@@ -6,8 +6,12 @@ import os
 import socket
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
+from harness_contracts.v1.execution_plan import (
+    ExecutionPlanContractError,
+    authenticate_execution_plan_bytes,
+)
 from harness_coordinator.v1.coordinator import run_once
 from harness_coordinator.v1.cli import _NEEDS_HUMAN_ATTENTION_CODES
 
@@ -28,6 +32,38 @@ def derive_local_process_context(coordinator_id: str, now: str):
             "pid": os.getpid(), "live_coordinator_ids": {coordinator_id}, "now": now}
 
 
+def _load_execution_plan(path: str) -> Dict[str, Any]:
+    """Read and authenticate one canonical execution-plan artifact from disk.
+
+    Reuses ``harness_contracts.v1.execution_plan.authenticate_execution_plan_bytes``
+    -- the exact canonical-bytes/hash-checking path Task 1 already built for
+    ``bind_execution_plan`` -- rather than hand-rolling a second JSON-loading/
+    validation routine here. A missing file, an unreadable file, non-canonical
+    bytes, or a plan that fails ``validate_execution_plan`` all surface as the
+    same ``ExecutionPlanContractError`` shape this CLI already knows how to
+    render as its one machine-readable error payload (``_emit_error`` below).
+    An unreadable/missing path is folded into the same ``PLAN_IDENTITY_INVALID``
+    code ``authenticate_execution_plan_bytes`` already uses for "the caller
+    did not hand me valid plan bytes" (e.g. non-bytes input) -- no new error
+    vocabulary is introduced for this CLI-specific case.
+    """
+    try:
+        with open(path, "rb") as source:
+            raw = source.read()
+    except OSError as exc:
+        raise ExecutionPlanContractError(
+            "PLAN_IDENTITY_INVALID",
+            "execution plan file cannot be read: %s" % exc,
+        ) from exc
+    return authenticate_execution_plan_bytes(raw)
+
+
+def _emit_error(exc: Exception) -> int:
+    print(json.dumps({"error": True, "code": getattr(exc, "code", type(exc).__name__),
+                      "message": getattr(exc, "message", str(exc))}, sort_keys=True))
+    return 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="harness-coordinator-run")
     parser.add_argument("--once", action="store_true", required=True)
@@ -35,14 +71,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--coordinator-id", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--now", required=True)
+    parser.add_argument(
+        "--execution-plan-path", required=True,
+        help=("Path to an authenticated, canonical execution-plan artifact. "
+              "Required, no default: a governed run must never silently "
+              "proceed with no plan-derived limits, no wall-clock backstop, "
+              "and no pre-claim budget/routing/human-authority gate."))
     args = parser.parse_args(argv)
+
+    # Fail closed on the plan BEFORE deriving process identity or touching
+    # the state root at all -- a missing file, an unreadable file,
+    # non-canonical bytes, or a validate_execution_plan failure means no
+    # coordinator claim, no attempt, nothing durable written.
+    try:
+        execution_plan = _load_execution_plan(args.execution_plan_path)
+    except Exception as exc:  # noqa: BLE001 - one machine-readable result, same posture as below
+        return _emit_error(exc)
+
     context = derive_local_process_context(args.coordinator_id, args.now)
     try:
-        result = run_once(args.state_root, args.coordinator_id, args.run_id, context, args.now)
+        result = run_once(args.state_root, args.coordinator_id, args.run_id, context, args.now,
+                          execution_plan=execution_plan)
     except Exception as exc:  # noqa: BLE001 - write CLI still emits one machine-readable result
-        print(json.dumps({"error": True, "code": getattr(exc, "code", type(exc).__name__),
-                          "message": getattr(exc, "message", str(exc))}, sort_keys=True))
-        return 1
+        return _emit_error(exc)
     print(json.dumps(result, sort_keys=True))
     reconciliation = result.get("reconciliation") or {}
     # Compatibility for injected/unit callers that predate P5D. A real
