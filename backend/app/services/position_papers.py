@@ -213,6 +213,107 @@ TONGUES_CONTRAST_COMMUNION = (
     "supernatural gift of speaking in an unlearned tongue."
 )
 
+# deliverance_and_spiritual_warfare — calibrated 2026-08-13 (6 positives
+# spanning definition, personal application, and authority; contrasts:
+# gifts catalog + divine healing + salvation security + the shared standing
+# debates + GENERIC_CHRISTIAN_LIFE_CONTRAST below). Two real bugs found and
+# fixed during calibration, not just noise:
+#   1. First pass had 3 of 6 positives losing margin to a divine-healing
+#      contrast anchor that itself named "demonic oppression" as what it
+#      was NOT -- an own-goal: negating a topic in prose does not make an
+#      embedding model treat it as distant, it just picks up the shared
+#      vocabulary. Fixed by rewriting that contrast to describe divine
+#      healing purely in its own terms, no deliverance vocabulary at all.
+#   2. scripts/test_position_paper_routing.py's own pre-existing regression
+#      suite (built for baptism/tongues, run unchanged against the widened
+#      4-pillar registry) caught a real regression this pillar's own
+#      calibration never tested: "Can a believer lose their salvation?"
+#      wrongly qualified for this pillar (no salvation-security contrast
+#      existed here the way BAPTISM_CONTRAST_SALVATION already protects
+#      baptism). A first fix (a dedicated salvation-security contrast
+#      anchor) closed that but broke "Can a genuine Christian have a
+#      demon?" -- both questions share the same "can a true/genuine
+#      believer experience negative spiritual state X" structural framing,
+#      which cosine similarity picks up on independent of topical content
+#      no matter how the contrast is worded. Fixed on the POSITIVE side
+#      instead: the description below now explicitly states the paper's
+#      own "genuine believer cannot be possessed, can be oppressed"
+#      distinction, raising this question's own pos_sim rather than
+#      fighting it via the contrast. Verified against all 8 positive/
+#      negative cases together, plus the full existing test suite.
+DELIVERANCE_ANCHOR_TITLE = "Deliverance and Spiritual Warfare"
+DELIVERANCE_ANCHOR_DESCRIPTION = (
+    "Spiritual warfare is the ongoing conflict every believer is already "
+    "in against demonic rulers and authorities; deliverance is the "
+    "specific ministry inside that larger war of freeing a person from "
+    "a demonic spirit's grip on some part of their life. A genuine "
+    "believer cannot be possessed, but can genuinely be oppressed or "
+    "demonized in a specific area, freed through the authority believers "
+    "already have in Jesus' name."
+)
+DELIVERANCE_CONTRAST_GIFTS_GENERAL = (
+    "Spiritual gifts of 1 Corinthians 12 as their own catalog and topic "
+    "— word of wisdom, word of knowledge, faith, gifts of healing, "
+    "working of miracles, prophecy, tongues, and interpretation of "
+    "tongues — as a topic of spiritual gifts generally, not deliverance "
+    "or spiritual warfare specifically."
+)
+DELIVERANCE_CONTRAST_HEALING = (
+    "Divine healing as God restoring a sick or injured body by His own "
+    "power, flowing from His character as healer and from what Christ "
+    "accomplished on the cross — physical sickness and disease "
+    "specifically, and the means by which healing comes."
+)
+DELIVERANCE_CONTRAST_SALVATION = (
+    "Eternal security in salvation, and whether a truly saved person "
+    "can become unsaved — a soteriology question about salvation's "
+    "permanence, unrelated to demons or spiritual warfare."
+)
+# Set below the weakest genuine positive (0.2680, "Is it safe to try to
+# cast a demon out myself?") — MIN_QUALIFY_MARGIN is the real discriminator
+# for this pillar, not the absolute floor; see GENERIC_CHRISTIAN_LIFE_CONTRAST
+# immediately below for why a low absolute threshold is still safe here.
+DELIVERANCE_MATCH_THRESHOLD = 0.25
+
+# GENERIC_CHRISTIAN_LIFE_CONTRAST — found live 2026-08-13 calibrating the
+# deliverance/prosperity pair (present, untested, in baptism/tongues too —
+# NOT retrofitted onto those two live pillars this pass, deliberately out
+# of scope for this change; carried forward for the next pillar round). A
+# vague question like "How do I grow closer to God in my daily walk?" has
+# low pos_sim against every real pillar (0.22-0.35) but an even lower
+# contrast_sim when nothing in the contrast set addresses generic Christian
+# life at all — so MIN_QUALIFY_MARGIN's tiny 0.008 floor lets it through by
+# default. This anchor gives generic-life questions somewhere to lose to
+# instead.
+GENERIC_CHRISTIAN_LIFE_CONTRAST = (
+    "Ordinary, general questions about the Christian life, spiritual "
+    "growth, prayer, or knowing God more deeply that are not specifically "
+    "about this topic's own distinct subject matter — generic discipleship "
+    "and spiritual formation considered broadly."
+)
+
+# prosperity_and_faith_teaching — calibrated 2026-08-13 (6 positives, clean
+# on first pass — no own-goal contrast issue, no thin margins; worst margin
+# +0.0603, best-separated of the pillars calibrated this session).
+PROSPERITY_ANCHOR_TITLE = "Prosperity and Faith Teaching"
+PROSPERITY_ANCHOR_DESCRIPTION = (
+    "God is not indifferent to a believer's material needs and provides "
+    "for His people out of His own character as a good Father, and "
+    "generous giving is a normal expression of trust in Him as provider "
+    "— though exactly how much material increase this should lead a "
+    "believer to expect is a genuine, unresolved disagreement among "
+    "named teachers that is not adjudicated here."
+)
+PROSPERITY_CONTRAST_GIFTS = (
+    "Spiritual gifts of 1 Corinthians 12 as their own catalog and topic, "
+    "including the gift of faith specifically, as a topic of supernatural "
+    "enablement rather than material provision or finances."
+)
+# Midpoint between the lowest genuine positive (0.4198) and the highest
+# problematic negative (0.3514) — same derivation method as
+# BAPTISM_MATCH_THRESHOLD / TONGUES_MATCH_THRESHOLD.
+PROSPERITY_MATCH_THRESHOLD = 0.3856
+
 # ── Standing debate-topic contrasts — SHARED across every pillar, current
 # and future (Alex's ruling, 2026-08-01, pulled forward from Phase 1 items
 # 1.5-1.7 per the Phase 0 report; eschatological timing added 2026-08-05):
@@ -310,6 +411,24 @@ PILLARS = [
         "match_threshold": TONGUES_MATCH_THRESHOLD,
         "voice_topic_name": "speaking in tongues",
         "tie_break_priority": 1,
+    },
+    {
+        "pillar_key": "deliverance_and_spiritual_warfare",
+        "document_id": "fe8c8381-6438-4ad8-9eaa-5ce581f6071b",
+        "positive_anchors": [DELIVERANCE_ANCHOR_TITLE, DELIVERANCE_ANCHOR_DESCRIPTION],
+        "contrast_anchors": [DELIVERANCE_CONTRAST_GIFTS_GENERAL, DELIVERANCE_CONTRAST_HEALING, DELIVERANCE_CONTRAST_SALVATION, GENERIC_CHRISTIAN_LIFE_CONTRAST],
+        "match_threshold": DELIVERANCE_MATCH_THRESHOLD,
+        "voice_topic_name": "deliverance and spiritual warfare",
+        "tie_break_priority": 2,
+    },
+    {
+        "pillar_key": "prosperity_and_faith_teaching",
+        "document_id": "4545e31f-e728-43e8-8030-b030337d92fa",
+        "positive_anchors": [PROSPERITY_ANCHOR_TITLE, PROSPERITY_ANCHOR_DESCRIPTION],
+        "contrast_anchors": [PROSPERITY_CONTRAST_GIFTS, GENERIC_CHRISTIAN_LIFE_CONTRAST],
+        "match_threshold": PROSPERITY_MATCH_THRESHOLD,
+        "voice_topic_name": "prosperity and faith teaching",
+        "tie_break_priority": 3,
     },
 ]
 
