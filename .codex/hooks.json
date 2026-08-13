@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/guard_pretooluse.py'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/guard_pretooluse.py'"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/guard_pretooluse.py'"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "executor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/deterministic_gate.py'"
+          }
+        ]
+      }
+    ]
+  }
+}
