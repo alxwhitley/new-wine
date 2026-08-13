@@ -9,10 +9,15 @@
 product while approved corpus production runs concurrently.
 
 **Architecture:** a resumable coordinator dispatches bounded, isolated packets
-to Claude Code, Kimi through OpenCode Go, and Grok. Claude Opus 5 is the sole
-judgment/integration layer; Kimi is the primary worker, Claude Sonnet 5 is its
-confirmed-exhaustion fallback, and Grok handles bounded research and mechanical
-verification.
+to Claude Code, Kimi through OpenCode Go, and Grok. Claude Opus 5 remains the
+default judgment/integration layer; Claude Sonnet 5 is the default reviewer/
+verdict-issuer for harness/repo-only build work Grok performs (Opus stays
+available if Alex routes a packet there). Kimi is the primary worker, Claude
+Sonnet 5 is its confirmed-exhaustion fallback, and Grok may also build
+repo-only harness work — a budget-driven swap, not a capability upgrade.
+Grok's hard restriction is unchanged: no theological content, no answer-
+accuracy path, no production database writes, no doctrinal or licensing
+judgment, ever. Outside that lane Grok remains read-only.
 
 **Tech stack:** existing Rhemata application and scripts, Git worktrees, Claude
 Code subscription CLI, OpenCode Go subscription CLI, Grok subscription CLI,
@@ -87,15 +92,26 @@ October 2026 that Alex wants to use as the launch venue.
 
 | Claude Code | Kimi via OpenCode Go | Grok |
 |---|---|---|
-| **Claude Opus 5 is the judgment layer.** It plans packets, approves parallelism, reviews evidence, resolves conflicts, and returns `ACCEPT`, `REVISE`, `QUARANTINE`, or `HUMAN_REQUIRED`. Claude Sonnet 5 becomes a worker only after confirmed Kimi exhaustion or for a packet explicitly reserved for Claude. | **Primary implementation worker.** It processes eligible build packets through the pinned OpenCode Go Kimi model until confirmed allowance exhaustion. It never makes final architectural, theological, licensing, production-write, or launch judgments. | **Third implementation worker, on equal footing with Kimi and Sonnet for eligible build packets** — plus its existing role: inventories, read-only diagnostics, test/log analysis, cross-checks, and other mechanical work with objective outputs. It never makes final architectural, theological, licensing, production-write, or launch judgments — same as Kimi and Sonnet. |
+| **Claude Opus 5 is the default judgment layer.** It plans packets, approves parallelism, reviews evidence, resolves conflicts, and returns `ACCEPT`, `REVISE`, `QUARANTINE`, or `HUMAN_REQUIRED`. Claude Sonnet 5 is the default reviewer/verdict-issuer for harness/repo-only build work Grok performs (same four verdicts, same ACCEPT-requires-evidence contract); Opus remains available if Alex routes a packet there. Claude Sonnet 5 also becomes a worker after confirmed Kimi exhaustion or for a packet explicitly reserved for Claude. | **Primary implementation worker.** It processes eligible build packets through the pinned OpenCode Go Kimi model until confirmed allowance exhaustion. It never makes final architectural, theological, licensing, production-write, or launch judgments. | **Second permitted builder for repo-only harness work** (remaining O-series items and any future Session-Routing "Repo-only multi-step build"), alongside Claude Code — a budget-driven swap, not a capability upgrade — plus its existing role: inventories, read-only diagnostics, test/log analysis, cross-checks, and other mechanical work with objective outputs. Outside that lane Grok remains read-only. Hard restriction unchanged: no theological content, no answer-accuracy path, no production database writes, no doctrinal or licensing judgment, ever. It never makes final architectural, theological, licensing, production-write, or launch judgments — same as Kimi and Sonnet. |
 
-> **Settled 2026-08-13 — Grok promoted to a third implementation worker.**
-> Grok 4.6's 2026-08-12 release closed most of the capability gap with Kimi
-> and Sonnet on agentic coding benchmarks. This is a role-table change only:
-> Opus remains the sole judgment/integration layer, every packet Grok
-> produces still requires Opus review and an `ACCEPT`/`REVISE`/`QUARANTINE`/
-> `HUMAN_REQUIRED` verdict before it counts as complete, and the
-> judgment/review structure and packet contract are otherwise unchanged.
+> **Settled 2026-08-13 — Grok promoted to a third implementation worker;
+> reviewer for Grok-built harness work is Sonnet.** Grok 4.6's 2026-08-12
+> release closed most of the capability gap with Kimi and Sonnet on agentic
+> coding benchmarks. This is a budget-driven role-table change, not a
+> capability upgrade: Grok may now build repo-only harness work (O-series
+> remaining items — coordinator run loop, safety fence — and any future
+> Session-Routing "Repo-only multi-step build") alongside Claude Code.
+> Sonnet (not Opus) is the default reviewer/verdict-issuer for harness work
+> Grok performs — same review contract already documented for Opus (no
+> `ACCEPT` without recorded acceptance evidence; a verdict is required
+> before any worker result is complete). Opus remains available for review
+> on anything Alex routes to it, and remains the reviewer of record for all
+> existing completed O1–O4 work; this does not retroactively change any past
+> verdict. Grok's hard restriction is unchanged: no theological content, no
+> answer-accuracy path, no production database writes, no doctrinal or
+> licensing judgment, ever. Outside the harness/repo-only build lane Grok
+> remains read-only (inventories, diagnostics, test/log analysis,
+> mechanical verification).
 
 ### Worker fallback
 
@@ -126,8 +142,10 @@ Kimi worker
   choices, and unresolved product decisions are never parallelized implicitly.
 - Parallel workers use isolated worktrees. No worker edits the user's current
   dirty worktree.
-- Only Opus may accept a packet for integration. Command success alone never
-  means completion.
+- Only the assigned reviewer may accept a packet for integration: Opus by
+  default; Sonnet for harness/repo-only build work Grok performs. Opus
+  remains available if Alex routes a packet there. Command success alone
+  never means completion.
 
 ### Required packet contract
 
@@ -153,8 +171,8 @@ BLOCKED → READY → RUNNING → REVIEW → ACCEPTED
 ```
 
 The durable journal records worker, provider/model, timestamps, attempts,
-changed files, commands, exit codes, test evidence, fallback reason, Opus
-verdict, and integration revision.
+changed files, commands, exit codes, test evidence, fallback reason,
+reviewer verdict, and integration revision.
 
 ---
 
@@ -246,7 +264,7 @@ routes to `HUMAN_REQUIRED`. O6 still owns concurrent multi-packet rehearsal.
 
 | Claude Code | Kimi via OpenCode Go | Grok |
 |---|---|---|
-| Opus sets packet risk classes and permitted autonomy for each class. | Implement turn, time, retry, output-size, and queue-wide limits. | Verify stop behavior and that logs contain no credential values or prompt payloads that should remain private. |
+| Sonnet is the default reviewer/verdict-issuer for any remaining Grok-built O5-class work (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes a packet there. The existing O5 ACCEPT stays an Opus verdict of record and is not retroactively reassigned. | Implement turn, time, retry, output-size, and queue-wide limits. Remaining repo-only implementation may also go to Grok. | May now *build* remaining repo-only O5-class work (including the coordinator run loop and safety fence), not only verify stop behavior. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
 
 **Built, reviewed, NOT yet merged — 2026-08-13.** All 5 tasks (execution-plan
 binding, budget/routing decisions, invocation limits + graceful stop,
@@ -284,7 +302,7 @@ section stays the working record, not a DONE line.
 
 | Claude Code | Kimi via OpenCode Go | Grok |
 |---|---|---|
-| Opus runs the final review and issues the harness readiness verdict. | Complete a disposable multi-packet repo-only rehearsal including a simulated Kimi→Sonnet handoff. | Independently reconcile journal state, changed files, tests, failure classifications, and morning report totals. |
+| Sonnet is the default reviewer/verdict-issuer for any O6 work Grok builds (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes the readiness verdict there, and remains the reviewer of record for completed O1–O4 work. | Complete a disposable multi-packet repo-only rehearsal including a simulated Kimi→Sonnet handoff. | May now *build* remaining repo-only O6 work (rehearsal implementation, coordinator run loop, safety fence) as well as independently reconcile journal state, changed files, tests, failure classifications, and morning report totals. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
 
 **Exit criteria:**
 
@@ -611,7 +629,13 @@ These require a fresh specification and do not authorize construction:
     for generation leakage checks.
 14. Mechanical workers never receive theological, answer-path, licensing,
     production-write, or failure-mode judgment authority.
-15. No worker result is complete until Opus records a verdict with evidence.
+    This includes Grok after the 2026-08-13 builder promotion — that change
+    did not grant Grok any of these judgments.
+15. No worker result is complete until the assigned reviewer records a
+    verdict with evidence. Opus is the reviewer of record by default and
+    for all completed O1–O4 work. Sonnet is the default reviewer for
+    harness/repo-only build work Grok performs. Same contract either way:
+    no ACCEPT without recorded acceptance evidence.
 16. Destructive filesystem/Git actions, pushes, deploys, migrations, production
     writes, doctrinal content, and material scope changes require Alex.
 
@@ -756,5 +780,7 @@ to prevent it from being mistaken for routine extraction.
 
 *v7.0 makes the ingestion-ready benchmark the boundary between foundation work
 and continuous corpus production, adds explicit Claude/Kimi/Grok parallel lanes,
-pins Opus 5 as judgment authority, defines Kimi→Sonnet fallback, and places all
+defines Kimi→Sonnet fallback (Sonnet is also the default reviewer for
+Grok-built harness/repo-only work; Opus remains default judgment elsewhere
+and the reviewer of record for completed O1–O4 work), and places all
 extraction and ingestion work after the build plan.*

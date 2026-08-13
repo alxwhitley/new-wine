@@ -459,9 +459,26 @@ not before, and not by default.
 |---|---|---|---|---|---|
 | **Database write** | Any Bash-run script, migration apply, or SQL statement performs INSERT/UPDATE/DELETE/ALTER/schema DDL against Supabase — including via `psycopg2` or the SQL Editor. | **Plain script.** Never harness. | N/A — harness not used | N/A — harness not used | Hard rule above. |
 | **Read-only diagnostic / audit** | Zero `Edit`/`Write` calls, zero DB mutation — SELECT-only queries, file reads, greps, read-only script runs. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | No build-then-judge loop needed for a single read-only pass; harness review overhead buys nothing here. |
-| **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or multiple ordered steps (new feature, new script plus its own verification, a refactor) — zero DB writes anywhere in the session. | **Harness** (`executor`/`planner-reviewer`). | `HARNESS.md` (always, for harness sessions); `ARCHITECTURE.md` (near-universal for build work); `PRODUCT.md` + `DESIGN.md` only if the task touches UI; `POSITIONING.md` only if it touches copy. | `PRODUCT.md`/`DESIGN.md`/`POSITIONING.md` unless the task's own surface requires them. | This is what the harness exists for — multi-step work that benefits from a planning/review split. |
+| **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or multiple ordered steps (new feature, new script plus its own verification, a refactor) — zero DB writes anywhere in the session. | **Harness** (`executor`/`planner-reviewer`). Permitted builders: Claude Code or Grok. Default reviewer for Grok-built work: Sonnet (Opus remains available). | `HARNESS.md` (always, for harness sessions); `ARCHITECTURE.md` (near-universal for build work); `PRODUCT.md` + `DESIGN.md` only if the task touches UI; `POSITIONING.md` only if it touches copy. | `PRODUCT.md`/`DESIGN.md`/`POSITIONING.md` unless the task's own surface requires them. | This is what the harness exists for — multi-step work that benefits from a planning/review split. |
 | **Repo-only single-script / trivial edit** | A single mechanical edit or one-shot script, no multi-step build sequence — zero DB writes anywhere in the session. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | A planning/review loop is overhead a one-shot change doesn't need. |
 | **Docs/records-only** | Task's only output is a change to `CLAUDE.md` / `PLAN.md` / `POSITIONING.md` / `DESIGN.md` / `rhemata-status.md`. | **Plain — chat proposes, terminal commits**, per the Project Knowledge Read Contract's propose→commit rule. | N/A — harness not used | N/A — harness not used | Structurally enforced, not just preferred: `guard_pretooluse.py` denies `Edit`/`Write` on all five governed files for any subagent — the harness physically cannot do this work. |
+
+**Harness builders and reviewers (settled 2026-08-13) — budget-driven swap,
+not a capability upgrade.** For this row — the remaining O-series items
+(coordinator run loop, safety fence) and any future repo-only multi-step
+harness build — Grok is a second permitted builder alongside Claude Code.
+Grok's existing hard restriction is unchanged and is restated here so it
+is not silently dropped: no theological content, no answer-accuracy path,
+no production database writes, no doctrinal or licensing judgment, ever.
+Outside this harness/repo-only build lane Grok remains read-only
+(inventories, diagnostics, test/log analysis, mechanical verification).
+Sonnet (not Opus) is the default reviewer and verdict-issuer for harness
+build work Grok performs — same review contract already documented for
+Opus (no `ACCEPT` without recorded acceptance evidence; a verdict is
+required before any worker result is complete). Opus remains available
+for review on anything Alex routes to it, and remains the reviewer of
+record for all existing completed O1–O4 work; this does not retroactively
+change any past verdict.
 
 **Stall-risk mitigation for harness sessions (repo-only multi-step build
 row):** if a harness session shows the same flagged-item count across ≥3

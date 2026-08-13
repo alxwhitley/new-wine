@@ -53,18 +53,31 @@ migration or runs a production ingest/backfill/write. Those actions use a
 separately authorized plain-script session. This is a task-class boundary, not
 a script-name freeze.
 
-**Judgment authority: Claude Opus 5.** Opus plans bounded packets and returns
-exactly one of `ACCEPT`, `REVISE`, `QUARANTINE`, or `HUMAN_REQUIRED`. Worker
-command success is not acceptance. If Opus performs implementation itself, a
-separate Opus review session or Alex must judge it.
+**Judgment authority.** Opus is the default judgment/integration layer and
+plans bounded packets. Sonnet is the default reviewer and verdict-issuer for
+harness/repo-only build work Grok performs. Either assigned reviewer returns
+exactly one of `ACCEPT`, `REVISE`, `QUARANTINE`, or `HUMAN_REQUIRED`. Same
+contract either way: no `ACCEPT` without recorded acceptance evidence; a
+verdict is required before any worker result is complete. Worker command
+success is not acceptance. Opus remains available if Alex routes a packet
+there, and remains the reviewer of record for all existing completed O1–O4
+work — this does not retroactively change any past verdict. If Opus performs
+implementation itself, a separate Opus review session or Alex must judge it.
 
 **Worker routing.** Kimi through OpenCode Go is the primary implementation
 worker for eligible packets. Confirmed provider quota/rate-limit exhaustion
 checkpoints and requeues an eligible packet to Claude Sonnet 5. Ordinary test,
-code, permission, or output failures do not trigger fallback. Grok handles
-bounded research, inventories, log/test analysis, and mechanical verification;
-it has no architectural, theological, licensing, production-write, or launch
-judgment authority.
+code, permission, or output failures do not trigger fallback. Grok is a
+second permitted builder, alongside Claude Code, for repo-only harness work
+(remaining O-series items — coordinator run loop, safety fence — and any
+future repo-only multi-step harness build). This is a budget-driven swap,
+not a capability upgrade. Grok also still handles bounded research,
+inventories, log/test analysis, and mechanical verification. Grok's hard
+restriction is unchanged: no theological content, no answer-accuracy path,
+no production database writes, no doctrinal or licensing judgment, ever.
+Outside the harness/repo-only build lane Grok remains read-only. It has no
+architectural, theological, licensing, production-write, or launch judgment
+authority.
 
 **Isolation and ownership.** Every write-capable packet names an isolated
 worktree and writable file allowlist. Parallel packets require disjoint file
