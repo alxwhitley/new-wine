@@ -2396,6 +2396,7 @@ class TestO3RuntimeSchemaParity(unittest.TestCase):
                 "sum_of_by_state": 0, "packets_array_length": 0, "distinct_packet_ids": 0,
                 "equals_inventory_total": True, "all_invariants_passed": True,
             },
+            "plan_totals": None, "attempted_packet_ids": None, "all_invariants_passed": True,
             "content_sha256": "", "report_sha256": "",
         }
         report["content_sha256"] = compute_sha256(canonical_bytes(
@@ -2439,6 +2440,8 @@ class TestO3RuntimeSchemaParity(unittest.TestCase):
             "reassignment_used": False, "open_attempt": None, "last_event_seq": 1, "last_event_sha256": "0" * 64,
             "quarantine_reason": None, "human_required_reasons": [], "blocked_on": [], "attention_codes": [],
             "retry_limit": 2,
+            "budget_usage": None, "disposition": None, "stop_reasons": [], "route_history": [],
+            "provider_backoff_state": None, "plan_id": None, "capability_class": None, "plan_sha256": None,
         }
         self.assertEqual(set(valid_row.keys()), schema_row_props, "sanity: this test's own fixture must start aligned with the schema")
 
@@ -2464,6 +2467,7 @@ class TestO3RuntimeSchemaParity(unittest.TestCase):
                     "sum_of_by_state": 1, "packets_array_length": 1, "distinct_packet_ids": 1,
                     "equals_inventory_total": True, "all_invariants_passed": True,
                 },
+                "plan_totals": None, "attempted_packet_ids": None, "all_invariants_passed": True,
                 "content_sha256": "", "report_sha256": "",
             }
             report["content_sha256"] = compute_sha256(canonical_bytes(

@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+from test_o5_execution_plan import _valid_plan
 
 
 def _packet(packet_id, dependencies=None):
@@ -555,11 +556,17 @@ def test_run_cli_derives_trusted_context_locally_not_from_argv(tmp_path, monkeyp
     captured = {}
     local = {"hostname": "local-host", "boot_id": "local-boot", "pid": 42, "coordinator_id": "coord-1", "live_coordinator_ids": {"coord-1"}, "now": "2026-08-10T00:00:00Z"}
     monkeypatch.setattr(cli, "derive_local_process_context", lambda coordinator_id, now: local)
-    def fake_run_once(*args):
+    def fake_run_once(*args, **kwargs):
         captured["context"] = args[3]
         return {"status": "no_eligible_work", "packet_id": None}
     monkeypatch.setattr(cli, "run_once", fake_run_once)
-    assert cli.main(["--once", "--state-root", str(tmp_path), "--coordinator-id", "coord-1", "--run-id", "run-1", "--now", "2026-08-10T00:00:00Z"]) == 0
+    # main() authenticates the plan itself before ever reaching the mocked
+    # run_once -- plan CONTENT doesn't matter for this test's purpose, but a
+    # real, valid, on-disk plan is required for the call to get past
+    # argument-parsing/plan-validation at all.
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_bytes(canonical_bytes(_valid_plan()))
+    assert cli.main(["--once", "--state-root", str(tmp_path), "--coordinator-id", "coord-1", "--run-id", "run-1", "--now", "2026-08-10T00:00:00Z", "--execution-plan-path", str(plan_path)]) == 0
     assert captured["context"] is local
 
 

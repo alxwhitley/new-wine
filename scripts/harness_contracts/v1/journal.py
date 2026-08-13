@@ -7,6 +7,12 @@ from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.claim import CLAIM_CLASSIFICATIONS
 from harness_contracts.v1.classification import ATTEMPT_CLASSES
 from harness_contracts.v1.errors import PHASE_RANK, error, invalid_result, sort_errors, valid_result
+# ``execution_plan`` imports only canonical/packet at module scope (its own
+# journal import is function-local, inside ``bind_execution_plan``), so this
+# direction is acyclic.  Importing the class vocabulary keeps one definition
+# of the capability classes rather than a second hand-kept copy here.
+from harness_contracts.v1.execution_plan import CAPABILITY_CLASSES
+from harness_contracts.v1.provider_evidence import CAPACITY_STATES, RE_MODEL_ID
 from harness_contracts.v1.packet import (
     LANES,
     PACKET_STATES,
@@ -38,6 +44,109 @@ JOURNAL_EVENT_TYPES = {
     "WORKSPACE_BASELINE_RECORDED",
     "WORKSPACE_POSTFLIGHT_RECORDED",
     "INTEGRATION_MANIFEST_RECORDED",
+    "EXECUTION_PLAN_BOUND",
+    "PROVIDER_CAPACITY_RECORDED",
+    "PROVIDER_BACKOFF_SCHEDULED",
+    "MODEL_FALLBACK_SELECTED",
+    "PACKET_PAUSED",
+    "GRACEFUL_STOP_REQUESTED",
+    "GRACEFUL_STOP_EFFECTIVE",
+}
+
+# A graceful run stop is a decision about the whole run, not about one packet:
+# the active attempt may finish, but no later packet may be claimed.
+GRACEFUL_STOP_EVENT_TYPES = {
+    "GRACEFUL_STOP_REQUESTED",
+    "GRACEFUL_STOP_EFFECTIVE",
+}
+
+# O5 stop-reason vocabulary, from the approved design's stable families.  It
+# is closed: an unknown reason code fails validation here and in the JSON
+# Schema, so no ad hoc reason string can reach a durable event.
+BUDGET_REASON_CODES = {
+    # PACKET_BUDGET_* -- plan limits, derived from the journal before a claim.
+    "PACKET_BUDGET_ATTEMPTS_EXHAUSTED",
+    "PACKET_BUDGET_RETRIES_EXHAUSTED",
+    "PACKET_BUDGET_REVISIONS_EXHAUSTED",
+    # PROVIDER_ALLOWANCE_* -- observed subscription capacity, never spend.
+    "PROVIDER_ALLOWANCE_EXHAUSTED",
+    "PROVIDER_ALLOWANCE_UNAVAILABLE",
+    "PROVIDER_ALLOWANCE_RESET_PENDING",
+    # PROVIDER_BACKOFF_* -- the plan's bounded, finite retry schedule.
+    "PROVIDER_BACKOFF_PENDING",
+    "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+    # Immediate process-safety limits.  These terminate a process group; see
+    # IMMEDIATE_STOP_REASON_CODES below for why they are never graceful.
+    "COMMAND_TIMEOUT",
+    "OUTPUT_LIMIT_EXCEEDED",
+    # The plan's run-level wall-clock backstop against an abandoned run.
+    "QUEUE_SAFETY_CEILING_REACHED",
+    # MODEL_ROUTE_* -- plan-pinned routing outcomes and refusals.
+    "MODEL_ROUTE_SELECTED",
+    "MODEL_ROUTE_FALLBACK_SELECTED",
+    "MODEL_ROUTE_DISABLED",
+    "MODEL_ROUTE_UNQUALIFIED",
+    "MODEL_ROUTE_NOT_IN_PLAN",
+    "MODEL_ROUTE_CROSS_CLASS_FALLBACK",
+    "MODEL_ROUTE_FALLBACK_CYCLE",
+    "MODEL_ROUTE_REVIEWER_IDENTITY_CONFLICT",
+    # Terminal families shared with the wider stop vocabulary.
+    "NO_CAPABLE_MODEL_AVAILABLE",
+    "HUMAN_AUTHORITY_REQUIRED",
+    "BUDGET_EVIDENCE_INVALID",
+    "PLAN_SCOPE_PACKET_OUTSIDE_PLAN",
+    "PLAN_SCOPE_PACKET_DIGEST_MISMATCH",
+}
+
+# Immediate process-safety limits terminate the worker's process group
+# because letting it finish would defeat the safety boundary.  They are NOT
+# graceful plan stops, and the two vocabularies below are disjoint on purpose:
+# a timeout or an output flood structurally cannot be recorded as a graceful
+# run stop, so no caller can quietly relabel a containment failure as an
+# orderly end to the plan.
+IMMEDIATE_STOP_REASON_CODES = {
+    "COMMAND_TIMEOUT",
+    "OUTPUT_LIMIT_EXCEEDED",
+}
+
+# The reason codes a capacity-family payload may carry -- PACKET_PAUSED,
+# PROVIDER_BACKOFF_SCHEDULED, MODEL_FALLBACK_SELECTED.  The immediate codes
+# are SUBTRACTED for the same reason the graceful vocabulary excludes them,
+# one surface over: those three events describe a bounded, resumable capacity
+# condition, and a reconciliation that partitions PACKET_PAUSED as a capacity
+# pause would silently count a containment failure as capacity if a timeout
+# or an output flood could ride on one.
+CAPACITY_EVENT_REASON_CODES = BUDGET_REASON_CODES - IMMEDIATE_STOP_REASON_CODES
+
+# The only reason codes a graceful stop event may carry: the plan's
+# wall-clock backstop and authenticated provider-capacity exhaustion.
+GRACEFUL_STOP_REASON_CODES = {
+    "QUEUE_SAFETY_CEILING_REACHED",
+    "PROVIDER_ALLOWANCE_EXHAUSTED",
+    "PROVIDER_ALLOWANCE_UNAVAILABLE",
+    "PROVIDER_ALLOWANCE_RESET_PENDING",
+    "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+}
+
+# Each O5 budget event carries exactly one closed payload object, under its
+# own payload key.  Every other event type must leave that key null/absent.
+BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE = {
+    "PROVIDER_CAPACITY_RECORDED": "provider_capacity",
+    "PROVIDER_BACKOFF_SCHEDULED": "provider_backoff",
+    "MODEL_FALLBACK_SELECTED": "model_fallback",
+    "PACKET_PAUSED": "packet_pause",
+    "GRACEFUL_STOP_REQUESTED": "graceful_stop_request",
+    "GRACEFUL_STOP_EFFECTIVE": "graceful_stop_effective",
+}
+
+BUDGET_PAYLOAD_KEYS = frozenset(BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE.values())
+
+# Provider capacity and its backoff schedule are provider-scoped facts, not
+# packet-scoped ones; fallback selection and pause are decisions about one
+# packet and carry its id.
+PROVIDER_SCOPED_EVENT_TYPES = {
+    "PROVIDER_CAPACITY_RECORDED",
+    "PROVIDER_BACKOFF_SCHEDULED",
 }
 
 TRANSITION_CAUSES = {
@@ -124,6 +233,13 @@ CAUSES_BY_EVENT_TYPE: Dict[str, Set[str]] = {
     "WORKSPACE_BASELINE_RECORDED": {"none"},
     "WORKSPACE_POSTFLIGHT_RECORDED": {"none"},
     "INTEGRATION_MANIFEST_RECORDED": {"none"},
+    "EXECUTION_PLAN_BOUND": {"none"},
+    "PROVIDER_CAPACITY_RECORDED": {"none"},
+    "PROVIDER_BACKOFF_SCHEDULED": {"none"},
+    "MODEL_FALLBACK_SELECTED": {"none"},
+    "PACKET_PAUSED": {"none"},
+    "GRACEFUL_STOP_REQUESTED": {"none"},
+    "GRACEFUL_STOP_EFFECTIVE": {"none"},
 }
 
 # Payload sub-objects that must be non-null for each event type.
@@ -143,6 +259,13 @@ PAYLOAD_NON_NULL_BY_TYPE: Dict[str, Set[str]] = {
     "WORKSPACE_BASELINE_RECORDED": set(),
     "WORKSPACE_POSTFLIGHT_RECORDED": set(),
     "INTEGRATION_MANIFEST_RECORDED": set(),
+    "EXECUTION_PLAN_BOUND": {"execution_plan"},
+    "PROVIDER_CAPACITY_RECORDED": set(),
+    "PROVIDER_BACKOFF_SCHEDULED": set(),
+    "MODEL_FALLBACK_SELECTED": set(),
+    "PACKET_PAUSED": set(),
+    "GRACEFUL_STOP_REQUESTED": set(),
+    "GRACEFUL_STOP_EFFECTIVE": set(),
 }
 
 ARTIFACT_KINDS = {
@@ -337,7 +460,10 @@ def _validate_journal_event_object(
         v.add("EVIDENCE_HASH_MISMATCH", "/state_root_id", "state_root_id does not match manifest", phase="cross_field")
 
     packet_id = value.get("packet_id")
-    if event_type in {"RUN_STARTED", "RUN_ENDED", "JOURNAL_TAIL_TRUNCATED", "RECONCILIATION_EMITTED"}:
+    if event_type in ({"RUN_STARTED", "RUN_ENDED", "JOURNAL_TAIL_TRUNCATED",
+                       "RECONCILIATION_EMITTED", "EXECUTION_PLAN_BOUND"}
+                      | PROVIDER_SCOPED_EVENT_TYPES
+                      | GRACEFUL_STOP_EVENT_TYPES):
         if packet_id is not None:
             v.add("INVALID_VALUE", "/packet_id", f"{event_type} event must have packet_id null", phase="value")
     else:
@@ -469,8 +595,9 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         v.add("INVALID_TYPE", "/payload", "Expected object", phase="scalar")
         return
     required_keys = {"packet", "attempt", "artifacts", "classification", "transition_detail", "recovery", "run", "report"}
+    allowed_keys = required_keys | {"execution_plan"} | set(BUDGET_PAYLOAD_KEYS)
     for key in payload:
-        if key not in required_keys:
+        if key not in allowed_keys:
             v.add("UNKNOWN_FIELD", f"/payload/{key}", f"Unknown field '{key}'")
     for key in required_keys:
         if key not in payload:
@@ -492,6 +619,15 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         elif should_be_non_null and not is_non_null:
             v.add("MISSING_FIELD", f"/payload/{key}", f"{event_type} event requires {key} to be non-null", phase="unknown_missing")
 
+    execution_plan = payload.get("execution_plan")
+    if event_type == "EXECUTION_PLAN_BOUND":
+        if not isinstance(execution_plan, dict):
+            v.add("MISSING_FIELD", "/payload/execution_plan", "EXECUTION_PLAN_BOUND requires execution_plan to be non-null", phase="unknown_missing")
+    elif execution_plan is not None:
+        v.add("INVALID_VALUE", "/payload/execution_plan", f"{event_type} event must have execution_plan null or absent", phase="value")
+
+    _validate_budget_payloads(v, payload, event_type)
+
     if isinstance(payload.get("artifacts"), list):
         _validate_artifacts(v, payload["artifacts"], "/payload/artifacts")
 
@@ -509,6 +645,218 @@ def _validate_payload(v: _PacketValidator, payload: Any, event_type: str) -> Non
         _validate_payload_run(v, payload["run"], "/payload/run")
     if "report" in non_null and isinstance(payload.get("report"), dict):
         _validate_payload_report(v, payload["report"], "/payload/report")
+    if "execution_plan" in non_null and isinstance(payload.get("execution_plan"), dict):
+        _validate_payload_execution_plan(v, payload["execution_plan"], "/payload/execution_plan")
+
+
+def _validate_closed_payload(
+    v: _PacketValidator,
+    value: Any,
+    path: str,
+    spec: Dict[str, Any],
+) -> bool:
+    """Validate one closed payload object against an exact field spec.
+
+    ``spec`` maps every permitted key to a ``(v, value, path)`` checker.  Key
+    membership -- unknown keys, missing keys -- is decided here, once, so each
+    new closed payload declares its fields exactly once instead of re-spelling
+    the same membership loop.  Returns whether the per-field checks ran.
+    """
+    if not isinstance(value, dict):
+        v.add("INVALID_TYPE", path, "Expected object", phase="scalar")
+        return False
+    for key in value:
+        if key not in spec:
+            v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
+    for key in spec:
+        if key not in value:
+            v.add("MISSING_FIELD", f"{path}/{key}", f"Missing required field '{key}'")
+    if v.errors:
+        return False
+    for key in sorted(spec):
+        spec[key](v, value.get(key), f"{path}/{key}")
+    return True
+
+
+def _check_model_id(v: _PacketValidator, value: Any, path: str) -> bool:
+    if not _matches(value, RE_MODEL_ID):
+        v.add("INVALID_FORMAT", path, "Must be a canonical lowercase model identifier", phase="format")
+        return False
+    return True
+
+
+def _check_optional_rfc3339(v: _PacketValidator, value: Any, path: str) -> bool:
+    if value is None:
+        return True
+    return _check_rfc3339(v, value, path)
+
+
+def _check_enum_factory(allowed: Set[str], label: str):
+    def check(v: _PacketValidator, value: Any, path: str) -> bool:
+        return v.check_enum(value, allowed, path)
+
+    check.__name__ = "_check_" + label
+    return check
+
+
+# Deliberately NOT the whole of BUDGET_REASON_CODES: an immediate
+# process-safety code fails validation on a capacity-family payload rather
+# than being recorded as a bounded, resumable pause or backoff.
+_check_reason_code = _check_enum_factory(CAPACITY_EVENT_REASON_CODES, "reason_code")
+_check_capability_class = _check_enum_factory(CAPABILITY_CLASSES, "capability_class")
+_check_capacity_state = _check_enum_factory(CAPACITY_STATES, "capacity_state")
+# Deliberately NOT ``_check_reason_code``: a graceful stop accepts a strict
+# subset of the vocabulary, so an immediate process-safety code fails
+# validation here rather than being recorded as an orderly plan stop.
+_check_graceful_stop_reason_code = _check_enum_factory(
+    GRACEFUL_STOP_REASON_CODES, "graceful_stop_reason_code")
+
+
+def _check_harness_id(v: _PacketValidator, value: Any, path: str) -> bool:
+    if not is_harness_id(value):
+        v.add("INVALID_FORMAT", path, "Must be a safe harness identifier", phase="format")
+        return False
+    return True
+
+
+def _check_nonneg_int(v: _PacketValidator, value: Any, path: str) -> bool:
+    return _check_int(v, value, path, nonneg=True)
+
+
+def _check_evidence_id_list(v: _PacketValidator, value: Any, path: str) -> bool:
+    if not isinstance(value, list):
+        v.add("INVALID_TYPE", path, "Expected array", phase="scalar")
+        return False
+    seen: Set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or item.strip() == "":
+            v.add("INVALID_VALUE", f"{path}/{index}", "Evidence id must be a non-empty string", phase="value")
+        elif item in seen:
+            v.add("DUPLICATE_ID", f"{path}/{index}", "Duplicate evidence id", phase="uniqueness")
+        else:
+            seen.add(item)
+    if value != sorted(value, key=lambda item: item if isinstance(item, str) else ""):
+        v.add("INVALID_VALUE", path, "Evidence ids must be sorted for deterministic bytes", phase="value")
+    return True
+
+
+# One closed field spec per O5 budget payload.  Nothing here can hold raw
+# headers, credentials, response bodies, subscription identifiers, or prompt
+# content -- there is no key for any of them.
+BUDGET_PAYLOAD_SPECS: Dict[str, Dict[str, Any]] = {
+    "provider_capacity": {
+        "provider": _check_non_empty_string,
+        "model_id": _check_model_id,
+        "state": _check_capacity_state,
+        "observed_at": _check_rfc3339,
+        "reset_at": _check_optional_rfc3339,
+        "evidence_sha256": _check_sha256,
+    },
+    "provider_backoff": {
+        "provider": _check_non_empty_string,
+        "model_id": _check_model_id,
+        "reason_code": _check_reason_code,
+        "next_eligible_at": _check_rfc3339,
+        "retry_index": _check_nonneg_int,
+        "evidence_sha256": _check_sha256,
+    },
+    "model_fallback": {
+        "capability_class": _check_capability_class,
+        "from_route_id": _check_harness_id,
+        "to_route_id": _check_harness_id,
+        "provider": _check_non_empty_string,
+        "model_id": _check_model_id,
+        "reason_code": _check_reason_code,
+    },
+    "packet_pause": {
+        "reason_code": _check_reason_code,
+        "capability_class": _check_capability_class,
+        "next_eligible_at": _check_optional_rfc3339,
+        "evidence_ids": _check_evidence_id_list,
+    },
+    # Both graceful-stop payloads bind the stop to the plan whose ceiling or
+    # provider allowance produced it; the run identity comes from the event
+    # envelope.  There is no field for stdout, stderr, or any other command
+    # output, so a stop record cannot become a smuggling channel for it.
+    "graceful_stop_request": {
+        "plan_id": _check_harness_id,
+        "plan_sha256": _check_sha256,
+        "reason_code": _check_graceful_stop_reason_code,
+        "evidence_ids": _check_evidence_id_list,
+    },
+    "graceful_stop_effective": {
+        "plan_id": _check_harness_id,
+        "plan_sha256": _check_sha256,
+        "reason_code": _check_graceful_stop_reason_code,
+        # Names the request this stop completes, so a fold can never pair an
+        # effective stop with the wrong request.
+        "requested_event_id": _check_non_empty_string,
+        "evidence_ids": _check_evidence_id_list,
+    },
+}
+
+
+def _validate_budget_payloads(v: _PacketValidator, payload: Dict[str, Any], event_type: str) -> None:
+    """Bind each O5 budget payload key to exactly one event type."""
+    for source_type in sorted(BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE):
+        key = BUDGET_PAYLOAD_KEY_BY_EVENT_TYPE[source_type]
+        body = payload.get(key)
+        if event_type == source_type:
+            if body is None:
+                v.add(
+                    "MISSING_FIELD",
+                    f"/payload/{key}",
+                    f"{event_type} requires {key} to be non-null",
+                    phase="unknown_missing",
+                )
+                continue
+            _validate_closed_payload(v, body, f"/payload/{key}", BUDGET_PAYLOAD_SPECS[key])
+            if key == "provider_capacity" and isinstance(body, dict):
+                observed_at, reset_at = body.get("observed_at"), body.get("reset_at")
+                if (_matches(observed_at, RE_RFC3339) and _matches(reset_at, RE_RFC3339)
+                        and reset_at < observed_at):
+                    v.add(
+                        "CHRONOLOGY_VIOLATION",
+                        f"/payload/{key}/reset_at",
+                        "reset_at must not precede observed_at",
+                        phase="cross_field",
+                    )
+            if key == "model_fallback" and isinstance(body, dict):
+                if body.get("from_route_id") == body.get("to_route_id"):
+                    v.add(
+                        "INVALID_FALLBACK",
+                        f"/payload/{key}/to_route_id",
+                        "A fallback hop must differ from the route it replaces",
+                        phase="cross_field",
+                    )
+        elif body is not None:
+            v.add(
+                "INVALID_VALUE",
+                f"/payload/{key}",
+                f"{event_type} event must have {key} null or absent",
+                phase="value",
+            )
+
+
+def _validate_payload_execution_plan(v: _PacketValidator, binding: Dict[str, Any], path: str) -> None:
+    """Validate the O5 immutable plan-binding payload and nothing else."""
+    allowed = {"plan_id", "plan_sha256", "plan_path", "packet_count"}
+    for key in binding:
+        if key not in allowed:
+            v.add("UNKNOWN_FIELD", f"{path}/{key}", f"Unknown field '{key}'")
+    for key in allowed:
+        if key not in binding:
+            v.add("MISSING_FIELD", f"{path}/{key}", f"Missing required field '{key}'")
+    if v.errors:
+        return
+    if not is_harness_id(binding.get("plan_id")):
+        v.add("INVALID_FORMAT", f"{path}/plan_id", "plan_id must be a safe harness identifier", phase="format")
+    _check_sha256(v, binding.get("plan_sha256"), f"{path}/plan_sha256")
+    plan_path = binding.get("plan_path")
+    normalized = _check_repo_relative_path(v, plan_path, f"{path}/plan_path")
+    if normalized is not None and normalized != f"plans/{binding.get('plan_id')}.json":
+        v.add("INVALID_VALUE", f"{path}/plan_path", "plan_path must be the canonical plan artifact path", phase="value")
+    _check_int(v, binding.get("packet_count"), f"{path}/packet_count", positive=True)
 
 
 def _validate_artifacts(v: _PacketValidator, artifacts: List[Any], path: str) -> None:

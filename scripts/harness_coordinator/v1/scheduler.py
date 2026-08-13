@@ -31,11 +31,26 @@ def _is_eligible(
     packets: Dict[str, Dict[str, Any]],
     disabled: Set[str],
     now: str,
+    plan_members: Optional[Set[str]] = None,
 ) -> bool:
     """The single filter both ``select_next`` and ``eligible_packets``
     apply -- one predicate, not two independently-maintained copies, so a
     future edit cannot silently guard one entry point and not the other.
+
+    ``plan_members`` is ``None`` for an ungoverned (no-plan) selection,
+    which preserves every prior caller's behavior exactly.  When a plan IS
+    bound, it is the closed set of that plan's own member packet_ids: a
+    packet the fold still knows about (e.g. enrolled under an earlier run,
+    before this run's plan ever bound) but that is not itself a member of
+    THIS plan must never be selected -- not because it is ineligible for
+    some ordinary scheduling reason, but because it is out of scope for
+    this run entirely.  Selecting it would hand it to the pre-claim gate,
+    which has no plan row to evaluate it against; excluding it here, at the
+    one shared predicate, is the root-cause fix rather than a reactive
+    check further down the pipeline.
     """
+    if plan_members is not None and packet_id not in plan_members:
+        return False
     if pkt.get("state") != "READY":
         return False
     if pkt.get("terminal_seal_sha256") is not None:
@@ -72,10 +87,23 @@ def _is_eligible(
     return True
 
 
+def _plan_member_ids(plan: Optional[Dict[str, Any]]) -> Optional[Set[str]]:
+    """The closed set of a bound plan's own member packet_ids, or ``None``.
+
+    ``None`` (no plan supplied) means "no plan-scope restriction" -- the
+    exact prior, ungoverned behavior -- rather than an empty, universally-
+    excluding set.
+    """
+    if plan is None:
+        return None
+    return {row.get("packet_id") for row in plan.get("packets", [])}
+
+
 def select_next(
     packets: Dict[str, Dict[str, Any]],
     disabled_lanes: List[str],
     now: str,
+    plan: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """Return the packet_id of the next packet to run, or ``None``.
 
@@ -94,9 +122,15 @@ def select_next(
     ``.get()``, lookup on the min key) -- a fold-produced packet missing it
     is a structural impossibility upstream, and raising loudly here beats
     silently mis-ordering the schedule.
+
+    ``plan``, when supplied, scopes selection to that plan's own member
+    packets (see ``_is_eligible``'s ``plan_members`` docstring). Omitting it
+    preserves the exact ungoverned behavior every existing caller relies on.
     """
     disabled = set(disabled_lanes or [])
-    eligible = [pid for pid, pkt in packets.items() if _is_eligible(pid, pkt, packets, disabled, now)]
+    plan_members = _plan_member_ids(plan)
+    eligible = [pid for pid, pkt in packets.items()
+               if _is_eligible(pid, pkt, packets, disabled, now, plan_members)]
     if not eligible:
         return None
     return min(eligible, key=lambda pid: (packets[pid]["enqueue_seq"], pid))
@@ -106,14 +140,18 @@ def eligible_packets(
     packets: Dict[str, Dict[str, Any]],
     disabled_lanes: List[str],
     now: str,
+    plan: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     """Return every eligible packet_id, in selection order.
 
     A genuine wrapper around ``_is_eligible`` -- the same predicate
     ``select_next`` uses, not a second hand-maintained copy -- useful for
     the morning report and for tests that need to see the full eligible
-    set rather than just the head.
+    set rather than just the head. ``plan`` has the same meaning as in
+    ``select_next``.
     """
     disabled = set(disabled_lanes or [])
-    eligible = [pid for pid, pkt in packets.items() if _is_eligible(pid, pkt, packets, disabled, now)]
+    plan_members = _plan_member_ids(plan)
+    eligible = [pid for pid, pkt in packets.items()
+               if _is_eligible(pid, pkt, packets, disabled, now, plan_members)]
     return sorted(eligible, key=lambda pid: (packets[pid]["enqueue_seq"], pid))

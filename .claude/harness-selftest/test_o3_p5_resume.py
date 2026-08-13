@@ -6,6 +6,7 @@ import shutil
 import pytest
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+from test_o5_execution_plan import _valid_plan
 from harness_coordinator.v1.reassignment_runtime import (
     ReassignmentConflict,
     assert_preserved,
@@ -589,10 +590,18 @@ def test_once_fails_closed_when_real_result_omits_reconciliation(tmp_path, monke
     (tmp_path / "MANIFEST.json").write_text("{}")
     monkeypatch.setattr(run_cli, "derive_local_process_context", lambda *args: {})
     monkeypatch.setattr(run_cli, "run_once",
-                        lambda *args: {"status": "no_eligible_work", "packet_id": None})
+                        lambda *args, **kwargs: {"status": "no_eligible_work", "packet_id": None})
+    # main() authenticates the plan itself before ever reaching the mocked
+    # run_once -- a real, valid, on-disk plan is required for the call to
+    # get past argument-parsing/plan-validation and reach the mock, whose
+    # fake result (missing "reconciliation") is what this test checks
+    # triggers exit code 1.
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_bytes(canonical_bytes(_valid_plan()))
     assert run_cli.main(["--once", "--state-root", str(tmp_path),
                          "--coordinator-id", "coord-1", "--run-id", "run-1",
-                         "--now", "2026-08-11T13:00:00Z"]) == 1
+                         "--now", "2026-08-11T13:00:00Z",
+                         "--execution-plan-path", str(plan_path)]) == 1
 
 
 def test_status_corrupt_root_is_machine_readable_and_write_free(tmp_path, capsys):

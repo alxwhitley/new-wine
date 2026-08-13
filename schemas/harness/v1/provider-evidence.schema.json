@@ -175,6 +175,49 @@
         "NOT_EXHAUSTION"
       ]
     },
+    "capacity": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model_id",
+        "state",
+        "observed_at",
+        "reset_at",
+        "evidence_sha256"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "AVAILABLE",
+            "RATE_LIMITED",
+            "ALLOWANCE_EXHAUSTED",
+            "UNAVAILABLE"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "reset_at": {
+          "type": ["string", "null"],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "evidence_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
     "evidence_sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"

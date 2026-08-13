@@ -154,6 +154,21 @@ def _group_is_live(pgid: int) -> bool:
     return False
 
 
+def process_group_is_live(pgid: int) -> bool:
+    """Whether any live process remains in ``pgid``.
+
+    The public form of the containment predicate ``terminate_process_group``
+    already polls.  Callers proving that an immediate limit really did take
+    the whole group down -- not just its leader -- need to ask this question
+    without reaching into a private helper, and the group is the honest unit:
+    a worker's child and grandchild inherit its process group unless they
+    detach, so a group that is still live is containment that did not hold.
+    """
+    if isinstance(pgid, bool) or not isinstance(pgid, int) or pgid < 1:
+        raise ValueError("process group id must be a positive integer")
+    return _group_is_live(pgid)
+
+
 def _leader_was_replaced(pgid: int, expected: Optional[str]) -> bool:
     if expected is None:
         return False
@@ -163,13 +178,29 @@ def _leader_was_replaced(pgid: int, expected: Optional[str]) -> bool:
 
 def terminate_process_group(pgid: int, grace_seconds: float,
                             expected_leader_identity: Optional[str] = None) -> bool:
-    """TERM, then KILL if required, returning only after group death."""
+    """TERM, then KILL if required, returning only after group death.
+
+    The two signal failures are answered differently on purpose.  ESRCH
+    (``ProcessLookupError``) is positive evidence: there is no such group left
+    to signal, so containment holds.  EPERM (``PermissionError``) is
+    ambiguous on this platform: on macOS, ``os.killpg`` raises EPERM -- not
+    ESRCH -- when every remaining member of the process group is an unreaped
+    zombie, which is a dead group, not a live one this process merely lacks
+    permission to signal.  EPERM is therefore disambiguated by consulting
+    ``_group_is_live``: if no live member remains, the group is dead despite
+    the signal failure and containment holds; if a live member does remain,
+    this process genuinely cannot signal it, so containment loss is reported
+    rather than propagating a raw OS error out of ``invoke_worker`` as an
+    unhandled exception.
+    """
     if _leader_was_replaced(pgid, expected_leader_identity):
         return True
     try:
         os.killpg(pgid, signal.SIGTERM)
     except ProcessLookupError:
         return True
+    except PermissionError:
+        return not _group_is_live(pgid)
     deadline = time.monotonic() + max(0.0, grace_seconds)
     while time.monotonic() < deadline:
         if not _group_is_live(pgid):
@@ -181,6 +212,8 @@ def terminate_process_group(pgid: int, grace_seconds: float,
         os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
         return True
+    except PermissionError:
+        return not _group_is_live(pgid)
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
         if not _group_is_live(pgid):
@@ -216,5 +249,5 @@ def terminate_sidecar_process(intent_dir_fd: int, basename: str, expected_state_
     )
 
 
-__all__ = ["process_start_identity", "read_sidecar", "terminate_process_group",
-           "terminate_sidecar_process", "write_sidecar"]
+__all__ = ["process_group_is_live", "process_start_identity", "read_sidecar",
+           "terminate_process_group", "terminate_sidecar_process", "write_sidecar"]

@@ -51,7 +51,14 @@
         "RECONCILIATION_EMITTED",
         "WORKSPACE_BASELINE_RECORDED",
         "WORKSPACE_POSTFLIGHT_RECORDED",
-        "INTEGRATION_MANIFEST_RECORDED"
+        "INTEGRATION_MANIFEST_RECORDED",
+        "EXECUTION_PLAN_BOUND",
+        "PROVIDER_CAPACITY_RECORDED",
+        "PROVIDER_BACKOFF_SCHEDULED",
+        "MODEL_FALLBACK_SELECTED",
+        "PACKET_PAUSED",
+        "GRACEFUL_STOP_REQUESTED",
+        "GRACEFUL_STOP_EFFECTIVE"
       ]
     },
     "event_at": {
@@ -811,6 +818,351 @@
               "type": "boolean"
             }
           }
+        },
+        "execution_plan": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "plan_sha256",
+            "plan_path",
+            "packet_count"
+          ],
+          "properties": {
+            "plan_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+            },
+            "plan_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "plan_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!^[A-Za-z]:)(?!^\\\\)(?!^//).+$"
+            },
+            "packet_count": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "provider_capacity": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "model_id",
+            "state",
+            "observed_at",
+            "reset_at",
+            "evidence_sha256"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "AVAILABLE",
+                "RATE_LIMITED",
+                "ALLOWANCE_EXHAUSTED",
+                "UNAVAILABLE"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "reset_at": {
+              "type": ["string", "null"],
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "evidence_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "provider_backoff": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "model_id",
+            "reason_code",
+            "next_eligible_at",
+            "retry_index",
+            "evidence_sha256"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "BUDGET_EVIDENCE_INVALID",
+                "HUMAN_AUTHORITY_REQUIRED",
+                "MODEL_ROUTE_CROSS_CLASS_FALLBACK",
+                "MODEL_ROUTE_DISABLED",
+                "MODEL_ROUTE_FALLBACK_CYCLE",
+                "MODEL_ROUTE_FALLBACK_SELECTED",
+                "MODEL_ROUTE_NOT_IN_PLAN",
+                "MODEL_ROUTE_REVIEWER_IDENTITY_CONFLICT",
+                "MODEL_ROUTE_SELECTED",
+                "MODEL_ROUTE_UNQUALIFIED",
+                "NO_CAPABLE_MODEL_AVAILABLE",
+                "PACKET_BUDGET_ATTEMPTS_EXHAUSTED",
+                "PACKET_BUDGET_RETRIES_EXHAUSTED",
+                "PACKET_BUDGET_REVISIONS_EXHAUSTED",
+                "PLAN_SCOPE_PACKET_DIGEST_MISMATCH",
+                "PLAN_SCOPE_PACKET_OUTSIDE_PLAN",
+                "PROVIDER_ALLOWANCE_EXHAUSTED",
+                "PROVIDER_ALLOWANCE_RESET_PENDING",
+                "PROVIDER_ALLOWANCE_UNAVAILABLE",
+                "PROVIDER_BACKOFF_PENDING",
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
+              ]
+            },
+            "next_eligible_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "retry_index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "evidence_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "model_fallback": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "capability_class",
+            "from_route_id",
+            "to_route_id",
+            "provider",
+            "model_id",
+            "reason_code"
+          ],
+          "properties": {
+            "capability_class": {
+              "type": "string",
+              "enum": [
+                "adversarial_audit",
+                "design_judgment",
+                "implementation",
+                "independent_review",
+                "mechanical_check",
+                "planning_architecture"
+              ]
+            },
+            "from_route_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+            },
+            "to_route_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "BUDGET_EVIDENCE_INVALID",
+                "HUMAN_AUTHORITY_REQUIRED",
+                "MODEL_ROUTE_CROSS_CLASS_FALLBACK",
+                "MODEL_ROUTE_DISABLED",
+                "MODEL_ROUTE_FALLBACK_CYCLE",
+                "MODEL_ROUTE_FALLBACK_SELECTED",
+                "MODEL_ROUTE_NOT_IN_PLAN",
+                "MODEL_ROUTE_REVIEWER_IDENTITY_CONFLICT",
+                "MODEL_ROUTE_SELECTED",
+                "MODEL_ROUTE_UNQUALIFIED",
+                "NO_CAPABLE_MODEL_AVAILABLE",
+                "PACKET_BUDGET_ATTEMPTS_EXHAUSTED",
+                "PACKET_BUDGET_RETRIES_EXHAUSTED",
+                "PACKET_BUDGET_REVISIONS_EXHAUSTED",
+                "PLAN_SCOPE_PACKET_DIGEST_MISMATCH",
+                "PLAN_SCOPE_PACKET_OUTSIDE_PLAN",
+                "PROVIDER_ALLOWANCE_EXHAUSTED",
+                "PROVIDER_ALLOWANCE_RESET_PENDING",
+                "PROVIDER_ALLOWANCE_UNAVAILABLE",
+                "PROVIDER_BACKOFF_PENDING",
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
+              ]
+            }
+          }
+        },
+        "packet_pause": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "reason_code",
+            "capability_class",
+            "next_eligible_at",
+            "evidence_ids"
+          ],
+          "properties": {
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "BUDGET_EVIDENCE_INVALID",
+                "HUMAN_AUTHORITY_REQUIRED",
+                "MODEL_ROUTE_CROSS_CLASS_FALLBACK",
+                "MODEL_ROUTE_DISABLED",
+                "MODEL_ROUTE_FALLBACK_CYCLE",
+                "MODEL_ROUTE_FALLBACK_SELECTED",
+                "MODEL_ROUTE_NOT_IN_PLAN",
+                "MODEL_ROUTE_REVIEWER_IDENTITY_CONFLICT",
+                "MODEL_ROUTE_SELECTED",
+                "MODEL_ROUTE_UNQUALIFIED",
+                "NO_CAPABLE_MODEL_AVAILABLE",
+                "PACKET_BUDGET_ATTEMPTS_EXHAUSTED",
+                "PACKET_BUDGET_RETRIES_EXHAUSTED",
+                "PACKET_BUDGET_REVISIONS_EXHAUSTED",
+                "PLAN_SCOPE_PACKET_DIGEST_MISMATCH",
+                "PLAN_SCOPE_PACKET_OUTSIDE_PLAN",
+                "PROVIDER_ALLOWANCE_EXHAUSTED",
+                "PROVIDER_ALLOWANCE_RESET_PENDING",
+                "PROVIDER_ALLOWANCE_UNAVAILABLE",
+                "PROVIDER_BACKOFF_PENDING",
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
+              ]
+            },
+            "capability_class": {
+              "type": "string",
+              "enum": [
+                "adversarial_audit",
+                "design_judgment",
+                "implementation",
+                "independent_review",
+                "mechanical_check",
+                "planning_architecture"
+              ]
+            },
+            "next_eligible_at": {
+              "type": ["string", "null"],
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "evidence_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "graceful_stop_request": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "plan_sha256",
+            "reason_code",
+            "evidence_ids"
+          ],
+          "properties": {
+            "plan_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "plan_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "PROVIDER_ALLOWANCE_EXHAUSTED",
+                "PROVIDER_ALLOWANCE_RESET_PENDING",
+                "PROVIDER_ALLOWANCE_UNAVAILABLE",
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
+              ]
+            },
+            "evidence_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "graceful_stop_effective": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "plan_id",
+            "plan_sha256",
+            "reason_code",
+            "requested_event_id",
+            "evidence_ids"
+          ],
+          "properties": {
+            "plan_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "plan_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "PROVIDER_ALLOWANCE_EXHAUSTED",
+                "PROVIDER_ALLOWANCE_RESET_PENDING",
+                "PROVIDER_ALLOWANCE_UNAVAILABLE",
+                "PROVIDER_BACKOFF_RETRIES_EXHAUSTED",
+                "QUEUE_SAFETY_CEILING_REACHED"
+              ]
+            },
+            "requested_event_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidence_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         }
       }
     },
@@ -935,6 +1287,243 @@
                   }
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "EXECUTION_PLAN_BOUND"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["execution_plan"],
+            "properties": {
+              "execution_plan": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "execution_plan": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "PROVIDER_CAPACITY_RECORDED"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["provider_capacity"],
+            "properties": {
+              "provider_capacity": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "provider_capacity": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "PROVIDER_BACKOFF_SCHEDULED"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["provider_backoff"],
+            "properties": {
+              "provider_backoff": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "provider_backoff": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "MODEL_FALLBACK_SELECTED"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "string"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["model_fallback"],
+            "properties": {
+              "model_fallback": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "model_fallback": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "PACKET_PAUSED"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "string"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["packet_pause"],
+            "properties": {
+              "packet_pause": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "packet_pause": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "GRACEFUL_STOP_REQUESTED"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["graceful_stop_request"],
+            "properties": {
+              "graceful_stop_request": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "graceful_stop_request": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "GRACEFUL_STOP_EFFECTIVE"
+          }
+        },
+        "required": ["event_type"]
+      },
+      "then": {
+        "properties": {
+          "packet_id": {"type": "null"},
+          "intent_id": {"type": "null"},
+          "from_state": {"type": "null"},
+          "to_state": {"type": "null"},
+          "cause": {"const": "none"},
+          "payload": {
+            "required": ["graceful_stop_effective"],
+            "properties": {
+              "graceful_stop_effective": {"type": "object"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "graceful_stop_effective": {"type": "null"}
             }
           }
         }

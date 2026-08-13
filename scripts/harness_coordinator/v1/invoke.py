@@ -12,12 +12,30 @@ from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.classification import validate_attempt_outcome
+from harness_contracts.v1.journal import IMMEDIATE_STOP_REASON_CODES
 from harness_contracts.v1.worker_result import validate_worker_result
 from harness_coordinator.v1.paths import validate_harness_id
 from harness_coordinator.v1.process_sidecar import terminate_process_group, write_sidecar
 
 
 _ALLOWED_ADAPTER_ENV = {"SYNTHETIC_RESULT", "SYNTHETIC_MARKER_PATH"}
+
+# The two immediate process-safety limits enforced at this boundary.  Both are
+# in the design's stable reason vocabulary, and both are excluded from the
+# graceful stop vocabulary by construction: terminating a runaway process
+# group is never an orderly end to the plan, and must not be recorded as one.
+COMMAND_TIMEOUT = "COMMAND_TIMEOUT"
+OUTPUT_LIMIT_EXCEEDED = "OUTPUT_LIMIT_EXCEEDED"
+# A subset check, not equality: a future immediate limit may legitimately join
+# the contract vocabulary, but neither of these two may quietly leave it -- or
+# be reclassified as graceful -- without this import failing loudly.  Raised,
+# never asserted: ``python -O`` strips an assert, and a contract guard that an
+# interpreter flag can optimise away is not a guard.
+if not {COMMAND_TIMEOUT, OUTPUT_LIMIT_EXCEEDED} <= IMMEDIATE_STOP_REASON_CODES:
+    raise RuntimeError(
+        "immediate stop vocabulary no longer covers this boundary's own limits")
+
+_PLAN_BUDGET_LIMIT_FIELDS = ("command_timeout_seconds", "output_bytes")
 _FD_CWD_LAUNCHER = (
     "import os,sys; cwd_fd=int(sys.argv[1]); executable_fd=int(sys.argv[2]); argv=sys.argv[3:]; "
     "expected=os.fstat(executable_fd); actual=os.stat(argv[0],follow_symlinks=False); "
@@ -28,10 +46,17 @@ _FD_CWD_LAUNCHER = (
 
 @dataclass(frozen=True)
 class WorkerAdapter:
-    """Operator-owned immutable synthetic adapter configuration."""
+    """Operator-owned immutable synthetic adapter configuration.
+
+    An adapter may REQUEST a tighter command timeout or output cap than the
+    plan allows, and never a looser one: ``resolve_invocation_limits`` takes
+    the minimum, so these two fields can only ever narrow the boundary.
+    """
 
     argv: Tuple[str, ...]
     env: Mapping[str, str]
+    requested_timeout_seconds: Optional[float] = None
+    requested_output_limit_bytes: Optional[int] = None
 
     def __post_init__(self) -> None:
         if not self.argv or not all(isinstance(arg, str) and arg for arg in self.argv):
@@ -45,6 +70,17 @@ class WorkerAdapter:
                 raise ValueError("adapter environment must contain strings")
             if key not in _ALLOWED_ADAPTER_ENV:
                 raise ValueError(f"adapter environment key is not allowlisted: {key}")
+        timeout = self.requested_timeout_seconds
+        if timeout is not None and (isinstance(timeout, bool)
+                                    or not isinstance(timeout, (int, float))
+                                    or timeout <= 0):
+            raise ValueError("adapter requested_timeout_seconds must be a positive number")
+        output = self.requested_output_limit_bytes
+        if output is not None and (isinstance(output, bool)
+                                   or not isinstance(output, int)
+                                   or output <= 0):
+            raise ValueError(
+                "adapter requested_output_limit_bytes must be a positive integer")
 
 
 @dataclass(frozen=True)
@@ -62,6 +98,92 @@ class InvocationOutcome:
     result_path: str
     sidecar_path: str
     environment_keys: Tuple[str, ...]
+    # The stable immediate reason code that ended this invocation, or None
+    # when nothing terminated it.  Never a graceful stop reason.
+    termination_reason: Optional[str] = None
+    # The worker's process GROUP, which is the honest unit of containment: a
+    # child and grandchild inherit it unless they detach, so a group still
+    # live is containment that did not hold.  ``None`` has exactly two
+    # meanings, both of them "no group to ask about", never "the group is
+    # dead": nothing was ever spawned (the pre-spawn interrupted return), or
+    # the outcome was reconstructed from a completion receipt after a restart,
+    # which records no pgid and whose process is gone regardless.
+    pgid: Optional[int] = None
+
+
+def resolve_invocation_limits(
+    plan_budgets: Optional[Mapping[str, Any]],
+    adapter: WorkerAdapter,
+    timeout_seconds: float,
+    output_limit_bytes: int,
+) -> Tuple[float, int]:
+    """Clamp the requested invocation limits to the authenticated plan.
+
+    The plan value is a CEILING, not a default that some other channel may
+    raise.  The result is the minimum over every bound supplied -- the plan,
+    the adapter's own request, and the caller's argument -- so no adapter,
+    caller, or future call site can widen a plan-derived limit.  This is the
+    hard property; the clamp is not a convention that a later caller could
+    opt out of by passing a larger number.
+
+    ``plan_budgets`` may be ``None`` (no plan bound yet), in which case the
+    caller's own bounds stand.  Anything else that is present but unusable
+    fails closed with ``ValueError`` rather than silently going unbounded.
+    """
+    if not _is_positive_number(timeout_seconds):
+        raise ValueError("timeout_seconds must be a positive number")
+    if not _is_positive_int(output_limit_bytes):
+        raise ValueError("output_limit_bytes must be a positive integer")
+
+    timeout_bounds = [float(timeout_seconds)]
+    output_bounds = [int(output_limit_bytes)]
+
+    if plan_budgets is not None:
+        if not isinstance(plan_budgets, Mapping):
+            raise ValueError("plan budgets must be a mapping")
+        for field in _PLAN_BUDGET_LIMIT_FIELDS:
+            if field not in plan_budgets:
+                raise ValueError(f"plan budgets are missing {field}")
+        plan_timeout = plan_budgets["command_timeout_seconds"]
+        plan_output = plan_budgets["output_bytes"]
+        if not _is_positive_int(plan_timeout):
+            raise ValueError("plan command_timeout_seconds must be a positive integer")
+        if not _is_positive_int(plan_output):
+            raise ValueError("plan output_bytes must be a positive integer")
+        timeout_bounds.append(float(plan_timeout))
+        output_bounds.append(int(plan_output))
+
+    if adapter.requested_timeout_seconds is not None:
+        timeout_bounds.append(float(adapter.requested_timeout_seconds))
+    if adapter.requested_output_limit_bytes is not None:
+        output_bounds.append(int(adapter.requested_output_limit_bytes))
+
+    return min(timeout_bounds), min(output_bounds)
+
+
+def _is_positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _is_positive_number(value: Any) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and value > 0)
+
+
+def _immediate_termination_reason(timed_out: bool, output_exceeded: bool) -> Optional[str]:
+    """Name the immediate limit that ended this invocation, deterministically.
+
+    Ordering matters only when both fire in the same poll: the deadline is
+    reported first because it bounds the whole attempt, while the output cap
+    bounds one channel of it.  Operator interruption is deliberately NOT given
+    a code here -- the design names no reason family for it, and it already
+    has a durable representation in ``interrupted``/``INTERRUPTED``.
+    """
+    if timed_out:
+        return COMMAND_TIMEOUT
+    if output_exceeded:
+        return OUTPUT_LIMIT_EXCEEDED
+    return None
 
 
 def _claimed_paths_violate_packet(packet: Dict[str, Any], result: Dict[str, Any]) -> bool:
@@ -101,8 +223,23 @@ def _bounded_read_regular(dir_fd: int, name: str, maximum: int, expected_identit
 
 
 def _adapter_sha256(adapter: WorkerAdapter) -> str:
-    return compute_sha256(canonical_bytes(
-        {"argv": list(adapter.argv), "env": dict(adapter.env)}))
+    """The adapter identity a completion receipt is checked against.
+
+    The two requested limit fields belong in this digest, not outside it: they
+    change the EFFECTIVE timeout and output cap the adapter produces, so two
+    adapters differing only in them are genuinely different adapters and a
+    receipt written under one must not reconstruct under the other.  The
+    timeout is normalised through ``float`` exactly as
+    ``resolve_invocation_limits`` does, so the identity tracks the effective
+    bound rather than whether the operator happened to write ``2`` or ``2.0``.
+    """
+    timeout = adapter.requested_timeout_seconds
+    return compute_sha256(canonical_bytes({
+        "argv": list(adapter.argv),
+        "env": dict(adapter.env),
+        "requested_timeout_seconds": None if timeout is None else float(timeout),
+        "requested_output_limit_bytes": adapter.requested_output_limit_bytes,
+    }))
 
 
 def _publish_completion_receipt(dir_fd: int, receipt: Dict[str, Any]) -> None:
@@ -184,11 +321,24 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
                   *, timeout_seconds: float = 30.0, output_limit_bytes: int = 1024 * 1024,
                   result_limit_bytes: int = 1024 * 1024, terminate_grace_seconds: float = 1.0,
                   stop_requested: Optional[Callable[[], bool]] = None,
+                  plan_budgets: Optional[Mapping[str, Any]] = None,
                   allowed_worktree: str) -> InvocationOutcome:
-    """Invoke one fixed synthetic adapter; never executes packet-selected commands."""
+    """Invoke one fixed synthetic adapter; never executes packet-selected commands.
+
+    ``plan_budgets`` supplies the authenticated plan's ``command_timeout_seconds``
+    and ``output_bytes``.  They are ceilings: the effective limits are resolved
+    before anything is spawned, and neither this call's own arguments nor the
+    adapter can raise them.
+    """
     packet_id = validate_harness_id(packet["packet_id"], "/packet_id")
     validate_harness_id(intent_id, "/intent_id")
+    # Resolved before the stop check and before any spawn, so an unusable plan
+    # budget refuses the invocation instead of running it unbounded.
+    timeout_seconds, output_limit_bytes = resolve_invocation_limits(
+        plan_budgets, adapter, timeout_seconds, output_limit_bytes)
     if stop_requested is not None and stop_requested():
+        # Nothing was spawned, so there is no process group to name: pgid stays
+        # None because none exists, not because containment is unknown.
         return InvocationOutcome(None, ("INTERRUPTED",), None, False, False, True, True, None,
                                  "", "", "", "", tuple())
     packet_worktree = packet.get("worktree", {}).get("path")
@@ -201,6 +351,7 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
     stdout_fd = stderr_fd = result_fd = None
     selector = process = None
     process_identity = None
+    sidecar: Optional[Dict[str, Any]] = None
     artifact_dir = stdout_path = stderr_path = result_path = sidecar_path = ""
     result_identity = None
     environment: Dict[str, str] = {}
@@ -361,7 +512,10 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
         outcome = InvocationOutcome(result, tuple(dict.fromkeys(errors)), process.returncode,
                                     timed_out, output_exceeded, interrupted, group_dead, process.pid,
                                     *public_paths,
-                                    tuple(sorted(environment)))
+                                    tuple(sorted(environment)),
+                                    termination_reason=_immediate_termination_reason(
+                                        timed_out, output_exceeded),
+                                    pgid=(sidecar or {}).get("pgid"))
         stdout_raw = _bounded_read_regular(
             artifact_fd, "stdout.bin", output_limit_bytes,
             _fd_identity(stdout_fd))
@@ -383,6 +537,10 @@ def invoke_worker(state_root: str, state_root_id: str, packet: Dict[str, Any],
             "output_exceeded": outcome.output_exceeded,
             "interrupted": outcome.interrupted,
             "process_group_dead": outcome.process_group_dead,
+            # Bounded metadata only: the stable reason an immediate limit
+            # ended this invocation.  Captured bytes are represented by their
+            # digest and length below, never by their content.
+            "termination_reason": outcome.termination_reason,
             "pid": outcome.pid, "error_codes": list(outcome.error_codes),
             "stdout": {"sha256": compute_sha256(stdout_raw), "byte_length": len(stdout_raw)},
             "stderr": {"sha256": compute_sha256(stderr_raw), "byte_length": len(stderr_raw)},
@@ -567,6 +725,15 @@ def load_completed_invocation(handle, state_root_id: str, packet: Dict[str, Any]
         if (result_raw is None or len(result_raw) != result_pointer.get("byte_length")
                 or compute_sha256(result_raw) != result_pointer.get("sha256")):
             raise ValueError("invocation completion result mismatch")
+    # Re-derived from the receipt's own authenticated flags, then checked
+    # against what the receipt recorded.  The two are produced by one function
+    # from one pair of flags, so a disagreement means the record is internally
+    # inconsistent and must not be reconstructed into a usable outcome.
+    termination_reason = _immediate_termination_reason(
+        bool(receipt.get("timed_out")), bool(receipt.get("output_exceeded")))
+    if receipt.get("termination_reason", termination_reason) != termination_reason:
+        raise ValueError("invocation completion receipt termination reason disagrees")
+
     result = None
     if result_pointer.get("valid"):
         if result_raw is None:
@@ -592,14 +759,22 @@ def load_completed_invocation(handle, state_root_id: str, packet: Dict[str, Any]
     if pending:
         handle.publish(parts + ("completion.json",), raw)
         handle.unlink(parts + ("completion.pending",), predicate=lambda current: current == raw)
+    # pgid is left None deliberately, and the receipt is not extended to carry
+    # one: it is UNKNOWN AFTER RESTART.  A pgid recorded before a crash names a
+    # process group this process never observed and whose id the operating
+    # system is free to have reused, so reconstructing one would offer a
+    # containment answer nobody may rely on.  ``process_group_dead`` is True
+    # here on the receipt's own authority, which is the claim that is sound.
     return InvocationOutcome(
         result, tuple(receipt.get("error_codes") or ()), receipt.get("exit_code"),
         bool(receipt.get("timed_out")), bool(receipt.get("output_exceeded")),
         bool(receipt.get("interrupted")), True, receipt.get("pid"),
         os.path.join(artifact_dir, "stdout.bin"), os.path.join(artifact_dir, "stderr.bin"),
         os.path.join(artifact_dir, "worker-result.json"),
-        os.path.join(artifact_dir, "process.json"), tuple())
+        os.path.join(artifact_dir, "process.json"), tuple(),
+        termination_reason=termination_reason, pgid=None)
 
 
-__all__ = ["InvocationOutcome", "WorkerAdapter", "invoke_worker",
-           "load_completed_invocation", "persist_invocation_outcome"]
+__all__ = ["COMMAND_TIMEOUT", "OUTPUT_LIMIT_EXCEEDED", "InvocationOutcome",
+           "WorkerAdapter", "invoke_worker", "load_completed_invocation",
+           "persist_invocation_outcome", "resolve_invocation_limits"]

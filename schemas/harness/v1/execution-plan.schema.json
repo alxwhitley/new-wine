@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harness Contract v1 Execution Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_sha256",
+    "packets",
+    "routes",
+    "provider_backoff",
+    "wall_clock_safety_seconds",
+    "human_stop_categories"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1]},
+    "plan_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "packets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/definitions/packet"}
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "design_judgment": {"$ref": "#/definitions/route_list"},
+        "planning_architecture": {"$ref": "#/definitions/route_list"},
+        "implementation": {"$ref": "#/definitions/route_list"},
+        "independent_review": {"$ref": "#/definitions/route_list"},
+        "adversarial_audit": {"$ref": "#/definitions/route_list"},
+        "mechanical_check": {"$ref": "#/definitions/route_list"}
+      }
+    },
+    "provider_backoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_retries", "base_delay_seconds", "max_delay_seconds"],
+      "properties": {
+        "max_retries": {"type": "integer", "minimum": 0},
+        "base_delay_seconds": {"type": "integer", "minimum": 1},
+        "max_delay_seconds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "wall_clock_safety_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400
+    },
+    "human_stop_categories": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "production_database_write",
+          "migration",
+          "deployment",
+          "destructive_filesystem_git",
+          "git_stage",
+          "git_commit",
+          "git_merge",
+          "git_push",
+          "git_clean",
+          "git_delete",
+          "governed_content",
+          "licensing_determination",
+          "real_provider_commissioning",
+          "material_plan_expansion"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_id",
+        "packet_sha256",
+        "dependencies",
+        "capability_class",
+        "budgets"
+      ],
+      "properties": {
+        "packet_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "packet_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "dependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          }
+        },
+        "capability_class": {
+          "type": "string",
+          "enum": [
+            "design_judgment",
+            "planning_architecture",
+            "implementation",
+            "independent_review",
+            "adversarial_audit",
+            "mechanical_check"
+          ]
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "attempt_limit",
+            "retry_limit",
+            "revision_limit",
+            "turn_limit",
+            "command_timeout_seconds",
+            "output_bytes"
+          ],
+          "properties": {
+            "attempt_limit": {"type": "integer", "minimum": 0},
+            "retry_limit": {"type": "integer", "minimum": 0},
+            "revision_limit": {"type": "integer", "minimum": 0},
+            "turn_limit": {"type": "integer", "minimum": 1},
+            "command_timeout_seconds": {"type": "integer", "minimum": 1},
+            "output_bytes": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "route_list": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "route_id",
+          "provider",
+          "model_id",
+          "minimum_reasoning",
+          "enabled",
+          "qualification_id",
+          "fallback_to"
+        ],
+        "properties": {
+          "route_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          },
+          "provider": {"type": "string", "minLength": 1},
+          "model_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+          },
+          "minimum_reasoning": {
+            "type": "string",
+            "enum": ["none", "low", "medium", "high", "xhigh", "max"]
+          },
+          "enabled": {"type": "boolean"},
+          "qualification_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          },
+          "fallback_to": {
+            "type": ["string", "null"],
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          }
+        }
+      }
+    }
+  }
+}

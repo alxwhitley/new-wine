@@ -6,8 +6,12 @@ import os
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
+from harness_contracts.v1.execution_plan import HUMAN_STOP_CATEGORIES
+from harness_contracts.v1.journal import validate_journal_event
 from harness_contracts.v1.packet import validate_packet
 from harness_contracts.v1.replay import validate_replay_bundle
+from harness_contracts.v1.seal import TERMINAL_STATES
+from harness_coordinator.v1.budget_runtime import budget_event_payload, evaluate_preclaim
 from harness_coordinator.v1.classify_runtime import (
     promote_dependencies,
     requeue_revise,
@@ -22,7 +26,18 @@ from harness_coordinator.v1.integration_analysis import (
 )
 from harness_coordinator.v1.paths import validate_harness_id
 from harness_coordinator.v1.process_sidecar import terminate_sidecar_process
-from harness_coordinator.v1.recovery import _build_derived_queue, _fold_journal, _make_event, run_started_recovery
+from harness_coordinator.v1.recovery import (
+    IntegrityError,
+    _build_derived_queue,
+    _fold_journal,
+    _make_event,
+    bound_execution_plan_for_run,
+    graceful_stop_state,
+    make_graceful_stop_effective,
+    request_graceful_stop,
+    run_started_recovery,
+    wall_clock_ceiling_reached,
+)
 from harness_coordinator.v1.review import (
     _dependency_context, load_trusted_reviewer_sessions, resolve_pending_reviews,
 )
@@ -44,6 +59,306 @@ from harness_coordinator.v1.workspace_evidence import (
 def attempt_session_id(run_id: str, packet_id: str, attempt: int) -> str:
     """Durable worker-session identity; P5B must consume this exact value."""
     return f"session-{run_id}-{packet_id}-{attempt}"
+
+
+def _plan_budgets_for(plan: Optional[Dict[str, Any]], packet_id: str) -> Optional[Dict[str, Any]]:
+    """The authenticated plan's budgets for one member packet, if bound.
+
+    ``None`` means no plan is bound to this run, in which case the invocation
+    keeps its own defaults.  A bound plan that does not contain the packet is
+    a plan-scope problem owned by the pre-claim gate, not something to paper
+    over with a permissive default here.
+    """
+    if plan is None:
+        return None
+    for row in plan.get("packets", []):
+        if row.get("packet_id") == packet_id:
+            return row.get("budgets")
+    return None
+
+
+def _plan_packet_row(plan: Dict[str, Any], packet_id: str) -> Optional[Dict[str, Any]]:
+    """The authenticated plan's own row for one member packet, if any."""
+    for row in plan.get("packets", []):
+        if row.get("packet_id") == packet_id:
+            return row
+    return None
+
+
+def _plan_is_complete(plan: Dict[str, Any], folded: Dict[str, Dict[str, Any]]) -> bool:
+    """Every plan member packet has reached a packet-level TERMINAL state.
+
+    ``TERMINAL_STATES`` (``harness_contracts.v1.seal``) is
+    ``{ACCEPTED, QUARANTINED, HUMAN_REQUIRED}`` -- the fold's only terminal
+    states. A packet merely paused for provider capacity, or blocked on
+    this task's own human-authority gate, stays READY in the fold: neither
+    condition has (or should have) a dedicated ``PACKET_STATES`` value --
+    see ``PACKET_PAUSED``'s own from_state/to_state-null journal contract --
+    so it is deliberately NOT treated as complete here. It remains
+    genuinely resumable and must go on being offered to selection on a
+    later iteration once its condition clears; only Task 5's reconciliation
+    is responsible for partitioning a "paused"/"blocked" packet into the
+    run's final accounting, which is a different question from whether
+    ``run_once`` may still claim new work.
+    """
+    for row in plan.get("packets", []):
+        packet = folded.get(row.get("packet_id"))
+        if packet is None or packet.get("state") not in TERMINAL_STATES:
+            return False
+    return True
+
+
+def _human_authority_decision(packet_body: Dict[str, Any], packet_id: str) -> Optional[Dict[str, Any]]:
+    """A packet-declared human-stop condition that matches the plan's closed
+    ``human_stop_categories`` vocabulary gates unconditionally, before claim.
+
+    Reasoned design call (flagged for review, see the report): the PLAN's
+    own ``human_stop_categories`` field is a required up-front declaration
+    of which categories a plan is expected to encounter (useful for
+    governance/audit, Task 5's job) -- it is never read here as a filter
+    that could narrow or waive which packet-level conditions actually gate.
+    Only the packet's own ``human_stop_conditions`` is the operative
+    claim-time signal, checked against the full closed 14-value enum
+    directly. A ``human_stop_conditions`` entry that is not itself one of
+    the 14 closed values (e.g. legacy pre-O5 free-form text such as
+    ``"governed_doc_touched"``) does not trigger this gate -- only an exact
+    closed-vocabulary match does. The returned shape deliberately matches
+    ``budget_runtime.BUDGET_DECISION_KEYS`` exactly, so the caller treats it
+    identically to an ``evaluate_preclaim`` result -- one decision shape,
+    one persistence path (``_persist_budget_decision``), regardless of
+    which check produced it.
+    """
+    conditions = packet_body.get("human_stop_conditions") or []
+    triggered = sorted(set(conditions) & HUMAN_STOP_CATEGORIES)
+    if not triggered:
+        return None
+    return {
+        "decision": "HUMAN_REQUIRED", "reason_code": "HUMAN_AUTHORITY_REQUIRED",
+        "packet_id": packet_id, "route": None, "next_eligible_at": None,
+        "evidence_ids": [],
+    }
+
+
+_STATUS_BY_BUDGET_DECISION = {
+    "PAUSE": "no_capable_model",
+    "BACKOFF": "awaiting_provider_reset",
+    "HUMAN_REQUIRED": "plan_stopped",
+    "STOP": "plan_stopped",
+}
+
+
+def _status_for_budget_decision(decision: Dict[str, Any]) -> str:
+    """The coordinator status for a non-claimable ``BudgetDecision``.
+
+    ``ALLOW``/``FALLBACK`` are claimable and never reach this function.
+    """
+    return _STATUS_BY_BUDGET_DECISION.get(decision["decision"], "plan_stopped")
+
+
+def _assigned_worker_override(
+    packet_body: Dict[str, Any], route: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """The ``assigned_worker`` shape a chosen plan route implies.
+
+    Only ``provider``/``model`` are overridden -- ``worker_id`` is a worker
+    INSTANCE label, not part of the plan's capability-class routing model
+    (``select_capable_route``'s route shape has no such field), so the
+    packet's own declared instance id is deliberately preserved. For every
+    plan whose primary route already matches a packet's own pre-plan
+    ``assigned_worker`` (true of every existing O5 fixture that predates
+    Task 4), this is a value-for-value no-op.
+    """
+    if route is None:
+        return None
+    overridden = dict(packet_body.get("assigned_worker") or {})
+    overridden["provider"] = route["provider"]
+    overridden["model"] = route["model_id"]
+    return overridden
+
+
+def _attempt_started_worker(
+    journal_events: List[Dict[str, Any]], packet_id: str, attempt: Any,
+) -> Optional[Dict[str, str]]:
+    """The ATTEMPT_STARTED-recorded ``worker`` identity for one specific attempt.
+
+    Ground truth for what a given attempt was actually assigned -- a prior
+    iteration's pre-claim gate fallback route (``_assigned_worker_override``
+    above), or the packet's own default when no override applied -- never the
+    enrolled packet's own (possibly stale) static default. Returns ``None``
+    when no matching ATTEMPT_STARTED exists or its recorded worker is
+    incomplete, so a caller can fall back to the packet's own
+    ``assigned_worker`` exactly as before this existed.
+    """
+    started = next((
+        event for event in reversed(journal_events)
+        if event.get("event_type") == "ATTEMPT_STARTED"
+        and event.get("packet_id") == packet_id
+        and (((event.get("payload") or {}).get("attempt") or {}).get("attempt") == attempt)
+    ), None)
+    if started is None:
+        return None
+    worker = ((started.get("payload") or {}).get("attempt") or {}).get("worker") or {}
+    if not {"worker_id", "provider", "model"} <= set(worker):
+        return None
+    return {"worker_id": worker["worker_id"], "provider": worker["provider"], "model": worker["model"]}
+
+
+def _record_model_fallback(
+    handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
+    plan: Dict[str, Any], packet_id: str, capability_class: str, decision: Dict[str, Any],
+    coordinator_id: str, run_id: str, now: str,
+) -> List[Dict[str, Any]]:
+    """Durably record a fallback route choice. Written fresh on every claim
+    that uses one -- a crash before the claim that follows simply produces
+    another truthful record on retry, which the crash matrix names as an
+    expected boundary ("during fallback selection"), not a defect."""
+    route = decision["route"]
+    primary = plan["routes"][capability_class][0]
+    body = {
+        "capability_class": capability_class,
+        "from_route_id": primary["route_id"],
+        "to_route_id": route["route_id"],
+        "provider": route["provider"],
+        "model_id": route["model_id"],
+        "reason_code": decision["reason_code"],
+    }
+    previous = journal_events[-1] if journal_events else None
+    event = _make_event(
+        (previous["seq"] + 1) if previous else 1, "MODEL_FALLBACK_SELECTED",
+        coordinator_id, run_id, state_root_id, previous, now, packet_id=packet_id,
+        payload=budget_event_payload("MODEL_FALLBACK_SELECTED", body))
+    # Defense-in-depth, matching ``recovery._append_stop_event``'s pattern
+    # exactly: never durably write an event this codebase's own validator
+    # would refuse to read back. Without this, a contract-invalid write
+    # (e.g. a null ``capability_class`` when the selected packet is out of
+    # the bound plan's scope) succeeds silently and corrupts the journal
+    # for good -- ``read_journal`` refuses to load it on every future call.
+    result = validate_journal_event(event, prev_event=previous, state_root_id=state_root_id)
+    if not result["valid"]:
+        raise IntegrityError(
+            "MODEL_FALLBACK_INVALID",
+            "refusing to journal an invalid model fallback event: %s"
+            % result["errors"][0]["message"], packet_id)
+    handle.verify_identity()
+    append_journal(os.path.join(state_root, "journal.ndjson"), event,
+                   os.path.join(state_root, "locks", "journal.wlock"), expected_head=previous)
+    handle.verify_identity()
+    journal_events.append(event)
+    return journal_events
+
+
+def _record_packet_pause(
+    handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
+    packet_id: str, capability_class: str, decision: Dict[str, Any],
+    coordinator_id: str, run_id: str, now: str,
+) -> List[Dict[str, Any]]:
+    """Durably record why one packet could not be claimed this iteration.
+
+    Covers every non-claimable ``BudgetDecision`` -- ``PAUSE``, ``BACKOFF``,
+    a pre-claim plan/budget ``STOP``, and this task's own
+    ``HUMAN_REQUIRED`` -- under the single closed event the schema actually
+    offers for a packet-scoped, non-transitioning refusal
+    (``PACKET_PAUSED``'s ``reason_code`` accepts the full
+    ``CAPACITY_EVENT_REASON_CODES`` set, which includes every one of these).
+    Deduplicated against the latest identical record for this packet, so a
+    repeatedly-polled, still-blocked packet does not grow the journal
+    without bound while nothing about its evidence has changed.
+    """
+    body = {
+        "reason_code": decision["reason_code"],
+        "capability_class": capability_class,
+        "next_eligible_at": decision.get("next_eligible_at"),
+        "evidence_ids": sorted(decision.get("evidence_ids") or []),
+    }
+    latest = None
+    for event in journal_events:
+        if event.get("event_type") == "PACKET_PAUSED" and event.get("packet_id") == packet_id:
+            latest = event
+    if latest is not None and (latest.get("payload") or {}).get("packet_pause") == body:
+        return journal_events
+    previous = journal_events[-1] if journal_events else None
+    event = _make_event(
+        (previous["seq"] + 1) if previous else 1, "PACKET_PAUSED",
+        coordinator_id, run_id, state_root_id, previous, now, packet_id=packet_id,
+        payload=budget_event_payload("PACKET_PAUSED", body))
+    # Defense-in-depth, matching ``recovery._append_stop_event``'s pattern
+    # exactly: never durably write an event this codebase's own validator
+    # would refuse to read back. Without this, a contract-invalid write
+    # (e.g. a null ``capability_class`` when the selected packet is out of
+    # the bound plan's scope) succeeds silently and corrupts the journal
+    # for good -- ``read_journal`` refuses to load it on every future call.
+    # The root cause (a plan-scope-outside packet ever reaching this
+    # function at all) is closed separately, at selection
+    # (``scheduler.select_next``'s ``plan`` parameter) -- this check is the
+    # backstop for every other way a caller could reach here, not a
+    # substitute for that fix.
+    result = validate_journal_event(event, prev_event=previous, state_root_id=state_root_id)
+    if not result["valid"]:
+        raise IntegrityError(
+            "PACKET_PAUSE_INVALID",
+            "refusing to journal an invalid packet pause event: %s"
+            % result["errors"][0]["message"], packet_id)
+    handle.verify_identity()
+    append_journal(os.path.join(state_root, "journal.ndjson"), event,
+                   os.path.join(state_root, "locks", "journal.wlock"), expected_head=previous)
+    handle.verify_identity()
+    journal_events.append(event)
+    return journal_events
+
+
+def _persist_budget_decision(
+    handle, state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
+    plan: Dict[str, Any], packet_id: str, capability_class: str, decision: Dict[str, Any],
+    coordinator_id: str, run_id: str, now: str,
+) -> List[Dict[str, Any]]:
+    """Persist step 6 of the pre-claim gate ordering: fallback, or a
+    pause/backoff/stop/human-required refusal. ``ALLOW`` persists nothing
+    here -- the chosen (primary) route is recorded on ATTEMPT_STARTED
+    itself, not as a separate budget event."""
+    kind = decision["decision"]
+    if kind == "FALLBACK":
+        return _record_model_fallback(
+            handle, state_root, state_root_id, journal_events, plan, packet_id,
+            capability_class, decision, coordinator_id, run_id, now)
+    if kind in ("PAUSE", "BACKOFF", "STOP", "HUMAN_REQUIRED"):
+        return _record_packet_pause(
+            handle, state_root, state_root_id, journal_events, packet_id,
+            capability_class, decision, coordinator_id, run_id, now)
+    return journal_events
+
+
+def _ceiling_evidence_ids(journal_events: List[Dict[str, Any]], run_id: str) -> List[str]:
+    """Bounded identifiers for the events that fix this run's elapsed time.
+
+    The run start and the plan binding are what the backstop was computed
+    from, so they are what a later reader needs to recheck it. Identifiers
+    only -- never timings, output, or any part of a command.
+    """
+    evidence: List[str] = []
+    for event in journal_events:
+        if event.get("run_id") != run_id:
+            continue
+        if event.get("event_type") in ("RUN_STARTED", "EXECUTION_PLAN_BOUND"):
+            event_id = event.get("event_id")
+            if isinstance(event_id, str) and event_id:
+                evidence.append(event_id)
+    return evidence
+
+
+def _assert_no_graceful_stop(journal_events: List[Dict[str, Any]], run_id: str) -> None:
+    """Refuse a claim once this run's stop is effective or already pending.
+
+    Every pre-claim path passes through here, not only the iteration loop, so
+    a direct caller cannot add the one extra claim a graceful stop exists to
+    prevent.  ``pending`` counts: the stop was requested, the active attempt
+    may finish, but nothing new may start.
+    """
+    state = graceful_stop_state(journal_events, run_id)
+    if state["stopped"] or state["pending"]:
+        raise IntegrityError(
+            "GRACEFUL_STOP_IN_EFFECT",
+            "run %s has a graceful stop %s; no further packet may be claimed"
+            % (run_id, "in effect" if state["stopped"] else "pending"))
 
 
 def _record_workspace_baseline(
@@ -299,8 +614,17 @@ def _accepted_replay_evidence(handle, packet_id: str, packet: Dict[str, Any],
         raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay evidence disagrees")
     try:
         _dependency_states, provenance = _dependency_context(handle, packet, journal_events, folded)
+        # Same reasoning as review.py's ``_decide`` -- ``bundle["packet"]``
+        # stays the packet's static enrollment-time default (it must, for
+        # the seal/self-hash checks above), so a packet that reached
+        # ACCEPTED via a plan-pinned fallback route needs the same
+        # ATTEMPT_STARTED-recorded worker identity supplied alongside the
+        # bundle here, or this re-validation would spuriously reject an
+        # already-legitimately-accepted fallback packet during promotion.
+        trusted_attempt_worker = _attempt_started_worker(
+            journal_events, packet_id, worker_result.get("attempt"))
         replay_validation = validate_replay_bundle(
-            bundle, provenance, load_trusted_reviewer_sessions(handle))
+            bundle, provenance, load_trusted_reviewer_sessions(handle), trusted_attempt_worker)
     except Exception as exc:
         raise WorkspaceEvidenceError("WORKSPACE_INTEGRATION_INELIGIBLE", "Accepted replay context is unavailable") from exc
     if not replay_validation["valid"]:
@@ -494,13 +818,26 @@ def claim_packet(state_root: str, packet_id: str, packet: Dict[str, Any], coordi
 def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events: List[Dict[str, Any]],
                             packet_id: str, packet: Dict[str, Any], coordinator_id: str,
                             run_id: str, trusted_process_context: Dict[str, Any], now: str,
-                            handle=None) -> str:
-    """Durably perform lock -> pending intent -> ATTEMPT_STARTED -> projection."""
+                            handle=None, assigned_worker: Optional[Dict[str, str]] = None) -> str:
+    """Durably perform lock -> pending intent -> ATTEMPT_STARTED -> projection.
+
+    ``assigned_worker``, when supplied, overrides the enrolled packet's own
+    declared ``assigned_worker`` for exactly this attempt's ATTEMPT_STARTED
+    ``worker`` fields -- the O5 pre-claim gate's chosen plan route, so the
+    durable claim record names the route that was actually decided, not a
+    stale pre-plan default. ``None`` (every caller that predates this
+    parameter, and every ungoverned/no-plan claim) preserves the exact prior
+    behavior: the enrolled packet's own ``assigned_worker`` is used as-is.
+    """
     if handle is None:
         with open_state_root(state_root) as scoped:
             return claim_and_start_attempt(
                 state_root, state_root_id, journal_events, packet_id, packet,
-                coordinator_id, run_id, trusted_process_context, now, handle=scoped)
+                coordinator_id, run_id, trusted_process_context, now, handle=scoped,
+                assigned_worker=assigned_worker)
+    # Checked before the lock, the pending intent, and ATTEMPT_STARTED, so a
+    # stopped run creates no durable claim artifact at all.
+    _assert_no_graceful_stop(journal_events, run_id)
     packet_body = _load_enrolled_packet(
         state_root, packet_id, packet, journal_events, handle=handle)
     claim = claim_packet(
@@ -520,7 +857,7 @@ def claim_and_start_attempt(state_root: str, state_root_id: str, journal_events:
                    f"pending-{run_id}-{claim['attempt']}")
     handle.verify_identity()
 
-    assigned = packet_body["assigned_worker"]
+    assigned = assigned_worker if assigned_worker is not None else packet_body["assigned_worker"]
     attempt_payload = {
         "attempt": claim["attempt"], "lane": packet["lane"],
         "worker": {"worker_id": assigned["worker_id"], "session_id": attempt_session_id(run_id, packet_id, claim["attempt"]),
@@ -629,7 +966,9 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
              disabled_lanes: List[str] = None,
              worker_adapters: Optional[Mapping[str, WorkerAdapter]] = None,
              protected_worktree_path: Optional[str] = None,
-             integration_context_by_packet: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+             integration_context_by_packet: Optional[Mapping[str, Any]] = None,
+             execution_plan: Optional[Dict[str, Any]] = None,
+             provider_state: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """Recover, resolve reviews, seal, promote, then claim at most one packet.
 
     Maintenance runs twice by design. The first pass completes work a previous
@@ -638,6 +977,23 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
     promotes whatever this iteration's own reviews just made terminal, so an
     ACCEPT and its dependents' promotion land in the same bounded iteration
     rather than waiting for the next one.
+
+    ``execution_plan`` is the validated plan this run is bound to. When it is
+    omitted, an already-bound plan is authenticated from the journal instead;
+    when neither exists, the iteration behaves exactly as before, with no
+    plan-derived limits, no wall-clock backstop, and no pre-claim budget/
+    routing/human-authority gate.
+
+    ``provider_state`` is an optional, caller-supplied capacity snapshot
+    passed straight through to ``evaluate_preclaim``/``select_capable_route``
+    (Task 2) alongside the authenticated journal. Nothing in this build
+    populates it from a live provider -- real provider commissioning is an
+    explicit O5 non-goal -- so every caller today either omits it or supplies
+    synthetic evidence directly; it exists so a future live-provider
+    integration has a call-time input to fill without another coordinator
+    signature change. Omitting it is equivalent to an empty snapshot: the
+    durable, authenticated ``PROVIDER_CAPACITY_RECORDED`` journal trail is
+    always consulted regardless.
     """
     # One pinned state-root identity for the whole iteration. It is opened
     # BEFORE recovery -- which is accepted code operating by pathname -- and
@@ -652,7 +1008,8 @@ def run_once(state_root: str, coordinator_id: str, run_id: str,
             return _run_iteration(handle, state_root, report, coordinator_id, run_id,
                                   trusted_process_context, now, disabled_lanes,
                                   worker_adapters, protected_worktree_path,
-                                  integration_context_by_packet)
+                                  integration_context_by_packet, execution_plan,
+                                  provider_state)
         finally:
             report.release_singleton()
 
@@ -662,7 +1019,9 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                    disabled_lanes: List[str],
                    worker_adapters: Optional[Mapping[str, WorkerAdapter]],
                    protected_worktree_path: Optional[str],
-                   integration_context_by_packet: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+                   integration_context_by_packet: Optional[Mapping[str, Any]],
+                   execution_plan: Optional[Dict[str, Any]] = None,
+                   provider_state: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """One bounded iteration, every P5C artifact operation sharing one handle."""
     journal_events = getattr(report, "journal_events", [])
     state_root_id = getattr(report, "state_root_id", None)
@@ -671,6 +1030,47 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
     review_outcomes: List[Dict[str, Any]] = []
     review_attention: List[Dict[str, Any]] = []
     first = second = {"sealed": [], "promotion_attention": [], "revise_budget_exhausted": []}
+    journal_path = os.path.join(state_root, "journal.ndjson")
+    journal_lock_path = os.path.join(state_root, "locks", "journal.wlock")
+
+    # The plan is resolved once, before anything is claimed or invoked. An
+    # explicit argument wins; otherwise a plan already bound to this run is
+    # authenticated from the journal, so its limits and its wall-clock
+    # backstop apply on a restart even when the caller did not re-supply it.
+    # A caller-supplied ``execution_plan`` never silently overrides a plan
+    # already durably bound to this run: if one is bound, its identity is
+    # cross-checked against the caller's argument and any disagreement fails
+    # closed, matching the existing ``PLAN_IDENTITY_CONFLICT`` pattern
+    # ``_fold_journal`` already raises for two conflicting bindings of the
+    # same run. An unbound run (the common test/ungoverned-caller shape,
+    # where ``execution_plan`` is supplied but never durably bound) has
+    # nothing to conflict with, so this is a no-op for it.
+    plan = execution_plan
+    if state_root_id is not None:
+        bound_plan = bound_execution_plan_for_run(state_root, journal_events, run_id)
+        if plan is None:
+            plan = bound_plan
+        elif bound_plan is not None and bound_plan.get("plan_sha256") != plan.get("plan_sha256"):
+            raise IntegrityError(
+                "PLAN_IDENTITY_CONFLICT",
+                "caller-supplied execution_plan disagrees with the plan already "
+                "bound to run %s" % run_id)
+
+    # A stop condition observed BEFORE the attempt-resolution block below is
+    # recorded before that work runs: the design lets the active attempt reach
+    # a durable outcome, but the decision to stop is what must survive a crash
+    # in the middle of it. Making the stop EFFECTIVE waits until afterwards.
+    stop = graceful_stop_state(journal_events, run_id)
+    if state_root_id is not None and plan is not None and not (
+            stop["stopped"] or stop["pending"]):
+        if wall_clock_ceiling_reached(
+                journal_events, run_id, plan["wall_clock_safety_seconds"], now):
+            journal_events = request_graceful_stop(
+                journal_path, journal_lock_path, journal_events, plan,
+                coordinator_id, run_id, state_root_id, now,
+                "QUEUE_SAFETY_CEILING_REACHED",
+                _ceiling_evidence_ids(journal_events, run_id), handle=handle)
+            stop = graceful_stop_state(journal_events, run_id)
 
     # Every durable phase is skipped without an identified state root. A
     # real RecoveryReport always carries one; a caller-supplied minimal
@@ -724,8 +1124,26 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                     state_root, packet_id, packet, journal_events, handle=handle)
                 invocation_packet = dict(packet_body)
                 invocation_packet["attempt"] = attempt
-                session_id = (((started.get("payload") or {}).get("attempt") or {})
-                              .get("worker", {}).get("session_id"))
+                # ATTEMPT_STARTED's own durably-recorded ``worker`` is the
+                # ground truth for what this specific attempt was actually
+                # assigned -- whatever a prior iteration's pre-claim gate
+                # decided (a fallback route or the packet's own default),
+                # never the enrolled packet's own (possibly stale) default.
+                # Without this, a resumed invocation after a pre-invoke
+                # crash checks the worker RESULT's identity against the
+                # packet's original assignment instead of the one actually
+                # recorded at claim time, and a genuine fallback fails
+                # ``RESULT_IDENTITY_MISMATCH`` even though the correct
+                # worker ran.
+                started_worker = (((started.get("payload") or {}).get("attempt") or {})
+                                  .get("worker") or {})
+                session_id = started_worker.get("session_id")
+                if {"worker_id", "provider", "model"} <= set(started_worker):
+                    invocation_packet["assigned_worker"] = {
+                        "worker_id": started_worker["worker_id"],
+                        "provider": started_worker["provider"],
+                        "model": started_worker["model"],
+                    }
                 baseline_was_journaled = any(
                     event.get("event_type") == "WORKSPACE_BASELINE_RECORDED"
                     and event.get("packet_id") == packet_id
@@ -755,7 +1173,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                       and not sidecar_present):
                     invocation = invoke_worker(
                         state_root, state_root_id, invocation_packet, started["intent_id"],
-                        session_id, adapter, allowed_worktree=packet_body["worktree"]["path"])
+                        session_id, adapter, allowed_worktree=packet_body["worktree"]["path"],
+                        plan_budgets=_plan_budgets_for(plan, packet_id))
                     postflight = _record_workspace_postflight(
                         handle, state_root, state_root_id, journal_events, invocation_packet,
                         started["intent_id"], invocation.result, started["coordinator_id"],
@@ -836,9 +1255,15 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             integration_context_by_packet)
 
         before = len(journal_events)
-        journal_events, review_outcomes, review_attention = resolve_pending_reviews(
+        # Extended, never rebound: attempt-level attention gathered above is
+        # part of what this iteration must report.  Rebinding the name here
+        # silently discarded it, so a packet whose evidence contradicted
+        # itself -- the exact case resolve_open_attempts isolates rather than
+        # aborting on -- came back to the caller as an empty list.
+        journal_events, review_outcomes, pending_attention = resolve_pending_reviews(
             state_root, state_root_id, journal_events, folded, coordinator_id, run_id,
             trusted_process_context, now, handle=handle)
+        review_attention.extend(pending_attention)
         if len(journal_events) != before:
             folded, _ = _fold_journal(state_root, journal_events)
 
@@ -846,7 +1271,60 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             handle, state_root, state_root_id, journal_events, folded, coordinator_id, run_id, now,
             integration_context_by_packet)
 
-    packet_id = select_next(folded, disabled_lanes or [], now)
+        # The active attempt has now reached a durable outcome and its O4
+        # postflight is recorded, so a requested stop may become effective.
+        # A restart that found the stop already requested lands here too: it
+        # completes recovery first, exactly as a fresh observation would, and
+        # never assumes the condition has passed.
+        stop = graceful_stop_state(journal_events, run_id)
+        if stop["pending"] and not _any_attempt_open(folded):
+            # ``plan`` is passed as a cross-check, not as the source of the
+            # stop's plan identity -- that comes from the recorded request, so
+            # this closes cleanly even on a restart that resolved no plan.
+            journal_events = make_graceful_stop_effective(
+                journal_path, journal_lock_path, journal_events,
+                coordinator_id, run_id, state_root_id, now, plan=plan,
+                handle=handle)
+            stop = graceful_stop_state(journal_events, run_id)
+
+    if stop["stopped"] or stop["pending"]:
+        # Selection is skipped entirely rather than filtered: a graceful stop
+        # must produce ZERO further ATTEMPT_STARTED events, and the surest way
+        # to guarantee that is never to reach the claim path at all.
+        return _finish_iteration(
+            handle, state_root, state_root_id, journal_events, coordinator_id, run_id, now,
+            {
+                "status": "graceful_stopped" if stop["stopped"] else "graceful_stop_pending",
+                "packet_id": None,
+                "stop_reason_code": stop["reason_code"],
+                "reviews": review_outcomes, "review_attention": review_attention,
+                "sealed": first["sealed"] + second["sealed"],
+                "promotion_attention": (
+                    first["promotion_attention"] + second["promotion_attention"]),
+                "revise_budget_exhausted": (
+                    first["revise_budget_exhausted"] + second["revise_budget_exhausted"]),
+            })
+
+    # Step 4 of the pre-claim gate ordering: verify plan membership and
+    # terminal partition. Every plan member has reached a packet-level
+    # terminal state, so remaining provider capacity or newly-discoverable
+    # work must not permit a new claim or new enrollment -- checked before
+    # ``select_next`` runs at all, so a completed plan never even asks the
+    # scheduler for a candidate.
+    if plan is not None and _plan_is_complete(plan, folded):
+        return _finish_iteration(
+            handle, state_root, state_root_id, journal_events, coordinator_id, run_id, now,
+            {
+                "status": "plan_complete", "packet_id": None,
+                "reviews": review_outcomes, "review_attention": review_attention,
+                "sealed": first["sealed"] + second["sealed"],
+                "promotion_attention": (
+                    first["promotion_attention"] + second["promotion_attention"]),
+                "revise_budget_exhausted": (
+                    first["revise_budget_exhausted"] + second["revise_budget_exhausted"]),
+            })
+
+    packet_id = select_next(folded, disabled_lanes or [], now, plan=plan)
     waiting_for_adapter = False
     if packet_id is not None:
         selected_adapter = adapters.get(packet_id) or adapters.get(folded[packet_id]["lane"])
@@ -854,6 +1332,38 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             selected_packet = _load_enrolled_packet(
                 state_root, packet_id, folded[packet_id], journal_events, handle=handle)
             waiting_for_adapter = bool(selected_packet.get("writable_paths"))
+
+    # Steps 5-6 of the pre-claim gate ordering: evaluate the stop/budget/
+    # provider/model decision for the one packet selection actually picked,
+    # then persist whatever it implies (fallback, or a pause/backoff/stop/
+    # human-required refusal). No adapter lookup, provider catalog response,
+    # worker result, or cache participates in this decision -- it is derived
+    # solely from the authenticated plan and journal (plus this task's own
+    # human-authority read of the packet's OWN declared conditions).
+    #
+    # Scope note (flagged in the report): this evaluates only the packet
+    # ``select_next`` already chose. It does not walk past a blocked
+    # candidate to try a different eligible packet with unrelated capacity --
+    # a deliberate, narrower scope than a full multi-candidate scheduler,
+    # explained in the report.
+    budget_decision: Optional[Dict[str, Any]] = None
+    assigned_worker_override: Optional[Dict[str, str]] = None
+    if packet_id is not None and not waiting_for_adapter and plan is not None:
+        plan_packet_row = _plan_packet_row(plan, packet_id)
+        gate_packet_body = _load_enrolled_packet(
+            state_root, packet_id, folded[packet_id], journal_events, handle=handle)
+        capability_class = plan_packet_row["capability_class"] if plan_packet_row else None
+        budget_decision = _human_authority_decision(gate_packet_body, packet_id)
+        if budget_decision is None:
+            budget_decision = evaluate_preclaim(
+                plan, folded[packet_id], journal_events, provider_state or {}, now)
+        journal_events = _persist_budget_decision(
+            handle, state_root, state_root_id, journal_events, plan, packet_id,
+            capability_class, budget_decision, coordinator_id, run_id, now)
+        if budget_decision["decision"] in ("ALLOW", "FALLBACK"):
+            assigned_worker_override = _assigned_worker_override(
+                gate_packet_body, budget_decision.get("route"))
+
     if waiting_for_adapter:
         # A nonempty writable allowlist is the compatibility-independent
         # boundary for workspace preflight. Without an adapter there is no
@@ -861,6 +1371,24 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
         # creating a durable claim/RUNNING attempt.
         result = {
             "status": "awaiting_worker_adapter", "packet_id": packet_id,
+            "reviews": review_outcomes, "review_attention": review_attention,
+            "sealed": first["sealed"] + second["sealed"],
+            "promotion_attention": (
+                first["promotion_attention"] + second["promotion_attention"]),
+            "revise_budget_exhausted": (
+                first["revise_budget_exhausted"] + second["revise_budget_exhausted"]),
+        }
+    elif budget_decision is not None and budget_decision["decision"] not in ("ALLOW", "FALLBACK"):
+        # Steps 4-6 of the pre-claim gate ordering refused this claim: the
+        # decision (and, for PAUSE/BACKOFF/STOP/HUMAN_REQUIRED, its
+        # PACKET_PAUSED record) is already durably persisted above. The one
+        # thing left to guarantee is that steps 7-9 (O4 preflight,
+        # ATTEMPT_STARTED, invocation) never run for this packet on this
+        # iteration -- selection is reported, not acted on.
+        result = {
+            "status": _status_for_budget_decision(budget_decision),
+            "packet_id": packet_id,
+            "stop_reason_code": budget_decision["reason_code"],
             "reviews": review_outcomes, "review_attention": review_attention,
             "sealed": first["sealed"] + second["sealed"],
             "promotion_attention": (
@@ -890,7 +1418,8 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                                             journal_events=journal_events, packet_id=packet_id,
                                             packet=folded[packet_id], coordinator_id=coordinator_id,
                                             run_id=run_id, trusted_process_context=trusted_process_context,
-                                            now=now, handle=handle)
+                                            now=now, handle=handle,
+                                            assigned_worker=assigned_worker_override)
         if preflight_intent_id is not None and intent_id != preflight_intent_id:
             raise RuntimeError("attempt identity changed after workspace preflight")
         result = {"status": "claimed", "packet_id": packet_id, "intent_id": intent_id,
@@ -903,11 +1432,21 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
             assert packet_body is not None
             invocation_packet = dict(packet_body)
             invocation_packet["attempt"] = attempt
+            # The pre-claim gate's chosen route (if any) was already applied
+            # to the durable ATTEMPT_STARTED record via ``claim_and_start_
+            # attempt``'s own ``assigned_worker`` parameter above; it must
+            # also apply here, to the packet actually handed to the worker,
+            # or the journal and the invocation disagree on who was assigned
+            # and ``invoke_worker``'s own result-identity check rejects a
+            # genuine fallback as ``RESULT_IDENTITY_MISMATCH``.
+            if assigned_worker_override is not None:
+                invocation_packet["assigned_worker"] = assigned_worker_override
             session_id = attempt_session_id(run_id, packet_id, attempt)
             handle.verify_identity()
             invocation = invoke_worker(
                 state_root, state_root_id, invocation_packet, intent_id, session_id,
-                adapter, allowed_worktree=packet_body["worktree"]["path"])
+                adapter, allowed_worktree=packet_body["worktree"]["path"],
+                plan_budgets=_plan_budgets_for(plan, packet_id))
             handle.verify_identity()
             postflight = _record_workspace_postflight(
                 handle, state_root, state_root_id, journal_events, invocation_packet,
@@ -937,6 +1476,24 @@ def _run_iteration(handle, state_root: str, report, coordinator_id: str, run_id:
                                             + after_worker["revise_budget_exhausted"]),
             })
 
+    return _finish_iteration(handle, state_root, state_root_id, journal_events,
+                             coordinator_id, run_id, now, result)
+
+
+def _any_attempt_open(folded: Dict[str, Dict[str, Any]]) -> bool:
+    """Whether any packet still holds an unresolved attempt."""
+    return any(packet.get("state") == "RUNNING" and packet.get("open_attempt") is not None
+               for packet in folded.values())
+
+
+def _finish_iteration(handle, state_root: str, state_root_id: Optional[str],
+                      journal_events: List[Dict[str, Any]], coordinator_id: str,
+                      run_id: str, now: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    """Publish this iteration's reconciliation report and return the result.
+
+    Shared by every exit from the iteration, including the graceful-stop one:
+    a stopped run still owes an accurate report of where its packets landed.
+    """
     if state_root_id is None or not os.path.exists(os.path.join(state_root, "MANIFEST.json")):
         return result
     report_id = f"reconciliation-{compute_sha256(run_id.encode('utf-8'))[:32]}"

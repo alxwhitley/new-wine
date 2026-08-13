@@ -54,7 +54,24 @@ def validate_replay_bundle(
     value: Any,
     trusted_dependency_provenance: Optional[Dict[str, Dict[str, str]]] = None,
     trusted_reviewer_sessions: Optional[Set[str]] = None,
+    trusted_attempt_worker: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
+    """Validate a coordinator-assembled replay bundle.
+
+    ``trusted_attempt_worker``, when supplied, is the ATTEMPT_STARTED-
+    recorded ``worker`` identity for the specific attempt under review --
+    ground truth for a plan-pinned fallback route, which the bundle's own
+    ``packet.assigned_worker`` (the packet's static, enrollment-time default)
+    does not reflect and must never be mutated to reflect: ``packet`` inside
+    the bundle has to stay byte-identical to the enrolled packet artifact for
+    its own self-hash (``packet_sha256``) and downstream terminal-seal
+    binding to keep holding. Passing it here, alongside the bundle rather
+    than inside it, is the same shape ``trusted_dependency_provenance`` and
+    ``trusted_reviewer_sessions`` already use for coordinator-owned context a
+    self-consistent bundle cannot forge on its own. Omitting it (every caller
+    that predates this parameter) preserves the exact prior behavior: the
+    worker-identity cross-check falls back to ``packet.assigned_worker``.
+    """
     if isinstance(value, (str, bytes, bytearray)):
         try:
             value = json.loads(value)
@@ -66,6 +83,7 @@ def validate_replay_bundle(
     v = _PacketValidator(value)
     v.trusted_dependency_provenance = trusted_dependency_provenance
     v.trusted_reviewer_sessions = trusted_reviewer_sessions
+    v.trusted_attempt_worker = trusted_attempt_worker
     _validate_bundle_object(v)
     if not v.errors:
         return valid_result()
@@ -286,8 +304,19 @@ def _cross_object_replay_checks(v: _PacketValidator, packet: Any, worker_result:
     if not isinstance(packet, dict) or not isinstance(worker_result, dict):
         return
 
-    # Worker identity must match the packet's assigned worker.
-    assigned = packet.get("assigned_worker") or {}
+    # Worker identity must match the worker actually assigned to this
+    # attempt. ``trusted_attempt_worker`` (the ATTEMPT_STARTED-recorded
+    # identity for the reviewed attempt, supplied by the coordinator
+    # assembling this bundle -- see ``validate_replay_bundle``'s docstring)
+    # is the ground truth when present, because it reflects a plan-pinned
+    # fallback route the packet's own static ``assigned_worker`` default
+    # cannot. Falling back to ``packet.get("assigned_worker")`` when it is
+    # absent preserves the exact prior check for every caller that predates
+    # this parameter, including the non-fallback case this check exists to
+    # catch: a worker result whose identity disagrees with what was actually
+    # assigned, for any reason other than a legitimate recorded fallback.
+    trusted_worker = getattr(v, "trusted_attempt_worker", None)
+    assigned = trusted_worker if isinstance(trusted_worker, dict) else (packet.get("assigned_worker") or {})
     worker = worker_result.get("worker") or {}
     for field in ("worker_id", "provider", "model"):
         if assigned.get(field) != worker.get(field):

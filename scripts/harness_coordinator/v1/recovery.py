@@ -6,20 +6,30 @@ are left to packet O3-P3; this module returns a report describing the fold
 state so the caller can continue.
 """
 
+import datetime
 import fcntl
 import json
 import os
+import stat
 import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from harness_contracts.v1.canonical import canonical_bytes, compute_sha256
 from harness_contracts.v1.claim import classify_claim, validate_claim
+from harness_contracts.v1.execution_plan import (
+    ExecutionPlanContractError,
+    authenticate_execution_plan_bytes,
+)
 from harness_contracts.v1.journal import (
     CAUSE_EDGES,
+    GRACEFUL_STOP_EVENT_TYPES,
+    GRACEFUL_STOP_REASON_CODES,
     ZERO_SHA256,
     validate_journal_event,
 )
+from harness_contracts.v1.worker_result import RE_RFC3339
 from harness_contracts.v1.provider_evidence import validate_provider_signals_registry
+from harness_contracts.v1.packet import RE_SHA256, _matches, is_harness_id, validate_packet
 from harness_contracts.v1.queue_state import validate_queue
 from harness_contracts.v1.seal import TERMINAL_STATES, validate_terminal_seal
 from harness_contracts.v1.transition import validate_transition
@@ -55,10 +65,33 @@ class IntegrityError(Exception):
     """
 
     def __init__(self, code: str, message: str, packet_id: Optional[str] = None) -> None:
-        super().__init__(message)
+        # ``str(exc)`` carries the code for every code uniformly, so a bare
+        # ``pytest.raises(match=...)`` or a logged traceback names the failure
+        # class.  ``self.message`` stays the RAW message: consumers such as
+        # ``reconcile``'s attention records and ``replay_schedule``'s
+        # divergences format ``code`` themselves and would otherwise double it.
+        super().__init__("%s: %s" % (code, message))
         self.code = code
         self.message = message
         self.packet_id = packet_id
+
+
+# ``PACKET_PAUSED`` is schema-forbidden from transitioning packet state (its
+# ``from_state``/``to_state`` must both be null), so it cannot mark a paused
+# packet ineligible the way an ordinary state transition would. Reusing the
+# already-required ``earliest_next_attempt_at`` packet-state field --
+# already consulted by ``scheduler._is_eligible`` -- is how the fold makes a
+# paused/blocked packet genuinely ineligible for reselection without
+# inventing new schema. A real BACKOFF's own ``next_eligible_at`` is used
+# verbatim (see ``_fold_journal``'s ``PACKET_PAUSED`` branch); a pause with
+# no natural expiry (``PAUSE``/``STOP``/``HUMAN_REQUIRED``, e.g.
+# ``NO_CAPABLE_MODEL_AVAILABLE`` or the human-authority gate) gets this
+# sentinel instead. It is a timestamp safely beyond any plan's
+# ``wall_clock_safety_seconds`` ceiling (``execution_plan.
+# MAX_WALL_CLOCK_SAFETY_SECONDS`` is 86400 seconds, one day), so it reads as
+# "not eligible again within this run" without inventing a second,
+# never-clears sentinel value that could be confused with a real timestamp.
+_INDEFINITE_PAUSE_SENTINEL = "9999-12-31T23:59:59Z"
 
 
 WORKSPACE_STAGE_SPECS = {
@@ -586,6 +619,12 @@ def _fold_journal(
     journal_events: List[Dict[str, Any]],
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
     packets: Dict[str, Dict[str, Any]] = {}
+    bound_plans_by_run: Dict[str, Dict[str, Any]] = {}
+    # Graceful-stop state is journal-only: no artifact is read to decide it,
+    # so unlike plan authentication below it holds under the phantom-root
+    # folds that reconcile and replay perform.
+    stop_requested_runs: Set[str] = set()
+    stop_effective_runs: Set[str] = set()
     counters = {
         "attempts_started_total": 0,
         "infra_retries_total": 0,
@@ -601,7 +640,7 @@ def _fold_journal(
 
     state_changing_types = {"PACKET_ENROLLED", "STATE_TRANSITION", "ATTEMPT_STARTED", "ATTEMPT_FINISHED", "VERDICT_RECORDED"}
 
-    for event in journal_events:
+    for event_index, event in enumerate(journal_events):
         event_type = event.get("event_type")
         cause = event.get("cause")
         packet_id = event.get("packet_id")
@@ -612,6 +651,68 @@ def _fold_journal(
                 raise IntegrityError("INVALID_FORMAT", str(exc)) from exc
         from_state = event.get("from_state")
         to_state = event.get("to_state")
+
+        if event_type in GRACEFUL_STOP_EVENT_TYPES:
+            stop_run_id = event.get("run_id")
+            if not isinstance(stop_run_id, str) or not stop_run_id:
+                raise IntegrityError(
+                    "GRACEFUL_STOP_INVALID", "graceful stop event has an invalid run_id")
+            if event_type == "GRACEFUL_STOP_REQUESTED":
+                if stop_run_id in stop_effective_runs:
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_REQUEST_AFTER_EFFECTIVE",
+                        "run requested a graceful stop after one already took effect")
+                if stop_run_id in stop_requested_runs:
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_DUPLICATE_REQUEST",
+                        "run has more than one graceful stop request")
+                stop_requested_runs.add(stop_run_id)
+            else:
+                if stop_run_id not in stop_requested_runs:
+                    # An effective stop with no request is not reconstructable:
+                    # nothing records what the run was stopping for.
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_EFFECTIVE_WITHOUT_REQUEST",
+                        "graceful stop took effect without a recorded request")
+                if stop_run_id in stop_effective_runs:
+                    raise IntegrityError(
+                        "GRACEFUL_STOP_DUPLICATE_EFFECTIVE",
+                        "run has more than one effective graceful stop")
+                stop_effective_runs.add(stop_run_id)
+
+        if event_type == "ATTEMPT_STARTED" and event.get("run_id") in stop_effective_runs:
+            # The one-extra-claim failure, caught durably rather than only at
+            # the pre-claim gate: once a run's stop is effective, a later
+            # ATTEMPT_STARTED in the same run cannot be replayed as legitimate.
+            raise IntegrityError(
+                "GRACEFUL_STOP_CLAIM_AFTER_STOP",
+                "packet claimed after the run's graceful stop took effect",
+                packet_id)
+
+        if event_type == "EXECUTION_PLAN_BOUND":
+            run_id = event.get("run_id")
+            if not isinstance(run_id, str) or not run_id:
+                raise IntegrityError("PLAN_IDENTITY_INVALID", "execution plan binding has an invalid run_id")
+            if any(
+                prior.get("event_type") == "ATTEMPT_STARTED" and prior.get("run_id") == run_id
+                for prior in journal_events[:event_index]
+            ):
+                raise IntegrityError("PLAN_IDENTITY_LATE_BIND", "execution plan binding occurred after an attempt claim")
+            # Recovery has a concrete state root, unlike reconciliation's
+            # phantom inventory fold and replay's phantom prefix-fold root.
+            # Plan authentication and plan-scope membership both read
+            # immutable artifacts from that root, so a phantom-root fold is
+            # an inventory pass, not an authentication pass -- exactly how
+            # the workspace-evidence branch below already treats it.
+            if os.path.isdir(state_root):
+                plan = _authenticate_bound_execution_plan(state_root, event)
+                existing_plan = bound_plans_by_run.get(run_id)
+                if existing_plan is not None and existing_plan != plan:
+                    raise IntegrityError("PLAN_IDENTITY_CONFLICT", "run has conflicting execution plan bindings")
+                bound_plans_by_run[run_id] = plan
+                for known_packet in packets.values():
+                    if known_packet.get("run_id") == run_id:
+                        _validate_plan_packet_binding(state_root, plan, known_packet)
 
         if event_type in state_changing_types:
             if event_type == "PACKET_ENROLLED":
@@ -667,14 +768,34 @@ def _fold_journal(
                     raise IntegrityError("INVALID_FORMAT", str(exc)) from exc
             if packet_id in packets:
                 raise IntegrityError("DUPLICATE_ID", f"Packet {packet_id} already enrolled")
+            plan = bound_plans_by_run.get(event.get("run_id"))
+            # Same phantom-root convention as the plan-binding branch above:
+            # ``_validate_plan_packet_binding`` reads the enrolled packet's
+            # immutable artifact, which only a concrete state root has.
+            if plan is not None and os.path.isdir(state_root):
+                _validate_plan_packet_binding(
+                    state_root,
+                    plan,
+                    {
+                        "packet_id": packet_id,
+                        "packet_sha256": packet_payload.get("packet_sha256"),
+                        "dependency_ids": list(packet_payload.get("dependency_ids") or []),
+                        "packet_path": packet_payload.get("packet_path"),
+                    },
+                )
             lane = packet_payload.get("lane")
             packets[packet_id] = {
                 "packet_id": packet_id,
+                "run_id": event.get("run_id"),
                 "enqueue_seq": event["seq"],
                 "state": to_state,
                 "lane": lane,
                 "dependency_ids": list(packet_payload.get("dependency_ids") or []),
                 "packet_sha256": packet_payload.get("packet_sha256"),
+                # Persisted so the retro plan-scope check performed when a
+                # binding event arrives AFTER enrollment passes the same
+                # record shape this branch's own enrollment-time call builds.
+                "packet_path": packet_payload.get("packet_path"),
                 "retry_limit": packet_payload.get("retry_limit"),
                 "sonnet_reassignment_allowed": packet_payload.get("sonnet_reassignment_allowed"),
                 "attempts_started": 0,
@@ -790,6 +911,36 @@ def _fold_journal(
             pkt["last_event_seq"] = event["seq"]
             pkt["last_event_sha256"] = event["event_sha256"]
 
+        elif event_type == "PACKET_PAUSED":
+            pkt = packets.get(packet_id)
+            if pkt is None:
+                # Unlike ATTEMPT_STARTED/ATTEMPT_FINISHED/STATE_TRANSITION,
+                # PACKET_PAUSED is not itself proof of a real prior
+                # enrollment the fold must have seen -- it is a pure
+                # capacity-event record, and reconcile's inventory fold and
+                # replay's prefix fold both run over phantom/partial slices
+                # that legitimately omit the PACKET_ENROLLED an event like
+                # this references (see
+                # ``test_phantom_root_folds_tolerate_the_new_budget_events``).
+                # A live coordinator run never actually reaches this branch
+                # for an unenrolled packet: ``_persist_budget_decision`` is
+                # only ever called with a packet ``select_next`` already drew
+                # from this SAME fold, so it is always present there.
+                continue
+            body = (event.get("payload") or {}).get("packet_pause") or {}
+            next_eligible = body.get("next_eligible_at")
+            # A real BACKOFF window is used verbatim; every other pause
+            # reason (PAUSE/STOP/HUMAN_REQUIRED, no natural expiry) gets the
+            # indefinite sentinel -- see the constant's own docstring above.
+            # This is a last-write-wins update, same convention as every
+            # other packet-scoped fold field: the most recent journal record
+            # for this packet is authoritative, whichever direction it moves.
+            pkt["earliest_next_attempt_at"] = (
+                next_eligible if isinstance(next_eligible, str) and next_eligible
+                else _INDEFINITE_PAUSE_SENTINEL)
+            pkt["last_event_seq"] = event["seq"]
+            pkt["last_event_sha256"] = event["event_sha256"]
+
         elif event_type == "ATTEMPT_FINISHED":
             pkt = packets.get(packet_id)
             if pkt is None:
@@ -899,6 +1050,394 @@ def _fold_journal(
     # Step 5 only checks existing seals for consistency; missing terminal seals
     # are created later by step 13 (owned by O3-P3).
     return packets, counters
+
+
+def _authenticate_bound_execution_plan(state_root: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    """Authenticate the immutable plan artifact named by one binding event."""
+    binding = ((event.get("payload") or {}).get("execution_plan"))
+    required = {"plan_id", "plan_sha256", "plan_path", "packet_count"}
+    if not isinstance(binding, dict) or set(binding) != required:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", "execution plan binding payload is not closed")
+    plan_id = binding.get("plan_id")
+    try:
+        validate_harness_id(plan_id, "/payload/execution_plan/plan_id")
+        expected_path = safe_state_path(
+            state_root, "plans", identifier=plan_id, identifier_suffix=".json"
+        )
+    except ValueError as exc:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", str(exc)) from exc
+    if binding.get("plan_path") != "plans/%s.json" % plan_id:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", "execution plan binding path is not canonical")
+    try:
+        raw = _read_regular_nofollow(expected_path)
+    except FileNotFoundError as exc:
+        raise IntegrityError("PLAN_IDENTITY_ARTIFACT_MISSING", "bound execution plan artifact is missing") from exc
+    except OSError as exc:
+        raise IntegrityError("PLAN_IDENTITY_INVALID", "bound execution plan artifact cannot be safely read") from exc
+    try:
+        plan = authenticate_execution_plan_bytes(raw)
+    except ExecutionPlanContractError as exc:
+        raise IntegrityError(exc.code, exc.message) from exc
+    if plan.get("plan_id") != plan_id:
+        raise IntegrityError("PLAN_IDENTITY_CONFLICT", "bound plan artifact plan_id disagrees with journal")
+    if plan.get("plan_sha256") != binding.get("plan_sha256"):
+        raise IntegrityError("PLAN_IDENTITY_CONFLICT", "bound plan artifact digest disagrees with journal")
+    if len(plan.get("packets", [])) != binding.get("packet_count"):
+        raise IntegrityError("PLAN_IDENTITY_CONFLICT", "bound plan packet count disagrees with journal")
+    return plan
+
+
+def bound_execution_plan_for_run(
+    state_root: str, journal_events: List[Dict[str, Any]], run_id: str
+) -> Optional[Dict[str, Any]]:
+    """Return the authenticated plan this run is bound to, if any.
+
+    Same phantom-root convention as the fold: authentication reads the
+    immutable plan artifact, which only a concrete state root has, so an
+    inventory or prefix fold root yields ``None`` rather than a failure.
+    """
+    if not os.path.isdir(state_root):
+        return None
+    binding_event = None
+    for event in journal_events:
+        if (event.get("event_type") == "EXECUTION_PLAN_BOUND"
+                and event.get("run_id") == run_id):
+            binding_event = event
+    if binding_event is None:
+        return None
+    return _authenticate_bound_execution_plan(state_root, binding_event)
+
+
+# ---------------------------------------------------------------------------
+# Durable graceful-stop state
+#
+# A graceful stop lets the active attempt reach a durable outcome and complete
+# mandatory O4 postflight, then stops the run before the next claim.  It is a
+# different thing from an immediate process-safety limit, which terminates a
+# process group; the reason vocabularies are disjoint so the two can never be
+# confused in the journal.
+# ---------------------------------------------------------------------------
+
+
+def graceful_stop_state(
+    journal_events: List[Dict[str, Any]], run_id: str
+) -> Dict[str, Any]:
+    """Fold one run's durable graceful-stop state. Pure; reads no artifact.
+
+    ``pending`` is the conservative state a restart must honour: the stop was
+    requested and has not yet taken effect, so recovery completes first and
+    the stop is made effective afterwards -- never dropped because a new
+    process did not observe the original condition.
+    """
+    requested = None
+    effective = None
+    for event in journal_events or []:
+        if event.get("run_id") != run_id:
+            continue
+        event_type = event.get("event_type")
+        if event_type == "GRACEFUL_STOP_REQUESTED":
+            requested = event
+        elif event_type == "GRACEFUL_STOP_EFFECTIVE":
+            effective = event
+    reason_code = None
+    for event in (effective, requested):
+        if event is None:
+            continue
+        body = ((event.get("payload") or {}).get(_stop_payload_key(event["event_type"]))
+                or {})
+        if isinstance(body.get("reason_code"), str):
+            reason_code = body["reason_code"]
+            break
+    return {
+        "requested": requested,
+        "effective": effective,
+        "pending": requested is not None and effective is None,
+        "stopped": effective is not None,
+        "reason_code": reason_code,
+    }
+
+
+def _stop_payload_key(event_type: str) -> str:
+    return ("graceful_stop_effective" if event_type == "GRACEFUL_STOP_EFFECTIVE"
+            else "graceful_stop_request")
+
+
+def _run_started_at(journal_events: List[Dict[str, Any]], run_id: str) -> Optional[str]:
+    """The authenticated start instant of ``run_id``, or None if unrecorded.
+
+    The EARLIEST RUN_STARTED wins: a restart appends another one for the same
+    run, and measuring elapsed time from the restart would let a run that
+    keeps crashing outlive its own backstop forever.
+
+    Earliest by VALUE, never by position in the list -- taking the first match
+    in list order would make a safety backstop depend on how the caller
+    happened to order its events, and every accepted instant here is
+    normalised fixed-width Z-terminated UTC, so ``min`` over the strings is
+    exactly ``min`` over the instants.
+    """
+    started = [
+        event.get("event_at") for event in journal_events or []
+        if event.get("event_type") == "RUN_STARTED"
+        and event.get("run_id") == run_id
+        and _matches_rfc3339(event.get("event_at"))
+    ]
+    return min(started) if started else None
+
+
+def _matches_rfc3339(value: Any) -> bool:
+    """Normalised, fixed-width, Z-terminated UTC, so string order is time order."""
+    return _matches(value, RE_RFC3339)
+
+
+def _parse_utc(value: str) -> datetime.datetime:
+    return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+
+
+def wall_clock_ceiling_reached(
+    journal_events: List[Dict[str, Any]],
+    run_id: str,
+    wall_clock_safety_seconds: Any,
+    now: Any,
+) -> bool:
+    """Has the plan's run-level wall-clock backstop elapsed?
+
+    This is a backstop against an abandoned run, NOT the definition of a
+    successful one: plan completion is.  It is evaluated against durable UTC
+    with explicit ordering validation, per the design -- a ``now`` earlier
+    than the authenticated run start is clock regression and fails closed
+    rather than being read as "time remains".
+    """
+    if isinstance(wall_clock_safety_seconds, bool) or not isinstance(
+            wall_clock_safety_seconds, int) or wall_clock_safety_seconds < 1:
+        raise IntegrityError(
+            "BUDGET_EVIDENCE_INVALID",
+            "wall_clock_safety_seconds must be a positive integer")
+    started_at = _run_started_at(journal_events, run_id)
+    if started_at is None:
+        # Nothing authenticates when this run began, so no elapsed time can be
+        # claimed against it.  The run is bounded by its other limits instead.
+        return False
+    if not _matches_rfc3339(now):
+        raise IntegrityError(
+            "CLOCK_EVIDENCE_INVALID", "now must be a normalised RFC3339 UTC instant")
+    if now < started_at:
+        raise IntegrityError(
+            "CLOCK_REGRESSION",
+            "now precedes the authenticated run start")
+    elapsed = (_parse_utc(now) - _parse_utc(started_at)).total_seconds()
+    return elapsed >= wall_clock_safety_seconds
+
+
+def _graceful_stop_binding(source: Dict[str, Any]) -> Dict[str, str]:
+    """The plan identity every graceful stop event is bound to.
+
+    ``source`` is anything carrying ``plan_id``/``plan_sha256`` -- a validated
+    execution plan, or a recorded ``graceful_stop_request`` payload, which
+    names the same two fields precisely so a stop's plan identity can be read
+    back off the journal instead of being supplied again.
+    """
+    if not isinstance(source, dict):
+        raise ValueError("a graceful stop must name the plan it stops")
+    plan_id, plan_sha256 = source.get("plan_id"), source.get("plan_sha256")
+    if not is_harness_id(plan_id) or not _matches(plan_sha256, RE_SHA256):
+        raise ValueError("a graceful stop must name an authenticated plan identity")
+    return {"plan_id": plan_id, "plan_sha256": plan_sha256}
+
+
+def _append_stop_event(
+    journal_path: str,
+    lock_path: str,
+    journal_events: List[Dict[str, Any]],
+    event_type: str,
+    body: Dict[str, Any],
+    coordinator_id: str,
+    run_id: str,
+    state_root_id: str,
+    now: str,
+    handle=None,
+) -> List[Dict[str, Any]]:
+    from harness_coordinator.v1.budget_runtime import budget_event_payload
+
+    previous = journal_events[-1] if journal_events else None
+    event = _make_event(
+        seq=(_last_seq(journal_events) + 1),
+        event_type=event_type,
+        coordinator_id=coordinator_id,
+        run_id=run_id,
+        state_root_id=state_root_id,
+        prev_event=previous,
+        event_at=now,
+        payload=budget_event_payload(event_type, body),
+    )
+    result = validate_journal_event(event, previous, state_root_id)
+    if not result["valid"]:
+        raise IntegrityError(
+            "GRACEFUL_STOP_INVALID",
+            "refusing to journal an invalid graceful stop event: %s"
+            % result["errors"][0]["message"])
+    if handle is not None:
+        handle.verify_identity()
+    append_journal(journal_path, event, lock_path, expected_head=previous)
+    if handle is not None:
+        handle.verify_identity()
+    journal_events.append(event)
+    return journal_events
+
+
+def request_graceful_stop(
+    journal_path: str,
+    lock_path: str,
+    journal_events: List[Dict[str, Any]],
+    plan: Dict[str, Any],
+    coordinator_id: str,
+    run_id: str,
+    state_root_id: str,
+    now: str,
+    reason_code: str,
+    evidence_ids: List[str],
+    handle=None,
+) -> List[Dict[str, Any]]:
+    """Record that this run must stop after its active attempt resolves.
+
+    Requesting is idempotent: a request already on record is returned as-is
+    rather than duplicated, so a retry or a restart cannot manufacture a
+    second stop for one run.
+    """
+    if reason_code not in GRACEFUL_STOP_REASON_CODES:
+        # An immediate process-safety code lands here: refused, not recorded.
+        # Terminating a runaway process group is not an orderly plan stop, and
+        # relabelling one as the other is exactly the confusion this vocabulary
+        # split exists to prevent.
+        raise ValueError(
+            "%s is not a graceful stop reason code" % (reason_code,))
+    binding = _graceful_stop_binding(plan)
+    state = graceful_stop_state(journal_events, run_id)
+    if state["stopped"]:
+        raise IntegrityError(
+            "GRACEFUL_STOP_REQUEST_AFTER_EFFECTIVE",
+            "run already has an effective graceful stop")
+    if state["pending"]:
+        return journal_events
+    body = dict(binding, reason_code=reason_code,
+                evidence_ids=sorted(set(evidence_ids or [])))
+    return _append_stop_event(
+        journal_path, lock_path, journal_events, "GRACEFUL_STOP_REQUESTED", body,
+        coordinator_id, run_id, state_root_id, now, handle=handle)
+
+
+def make_graceful_stop_effective(
+    journal_path: str,
+    lock_path: str,
+    journal_events: List[Dict[str, Any]],
+    coordinator_id: str,
+    run_id: str,
+    state_root_id: str,
+    now: str,
+    plan: Optional[Dict[str, Any]] = None,
+    handle=None,
+) -> List[Dict[str, Any]]:
+    """Close a requested stop, after recovery and postflight have completed.
+
+    Reason code, evidence ids AND PLAN IDENTITY are all read back off the
+    recorded request rather than supplied again, so an effective stop can
+    never claim a different reason -- or a different plan -- from the request
+    it completes.  Taking the binding from the journal is also what lets a
+    restart close a pending stop at all: the plan that produced the request is
+    on record even when this process was handed no plan argument and none was
+    ever bound into the journal.
+
+    ``plan`` is therefore optional, and when supplied it is CHECKED against
+    the recorded identity rather than preferred over it.  A disagreement is
+    ambiguity about which plan is being stopped, so it fails closed with
+    ``PLAN_IDENTITY_CONFLICT`` instead of silently writing the argument's
+    identity over the request's.
+    """
+    state = graceful_stop_state(journal_events, run_id)
+    request = state["requested"]
+    binding = None
+    if request is not None:
+        requested_body = (
+            (request.get("payload") or {}).get("graceful_stop_request") or {})
+        binding = _graceful_stop_binding(requested_body)
+        if plan is not None and _graceful_stop_binding(plan) != binding:
+            raise IntegrityError(
+                "PLAN_IDENTITY_CONFLICT",
+                "an effective graceful stop must name the same plan as the "
+                "request it completes")
+    if state["stopped"]:
+        return journal_events
+    if not state["pending"]:
+        raise ValueError(
+            "a graceful stop cannot take effect without a recorded request")
+    body = dict(
+        binding,
+        reason_code=requested_body.get("reason_code"),
+        requested_event_id=request.get("event_id"),
+        evidence_ids=sorted(set(requested_body.get("evidence_ids") or [])),
+    )
+    return _append_stop_event(
+        journal_path, lock_path, journal_events, "GRACEFUL_STOP_EFFECTIVE", body,
+        coordinator_id, run_id, state_root_id, now, handle=handle)
+
+
+def _validate_plan_packet_binding(
+    state_root: str, plan: Dict[str, Any], enrolled: Dict[str, Any]
+) -> None:
+    """Prove an enrolled packet is one authenticated member of ``plan``."""
+    packet_id = enrolled.get("packet_id")
+    expected = None
+    for packet in plan.get("packets", []):
+        if packet.get("packet_id") == packet_id:
+            expected = packet
+            break
+    if expected is None:
+        raise IntegrityError("PLAN_SCOPE_PACKET_OUTSIDE_PLAN", "enrolled packet is outside bound execution plan", packet_id)
+    if enrolled.get("packet_sha256") != expected.get("packet_sha256"):
+        raise IntegrityError("PLAN_SCOPE_PACKET_DIGEST_MISMATCH", "enrolled packet digest disagrees with bound execution plan", packet_id)
+    # Ordered, not set, comparison on purpose: the plan authenticates a
+    # deterministic enrollment order, so dependency ORDER is part of plan
+    # identity and a reordering is a different plan, not the same one.
+    if enrolled.get("dependency_ids") != expected.get("dependencies"):
+        raise IntegrityError("PLAN_SCOPE_PACKET_DEPENDENCY_MISMATCH", "enrolled packet dependencies disagree with bound execution plan", packet_id)
+    if enrolled.get("packet_path") != "packets/%s.json" % packet_id:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_PATH", "enrolled packet artifact path is not canonical", packet_id)
+
+    try:
+        packet_path = safe_state_path(
+            state_root, "packets", identifier=packet_id, identifier_suffix=".json"
+        )
+        raw = _read_regular_nofollow(packet_path)
+    except FileNotFoundError as exc:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_MISSING", "enrolled packet artifact is missing", packet_id) from exc
+    except (OSError, ValueError) as exc:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_INVALID", "enrolled packet artifact cannot be safely read", packet_id) from exc
+    try:
+        packet = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_INVALID", "enrolled packet artifact is invalid JSON", packet_id) from exc
+    result = validate_packet(packet)
+    if not result["valid"] or raw != canonical_bytes(packet):
+        raise IntegrityError("PLAN_SCOPE_PACKET_ARTIFACT_INVALID", "enrolled packet artifact is not canonical and authenticated", packet_id)
+    if packet.get("packet_id") != packet_id:
+        raise IntegrityError("PLAN_SCOPE_PACKET_DIGEST_MISMATCH", "packet artifact identity disagrees with enrollment", packet_id)
+    if packet.get("packet_sha256") != expected.get("packet_sha256"):
+        raise IntegrityError("PLAN_SCOPE_PACKET_DIGEST_MISMATCH", "packet artifact digest disagrees with bound execution plan", packet_id)
+
+
+def _read_regular_nofollow(path: str) -> bytes:
+    """Read one artifact without accepting a symlinked terminal path."""
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("artifact is not a regular file")
+        chunks = []
+        while True:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                return b"".join(chunks)
+            chunks.append(chunk)
+    finally:
+        os.close(fd)
 
 
 def _build_run_started_event(

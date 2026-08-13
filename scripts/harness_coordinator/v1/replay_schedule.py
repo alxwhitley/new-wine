@@ -11,7 +11,13 @@ it); (4) the scheduling CHOICE at every ``ATTEMPT_STARTED`` -- walks the
 journal from seq 1 and, at each one, independently re-derives what
 ``scheduler.select_next`` would have chosen given the fold state
 immediately BEFORE that event, and compares it to what was actually
-recorded. **NOT implemented, and not silently claimed:** (3) re-running
+recorded. Plan-aware (O5 Task 4): the plan actually bound to that event's
+own ``run_id`` as of that point in the journal is resolved via
+``recovery.bound_execution_plan_for_run`` and passed to ``select_next``,
+so a plan's scope restriction is part of the re-derivation, not just the
+original decision -- otherwise a correctly plan-scoped choice would
+falsely diverge from an unscoped re-derivation. **NOT implemented, and
+not silently claimed:** (3) re-running
 ``classify_attempt`` over the stored ``attempt_outcome.json``/
 ``provider_evidence.json`` to prove the CLASSIFICATION decision (not
 just its legality) was reproducible; (5) backoff timing (moot today --
@@ -48,7 +54,7 @@ import os
 from typing import Any, Dict, List
 
 from harness_coordinator.v1.reconcile import _read_manifest_read_only
-from harness_coordinator.v1.recovery import IntegrityError, _fold_journal
+from harness_coordinator.v1.recovery import IntegrityError, _fold_journal, bound_execution_plan_for_run
 from harness_coordinator.v1.scheduler import select_next
 from harness_coordinator.v1.store import JournalChainBroken, JournalHeadMoved, read_journal
 
@@ -105,7 +111,20 @@ def replay_schedule(state_root: str, state_root_id: str) -> Dict[str, Any]:
             divergences.append({"seq": event.get("seq"), "code": "FOLD_FAILED_AT_PREFIX", "message": exc.message})
             continue
         disabled = prior_counters.get("disabled_lanes", disabled_lanes)
-        expected = select_next(prior_packets, disabled, event.get("event_at"))
+        # ``select_next`` became plan-aware (O5 Task 4): a bound plan scopes
+        # selection to its own member packets, so re-deriving "what would
+        # have been chosen" must resolve the SAME plan the real coordinator
+        # would have seen at this point -- the plan bound to this event's
+        # own run_id, as of the journal prefix strictly before this event.
+        # Reuses ``recovery.bound_execution_plan_for_run`` (never
+        # reimplemented) against the REAL ``state_root`` -- unlike the
+        # packet/counters fold above, plan authentication reads an immutable
+        # artifact from disk that only the real state root has (see the
+        # ``_prefix_fold_root`` comment above), and an ungoverned/pre-O5 run
+        # with no bound plan correctly resolves to ``None`` here, preserving
+        # ``select_next``'s exact prior (unscoped) behavior for it.
+        plan = bound_execution_plan_for_run(state_root, journal_events[:i], event.get("run_id"))
+        expected = select_next(prior_packets, disabled, event.get("event_at"), plan)
         actual = event.get("packet_id")
         if expected != actual:
             divergences.append({
