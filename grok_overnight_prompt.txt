@@ -1,0 +1,34 @@
+Set up an overnight Grok run against the Rhemata corpus. Read-only diagnostic. Connect using the read-only database role created for overnight analysis jobs — do NOT use the main read-write connection. No writes of any kind — no database writes, no schema changes, no edits to any pipeline. If any step would require a write, stop and report instead.
+
+TASK: Corpus-wide data-quality sweep. Read the corpus and flag records where the stored information about a document looks wrong or inconsistent. Specifically look for:
+
+1. Author/attribution fields containing something that is not a person's name (page furniture, video titles, sermon titles, boilerplate, empty or placeholder values).
+2. The same teacher appearing under multiple spellings, aliases, or variant forms that would split them into separate authors under a naive query — including invisible causes like non-breaking spaces or unusual whitespace.
+3. Mismatches between a document's author field and its source name.
+4. Documents whose stored metadata disagrees with what the document's own text indicates about who wrote or spoke it.
+5. Text that appears inside a teacher's document but is plainly not that teacher — translator notes, editorial apparatus, prefaces by other people, quoted passages from other authors, catechism or footnote inserts.
+
+CALIBRATION CHECK — run this first and report it separately before the main sweep:
+Confirm whether the sweep independently surfaces each of the following known cases. Do not search for them by name; run the general sweep logic and report whether each was caught.
+- Vlad Savchuk documents where the author field contains a video/sermon title rather than his name.
+- A Zac Poonen record whose author field uses a non-breaking space instead of a regular space.
+- Andrew Murray's "The New Life" — translator's note material sitting inside his attributed content.
+Report caught/missed for each. This is the run's own accuracy check.
+
+OUTPUT:
+Write findings to a plain review file, progressively as it goes — do not buffer everything to the end. If the run dies partway, whatever it found so far must survive.
+For each finding: which document, what the stored value is, what appears to be wrong, and how confident it is.
+Group findings by type. Within each type, order by confidence, highest first.
+Do not fix anything. Do not propose fixes. Findings only.
+
+BOUNDS:
+Report progress at regular intervals (not just at the end) so a stalled or failing run is visible rather than silent — this run should never look frozen the way tonight's Qwen test did.
+If a connection attempt fails, report the failure immediately rather than retrying silently in a loop.
+If the corpus is too large to complete in one run, work in a stable, resumable order and record where it stopped.
+Do not send anything outside the corpus text needed for the task.
+
+WHEN DONE, REPORT:
+- Calibration result (caught/missed on all three).
+- Total documents examined, total findings, breakdown by type.
+- Anything that failed or was skipped.
+- Confirmation that nothing outside the review file was touched, and confirmation the read-only connection was used throughout.
