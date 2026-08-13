@@ -272,11 +272,12 @@ SEQUENCE (2026-08-03)".
     `backend/app/services/stored_position_evidence.py` + `producer.py`) and
     is verified end-to-end with real generation on all six seeded topics —
     zero stored-position-text leakage into any served answer. Built and
-    verified, but **NOT pushed to origin as of 2026-08-08** — `producer.py`
-    is the live answer path serving 100% of traffic, so pushing deploys
-    this immediately; push is Alex's call, not yet given. Full current
-    status, including what's still deliberately out of scope (production
-    concurrency/rollout): PLAN.md Phase 3 item 5.
+    verified. **Confirmed pushed to origin and live in production as of
+    2026-08-13** — supersedes this entry's earlier "NOT pushed to origin as
+    of 2026-08-08" note, which is stale; `eca8070` is confirmed an ancestor
+    of `origin/main`. Full current status, including what's still
+    deliberately out of scope (production concurrency/rollout): PLAN.md
+    Phase 3 item 5.
     **Open Decisions #14 (refresh trigger) and #15 (replace-vs-version) are
     RESOLVED 2026-08-08 — see Settled decisions #21/#22 below.** This
     paragraph's own earlier "#14 now answered by... / #15 unchanged...
@@ -665,15 +666,19 @@ different row, per the hard rule above.
     — it still reads chunk text, which (a)'s functions structurally cannot —
     but it is **no longer the routine path it once was; it is now the
     exception path**, and (a)'s source-blindness is still not violated by
-    it. (c) `docs/position_papers/` — draft papers for pillars not yet
-    shipped. **Updated 2026-08-13: four pillars now registered/live**
-    (baptism_holy_spirit, speaking_in_tongues, deliverance_and_spiritual_warfare,
-    prosperity_and_faith_teaching); four remain in `docs/position_papers/` —
-    three (divine_healing, gifts_of_the_spirit_overview,
-    prophecy_and_the_prophetic) failed first-pass calibration and need real
-    iteration, one (five_fold_ministry) has an unresolved editorial question
-    blocked on Alex. See ARCHITECTURE.md, "Position papers (fence + guarded
-    retrieval)."
+    it. (c) `docs/position_papers/` — **updated 2026-08-13: all eight
+    charismatic pillars are now registered/live** (baptism_holy_spirit,
+    speaking_in_tongues, deliverance_and_spiritual_warfare,
+    prosperity_and_faith_teaching, divine_healing,
+    gifts_of_the_spirit_overview, prophecy_and_the_prophetic,
+    five_fold_ministry). The three that had previously failed first-pass
+    calibration were given real iteration this pass, not a quick fix — see
+    ARCHITECTURE.md, "Position papers (fence + guarded retrieval)," for
+    what was found and how it was fixed. five_fold_ministry's editorial
+    question (restoration-after-a-gap vs. never-ceased) was resolved by
+    Alex the same session (the offices never ceased, only neglected)
+    before registering. No draft remains unregistered in
+    `docs/position_papers/`.
 
 13. **Position scope is locked to exactly two values (`'teacher'` |
     `'corpus'`), double-locked — a third scope is still refused twice.** A

@@ -177,18 +177,25 @@ real data before any study-panel links are surfaced.
 
 `backend/app/services/position_papers.py` — a small, CLOSED, code-defined
 registry (`PILLARS`) of Alex's own first-party owned "house position papers."
-**Four pillars are live — `baptism_holy_spirit`, `speaking_in_tongues`,
-`deliverance_and_spiritual_warfare`, and `prosperity_and_faith_teaching`**
-(the latter two registered 2026-08-13, same fence/exclusion/fallback
-mechanism as the original two, no pillar-specific code path). Of the
-remaining four charismatic pillars: three (`divine_healing`,
-`gifts_of_the_spirit_overview`, `prophecy_and_the_prophetic`) have drafts
-in `docs/position_papers/` but failed first-pass calibration — each loses
-margin to a standing-debate contrast on its own core content and needs
-real iteration, not a quick fix, before registering; `five_fold_ministry`
-has an unresolved internal editorial question the draft flags itself
-(restoration-after-a-gap vs. never-ceased) and is blocked on Alex, not
-calibration.
+**All eight charismatic pillars are now live** — `baptism_holy_spirit`,
+`speaking_in_tongues`, `deliverance_and_spiritual_warfare`,
+`prosperity_and_faith_teaching` (registered 2026-08-13, first round),
+and `divine_healing`, `gifts_of_the_spirit_overview`,
+`prophecy_and_the_prophetic`, `five_fold_ministry` (registered 2026-08-13,
+second round — same fence/exclusion/fallback mechanism as the first four,
+no pillar-specific code path). `docs/position_papers/` no longer holds any
+unregistered draft. The second-round three that had "failed first-pass
+calibration" got real iteration this pass, not a quick fix: own-goal
+contrast-anchor bugs (a contrast anchor accidentally describing the
+pillar's own genuine territory, the same pattern already documented for
+`baptism`/`deliverance`) and cross-pillar bleed against the broad
+`gifts_of_the_spirit_overview` anchor were found and fixed the same way
+prior rounds were — see the code comments above each pillar's anchor
+constants for the specific bugs found and how each was resolved.
+`five_fold_ministry`'s editorial question (restoration-after-a-gap vs.
+never-ceased) was resolved by Alex the same session — the offices never
+ceased, only neglected — before registering, so the draft carried no open
+placeholder into its ingested content.
 
 **Corrected 2026-08-06 (CLAUDE.md Settled decisions #8/#16/#17) — a position
 paper is constraining silent context, never a served answer.** Until this
