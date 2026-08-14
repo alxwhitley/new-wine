@@ -436,17 +436,17 @@ deliberate-timeout case. Merged to `main` at `1356418`. Full suite
 post-merge: 1367 passed, 1 skipped. This closed the last open item on
 the Claude-side path before a real overnight night.
 
-**Grok's standing role-definition file now exists — 2026-08-14:**
-`.grok/agents/harness-builder.md` (branch `claude/grok-harness-builder-role`,
-build `d0bdf64`, merged `1797e31`). Authored directly by Claude Code per
-this session's locked decisions; reviewer is Sonnet, stated in the file's
-own text; attended-only pending a separate hook-compatibility follow-up
-(the harness's automatic guard doesn't yet recognize Grok's action shapes
-— the file states this as its own mandatory warning). Not independently
-re-reviewed since Alex confirmed the section outline. `1356418` and
-`1797e31` (plus the O6-close commits already on origin) were all pushed
-together this session — see `rhemata-status.md`. Next: a Grok-built probe
-through the same real-worker harness path, not yet run — see
+**Grok's standing role-definition file now exists and is reviewed —
+2026-08-14:** `.grok/agents/harness-builder.md` (branch
+`claude/grok-harness-builder-role`, build `d0bdf64`, merged `1797e31`).
+Authored directly by Claude Code per this session's locked decisions;
+reviewer is Sonnet, stated in the file's own text. Independent
+fresh-context Sonnet review returned `VERDICT: ACCEPT`, two non-blocking
+notes: `docs/audits/grok_harness_builder_role_review_2026-08-14.md`.
+Attended-only pending a separate hook-compatibility follow-up (the
+harness's automatic guard doesn't yet recognize Grok's action shapes —
+the file states this as its own mandatory warning). Next: a Grok-built
+probe through the same real-worker harness path, not yet run — see
 `rhemata-status.md`'s Next list.
 
 ---

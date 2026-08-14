@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-14 (Grok role-definition file authored, merged
-`1797e31`, and pushed; every previously-local-only commit this week is
-now on origin too).
+Last verified: 2026-08-14 (Grok role-definition file authored, merged,
+independently reviewed `ACCEPT`, and pushed; Auto Mode landmine synced
+into `CLAUDE.md`; every local commit this week is now on origin).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,35 +17,34 @@ for this file.
 
 ## Current state
 
-**Grok's standing role-definition file authored, merged, and pushed —
-2026-08-14.** `.grok/agents/harness-builder.md`, branch
-`claude/grok-harness-builder-role` (build `d0bdf64`, merge `1797e31`,
-pushed same commit). Authored directly by Claude Code — Grok does not
-author its own fence — per the prior session's locked decisions: its own
-agent type, not a shadow of `executor`; current task-class production-write
-gate (mirrors `.codex/agents/executor.toml`/`HARNESS.md`, not Claude's
-stale frozen-script version); shared verification-timeout discipline; a
-Grok-shaped outer-timeout note sized from verified `run_terminal_command`
-facts, not Grok's own self-report; Sonnet named as reviewer in the file's
-own text; attended-only pending a separate hook-compatibility follow-up
-(the guard doesn't yet recognize Grok's action shapes — the file states
-this as its own mandatory warning). Alex confirmed the section outline
-before the full text was written; no independent second-reviewer pass has
-run against the finished file yet. Full detail: the file itself and
-`HARNESS.md`'s Local activation note.
+**Grok's standing role-definition file authored, merged, reviewed, and
+pushed — 2026-08-14, closed.** `.grok/agents/harness-builder.md`, branch
+`claude/grok-harness-builder-role` (build `d0bdf64`, merge `1797e31`).
+Authored directly by Claude Code — Grok does not author its own fence —
+per the prior session's locked decisions. Independent fresh-context Sonnet
+review (uninvolved in authoring or the earlier outline sign-off) returned
+`VERDICT: ACCEPT`, two non-blocking notes:
+`docs/audits/grok_harness_builder_role_review_2026-08-14.md`. Attended-only
+pending a separate hook-compatibility follow-up (the guard doesn't yet
+recognize Grok's action shapes — the file states this as its own mandatory
+warning). Nothing further blocks a Grok-built probe — see Next.
 
-**Everything previously "merged locally, not pushed" is now on origin.**
-O6's close was already on origin (`2867ecc`); this push carried the two
-real-worker verification-timeout probes, their records closes, and this
-session's role-definition merge — 11 commits, `2867ecc..1797e31`, fast-
-forwarded cleanly. Not re-narrated here — see PLAN.md's Overnight
-unattended runs section for what each one did.
+**Auto Mode landmine — `CLAUDE.md` and this file now describe both
+confirmed behaviors of the classifier, consistently.** Blocking real
+(safe) DB writes was already in `CLAUDE.md`. Misfiring on harmless
+SQL/migration-adjacent prose with no real write involved (this file's
+Known Harness Bugs entry below) is now also in `CLAUDE.md`, as its own
+separate landmine entry — added this session, not folded into the
+existing one, since git history confirmed `CLAUDE.md` had never described
+the misfire finding before.
 
-**O5/O6/probes 1–3, unchanged since last entry, now also on origin:** O5
-budgets (`20ce143`), coordinator run loop (`ac53f76`), O6 concurrent
-rehearsal (`425d6e2`), and real-worker probes 1–3 closing the Claude-side
-verification-timeout gap (`1356418`) are all live on `main`. Full detail:
-PLAN.md's Phase 0 / Overnight unattended runs section.
+**All local work this week is now on origin.** Today's pushes carried the
+two real-worker verification-timeout probes and their records closes, the
+role-definition merge (`1797e31`), and this session's review + Auto Mode
+records commit (`6849835`) — `main` and `origin/main` match. O5
+(`20ce143`), coordinator run loop (`ac53f76`), and O6 (`425d6e2`) were
+already on origin before today. Full detail: PLAN.md's Phase 0 / Overnight
+unattended runs section, not re-narrated here.
 
 **Standing decisions, unchanged:** harness-tooling review is one round
 (multi-round stays on the answer path). Safety fence deferred — not
@@ -58,8 +57,7 @@ through the harness, day or night.
 
 Already true, unchanged: all 8 pillars live; one async answer path
 (`serving_enabled` TRUE); quote rail live; position one-hop live on
-origin. Auto Mode landmine still current — see the Known Harness Bugs
-entry below.
+origin.
 
 ---
 
@@ -101,9 +99,10 @@ PLAN.md, 2026-08-13.)
 
 1. Run a Grok-built probe through the same real-worker harness path —
    probes 1–3 were all Claude Code; needed before the supervised-week
-   path can claim coverage across both permitted builders. Unblocked —
-   `.grok/agents/harness-builder.md` landed 2026-08-14 (merge `1797e31`).
-   Grok stays attended-only until the hook-compatibility follow-up lands.
+   path can claim coverage across both permitted builders. Fully
+   unblocked: `.grok/agents/harness-builder.md` merged (`1797e31`) and
+   independently reviewed `ACCEPT`. Grok stays attended-only until the
+   hook-compatibility follow-up lands.
 2. First supervised overnight night. Fence stays deferred, unchanged
    revisit trigger (real unrecoverable damage, or harness work
    reaching outside the repo).
