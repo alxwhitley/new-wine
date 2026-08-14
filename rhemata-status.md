@@ -8,7 +8,8 @@ specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-14 (two attended Grok harness-builder probes run,
 both independently reviewed `ACCEPT`; two real infrastructure findings from
-probe 2 investigated, corrected, and pushed to origin).
+probe 2 investigated, corrected, pushed to origin, and the correction itself
+independently reviewed `ACCEPT`).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -56,6 +57,20 @@ externally hard-killed mid-execution (two zero-output attempts on the same
 session) — documented as a known limitation: restart the packet, don't
 attempt `--resume` on a killed session. Both live in `HARNESS.md`'s "Grok
 tool-surface facts" note, the existing home for this kind of verified fact.
+**The correction commit (`5c765e5`) was itself independently reviewed
+`ACCEPT`** — fresh-context Sonnet pass, uninvolved in making the correction
+(`docs/audits/grok_timeout_resume_correction_review_2026-08-14.md`).
+Confirmed the retraction is genuine (no leftover sentence in either file
+still implies explicit-timeout kill protection) and that
+`verification_commands.py`'s SIGTERM→SIGKILL teardown is real, read
+directly from the code. One evidentiary gap noted, not a blocker: no
+persisted test artifact for the underlying sleep-command reproduction
+exists in the repo, so that specific claim rests on the prose description,
+not an inspectable transcript. One small documentation defect flagged for a
+future touch: `HARNESS.md` line 196's "per the guidance below" is a
+dangling cross-reference — the actual timeout-margin formula lives in
+`.grok/agents/harness-builder.md`, named two paragraphs earlier, not
+"below."
 
 **Standing decisions, unchanged:** harness-tooling review is one round
 (multi-round stays on the answer path). Safety fence deferred — not

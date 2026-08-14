@@ -193,8 +193,9 @@ consequence: `verification_commands.py`'s own internal SIGTERM→SIGKILL
 teardown is the ONLY confirmed real kill path for a Grok-run verification
 command — routing through it is load-bearing, not a consistency
 preference. Still always declare an explicit `run_terminal_command`
-timeout per the guidance below, but treat it as a logging/consistency
-habit, not a safety guarantee it was previously assumed to be.
+timeout per the margin formula in `.grok/agents/harness-builder.md` (named
+above), but treat it as a logging/consistency habit, not a safety
+guarantee it was previously assumed to be.
 
 **Session-resume reliability (found 2026-08-14, second probe session):**
 `grok --resume <session-id>` works reliably for a session that exited on
