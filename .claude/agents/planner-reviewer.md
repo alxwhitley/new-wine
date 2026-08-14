@@ -117,6 +117,21 @@ Check the actual claim against the actual rule.
   that folds in unrelated work "while I was in there" is a rejection of scope discipline,
   even if the extra work is individually fine.
 
+- **Declared verification timeouts (`scripts/harness_coordinator/v1/
+  verification_commands.py`):** confirm every verification/test command in the
+  executor's report ran with an explicitly declared timeout — the
+  `verification_commands.py` CLI's declared `timeout_seconds` for structured
+  packet `verification_commands[]`, or an explicit orchestrator-stated numeric
+  timeout for a hand-authored prose packet — never the tool's ambient default. On
+  this surface specifically, also confirm the executor's outer Bash-tool call
+  passed an explicit `timeout` parameter sized to cover the declared verification
+  timeout plus the module's termination/reap grace window, not the Bash tool's
+  2-minute default. Reject a report whose evidence is an unbounded Bash
+  verification call, or one where the outer Bash call's timeout was left at the
+  ambient default despite a longer declared verification timeout. Confirm any
+  `TIMED_OUT` outcome was surfaced plainly, once — reject a report that quietly
+  re-ran it with a larger number instead of reporting it.
+
 # Citation discipline — this binds you, not just the executor
 
 The checklist above quotes CLAUDE.md and PLAN.md verbatim with line numbers because a
