@@ -356,6 +356,50 @@ never touches app code, and builds never touch the corpus write
 path. Production database writes still never run through the
 harness itself, day or night, regardless of this change.
 
+**Real-worker probes — first two, 2026-08-14.** Before trusting an
+unattended overnight run, two attended daytime probes substituted a
+real (not simulated) worker for O1–O6's simulated-multiprocess
+rehearsal — the question O1–O6 couldn't answer, since they only ever
+proved the coordinator logic against synthetic workers. **Probe 1**
+ran a real Claude Code `executor` subagent through a genuine
+repo-only packet (test coverage for
+`night_loop.combine_morning_reports()`'s five previously-untested
+defensive branches) in an isolated worktree, attended but
+unattended-style — zero Auto Mode classifier interference across the
+whole run; the only anomaly was the Bash tool's default timeout
+auto-backgrounding a long verification command, noticed and rerun by
+the attended worker. One `planner-reviewer` round, independently
+traced via `sys.settrace` rather than trusting the executor's own
+report, `ACCEPT`. **Probe 2** closed exactly the gap probe 1
+surfaced: `scripts/harness_coordinator/v1/verification_commands.py`'s
+`run_verification_command()` now executes a packet-declared
+verification command as a real subprocess with its declared
+`timeout_seconds` applied up front (fails closed with `ValueError`
+before spawning anything if undeclared), reusing the existing
+`process_sidecar.terminate_process_group()` rather than forking it,
+and reports `outcome=TIMED_OUT` into the existing
+`worker-result.schema.json`/reconciliation machinery on a genuine
+overrun — not a parallel stop mechanism. One `planner-reviewer` round
+returned `REVISE`: the new `.codex/agents/executor.toml` instruction
+named a CLI invocation (`python3 -m
+harness_coordinator.v1.verification_commands`) that throws
+`ModuleNotFoundError` without an undocumented `PYTHONPATH=scripts`
+prefix — the fix, as written, would have reproduced the exact
+failure it existed to prevent. Fixed with the reviewer's own exact
+one-line correction, reverified (CLI tested both failing and passing
+as documented, full suite rerun green), no second round needed per
+the reviewer's own "no other change is required for acceptance."
+**Both merged to local `main` only, not pushed:** build `1bb1d73` →
+merge `f306080` (probe 1); build `e08b5e7` → merge `ef49605` (probe
+2). Full suite post-merge: 1366 passed, 1 skipped (1354 before either
+probe). **Not done — recorded as the next build, not a residual:**
+the timeout-declaration fix landed on `.codex/agents/executor.toml`/
+`planner-reviewer.toml` only. The parallel Claude-side agent
+definitions (`.claude/agents/executor.md`/`planner-reviewer.md`)
+carry the same hard-constraints section and were independently
+confirmed by the reviewer to contain zero timeout mentions — still
+open, see `rhemata-status.md`'s Next list.
+
 ---
 
 ## Phase 1 — Foundation build to the ingestion-ready benchmark
