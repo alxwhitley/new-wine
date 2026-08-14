@@ -432,12 +432,22 @@ by an independent cold Probe 3 rerun, again with no mechanism
 specified: the executor chose the CLI on its own, sized both outer
 timeouts correctly, `PASSED` with hash-verified stdout on the long
 case, `TIMED_OUT` with `pgrep`-confirmed real process death on the
-deliberate-timeout case. Merged to local `main` only, not pushed:
-`1356418`. Full suite post-merge: 1367 passed, 1 skipped. **This
-closes the last open item on the Claude-side path before a real
-overnight night** — see `rhemata-status.md`'s Next list for what's
-now first (a standing Grok role-definition file, which was confirmed
-this session not to exist anywhere in the repo).
+deliberate-timeout case. Merged to `main` at `1356418`. Full suite
+post-merge: 1367 passed, 1 skipped. This closed the last open item on
+the Claude-side path before a real overnight night.
+
+**Grok's standing role-definition file now exists — 2026-08-14:**
+`.grok/agents/harness-builder.md` (branch `claude/grok-harness-builder-role`,
+build `d0bdf64`, merged `1797e31`). Authored directly by Claude Code per
+this session's locked decisions; reviewer is Sonnet, stated in the file's
+own text; attended-only pending a separate hook-compatibility follow-up
+(the harness's automatic guard doesn't yet recognize Grok's action shapes
+— the file states this as its own mandatory warning). Not independently
+re-reviewed since Alex confirmed the section outline. `1356418` and
+`1797e31` (plus the O6-close commits already on origin) were all pushed
+together this session — see `rhemata-status.md`. Next: a Grok-built probe
+through the same real-worker harness path, not yet run — see
+`rhemata-status.md`'s Next list.
 
 ---
 

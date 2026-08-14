@@ -93,7 +93,9 @@ restriction is unchanged: no theological content, no answer-accuracy path,
 no production database writes, no doctrinal or licensing judgment, ever.
 Outside the harness/repo-only build lane Grok remains read-only. It has no
 architectural, theological, licensing, production-write, or launch judgment
-authority.
+authority. Grok's standing role-definition, `.grok/agents/harness-builder.md`,
+states all of this directly and is attended-only until guard-recognition
+support lands — see the Local activation note below.
 
 **Isolation and ownership.** Every write-capable packet names an isolated
 worktree and writable file allowlist. Parallel packets require disjoint file
@@ -152,6 +154,29 @@ contract. The test proves the obsolete name-specific freeze is gone while a
 broader repo-only gate blocks recognizable real ingest, backfill, migration,
 seed, restore, and direct mutating-SQL commands. A fresh machine must install
 or generate equivalent local configuration before using the harness.
+
+`.grok/agents/harness-builder.md` (added 2026-08-14) is different: fully
+tracked markdown, not untracked local config like the Codex TOML above — a
+fresh machine gets it for free on checkout. It is the third tracked
+role-definition surface alongside `.codex/agents/executor.toml` and
+`.claude/agents/executor.md`, and its own standing agent type, not a shadow
+of `executor`. Reviewer for Grok-built harness work is Sonnet, stated in the
+file's own text. **Attended-only, pending a separate follow-up:** the guard
+hooks above do not yet recognize Grok's action shapes, so this file's fence
+is instruction-only, not machine-enforced, until a hook-compatibility fix
+lands — the file states this as its own mandatory, non-negotiable warning.
+
+**Grok tool-surface facts (verified 2026-08-14 against real tool-schema
+docs, not Grok's own self-report — see `.grok/agents/harness-builder.md`
+for the CLI-invocation guidance built on these):** shell tool is
+`run_terminal_command`; ambient default timeout 120000ms (2 min) — an
+overrun with no explicit timeout set gets backgrounded, not killed, the
+same silent-continuation risk Claude's Bash tool has; with an explicit
+timeout set, an overrun genuinely gets killed (SIGTERM, escalated to
+SIGKILL after a ~1s grace period, process group plus any descendant that
+didn't detach via `setsid`/`nohup`); ceiling 36,000,000ms (10 hours) — no
+Claude-style low ceiling or `HUMAN_REQUIRED`-above-ceiling case applies on
+this surface.
 
 ---
 

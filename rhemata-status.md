@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-14 (real-worker probes 1–3 merged to local
-`main`, Claude-side verification-timeout mirror proven live; records
-close).
+Last verified: 2026-08-14 (Grok role-definition file authored, merged
+`1797e31`, and pushed; every previously-local-only commit this week is
+now on origin too).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,44 +17,35 @@ for this file.
 
 ## Current state
 
-**O6 concurrent rehearsal merged to `main` at `425d6e2`.** Two disjoint
-lanes run as real `multiprocessing.Process` children on a barrier — the
-independent reviewer proved the concurrency proof load-bearing by mutation
-(forced sequential execution made the overlap assertion fail). All five O6
-failure paths (crash/resume, worker failure, quota fallback Kimi→Sonnet,
-quarantine, human-stop) demonstrated with real journal evidence, reusing the
-O3/O5 fixtures directly. New pure `night_loop.combine_morning_reports()`
-merges lanes into one report. Independent `ACCEPT`, one round. Full O2–O6
-suite: 1352 passed, 1 skipped, confirmed post-merge. Full detail:
-`docs/audits/o6_overnight_rehearsal_2026-08-13.md`. Phase 0 (O1–O6) is now
-fully closed. Real AI workers running overnight remain a separate milestone,
-still blocked on the deferred safety fence — unchanged, not this session's
-work.
+**Grok's standing role-definition file authored, merged, and pushed —
+2026-08-14.** `.grok/agents/harness-builder.md`, branch
+`claude/grok-harness-builder-role` (build `d0bdf64`, merge `1797e31`,
+pushed same commit). Authored directly by Claude Code — Grok does not
+author its own fence — per the prior session's locked decisions: its own
+agent type, not a shadow of `executor`; current task-class production-write
+gate (mirrors `.codex/agents/executor.toml`/`HARNESS.md`, not Claude's
+stale frozen-script version); shared verification-timeout discipline; a
+Grok-shaped outer-timeout note sized from verified `run_terminal_command`
+facts, not Grok's own self-report; Sonnet named as reviewer in the file's
+own text; attended-only pending a separate hook-compatibility follow-up
+(the guard doesn't yet recognize Grok's action shapes — the file states
+this as its own mandatory warning). Alex confirmed the section outline
+before the full text was written; no independent second-reviewer pass has
+run against the finished file yet. Full detail: the file itself and
+`HARNESS.md`'s Local activation note.
 
-**Three real-worker harness probes, 2026-08-14 — build/merge happened
-locally this session, this is the records close.** First: a real
-Claude Code worker ran a repo-only test-coverage packet, attended,
-isolated worktree — one round `ACCEPT`. Second: closed the
-verification-timeout gap the first surfaced, on the `.Codex` side —
-one round `REVISE`, bounded fix, no second round needed. Third:
-mirrored the same discipline onto the Claude-side `.claude/agents/*.md`
-definitions Claude Code's own subagents actually load, plus a
-Claude-specific outer-Bash-timeout-ceiling clause — one round
-`APPROVE`, mutation-tested. A live, unprompted rerun then found the
-wording insufficient (an executor could satisfy it with a raw native
-Bash timeout instead of the CLI, and a genuine overrun backgrounded
-instead of being cleanly killed); tightened to make the CLI mandatory,
-reverified by an independent cold rerun — the executor chose the CLI
-on its own, `pgrep` confirmed the timed-out process was actually dead.
-All three merged to local `main` only, not pushed. Full suite: 1367
-passed, 1 skipped. Full detail: PLAN.md's Overnight unattended runs
-section. **This closes the last open item on the Claude-side path
-before a real overnight night** — first item is now building Grok a
-standing role-definition file (see Next).
+**Everything previously "merged locally, not pushed" is now on origin.**
+O6's close was already on origin (`2867ecc`); this push carried the two
+real-worker verification-timeout probes, their records closes, and this
+session's role-definition merge — 11 commits, `2867ecc..1797e31`, fast-
+forwarded cleanly. Not re-narrated here — see PLAN.md's Overnight
+unattended runs section for what each one did.
 
-**O5 budgets merged to `main` at `20ce143`; coordinator run loop at
-`ac53f76`.** Both unchanged since last session — see PLAN.md for full
-detail rather than re-narrating here.
+**O5/O6/probes 1–3, unchanged since last entry, now also on origin:** O5
+budgets (`20ce143`), coordinator run loop (`ac53f76`), O6 concurrent
+rehearsal (`425d6e2`), and real-worker probes 1–3 closing the Claude-side
+verification-timeout gap (`1356418`) are all live on `main`. Full detail:
+PLAN.md's Phase 0 / Overnight unattended runs section.
 
 **Standing decisions, unchanged:** harness-tooling review is one round
 (multi-round stays on the answer path). Safety fence deferred — not
@@ -67,9 +58,8 @@ through the harness, day or night.
 
 Already true, unchanged: all 8 pillars live; one async answer path
 (`serving_enabled` TRUE); quote rail live; position one-hop live on
-origin. Auto Mode landmine still current — this session found a real
-counterexample to the prior "pure noise" framing; see the upgraded
-Known Harness Bugs entry below.
+origin. Auto Mode landmine still current — see the Known Harness Bugs
+entry below.
 
 ---
 
@@ -109,37 +99,31 @@ PLAN.md, 2026-08-13.)
 
 ## Next
 
-1. Build Grok a standing harness role-definition file — confirmed this
-   session that none exists anywhere in the repo (no `.toml`/`.md`
-   analog to `.Codex/agents/*.toml` or `.claude/agents/*.md`); the
-   only Grok artifact found, `grok_overnight_prompt.txt`, is a one-off
-   task prompt for an unrelated data-quality sweep and carries none of
-   the hard constraints (governed-doc protection, ingest freeze,
-   timeout discipline, reporting format). Blocks item 2.
-2. Run a Grok-built probe through the same real-worker harness path —
+1. Run a Grok-built probe through the same real-worker harness path —
    probes 1–3 were all Claude Code; needed before the supervised-week
-   path can claim coverage across both permitted builders. Blocked on
-   item 1.
-3. First supervised overnight night. Fence stays deferred, unchanged
+   path can claim coverage across both permitted builders. Unblocked —
+   `.grok/agents/harness-builder.md` landed 2026-08-14 (merge `1797e31`).
+   Grok stays attended-only until the hook-compatibility follow-up lands.
+2. First supervised overnight night. Fence stays deferred, unchanged
    revisit trigger (real unrecoverable damage, or harness work
    reaching outside the repo).
-4. Decide extractor hardening before any next Prince-style batch.
-5. Decide whether the 20 zero-coverage Prince documents warrant a
+3. Decide extractor hardening before any next Prince-style batch.
+4. Decide whether the 20 zero-coverage Prince documents warrant a
    targeted re-extraction.
-6. Human review of chapter-boundary proposals (18 books) — Open
+5. Human review of chapter-boundary proposals (18 books) — Open
    Decision #21.
-7. Trail / Brooks one-offs — review then visibility.
-8. `pending` vs `draft` quote-status consolidation.
-9. `jewish_perspectives` drop — needs Alex's explicit approval + a
+6. Trail / Brooks one-offs — review then visibility.
+7. `pending` vs `draft` quote-status consolidation.
+8. `jewish_perspectives` drop — needs Alex's explicit approval + a
    dedicated DB-write session.
-10. F2–F5 remain open before F6's ingestion-ready benchmark can be
-    declared — O6 alone does not close F6.
-11. `.claude/agents/planner-reviewer.md` cleanup — retired two-value
+9. F2–F5 remain open before F6's ingestion-ready benchmark can be
+   declared — O6 alone does not close F6.
+10. `.claude/agents/planner-reviewer.md` cleanup — retired two-value
     `VERDICT: APPROVE | REJECT` format (current standard elsewhere is
     the four-value `ACCEPT|REVISE|QUARANTINE|HUMAN_REQUIRED` contract)
     and stale hardcoded `PLAN.md:NN`/`CLAUDE.md:NN` line-number
     citations in its checklist — both confirmed real and pre-existing
-    by this session's planner-reviewer round, deliberately left
+    by a prior session's planner-reviewer round, deliberately left
     untouched (a different, larger change than the timeout mirror).
     Needs its own cleanup packet.
 
