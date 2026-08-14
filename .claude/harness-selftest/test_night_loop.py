@@ -11,7 +11,7 @@ import os
 import pytest
 
 from harness_coordinator.v1.coordinator import run_once
-from harness_coordinator.v1.night_loop import run_night
+from harness_coordinator.v1.night_loop import combine_morning_reports, run_night
 from test_o5_budget_runtime import _default_routes
 from test_o5_coordinator_budgets import (
     COORDINATOR_ID,
@@ -233,3 +233,75 @@ def test_night_loop_morning_cutoff_requests_stop_before_any_claim(tmp_path):
     assert "what_needs_attention" in report
     assert _folded(state_root)["p1"]["state"] == "READY"
     assert _folded(state_root)["p2"]["state"] == "READY"
+
+
+# ---------------------------------------------------------------------------
+# combine_morning_reports -- defensive/error branches
+#
+# Pure merge function, no state-root I/O and no coordinator run needed --
+# these exercise its guard clauses and its tolerant wrapping/skipping of
+# malformed per-lane content directly against hand-built dicts, the same
+# style used for its happy-path/AND/empty-input coverage in
+# test_o6_concurrent_rehearsal.py (read-only reference, not modified here).
+# ---------------------------------------------------------------------------
+
+
+def test_combine_morning_reports_rejects_non_string_lane_name():
+    reports = {1: {"morning_report": {"all_invariants_passed": True}}}
+    with pytest.raises(ValueError, match="lane names must be non-empty strings"):
+        combine_morning_reports(reports)
+
+
+def test_combine_morning_reports_rejects_empty_string_lane_name():
+    reports = {"": {"morning_report": {"all_invariants_passed": True}}}
+    with pytest.raises(ValueError, match="lane names must be non-empty strings"):
+        combine_morning_reports(reports)
+
+
+def test_combine_morning_reports_rejects_lane_report_missing_morning_report_key():
+    reports = {"ingestion": {"status": "queue_drained"}}
+    with pytest.raises(ValueError, match="missing morning_report"):
+        combine_morning_reports(reports)
+
+
+def test_combine_morning_reports_rejects_lane_report_that_is_not_a_mapping():
+    reports = {"ingestion": ["not", "a", "mapping"]}
+    with pytest.raises(ValueError, match="missing morning_report"):
+        combine_morning_reports(reports)
+
+
+def test_combine_morning_reports_rejects_non_mapping_morning_report_value():
+    reports = {"ingestion": {"morning_report": "not-a-mapping"}}
+    with pytest.raises(ValueError, match="morning_report is not a mapping"):
+        combine_morning_reports(reports)
+
+
+def test_combine_morning_reports_wraps_non_mapping_attention_item_as_detail():
+    reports = {
+        "ingestion": {
+            "morning_report": {
+                "what_needs_attention": ["a bare string attention note"],
+                "packets": [],
+                "all_invariants_passed": True,
+            },
+        },
+    }
+    combined = combine_morning_reports(reports)
+    assert combined["what_needs_attention"] == [
+        {"detail": "a bare string attention note", "lane": "ingestion"},
+    ]
+
+
+def test_combine_morning_reports_skips_non_mapping_packet_rows_silently():
+    reports = {
+        "app_build": {
+            "morning_report": {
+                "what_needs_attention": [],
+                "packets": [None, "not-a-mapping"],
+                "all_invariants_passed": True,
+            },
+        },
+    }
+    combined = combine_morning_reports(reports)
+    assert combined["what_needs_attention"] == []
+    assert combined["all_invariants_passed"] is True
