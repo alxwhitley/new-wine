@@ -6,7 +6,7 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-13 (harness records closeout).
+Last verified: 2026-08-13 (O6 concurrent rehearsal closeout).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -15,28 +15,38 @@ for this file.
 
 ## Current state
 
-**O5 budgets merged to `main` at `20ce143`.** The previous "not yet
-merged" line is false and is replaced, not annotated. Post-merge
-suite was 1337 passed, 1 skipped.
+**O6 concurrent rehearsal merged to `main` at `425d6e2`.** Two disjoint
+lanes run as real `multiprocessing.Process` children on a barrier — the
+independent reviewer proved the concurrency proof load-bearing by mutation
+(forced sequential execution made the overlap assertion fail). All five O6
+failure paths (crash/resume, worker failure, quota fallback Kimi→Sonnet,
+quarantine, human-stop) demonstrated with real journal evidence, reusing the
+O3/O5 fixtures directly. New pure `night_loop.combine_morning_reports()`
+merges lanes into one report. Independent `ACCEPT`, one round. Full O2–O6
+suite: 1352 passed, 1 skipped, confirmed post-merge. Full detail:
+`docs/audits/o6_overnight_rehearsal_2026-08-13.md`. Phase 0 (O1–O6) is now
+fully closed. Real AI workers running overnight remain a separate milestone,
+still blocked on the deferred safety fence — unchanged, not this session's
+work.
 
-**Coordinator run loop built at `ac53f76`.** Thin
-driver over the one-step runner; simulated workers only. One review
-round; four fixtures fired (full night, crash/resume, provider
-outage without spin, clean stop). Full suite 1342 passed, 1 skipped.
-"Done" means simulated night, not real AI workers overnight.
+**O5 budgets merged to `main` at `20ce143`; coordinator run loop at
+`ac53f76`.** Both unchanged since last session — see PLAN.md for full
+detail rather than re-narrating here.
 
-**Decisions this session:** harness-tooling review is one round
+**Standing decisions, unchanged:** harness-tooling review is one round
 (multi-round stays on the answer path). Safety fence deferred — not
-cancelled, not a launch blocker. Path to real overnight workers:
-narrow file allowlist + Alex reading the morning report daily for a
-week. **Revisit trigger:** the fence gets built if a real overnight
-run causes damage that cannot be recovered from git, or before any
-harness work reaches anything outside the repository. Production DB
-writes never run through the harness, day or night.
+cancelled, not a launch blocker. Path to real overnight workers: narrow
+file allowlist + Alex reading the morning report daily for a week.
+**Revisit trigger:** the fence gets built if a real overnight run causes
+damage that cannot be recovered from git, or before any harness work
+reaches anything outside the repository. Production DB writes never run
+through the harness, day or night.
 
 Already true, unchanged: all 8 pillars live; one async answer path
 (`serving_enabled` TRUE); quote rail live; position one-hop live on
-origin. Auto Mode landmine still current.
+origin. Auto Mode landmine still current — reconfirmed this session as
+pure reporting noise (misfired on report prose, not on any real file),
+not a build defect.
 
 ---
 
@@ -55,16 +65,16 @@ PLAN.md, 2026-08-13.)
 
 ## Next
 
-1. O6 concurrent multi-packet rehearsal, when wanted — not a launch
-   blocker for the deferred fence.
-2. Decide extractor hardening before any next Prince-style batch.
-3. Decide whether the 20 zero-coverage Prince documents warrant a
+1. Decide extractor hardening before any next Prince-style batch.
+2. Decide whether the 20 zero-coverage Prince documents warrant a
    targeted re-extraction.
-4. Human review of chapter-boundary proposals (18 books) — Open
+3. Human review of chapter-boundary proposals (18 books) — Open
    Decision #21.
-5. Trail / Brooks one-offs — review then visibility.
-6. `pending` vs `draft` quote-status consolidation.
-7. `jewish_perspectives` drop — needs Alex's explicit approval + a
+4. Trail / Brooks one-offs — review then visibility.
+5. `pending` vs `draft` quote-status consolidation.
+6. `jewish_perspectives` drop — needs Alex's explicit approval + a
    dedicated DB-write session.
+7. F2–F5 remain open before F6's ingestion-ready benchmark can be
+   declared — O6 alone does not close F6.
 
 SP: #43 swipe-to-close shipped; full drag-to-follow-with-peek not shipped.

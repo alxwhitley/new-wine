@@ -296,15 +296,27 @@ Post-merge suite: 1337 passed, 1 skipped, 0 failed. Full detail:
 
 | Claude Code | Kimi via OpenCode Go | Grok |
 |---|---|---|
-| Sonnet is the default reviewer/verdict-issuer for any O6 work Grok builds (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes the readiness verdict there, and remains the reviewer of record for completed O1–O4 work. | Complete a disposable multi-packet repo-only rehearsal including a simulated Kimi→Sonnet handoff. | May now *build* remaining repo-only O6 rehearsal work (concurrent multi-packet rehearsal, journal/file/test reconciliation, morning-report totals). The run loop is done (see overnight section). The safety fence is deferred, not cancelled — it gets built if a real overnight run causes damage that cannot be recovered from git, or before any harness work reaches anything outside the repository. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
+| Sonnet is the default reviewer/verdict-issuer for any O6 work Grok builds (same ACCEPT-requires-evidence contract as Opus). Opus remains available if Alex routes the readiness verdict there, and remains the reviewer of record for completed O1–O4 work. | Complete a disposable multi-packet repo-only rehearsal including a simulated Kimi→Sonnet handoff. | Repo-only O6 rehearsal work is done (see below). The safety fence is deferred, not cancelled — it gets built if a real overnight run causes damage that cannot be recovered from git, or before any harness work reaches anything outside the repository. Restrictions unchanged: no theological content, no answer-accuracy path, no production DB writes, no doctrinal or licensing judgment. |
 
-**Exit criteria:**
+**DONE — 2026-08-13:** Merged to `main` at `425d6e2` (build `98dc62e`, audit
+`7d5b4a7` / `docs/audits/o6_overnight_rehearsal_2026-08-13.md`). Two disjoint
+lanes run as real `multiprocessing.Process` children synchronized on a
+barrier; the independent reviewer proved the overlap assertion load-bearing
+by mutation (forcing sequential execution made it fail). All five failure
+paths demonstrated with real journal evidence, reusing the O3/O5 fixtures
+directly rather than new shortcuts. New pure `night_loop.
+combine_morning_reports()` merges lanes into one report. Independent
+planner-reviewer `ACCEPT`, one round. Full O2–O6 suite: 1352 passed, 1
+skipped, confirmed post-merge on `main`. Real AI workers overnight remain a
+separate milestone, still blocked on the deferred safety fence.
 
-- [ ] At least two independent packets run concurrently without file collision.
-- [ ] Crash/resume, worker failure, quota fallback, quarantine, and human-stop
+**Exit criteria — closed by commissioning:**
+
+- [x] At least two independent packets run concurrently without file collision.
+- [x] Crash/resume, worker failure, quota fallback, quarantine, and human-stop
   paths are demonstrated with fixtures.
-- [ ] No production database, deployment, or governed document is changed.
-- [ ] Alex can determine what happened, what changed, what passed, and what
+- [x] No production database, deployment, or governed document is changed.
+- [x] Alex can determine what happened, what changed, what passed, and what
   needs attention from one morning report.
 
 ### Overnight unattended runs — settled 2026-08-13; updated 2026-08-13
