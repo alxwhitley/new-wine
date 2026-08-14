@@ -171,12 +171,44 @@ docs, not Grok's own self-report — see `.grok/agents/harness-builder.md`
 for the CLI-invocation guidance built on these):** shell tool is
 `run_terminal_command`; ambient default timeout 120000ms (2 min) — an
 overrun with no explicit timeout set gets backgrounded, not killed, the
-same silent-continuation risk Claude's Bash tool has; with an explicit
-timeout set, an overrun genuinely gets killed (SIGTERM, escalated to
-SIGKILL after a ~1s grace period, process group plus any descendant that
-didn't detach via `setsid`/`nohup`); ceiling 36,000,000ms (10 hours) — no
-Claude-style low ceiling or `HUMAN_REQUIRED`-above-ceiling case applies on
-this surface.
+same silent-continuation risk Claude's Bash tool has. Ceiling 36,000,000ms
+(10 hours) — no Claude-style low ceiling or `HUMAN_REQUIRED`-above-ceiling
+case applies on this surface. **Corrected 2026-08-14, second probe session,
+by direct reproduction (not schema-doc inference this time) — the paired
+claim that used to follow, "with an explicit timeout set, an overrun
+genuinely gets killed," was FALSE and is retracted, not softened.** Passing
+`run_terminal_command` an explicit millisecond timeout does NOT prevent
+backgrounding and does NOT cause a kill at any tested value: verified
+directly across three controlled cases (`sleep` commands under an
+unrelated throwaway session, not a live packet), including one where a
+command was given an explicit 140000ms timeout, actually ran 200 real
+seconds — 60 seconds past its own declared ceiling — and was never
+terminated; it completed entirely on its own. **No mechanism was found on
+this surface that genuinely kills an overrunning command at any declared
+timeout value.** A `kill_command_or_subagent` tool exists and can
+terminate a running background task, but nothing invokes it automatically
+when a declared timeout is exceeded — it would have to be called
+deliberately, and nothing in the current workflow does that. Practical
+consequence: `verification_commands.py`'s own internal SIGTERM→SIGKILL
+teardown is the ONLY confirmed real kill path for a Grok-run verification
+command — routing through it is load-bearing, not a consistency
+preference. Still always declare an explicit `run_terminal_command`
+timeout per the guidance below, but treat it as a logging/consistency
+habit, not a safety guarantee it was previously assumed to be.
+
+**Session-resume reliability (found 2026-08-14, second probe session):**
+`grok --resume <session-id>` works reliably for a session that exited on
+its own — verified directly: resuming a cleanly-completed prior session
+succeeded and the resumed session showed real, correct awareness of its
+own prior work. It does NOT reliably work for a session that was
+externally hard-killed mid-execution (as opposed to exiting on its own) —
+two resume attempts against such a session both produced zero output
+before being killed themselves, no error surfaced either time. The exact
+mechanism isn't nailed down (plausibly the on-disk session transcript is
+never flushed/finalized before a hard kill, but that root cause wasn't
+independently confirmed) — only the practical behavior is established.
+**Treat an externally-killed Grok session as unresumable: don't attempt
+`--resume` on it, restart the packet fresh instead.**
 
 ---
 

@@ -133,7 +133,8 @@ with a bigger number.
 
 Your terminal tool is `run_terminal_command`, not Bash — invoking the
 verification CLI above still goes through it, and it has its own timeout
-behavior worth sizing around explicitly:
+behavior worth understanding precisely, because part of what this note
+used to claim about it was wrong:
 
 - Its ambient default is 120000ms (2 minutes). If you invoke it with no
   explicit timeout and it overruns that default, the command gets
@@ -141,22 +142,40 @@ behavior worth sizing around explicitly:
   other builder's shell tool has by default. This is why "never the
   ambient default," above, applies to you too, not just to Claude/Codex —
   the failure mode is the same even though the underlying mechanism isn't.
-- When you pass an **explicit** timeout, an overrun genuinely gets killed:
-  the process group receives SIGTERM, escalated to SIGKILL after a ~1s
-  grace period, including descendants that didn't detach via
-  `setsid`/`nohup`.
 - Its ceiling is 36,000,000ms (10 hours) — far above anything a
   verification command in this repo will ever need.
+- **Corrected 2026-08-14, second probe session, by direct reproduction —
+  retracted, not softened:** this note used to claim that passing an
+  explicit timeout makes an overrun "genuinely get killed" (SIGTERM,
+  escalated to SIGKILL). That is false. Passing an explicit timeout does
+  NOT prevent backgrounding and does NOT cause a kill at any tested value.
+  Verified directly across three controlled cases: a command given an
+  explicit 20000ms timeout that actually ran 60 real seconds was still
+  backgrounded exactly like an unbounded one and finished on its own; a
+  command given an explicit 140000ms timeout that actually ran 200 real
+  seconds — 60 seconds past its own declared ceiling — was never
+  terminated and finished entirely on its own. No mechanism was found on
+  this surface that genuinely kills an overrunning command at any declared
+  timeout value. A `kill_command_or_subagent` tool exists and can
+  terminate a running background task, but nothing calls it automatically
+  when a declared timeout is exceeded — that would require a deliberate
+  call, which nothing in this workflow currently makes.
 
-So: always pass `run_terminal_command` an explicit millisecond timeout
-above the CLI's own declared `timeout_seconds` plus grace (a comfortable
-margin — e.g. `(timeout_seconds + 15) * 1000` — covers the module's
-SIGTERM/SIGKILL/reap window). Unlike Claude's Bash tool, there is no low
-outer ceiling to run into here, and no `HUMAN_REQUIRED`-above-ceiling case
-to design for — an explicit timeout on your surface is both required (to
-avoid backgrounding) and sufficient (it actually kills). Don't invent a
-Claude-style ceiling that doesn't exist for you; do keep the same
-non-negotiable habit of always stating one.
+So: still always pass `run_terminal_command` an explicit millisecond
+timeout above the CLI's own declared `timeout_seconds` plus grace (a
+comfortable margin — e.g. `(timeout_seconds + 15) * 1000`) — keep this
+habit regardless, for consistency with every other builder and in case it
+matters under conditions this investigation didn't cover — but do not
+treat it as a safety guarantee. On your surface, it is neither required
+to avoid backgrounding nor sufficient to guarantee a kill, as previously
+claimed here. **The verification CLI's own internal SIGTERM→SIGKILL
+teardown is the only confirmed real kill path for an overrunning
+verification command** — that is the actual reason routing through it is
+non-negotiable, not merely a consistency preference. If a command you ran
+outside that CLI appears to hang, "moved to background" does not mean it
+stopped or will stop on its own timeout — poll for the real result
+(`get_command_or_subagent_output` / `wait_commands_or_subagents`) rather
+than assuming an unanswered call has failed or been terminated.
 
 ---
 
