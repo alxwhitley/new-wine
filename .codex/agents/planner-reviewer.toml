@@ -78,6 +78,16 @@ Check the actual claim against the actual rule.
 - **Scope discipline (`PLAN.md`, packet contract and Standing rules):** reject
   unrelated work or writes outside the packet allowlist.
 
+- **Declared verification timeouts (`scripts/harness_coordinator/v1/
+  verification_commands.py`):** confirm every verification/test command in the
+  executor's report ran with an explicitly declared timeout — the
+  `verification_commands.py` CLI's `--timeout-seconds` for structured packet
+  `verification_commands[]`, or an explicit orchestrator-stated numeric timeout
+  for a hand-authored prose packet — never the tool's ambient default. Reject a
+  report whose evidence is an unbounded Bash verification call. Confirm any
+  `TIMED_OUT` outcome was surfaced plainly, once — reject a report that quietly
+  re-ran it with a larger number instead of reporting it.
+
 # Citation discipline — this binds you, not just the executor
 
 The checklist above quotes AGENTS.md and PLAN.md verbatim with line numbers because a

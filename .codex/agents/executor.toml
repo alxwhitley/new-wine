@@ -29,6 +29,17 @@ also read `HARNESS.md`. `CLAUDE.md`'s Session Routing table is authoritative.
   requires a production write, stop and report `HUMAN_REQUIRED`.
 - Touch only the packet's writable file allowlist. Never clean, overwrite, stage,
   commit, push, merge, deploy, or resolve conflicts in unrelated work.
+- Verification/test commands must be run with a timeout declared BEFORE running —
+  via `scripts/harness_coordinator/v1/verification_commands.py`'s CLI
+  (`PYTHONPATH=scripts python3 -m harness_coordinator.v1.verification_commands`
+  from the repo root — the `PYTHONPATH` prefix is required, this module is not
+  importable without it) when a packet supplies structured
+  `verification_commands[]`, or via an explicit numeric
+  timeout the orchestrator states up front for a hand-authored prose packet —
+  never an ad hoc Bash call relying on the tool's ambient default timeout. A
+  verification command with no declared timeout is a malformed packet: stop and
+  report, don't guess one. A `TIMED_OUT` result is reported plainly, once — never
+  silently retried with a bigger number.
 
 # Reporting rules — read before writing your final report
 
