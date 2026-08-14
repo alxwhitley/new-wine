@@ -15,6 +15,8 @@ GUARD_PATH = CODEX_GUARD_PATH
 EXECUTOR_PATH = ACTIVE_ROOT / ".codex" / "agents" / "executor.toml"
 REVIEWER_PATH = ACTIVE_ROOT / ".codex" / "agents" / "planner-reviewer.toml"
 GATE_PATH = ACTIVE_ROOT / ".codex" / "hooks" / "deterministic_gate.py"
+CLAUDE_EXECUTOR_PATH = ACTIVE_ROOT / ".claude" / "agents" / "executor.md"
+CLAUDE_REVIEWER_PATH = ACTIVE_ROOT / ".claude" / "agents" / "planner-reviewer.md"
 
 
 def load_guard(path=GUARD_PATH):
@@ -79,6 +81,32 @@ def test_settings_wire_the_two_explicit_hook_surfaces():
     codex_settings = (ACTIVE_ROOT / ".codex" / "hooks.json").read_text()
     assert ".claude/hooks/guard_pretooluse.py" in claude_settings
     assert ".codex/hooks/guard_pretooluse.py" in codex_settings
+
+
+def test_claude_side_agents_declare_the_verification_timeout_discipline():
+    executor = CLAUDE_EXECUTOR_PATH.read_text()
+    reviewer = CLAUDE_REVIEWER_PATH.read_text()
+
+    # Executor: must point at the declared-ahead-timeout CLI, require a
+    # timeout be declared before running, name the TIMED_OUT outcome, and
+    # state the Claude-specific outer Bash-tool ceiling (600000ms / 10 min).
+    assert "verification_commands" in executor
+    assert "PYTHONPATH=scripts" in executor
+    assert "declared" in executor and "before running" in executor.lower()
+    assert "TIMED_OUT" in executor
+    assert "600000" in executor
+
+    # Executor: a raw Bash-tool `timeout` param on the command itself must be
+    # explicitly stated as not an accepted substitute for the CLI.
+    assert "not an accepted substitute" in executor.lower()
+
+    # Planner-reviewer: must check the same discipline, plus (Claude-specific)
+    # confirm the outer Bash-tool timeout, not just the declared packet timeout.
+    assert "verification_commands" in reviewer
+    assert "outer Bash" in reviewer or "outer Bash-tool" in reviewer
+
+    # Planner-reviewer: must reject a raw Bash-tool timeout substituted for the CLI.
+    assert "not an accepted substitute" in reviewer.lower()
 
 
 def check(condition: bool, label: str) -> None:
