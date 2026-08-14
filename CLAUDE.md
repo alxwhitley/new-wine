@@ -800,6 +800,25 @@ different row, per the hard rule above.
   a deliberate decision from Alex on the general pattern, not a fresh
   ad hoc call each session.
 
+- **Auto Mode misfire on harmless prose mentioning "SQL"/"migration" —
+  2026-08-14, upgraded same day.** A separate behavior of the same Auto
+  Mode classifier from the entry above — that one blocks real DB writes;
+  this one is a false-positive misfire with no real write involved. First
+  observed earlier that session as pure reporting noise (misfired on
+  report prose, zero effect). Later the same session, a real
+  counterexample: the misfire can genuinely stall work, not just decorate
+  a log. During a real-worker harness probe, a live `executor` subagent
+  hit this classifier while running Python `time.sleep` verification
+  commands — semicolons in the test one-liners, combined with the
+  executor's own loaded SQL-comment/semicolon instructions (the Migration
+  051 gotcha), triggered a defensive loop explaining a phantom
+  SQL-migration flag instead of running the task. Nothing SQL- or
+  migration-related was actually present. Worked around per the
+  stall-risk rule: did not retry the identical prompt, removed the
+  semicolons, reran once — cleared. **A future session must not assume
+  this misfire is always harmless** — it can consume a full turn and
+  block real work; reformulate, don't just retry.
+
 - **RESOLVED 2026-08-09 — `quote_source_revisions.passage_text` was
   captured as just the candidate span, not the full chunk — silently
   defeating the DB trigger's own substring check for any row written that
