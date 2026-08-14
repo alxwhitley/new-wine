@@ -293,4 +293,90 @@ def run_night(
     }
 
 
-__all__ = ["run_night"]
+_ATTENTION_WORTHY_DISPOSITIONS = {
+    "quarantined": "packet_quarantined",
+    "blocked_human": "packet_blocked_human",
+}
+
+
+def combine_morning_reports(reports: Mapping[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Merge N independent lanes' own ``run_night()`` results into one
+    morning report. Pure: no state-root I/O, no side effects -- every input
+    is already-produced, in-memory lane output (each lane's own ``run_night``
+    return dict). This is the seam that lets Alex read one report instead of
+    opening N state roots by hand when ingestion and app-build lanes run
+    concurrently (PLAN.md's two-lane overnight design, Invariant 15).
+
+    ``reports`` maps an arbitrary caller-chosen lane name to that lane's own
+    ``run_night()`` return dict (each of which nests its own
+    ``morning_report``). The combined result has three parts:
+
+    - ``lanes``: the per-lane breakdown, each sub-report kept verbatim and
+      keyed by lane name -- nothing here is summarized or dropped, so a
+      reader can always drill into one lane's own full detail.
+    - ``what_needs_attention``: the union of two things, each item tagged
+      with its source ``lane`` so it is traceable back to which lane
+      produced it:
+        1. every item each lane's own reconciliation already flagged
+           (``morning_report.what_needs_attention`` -- genuine integrity
+           findings, carried through unchanged);
+        2. one synthesized item per packet whose disposition is
+           ``quarantined`` or ``blocked_human``. These are correct,
+           EXPECTED dispositions, not integrity violations -- reconcile.py's
+           own ``attention_required`` deliberately does not flag a packet
+           for reaching one of them (see ``_o5_disposition``'s docstring:
+           they are self-explanatory terminal/paused outcomes) -- so
+           without this they would be invisible in a morning report even
+           though O6's own exit criterion is that Alex can tell "what needs
+           attention" from one report. A quarantined packet or one blocked
+           on human authority is exactly the kind of thing a human should
+           see without opening that packet's own state root by hand.
+    - ``all_invariants_passed``: the logical AND of every lane's own
+      ``morning_report.all_invariants_passed`` -- true only when every lane
+      independently reports a clean night.
+    """
+    if not isinstance(reports, Mapping) or not reports:
+        raise ValueError("combine_morning_reports requires at least one lane report")
+
+    lanes: Dict[str, Any] = {}
+    what_needs_attention: List[Dict[str, Any]] = []
+    all_passed = True
+
+    for lane_name in sorted(reports):
+        if not isinstance(lane_name, str) or not lane_name:
+            raise ValueError("lane names must be non-empty strings")
+        lane_report = reports[lane_name]
+        if not isinstance(lane_report, Mapping) or "morning_report" not in lane_report:
+            raise ValueError("lane %r report is missing morning_report" % (lane_name,))
+        morning = lane_report["morning_report"]
+        if not isinstance(morning, Mapping):
+            raise ValueError("lane %r morning_report is not a mapping" % (lane_name,))
+        lanes[lane_name] = lane_report
+
+        for item in morning.get("what_needs_attention") or []:
+            tagged = dict(item) if isinstance(item, Mapping) else {"detail": item}
+            tagged["lane"] = lane_name
+            what_needs_attention.append(tagged)
+
+        for row in morning.get("packets") or []:
+            disposition = row.get("disposition") if isinstance(row, Mapping) else None
+            code = _ATTENTION_WORTHY_DISPOSITIONS.get(disposition)
+            if code is None:
+                continue
+            what_needs_attention.append({
+                "packet_id": row.get("packet_id"),
+                "code": code,
+                "detail": "%s reached disposition %r" % (row.get("packet_id"), disposition),
+                "lane": lane_name,
+            })
+
+        all_passed = all_passed and bool(morning.get("all_invariants_passed"))
+
+    return {
+        "lanes": lanes,
+        "what_needs_attention": what_needs_attention,
+        "all_invariants_passed": all_passed,
+    }
+
+
+__all__ = ["run_night", "combine_morning_reports"]
