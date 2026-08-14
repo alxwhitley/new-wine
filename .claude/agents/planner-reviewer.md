@@ -130,7 +130,16 @@ Check the actual claim against the actual rule.
   verification call, or one where the outer Bash call's timeout was left at the
   ambient default despite a longer declared verification timeout. Confirm any
   `TIMED_OUT` outcome was surfaced plainly, once — reject a report that quietly
-  re-ran it with a larger number instead of reporting it.
+  re-ran it with a larger number instead of reporting it. **Reject a report whose
+  evidence shows a raw command run with an explicit Bash-tool `timeout` parameter
+  placed directly on the command instead of through the `verification_commands.py`
+  CLI — that is not an accepted substitute for the CLI, regardless of whether a
+  timeout value was technically declared.** Only the CLI's own
+  `terminate_process_group()` SIGTERM→SIGKILL teardown counts as an enforced
+  timeout on this surface; the Bash tool's own `timeout` parameter instead
+  backgrounds an overrunning process with its kill deferred to end-of-turn, which
+  is not equivalent and does not satisfy this discipline even when a timeout
+  number was declared ahead of time.
 
 # Citation discipline — this binds you, not just the executor
 

@@ -96,10 +96,17 @@ def test_claude_side_agents_declare_the_verification_timeout_discipline():
     assert "TIMED_OUT" in executor
     assert "600000" in executor
 
+    # Executor: a raw Bash-tool `timeout` param on the command itself must be
+    # explicitly stated as not an accepted substitute for the CLI.
+    assert "not an accepted substitute" in executor.lower()
+
     # Planner-reviewer: must check the same discipline, plus (Claude-specific)
     # confirm the outer Bash-tool timeout, not just the declared packet timeout.
     assert "verification_commands" in reviewer
     assert "outer Bash" in reviewer or "outer Bash-tool" in reviewer
+
+    # Planner-reviewer: must reject a raw Bash-tool timeout substituted for the CLI.
+    assert "not an accepted substitute" in reviewer.lower()
 
 
 def check(condition: bool, label: str) -> None:

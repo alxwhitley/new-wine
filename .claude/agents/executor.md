@@ -28,14 +28,26 @@ by guessing — you escalate it back in your report instead.
   these are frozen for new-source ingests per PLAN.md Standing Rule 10 until the
   chokepoint conversion band (#6–13) clears. If your task seems to require a real
   run through one of these, stop and report that instead of finding a workaround.
-- Verification/test commands must be run with a timeout declared BEFORE running: via
+- Verification/test commands must be run with a timeout declared BEFORE running,
+  and the CLI is mandatory — not merely "not the ambient default." Every
+  verification/test command with a declared timeout MUST be run via
   `scripts/harness_coordinator/v1/verification_commands.py`'s CLI (invoked as
   `PYTHONPATH=scripts python3 -m harness_coordinator.v1.verification_commands ...`
   from the repo root — the `PYTHONPATH` prefix is required, the module is not
   importable without it) when a packet supplies structured `verification_commands[]`,
-  or via an explicit numeric timeout the orchestrator states up front for a
-  hand-authored prose packet — never an ad hoc Bash call relying on the tool's
-  ambient default. A verification command with no declared timeout is a malformed
+  or via that same module invoked directly for a hand-authored prose packet's
+  stated numeric timeout. **A raw command run with an explicit Bash-tool `timeout`
+  parameter placed directly on the command, instead of going through the CLI, is
+  NOT an accepted substitute — even though it also declares a timeout ahead of
+  time.** This distinction matters and is not a style preference: the module
+  guarantees a confirmed-dead SIGTERM→SIGKILL process-group teardown via
+  `terminate_process_group()` when a command overruns its declared timeout; the
+  Bash tool's own `timeout` parameter instead backgrounds an overrunning process
+  with its kill deferred to end-of-turn (per the tool's own stated behavior
+  — "terminated when you give your final response," not immediately) — that is
+  not equivalent, and is exactly the silent-backgrounding pattern this whole
+  discipline exists to prevent, even when the report itself is plain and not
+  silently retried. A verification command with no declared timeout is a malformed
   packet: stop and report, don't guess one. A `TIMED_OUT` result is reported
   plainly, once — never silently retried with a bigger number. **Claude-specific
   addition (not in the Codex-side equivalent):** the CLI call above still runs
@@ -44,11 +56,14 @@ by guessing — you escalate it back in your report instead.
   before backgrounding the command. Always pass that Bash call an explicit
   `timeout` in milliseconds of at least `(declared timeout_seconds + 10) * 1000`
   (the extra 10 seconds covers the module's own SIGTERM/SIGKILL/reap grace
-  window) — never rely on the Bash tool's 2-minute default. If a packet's declared
-  `timeout_seconds` would require an outer timeout above 600000ms, this
-  verification command cannot run synchronously on this surface at all: stop and
-  report `HUMAN_REQUIRED`/escalate rather than truncating the declared timeout or
-  letting the Bash tool background it silently.
+  window) — never rely on the Bash tool's 2-minute default, and never treat that
+  outer Bash-tool timeout as a substitute for running the CLI itself; it only
+  bounds how long you wait for the CLI's own process, it is not the timeout
+  enforcement mechanism. If a packet's declared `timeout_seconds` would require an
+  outer timeout above 600000ms, this verification command cannot run
+  synchronously on this surface at all: stop and report `HUMAN_REQUIRED`/escalate
+  rather than truncating the declared timeout or letting the Bash tool background
+  it silently.
 
 # Reporting rules — read before writing your final report
 
