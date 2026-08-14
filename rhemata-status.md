@@ -6,8 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-14 (real-worker probes 1–2 merged to local
-`main`; records close).
+Last verified: 2026-08-14 (real-worker probes 1–3 merged to local
+`main`, Claude-side verification-timeout mirror proven live; records
+close).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -30,20 +31,26 @@ fully closed. Real AI workers running overnight remain a separate milestone,
 still blocked on the deferred safety fence — unchanged, not this session's
 work.
 
-**Two real-worker harness probes, 2026-08-14 — build/merge happened
-locally this session, this is the records close.** First: a real (not
-simulated) Claude Code worker ran a repo-only test-coverage packet
-attended, isolated worktree, zero Auto Mode interference — one round
-`ACCEPT`. Second: closed the verification-timeout gap the first
-surfaced (`scripts/harness_coordinator/v1/verification_commands.py` —
-timeouts now declared ahead of the run, clean `TIMED_OUT` into the
-existing hard-stop machinery, not a parallel one) — one round
-`REVISE`, bounded one-line fix applied and reverified, no second
-round needed. Both merged to local `main` only, not pushed. Full
-suite: 1366 passed, 1 skipped. Full detail: PLAN.md's Overnight
-unattended runs section. **Not done:** the timeout fix landed on
-`.codex/agents/*.toml` only — the parallel Claude-side
-`.claude/agents/*.md` definitions still need it; see Next.
+**Three real-worker harness probes, 2026-08-14 — build/merge happened
+locally this session, this is the records close.** First: a real
+Claude Code worker ran a repo-only test-coverage packet, attended,
+isolated worktree — one round `ACCEPT`. Second: closed the
+verification-timeout gap the first surfaced, on the `.Codex` side —
+one round `REVISE`, bounded fix, no second round needed. Third:
+mirrored the same discipline onto the Claude-side `.claude/agents/*.md`
+definitions Claude Code's own subagents actually load, plus a
+Claude-specific outer-Bash-timeout-ceiling clause — one round
+`APPROVE`, mutation-tested. A live, unprompted rerun then found the
+wording insufficient (an executor could satisfy it with a raw native
+Bash timeout instead of the CLI, and a genuine overrun backgrounded
+instead of being cleanly killed); tightened to make the CLI mandatory,
+reverified by an independent cold rerun — the executor chose the CLI
+on its own, `pgrep` confirmed the timed-out process was actually dead.
+All three merged to local `main` only, not pushed. Full suite: 1367
+passed, 1 skipped. Full detail: PLAN.md's Overnight unattended runs
+section. **This closes the last open item on the Claude-side path
+before a real overnight night** — first item is now building Grok a
+standing role-definition file (see Next).
 
 **O5 budgets merged to `main` at `20ce143`; coordinator run loop at
 `ac53f76`.** Both unchanged since last session — see PLAN.md for full
@@ -60,9 +67,9 @@ through the harness, day or night.
 
 Already true, unchanged: all 8 pillars live; one async answer path
 (`serving_enabled` TRUE); quote rail live; position one-hop live on
-origin. Auto Mode landmine still current — reconfirmed this session as
-pure reporting noise (misfired on report prose, not on any real file),
-not a build defect.
+origin. Auto Mode landmine still current — this session found a real
+counterexample to the prior "pure noise" framing; see the upgraded
+Known Harness Bugs entry below.
 
 ---
 
@@ -82,26 +89,37 @@ PLAN.md, 2026-08-13.)
 ## Known Harness Bugs
 
 - **Auto Mode misfire on harmless prose mentioning "SQL"/"migration"
-  — 2026-08-14.** Consistent with the existing Auto Mode landmine
-  (CLAUDE.md): the classifier reacted to report/instruction prose
-  that merely named "SQL"/"migration" as words, with no such file or
-  action actually present anywhere in the session. Pure noise, not a
-  build defect — logged so a future session doesn't re-investigate it
-  as new.
+  — 2026-08-14, upgraded same day.** First observed earlier this
+  session as pure reporting noise (misfired on report prose, zero
+  effect). **Later the same session, a real counterexample: the
+  misfire can genuinely stall work, not just decorate a log.** During
+  Probe 3, a live `executor` subagent hit this classifier while
+  running Python `time.sleep` verification commands — semicolons in
+  the test one-liners, combined with the executor's own loaded
+  SQL-comment/semicolon instructions (the Migration 051 gotcha),
+  triggered a defensive loop explaining a phantom SQL-migration flag
+  instead of running the task. Nothing SQL- or migration-related was
+  actually present. Worked around per the stall-risk rule: did not
+  retry the identical prompt, removed the semicolons, reran once —
+  cleared. **A future session must not assume this misfire is always
+  harmless** — it can consume a full turn and block real work;
+  reformulate, don't just retry.
 
 ---
 
 ## Next
 
-1. Close the Claude-side agent-definition timeout gap —
-   `.claude/agents/executor.md`/`planner-reviewer.md` need the same
-   declared-ahead-timeout hard constraint just added to
-   `.codex/agents/executor.toml`/`planner-reviewer.toml` (probe 2,
-   2026-08-14); confirmed zero timeout mentions in the Claude-side
-   copies today.
+1. Build Grok a standing harness role-definition file — confirmed this
+   session that none exists anywhere in the repo (no `.toml`/`.md`
+   analog to `.Codex/agents/*.toml` or `.claude/agents/*.md`); the
+   only Grok artifact found, `grok_overnight_prompt.txt`, is a one-off
+   task prompt for an unrelated data-quality sweep and carries none of
+   the hard constraints (governed-doc protection, ingest freeze,
+   timeout discipline, reporting format). Blocks item 2.
 2. Run a Grok-built probe through the same real-worker harness path —
-   probes 1–2 were both Claude Code; needed before the supervised-week
-   path can claim coverage across both permitted builders.
+   probes 1–3 were all Claude Code; needed before the supervised-week
+   path can claim coverage across both permitted builders. Blocked on
+   item 1.
 3. First supervised overnight night. Fence stays deferred, unchanged
    revisit trigger (real unrecoverable damage, or harness work
    reaching outside the repo).
@@ -116,5 +134,13 @@ PLAN.md, 2026-08-13.)
    dedicated DB-write session.
 10. F2–F5 remain open before F6's ingestion-ready benchmark can be
     declared — O6 alone does not close F6.
+11. `.claude/agents/planner-reviewer.md` cleanup — retired two-value
+    `VERDICT: APPROVE | REJECT` format (current standard elsewhere is
+    the four-value `ACCEPT|REVISE|QUARANTINE|HUMAN_REQUIRED` contract)
+    and stale hardcoded `PLAN.md:NN`/`CLAUDE.md:NN` line-number
+    citations in its checklist — both confirmed real and pre-existing
+    by this session's planner-reviewer round, deliberately left
+    untouched (a different, larger change than the timeout mirror).
+    Needs its own cleanup packet.
 
 SP: #43 swipe-to-close shipped; full drag-to-follow-with-peek not shipped.

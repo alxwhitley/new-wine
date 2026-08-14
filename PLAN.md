@@ -392,13 +392,52 @@ the reviewer's own "no other change is required for acceptance."
 **Both merged to local `main` only, not pushed:** build `1bb1d73` →
 merge `f306080` (probe 1); build `e08b5e7` → merge `ef49605` (probe
 2). Full suite post-merge: 1366 passed, 1 skipped (1354 before either
-probe). **Not done — recorded as the next build, not a residual:**
-the timeout-declaration fix landed on `.codex/agents/executor.toml`/
-`planner-reviewer.toml` only. The parallel Claude-side agent
-definitions (`.claude/agents/executor.md`/`planner-reviewer.md`)
-carry the same hard-constraints section and were independently
-confirmed by the reviewer to contain zero timeout mentions — still
-open, see `rhemata-status.md`'s Next list.
+probe). **Closed the same day by Probe 3, below:** the
+timeout-declaration fix initially landed on
+`.codex/agents/executor.toml`/`planner-reviewer.toml` only; the
+parallel Claude-side agent definitions
+(`.claude/agents/executor.md`/`planner-reviewer.md`) were
+independently confirmed by the reviewer to carry zero timeout
+mentions at the time.
+
+**Probe 3, 2026-08-14 — closes the Claude-side gap the paragraph
+above left open.** Mirrored the same declared-ahead-timeout
+discipline onto `.claude/agents/executor.md`/`planner-reviewer.md`
+(tracked; the surface Claude Code's own Task-tool `executor`/
+`planner-reviewer` subagents actually load), plus a Claude-specific
+addition the Codex side doesn't need: Claude's own Bash tool defaults
+to a 120000ms timeout and backgrounds past it, with a 600000ms hard
+ceiling, so the executor must size its own outer Bash-tool `timeout`
+to cover the declared verification timeout, or escalate rather than
+truncate/background if that would exceed the ceiling. Build
+`da3d979`, one `planner-reviewer` round, `APPROVE` — mutation-tested,
+not keyword-checked: the reviewer confirmed the static test actually
+fails when either bullet is stripped. A live, unprompted Probe 3
+dispatch then found the wording insufficient in practice: a real
+`executor` subagent, given two verification commands (one
+legitimately long, one deliberately overrunning its declared timeout)
+with no mechanism specified, satisfied the letter of the rule by
+passing an explicit native Bash `timeout` directly on the raw
+command instead of going through the CLI — the wording banned the
+tool's ambient default but never said the CLI was mandatory. On the
+pass case this was indistinguishable from correct behavior; on the
+deliberate-overrun case, Claude's Bash tool backgrounded the process
+with its kill deferred to end-of-turn instead of the module's
+confirmed-dead SIGTERM→SIGKILL teardown — real silent backgrounding,
+though the report itself stayed plain and wasn't retried. Fixed with
+build `d5a27cc`: the CLI is now stated as mandatory, an explicit
+native Bash timeout is explicitly rejected as a substitute, with the
+SIGTERM/SIGKILL-vs-backgrounding reasoning stated inline. Reverified
+by an independent cold Probe 3 rerun, again with no mechanism
+specified: the executor chose the CLI on its own, sized both outer
+timeouts correctly, `PASSED` with hash-verified stdout on the long
+case, `TIMED_OUT` with `pgrep`-confirmed real process death on the
+deliberate-timeout case. Merged to local `main` only, not pushed:
+`1356418`. Full suite post-merge: 1367 passed, 1 skipped. **This
+closes the last open item on the Claude-side path before a real
+overnight night** — see `rhemata-status.md`'s Next list for what's
+now first (a standing Grok role-definition file, which was confirmed
+this session not to exist anywhere in the repo).
 
 ---
 
