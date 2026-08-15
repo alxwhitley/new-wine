@@ -158,8 +158,11 @@ recursive character, 1000 chars, 200 overlap. Lexicon — one entry, one chunk.
 
 ### Answer generation
 
-`producer.py` `_generate_and_capture()` (the only answer path since chat.py's
-deletion, 2026-08-07 mirror-unification job) streams `claude-sonnet-4-5`
+`producer.py` `_generate_and_capture()` (the primary chat-style answer path
+since chat.py's deletion, 2026-08-07 mirror-unification job — a second,
+structurally different served-generation surface, `get_teacher_card()`
+in `backend/app/routers/study.py`, also exists; see CLAUDE.md's Landmines
+correction on that job) streams `claude-sonnet-4-5`
 (`GEN_MAX_TOKENS = 8000`) and emits ONLY the `<answer>`
 block; the `<thinking>`/`<research_analysis>` prefix is discarded, never streamed.
 **Hard guarantee (Phase 0 §7a): internal reasoning can never reach the user.** If

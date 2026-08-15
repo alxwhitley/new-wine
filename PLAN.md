@@ -551,8 +551,12 @@ parallelism after Opus has issued packets with disjoint ownership.
 
 **Investigated 2026-08-13, generation-output verification stays open:**
 `backend/app/services/reference_verifier.py` is real, live, and wired into
-the sole answer path (`producer.py`) — a genuine deterministic guard, fail-
-closed throughout. But it closes **misattribution** (a real teacher's name
+`producer.py`, the primary chat-style answer path — a genuine deterministic
+guard, fail-closed throughout. (Corrected 2026-08-15: `producer.py` is not
+the only served-generation surface — `get_teacher_card()`, a second one, now
+also calls this module's `ungrounded_prose_teachers`; see CLAUDE.md's
+Landmines correction on the 2026-08-07 mirror-unification job.) But it
+closes **misattribution** (a real teacher's name
 credited with material never retrieved for that question — the mechanism
 CLAUDE.md's Settled decision #15 already documents as built), not
 **substance/claim-support** verification (whether a claim's content is

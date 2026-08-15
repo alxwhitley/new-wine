@@ -178,8 +178,11 @@ SEQUENCE (2026-08-03)".
     claim-level A2 misattribution (the other teacher's material is never in the
     generation) — a failure previously logged as uncatchable. **Phase 1 scope
     (confirmed):** single-teacher topics only, enforced at retrieval/context-
-    assembly (`producer.py` -- the only answer path since chat.py's deletion,
-    2026-08-07 mirror-unification job); in-house-debate topics
+    assembly (`producer.py` -- the primary chat-style answer path since
+    chat.py's deletion, 2026-08-07 mirror-unification job; a second,
+    structurally different served-generation surface, `get_teacher_card()`,
+    exists too — corrected in full at the Landmines entry on that job);
+    in-house-debate topics
     (decision #11) are OUT of phase 1 and keep working unchanged — full design
     in PLAN.md's CURRENT BUILD SEQUENCE, Project 2. Teacher profile pages
     precompute instead of regenerating from source text per view
@@ -253,8 +256,9 @@ SEQUENCE (2026-08-03)".
     **The accepted direction is now ONE hop, not two:** a matched
     position's underlying PROPOSITIONS — never its rendered text — feed
     the answer path's existing, already-hardened retrieval/generation/
-    verification pipeline directly (`producer.py` -- the only answer path
-    since chat.py's deletion, 2026-08-07 mirror-unification job); the
+    verification pipeline directly (`producer.py` -- the primary chat-style
+    answer path since chat.py's deletion, 2026-08-07 mirror-unification
+    job); the
     position's own generated text
     becomes a build-time human-review artifact only, never served. Same
     day, narrowly scoped: 2 of the 3 documented fabrication cases (Conlon,
@@ -296,7 +300,10 @@ session: `backend/app/services/position_paper_exclusion.py`,
 `backend/app/services/position_papers.py`'s `render_paper_voice_with_disclaimer()`,
 and the retrieval-path wiring in `producer.py` (originally also wired into
 chat.py; that side is moot since chat.py's deletion, 2026-08-07
-mirror-unification job — `producer.py` is the only answer path now).
+mirror-unification job — `producer.py` is the primary chat-style answer
+path now; the position-paper fence is deliberately NOT extended to
+`get_teacher_card()`'s second served-generation surface — see the
+Landmines correction on that job for why).
 
 16. **Retrieved teacher material that contradicts a matched house position is
     excluded from the answer, never presented alongside it and never silently
@@ -420,7 +427,7 @@ PLAN.md's Open Decisions note.
 
 23. **Quote review tool stays admin-only.** No broader access, including now that quote approval is automatic (Settled decisions #18/#19 above). Confirmed unchanged: every route in `backend/app/routers/quotes.py` already gates on `Depends(require_admin_role)`. Reason: broader access multiplies who can introduce a bad quote candidate with no corresponding benefit.
 
-24. **Quotes serve on the primary (and now only) async answer path.** Structurally satisfied, not merely a policy choice: `chat.py` (the synchronous fallback path this decision originally distinguished against) was deleted 2026-08-07 (mirror-unification job) — there is exactly one answer path today, and it always runs quote selection. If a second synchronous path is ever reintroduced, this decision's original policy (quotes on the primary/proven path only, revisit after concurrency is proven at the 100-dial) governs again; until then there is nothing to distinguish it from.
+24. **Quotes serve on `producer.py` only — the sole chat-style/async answer path, not the sole served-generation surface.** Corrected 2026-08-15: this decision originally read "there is exactly one answer path today, and it always runs quote selection," which was never true of `get_teacher_card()` (`GET /study/teacher/{source_id}`), a second, always-existing served-generation surface — full correction at the Landmines entry on the 2026-08-07 mirror-unification job. `chat.py` (the synchronous fallback this decision originally distinguished against) is still deleted — that part stands. What's actually true: quote selection is wired into `producer.py` alone; `get_teacher_card()` never selected or served quotes and still doesn't (confirmed 2026-08-15 — out of scope for that session's guard work, since there was nothing there to guard). If a second synchronous CHAT-STYLE path is ever reintroduced, this decision's original policy (quotes on the primary/proven path only, revisit after concurrency is proven at the 100-dial) governs again.
 
 25. **The product is renamed Manna.** Rhemata is retired as the product name. The "provision, not source" framing — Israel was given manna as provision, but was never meant to make the provision its source — carries into product copy and the About page. Naming decision only: no code, repo, domain, or identifier changes are in scope from this decision alone; the rename's actual implementation across the product needs separate scoping (tracked at PLAN.md Horizon item 1, "Full rebrand and UI redesign," which is Phase-2-of-the-product work, not near-term).
 
@@ -896,12 +903,54 @@ different row, per the hard rule above.
   session; nothing in `is_word_study_query()` or the `match_lexicon_chunks`
   retrieval path changed.
 - **RESOLVED 2026-08-07 (mirror-unification job, commits `4557e5c`/`e223c98`)
-  — the quote rail's chat.py asymmetry is gone.** chat.py (the old
-  synchronous `/chat` path) is deleted; `async_answers/producer.py` is the
-  only answer path left and always runs quote-rail selection (subject to
-  its own fail-soft wrapping). "A quote can appear on one answer and not
-  the next for the same user" is no longer possible — there is no second
-  path left to land on.
+  — the quote rail's chat.py asymmetry is gone. CORRECTED 2026-08-15 — this
+  entry's own "the only answer path left" / "no second path left to land
+  on" language was never true and is retracted, not softened.** chat.py
+  (the old synchronous `/chat` path) is deleted — that part is real and
+  unchanged. But `GET /study/teacher/{source_id}` (`get_teacher_card()`,
+  `backend/app/routers/study.py`) is a second, always-existing, live
+  served-generation surface — its own retrieval, its own Anthropic call,
+  synthesizing a named teacher's position on a question. It was never
+  chat.py, so it was never actually in tension with the mirror-unification
+  job's real, narrower scope (chat.py vs producer.py) — the overclaim was
+  treating "the only ANSWER path" as "the only served-GENERATION surface,"
+  language this file repeated in several places (all corrected the same
+  session — see Settled decision #24 and the Phase 1/position-layer
+  decisions above).
+
+  Found by a read-only F5 path trace (Grok, attended, 2026-08-15) and
+  corrected the same session: `get_teacher_card()` applies the
+  license/visibility gate but historically skipped commentary exclusion,
+  citation grounding, the position-paper fence, and quote verification.
+  **Fixed this session (build `3678d05`, merge `9dd0438`, independent
+  planner-reviewer `ACCEPT` with reproduced evidence — merged to local
+  `main` only, not pushed):** citation grounding now runs via
+  `reference_verifier.ungrounded_prose_teachers` (regenerate-once-then-
+  refuse, reusing `answer_toolbox._ATTRIBUTION_REFUSAL` verbatim on a
+  second failure); commentary/word_study exclusion now runs by filtering
+  `document_ids` before the `match_teacher_chunks` RPC call, since that RPC
+  (migration 065) returns no `source_kind`/`source_type` to filter on
+  after the fact. **Deliberately NOT applied:** the position-paper fence —
+  `exclude_contradicting_teachers` removes 100% of a contradicting
+  author's chunks, and this surface's retrieval is always exactly one
+  teacher, so applying it would substitute house-position prose for a
+  genuinely dissenting teacher's own card (via the empty-answer fallback)
+  — misrepresentation-by-substitution against ranked failure mode #2 and
+  Settled decision #9, a worse failure than the one being guarded against.
+  **N/A, not a gap:** quote verification — this endpoint never selected or
+  served quotes at all (response shape `{bio, works, position}`, confirmed
+  by this session's own trace); quotes still serve ONLY on `producer.py`.
+  Two residuals the independent reviewer flagged, not yet acted on: a
+  `teacher_profiles.bio` that happens to name another teacher could trigger
+  a false-positive refusal (fails toward refusing, not misattributing, but
+  degrades a legitimate card — unverified against real bio content, no DB
+  credentials in the review worktree); documents excluded as commentary/
+  word_study still consume the existing `LIMIT 20` query slots before
+  being filtered in Python, so a heavily-commentary teacher now gets fewer
+  real candidate documents than before. Also unresolved, a copy question
+  not a code gap: the refusal string renders under a named teacher's card
+  heading — reads as the system's own voice, not a misattribution, but
+  Alex hasn't confirmed the copy is right in that slot.
 - **RESOLVED 2026-08-14 — `backend/requirements.txt` now pins `pydantic==2.13.4` and
   `starlette==0.52.1`; the unpinned condition this entry originally described no
   longer exists.** Historical record, preserved: `fastapi==0.128.8`/`uvicorn` were
@@ -966,8 +1015,13 @@ different row, per the hard rule above.
   `backend/app/routers/async_chat.py` run a durable Postgres-backed answer queue
   (migrations 078/079: `answer_jobs`/`async_answer_config`/`provider_rate_usage`
   + `corpus_version()`) — as of 2026-08-07 (mirror-unification job, commits
-  `4557e5c`/`e223c98`) this is the ONLY answer path; `/chat` (chat.py) is
-  deleted, not "alongside" it. **RESOLVED — the mirror/two-level-switch
+  `4557e5c`/`e223c98`) this is the only CHAT-STYLE answer path; `/chat`
+  (chat.py) is deleted, not "alongside" it. **Correction, 2026-08-15: this
+  is not the only served-generation surface** — `get_teacher_card()`
+  (`GET /study/teacher/{source_id}`) is a second, structurally different
+  one (synchronous, not async-queued; single-teacher, not corpus-wide);
+  see the Landmines entry on this same mirror-unification job for the full
+  correction and this session's guard fix. **RESOLVED — the mirror/two-level-switch
   history below is preserved for context, not current state.** Before the
   fix: chat.py ran alongside the async path as a silently-reachable
   fallback, gated by a two-level switch (env `ASYNC_ANSWER_ENABLED`
