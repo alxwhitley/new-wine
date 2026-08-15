@@ -93,10 +93,11 @@ def _compute_prompt_version() -> str:
 
 
 PROMPT_VERSION = _compute_prompt_version()
-# policy_version tracks the answer-orchestration version. Bumped to v2 in Stage 2:
-# the producer now runs position-paper interception + background-topic injection
-# to match chat.py, so any Stage-1 reuse under policy_v1 is correctly invalidated.
-POLICY_VERSION = "policy_v2"
+# policy_version tracks the answer-orchestration version. Bumped to v3 for the
+# single-author attribution contract: a pre-v3 cached answer may legitimately
+# omit its sole named source, so reusing it would bypass the new retry/label
+# guarantee even though the current producer is correct.
+POLICY_VERSION = "policy_v3"
 # evidence_version is now the REAL shared corpus_version() signal (Stage 2,
 # migration 079) -- see app.services.corpus_version. get_corpus_version() is
 # cached + fail-safe, so the reuse key gets a real signal and can never raise.
@@ -144,6 +145,36 @@ def current_policy(supabase) -> Dict[str, Any]:
         "prompt_version": PROMPT_VERSION,
         "policy_version": POLICY_VERSION,
     }
+
+
+def _missing_required_single_author(answer: str, permitted_names: List[str]) -> bool:
+    """Return True only when exactly one citable author exists and the
+    answer omits that full name.
+
+    This is a product-attribution requirement, not a claim-grounding check:
+    the existing verifier still decides whether any name that does appear is
+    actually grounded. Multi-author and genuinely anonymous evidence retain
+    their existing behavior because choosing one display name for them would
+    add a new editorial decision.
+    """
+    names = sorted({name.strip() for name in permitted_names if name and name.strip()})
+    if len(names) != 1:
+        return False
+    pattern = r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(names[0])
+    return re.search(pattern, answer or "", flags=re.IGNORECASE) is None
+
+
+def _ensure_single_author_label(answer: str, permitted_names: List[str]) -> str:
+    """Deterministically expose the sole citable source after a writer retry.
+
+    The label describes the source voice; it does not rewrite or attribute an
+    individual generated sentence. It is added before reference verification,
+    so the existing grounding/link machinery validates the inserted name too.
+    """
+    names = sorted({name.strip() for name in permitted_names if name and name.strip()})
+    if len(names) != 1 or not _missing_required_single_author(answer, names):
+        return answer
+    return "**Source voice: %s**\n\n%s" % (names[0], answer)
 
 
 # ---- retrieval (MIRROR of chat.chat() ~L754-993; DRIFT POINT) ---------------
@@ -445,7 +476,8 @@ def _generate_and_capture(history, permitted_names=None):
     from app.services import answer_toolbox
     system = answer_toolbox.ANSWER_SYSTEM_BLOCKS
     if permitted_names is not None:
-        names = ", ".join(permitted_names) if permitted_names else "(no teachers were retrieved -- attribute to no one)"
+        unique_names = sorted({name.strip() for name in permitted_names if name and name.strip()})
+        names = ", ".join(unique_names) if unique_names else "(no teachers were retrieved -- attribute to no one)"
         constraint = (
             "STRICT ATTRIBUTION CONSTRAINT (this answer only): you may attribute a claim BY NAME "
             "ONLY to these teachers, whose material was actually retrieved for this question: "
@@ -454,6 +486,12 @@ def _generate_and_capture(history, permitted_names=None):
             "permitted name, state it without attribution. This overrides any inclination to add "
             "other voices for balance."
         )
+        if len(unique_names) == 1:
+            constraint += (
+                " Because this answer has exactly one named citable source, you MUST identify "
+                + unique_names[0]
+                + " by full name at least once in the answer."
+            )
         system = list(answer_toolbox.ANSWER_SYSTEM_BLOCKS) + [{"type": "text", "text": constraint}]
 
     client = get_anthropic_client()
@@ -730,7 +768,8 @@ def produce(supabase, question, messages=None, topics_established=None):
                 return True
             return False
 
-        if _has_ungrounded(answer, raw_output):
+        needs_single_author = _missing_required_single_author(answer, permitted_names)
+        if _has_ungrounded(answer, raw_output) or needs_single_author:
             answer2, raw2, _sr2, usage2, model_used = _generate_and_capture(history, permitted_names=permitted_names)
             total_usage = _add_usage(total_usage, usage2)
             if _has_ungrounded(answer2, raw2):
@@ -738,6 +777,11 @@ def produce(supabase, question, messages=None, topics_established=None):
                 answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
             else:
                 answer, raw_output = answer2, raw2
+                if _missing_required_single_author(answer, permitted_names):
+                    logger.warning(
+                        "Producer regeneration omitted the sole citable author -- adding deterministic source label"
+                    )
+                    answer = _ensure_single_author_label(answer, permitted_names)
     except Exception:
         logger.exception("Producer attribution-resolution failed -- refusing cleanly (fail closed)")
         answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True

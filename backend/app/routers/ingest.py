@@ -36,6 +36,35 @@ CHUNK_INSERT_BATCH_SIZE = 6
 # offline (direct DB connection, no request timeout), not through this
 # request/response endpoint.
 MAX_INGEST_CHUNKS = 250
+MAX_LOG_IDENTITY_CHARS = 240
+
+
+def _bounded_log_identity(value):
+    if value is None:
+        return None
+    text = str(value)
+    if len(text) <= MAX_LOG_IDENTITY_CHARS:
+        return text
+    return text[:MAX_LOG_IDENTITY_CHARS] + "..."
+
+
+def _log_ingest_failure(log, progress):
+    """Emit identifiers and counts needed to reconcile a partial ingest.
+
+    User-derived strings use repr formatting so embedded newlines cannot forge
+    extra log lines. Document text and chunk contents are intentionally absent.
+    """
+    log.exception(
+        "Unhandled error in /ingest endpoint: filename=%r source_type=%s "
+        "stage=%s document_id=%s title=%r chunks_attempted=%s chunks_stored=%s",
+        _bounded_log_identity(progress.get("filename")),
+        progress.get("source_type"),
+        progress.get("stage"),
+        progress.get("document_id"),
+        _bounded_log_identity(progress.get("title")),
+        progress.get("chunks_attempted"),
+        progress.get("chunks_stored"),
+    )
 
 
 @router.post("")
@@ -51,15 +80,30 @@ async def ingest(
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
+    progress = {
+        "filename": file.filename,
+        "source_type": source_type,
+        "stage": "read_upload",
+        "document_id": None,
+        "title": None,
+        "chunks_attempted": 0,
+        "chunks_stored": 0,
+    }
     try:
         file_bytes = await file.read()
 
+        progress["stage"] = "extract_text"
         text = extract_text_from_pdf(file_bytes)
         if not text:
             raise HTTPException(status_code=400, detail="Could not extract text from PDF")
 
+        progress["stage"] = "extract_metadata"
         metadata = extract_metadata(text)
+        progress["title"] = metadata.get("title")
+
+        progress["stage"] = "chunk_text"
         chunks = chunk_text(text)
+        progress["chunks_attempted"] = len(chunks)
 
         # Size-check BEFORE any DB mutation or embedding spend -- see
         # MAX_INGEST_CHUNKS for why. A rejected request here has written
@@ -90,12 +134,15 @@ async def ingest(
         # ~110-chunk document was ~220 sequential round trips, 40-90s,
         # guaranteed Railway timeout) with one batched embedding call plus
         # ~1 insert call per 6 chunks.
+        progress["stage"] = "embed_chunks"
         prefix = f"Author: {author} | Year: {year} | "
         embeddings = embed_batch([prefix + chunk_content for chunk_content in chunks])
 
         db = get_supabase()
         doc_id = str(uuid.uuid4())
+        progress["document_id"] = doc_id
 
+        progress["stage"] = "insert_document"
         db.table("documents").insert({
             "id": doc_id,
             "title": metadata.get("title"),
@@ -115,9 +162,13 @@ async def ingest(
             }
             for i, (chunk_content, embedding) in enumerate(zip(chunks, embeddings))
         ]
+        progress["stage"] = "insert_chunks"
         for i in range(0, len(chunk_rows), CHUNK_INSERT_BATCH_SIZE):
-            db.table("chunks").insert(chunk_rows[i:i + CHUNK_INSERT_BATCH_SIZE]).execute()
+            batch = chunk_rows[i:i + CHUNK_INSERT_BATCH_SIZE]
+            db.table("chunks").insert(batch).execute()
+            progress["chunks_stored"] += len(batch)
 
+        progress["stage"] = "complete"
         return {
             "document_id": doc_id,
             "title": metadata.get("title"),
@@ -127,5 +178,5 @@ async def ingest(
     except HTTPException:
         raise
     except Exception:
-        logger.exception("Unhandled error in /ingest endpoint")
+        _log_ingest_failure(logger, progress)
         raise HTTPException(status_code=500, detail="An internal error occurred during ingestion")
