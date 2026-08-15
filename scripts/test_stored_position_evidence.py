@@ -19,30 +19,13 @@ corpus/source state): a nonexistent topic_key can never match a row -> None.
 
 Tier B (live, read-only DB, ZERO writes; skips cleanly if creds absent):
 exercises fetch_stored_position_evidence() against the real live positions
-table for all six V1 topic_keys, asserting against the ACTUAL live
-contributor data confirmed 2026-08-08 (build session for this file) -- not a
-hypothetical:
-  - "the divine exchange at the cross" and "holiness and personal purity"
-    are both 100% Derek Prince (unlicensed/shown) -> full evidence survives
-    the live license gate.
-  - "fasting", "deliverance from demons and spiritual warfare", and
-    "how to pray effectively" are all 100% Vlad Savchuk, who is currently
-    unlicensed/HIDDEN -> every evidence proposition is filtered by the live
-    gate -> fetch returns None (fail-safe fall-through to normal RAG, not a
-    bug).
-  - "can a believer lose their salvation" (corpus scope) mixes Vlad Savchuk,
-    Derek Prince, Leonard Ravenhill (hidden), and Doug Kreighbaum -> only
-    the Prince + Kreighbaum evidence survives; Savchuk/Ravenhill are
-    dropped.
-Also checks: every surviving chunk has the expected shape (id, content,
-document_id present); no surviving chunk is ever commentary/word_study
-kind; no surviving chunk's author is ever a currently-hidden source name.
-
-This test is a snapshot of live corpus/source state at write time (CLAUDE.md
-Phase 1.3 will eventually unhide Savchuk/Ravenhill, which will change which
-topics show non-None results). If Tier B assertions about WHICH topics
-return None start failing, check sources.visibility for Savchuk/Ravenhill
-before assuming a code regression -- see is_source_servable().
+table for all six V1 topic_keys. It deliberately avoids snapshotting which
+contributors happen to be shown or hidden: visibility is mutable production
+state, so a correct result may change between None and non-empty without a
+code regression. Instead it verifies the durable contract: never return an
+empty list; every surviving chunk has the expected shape; every surviving
+chunk's source passes the current live servability predicate; and no
+surviving chunk is commentary/word_study content.
 
 Run: python3 scripts/test_stored_position_evidence.py
 """
@@ -65,6 +48,7 @@ logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message
 
 from app.services import stored_position_evidence as spe  # noqa: E402
 from app.services import answer_toolbox  # noqa: E402
+from app.services.source_resolver import is_source_servable  # noqa: E402
 
 failures = []
 
@@ -103,25 +87,6 @@ def test_nonexistent_topic_key_returns_none():
 # Tier B -- live, read-only, ZERO writes. Against real corpus/source state.
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Expected live behavior as of 2026-08-08 (see module docstring). Topics
-# whose sole/partial contributor set survives the live license gate ->
-# non-empty evidence expected. Topics whose sole contributor is currently
-# hidden -> None expected (fail-safe, not a bug).
-EXPECTED_NON_NONE = {
-    "the divine exchange at the cross",
-    "holiness and personal purity",
-    "can a believer lose their salvation",
-}
-EXPECTED_NONE_TODAY = {
-    "fasting",
-    "deliverance from demons and spiritual warfare",
-    "how to pray effectively",
-}
-
-# Currently-hidden contributors to these positions (CLAUDE.md Phase 1.3) --
-# must NEVER appear as a surviving chunk's author.
-HIDDEN_AUTHOR_NAMES = {"Vlad Savchuk", "Leonard Ravenhill"}
-
 ALL_SIX_TOPIC_KEYS = (
     "fasting",
     "deliverance from demons and spiritual warfare",
@@ -143,32 +108,46 @@ def _run_tier_b():
 
     from app.db.supabase import get_supabase
     db = get_supabase()
+    servable_by_source = {}
 
     for topic_key in ALL_SIX_TOPIC_KEYS:
         result = spe.fetch_stored_position_evidence(db, topic_key)
-        if topic_key in EXPECTED_NON_NONE:
-            _check(f"{topic_key!r} -> non-empty evidence", bool(result))
-            if result:
-                for c in result:
-                    _check(
-                        f"{topic_key!r} chunk has required shape (id/content/document_id)",
-                        all(c.get(k) for k in ("id", "content", "document_id")),
-                    )
-                    _check(
-                        f"{topic_key!r} chunk author {c.get('author')!r} is never a hidden contributor",
-                        c.get("author") not in HIDDEN_AUTHOR_NAMES,
-                    )
-                    _check(
-                        f"{topic_key!r} chunk is never commentary/word_study",
-                        not answer_toolbox.is_commentary_chunk(c),
-                    )
-        elif topic_key in EXPECTED_NONE_TODAY:
+        _check(
+            f"{topic_key!r} returns None or a non-empty list",
+            result is None or (isinstance(result, list) and bool(result)),
+        )
+        if result:
+            document_ids = sorted({c.get("document_id") for c in result if c.get("document_id")})
+            documents = (
+                db.table("documents")
+                .select("id, source_id")
+                .in_("id", document_ids)
+                .execute()
+                .data
+                or []
+            )
+            source_id_by_document = {d["id"]: d.get("source_id") for d in documents}
+            for c in result:
+                source_id = source_id_by_document.get(c.get("document_id"))
+                if source_id and source_id not in servable_by_source:
+                    servable_by_source[source_id] = is_source_servable(db, source_id)
+                _check(
+                    f"{topic_key!r} chunk has required shape (id/content/document_id)",
+                    all(c.get(k) for k in ("id", "content", "document_id")),
+                )
+                _check(
+                    f"{topic_key!r} chunk source is currently servable",
+                    bool(source_id) and servable_by_source.get(source_id, False),
+                )
+                _check(
+                    f"{topic_key!r} chunk is never commentary/word_study",
+                    not answer_toolbox.is_commentary_chunk(c),
+                )
+        else:
             _check(
-                f"{topic_key!r} -> None today (sole contributor currently hidden, fail-safe)",
+                f"{topic_key!r} fail-safe None is accepted when no evidence is currently servable",
                 result is None,
             )
-        else:
-            _check(f"unexpected topic_key in test set: {topic_key!r}", False)
 
 
 def main():
