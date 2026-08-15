@@ -36,6 +36,25 @@ CORPUS_SOURCE_KINDS = {"sermon_transcript", "magazine_article", "word_study", "c
 # scripts/test_teacher_card.py before this feature is considered verified.
 TEACHER_POSITION_SIMILARITY_FLOOR = 0.3
 
+# Issue 2 fix (2026-08-15 teacher-card session, closing the residual named
+# at the 2026-08-15 mirror-unification Landmines entry): the bibliography
+# ("works") display window and the document pool the commentary/word_study
+# exclusion (Guard 2) draws candidates from are now DECOUPLED. Before this
+# fix, both were the same single `.limit(20)` query -- a commentary/
+# word_study-heavy teacher could have most or all of that 20-slot budget
+# consumed by documents Guard 2 was going to filter out anyway, starving
+# the real candidate pool `match_teacher_chunks` searches over.
+# TEACHER_CARD_WORKS_LIMIT preserves the bibliography's exact prior
+# behavior (top 20 by recency, unfiltered). TEACHER_CARD_CANDIDATE_DOC_LIMIT
+# is the wider pool Guard 2's existing, unchanged `is_commentary_chunk()`
+# filter now runs over -- deliberately not a second, duplicated SQL-level
+# source_kind/source_type filter (that fallback logic -- source_kind, else
+# source_type -- doesn't translate cleanly to a PostgREST `not.in.` filter
+# once a NULL source_kind is in play, and forking it risks a subtly wrong
+# second copy of the same rule).
+TEACHER_CARD_WORKS_LIMIT = 20
+TEACHER_CARD_CANDIDATE_DOC_LIMIT = 200
+
 TEACHER_POSITION_PROMPT = (
     "You are summarizing what a specific teacher has said on a topic, based "
     "only on the excerpts provided below. Paraphrase in your own words — "
@@ -874,6 +893,94 @@ async def list_curated_teachers():
     return {"teachers": teachers}
 
 
+_BIO_REDACTION_PLACEHOLDER = "another minister"
+
+
+def _redact_name_word_bounded(text: str, name: str, replacement: str) -> str:
+    """Replace every word-bounded occurrence of `name` in `text` with
+    `replacement`. A match is rejected (left untouched, scan continues past
+    just one character) if the character immediately before or after it is
+    itself alphabetic, so this never mangles a name embedded inside a larger
+    word. Pure string transform, no DB, no guard logic -- used only to build
+    a redacted COPY of prompt-bound text, never touches the value actually
+    returned to the caller."""
+    if not name:
+        return text
+    out = []
+    idx = 0
+    while True:
+        found = text.find(name, idx)
+        if found == -1:
+            out.append(text[idx:])
+            break
+        before = text[found - 1] if found > 0 else ""
+        after_pos = found + len(name)
+        after = text[after_pos] if after_pos < len(text) else ""
+        if before.isalpha() or after.isalpha():
+            out.append(text[idx:found + 1])
+            idx = found + 1
+            continue
+        out.append(text[idx:found])
+        out.append(replacement)
+        idx = after_pos
+    return "".join(out)
+
+
+def _redact_bio_for_prompt(
+    bio: Optional[str],
+    name_universe: frozenset,
+    exclude_name: Optional[str] = None,
+    replacement: str = _BIO_REDACTION_PLACEHOLDER,
+) -> Optional[str]:
+    """Issue 1 fix (2026-08-15 teacher-card session, REDONE after an
+    independent reviewer reproduced a real hole in the first version). This
+    is now the ONLY thing Issue 1 does: return a redacted COPY of the bio
+    text, with every OTHER full corpus teacher name replaced by a generic
+    placeholder, for use ONLY in the model's prompt context. The `bio` value
+    returned in the API response is never touched by this function and stays
+    the original, full, unredacted text -- real user-facing bibliography
+    content, not evidence context.
+
+    `exclude_name` is this card's own subject teacher (`sources.name`) and is
+    deliberately never redacted: his own material is always what gets
+    retrieved for his own card, so his name was never at risk of being
+    flagged as ungrounded by Guard 1 in the first place -- redacting him too
+    would only degrade the bio's clarity (his own background sentence
+    turning into "another minister trained under...") with no safety
+    benefit. This exclusion narrows what gets redacted, never widens it --
+    strictly safer, not a weaker version of the fix.
+
+    Why redaction, not pre-grounding the guard (the first version of this
+    fix, removed this session): that version put a bio-mentioned name
+    directly into the citation guard's RetrievalGrounding.author_keys for
+    the WHOLE answer, which blanket-permitted the model to credit that name
+    for ANYTHING, not just the specific fact the bio actually stated. An
+    independent reviewer reproduced this live: a bio mentioning "Reinhard
+    Bonnke" let a wholly FABRICATED claim ("Bonnke taught physical healing
+    is guaranteed in the atonement for every believer without exception")
+    sail through `ungrounded_prose_teachers` uncaught, because Bonnke's name
+    was blanket-grounded just for appearing in the bio, not for the specific
+    thing the model said about him -- a real hole in CLAUDE.md's #2-ranked
+    failure mode (misrepresenting a real, living teacher). This version
+    instead leaves `reference_verifier.py`'s guard (`build_retrieval_
+    grounding`, `build_name_universe`, `ungrounded_prose_teachers`)
+    completely untouched, and prevents the false positive at its actual
+    source: the model is never shown the bio-mentioned OTHER-teacher name in
+    the first place. If the model still produces that name in its answer, it
+    came from the model's own parametric/training knowledge, not from
+    anything it was shown in this request -- and the guard, unchanged,
+    correctly catches that as ungrounded.
+    """
+    if not bio:
+        return bio
+    redacted = bio
+    for corpus_name in name_universe:
+        if exclude_name is not None and corpus_name == exclude_name:
+            continue
+        redacted = _redact_name_word_bounded(redacted, corpus_name, replacement)
+    return redacted
+
+
 @router.get("/teacher/{source_id}")
 async def get_teacher_card(
     source_id: str,
@@ -918,11 +1025,16 @@ async def get_teacher_card(
         .select("id, title, source_kind, source_type")
         .eq("source_id", source_id)
         .order("created_at", desc=True)
-        .limit(20)
+        .limit(TEACHER_CARD_CANDIDATE_DOC_LIMIT)
         .execute()
     )
     all_docs = docs_result.data or []
-    works = [{"id": d["id"], "title": d["title"]} for d in all_docs]
+    # `works` (the bibliography) is the top-N-by-recency slice of this same
+    # WHERE/ORDER BY -- byte-identical to what a standalone `.limit(
+    # TEACHER_CARD_WORKS_LIMIT)` query would have returned, since it's the
+    # same query with a wider LIMIT superset sliced down in Python. Stays
+    # built from the FULL unfiltered doc set, same as before this fix.
+    works = [{"id": d["id"], "title": d["title"]} for d in all_docs[:TEACHER_CARD_WORKS_LIMIT]]
 
     if not works:
         return {"bio": bio, "works": [], "position": None}
@@ -931,8 +1043,11 @@ async def get_teacher_card(
     # no source_kind/source_type on its rows, so is_commentary_chunk can't be
     # applied to its output directly -- filter at the document level instead,
     # before the RPC call. `works` (the bibliography) stays built from the
-    # FULL unfiltered doc set above; this filtered list only narrows what
-    # feeds generation.
+    # FULL unfiltered top-N doc set above; this filtered list only narrows
+    # what feeds generation. Drawn from the WIDER TEACHER_CARD_CANDIDATE_DOC_LIMIT
+    # pool (`all_docs`), not just the narrower `works` window, so a
+    # commentary/word_study-heavy teacher's real candidates no longer
+    # compete with filtered-out documents for the same small budget.
     non_commentary_docs = [d for d in all_docs if not is_commentary_chunk(d)]
     if not non_commentary_docs:
         return {"bio": bio, "works": works, "position": None}
@@ -972,10 +1087,33 @@ async def get_teacher_card(
         {"type": "text", "text": _select_teacher_position_prompt(question)},
         {"type": "text", "text": get_guardrails_text()},
     ]
+
+    # Issue 1 fix (2026-08-15, redone). Build a redacted COPY of the bio for
+    # the prompt only -- every full corpus teacher name the bio mentions
+    # (e.g. "trained under Reinhard Bonnke") is replaced with a generic
+    # placeholder BEFORE the model ever sees it, so it cannot echo a
+    # specific other-teacher name into `position` in the first place. The
+    # `bio` variable itself is untouched and is what the final response
+    # dict returns -- real, full, unredacted bibliography content. On a DB
+    # failure building the name universe here, fail SOFT (use the original,
+    # unredacted bio in the prompt) rather than failing the whole card --
+    # the actual safety boundary is Guard 1 below, which is completely
+    # unmodified and still runs unconditionally regardless of whether
+    # redaction happened.
+    try:
+        bio_name_universe_for_redaction = build_name_universe(db)
+    except Exception:
+        logger.exception(
+            "build_name_universe failed for bio redaction -- using original bio in prompt, source_id=%s",
+            source_id,
+        )
+        bio_name_universe_for_redaction = frozenset()
+    redacted_bio = _redact_bio_for_prompt(bio, bio_name_universe_for_redaction, exclude_name=name)
+
     user_message = {
         "role": "user",
         "content": (
-            f"Teacher: {name}\n\nBio: {bio}\n\n"
+            f"Teacher: {name}\n\nBio: {redacted_bio}\n\n"
             f"Excerpts:\n{excerpts_text}\n\nQuestion: {question}"
         ),
     }
