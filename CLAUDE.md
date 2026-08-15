@@ -788,6 +788,17 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **`scripts/harness_coordinator/v1`'s `invoke.py` has no live-provider call
+  path — confirmed 2026-08-15, before any dispatch was attempted.** Its code
+  only supports a synthetic/placeholder result and a marker-file path; there
+  is no code path that calls a real Kimi, Grok, or other live provider. Any
+  future reference to this system as ready for real unattended
+  multi-provider runs is describing an unbuilt capability. This was
+  discovered, not fixed, this session. The supervised single-agent method
+  used instead that night (direct executor/planner-reviewer invocation from
+  within a session) is a separate, working mechanism — do not conflate the
+  two when reading past references to "the coordinator" or "the harness ran
+  real workers."
 - **A single, confirmed ingestion-chokepoint bypass exists and was
   deliberately left in place — 2026-08-15 diagnostic.** An admin-only
   single-PDF-upload endpoint on the backend inserts `documents`/`chunks`
