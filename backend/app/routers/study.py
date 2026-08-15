@@ -15,6 +15,12 @@ from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.source_resolver import is_source_servable
 from app.services.llm_client import get_anthropic_client, get_guardrails_text, get_generation_model
 from app.services.debate_topics import matched_debate_topic
+from app.services.answer_toolbox import is_commentary_chunk, _ATTRIBUTION_REFUSAL
+from app.services.reference_verifier import (
+    build_retrieval_grounding,
+    build_name_universe,
+    ungrounded_prose_teachers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -909,16 +915,27 @@ async def get_teacher_card(
 
     docs_result = (
         db.table("documents")
-        .select("id, title")
+        .select("id, title, source_kind, source_type")
         .eq("source_id", source_id)
         .order("created_at", desc=True)
         .limit(20)
         .execute()
     )
-    works = [{"id": d["id"], "title": d["title"]} for d in (docs_result.data or [])]
+    all_docs = docs_result.data or []
+    works = [{"id": d["id"], "title": d["title"]} for d in all_docs]
 
     if not works:
         return {"bio": bio, "works": [], "position": None}
+
+    # Guard 2 (commentary/word_study exclusion): match_teacher_chunks returns
+    # no source_kind/source_type on its rows, so is_commentary_chunk can't be
+    # applied to its output directly -- filter at the document level instead,
+    # before the RPC call. `works` (the bibliography) stays built from the
+    # FULL unfiltered doc set above; this filtered list only narrows what
+    # feeds generation.
+    non_commentary_docs = [d for d in all_docs if not is_commentary_chunk(d)]
+    if not non_commentary_docs:
+        return {"bio": bio, "works": works, "position": None}
 
     try:
         embedding = embed_text(question)
@@ -926,7 +943,7 @@ async def get_teacher_card(
         logger.exception("Embedding failed for teacher-position query: %s", question[:100])
         raise HTTPException(status_code=500, detail="Embedding service error")
 
-    document_ids = [w["id"] for w in works]
+    document_ids = [d["id"] for d in non_commentary_docs]
     try:
         chunk_result = db.rpc("match_teacher_chunks", {
             "query_embedding": embedding,
@@ -951,27 +968,80 @@ async def get_teacher_card(
         f'From "{c["title"]}":\n{c["content"]}' for c in top_chunks
     )
 
-    try:
-        client = get_anthropic_client()
+    base_system = [
+        {"type": "text", "text": _select_teacher_position_prompt(question)},
+        {"type": "text", "text": get_guardrails_text()},
+    ]
+    user_message = {
+        "role": "user",
+        "content": (
+            f"Teacher: {name}\n\nBio: {bio}\n\n"
+            f"Excerpts:\n{excerpts_text}\n\nQuestion: {question}"
+        ),
+    }
+
+    def _call_teacher_position_model(client, system_blocks):
         response = client.messages.create(
             model=get_generation_model(),
             max_tokens=400,
             thinking={"type": "disabled"},
-            system=[
-                {"type": "text", "text": _select_teacher_position_prompt(question)},
-                {"type": "text", "text": get_guardrails_text()},
-            ],
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Teacher: {name}\n\nBio: {bio}\n\n"
-                    f"Excerpts:\n{excerpts_text}\n\nQuestion: {question}"
-                ),
-            }],
+            system=system_blocks,
+            messages=[user_message],
         )
-        position = response.content[0].text
+        return response.content[0].text
+
+    try:
+        client = get_anthropic_client()
+        position = _call_teacher_position_model(client, base_system)
     except Exception:
         logger.exception("Anthropic call failed for teacher-position synthesis, source_id=%s", source_id)
         raise HTTPException(status_code=500, detail="Answer generation error")
+
+    # Guard 1 (citation grounding): the same regenerate-once-then-refuse check
+    # producer.py runs on the main answer path (reference_verifier's
+    # ungrounded_prose_teachers), applied here to the teacher-card synthesis.
+    # top_chunks already carries author/document_id, which build_retrieval_
+    # grounding needs. Any failure in this block (including the retry call
+    # itself) fails closed to the standard refusal, mirroring producer.py's
+    # own posture -- never a raw crash on the guard, never a silent pass.
+    grounding = build_retrieval_grounding(top_chunks, db)
+    try:
+        name_universe = build_name_universe(db)
+        if ungrounded_prose_teachers(position, name_universe, grounding, db):
+            permitted_names = sorted({
+                (c.get("author") or "").strip() for c in top_chunks
+                if (c.get("author") or "").strip()
+            })
+            names_text = (
+                ", ".join(permitted_names) if permitted_names
+                else "(no teacher's material was retrieved for this question -- attribute to no one)"
+            )
+            constraint_block = {
+                "type": "text",
+                "text": (
+                    "STRICT ATTRIBUTION CONSTRAINT (this answer only): you may attribute a claim BY "
+                    "NAME ONLY to these teachers, whose material was actually retrieved for this "
+                    "question: " + names_text + ". Do NOT name, cite, or attribute any point to any "
+                    "other teacher, author, commentator, or ministry -- not even in passing. If a "
+                    "point cannot be attributed to a permitted name, state it without attribution. "
+                    "This overrides any inclination to add other voices for balance."
+                ),
+            }
+            retry_system = base_system + [constraint_block]
+            position2 = _call_teacher_position_model(client, retry_system)
+            if ungrounded_prose_teachers(position2, name_universe, grounding, db):
+                logger.warning(
+                    "get_teacher_card regeneration still credits an ungrounded teacher -- "
+                    "clean refusal, source_id=%s", source_id,
+                )
+                position = _ATTRIBUTION_REFUSAL
+            else:
+                position = position2
+    except Exception:
+        logger.exception(
+            "get_teacher_card attribution-resolution failed -- refusing cleanly (fail closed), "
+            "source_id=%s", source_id,
+        )
+        position = _ATTRIBUTION_REFUSAL
 
     return {"bio": bio, "works": works, "position": position}
