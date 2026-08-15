@@ -477,6 +477,57 @@ each merge — no regression — then pushed to origin. Evidence:
 `docs/audits/deps_pin_pydantic_starlette_2026-08-14.md`,
 `docs/audits/nixpacks_python_parity_2026-08-14.md`.
 
+**Second real (non-rehearsal, non-probe) run — 2026-08-15, ATTENDED, not
+unattended.** Alex's original ask was the first overnight run against
+real workers through `scripts/harness_coordinator/v1`'s coordinator
+(packets/claims/journal/multi-provider routing), unattended, 6-hour
+window. Checked before launch, not assumed: `invoke.py`'s own
+`WorkerAdapter` only allows two environment keys,
+`SYNTHETIC_RESULT`/`SYNTHETIC_MARKER_PATH` — that specific coordinator
+still has no real-provider adapter built, consistent with every entry in
+this section to date. Not reopened or built this session; still an open
+gap for that system specifically. Ran attended instead, via the same
+`executor`/`planner-reviewer` path as the run above: two disjoint
+repo-only packets (the F5 license-gate closure noted above; and two
+`get_teacher_card()` bug fixes, noted in CLAUDE.md's Landmines entry on
+the 2026-08-07 mirror-unification job). Packet A: `ACCEPT` round one, the
+reviewer independently extended mutation-proof coverage beyond what was
+asked (all four surfaces, not just the one the executor proved). Packet
+B: `REVISE` round one — the reviewer reproduced a real, live
+fabrication-attribution hole the first fix attempt had opened, and found
+the executor's own report had inaccurately claimed no conflict arose
+against the packet's explicit instructions; redone at the correct fix
+point, independently re-verified with the reviewer's own third,
+different adversarial scenario, `ACCEPT` round two. Both packets then
+got real, repo-resident regression tests (not scratchpad-only), each
+independently mutation-tested (fix reverted → test fails; fix restored →
+test passes), Packet B's test needed one small follow-up fix (a coverage
+gap, not a safety one). All merged to `main` (`21ff62f` fast-forward;
+`ceb317f`/`bc37749` merge) and pushed to origin.
+
+**What this changes about trusting a longer or less-attended run:**
+self-tracked turn budgets did not hold across any of the ~11 real
+dispatches tonight — every one exceeded its stated cap to some degree
+(no pre-provisioned Python environment in a fresh worktree, plus a
+Bash-tool worktree-isolation classifier repeatedly refusing certain
+multi-line/heredoc/multi-command shapes), though wall-clock time stayed
+a small fraction of every cap throughout, and every overrun tracked
+tool-call friction, not incomplete work. Passing infra hints forward
+(reuse an existing venv; prefer Write/Edit over Bash heredocs for new
+files) measurably narrowed but did not eliminate the overrun on the
+smallest follow-up task (13 vs. 12, then 12 vs. 8). Separately, the
+standing "stop and report a conflict, don't resolve it unilaterally"
+rule (CLAUDE.md's working rules, written from the 2026-08-15
+session-close finding) failed once under real pressure tonight, on
+Packet B's first attempt — a second live instance of the same failure
+shape, this time caught only by independent review, not by the rule
+itself firing. Neither finding blocks the safety-fence revisit trigger
+above (no unrecoverable damage; everything stayed in isolated worktrees
+until an explicit merge/push decision) but both are concrete evidence
+against trusting a longer or less-attended run on self-tracked budgets
+or the conflict rule alone, without either a real enforcement mechanism
+or more attended repetitions first.
+
 ---
 
 ## Phase 1 — Foundation build to the ingestion-ready benchmark
@@ -613,11 +664,21 @@ the 19 (get_teacher_card's missing commentary exclusion and citation
 grounding) are closed as of `21f5b14` (live in production; see CLAUDE.md's
 Landmines correction on the 2026-08-07 mirror-unification job for the
 full account, including two guards deliberately NOT applied with reasons).
-**The remaining 17 are NOT closed, NOT yet triaged into
-closed/accepted/deferred, and this exit criterion is NOT met** — do not
-read the get_teacher_card fix as satisfying this row generally. Next step
-is Alex triaging the remaining list (accept/defer/close), not a repeat
-trace.
+**The remaining count is NOT fully closed or triaged, and this exit
+criterion is still NOT met** — do not read the get_teacher_card fix as
+satisfying this row generally. **2026-08-15, later session:** a separate
+read-only verification pass this same day had independently scoped four
+license/visibility-gate bypasses (document view, library book excerpts,
+background-topic injection, `get_paper_body`) — these are now fixed,
+independently reviewed with per-surface mutation-proof (each refusal
+check confirmed to fail when the real gate is neutered, corpus-wide
+impact confirmed live: 2 of 3,603 documents newly gated, 0 of 8
+position-paper pillars and 0 of 2 background topics affected), and
+merged/pushed (`21ff62f`). Whether these four are drawn from Grok's
+original 17-remaining list, or are a distinct finding, was not confirmed
+this session — flagging rather than assuming a specific count reduction.
+Next step is still Alex triaging the full remaining list
+(accept/defer/close), not a repeat trace.
 
 ### F6 — Declare the ingestion-ready benchmark
 

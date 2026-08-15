@@ -966,17 +966,29 @@ different row, per the hard rule above.
   **N/A, not a gap:** quote verification — this endpoint never selected or
   served quotes at all (response shape `{bio, works, position}`, confirmed
   by this session's own trace); quotes still serve ONLY on `producer.py`.
-  Two residuals the independent reviewer flagged, not yet acted on: a
-  `teacher_profiles.bio` that happens to name another teacher could trigger
-  a false-positive refusal (fails toward refusing, not misattributing, but
-  degrades a legitimate card — unverified against real bio content, no DB
-  credentials in the review worktree); documents excluded as commentary/
-  word_study still consume the existing `LIMIT 20` query slots before
-  being filtered in Python, so a heavily-commentary teacher now gets fewer
-  real candidate documents than before. Also unresolved, a copy question
-  not a code gap: the refusal string renders under a named teacher's card
-  heading — reads as the system's own voice, not a misattribution, but
-  Alex hasn't confirmed the copy is right in that slot.
+  Two residuals the independent reviewer flagged 2026-08-15 are both
+  **RESOLVED, later session the same day.** Bio-mentioned-teacher false
+  positive: fixed by redacting corpus teacher names out of the model's
+  COPY of the bio before generation (the response payload's own `bio`
+  field stays the full, original text) — a first attempt instead
+  pre-grounded the bio-mentioned name into the guard's `author_keys`,
+  which independent review found opened a real hole (a fabricated claim
+  attributed to that name was no longer caught, since the name stayed
+  grounded for the whole answer, not just the triggering fact); that
+  attempt was fully removed, not patched, and the replacement was
+  independently re-verified with a second, different adversarial
+  fabrication scenario. Commentary/word_study query-slot crowding: fixed
+  by decoupling the bibliography display cap (unchanged, still 20) from
+  the candidate-document pool the filter and search run over (raised to
+  200), without forking `is_commentary_chunk()`'s rule into a second
+  copy. Both fixes plus a new, mutation-tested repo regression test
+  (`scripts/test_teacher_card_bio_redaction.py` — each check proven to
+  fail when its fix is reverted, pass when restored) are merged to
+  `main` (`ceb317f`/`bc37749`) and pushed to origin. Still unresolved,
+  untouched by this fix, a copy question not a code gap: the refusal
+  string renders under a named teacher's card heading — reads as the
+  system's own voice, not a misattribution, but Alex hasn't confirmed
+  the copy is right in that slot.
 - **RESOLVED 2026-08-14 — `backend/requirements.txt` now pins `pydantic==2.13.4` and
   `starlette==0.52.1`; the unpinned condition this entry originally described no
   longer exists.** Historical record, preserved: `fastapi==0.128.8`/`uvicorn` were
