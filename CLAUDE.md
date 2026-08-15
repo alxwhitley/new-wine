@@ -923,8 +923,13 @@ different row, per the hard rule above.
   license/visibility gate but historically skipped commentary exclusion,
   citation grounding, the position-paper fence, and quote verification.
   **Fixed this session (build `3678d05`, merge `9dd0438`, independent
-  planner-reviewer `ACCEPT` with reproduced evidence — merged to local
-  `main` only, not pushed):** citation grounding now runs via
+  planner-reviewer `ACCEPT` with reproduced evidence — merged to `main`,
+  pushed to origin, and live in production as of 2026-08-15 (`21f5b14`
+  onward; Railway `rhemata` deployment `e8272119` and `answer-worker`
+  deployment `223d9512` both `SUCCESS`, Vercel deployment
+  `dpl_4KERiVU7cAAXc2ga4Q2AtHYhZp3W` `Ready`, all three confirmed against
+  their own build logs / live 200s, not just dashboard status)):**
+  citation grounding now runs via
   `reference_verifier.ungrounded_prose_teachers` (regenerate-once-then-
   refuse, reusing `answer_toolbox._ATTRIBUTION_REFUSAL` verbatim on a
   second failure); commentary/word_study exclusion now runs by filtering

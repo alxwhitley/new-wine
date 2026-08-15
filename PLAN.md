@@ -582,6 +582,22 @@ treat `reference_verifier.py`'s existence as closing this decision.
 - [ ] Remaining gaps are closed, explicitly accepted by Alex, or deferred with
   an owner and trigger.
 
+**Grok's F5 trace ran 2026-08-15** (read-only, this row's own Grok cell —
+"trace every served and ingest path... produce bypass, dependency, and
+failure-visibility inventories"). Found `get_teacher_card()`
+(`GET /study/teacher/{source_id}`) as an undocumented second served-
+generation surface, plus 19 named bypasses across serving and ingest paths
+(full list, file:line, in the trace output — not reproduced here). Two of
+the 19 (get_teacher_card's missing commentary exclusion and citation
+grounding) are closed as of `21f5b14` (live in production; see CLAUDE.md's
+Landmines correction on the 2026-08-07 mirror-unification job for the
+full account, including two guards deliberately NOT applied with reasons).
+**The remaining 17 are NOT closed, NOT yet triaged into
+closed/accepted/deferred, and this exit criterion is NOT met** — do not
+read the get_teacher_card fix as satisfying this row generally. Next step
+is Alex triaging the remaining list (accept/defer/close), not a repeat
+trace.
+
 ### F6 — Declare the ingestion-ready benchmark
 
 | Claude Code | Kimi via OpenCode Go | Grok |
