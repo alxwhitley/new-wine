@@ -503,8 +503,17 @@ different row, per the hard rule above.
 
 ## Invariants — violating these reopens a closed hole
 
-1. **Python 3.9.** Use `Optional[str]`, never `str | None`. Railway locks 3.9 via
-   `nixpacks.toml`; newer syntax runs locally and breaks in prod.
+1. **Python 3.12.** Railway builds via `nixpacks.toml` — both `backend/nixpacks.toml`
+   and the repo-root worker manifest declare `nixPkgs = ["python312"]`, confirmed live
+   and guarded by an automated parity check (`scripts/test_nixpacks_python_parity.py`).
+   This has been true since commit `a729fba` (2026-06-12, "security: harden backend +
+   frontend across 4 areas"); this invariant wrongly said 3.9 for two months after that
+   change. PEP 604 union syntax (`str | None`) is fine to use now — the earlier
+   `Optional[str]`-only restriction is lifted, since the deployed runtime supports it
+   natively. Residual caution, still real: this dev machine's own default `python3` is
+   3.9.6 (macOS system Python), not 3.12 — use `python3.12` explicitly for anything
+   meant to match what's actually deployed, and don't assume local and prod share a
+   Python version just because both "work."
 
 2. **License gate SQL — preserve in every future RPC edit:**
    ```sql
@@ -893,18 +902,29 @@ different row, per the hard rule above.
   its own fail-soft wrapping). "A quote can appear on one answer and not
   the next for the same user" is no longer possible — there is no second
   path left to land on.
-- **`backend/requirements.txt` pins only `fastapi==0.128.8`/`uvicorn` — `pydantic`
-  and `starlette` are UNPINNED, so local and the deployed Railway container can run
-  different transitive versions, and any rebuild pulls whatever is newest.** A bug
-  can therefore reproduce in one environment and not the other. Demonstrated
-  2026-08-06: the `require_admin_role`/`require_contributor` unreachability bug
-  (`da27fe4`) reproduced locally (Python 3.9 + `pydantic` 2.12.5 → every admin route
-  422'd) but did NOT manifest on the deployed backend (an older container tolerated
-  the same code) — so production admin auth was actually working while local looked
-  broken, and the fix's "was prod ever broken?" question stayed genuinely open. When
-  a "works here, broken there" behavior gap appears, check the transitive dep
-  versions BEFORE assuming a code difference. Pinning `pydantic`/`starlette` would
-  remove the divergence (offered to Alex 2026-08-06, not yet actioned).
+- **RESOLVED 2026-08-14 — `backend/requirements.txt` now pins `pydantic==2.13.4` and
+  `starlette==0.52.1`; the unpinned condition this entry originally described no
+  longer exists.** Historical record, preserved: `fastapi==0.128.8`/`uvicorn` were
+  pinned but `pydantic`/`starlette` were not, so local and the deployed Railway
+  container could run different transitive versions, and any rebuild pulled whatever
+  was newest. Demonstrated 2026-08-06: the `require_admin_role`/`require_contributor`
+  unreachability bug (`da27fe4`) reproduced locally (Python 3.9 + `pydantic` 2.12.5 →
+  every admin route 422'd) but did NOT manifest on the deployed backend (an older
+  container tolerated the same code) — so production admin auth was actually working
+  while local looked broken, and the fix's "was prod ever broken?" question stayed
+  genuinely open. When a "works here, broken there" behavior gap appears, check the
+  transitive dep versions BEFORE assuming a code difference — that diagnostic lesson
+  still stands regardless of this fix. **Closed 2026-08-14**
+  (`docs/audits/deps_pin_pydantic_starlette_2026-08-14.md`): pinning was actioned, not
+  merely offered. That same audit found the original `da27fe4` 422-vs-401 shape does
+  NOT actually reproduce on the now-pinned stack (pydantic 2.13.4 / starlette 0.52.1 /
+  Python 3.12 — both the buggy and fixed `_RequireRole.__call__` shapes return 401
+  there), so the pin alone is not what protects against the bug being reintroduced
+  going forward. The real ongoing guard is a structural regression test
+  (`scripts/test_admin_auth_regression.py`) asserting `_RequireRole.__call__` takes no
+  direct `request` parameter — the actual distinguishing shape, independent of which
+  dependency versions happen to be pinned at any given time. See that audit for the
+  full reasoning.
 - **SUPERSEDED 2026-08-08 — this entry's "RESOLVED 2026-08-06" description no
   longer describes reality; left in place so the history isn't lost, not
   because it's still current.** It originally recorded that the home-page
@@ -1295,7 +1315,7 @@ within days and has already caused one round of false blockers.
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 16 (React 19), Tailwind 4 → Vercel |
-| Backend | Python 3.9 / FastAPI → Railway |
+| Backend | Python 3.12 / FastAPI → Railway |
 | Database | Supabase (PostgreSQL + pgvector) |
 | Embeddings | OpenAI `text-embedding-3-small` (1536 dims, set explicitly) |
 | Answer generation | Anthropic `claude-sonnet-4-5` via `anthropic` SDK |
