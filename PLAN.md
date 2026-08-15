@@ -449,6 +449,34 @@ the file states this as its own mandatory warning). Next: a Grok-built
 probe through the same real-worker harness path, not yet run — see
 `rhemata-status.md`'s Next list.
 
+**First real (non-rehearsal, non-probe) Claude-Code-only unattended run —
+2026-08-14/15.** Two genuine F2 backlog packets (pin `pydantic`/`starlette`;
+add a backend/worker `nixpacks.toml` Python-version parity check), each
+dispatched as an isolated-worktree `executor` packet with a
+`planner-reviewer` verdict, ran end-to-end without Alex managing
+intermediate steps — fix rounds were dispatched by resuming the same
+agent, not restarting fresh. Both returned `REVISE` on round one, both
+`ACCEPT` on round two, each time because the reviewer independently
+reproduced the fix rather than trusting the report. Deps-pin packet: the
+original regression test was proven non-discriminating — the reviewer ran
+the real pre-`da27fe4` `auth.py` against the newly-pinned stack and got
+401, not 422, meaning the test passed identically whether the historical
+bug was present or fixed; fixed with a structural check
+(`inspect.signature()` on `_RequireRole.__call__`) that the reviewer
+proved fails on the real historical shape and passes on current code.
+Nixpacks-parity packet: the shipped script's own docstring fabricated a
+claim about Railway and mischaracterized CLAUDE.md Invariant 1 as not
+being about the manifests it's about. A real, previously undocumented
+finding surfaced while scoping: production Railway has run Python 3.12
+since commit `a729fba` (2026-06-12); CLAUDE.md said 3.9 for the two
+months since — corrected the same session (`621f408`), including lifting
+the `Optional[str]`-only restriction now that 3.12 supports PEP 604
+natively. Both branches split into build/docs commits, merged locally in
+order with the full harness suite (1367 passed/1 skipped) re-run after
+each merge — no regression — then pushed to origin. Evidence:
+`docs/audits/deps_pin_pydantic_starlette_2026-08-14.md`,
+`docs/audits/nixpacks_python_parity_2026-08-14.md`.
+
 ---
 
 ## Phase 1 — Foundation build to the ingestion-ready benchmark
@@ -473,11 +501,19 @@ parallelism after Opus has issued packets with disjoint ownership.
   and exclusions are recorded from an authoritative surface.
 - [ ] The safest available restore scope is tested. If full-project disaster
   restore cannot be proven, Alex explicitly accepts, upgrades, or defers it.
-- [ ] Production-relevant versions that caused divergence, especially
-  `pydantic` and `starlette`, are deterministic.
-- [ ] Backend and worker Python-version differences are intentional and
-  documented.
-- [ ] Clean-environment backend and admin-auth smoke tests pass.
+- [x] Production-relevant versions that caused divergence, especially
+  `pydantic` and `starlette`, are deterministic. **DONE 2026-08-14** —
+  pinned `pydantic==2.13.4`/`starlette==0.52.1` (`948d3f2`/`68cb746`;
+  `docs/audits/deps_pin_pydantic_starlette_2026-08-14.md`).
+- [x] Backend and worker Python-version differences are intentional and
+  documented. **DONE 2026-08-14** — both confirmed on `python312` since
+  `a729fba` (2026-06-12); automated parity check added
+  (`6b3e244`/`c5181c8`; `docs/audits/nixpacks_python_parity_2026-08-14.md`);
+  CLAUDE.md corrected to match (`621f408`).
+- [x] Clean-environment backend and admin-auth smoke tests pass. **DONE
+  2026-08-14** — structural regression test proven discriminating against
+  the real pre-`da27fe4` source; full harness suite re-run clean after
+  each merge (1367 passed / 1 skipped, twice, no regression).
 
 ### F3 — Finish the ingestion-default contract
 
