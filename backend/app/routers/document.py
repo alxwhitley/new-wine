@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import require_user
 from app.db.supabase import get_supabase
+from app.services.source_resolver import is_source_servable
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,16 @@ async def get_document(document_id: str, user_id: str = Depends(require_user)):
         if not doc_result.data:
             raise HTTPException(status_code=404, detail="Document not found")
 
+        doc = doc_result.data[0]
+
+        # License/visibility gate (Invariant 2 / is_source_servable) -- a
+        # gated-out document is treated identically to a nonexistent one, the
+        # same posture study.py's get_teacher_card() and this file's other
+        # 404 already use, so a client can't distinguish "hidden" from
+        # "doesn't exist".
+        if not is_source_servable(db, doc.get("source_id")):
+            raise HTTPException(status_code=404, detail="Document not found")
+
         chunks_result = (
             db.table("chunks")
             .select("id, chunk_index, content")
@@ -32,7 +43,7 @@ async def get_document(document_id: str, user_id: str = Depends(require_user)):
         )
 
         return {
-            "document": doc_result.data[0],
+            "document": doc,
             "chunks": chunks_result.data,
         }
     except HTTPException:
@@ -53,7 +64,7 @@ async def get_article(
 
         doc_result = (
             db.table("documents")
-            .select("id, title, author, issue, year, source_name, url, source_kind")
+            .select("id, title, author, issue, year, source_name, url, source_kind, source_id")
             .eq("id", document_id)
             .execute()
         )
@@ -61,6 +72,12 @@ async def get_article(
             raise HTTPException(status_code=404, detail="Document not found")
 
         doc = doc_result.data[0]
+
+        # License/visibility gate (Invariant 2 / is_source_servable) -- same
+        # fail-closed posture as get_document() above; source_id is selected
+        # only for this check and never included in the response below.
+        if not is_source_servable(db, doc.get("source_id")):
+            raise HTTPException(status_code=404, detail="Document not found")
 
         chunks_result = (
             db.table("chunks")

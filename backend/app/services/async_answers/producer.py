@@ -521,9 +521,38 @@ def _inject_background_topics(db, question, messages, topics_established):
         # attribute, never a `from`-import, so this always reads the freshly
         # loaded value (see answer_toolbox.py's REBOUND-GLOBAL warning).
         topic_lookup = {t["topic_key"]: t for t in answer_toolbox._background_topics}
+
+        # License/visibility gate (Invariant 2 / is_source_servable) --
+        # background_topics rows carry no source_id of their own
+        # (answer_toolbox._ensure_background_topics only selects topic_key/
+        # document_id/aliases/title), so it's resolved here via the same
+        # batched documents->source_id lookup single_teacher_lock.py already
+        # exposes publicly for exactly this kind of reuse, rather than
+        # forking a second document_id->source_id query. A topic whose
+        # document cannot be resolved to a currently-servable source is
+        # silently skipped -- same fail-closed posture as every other
+        # consumer of this gate (get_teacher_card, reference_verifier,
+        # stored_position_evidence).
+        from app.services.source_resolver import is_source_servable
+        from app.services.single_teacher_lock import resolve_source_ids_for_documents
+        candidate_doc_ids = [
+            topic_lookup[k]["document_id"] for k in (topics_to_inject + topics_to_condense)
+            if k in topic_lookup
+        ]
+        doc_to_source = resolve_source_ids_for_documents(db, candidate_doc_ids)
+        servable_cache = {}  # type: Dict[str, bool]
+
+        def _topic_servable(topic):
+            source_id = doc_to_source.get(topic["document_id"])
+            if not source_id:
+                return False
+            if source_id not in servable_cache:
+                servable_cache[source_id] = is_source_servable(db, source_id)
+            return servable_cache[source_id]
+
         for topic_key in topics_to_inject:
             topic = topic_lookup.get(topic_key)
-            if not topic:
+            if not topic or not _topic_servable(topic):
                 continue
             try:
                 chunk_result = db.table("chunks").select("content").eq(
@@ -538,7 +567,7 @@ def _inject_background_topics(db, question, messages, topics_established):
                 logger.exception("Producer failed to fetch chunks for topic %s", topic_key)
         for topic_key in topics_to_condense:
             topic = topic_lookup.get(topic_key)
-            if not topic:
+            if not topic or not _topic_servable(topic):
                 continue
             try:
                 chunk_result = db.table("chunks").select("content").eq(

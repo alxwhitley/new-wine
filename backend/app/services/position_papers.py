@@ -8,7 +8,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 from app.db.supabase import get_supabase
 from app.services.embeddings import cosine_similarity as _cosine, embed_text
 from app.services.llm_client import get_anthropic_client, get_generation_model
-from app.services.source_resolver import normalize_alias_key
+from app.services.source_resolver import is_source_servable, normalize_alias_key
 
 logger = logging.getLogger(__name__)
 
@@ -1036,6 +1036,30 @@ def _ensure_body(pillar: dict) -> None:
         return
     try:
         db = get_supabase()
+
+        # License/visibility gate (Invariant 2 / is_source_servable) -- a
+        # pillar dict carries only document_id, not source_id, so it's
+        # resolved here via one extra documents lookup before any chunk
+        # content is read. Same fail-soft posture as the rest of this
+        # function: an unresolvable or unservable source just leaves the
+        # cache empty for this call (get_paper_body returns None), never
+        # raises and never serves gated-out content.
+        doc_lookup = (
+            db.table("documents")
+            .select("source_id")
+            .eq("id", pillar["document_id"])
+            .limit(1)
+            .execute()
+        )
+        source_id = doc_lookup.data[0]["source_id"] if doc_lookup.data else None
+        if not source_id or not is_source_servable(db, source_id):
+            logger.error(
+                "Pillar document not servable (license/visibility gate) -- "
+                "pillar=%s document_id=%s source_id=%s",
+                key, pillar["document_id"], source_id,
+            )
+            return
+
         result = (
             db.table("chunks")
             .select("content")

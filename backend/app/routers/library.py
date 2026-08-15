@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import require_user
 from app.db.supabase import get_supabase
+from app.services.source_resolver import is_source_servable
 
 logger = logging.getLogger(__name__)
 
@@ -105,9 +106,26 @@ async def get_book_excerpts(doc_id: str, user_id: str = Depends(require_user)):
     try:
         db = get_supabase()
 
-        doc = db.table("documents").select("id, title, author, era").eq("id", doc_id).limit(1).execute()
+        doc = (
+            db.table("documents")
+            .select("id, title, author, era, source_id")
+            .eq("id", doc_id)
+            .limit(1)
+            .execute()
+        )
         if not doc.data:
             raise HTTPException(status_code=404, detail="Document not found")
+
+        doc_row = doc.data[0]
+
+        # License/visibility gate (Invariant 2 / is_source_servable) -- same
+        # fail-closed, treat-as-not-found posture as document.py. source_id
+        # is selected only for this check; document_payload below drops it
+        # so the response shape is unchanged from before this gate existed.
+        if not is_source_servable(db, doc_row.get("source_id")):
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        document_payload = {k: v for k, v in doc_row.items() if k != "source_id"}
 
         # Prefer pre-extracted quotes; fall back to raw chunks
         quotes = (
@@ -120,7 +138,7 @@ async def get_book_excerpts(doc_id: str, user_id: str = Depends(require_user)):
 
         if quotes.data:
             return {
-                "document": doc.data[0],
+                "document": document_payload,
                 "quotes": quotes.data,
             }
 
@@ -134,7 +152,7 @@ async def get_book_excerpts(doc_id: str, user_id: str = Depends(require_user)):
         )
 
         return {
-            "document": doc.data[0],
+            "document": document_payload,
             "chunks": chunks.data,
         }
     except HTTPException:
