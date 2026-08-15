@@ -788,6 +788,27 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **A single, confirmed ingestion-chokepoint bypass exists and was
+  deliberately left in place — 2026-08-15 diagnostic.** An admin-only
+  single-PDF-upload endpoint on the backend inserts `documents`/`chunks`
+  rows directly, entirely outside `shared_ingest.ingest_document()`
+  (Invariant 5). If ever actually invoked, it would silently skip
+  proposition generation (nothing else backfills them later), the license
+  gate, the permanent Precept-Austin lockout, and source/author
+  attribution — a document created this way lands on the sentinel
+  "Unassigned — needs source" row (Invariant 3) with no propositions ever.
+  A read-only, exhaustive repo-wide audit (every ingest script, every
+  backend router) found this to be the ONLY real bypass — a preliminary
+  "six bypass paths" figure from an earlier trace does not hold up; the
+  other five candidates were misclassified (three write to unrelated
+  tables with no proposition/license concept, two route through the
+  compliant importer transitively, one has no processor built yet, so
+  nothing to bypass today). A live signature check found zero documents
+  anywhere in the corpus bear this endpoint's telltale insert shape, and
+  no frontend caller was found either — it appears never to have actually
+  been used. **Decision (Alex, 2026-08-15): left in place, not removed or
+  fixed this session.** Full detail: `rhemata-status.md`'s 2026-08-15
+  entry.
 - **Claude Code "Auto Mode" became the default permission model
   2026-08-14 and blocks direct production DB writes from a Claude Code
   session — no settings-based self-grant path was found.** Discovered

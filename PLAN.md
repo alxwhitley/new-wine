@@ -532,6 +532,21 @@ parallelism after Opus has issued packets with disjoint ownership.
 - [ ] `ARCHITECTURE.md` is updated in the separate docs close so policy and code
   agree.
 
+**Reframed 2026-08-15:** the original question this row was tracking ("do
+registration paths honor the visible-by-default policy?") was found
+malformed — several write paths skip the shared chokepoint entirely, so
+there was no policy for them to honor in the first place. Re-asked as "which
+paths actually bypass the chokepoint, and what does bypassing cost?" A
+read-only diagnostic answered the reframed question: exactly ONE real
+ingestion-chokepoint bypass exists (an orphaned admin PDF-upload endpoint;
+full detail in CLAUDE.md's Landmines section and `rhemata-status.md`), not
+the "six" a preliminary trace had flagged. Alex's decision was to leave it
+in place, not fix it this session — this row's own exit criteria (the
+written visible-default policy, schema/registration agreement, a real dry
+run + isolated registration pass, the `ARCHITECTURE.md` update) remain
+UNMET; the diagnostic only inventoried the bypass, it did not do this row's
+build work.
+
 ### F4 — Resolve the remaining pre-benchmark quality decisions
 
 | Claude Code | Kimi via OpenCode Go | Grok |
@@ -576,7 +591,13 @@ treat `reference_verifier.py`'s existence as closing this decision.
 - [ ] No known answer path bypasses license/visibility, commentary, attribution,
   citation, position-paper, or verification guards.
 - [ ] Every document-writing ingest path routes through
-  `shared_ingest.ingest_document()`.
+  `shared_ingest.ingest_document()`. **Confirmed FALSE as literally stated
+  (2026-08-15 diagnostic): exactly one path does not** — an orphaned admin
+  PDF-upload endpoint, explicitly accepted by Alex as a named exception
+  rather than fixed (see CLAUDE.md's Landmines entry). Every other
+  candidate path resolves cleanly. This criterion stays unchecked as an
+  accurate reflection of that one accepted exception, not an unresolved
+  gap awaiting a fix.
 - [ ] Failure logs identify packet/job/source and support reconciliation without
   exposing secrets.
 - [ ] Remaining gaps are closed, explicitly accepted by Alex, or deferred with
@@ -747,7 +768,7 @@ The private beta is launch-ready only when:
 | 19 | Archaic commentary modernization | Hold | Licensing plus side-by-side faithfulness-review design |
 | 20 | Generation-output verification guard | Accept residual gap | F4 diagnostic; no sixth judge without new evidence — `reference_verifier.py` solves misattribution, not this (see F4 note, 2026-08-13) |
 | 21 | Numeral-heading chapter detector | Leave unwired | Per-book validation surviving both known regressions |
-| 23 | Quote hardening before next batch | No further teacher batch | F4 decision from 20 Prince rejects and cap evidence |
+| 23 | Quote hardening before next batch | No further teacher batch | Document-count gap self-resolved (20→1 zero-quote Prince documents, live-reconfirmed 2026-08-15, no extractor change) reduces urgency, but stays OPEN — the rejection-reason breakdown was never produced; the permission gap blocking that diagnostic (`quote_verification_log` unreadable by the analysis role) is fixed as of 2026-08-15, breakdown still not re-run |
 | 24 | `pending` vs `draft` quote status | Preserve both | Compatibility audit and migration plan |
 | 25 | Study-panel drag behavior | Swipe-only | Alex finds material mobile benefit |
 | 26 | `jewish_perspectives` table | Leave in place | Explicit approval for a dedicated drop migration |
@@ -839,8 +860,15 @@ Full history is in `docs/plan-archive.md`. Current foundations include:
 - quote schema, deterministic verifier, selection, frontend rail, sub-chunk
   exclusion, automatic verifier-gated approval, and Derek Prince non-book
   curation (477 approved across 496 documents attempted);
-- Ravenhill, Savchuk, and Poonen Tier 1 visibility flip verified on the serving
-  path.
+- Ravenhill, Savchuk, and Poonen Tier 1 visibility flip (2026-08-09) — the
+  serving-path verification at the time only individually re-tested one of
+  the three affected topics (deliverance); the other two were assumed
+  working via the identical mechanism. **All three topics independently
+  live-verified against the real answer pipeline 2026-08-15** (fasting, how
+  to pray effectively, and deliverance all returned substantive, real-cited
+  answers), closing that gap. One residual: a regression test
+  (`test_stored_position_evidence.py`) written before the flip still
+  hard-codes the pre-flip expectation and is stale; not fixed this session.
 
 ---
 
