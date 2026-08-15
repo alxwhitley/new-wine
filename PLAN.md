@@ -611,9 +611,12 @@ build work.
   not build a sixth probabilistic judge by default.
 - [ ] **System-prompt review timing:** decide whether review is required at the
   ingestion-ready benchmark or before private-beta expansion.
-- [ ] **Quote hardening:** decide majority-Scripture and unbalanced-quotation
-  guards, plus whether to change the proven `--per-doc-limit=1` cap, before any
-  further teacher batch.
+- [x] **Quote hardening:** keep the majority-Scripture and incoherent-fragment
+  guards and the proven `--per-doc-limit=1` cap. The 2026-08-15 breakdown
+  reconciled all 1,152 Prince decisions; the 239 `db_trigger_failure` rows were
+  one historical 19-second batch whose obsolete caller omitted `approved_at`,
+  not evidence of an active verifier/schema defect. Full evidence:
+  `docs/audits/stabilization_track_1_2026-08-15.md`.
 
 **Investigated 2026-08-13, generation-output verification stays open:**
 `backend/app/services/reference_verifier.py` is real, live, and wired into
@@ -649,36 +652,24 @@ treat `reference_verifier.py`'s existence as closing this decision.
   candidate path resolves cleanly. This criterion stays unchecked as an
   accurate reflection of that one accepted exception, not an unresolved
   gap awaiting a fix.
-- [ ] Failure logs identify packet/job/source and support reconciliation without
+- [x] Failure logs identify packet/job/source and support reconciliation without
   exposing secrets.
-- [ ] Remaining gaps are closed, explicitly accepted by Alex, or deferred with
+- [x] Remaining gaps are closed, explicitly accepted by Alex, or deferred with
   an owner and trigger.
 
-**Grok's F5 trace ran 2026-08-15** (read-only, this row's own Grok cell —
-"trace every served and ingest path... produce bypass, dependency, and
-failure-visibility inventories"). Found `get_teacher_card()`
-(`GET /study/teacher/{source_id}`) as an undocumented second served-
-generation surface, plus 19 named bypasses across serving and ingest paths
-(full list, file:line, in the trace output — not reproduced here). Two of
-the 19 (get_teacher_card's missing commentary exclusion and citation
-grounding) are closed as of `21f5b14` (live in production; see CLAUDE.md's
-Landmines correction on the 2026-08-07 mirror-unification job for the
-full account, including two guards deliberately NOT applied with reasons).
-**The remaining count is NOT fully closed or triaged, and this exit
-criterion is still NOT met** — do not read the get_teacher_card fix as
-satisfying this row generally. **2026-08-15, later session:** a separate
-read-only verification pass this same day had independently scoped four
-license/visibility-gate bypasses (document view, library book excerpts,
-background-topic injection, `get_paper_body`) — these are now fixed,
-independently reviewed with per-surface mutation-proof (each refusal
-check confirmed to fail when the real gate is neutered, corpus-wide
-impact confirmed live: 2 of 3,603 documents newly gated, 0 of 8
-position-paper pillars and 0 of 2 background topics affected), and
-merged/pushed (`21ff62f`). Whether these four are drawn from Grok's
-original 17-remaining list, or are a distinct finding, was not confirmed
-this session — flagging rather than assuming a specific count reduction.
-Next step is still Alex triaging the full remaining list
-(accept/defer/close), not a repeat trace.
+**F5 current reconstruction — 2026-08-15:** the original Grok 19-finding
+file:line artifact could not be recovered from the repository, Git history,
+retained worktrees, audit files, or task terminal state, so its old `19/17`
+count is not a reliable current work queue. A bounded current-code trace
+classified 20 control rows in
+`docs/audits/stabilization_track_1_2026-08-15.md`: every served-answer guard
+is closed or explicitly accepted; the four later license gates are closed by
+`21ff62f`; teacher-card commentary/attribution is closed by the `21f5b14`
+lineage; and failure reconciliation is closed by `ec42398` with a simulated
+partial-ingest regression and mutation proof. The only literal sole-writer
+failure is the orphaned admin PDF endpoint Alex explicitly accepted above.
+Accordingly F5 remains formally UNMET because that checkbox is accurately
+false, but there is no unclassified current-code bypass behind the stale count.
 
 ### F6 — Declare the ingestion-ready benchmark
 
@@ -829,7 +820,6 @@ The private beta is launch-ready only when:
 | 19 | Archaic commentary modernization | Hold | Licensing plus side-by-side faithfulness-review design |
 | 20 | Generation-output verification guard | Accept residual gap | F4 diagnostic; no sixth judge without new evidence — `reference_verifier.py` solves misattribution, not this (see F4 note, 2026-08-13) |
 | 21 | Numeral-heading chapter detector | Leave unwired | Per-book validation surviving both known regressions |
-| 23 | Quote hardening before next batch | No further teacher batch | Document-count gap self-resolved (20→1 zero-quote Prince documents, live-reconfirmed 2026-08-15, no extractor change) reduces urgency, but stays OPEN — the rejection-reason breakdown was never produced; the permission gap blocking that diagnostic (`quote_verification_log` unreadable by the analysis role) is fixed as of 2026-08-15, breakdown still not re-run |
 | 24 | `pending` vs `draft` quote status | Preserve both | Compatibility audit and migration plan |
 | 25 | Study-panel drag behavior | Swipe-only | Alex finds material mobile benefit |
 | 26 | `jewish_perspectives` table | Leave in place | Explicit approval for a dedicated drop migration |
@@ -916,20 +906,21 @@ Full history is in `docs/plan-archive.md`. Current foundations include:
   and transaction-pooler configuration;
 - inline study panel, source panels, and teacher-card content gate;
 - position-paper fence, contradiction exclusion, guarded fallback, V1 stored-
-  position matcher, and one-hop evidence injection;
+  position matcher, one-hop evidence injection, and the single-author answer
+  attribution contract (`policy_v3`, `ec42398`);
 - commentary/Precept answer exclusion and grounded citation verification;
 - quote schema, deterministic verifier, selection, frontend rail, sub-chunk
   exclusion, automatic verifier-gated approval, and Derek Prince non-book
-  curation (477 approved across 496 documents attempted);
+  curation (current 2026-08-15 snapshot: 635 approved across 495 documents);
 - Ravenhill, Savchuk, and Poonen Tier 1 visibility flip (2026-08-09) — the
   serving-path verification at the time only individually re-tested one of
   the three affected topics (deliverance); the other two were assumed
   working via the identical mechanism. **All three topics independently
   live-verified against the real answer pipeline 2026-08-15** (fasting, how
   to pray effectively, and deliverance all returned substantive, real-cited
-  answers), closing that gap. One residual: a regression test
-  (`test_stored_position_evidence.py`) written before the flip still
-  hard-codes the pre-flip expectation and is stale; not fixed this session.
+  answers), closing that gap. The pre-flip stored-position regression was
+  corrected to assert current servability rather than hardcoded teacher
+  visibility (`d907bf9`) and passes across all six topics.
 
 ---
 
@@ -996,7 +987,8 @@ Known historical evidence: 167 raw PDFs were unprocessed and 9 ingested at the
 
 - [ ] Reconcile Ravenhill, Savchuk, and Poonen visibility and actual retrievable
   content before further quote work.
-- [ ] Run further teacher quote extraction only after Decision 23 is closed.
+- [x] Quote-hardening gate is closed; any further teacher extraction still
+  requires its own dry run, single-item proof, reconciliation, and review.
 - [ ] Preserve the distinction between “document received a candidate” and
   “document has an approved quote.”
 - [ ] For HelloAO, keep the 12 missing book/commentary combinations quarantined:

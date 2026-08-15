@@ -172,7 +172,12 @@ that raw output contains NO reasoning tags (a benign plain-prose answer). If
 `<answer>` opened but hit the ceiling before `</answer>` (`stop_reason ==
 max_tokens`), one clean cutoff sentence is appended. SP1 `verify_references`
 (reference_verifier.py) then confirms the model's `<reference_mentions>` against
-real data before any study-panel links are surfaced.
+real data before any study-panel links are surfaced. If the citable evidence
+has exactly one named author, the producer also requires that full name in the
+answer: one constrained regeneration is followed, only if needed, by a
+deterministic grounded `Source voice` label before reference verification.
+This orchestration is versioned as `policy_v3`, so older anonymous cached
+answers cannot bypass it.
 
 ---
 
@@ -288,6 +293,13 @@ Routed through `shared_ingest`: `ingest.py`, `ingest_magazine.py`,
 `ingest_preceptaustin.py`, `ingest_lexicon.py`, `ingest_helloao.py`
 (commit `929bc34`, 2026-08-08 — chunk_fn override for one-chunk-per-verse,
 same pattern as lexicon's one-entry-one-chunk).
+
+Accepted exception: the orphaned admin PDF route in
+`backend/app/routers/ingest.py` still writes directly and does not gain the
+shared writer's proposition/license/source behavior. It now emits bounded,
+reconcilable failure context (upload/title identity, stage, attempted document
+ID, attempted/stored chunk counts), but that observability does not make it a
+compliant writer.
 
 | Script | Purpose |
 |---|---|

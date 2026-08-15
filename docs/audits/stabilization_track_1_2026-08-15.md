@@ -1,11 +1,12 @@
-# Stabilization Track 1 Audit — 2026-08-15
+# Stabilization and Track 2 Audit — 2026-08-15
 
 ## Scope and safety
 
 This pass verified deployment, serving guards, Derek Prince quote outcomes,
-stored-position evidence, deliverance attribution, and the F5 control matrix.
-All production inspection was read-only. No answer was generated, no database
-row was written, and `Temporary-assets/` was untouched.
+stored-position evidence, deliverance attribution, and the F5 control matrix,
+then implemented the two bounded defects the evidence demonstrated. All
+production inspection was read-only. No answer was generated, no database row
+was written, and `Temporary-assets/` was untouched.
 
 Observed facts are labeled **Observed**. Conclusions that follow from code and
 data but could not be tied to a retained request are labeled **Inference**.
@@ -81,11 +82,17 @@ approved quote: `45adafa8-5cd7-488b-8a8b-278bf76ecf28`, *Women In The Church —
 Question and Answer*. It has one incoherent-fragment refusal. The historical
 “20 zero-quote documents” figure is stale.
 
-**Decision 23 recommendation:** keep the majority-Scripture and incoherent-
-fragment guards. Their refusals are narrow, legible, and account for only 20
-of 1,152 decisions. Open a separate defect for the 239 `quotes_check`
-constraint failures; they dominate the non-accepted outcomes and are not
-evidence that the editorial guards are too strict.
+**Observed follow-up:** all 239 `db_trigger_failure` records occurred in one
+19-second batch on August 9. Each rejected row had `approved_by` populated but
+`approved_at` NULL, violating the current `quotes_check` rule for an approved
+row. The current extractor writes candidates as `pending`; the current
+`create_and_approve_quote()` path supplies `approved_at`. This was a historical
+batch-caller defect, not an active schema or verifier defect.
+
+**Decision 23 resolution:** keep the majority-Scripture and incoherent-fragment
+guards and retain the proven per-document cap. Their refusals are narrow,
+legible, and account for only 20 of 1,152 decisions. No current quote-path code
+change is supported by this evidence; Decision 23 can close.
 
 ## 4. Stored-position regression drift
 
@@ -124,19 +131,17 @@ NULL, but `stored_position_evidence.py` resolves `sources.name` and assigns
 every citation and includes `by Vlad Savchuk` in model context. The source
 panel renders `citation.author`; inline citation pills render only `[n]`.
 
-**Inference:** the likely earliest loss is generation, not evidence or the
-source-panel renderer. The generation constraint at
-`backend/app/services/async_answers/producer.py:452` limits which names may be
-used but does not require a grounded teacher name to appear. A fully anonymous
-answer can therefore pass the attribution guard. Inline `[n]` pills then make
-the omission visible until a reader opens the source panel.
+**Confirmed failure point:** generation, not evidence or the source-panel
+renderer. The generation constraint limited which names could be used but did
+not require the sole grounded source to appear, so anonymous prose passed.
 
-**Track 2 discriminating test:** construct one citable, single-author evidence
-bag whose citation has `author = "Vlad Savchuk"`; make generation return prose
-with citations but no author name; assert the answer is regenerated once or
-deterministically labeled, while multi-author and genuinely anonymous sources
-retain their existing behavior. The fix must be independently reviewed and
-mutation-proven because it changes the answer path.
+**Track 2 correction (`ec42398`):** when exactly one named citable author is in
+the evidence, the producer regenerates once with an explicit full-name
+requirement. If the grounded retry still omits the name, it prepends a
+deterministic `Source voice` label before the existing reference verifier runs.
+Multi-author and anonymous evidence are unchanged. `POLICY_VERSION` is now
+`policy_v3`, preventing reuse of anonymous pre-contract answers. The focused
+regression passed and failed when the detector was mutation-disabled.
 
 ## 6. F5 reconstruction and classification
 
@@ -167,39 +172,39 @@ claim one-to-one identity with the missing original numbering.
 | 17 | Search/browse corpus | gated retrieval RPCs; direct browse uses `_gated_source_ids()` | closed | Backend; RPC/browse changes |
 | 18 | Separate word-study/lexicon surfaces | Deliberate non-answer study tools; Precept Austin remains excluded from answer/paraphrase paths | accepted | Alex; legal/surface-scope change |
 | 19 | Document-writing ingest chokepoint | `shared_ingest.py:341` covers normal writers; `backend/app/routers/ingest.py:99` writes directly | accepted exception | Alex; delete or rebuild endpoint if reactivated |
-| 20 | Failure reconciliation | Worker exceptions include worker and job IDs (`scripts/answer_worker.py:177`); `/ingest` logs only a generic endpoint exception (`ingest.py:130`) | needs-build | Backend; before F5 close |
+| 20 | Failure reconciliation | Worker exceptions include worker and job IDs; `/ingest` now logs bounded filename/title identity, source type, stage, attempted document ID, and attempted/stored chunk counts | closed by `ec42398` | Backend; regression |
 
 Rows 12–16 are the later license/visibility findings and do overlap the
 control areas implicated by the original trace, but missing trace provenance
 prevents a defensible claim about exactly how many of the original 17 they
 close.
 
-**F5 verdict: UNMET.** The live answer path now has all named safety guards,
-but the criterion remains open because the accepted PDF-ingest exception
-literally bypasses the sole writer, generic ingest failure logging does not
-support packet/source reconciliation, and the original finding-to-fix mapping
-cannot be reconstructed one-to-one.
+**F5 verdict: formally UNMET, with no unclassified current-code finding.** The
+live answer path has all named safety guards and failure reconciliation is now
+implemented and mutation-proven. The remaining formal exception is the
+admin PDF endpoint Alex explicitly accepted: it still bypasses the sole writer,
+so that literal checkbox cannot be marked true. The missing original trace also
+prevents a historical one-to-one `19/17` mapping; this reconstructed matrix
+replaces that stale count for current decisions.
 
 ## 7. Track 2 packets, in order
 
-1. **Quote constraint failure:** reproduce one of the 239 `quotes_check`
-   failures against the current schema, identify the violating field, and add
-   a mutation-sensitive regression before changing verifier/storage code.
-2. **Single-author attribution contract:** add the discriminating deliverance
-   fixture described above; choose regeneration versus deterministic label
-   only after the failing test identifies the narrowest safe point.
-3. **F5 ingest observability:** include endpoint/job/source/document identity
-   in failure records and logs without secrets; prove a failed packet can be
-   reconciled from durable state.
-4. **Read-only analysis permission:** grant or deliberately refuse
-   `answer_jobs` read access to `rhemata_readonly_analysis`; this is a separate
-   production DB-write session with before/after privilege proof.
-5. **Authenticated UI smoke:** connect a signed-in browser and verify the
+1. **Quote constraint failure — closed as historical:** the violating field
+   was missing `approved_at` in one obsolete batch caller; current paths satisfy
+   the constraint, so no code change was made.
+2. **Single-author attribution contract — built (`ec42398`):** constrained
+   retry, deterministic grounded label, cache-policy bump, and mutation proof.
+3. **F5 ingest observability — built (`ec42398`):** partial-batch simulation
+   proves exact attempted/stored reconciliation without document contents.
+4. **Read-only analysis permission — deliberately refused:** migration 084
+   explicitly excludes `answer_jobs` as user/operational data. Diagnostics may
+   use the service role only in an explicitly scoped read-only session; the
+   corpus-analysis role will not be broadened.
+5. **Authenticated UI smoke — access-blocked:** connect a signed-in browser and verify the
    servable document, sentinel 404, and Derek Prince card on the exact READY
    Vercel deployment.
-6. **F5 provenance:** if the original Grok output can be recovered from the
-   external task transcript, map it to this matrix; otherwise explicitly
-   replace the stale “19/17” narrative in the governing records with this
-   reconstructed matrix after Alex's review.
+6. **F5 provenance — superseded for current work:** recover the original Grok
+   output only if historical one-to-one provenance becomes necessary; use this
+   reconstructed matrix for present decisions.
 
 No doctrinal content or position-paper prose was changed in this track.

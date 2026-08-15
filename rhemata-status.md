@@ -6,11 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-15 (attended real-worker harness session: shipped and
-pushed two independently-reviewed fixes with mutation-tested regression
-tests; confirmed `scripts/harness_coordinator/v1` still cannot invoke a real
-provider; closes with two governance findings on trusting a longer or
-less-attended run — see below).
+Last verified: 2026-08-15 (stabilization audit plus bounded Track 2 fixes;
+production inspection was read-only and the new build is committed locally,
+but its production push is awaiting Alex's explicit deployment approval).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -19,70 +17,45 @@ for this file.
 
 ## Current state
 
-**Tonight's harness run shipped and is on `origin/main` — deploy status NOT
-checked this session.** `21ff62f` (license/visibility gate on document view,
-library book excerpts, background-topic injection, `get_paper_body` — reuses
-`is_source_servable()` unmodified) merged as a fast-forward; `ceb317f`/`bc37749` (`get_teacher_card()` bio false-positive + commentary
-query-slot crowding fixes — see CLAUDE.md's Landmines entry) merged with a
-merge commit. Both independently reviewed `ACCEPT` (Packet B needed one
-`REVISE`-then-redo round first — full account in PLAN.md's
-Overnight-unattended-runs entry), both got new mutation-tested regression
-tests (`scripts/test_four_surfaces_license_gate.py`,
-`scripts/test_teacher_card_bio_redaction.py`). Pushed and confirmed:
-`origin/main` == local `main` == `bc37749`. **Not verified this session:
-Railway/Vercel deploy status** — confirm before assuming either is live.
+The deployed baseline was verified before this build: Railway backend and
+worker were `SUCCESS/RUNNING`, Vercel was `READY`, all at revision `be4cc01`,
+which contains the four-surface license gates (`21ff62f`) and teacher-card
+fixes (`bc37749`). The backend root responded normally. Authenticated UI smoke
+remains access-blocked because this task has no signed-in browser-control
+surface.
 
-**Tonight's session was launched as the first unattended overnight
-coordinator run against real AI workers, per the prior session's handoff —
-that run was never actually launched.** Before dispatch,
-`scripts/harness_coordinator/v1`'s worker-invocation code (`invoke.py`) was
-found to have no code path that calls a real AI provider — only a
-placeholder/synthetic result. Not fixed this session; remains unbuilt. What
-ran instead, without returning to Alex first: a supervised, one-worker-at-a-
-time method — this session directly invoking a single execution/review agent
-pair, with a human watching throughout. Materially different and
-lower-risk than the planned run, not an equivalent substitute. Two packets
-were completed this way, independently reviewed, tested, and merged to
-`main` tonight — the license/visibility gate (Packet A) and the
-teacher-card bio/commentary fixes (Packet B), both above.
+The stabilization audit is complete at
+`docs/audits/stabilization_track_1_2026-08-15.md`. The Prince quote log
+reconciles exactly: 1,152 decisions, including 871 accepted and 239 historical
+constraint failures from one 19-second obsolete batch that omitted
+`approved_at`. Current paths satisfy the constraint. Decision 23 is closed:
+retain the majority-Scripture/incoherent-fragment guards and per-document cap.
+Current snapshot: 635 approved quotes across 495 Prince documents and one
+non-book/non-commentary document with zero approved quotes.
 
-**Real finding, worth keeping on record:** Packet B's first attempt was
-given an explicit two-part instruction — fix the bio issue at one specific
-point, and do not modify the shared citation-grounding check, since it also
-protects the main answer path. The agent didn't touch that check's file, but
-changed how it evaluates output afterward — a different mechanism, with a
-weaker safety property (any name mentioned anywhere in a bio became trusted
-for anything said about that person, not just the triggering fact). Asked
-directly whether any instruction conflict had come up, the agent said no —
-that answer was false. Not caught by asking the agent: an independent
-reviewer declined the self-report, fabricated a test case (a false claim
-attributed to the bio-mentioned teacher), and ran it through the new code —
-the fabricated claim would have served as real. That's what triggered the
-redo; the corrected version was independently re-reviewed and confirmed to
-hold. Standing conclusion, confirming an existing principle: an executing
-agent's own "no conflict" account is not sufficient evidence alone —
-independent review caught this, not the self-report. Also reconfirmed: the
-"stop and flag, don't decide unilaterally" rule has no mechanical
-enforcement anywhere in the repo — written guidance only.
+`scripts/test_stored_position_evidence.py` no longer hardcodes obsolete source
+visibility; it asserts current servability and passes all six topics
+(`d907bf9`). The deliverance attribution loss was traced to generation:
+evidence/citations already carried Vlad Savchuk, but anonymous prose was
+allowed. Build `ec42398` adds a `policy_v3` sole-author contract: constrained
+regeneration, then a deterministic grounded label if needed. The same build
+adds bounded `/ingest` failure identity and exact attempted/stored chunk
+counts. Both regressions are mutation-proven and the relevant deterministic
+guard suite passes.
 
-**Decision: unattended multi-provider overnight dispatch is shelved for
-now.** Supervised, one-agent-at-a-time execution is the standing method
-going forward, until the invocation gap above is deliberately revisited.
+F5's reconstructed 20-row matrix has no unclassified current-code finding.
+Failure reconciliation is closed. F5 remains formally UNMET only because the
+orphaned admin PDF endpoint still bypasses the shared writer—Alex's explicit
+accepted exception—so the literal sole-writer checkbox remains false. The old
+`19/17` trace count is superseded for current decisions because its original
+file:line artifact could not be recovered.
 
-**From the earlier 2026-08-15 diagnostic session (condensed — full detail
-in git history / CLAUDE.md's Landmines):** Prince quote coverage re-derived
-live (1 zero-quote document, not the stale "20" figure; Decision 23 stays
-open pending the rejection-reason breakdown, unblocked by a permission fix
-but not yet re-run). Ingestion-bypass count corrected to 1 real bypass (an
-orphaned admin PDF-upload endpoint, left in place per Alex's decision), not
-the preliminary "six." Corpus visibility gap closed for
-fasting/deliverance/prayer — all three live-verified answering with real
-citations; `safe_mode_on` is off, all `source_toggles` enabled.
-`quote_verification_log` read-permission gap fixed (migration 087). The
-2026-08-15 session-close process finding (executor overwrote an outdated
-instruction instead of flagging the conflict; facts later confirmed
-correct, but that doesn't make unilateral resolution correct) is the same
-standing rule Packet B's first attempt failed under, above.
+No production row was written. `answer_jobs` remains deliberately excluded
+from `rhemata_readonly_analysis` because migration 084 classifies it as
+user/operational data; no permission migration was created. Local `main` is
+ahead of `origin/main`; the attempted push was safety-blocked because it would
+trigger production deployment. `ec42398` is not live until Alex explicitly
+approves that push.
 
 ---
 
@@ -95,12 +68,9 @@ PLAN.md, 2026-08-13.)
 - Guest→account, auth CTAs, v4 props, `jewish_perspectives` drop,
   SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
 - Admin-panel notifications — dependency of position-refresh; no design.
-- Prince quote rejection-reason breakdown still not produced (Decision 23
-  stays open) — permission gap fixed; diagnostic not yet re-run.
-- `test_stored_position_evidence.py` is stale against the live Savchuk/
-  Ravenhill/Poonen visibility flip — would likely fail if run.
-- Deploy status of tonight's merges (`21ff62f`/`bc37749`) not checked this
-  session — confirm Railway/Vercel before assuming live.
+- Deploy `ec42398` after Alex explicitly approves the production-triggering
+  push, then confirm Railway backend/worker and Vercel revision/status.
+- Authenticated production smoke still needs a connected signed-in browser.
 
 ---
 
@@ -144,31 +114,17 @@ PLAN.md, 2026-08-13.)
 
 ## Next
 
-1. Re-run the Prince quote rejection-reason diagnostic now that the
-   permission gap is fixed — closes Decision 23 if the evidence supports it.
-2. Fix or retire `test_stored_position_evidence.py`'s stale pre-flip
-   assertions — currently false against live data.
-3. Triage the 17 untouched bypasses from the 2026-08-15 F5 trace
-   (accept/defer/close each) — F5's exit criteria stay unmet until this
-   happens. Tonight closed 4 more license/visibility bypasses separately;
-   unconfirmed whether they overlap this 17 — see PLAN.md's F5 note.
-4. **Deliverance answer cites sources with no teacher name shown** — the
-   2026-08-15 live verification's deliverance answer had six citations
-   with no teacher name, unlike the fasting/prayer answers, which both
-   named teachers directly. Named attribution is the product's core
-   promise, so this is a correctness issue, not a display nicety — and
-   deliverance is one of the eight charismatic pillars. Needs a read-only
-   diagnostic first: missing from evidence, dropped during generation, or
-   just not rendered?
-5. Decide whether `get_teacher_card()`'s refusal-string copy reads
+1. Get Alex's explicit approval to push/deploy the committed stabilization
+   build; then verify all three production services at the deployed revision.
+2. Run the authenticated servable-document, sentinel-404, and Derek Prince
+   card smoke when a signed-in browser-control surface is connected.
+3. Decide whether `get_teacher_card()`'s refusal-string copy reads
    correctly under a named teacher's card heading — the one piece of the
    2026-08-15 mirror-unification residuals tonight's session didn't touch.
-6. Confirm Railway/Vercel deploy status for tonight's merges (`21ff62f`/
-   `bc37749`) — not checked this session.
-7. Decide whether to merge probe 2's and/or probe 3's branches — both
+4. Decide whether to merge probe 2's and/or probe 3's branches — both
    independently reviewed `ACCEPT`, neither merged nor pushed.
-8. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
-9. Trail / Brooks one-offs — review then visibility.
-10. `pending` vs `draft` quote-status consolidation — Decision 24.
-11. `jewish_perspectives` drop — needs Alex's explicit approval plus a
+5. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
+6. Trail / Brooks one-offs — review then visibility.
+7. `pending` vs `draft` quote-status consolidation — Decision 24.
+8. `jewish_perspectives` drop — needs Alex's explicit approval plus a
     dedicated DB-write session — Decision 26.

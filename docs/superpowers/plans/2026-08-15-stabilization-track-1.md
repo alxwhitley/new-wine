@@ -31,7 +31,7 @@
 - Consumes: local `main`, `origin/main`, Railway project services `rhemata` and `answer-worker`, Vercel project `rhemata`.
 - Produces: exact local/origin/deployed revision and status evidence for Checkpoint A.
 
-- [ ] **Step 1: Confirm local and remote Git state**
+- [x] **Step 1: Confirm local and remote Git state**
 
 Run:
 
@@ -44,7 +44,7 @@ git log --oneline --decorate -5
 
 Expected: only `Temporary-assets/` is unrelated/untracked; the plan commit may be ahead of `origin/main` until the docs close is pushed.
 
-- [ ] **Step 2: Read Railway deployment metadata for both services**
+- [x] **Step 2: Read Railway deployment metadata for both services**
 
 Run:
 
@@ -56,7 +56,7 @@ railway deployment list --service answer-worker --environment production --limit
 
 Expected: both services identify a latest deployment, status, creation time, and source revision. No `deployment up`, `redeploy`, `restart`, or `service` mutation command is permitted.
 
-- [ ] **Step 3: Read Vercel production deployment metadata**
+- [x] **Step 3: Read Vercel production deployment metadata**
 
 Run:
 
@@ -66,7 +66,7 @@ vercel list rhemata --environment production --status READY --limit 5 --json --c
 
 Expected: the latest READY deployment exposes its URL, creation time, and Git revision metadata.
 
-- [ ] **Step 4: Compare deployed revisions with the two shipped fixes**
+- [x] **Step 4: Compare deployed revisions with the two shipped fixes**
 
 Run:
 
@@ -89,7 +89,7 @@ Expected: both commands exit zero and deployment timestamps/revisions are new en
 - Consumes: production-deployed revision evidence, real servable/unservable document fixtures, existing mutation-tested regression scripts.
 - Produces: local real-DB guard evidence plus production availability evidence without weakening authentication.
 
-- [ ] **Step 1: Run the four-surface real-DB regression**
+- [x] **Step 1: Run the four-surface real-DB regression**
 
 Run:
 
@@ -99,7 +99,7 @@ python3.12 scripts/test_four_surfaces_license_gate.py
 
 Expected: all document, article, book-excerpt, background-topic, and position-paper checks pass, including refusal of the real sentinel-backed unservable document.
 
-- [ ] **Step 2: Run the teacher-card regression**
+- [x] **Step 2: Run the teacher-card regression**
 
 Run:
 
@@ -109,7 +109,7 @@ python3.12 scripts/test_teacher_card_bio_redaction.py
 
 Expected: bio redaction, fabricated other-teacher attribution refusal, candidate-pool decoupling, and bibliography-cap checks all pass.
 
-- [ ] **Step 3: Verify public production availability**
+- [x] **Step 3: Verify public production availability**
 
 Run:
 
@@ -120,7 +120,7 @@ curl -I https://rhemata.vercel.app/
 
 Expected: backend returns `{"message":"Rhemata API"}` and the production frontend returns an HTTP success or redirect to its canonical production URL.
 
-- [ ] **Step 4: Exercise authenticated production surfaces through the existing signed-in browser session**
+- [ ] **Step 4: Exercise authenticated production surfaces through the existing signed-in browser session** — access-blocked because no signed-in browser-control surface was connected; not treated as a product failure.
 
 Verify one servable document opens, the sentinel-backed unservable document returns the product's not-found behavior, a Derek Prince teacher card renders, and no fabricated other-teacher attribution appears. Do not bypass authentication or expose session credentials.
 
@@ -137,7 +137,7 @@ Expected: public behavior agrees with the real-DB regression and deployed revisi
 - Consumes: `quote_verification_log`, Derek Prince source ID `17be391b-d025-4178-8543-3e84da675c5d`, `quotes`, `quote_source_revisions`, `chunks`, and `documents`.
 - Produces: Decision 23 evidence grouped by rule, reason, document, and time window.
 
-- [ ] **Step 1: Establish the read-only connection and log bounds**
+- [x] **Step 1: Establish the read-only connection and log bounds**
 
 Run from one foreground shell after sourcing `backend/app/.env.readonly-analysis` and confirming `READONLY_ANALYSIS_DB_URL` is non-empty:
 
@@ -150,7 +150,7 @@ WHERE teacher_source_id = '17be391b-d025-4178-8543-3e84da675c5d';
 
 Expected: `current_user` is exactly `rhemata_readonly_analysis`; the log query returns a bounded timestamp range and row count.
 
-- [ ] **Step 2: Produce the rejection distribution**
+- [x] **Step 2: Produce the rejection distribution**
 
 Run:
 
@@ -165,7 +165,7 @@ ORDER BY decisions DESC, rule, reason;
 
 Expected: every logged Prince acceptance/refusal is accounted for exactly once; sum of grouped `decisions` equals the Step 1 row count.
 
-- [ ] **Step 3: Identify documents with refusals and no approved quote**
+- [x] **Step 3: Identify documents with refusals and no approved quote**
 
 Run:
 
@@ -198,7 +198,7 @@ ORDER BY pd.title;
 
 Expected: the current zero-approved-quote set is enumerated by ID and title, not copied from the stale 20-document figure.
 
-- [ ] **Step 4: Reconcile Decision 23 evidence**
+- [x] **Step 4: Reconcile Decision 23 evidence**
 
 Record whether the rejection classes support keeping, changing, or separately investigating majority-Scripture and unbalanced-quotation guards. Do not close Decision 23 without a conclusion Alex can evaluate.
 
@@ -215,7 +215,7 @@ Record whether the rejection classes support keeping, changing, or separately in
 - Consumes: six V1 topic keys, current source visibility, live stored-position evidence.
 - Produces: a discriminating statement of which assertions are stale versus which invariants remain valid.
 
-- [ ] **Step 1: Run the existing test unchanged**
+- [x] **Step 1: Run the existing test unchanged**
 
 Run:
 
@@ -225,7 +225,7 @@ python3.12 scripts/test_stored_position_evidence.py
 
 Expected: the pre-flip `EXPECTED_NONE_TODAY` and `HIDDEN_AUTHOR_NAMES` assumptions fail for now-shown Savchuk/Ravenhill evidence; structural shape and commentary-exclusion checks should remain meaningful.
 
-- [ ] **Step 2: Query current contributor visibility through the read-only role**
+- [x] **Step 2: Query current contributor visibility through the read-only role**
 
 Run:
 
@@ -238,7 +238,7 @@ ORDER BY s.name;
 
 Expected: current visibility explains the changed evidence results directly.
 
-- [ ] **Step 3: Classify the required Track 2 correction**
+- [x] **Step 3: Classify the required Track 2 correction**
 
 Record which assertions should become invariant-based instead of date-stamped live snapshots. Preserve checks for required chunk shape, servability, and commentary/word-study exclusion; remove only assumptions invalidated by the authorized visibility flip.
 
@@ -256,7 +256,7 @@ Record which assertions should become invariant-based instead of date-stamped li
 - Consumes: latest completed deliverance `answer_jobs` row, its citations, verified references, retrieved chunk IDs, and the associated documents/sources.
 - Produces: one cause classification—missing in evidence, omitted by generation, or dropped during rendering—with exact supporting fields.
 
-- [ ] **Step 1: Select recent completed deliverance jobs**
+- [ ] **Step 1: Select recent completed deliverance jobs** — access-blocked because migration 084 deliberately excludes `answer_jobs`; the current evidence path was diagnosed without broadening that user/operational-data grant.
 
 Run through the read-only role:
 
@@ -272,7 +272,7 @@ LIMIT 10;
 
 Expected: identify the exact job whose six citations showed no teacher name, or record that retention no longer contains it.
 
-- [ ] **Step 2: Resolve retrieved evidence identity**
+- [x] **Step 2: Resolve retrieved evidence identity**
 
 Resolve the retrieved UUIDs for all ten recent jobs in one query, preserving
 `job_id` so the exact observed answer remains distinguishable:
@@ -302,7 +302,7 @@ ORDER BY r.job_id, c.document_id, c.chunk_index;
 
 Expected: establish whether each cited/retrieved item had an attributable `documents.author` or `sources.name` before generation.
 
-- [ ] **Step 3: Compare pipeline stages**
+- [x] **Step 3: Compare pipeline stages**
 
 Compare:
 
@@ -314,7 +314,7 @@ Compare:
 
 Expected: exactly one earliest stage loses or suppresses the teacher name. Do not propose a renderer fix if the citation object was already nameless, and do not modify generation if the stored object is correct but the UI drops it.
 
-- [ ] **Step 4: Define a discriminating Track 2 test**
+- [x] **Step 4: Define a discriminating Track 2 test**
 
 Record the smallest fixture that fails at the identified stage and would pass only after a correct fix. Because this is answer-path work, require independent review and mutation proof in Track 2.
 
@@ -332,11 +332,11 @@ Record the smallest fixture that fails at the identified stage and would pass on
 - Consumes: original 19-finding F5 trace evidence, six confirmed closures, four later license/visibility fixes, and current served/ingest paths.
 - Produces: authoritative table of remaining items with status `closed`, `accepted`, `deferred`, or `needs-build`.
 
-- [ ] **Step 1: Recover the original trace artifact before re-tracing**
+- [x] **Step 1: Recover the original trace artifact before re-tracing**
 
 Search the current task terminal, Git history, audit documents, and retained task output for the original file:line list. Do not infer the 17 remaining items from the summary count alone.
 
-- [ ] **Step 2: Map known fixes onto the original list**
+- [x] **Step 2: Map known fixes onto the original list**
 
 Run:
 
@@ -348,11 +348,11 @@ git show --format=fuller --no-ext-diff ceb317f -- backend/app/routers/study.py
 
 Expected: each claimed closure maps to a specific original finding or is explicitly labeled a distinct later finding.
 
-- [ ] **Step 3: Reconstruct only missing evidence**
+- [x] **Step 3: Reconstruct only missing evidence**
 
 If the original file:line artifact cannot be recovered, perform a bounded read-only trace against the F5 exit-criterion control matrix: license/visibility, commentary, attribution, citation, position-paper, verification, shared-ingest chokepoint, and failure logging. Do not repeat already-proven branches merely to regenerate a count.
 
-- [ ] **Step 4: Classify every item**
+- [x] **Step 4: Classify every item**
 
 For each finding record surface, file:line, missing control, consequence, current status, evidence, owner, and revisit trigger. The F5 exit criterion remains unmet until no item is left unclassified.
 
@@ -368,11 +368,11 @@ For each finding record surface, file:line, missing control, consequence, curren
 - Consumes: Tasks 1-6 evidence.
 - Produces: durable audit, explicit owner decisions, and bounded Track 2 packet list.
 
-- [ ] **Step 1: Write the audit with exact evidence**
+- [x] **Step 1: Write the audit with exact evidence**
 
 The audit must contain deployment revisions/statuses, smoke results, Prince grouped counts with reconciliation, stale-test failures and cause, deliverance stage comparison, and the complete F5 classification table. It must distinguish observed facts from inferences.
 
-- [ ] **Step 2: Verify the audit**
+- [x] **Step 2: Verify the audit**
 
 Run:
 
@@ -384,7 +384,7 @@ git diff -- docs/audits/stabilization_track_1_2026-08-15.md
 
 Expected: no placeholders, no copied stale counts, no secrets, and no unsupported completion claim.
 
-- [ ] **Step 3: Commit the audit separately**
+- [x] **Step 3: Commit the audit separately**
 
 Run:
 
@@ -394,15 +394,15 @@ git diff --cached --check
 git commit -m "docs: record stabilization track 1 evidence"
 ```
 
-- [ ] **Step 4: Open bounded Track 2 work from evidence**
+- [x] **Step 4: Open bounded Track 2 work from evidence**
 
 Create one independently reviewable packet per demonstrated defect. Do not combine stored-position test maintenance, deliverance attribution, F5 bypasses, teacher-card copy, or harness-doc cleanup unless they share the same failure point and verification command.
 
 ## Track 1 completion checkpoint
 
-- [ ] Every Task 1-6 conclusion has fresh evidence.
-- [ ] The Prince grouped totals reconcile to the raw log count.
-- [ ] The deliverance failure stage is identified rather than guessed.
-- [ ] Every F5 finding is classified.
-- [ ] No production state was mutated.
-- [ ] Track 2 contains only demonstrated, bounded work.
+- [x] Every Task 1-6 conclusion has fresh evidence.
+- [x] The Prince grouped totals reconcile to the raw log count.
+- [x] The deliverance failure stage is identified rather than guessed.
+- [x] Every F5 finding is classified.
+- [x] No production state was mutated.
+- [x] Track 2 contains only demonstrated, bounded work.

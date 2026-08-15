@@ -818,8 +818,22 @@ different row, per the hard rule above.
   anywhere in the corpus bear this endpoint's telltale insert shape, and
   no frontend caller was found either — it appears never to have actually
   been used. **Decision (Alex, 2026-08-15): left in place, not removed or
-  fixed this session.** Full detail: `rhemata-status.md`'s 2026-08-15
-  entry.
+  routed through the shared writer.** Its remaining operability gap was
+  closed by `ec42398`: every unexpected failure now logs bounded upload/title
+  identity, source type, processing stage, attempted document ID, and exact
+  attempted/stored chunk counts without document contents; a simulated
+  second-batch failure is mutation-proven in
+  `scripts/test_ingest_failure_reconciliation.py`. Full detail:
+  `docs/audits/stabilization_track_1_2026-08-15.md`.
+- **Single-author answer attribution is now a producer contract, not a prompt
+  preference (`ec42398`, 2026-08-15).** When citable evidence has exactly one
+  named author, an answer that omits that full name is regenerated once with
+  an explicit requirement. If the grounded retry still omits it, the producer
+  adds a deterministic `Source voice` label before the existing reference
+  verifier runs. Multi-author and anonymous evidence are unchanged.
+  `POLICY_VERSION = "policy_v3"` prevents reuse of pre-contract anonymous
+  answers; `scripts/test_single_author_attribution_contract.py` is the
+  mutation-proven regression.
 - **Claude Code "Auto Mode" became the default permission model
   2026-08-14 and blocks direct production DB writes from a Claude Code
   session — no settings-based self-grant path was found.** Discovered
