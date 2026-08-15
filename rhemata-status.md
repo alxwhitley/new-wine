@@ -8,9 +8,9 @@ specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-15 (read-only diagnostic session: re-derived Prince
 quote coverage, the ingestion-bypass count, and the fasting/deliverance/prayer
-visibility gap live; granted a missing read permission; then live-verified all
+visibility gap live; granted a missing read permission; live-verified all
 three topics against the real answer pipeline and read the two settings the
-earlier diagnostic couldn't reach).
+earlier diagnostic couldn't reach; pushed all session records to origin).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -19,14 +19,11 @@ for this file.
 
 ## Current state
 
-**Prior session (2026-08-15), confirmed still merged and pushed today:** the
-teacher-card guard fix (citation grounding + commentary/word_study exclusion
-on `get_teacher_card()`) — commits `3678d05`/`9dd0438`/`21f5b14` — is
-confirmed live on `origin/main`, re-checked this session via ancestor
-verification rather than trusted from the prior report. One loose end: the
-prior session's own close-out commit (`65576d9`) was never actually pushed —
-the work it describes is genuinely live, but that specific record-keeping
-commit is still local only.
+**Teacher-card guard fix confirmed merged and live:** commits
+`3678d05`/`9dd0438`/`21f5b14` are on `origin/main`, re-verified via ancestor
+check rather than trusted from the prior report. This session's own three
+commits (`65576d9`/`12f7ca9`/`3290034`) are now pushed too — local and
+origin are level.
 
 **Today's read-only diagnostics (2026-08-15):**
 
@@ -51,40 +48,43 @@ commit is still local only.
   extraction. Mounted and admin-auth-gated but no frontend caller found, and
   a live check found zero documents in the corpus bearing its insert
   signature — orphaned, not actively used. **Decision (Alex, 2026-08-15):
-  left in place, not removed.** The other five candidates all resolve
-  cleanly: three write to unrelated tables with no proposition/license
-  concept, two route through the compliant importer transitively, one has no
-  processor built yet. Full detail: CLAUDE.md's Landmines entry.
+  left in place, not removed.** The other five preliminary candidates were
+  misclassified, not real bypasses — full detail in CLAUDE.md's Landmines
+  entry.
 
-- **Corpus visibility gap: content is not missing, and the gap is now fully
-  closed.** All three topics (fasting, deliverance and spiritual warfare, how
-  to pray effectively) have substantial servable teacher content. Savchuk,
-  Poonen, and Ravenhill are all `unlicensed`/`shown` and pass the real
-  serving gate; the separate `retrievable` column reading `false` for all
-  three is a known-inconsistent, dormant leftover, not part of the real
-  gate. At the time this diagnostic ran, the 2026-08-09 Tier 1 flip had only
-  been individually re-tested for one of the three topics (deliverance); the
-  other two were assumed working via the identical mechanism. **Closed the
-  same session:** called the real generation pipeline directly (the exact
-  function the production worker calls; confirmed by inspection to make no
-  database writes itself) for all three questions — all three came back
-  `answered`, full and substantively cited, not thin or fallback. Also
-  directly read the two settings the diagnostic couldn't reach:
-  **`safe_mode_on` = off**; **all 9 `source_toggles` rows are
-  `enabled=true`** — nothing is being suppressed by either mechanism right
-  now. One residual: a regression test (`test_stored_position_evidence.py`)
-  written before the flip still hard-codes the pre-flip expectation (these
-  topics return nothing, Savchuk/Ravenhill never appear as an author) — it
-  is stale and would likely fail if run; not fixed this session.
+- **Corpus visibility gap closed.** All three topics (fasting, deliverance
+  and spiritual warfare, how to pray effectively) have substantial servable
+  teacher content; Savchuk, Poonen, and Ravenhill are all `unlicensed`/
+  `shown` and pass the real serving gate (the separate `retrievable` column
+  reading `false` for all three is a known-inconsistent, dormant leftover,
+  not part of the real gate). The 2026-08-09 Tier 1 flip had only been
+  individually re-tested for one of the three topics at the time
+  (deliverance); the other two were assumed working via the identical
+  mechanism. Closed the same session by calling the real generation
+  pipeline directly for all three questions — all three came back
+  `answered`, full and substantively cited. Also directly read the two
+  settings the earlier diagnostic couldn't reach: **`safe_mode_on` = off**;
+  **all 9 `source_toggles` rows are `enabled=true`** — nothing is being
+  suppressed by either mechanism. One residual: a regression test
+  (`test_stored_position_evidence.py`) written before the flip still
+  hard-codes the pre-flip expectation and is stale; not fixed this session.
 
 - **`quote_verification_log` read-permission gap fixed (migration 087).**
   The read-only analysis role predated this table by ~45 minutes and was
-  never granted access — a provisioning gap, not a design exclusion
-  (confirmed against migration 084's own explicit exclusion list, which does
-  not name this table). Granted SELECT only. Verified: reads now work (1,153
-  rows), writes (INSERT/UPDATE/DELETE) still correctly rejected, existing
-  full-access connection unaffected. Unblocks re-running the Decision-23
-  rejection-reason diagnostic.
+  never granted access — a provisioning gap, not a design exclusion.
+  Granted SELECT only. Verified: reads now work (1,153 rows), writes still
+  correctly rejected, existing full-access connection unaffected. Unblocks
+  re-running the Decision-23 rejection-reason diagnostic.
+
+- **Process finding — authority vs. accuracy, 2026-08-15 session-close.**
+  The executor was instructed to record the live-answer verification and
+  two-settings lookup as OPEN, per Alex's stated understanding at the time.
+  It had in fact already completed both (see above), judged the instruction
+  outdated, and unilaterally overwrote it rather than stopping to flag the
+  conflict. A later evidence review confirmed the executor's FACTS were
+  right — but that doesn't make unilateral resolution correct; the finding
+  is about authority, not accuracy. New standing rule in CLAUDE.md's working
+  rules.
 
 ---
 
@@ -102,8 +102,8 @@ PLAN.md, 2026-08-13.)
   the diagnostic itself hasn't been re-run yet.
 - `test_stored_position_evidence.py` is stale against the live Savchuk/
   Ravenhill/Poonen visibility flip — would likely fail if run.
-- Two unpushed local commits on `main` (prior session's `65576d9` plus this
-  session's close-out) — held pending explicit push confirmation.
+- One unpushed local commit on `main` (this session's records-addition
+  commit, see Next below) — held pending explicit push confirmation.
 
 ---
 
@@ -115,11 +115,9 @@ PLAN.md, 2026-08-13.)
   test one-liners, combined with the executor's own loaded
   SQL-comment/semicolon instructions (the Migration 051 gotcha), triggered
   a defensive loop explaining a phantom SQL-migration flag instead of
-  running the task. Nothing SQL- or migration-related was actually
-  present. Worked around per the stall-risk rule: did not retry the
-  identical prompt, removed the semicolons, reran once — cleared. A
-  future session must not assume this misfire is always harmless — it can
-  consume a full turn and block real work; reformulate, don't just retry.
+  running the task. Worked around per the stall-risk rule: did not retry
+  the identical prompt, removed the semicolons, reran once — cleared. A
+  future session must not assume this misfire is always harmless.
 
 ---
 
@@ -132,15 +130,20 @@ PLAN.md, 2026-08-13.)
 3. Triage the 17 untouched bypasses from the 2026-08-15 F5 trace
    (accept/defer/close each) — F5's exit criteria stay unmet until this
    happens.
-4. Two teacher-card residuals, not yet acted on: check real
+4. **Deliverance answer cites sources with no teacher name shown** — the
+   2026-08-15 live verification's deliverance answer had six citations with
+   no teacher name, unlike the fasting/prayer answers, which both named
+   teachers directly. Named attribution is the product's core promise, so
+   this is a correctness issue on the central claim, not a display nicety —
+   and deliverance is one of the eight charismatic pillars. Needs a
+   read-only diagnostic first: is the name missing from the evidence,
+   dropped during generation, or just not rendered?
+5. Two teacher-card residuals, not yet acted on: check real
    `teacher_profiles.bio` content for cross-teacher name mentions
    (false-positive-refusal risk, unverified); decide whether the shared
    refusal string reads correctly under a named teacher's card heading.
-5. Decide whether to merge probe 2's and/or probe 3's branches — both
+6. Decide whether to merge probe 2's and/or probe 3's branches — both
    independently reviewed `ACCEPT`, neither merged nor pushed.
-6. Push this session's close-out commit(s) plus the still-unpushed prior
-   session close-out commit (`65576d9`) — held locally pending explicit
-   confirmation.
 7. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
 8. Trail / Brooks one-offs — review then visibility.
 9. `pending` vs `draft` quote-status consolidation — Decision 24.

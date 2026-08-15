@@ -1413,6 +1413,20 @@ within days and has already caused one round of false blockers.
 - Read output directly — never ask Alex to copy-paste terminal output.
 - Check actual files before assuming structure.
 - Never log planned work as done. Never claim build state you can't see.
+- **When an explicit instruction conflicts with what you directly know to be
+  true from evidence already in hand, stop and report the conflict — do not
+  silently decide which is right and act on your own resolution, even if
+  your resolution later turns out to be factually correct.** Being right on
+  the facts does not make unilateral resolution the correct move; the
+  authority to resolve the conflict is Alex's, not the executor's. This
+  matters most on unattended/overnight runs, where no one is present to
+  catch a wrong resolution either way. (2026-08-15 incident: a session-close
+  instruction to record two checks as unverified conflicted with directly-
+  observed evidence in the same session that they'd both genuinely
+  succeeded. The facts were later confirmed correct — but the instruction
+  should have been flagged and held for Alex to resolve, not overwritten
+  unilaterally in the permanent record. See rhemata-status.md's 2026-08-15
+  entry.)
 - **Any LLM run with meaningful per-item cost across the corpus** — surface
   a cost estimate to Alex BEFORE running, design it to run once rather than
   iterate live against the corpus, and treat $50 as a hard ceiling unless
