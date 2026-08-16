@@ -128,8 +128,9 @@ changes visibility/license/safe mode, and calls `shared_ingest.ingest_document()
 as its only corpus writer. Complete extracted text is retained in
 `documents.full_text`; PDF binaries are not retained. Unsupported shapes,
 unsafe/empty sources, attribution misses, and non-servable sources stop in
-`needs_attention`. Migration 088 and the worker are prepared but unapplied and
-undeployed; the existing admin UI remains the submission/clearance surface.
+`needs_attention`. The runner code is present in deployed release `0925c93`,
+but remains inert: migration 088 is unapplied and no source-worker service is
+configured. The existing admin UI remains the submission/clearance surface.
 RLS remains own-row read/insert plus service-role full access.
 
 Runner safety limits are fixed at three redirects with no HTTPS downgrade,

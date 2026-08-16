@@ -901,8 +901,9 @@ Full history is in `docs/plan-archive.md`. Current foundations include:
 
 - shared-ingest chokepoint, alias/sentinel model, all-or-nothing writes, and
   proposition provenance;
-- durable source-ingest queue runner prepared locally (`f6f51cb` through
-  `4ee0d40`): `pdf + single + declared`, secure bounded fetch/extraction,
+- durable source-ingest queue runner merged and deployed inert in `0925c93`
+  (`f6f51cb` through `4ee0d40`): `pdf + single + declared`, secure bounded
+  fetch/extraction,
   existing-source/servable gates, retained extracted originals, leased retries,
   read-only dry run, and hard reconciliation. Migration 088 remains unapplied;
   no worker service is deployed. Production begins only with a separately

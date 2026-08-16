@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-15 (source-ingest runner repository build; deterministic
-local tests only, with no live fetch/provider/database write, migration apply,
-push, or deployment).
+Last verified: 2026-08-16 (merged source-ingest runner release `0925c93`;
+Railway backend/answer-worker and Vercel production deployments verified
+successful, with migration 088 still unapplied and no source-worker service).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,22 +17,29 @@ for this file.
 
 ## Current state
 
-The durable source-ingest runner is built on local branch
-`codex/source-ingest-runner` in commits `f6f51cb` through `4ee0d40`. It supports
-one cleared `pdf + single + declared` row at a time: public-IP-pinned bounded
-fetch, bounded child-process PDF extraction, existing non-sentinel source
-resolution, canonical servability, declared-author override, read-only dry
-run, the shared atomic corpus writer, leases/retries, and exact terminal
-reconciliation. Successful ingest retains complete extracted text in
-`documents.full_text`; it does not retain the PDF binary. Review corrected
-retry accounting so a corpus attempt remains recorded across later retries.
+`codex/source-ingest-runner` was fast-forwarded into `main` and pushed through
+release `0925c93`. Railway backend deployment
+`d3e756a1-5a8d-4e84-a440-875dc8700e60`, Railway answer-worker deployment
+`dad75c62-5db3-46a0-af8f-7f0d74edd4d2`, and Vercel deployment
+`dpl_GXvnC3x1VjaHVVBJq2Yim3hR3ggU` all reached terminal success. The API root
+returned `{"message":"Rhemata API"}` and `https://rhemata.app/` returned HTTP
+200. The only backend log warning (`reference_verifier.py` invalid `\s` escape)
+was reproduced on the prior `a931cfd` deployment and is not a release
+regression.
 
-Migration 088 and its explicit apply/verifier script are prepared but
-unapplied. The script requires `--apply`, first writes a private exact retention
-snapshot, verifies the schema/count/backfill on a fresh connection, and scopes
-its two-claimer fixture and cleanup to one generated UUID/marker. There is no
-source-worker service. No URL, provider, or production database was contacted,
-and no push or deployment occurred.
+The deployed repository now contains the durable source-ingest runner for one
+cleared `pdf + single + declared` row at a time: public-IP-pinned bounded fetch,
+bounded child-process extraction, existing non-sentinel source resolution,
+canonical servability, declared-author override, read-only dry run, the shared
+atomic corpus writer, leases/retries, and exact terminal reconciliation.
+Successful ingest retains extracted text in `documents.full_text`, never the
+PDF binary.
+
+The runner remains operationally inert. Migration 088 is unapplied, no live
+source dry run or corpus write occurred, and no source-worker Railway service
+exists. Its explicit apply script still requires separate production-write
+approval, a private retention snapshot, fresh schema/count verification, and
+an exact scoped concurrent-claim fixture.
 
 The local gate passes 69 focused unit tests (12 fetcher, 6 PDF, 12 processor,
 12 jobs, 8 worker, 1 router retention, 17 apply verifier, 1 async serving), the
@@ -42,11 +49,9 @@ unsafe-IP rejection, streamed byte limits, PDF page/text bounds, sentinel and
 declared-author gates, ownership/reconciliation, read-only dry run, and the
 explicit apply guard.
 
-The previously verified deployed baseline remains revision `be4cc01` on
-Railway/Vercel. Local `main` also still contains the unpushed stabilization
-build ending at `ec42398`; pushing `main` would trigger production deployment,
-so it remains held for Alex's separate deployment decision. Authenticated UI
-smoke still requires a connected signed-in browser surface.
+Local `main` and `origin/main` are aligned at the deployed release except for
+the preserved unrelated untracked `Temporary-assets/` directory. Authenticated
+UI smoke still requires a connected signed-in browser surface.
 
 ---
 
@@ -62,8 +67,6 @@ PLAN.md, 2026-08-13.)
 - Source ingest is not operational until migration 088 is separately approved,
   applied, verified, dry-run against one row, and proven on one isolated item;
   no worker service exists yet.
-- Deploy `ec42398` after Alex explicitly approves the production-triggering
-  push, then confirm Railway backend/worker and Vercel revision/status.
 - Authenticated production smoke still needs a connected signed-in browser.
 
 ---
@@ -114,18 +117,15 @@ PLAN.md, 2026-08-13.)
 2. Process one isolated real queue item, reconcile queue/document/chunk/
    proposition counts, sample retained text, and only then decide whether to
    create/deploy a source-worker service or run a bounded attended batch.
-3. Get Alex's explicit approval to integrate and push the local builds; because
-   `main` push triggers production deployment, verify all three services at the
-   resulting revision when that deployment is intentionally authorized.
-4. Run the authenticated servable-document, sentinel-404, and Derek Prince
+3. Run the authenticated servable-document, sentinel-404, and Derek Prince
    card smoke when a signed-in browser-control surface is connected.
-5. Decide whether `get_teacher_card()`'s refusal-string copy reads
+4. Decide whether `get_teacher_card()`'s refusal-string copy reads
    correctly under a named teacher's card heading — the one piece of the
    2026-08-15 mirror-unification residuals tonight's session didn't touch.
-6. Decide whether to merge probe 2's and/or probe 3's branches — both
+5. Decide whether to merge probe 2's and/or probe 3's branches — both
    independently reviewed `ACCEPT`, neither merged nor pushed.
-7. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
-8. Trail / Brooks one-offs — review then visibility.
-9. `pending` vs `draft` quote-status consolidation — Decision 24.
-10. `jewish_perspectives` drop — needs Alex's explicit approval plus a
+6. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
+7. Trail / Brooks one-offs — review then visibility.
+8. `pending` vs `draft` quote-status consolidation — Decision 24.
+9. `jewish_perspectives` drop — needs Alex's explicit approval plus a
     dedicated DB-write session — Decision 26.
