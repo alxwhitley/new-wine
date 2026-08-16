@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-15
 
-**Status:** Design approved in chat; written spec awaiting review
+**Status:** Confirmed by Alex; ready for implementation planning
 
 **Scope:** First durable backend slice for one cleared, single-PDF,
 declared-author queue item
@@ -319,6 +319,7 @@ scripts/source_ingest_worker.py
 scripts/source_ingest_queue/__init__.py
 scripts/source_ingest_queue/fetcher.py
 scripts/source_ingest_queue/jobs.py
+scripts/source_ingest_queue/pdf.py
 scripts/source_ingest_queue/processor.py
 scripts/test_source_ingest_fetcher.py
 scripts/test_source_ingest_jobs.py
