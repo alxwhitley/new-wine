@@ -116,19 +116,32 @@ regardless of visibility. Never writes `sources.visibility`.
 **removed_urls** — blocklist written by `DELETE /admin/document/{id}`, checked by
 `youtube_ingest.py` before each ingest (non-fatal skip on hit).
 
-**source_ingest_queue** (migration 075) — admin-submitted candidate source
-URLs, table + admin UI only, no fetching/ingestion logic yet. `status`
-(waiting|running|done|failed|needs_attention), `cleared_to_run` boolean
-(future ingestion code must process ONLY `cleared_to_run=true` rows),
-`attribution_mode` (declared|per_item), `on_unknown_author` (flag|skip —
-never a value meaning "proceed unnamed"). `retain_original_text` is
-NULLABLE with no default — deliberately unset; treat NULL as "not yet
-decided," never as false (PLAN.md). RLS mirrors contributor_requests/
-deletion_requests (own-row read/insert + service-role full access); real
-access control is `require_admin_role` in `ingest_queue.py`, same as other
-admin endpoints. Admin UI: AdminModal.tsx's "Source Queue" tab
-(`SourceQueuePanel.tsx`) — submit form, Needs Attention list
-(assign-a-name/drop), Queue list with a per-row cleared-to-run toggle.
+**source_ingest_queue** (migration 075; runner extension prepared in unapplied
+migration 088) — admin-submitted candidate source URLs and the durable control
+plane for `scripts/source_ingest_worker.py`. The built first slice accepts only
+`pdf + single + declared`, claims only `waiting` rows with
+`cleared_to_run=true`, and uses worker ownership, leases, bounded retries,
+stages, final URL/hash/byte evidence, and exact attempted/stored/skipped/errored
+counts. It resolves the declared author to an existing non-sentinel source,
+requires canonical `is_source_servable()` approval, never creates aliases or
+changes visibility/license/safe mode, and calls `shared_ingest.ingest_document()`
+as its only corpus writer. Complete extracted text is retained in
+`documents.full_text`; PDF binaries are not retained. Unsupported shapes,
+unsafe/empty sources, attribution misses, and non-servable sources stop in
+`needs_attention`. Migration 088 and the worker are prepared but unapplied and
+undeployed; the existing admin UI remains the submission/clearance surface.
+RLS remains own-row read/insert plus service-role full access.
+
+Runner safety limits are fixed at three redirects with no HTTPS downgrade,
+30-second connect/read timeouts, 50 MiB streamed bytes, 60-second extraction,
+2,000 pages, and 10 million extracted characters. Every DNS answer must be
+globally routable and the socket is pinned to a validated address while Host,
+TLS SNI, and certificate identity stay on the original hostname. Policy/input
+failures (`unsupported_*`, retention/author/source/servable failures,
+`unsafe_url`, non-PDF/size/page/text/empty extraction) require operator
+attention; network/provider/database/internal transients retry up to the row's
+bounded attempt ceiling. Logs omit source text, response bodies, credentials,
+and URL query/fragment values.
 
 **source_ingest_domain_memory** — one row per URL domain, remembers the
 last `attribute_to`/`attribution_mode` used for that domain so the submit
@@ -303,6 +316,8 @@ compliant writer.
 
 | Script | Purpose |
 |---|---|
+| `source_ingest_worker.py` + `source_ingest_queue/` | Unapplied/undeployed durable queue runner: one-at-a-time leased claims, SSRF-safe IP-pinned PDF fetch, child-process extraction bounds, read-only dry run, canonical source/visibility gates, and sole-writer execution with exact reconciliation. First slice is `pdf + single + declared`; retains extracted text, not PDF binaries |
+| `apply_migration_088.py` | Explicit `--apply`-gated migration tool. Before mutation it writes a mode-0600 retention snapshot under gitignored `source_ingest_runner_review/`, applies migration 088 once, verifies schema/count/retention on a fresh connection, and runs an exact-fixture two-claimer proof. Repository tests never invoke the live apply path |
 | `source_resolver.py` | `normalize_alias_key`, `resolve_source_id`, sentinel + New Wine constants, `print_resolution_table` |
 | `propositions.py` | Extraction + storage. `DEFAULT_PROMPT_VERSION` is still `"v3"` (unchanged, so every caller that doesn't opt in is byte-identical to before 2026-07-30). **`EXTRACTION_PROMPT_V3_1` (2026-07-30) is v3's exact wording with ONLY the named-teacher mechanism grafted in** — a `{speaker}` placeholder replaces v3's 8 generic "the author" references, plus one added "never 'the author'" instruction; byte-identical to v3 everywhere else, including the length line (deliberately NOT v4's expanded length/structure/voice retuning). Selected via `prompt_version="v3.1"` + a non-empty `speaker` (same requirement as v4); proven corpus-wide (PLAN.md #17) at 0.0% "the author" rate, length unchanged. `EXTRACTION_PROMPT_V4` still exists, still unwired the same way. A deterministic `MIN_SUBSTANTIVE_WORD_COUNT=50` word-count floor in `process_document()` skips the model call entirely below it, returning `"too_thin_to_extract"` (distinct from `"no_propositions"`, which means the model ran and found nothing) — grounded in the real observed corpus minimum (61 words). `extract_propositions()` unconditionally builds a closed, mechanically-derived list of scripture references actually present in the source and appends it to the Groq message (no opt-out) — the model may not cite beyond it. At the end, unconditionally arbitrates every UNGROUNDED/UNCERTAIN reference via `citation_verifier_layers.verify_reference_grounded(..., llm_enabled=True)` (a live Groq call) before stripping — confirmed-absent strips as before; the arbiter overturning a flag keeps the reference instead, logged `arbitration_overturned`; arbiter unavailable or a still-unparseable reference strips fail-safe (`arbitration_unavailable*`, a narrow disclosed exception to CLAUDE.md Invariant 11). Every strip/keep decision logs to gitignored `reference_grounding_review/stripped_references.jsonl` with both the original reason and the arbitration label. `process_document()` takes optional `name_pattern`/`verse_lookup`/`vocab_matcher` (closeness-check gate, default off, byte-identical when omitted), optional `chunk_ids` (links every stored proposition to `proposition_chunks`, enrichment only), and optional `speaker`/`prompt_version` (2026-07-30, both default `None` → old behavior; a caller opts into `v3.1`/`v4` by supplying both). `store_propositions()` now REQUIRES `prompt_version` (an omission is an immediate `TypeError`, never a silent NULL write, CLAUDE.md Invariant 10) — `fingerprint`/`model` are no longer caller-suppliable at all, derived internally. **A gap surfaced 2026-07-30 (single-call-per-document sends the ENTIRE document, can exceed `max_tokens=8192` on book-length documents) now has a real fix for a SUBSET of books, shipped 2026-07-31, commits `d7c46f5`/`b4ab601`:** `split_book_into_chapters()`/`_extract_and_store_book_chapters()`/`process_book_document()` chapter-scope a book-length document into a multi-call extraction, one call per real chapter, with `is_front_back_matter()` skipping title-page/index/CCEL-metadata/third-party-editorial spans before the model is ever called (the byline/apparatus-credit checks — `_has_third_party_byline()`, `_MATTER_LABEL_APPARATUS` — plus a tightened digit-ratio roman-numeral arm are a separate follow-on fix, **committed 2026-08-01, commit `8e251c8`** — no longer a follow-on gap). Only reliably covers the 8 of 53 book documents whose chapters repeat their own title (`split_method="title_repeat_boundary"`); a second detector for roman-numeral/bare-"Chapter N" books (`detect_book_chapters()`/`_detect_numeral_heading_sequence()`) exists in the same file but is uncommitted and has zero production callers — do not assume it runs. `_roman_to_int()`/`_int_to_roman()`, originally introduced alongside that uncommitted detector, now live earlier in the file (near `_digit_token_ratio()`) since the committed digit-ratio fix depends on them directly — reused unchanged by the still-uncommitted detector too, not forked. See CLAUDE.md Landmines and PLAN.md #50. Separately, a pre-existing, occasionally-deterministic JSON-escaping defect remains true and unrelated to any of this: the model can emit an unescaped quote inside a nested scripture quotation, breaking `json.loads()` — present in v3 and v3.1 alike |
 | `backfill_propositions.py` (2026-07-30) | Runs `process_document()` against already-ingested documents that currently have zero propositions, given a JSON file of `{id, source_id, author, source_name, ...}` targets and an optional `prompt_version` CLI arg (omitted = old v3 behavior; `"v3.1"` = named-teacher fix, resolving `speaker` from the target's own `author`/`source_name`). Used for this session's two 25-document proving batches, not the full run (see `run_full_backfill.py`) |

@@ -784,6 +784,17 @@ different row, per the hard rule above.
     writes still never run through the harness itself, day or night,
     regardless of this decision.
 
+16. **The source-ingest queue runner is clearance- and policy-gated, and its
+    migration remains a separate production decision.** The prepared first
+    slice accepts only `pdf + single + declared`, claims only
+    `cleared_to_run=true`, resolves an existing non-sentinel source, and must
+    pass canonical `is_source_servable()` without creating sources/aliases or
+    changing visibility, license status, or safe mode. It retains complete
+    extracted text through `shared_ingest.ingest_document()` but never retains
+    the PDF binary. Migration 088, a live dry run, any real item, and worker
+    deployment remain separately approved operations; repository completion
+    does not authorize them.
+
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)

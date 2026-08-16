@@ -74,7 +74,7 @@ PyPDF/Groq/OpenAI ingestion helpers.
 - Produces: the exact columns/indexes/constraints consumed by
   `source_ingest_queue.jobs` in Task 5.
 
-- [ ] **Step 1: Write the failing structural regression**
+- [x] **Step 1: Write the failing structural regression**
 
 Create `scripts/test_source_ingest_migration.py` with a `main()` that reads
 the migration and asserts all of the following literal contracts:
@@ -110,7 +110,7 @@ drop every new column, remove the retention constraint/default/NOT NULL, and
 state that prior retention values must be restored from the apply-script
 snapshot before rollback completes.
 
-- [ ] **Step 2: Run the regression and confirm the red baseline**
+- [x] **Step 2: Run the regression and confirm the red baseline**
 
 Run:
 
@@ -121,7 +121,7 @@ python3 scripts/test_source_ingest_migration.py
 Expected: failure because `migrations/088_source_ingest_runner.sql` does not
 exist.
 
-- [ ] **Step 3: Write migration 088**
+- [x] **Step 3: Write migration 088**
 
 Use one idempotent migration with these operations:
 
@@ -174,7 +174,7 @@ SQL comments.
 Add `source_ingest_runner_review/` to `.gitignore`; this is where the apply
 script will later write pre-backfill snapshots.
 
-- [ ] **Step 4: Run the migration regression**
+- [x] **Step 4: Run the migration regression**
 
 Run:
 
@@ -185,7 +185,7 @@ git diff --check
 
 Expected: all migration contract assertions pass and no whitespace errors.
 
-- [ ] **Step 5: Commit the migration contract**
+- [x] **Step 5: Commit the migration contract**
 
 ```bash
 git add .gitignore migrations/088_source_ingest_runner.sql \
@@ -205,7 +205,7 @@ git commit -m "feat: define source ingest runner state"
 - Produces: `FetchResult`, `FetchRejected`, `FetchTransient`,
   `resolve_public_addresses()`, and `fetch_pdf()` for Task 4.
 
-- [ ] **Step 1: Write failing URL/address tests**
+- [x] **Step 1: Write failing URL/address tests**
 
 Test these exact public functions with injected resolver and connection
 factory:
@@ -239,7 +239,7 @@ for unsafe in ("127.0.0.1", "10.0.0.1", "169.254.1.1", "::1", "fc00::1"):
 Add cases for mixed public/private answers, embedded credentials, unsupported
 scheme, missing host, and explicit URL fragments.
 
-- [ ] **Step 2: Run the address tests and confirm they fail**
+- [x] **Step 2: Run the address tests and confirm they fail**
 
 Run:
 
@@ -249,7 +249,7 @@ PYTHONPATH=scripts python3 scripts/test_source_ingest_fetcher.py
 
 Expected: import failure because `source_ingest_queue.fetcher` is absent.
 
-- [ ] **Step 3: Implement address validation and error types**
+- [x] **Step 3: Implement address validation and error types**
 
 Define immutable output and bounded errors:
 
@@ -279,7 +279,7 @@ class FetchTransient(RuntimeError):
 parse it with `ipaddress.ip_address()`, and reject the whole hostname if any
 answer is not `is_global`.
 
-- [ ] **Step 4: Write failing fetch/redirect/bounds tests**
+- [x] **Step 4: Write failing fetch/redirect/bounds tests**
 
 Use fake connections/responses to assert:
 
@@ -294,7 +294,7 @@ Use fake connections/responses to assert:
 - the result SHA-256, byte count, final URL, and sanitized filename are exact;
 - query and fragment never appear in a value passed to the injected log hook.
 
-- [ ] **Step 5: Implement the pinned fetch loop**
+- [x] **Step 5: Implement the pinned fetch loop**
 
 Implement `fetch_pdf()` with these defaults:
 
@@ -317,7 +317,7 @@ chunks with a hard cumulative ceiling, close in `finally`, and revalidate any
 connection’s socket creator so TCP targets the validated IP while
 `HTTPSConnection` retains the original host for TLS verification and SNI.
 
-- [ ] **Step 6: Run fetcher tests and mutation probes**
+- [x] **Step 6: Run fetcher tests and mutation probes**
 
 Run the green test, then temporarily neutralize (one at a time) the unsafe-IP
 rejection and streamed-size increment. Each mutation must fail its targeted
@@ -327,7 +327,7 @@ case; restore both and rerun green.
 PYTHONPATH=scripts python3 scripts/test_source_ingest_fetcher.py
 ```
 
-- [ ] **Step 7: Commit the fetch boundary**
+- [x] **Step 7: Commit the fetch boundary**
 
 ```bash
 git add scripts/source_ingest_queue/__init__.py \
@@ -346,7 +346,7 @@ git commit -m "feat: add bounded source PDF fetcher"
 - Produces: `ExtractedPdf`, `PdfRejected`, and `extract_pdf_bounded()` for
   Task 4.
 
-- [ ] **Step 1: Write failing validation tests**
+- [x] **Step 1: Write failing validation tests**
 
 Define fixtures through injected child results rather than real files. Assert
 the following interface:
@@ -365,13 +365,13 @@ Add cases for zero/blank text (`pdf_empty`), page count 2,001
 (`pdf_page_limit`), text length 10,000,001 (`pdf_text_limit`), child timeout
 (`pdf_extract_timeout`), and child parser exception (`pdf_parse_failure`).
 
-- [ ] **Step 2: Run the tests and confirm the missing-module failure**
+- [x] **Step 2: Run the tests and confirm the missing-module failure**
 
 ```bash
 PYTHONPATH=scripts python3 scripts/test_source_ingest_pdf.py
 ```
 
-- [ ] **Step 3: Implement bounded extraction**
+- [x] **Step 3: Implement bounded extraction**
 
 Define:
 
@@ -404,7 +404,7 @@ before extraction, then concatenate page text with the same semantics as
 joins the child on deadline, accepts only a bounded `(ok, text, page_count)`
 payload, and never exposes raw parser output as an operator-facing detail.
 
-- [ ] **Step 4: Prove time/page/text guards are discriminating**
+- [x] **Step 4: Prove time/page/text guards are discriminating**
 
 Run green, temporarily raise the page limit and remove the text-length check,
 confirm the corresponding cases fail, restore, and rerun:
@@ -413,7 +413,7 @@ confirm the corresponding cases fail, restore, and rerun:
 PYTHONPATH=scripts python3 scripts/test_source_ingest_pdf.py
 ```
 
-- [ ] **Step 5: Commit PDF isolation**
+- [x] **Step 5: Commit PDF isolation**
 
 ```bash
 git add scripts/source_ingest_queue/pdf.py scripts/test_source_ingest_pdf.py
@@ -432,7 +432,7 @@ git commit -m "feat: bound queued PDF extraction"
 - Produces: `PreparedIngest`, `ProcessOutcome`, `AttentionRequired`,
   `RetryableIngestError`, `prepare_ingest()`, and `execute_ingest()` for Task 6.
 
-- [ ] **Step 1: Write failing row-classification tests**
+- [x] **Step 1: Write failing row-classification tests**
 
 Use this exact pure contract:
 
@@ -450,13 +450,13 @@ assert classify_row({"source_format": "web_page"}) == "unsupported_source_format
 Add one case for each unsupported shape, false/missing retention, and blank
 declared author.
 
-- [ ] **Step 2: Run the processor test and confirm red**
+- [x] **Step 2: Run the processor test and confirm red**
 
 ```bash
 PYTHONPATH=backend:scripts python3 scripts/test_source_ingest_processor.py
 ```
 
-- [ ] **Step 3: Implement types, classification, and preparation**
+- [x] **Step 3: Implement types, classification, and preparation**
 
 Define `AttentionRequired` and `RetryableIngestError` with bounded `code` and
 `detail`, plus immutable dataclasses matching the spec. Implement:
@@ -484,14 +484,14 @@ dedup check → return immediately for `dry_run` → metadata call for normal mo
 policy errors to `AttentionRequired` and provider/network transient errors to
 `RetryableIngestError`.
 
-- [ ] **Step 4: Add preparation tests**
+- [x] **Step 4: Add preparation tests**
 
 Assert unsupported rows call neither fetch nor writer; sentinel and
 non-servable sources stop before dedup/write; dry-run calls no metadata,
 embedding, proposition, or writer function; declared author wins over a fake
 metadata author; and chunk count/hash/byte count remain exact.
 
-- [ ] **Step 5: Implement and test the sole writer call**
+- [x] **Step 5: Implement and test the sole writer call**
 
 Define:
 
@@ -520,7 +520,7 @@ the pre-resolved `source_id`, and preserve URL/hash metadata outside corpus
 content. Map shared writer `processed`, `skipped`, and `failed` to `(1,1,0,0)`,
 `(1,0,1,0)`, and `(1,0,0,1)` respectively. Raise on any non-reconciling shape.
 
-- [ ] **Step 6: Run processor tests and mutation proof**
+- [x] **Step 6: Run processor tests and mutation proof**
 
 Temporarily change `allow_sentinel=False` to true and author override to the
 model value. Each targeted test must fail; restore and rerun:
@@ -529,7 +529,7 @@ model value. Each targeted test must fail; restore and rerun:
 PYTHONPATH=backend:scripts python3 scripts/test_source_ingest_processor.py
 ```
 
-- [ ] **Step 7: Commit processor behavior**
+- [x] **Step 7: Commit processor behavior**
 
 ```bash
 git add scripts/source_ingest_queue/processor.py \
@@ -549,7 +549,7 @@ git commit -m "feat: prepare queued sources for shared ingest"
   `needs_attention()`, `fail_or_requeue()`, `complete()`, and
   `reap_expired_leases()` for Task 6.
 
-- [ ] **Step 1: Write failing SQL-contract tests**
+- [x] **Step 1: Write failing SQL-contract tests**
 
 Use a recording fake `Db`/cursor and assert claim SQL contains all of:
 
@@ -568,13 +568,13 @@ Assert ownership-sensitive SQL contains `id = %s`, `worker_id = %s`, and
 `status = 'running'`. Add pure reconciliation cases accepting only zero-attempt
 attention or `attempted == stored + skipped + errored`.
 
-- [ ] **Step 2: Run jobs tests and confirm red**
+- [x] **Step 2: Run jobs tests and confirm red**
 
 ```bash
 PYTHONPATH=backend:scripts python3 scripts/test_source_ingest_jobs.py
 ```
 
-- [ ] **Step 3: Implement claim, read, stage, and heartbeat**
+- [x] **Step 3: Implement claim, read, stage, and heartbeat**
 
 Follow the answer-job pattern but keep this module independent. Claim must call
 `reap_expired_leases()`, then execute one parameterized
@@ -582,7 +582,7 @@ Follow the answer-job pattern but keep this module independent. Claim must call
 Heartbeat and stage updates return `False` when no owned running row was
 updated.
 
-- [ ] **Step 4: Implement terminal and retry transitions**
+- [x] **Step 4: Implement terminal and retry transitions**
 
 `needs_attention()` clears ownership/lease and writes bounded
 `flag_reason="<code>: <detail>"`. `fail_or_requeue()` increments attempts and
@@ -594,7 +594,7 @@ reconciliation before issuing SQL and stores final URL/hash/bytes/document ID.
 Lease reaping uses the same attempt rule and never claims or completes work in
 the same transaction.
 
-- [ ] **Step 5: Run tests and mutate ownership/reconciliation guards**
+- [x] **Step 5: Run tests and mutate ownership/reconciliation guards**
 
 Disable the `worker_id` SQL predicate and the reconciliation equality one at a
 time; targeted cases must fail. Restore and rerun:
@@ -603,7 +603,7 @@ time; targeted cases must fail. Restore and rerun:
 PYTHONPATH=backend:scripts python3 scripts/test_source_ingest_jobs.py
 ```
 
-- [ ] **Step 6: Commit durable lifecycle behavior**
+- [x] **Step 6: Commit durable lifecycle behavior**
 
 ```bash
 git add scripts/source_ingest_queue/jobs.py scripts/test_source_ingest_jobs.py
@@ -612,12 +612,12 @@ git commit -m "feat: add source ingest job lifecycle"
 
 ## Checkpoint 1: Foundations
 
-- [ ] Tasks 1–5 each have a green focused test and atomic commit.
-- [ ] Fetcher and processor mutation probes fail when their safety control is
+- [x] Tasks 1–5 each have a green focused test and atomic commit.
+- [x] Fetcher and processor mutation probes fail when their safety control is
   disabled and pass after restoration.
-- [ ] Migration 088 remains unapplied.
-- [ ] No live URL, provider, or production write occurred.
-- [ ] `git status --short` shows only known unrelated user files.
+- [x] Migration 088 remains unapplied.
+- [x] No live URL, provider, or production write occurred.
+- [x] `git status --short` shows only known unrelated user files.
 
 ### Task 6: Integrate the worker and fixed retention API
 
@@ -633,7 +633,7 @@ git commit -m "feat: add source ingest job lifecycle"
 - Produces: `Worker.tick()`, `Worker.run()`, `--once`, `--max-idle`,
   `--poll-interval`, and read-only `--dry-run-row`.
 
-- [ ] **Step 1: Write failing router retention test**
+- [x] **Step 1: Write failing router retention test**
 
 Call `create_queue_row()` with a fake Supabase client and assert the
 `source_ingest_queue` insert contains:
@@ -644,7 +644,7 @@ assert inserted_row["retain_original_text"] is True
 
 Also assert domain-memory behavior and existing response shape remain intact.
 
-- [ ] **Step 2: Persist the fixed retention policy**
+- [x] **Step 2: Persist the fixed retention policy**
 
 Add exactly one field to the existing insert dictionary:
 
@@ -658,7 +658,7 @@ Run:
 PYTHONPATH=backend:scripts python3 scripts/test_source_ingest_queue_retention.py
 ```
 
-- [ ] **Step 3: Write failing worker tick tests**
+- [x] **Step 3: Write failing worker tick tests**
 
 With fake jobs/processor dependencies, prove:
 
@@ -670,7 +670,7 @@ With fake jobs/processor dependencies, prove:
 - one processor fault does not terminate the polling loop;
 - `--dry-run-row` calls only `get_row()` and `prepare_ingest(dry_run=True)`.
 
-- [ ] **Step 4: Implement worker orchestration**
+- [x] **Step 4: Implement worker orchestration**
 
 Use constructor injection so tests need no environment:
 
@@ -696,7 +696,7 @@ row is processed; stop/join it before any terminal transition. Parse
 Sanitize logs to row/worker ID, hostname/path without query, stage, reason code,
 durations, and counts.
 
-- [ ] **Step 5: Implement CLI modes**
+- [x] **Step 5: Implement CLI modes**
 
 Normal mode supports:
 
@@ -709,7 +709,7 @@ python3 scripts/source_ingest_worker.py --poll-interval 2 --max-idle 30
 transitions the row, and prints only source identity, final URL without query,
 hash, bytes, page/chunk counts, resolved source ID, and duplicate classification.
 
-- [ ] **Step 6: Run worker, router, and existing endpoint regressions**
+- [x] **Step 6: Run worker, router, and existing endpoint regressions**
 
 ```bash
 PYTHONPATH=backend:scripts python3 scripts/test_source_ingest_worker.py
@@ -719,7 +719,7 @@ python3 scripts/test_async_serving_gate.py
 
 Expected: all pass without network/provider/database access.
 
-- [ ] **Step 7: Commit worker integration**
+- [x] **Step 7: Commit worker integration**
 
 ```bash
 git add backend/app/routers/ingest_queue.py scripts/source_ingest_worker.py \
@@ -741,7 +741,7 @@ git commit -m "feat: run cleared source ingest jobs"
   values before mutation, applies once, verifies fresh connections, and emits
   hard reconciliation for the separately approved production session.
 
-- [ ] **Step 1: Write failing safety and snapshot tests**
+- [x] **Step 1: Write failing safety and snapshot tests**
 
 Import the script module with fake connections and assert:
 
@@ -753,13 +753,13 @@ Import the script module with fake connections and assert:
 - validation rejects an empty/outside-root snapshot path;
 - cleanup targets only the generated verification fixture UUID.
 
-- [ ] **Step 2: Run apply-script tests and confirm red**
+- [x] **Step 2: Run apply-script tests and confirm red**
 
 ```bash
 PYTHONPATH=backend:scripts python3 scripts/test_apply_migration_088.py
 ```
 
-- [ ] **Step 3: Implement explicit apply and fresh verification**
+- [x] **Step 3: Implement explicit apply and fresh verification**
 
 `main()` must require `--apply`, open a fresh preflight connection, snapshot
 `SELECT id, retain_original_text FROM source_ingest_queue ORDER BY id`, write
@@ -773,7 +773,7 @@ close it, and verify on a fresh connection:
 - current queue count is unchanged;
 - every retention value is true after migration.
 
-- [ ] **Step 4: Add the real concurrent-claim verifier without running it**
+- [x] **Step 4: Add the real concurrent-claim verifier without running it**
 
 During an approved apply session only, select one existing `auth.users.id`,
 insert one uniquely generated uncleared test row, then set only that row
@@ -785,13 +785,13 @@ claimed=1, double_claimed=0, cleaned=1.
 
 No part of repository implementation invokes `main()` or supplies `--apply`.
 
-- [ ] **Step 5: Run deterministic apply-script tests**
+- [x] **Step 5: Run deterministic apply-script tests**
 
 ```bash
 PYTHONPATH=backend:scripts python3 scripts/test_apply_migration_088.py
 ```
 
-- [ ] **Step 6: Commit the apply verifier**
+- [x] **Step 6: Commit the apply verifier**
 
 ```bash
 git add scripts/apply_migration_088.py scripts/test_apply_migration_088.py
@@ -800,11 +800,11 @@ git commit -m "feat: verify source ingest runner migration"
 
 ## Checkpoint 2: Integrated repository build
 
-- [ ] Tasks 6–7 have green focused tests and atomic commits.
-- [ ] `--dry-run-row` is structurally read-only and tested against mutation.
-- [ ] The apply script refuses to mutate without `--apply`.
-- [ ] Migration 088 remains unapplied and no source-worker service exists.
-- [ ] No production state, deployment, answer path, or frontend changed.
+- [x] Tasks 6–7 have green focused tests and atomic commits.
+- [x] `--dry-run-row` is structurally read-only and tested against mutation.
+- [x] The apply script refuses to mutate without `--apply`.
+- [x] Migration 088 remains unapplied and no source-worker service exists.
+- [x] No production state, deployment, answer path, or frontend changed.
 
 ### Task 8: Run the full local gate and close records
 
@@ -820,7 +820,7 @@ git commit -m "feat: verify source ingest runner migration"
 - Produces: one separate records-only commit describing the built-but-unapplied
   runner and the exact next production decision.
 
-- [ ] **Step 1: Run focused and compatibility tests**
+- [x] **Step 1: Run focused and compatibility tests**
 
 ```bash
 python3 scripts/test_source_ingest_migration.py
@@ -835,7 +835,7 @@ python3 scripts/test_nixpacks_python_parity.py
 python3 scripts/test_ingest_failure_reconciliation.py
 ```
 
-- [ ] **Step 2: Compile every changed Python file**
+- [x] **Step 2: Compile every changed Python file**
 
 ```bash
 PYTHONPYCACHEPREFIX=/private/tmp/rhemata_pycache python3 -m py_compile \
@@ -849,7 +849,7 @@ PYTHONPYCACHEPREFIX=/private/tmp/rhemata_pycache python3 -m py_compile \
   backend/app/routers/ingest_queue.py
 ```
 
-- [ ] **Step 3: Review the build across five axes**
+- [x] **Step 3: Review the build across five axes**
 
 Review correctness, readability, architecture, security, and performance.
 Required review questions:
@@ -865,7 +865,7 @@ Required review questions:
 
 Resolve every required finding before records close.
 
-- [ ] **Step 4: Update governing records**
+- [x] **Step 4: Update governing records**
 
 Record:
 
@@ -878,7 +878,7 @@ Record:
 - next step is a separately approved migration apply, read-only dry run, and
   one isolated real item before any batch or worker deployment.
 
-- [ ] **Step 5: Verify and commit records separately**
+- [x] **Step 5: Verify and commit records separately**
 
 ```bash
 git diff --check
@@ -891,11 +891,34 @@ git commit -m "docs: record source ingest runner build"
 
 ## Final Repository Checkpoint
 
-- [ ] Every task has its red → green evidence recorded.
-- [ ] Every safety-critical mutation probe failed when disabled and passed after
+- [x] Every task has its red → green evidence recorded.
+- [x] Every safety-critical mutation probe failed when disabled and passed after
   restoration.
-- [ ] All focused, compatibility, compile, and diff checks are green.
-- [ ] Build and records commits are separate.
-- [ ] `Temporary-assets/` is the only allowed unrelated untracked path.
-- [ ] Migration 088 is unapplied; no live fetch/provider/DB write/deploy ran.
-- [ ] The repository is ready for Alex’s separate production migration decision.
+- [x] All focused, compatibility, compile, and diff checks are green.
+- [x] Build and records commits are separate.
+- [x] `Temporary-assets/` is the only allowed unrelated untracked path.
+- [x] Migration 088 is unapplied; no live fetch/provider/DB write/deploy ran.
+- [x] The repository is ready for Alex’s separate production migration decision.
+
+## Completion evidence — 2026-08-15
+
+- Build commits: `f6f51cb`, `f3ac985`, `e838f7e`, `415bb8b`, `87a8eb6`,
+  `523c726`, `eec19b3`, and review fix `4ee0d40`; records are committed
+  separately.
+- Fresh deterministic gate: migration contract; 12 fetcher, 6 PDF, 12
+  processor, 12 jobs, 8 worker, 1 router-retention, 17 apply-verifier, and 1
+  async-serving test (69 total); Nixpacks Python parity; ingest-failure
+  reconciliation; every changed Python file compiled; `git diff --check`.
+- Red → green and mutation evidence: missing migration/modules established the
+  initial red baselines; targeted mutations were observed failing for
+  unsafe-IP rejection, streamed-size accounting, PDF page/text limits,
+  sentinel and declared-author enforcement, ownership and reconciliation,
+  dry-run write isolation, and the explicit `--apply` gate. The review-found
+  retry-attempt history defect received its own failing regression before the
+  fix.
+- Five-axis review: correctness, readability, architecture, security, and
+  performance completed. The required reconciliation finding was resolved;
+  no unresolved required finding remains and no dependency changed.
+- Operational boundary: no live URL, provider, or production database was
+  contacted; migration 088 remains unapplied; no worker service, push, or
+  deployment was created.

@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-15 (stabilization audit plus bounded Track 2 fixes;
-production inspection was read-only and the new build is committed locally,
-but its production push is awaiting Alex's explicit deployment approval).
+Last verified: 2026-08-15 (source-ingest runner repository build; deterministic
+local tests only, with no live fetch/provider/database write, migration apply,
+push, or deployment).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,45 +17,36 @@ for this file.
 
 ## Current state
 
-The deployed baseline was verified before this build: Railway backend and
-worker were `SUCCESS/RUNNING`, Vercel was `READY`, all at revision `be4cc01`,
-which contains the four-surface license gates (`21ff62f`) and teacher-card
-fixes (`bc37749`). The backend root responded normally. Authenticated UI smoke
-remains access-blocked because this task has no signed-in browser-control
-surface.
+The durable source-ingest runner is built on local branch
+`codex/source-ingest-runner` in commits `f6f51cb` through `4ee0d40`. It supports
+one cleared `pdf + single + declared` row at a time: public-IP-pinned bounded
+fetch, bounded child-process PDF extraction, existing non-sentinel source
+resolution, canonical servability, declared-author override, read-only dry
+run, the shared atomic corpus writer, leases/retries, and exact terminal
+reconciliation. Successful ingest retains complete extracted text in
+`documents.full_text`; it does not retain the PDF binary. Review corrected
+retry accounting so a corpus attempt remains recorded across later retries.
 
-The stabilization audit is complete at
-`docs/audits/stabilization_track_1_2026-08-15.md`. The Prince quote log
-reconciles exactly: 1,152 decisions, including 871 accepted and 239 historical
-constraint failures from one 19-second obsolete batch that omitted
-`approved_at`. Current paths satisfy the constraint. Decision 23 is closed:
-retain the majority-Scripture/incoherent-fragment guards and per-document cap.
-Current snapshot: 635 approved quotes across 495 Prince documents and one
-non-book/non-commentary document with zero approved quotes.
+Migration 088 and its explicit apply/verifier script are prepared but
+unapplied. The script requires `--apply`, first writes a private exact retention
+snapshot, verifies the schema/count/backfill on a fresh connection, and scopes
+its two-claimer fixture and cleanup to one generated UUID/marker. There is no
+source-worker service. No URL, provider, or production database was contacted,
+and no push or deployment occurred.
 
-`scripts/test_stored_position_evidence.py` no longer hardcodes obsolete source
-visibility; it asserts current servability and passes all six topics
-(`d907bf9`). The deliverance attribution loss was traced to generation:
-evidence/citations already carried Vlad Savchuk, but anonymous prose was
-allowed. Build `ec42398` adds a `policy_v3` sole-author contract: constrained
-regeneration, then a deterministic grounded label if needed. The same build
-adds bounded `/ingest` failure identity and exact attempted/stored chunk
-counts. Both regressions are mutation-proven and the relevant deterministic
-guard suite passes.
+The local gate passes 69 focused unit tests (12 fetcher, 6 PDF, 12 processor,
+12 jobs, 8 worker, 1 router retention, 17 apply verifier, 1 async serving), the
+migration contract, Nixpacks parity, ingest-failure reconciliation, compilation
+of every changed Python file, and diff checks. Safety mutations were proven for
+unsafe-IP rejection, streamed byte limits, PDF page/text bounds, sentinel and
+declared-author gates, ownership/reconciliation, read-only dry run, and the
+explicit apply guard.
 
-F5's reconstructed 20-row matrix has no unclassified current-code finding.
-Failure reconciliation is closed. F5 remains formally UNMET only because the
-orphaned admin PDF endpoint still bypasses the shared writer—Alex's explicit
-accepted exception—so the literal sole-writer checkbox remains false. The old
-`19/17` trace count is superseded for current decisions because its original
-file:line artifact could not be recovered.
-
-No production row was written. `answer_jobs` remains deliberately excluded
-from `rhemata_readonly_analysis` because migration 084 classifies it as
-user/operational data; no permission migration was created. Local `main` is
-ahead of `origin/main`; the attempted push was safety-blocked because it would
-trigger production deployment. `ec42398` is not live until Alex explicitly
-approves that push.
+The previously verified deployed baseline remains revision `be4cc01` on
+Railway/Vercel. Local `main` also still contains the unpushed stabilization
+build ending at `ec42398`; pushing `main` would trigger production deployment,
+so it remains held for Alex's separate deployment decision. Authenticated UI
+smoke still requires a connected signed-in browser surface.
 
 ---
 
@@ -68,6 +59,9 @@ PLAN.md, 2026-08-13.)
 - Guest→account, auth CTAs, v4 props, `jewish_perspectives` drop,
   SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
 - Admin-panel notifications — dependency of position-refresh; no design.
+- Source ingest is not operational until migration 088 is separately approved,
+  applied, verified, dry-run against one row, and proven on one isolated item;
+  no worker service exists yet.
 - Deploy `ec42398` after Alex explicitly approves the production-triggering
   push, then confirm Railway backend/worker and Vercel revision/status.
 - Authenticated production smoke still needs a connected signed-in browser.
@@ -114,17 +108,24 @@ PLAN.md, 2026-08-13.)
 
 ## Next
 
-1. Get Alex's explicit approval to push/deploy the committed stabilization
-   build; then verify all three production services at the deployed revision.
-2. Run the authenticated servable-document, sentinel-404, and Derek Prince
+1. In a separately approved production-write session, apply and verify
+   migration 088; then run one read-only queue-row dry run and review its
+   URL/hash/page/chunk/source/dedup evidence before authorizing any write.
+2. Process one isolated real queue item, reconcile queue/document/chunk/
+   proposition counts, sample retained text, and only then decide whether to
+   create/deploy a source-worker service or run a bounded attended batch.
+3. Get Alex's explicit approval to integrate and push the local builds; because
+   `main` push triggers production deployment, verify all three services at the
+   resulting revision when that deployment is intentionally authorized.
+4. Run the authenticated servable-document, sentinel-404, and Derek Prince
    card smoke when a signed-in browser-control surface is connected.
-3. Decide whether `get_teacher_card()`'s refusal-string copy reads
+5. Decide whether `get_teacher_card()`'s refusal-string copy reads
    correctly under a named teacher's card heading — the one piece of the
    2026-08-15 mirror-unification residuals tonight's session didn't touch.
-4. Decide whether to merge probe 2's and/or probe 3's branches — both
+6. Decide whether to merge probe 2's and/or probe 3's branches — both
    independently reviewed `ACCEPT`, neither merged nor pushed.
-5. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
-6. Trail / Brooks one-offs — review then visibility.
-7. `pending` vs `draft` quote-status consolidation — Decision 24.
-8. `jewish_perspectives` drop — needs Alex's explicit approval plus a
+7. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
+8. Trail / Brooks one-offs — review then visibility.
+9. `pending` vs `draft` quote-status consolidation — Decision 24.
+10. `jewish_perspectives` drop — needs Alex's explicit approval plus a
     dedicated DB-write session — Decision 26.
