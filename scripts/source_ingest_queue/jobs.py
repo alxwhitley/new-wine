@@ -47,11 +47,12 @@ def validate_reconciliation(
     return attempted == 1 and attempted == stored + skipped + errored
 
 
-def reap_expired_leases(db) -> int:
+def reap_expired_leases(db, *, only_row_id: Optional[str] = None) -> int:
     """Requeue expired work or fail it when its retry budget is exhausted."""
     def _reap(conn):
         with dict_cursor(conn) as cursor:
-            cursor.execute(
+            row_filter = " AND id = %s" if only_row_id is not None else ""
+            reap_sql = (
                 "UPDATE source_ingest_queue "
                 "SET attempts = attempts + 1, "
                 "    status = CASE WHEN attempts + 1 >= max_attempts "
@@ -73,22 +74,35 @@ def reap_expired_leases(db) -> int:
                 "                             THEN 1 ELSE errored_documents END, "
                 "    updated_at = now() "
                 "WHERE status = 'running' AND lease_expires_at IS NOT NULL "
-                "AND lease_expires_at < now() RETURNING id"
+                "AND lease_expires_at < now()" + row_filter + " RETURNING id"
+            )
+            cursor.execute(
+                reap_sql,
+                (only_row_id,) if only_row_id is not None else None,
             )
             return len(cursor.fetchall())
 
     return db.run(_reap)
 
 
-def claim_next(db, worker_id: str, lease_seconds: int) -> Optional[dict]:
+def claim_next(
+    db,
+    worker_id: str,
+    lease_seconds: int,
+    *,
+    only_row_id: Optional[str] = None,
+) -> Optional[dict]:
     """Reap expired work, then atomically claim one cleared ready row."""
     if not worker_id or isinstance(lease_seconds, bool) or lease_seconds <= 0:
         raise ValueError("worker_id and positive lease_seconds are required")
-    reap_expired_leases(db)
+    if only_row_id is not None and not only_row_id:
+        raise ValueError("only_row_id must be nonempty")
+    reap_expired_leases(db, only_row_id=only_row_id)
 
     def _claim(conn):
         with dict_cursor(conn) as cursor:
-            cursor.execute(
+            row_filter = " AND id = %s" if only_row_id is not None else ""
+            claim_sql = (
                 "UPDATE source_ingest_queue "
                 "SET status = 'running', worker_id = %s, stage = 'claimed', "
                 "    flag_reason = NULL, "
@@ -98,11 +112,17 @@ def claim_next(db, worker_id: str, lease_seconds: int) -> Optional[dict]:
                 "    SELECT id FROM source_ingest_queue "
                 "    WHERE status = 'waiting' AND cleared_to_run = true "
                 "      AND run_after <= now() "
-                "    ORDER BY created_at "
+                + row_filter
+                + "    ORDER BY created_at "
                 "    FOR UPDATE SKIP LOCKED "
                 "    LIMIT 1"
-                ") RETURNING *",
-                (worker_id, lease_seconds),
+                ") RETURNING *"
+            )
+            cursor.execute(
+                claim_sql,
+                (worker_id, lease_seconds, only_row_id)
+                if only_row_id is not None
+                else (worker_id, lease_seconds),
             )
             return cursor.fetchone()
 

@@ -114,6 +114,21 @@ class ClaimTests(unittest.TestCase):
 
         self.assertIsNone(claim_next(db, "worker-1", 120))
 
+    def test_verifier_can_scope_reap_and_claim_to_one_exact_row(self):
+        claimed = {"id": "fixture-1", "status": "running"}
+        db = RecordingDb(results=[[], claimed])
+
+        self.assertEqual(
+            claim_next(db, "worker-1", 120, only_row_id="fixture-1"), claimed
+        )
+
+        reap_sql, reap_params = db.calls[0]
+        claim_sql, claim_params = db.calls[1]
+        self.assertIn("id = %s", reap_sql)
+        self.assertEqual(reap_params, ("fixture-1",))
+        self.assertIn("id = %s", claim_sql)
+        self.assertEqual(claim_params, ("worker-1", 120, "fixture-1"))
+
 
 class LifecycleTests(unittest.TestCase):
     def test_get_row_can_force_a_read_only_transaction(self):
