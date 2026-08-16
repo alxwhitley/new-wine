@@ -129,6 +129,7 @@ async def create_queue_row(
             "source_scope": body.source_scope,
             "attribute_to": declared_name,
             "attribution_mode": body.attribution_mode,
+            "retain_original_text": True,
             "submitted_by": user_id,
         })
         .execute()
