@@ -64,13 +64,15 @@ def reap_expired_leases(db, *, only_row_id: Optional[str] = None) -> int:
                 "                       THEN 'lease_expired: retry limit reached' "
                 "                       ELSE 'lease_expired: reclaimed' END, "
                 "    run_after = now(), "
-                "    attempted_documents = CASE WHEN attempts + 1 >= max_attempts "
+                "    attempted_documents = CASE WHEN stage IN "
+                "                               ('writing', 'finalizing') "
                 "                               THEN 1 ELSE attempted_documents END, "
                 "    stored_documents = CASE WHEN attempts + 1 >= max_attempts "
                 "                            THEN 0 ELSE stored_documents END, "
                 "    skipped_documents = CASE WHEN attempts + 1 >= max_attempts "
                 "                             THEN 0 ELSE skipped_documents END, "
-                "    errored_documents = CASE WHEN attempts + 1 >= max_attempts "
+                "    errored_documents = CASE WHEN stage IN "
+                "                             ('writing', 'finalizing') "
                 "                             THEN 1 ELSE errored_documents END, "
                 "    updated_at = now() "
                 "WHERE status = 'running' AND lease_expires_at IS NOT NULL "
@@ -235,19 +237,19 @@ def fail_or_requeue(
                 "                     ELSE now() + (LEAST(300, "
                 "                         (power(2, attempts) * 5)::integer) "
                 "                         * interval '1 second') END, "
-                "    attempted_documents = CASE WHEN attempts + 1 >= max_attempts "
-                "                               THEN 1 ELSE attempted_documents END, "
+                "    attempted_documents = CASE WHEN %s THEN 1 "
+                "                               ELSE attempted_documents END, "
                 "    stored_documents = CASE WHEN attempts + 1 >= max_attempts "
                 "                            THEN 0 ELSE stored_documents END, "
                 "    skipped_documents = CASE WHEN attempts + 1 >= max_attempts "
                 "                             THEN 0 ELSE skipped_documents END, "
-                "    errored_documents = CASE WHEN attempts + 1 >= max_attempts "
-                "                             THEN 1 ELSE errored_documents END, "
+                "    errored_documents = CASE WHEN %s THEN 1 "
+                "                             ELSE errored_documents END, "
                 "    updated_at = now() "
                 "WHERE id = %s AND worker_id = %s AND status = 'running' "
                 "AND lease_expires_at > now() "
                 "RETURNING status",
-                (reason, row_id, worker_id),
+                (reason, attempted, attempted, row_id, worker_id),
             )
             row = cursor.fetchone()
             return row["status"] if row else None

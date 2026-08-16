@@ -224,7 +224,38 @@ class LifecycleTests(unittest.TestCase):
             self.assertIn("worker_id = %s", sql)
             self.assertIn("status = 'running'", sql)
             self.assertIn("lease_expires_at > now()", sql)
+            self.assertIn(
+                "attempted_documents = CASE WHEN %s THEN 1 ELSE attempted_documents END",
+                sql,
+            )
             self.assertEqual(params[-2:], ("row-1", "worker-1"))
+
+        self.assertEqual(
+            waiting_db.calls[0][1],
+            ("dns_failure: retry later", False, False, "row-1", "worker-1"),
+        )
+        self.assertEqual(
+            failed_db.calls[0][1],
+            (
+                "proposition_provider_failure: rolled back",
+                True,
+                True,
+                "row-1",
+                "worker-1",
+            ),
+        )
+
+    def test_lease_reaper_counts_attempt_only_after_writer_boundary(self):
+        db = RecordingDb(results=[[]])
+
+        reap_expired_leases(db)
+
+        sql, params = db.calls[0]
+        self.assertIn(
+            "attempted_documents = CASE WHEN stage IN ('writing', 'finalizing') THEN 1 ELSE attempted_documents END",
+            sql,
+        )
+        self.assertEqual(params, None)
 
     def test_complete_validates_before_owned_terminal_update(self):
         outcome = ProcessOutcome(
