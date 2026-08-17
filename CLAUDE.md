@@ -442,36 +442,28 @@ this table first, identify the session type from objective properties of the
 task (not vibes), then follow its assigned path. If a task doesn't cleanly
 fit one row, it's two sessions, not one hybrid session — split it.
 
+**Current operating decision, 2026-08-17:** Codex is the primary working
+surface. Its native agents and worktrees may support bounded repo work. The
+custom multi-provider coordinator and overnight harness are retired from active
+development; the historical detail below no longer authorizes dispatch,
+commissioning, adapter work, or safety-fence work.
+
 **Hard rule — no exceptions.** Any session that writes to the database, by
-any mechanism (a `psycopg2` script, a migration apply, an SQL Editor
-statement, a write RPC), runs on the plain script path. Never
-`executor`/`planner-reviewer`. This holds regardless of how cleanly a prior
-harness session went — the 2026-07-25 document-linking build (migration 071)
-was a clean harness result and does not change this rule. Reason: the
-harness's write recorder is real ground truth for what it *does* record
-(`guard_pretooluse.py`, record-primary since commit `96bc3ff`), but
-`BASH_WRITE_INDICATORS` still deliberately over-flags benign Bash calls as
-writes (documented, open — `rhemata-status.md`'s "Known Harness Bugs"). A
-false-positive write flag costs real data-risk turns on a genuine DB-write
-session in a way it doesn't on a repo-only session, where the worst case is
-an extra review cycle. (The 2026-07-18 12-turn stall this over-flagging
-behavior is related to was itself fixed 2026-07-19, commit `d9ab1cc` — the
-residual risk named here is the over-flagging pattern, not that closed bug.)
-**Revisit trigger:** once the over-flagging classifier is narrowed (its own
-dedicated session, flagged but not scheduled) and a second clean DB-write
-harness session is deliberately run and reviewed, this rule gets revisited —
-not before, and not by default.
+any mechanism (a `psycopg2` script, migration apply, SQL statement, or write
+RPC), runs as an attended, explicitly approved plain-script operation. Never
+delegate a production database write to a subagent or automated coordinator;
+execute it only in the primary Codex session.
 
 | Session type | Objective trigger criteria | Path | Also load | Skip | Reason |
 |---|---|---|---|---|---|
 | **Database write** | Any Bash-run script, migration apply, or SQL statement performs INSERT/UPDATE/DELETE/ALTER/schema DDL against Supabase — including via `psycopg2` or the SQL Editor. | **Plain script.** Never harness. | N/A — harness not used | N/A — harness not used | Hard rule above. |
 | **Read-only diagnostic / audit** | Zero `Edit`/`Write` calls, zero DB mutation — SELECT-only queries, file reads, greps, read-only script runs. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | No build-then-judge loop needed for a single read-only pass; harness review overhead buys nothing here. |
-| **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or multiple ordered steps (new feature, new script plus its own verification, a refactor) — zero DB writes anywhere in the session. | **Harness** (`executor`/`planner-reviewer`). Permitted builders: Claude Code or Grok. Default reviewer for Grok-built work: Sonnet (Opus remains available). | `HARNESS.md` (always, for harness sessions); `ARCHITECTURE.md` (near-universal for build work); `PRODUCT.md` + `DESIGN.md` only if the task touches UI; `POSITIONING.md` only if it touches copy. | `PRODUCT.md`/`DESIGN.md`/`POSITIONING.md` unless the task's own surface requires them. | This is what the harness exists for — multi-step work that benefits from a planning/review split. |
+| **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or ordered steps, with zero DB writes. | **Codex native workflow.** One primary agent; bounded subagents only when tasks are independent and ownership is explicit. | `ARCHITECTURE.md` for architecture; `PRODUCT.md` + `DESIGN.md` for UI; `POSITIONING.md` for copy. | Unrelated governing docs and historical harness material. | Keeps execution on the supported surface without multiplying discovery. |
 | **Repo-only single-script / trivial edit** | A single mechanical edit or one-shot script, no multi-step build sequence — zero DB writes anywhere in the session. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | A planning/review loop is overhead a one-shot change doesn't need. |
 | **Docs/records-only** | Task's only output is a change to `CLAUDE.md` / `PLAN.md` / `POSITIONING.md` / `DESIGN.md` / `rhemata-status.md`. | **Plain — chat proposes, terminal commits**, per the Project Knowledge Read Contract's propose→commit rule. | N/A — harness not used | N/A — harness not used | Structurally enforced, not just preferred: `guard_pretooluse.py` denies `Edit`/`Write` on all five governed files for any subagent — the harness physically cannot do this work. |
 
-**Harness builders and reviewers (settled 2026-08-13) — budget-driven swap,
-not a capability upgrade.** For this row — remaining repo-only multi-step
+**Historical harness builders and reviewers — retired 2026-08-17.** The
+following records the former model and is not an active instruction. For this row — remaining repo-only multi-step
 harness builds — Grok is a second permitted builder alongside Claude Code.
 The coordinator run loop is done (`ac53f76`, simulated workers). The
 safety fence is deferred, not cancelled: it gets built if a real
@@ -490,16 +482,13 @@ for review on anything Alex routes to it, and remains the reviewer of
 record for all existing completed O1–O4 work; this does not retroactively
 change any past verdict.
 
-**Stall-risk mitigation for harness sessions (repo-only multi-step build
-row):** if a harness session shows the same flagged-item count across ≥3
-consecutive turns with no underlying action changing (the 2026-07-18 stall's
-signature), abort to the plain path immediately rather than keep retrying —
-and log the abort in `rhemata-status.md`'s Known Harness Bugs section with
-the turn count and the flagged item, even if you route around it rather than
-fixing it that session.
+**Historical stall-risk evidence:** if an agent workflow shows the same
+flagged-item count across three consecutive turns with no underlying action
+changing (the 2026-07-18 stall's signature), stop retrying. Under the current
+rule, classify and park the finding unless it satisfies the Blocker gate.
 
 **The upcoming closeness check (Phase 2, paraphrase wording gate) falls
-under Repo-only multi-step build → harness**, for the build-and-test work
+under Repo-only multi-step build → Codex native workflow**, for build-and-test work
 itself (new detection script, its own verification pass, no DB write). If a
 later session runs that check against real corpus data and writes
 flags/results back to the database, *that* session is a **Database write**
@@ -765,24 +754,14 @@ different row, per the hard rule above.
     unblock a migration" — nullable provenance is exactly how Invariant
     10's hole opened in the first place.
 
-15. **Overnight harness runs may parallelize ingestion and app-build
-    work in two lanes.** Settled 2026-08-13; updated the same day.
-    The coordinator run loop is built (`ac53f76`, simulated workers
-    through a full night). The safety fence (per-worker access
-    permissions) is deferred, not cancelled, and is not a launch
-    blocker — the intended path to real overnight workers is a
-    narrow file allowlist plus Alex reading the morning report daily
-    for a week. **Revisit trigger:** the fence gets built if a real
-    overnight run causes damage that cannot be recovered from git, or
-    before any harness work reaches anything outside the repository.
-    Real AI workers running overnight is a separate milestone, still
-    blocked on that deferred fence. The two lanes are safe to run
-    concurrently because they are disjoint: separate worktrees,
-    separate file ownership; ingestion never touches app code, and
-    app builds never touch the corpus write path. This does NOT relax
-    the standing harness/DB-write separation — production database
-    writes still never run through the harness itself, day or night,
-    regardless of this decision.
+15. **The custom multi-provider coordinator and overnight harness are
+    retired from active development.** Settled 2026-08-17. Existing code,
+    branches, tests, and historical evidence remain intact, but no current
+    task may extend, commission, or depend on them without Alex explicitly
+    reversing this decision. Repo work defaults to Codex's native workflow.
+    Production database writes remain attended plain-script operations in the
+    primary Codex session and are never delegated to a subagent or automated
+    coordinator.
 
 16. **The source-ingest queue runner is clearance- and policy-gated, and its
     migration remains a separate production decision.** The
@@ -799,9 +778,11 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- **`scripts/harness_coordinator/v1`'s `invoke.py` had no live-provider call
+- **PARKED — `scripts/harness_coordinator/v1` and its unmerged CLI adapter.**
+  The following is historical evidence, not authorized follow-up work.
+  `scripts/harness_coordinator/v1`'s `invoke.py` had no live-provider call
   path as of 2026-08-15 — corrected 2026-08-17, not still fully true as
-  originally stated.** A real (not synthetic) Claude Code CLI worker/reviewer
+  originally stated. A real (not synthetic) Claude Code CLI worker/reviewer
   adapter now exists on unmerged branch `claude/harness-claude-cli-adapter`
   (commit `ca5101e`, 2026-08-16, real `Alex Whitley`-authored commit, verified
   directly): additive to `invoke.py`'s existing synthetic-only path, opt-in
@@ -819,8 +800,8 @@ different row, per the hard rule above.
   single-agent method (direct executor/planner-reviewer invocation from
   within a session) remains the separate, working, proven mechanism — do not
   conflate the two when reading past references to "the coordinator" or "the
-  harness ran real workers." Full detail: `rhemata-status.md`'s Known Harness
-  Bugs, 2026-08-17.
+  harness ran real workers." Full detail: `rhemata-status.md`'s Retired harness
+  evidence, 2026-08-17.
 - **A single, confirmed ingestion-chokepoint bypass exists and was
   deliberately left in place — 2026-08-15 diagnostic.** An admin-only
   single-PDF-upload endpoint on the backend inserts `documents`/`chunks`
@@ -1468,10 +1449,14 @@ within days and has already caused one round of false blockers.
 
 - Alex works fast — short messages, direct feedback.
 - Surface risks before building, not after.
-- All code changes stay in Claude Code. Don't suggest manual edits unless trivial.
+- Codex is the primary working surface. Use native subagents only for bounded,
+  independent work; do not revive the custom coordinator by default.
 - Read output directly — never ask Alex to copy-paste terminal output.
 - Check actual files before assuming structure.
 - Never log planned work as done. Never claim build state you can't see.
+- Follow `AGENTS.md`'s Beta Critical Path: discovery does not authorize an
+  investigation, every finding is classified, and the active session stops
+  when its original acceptance criteria pass.
 - **When an explicit instruction conflicts with what you directly know to be
   true from evidence already in hand, stop and report the conflict — do not
   silently decide which is right and act on your own resolution, even if
@@ -1499,13 +1484,13 @@ State lives in repo files. No Notion mirroring, no sync step (retired 2026-07-09
 
 | File | Owns |
 |---|---|
-| `CLAUDE.md` | This file. Invariants, stack, working rules. Always loaded. |
+| `CLAUDE.md` | Product invariants, stack, and landmines. Load implicated sections; read in full for governing changes. |
 | `ARCHITECTURE.md` | Tree, schema, scripts, env vars, commands. Load on demand. |
-| `HARNESS.md` | Executor/planner-reviewer gate design. Harness sessions only. |
+| `HARNESS.md` | Historical custom-harness design. Load only if Alex explicitly reopens that work. |
 | `POSITIONING.md` | Messaging, voice, product posture. Source of truth. |
 | `PRODUCT.md` | Who it's for, brand register, design principles, anti-references. Read before UI work. |
 | `DESIGN.md` | Styling-token authority. No hardcoded hex. |
-| `PLAN.md` | Roadmap, standing session rules, open decisions, findings log. |
+| `PLAN.md` | Current beta critical path, roadmap, classifications, and open decisions. |
 | `rhemata-status.md` | Live state only. Overwritten each session. Never durable truth. |
 
 **Writer rules:** terminal authors and writes `CLAUDE.md`, `ARCHITECTURE.md`,

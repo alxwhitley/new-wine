@@ -1,34 +1,26 @@
-# Rhemata — Master Plan (v7.0 · build to ingestion-ready beta)
+# Rhemata — Master Plan (v7.1 · beta critical path)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: use
-> `superpowers:subagent-driven-development` or
-> `superpowers:executing-plans` when executing approved build packets. Packet
-> checkboxes are evidence gates, not permission for production writes.
+> **Current operating model:** work primarily in Codex using its native agent
+> and worktree capabilities. The custom multi-provider coordinator and
+> overnight harness are retired from active development. Existing code and
+> evidence remain historical; they do not authorize new harness work.
 
 **Goal:** reach an ingestion-ready platform, then complete the private-beta
 product while approved corpus production runs concurrently.
 
-**Architecture:** a resumable coordinator dispatches bounded, isolated packets
-to Claude Code, Kimi through OpenCode Go, and Grok. Claude Opus 5 remains the
-default judgment/integration layer; Claude Sonnet 5 is the default reviewer/
-verdict-issuer for harness/repo-only build work Grok performs (Opus stays
-available if Alex routes a packet there). Kimi is the primary worker, Claude
-Sonnet 5 is its confirmed-exhaustion fallback, and Grok may also build
-repo-only harness work — a budget-driven swap, not a capability upgrade.
-Grok's hard restriction is unchanged: no theological content, no answer-
-accuracy path, no production database writes, no doctrinal or licensing
-judgment, ever. Outside that lane Grok remains read-only.
-
-**Tech stack:** existing Rhemata application and scripts, Git worktrees, Claude
-Code subscription CLI, OpenCode Go subscription CLI, Grok subscription CLI,
-and deterministic Python orchestration. No model API integration is required.
+**Execution:** one active critical-path item at a time. Codex is the default
+working surface; native subagents are optional bounded helpers, not a reason to
+multiply investigations. Production database writes remain separate, attended,
+plain-script operations in the primary Codex session requiring Alex's explicit
+approval.
 
 ### Global constraints
 
 - Preserve all `CLAUDE.md` invariants and the hard rules in `AGENTS.md`.
-- Never run production DB writes through the agent harness.
+- Never run production DB writes through a subagent or automated coordinator;
+  use only an explicitly approved, attended primary-session operation.
 - Never infer doctrinal, licensing, destructive, deployment, or migration
-  authority from a work packet.
+  authority from a task or finding.
 - Keep build commits and docs/records commits separate.
 - Do not touch unrelated user changes in the dirty worktree.
 
@@ -68,11 +60,11 @@ Neither a polished product with an inadequate corpus nor a rich corpus on an
 unproven product qualifies.
 
 ```text
-Overnight enablement → Foundation build → Ingestion-ready benchmark
-                                             ├─ Product beta build ─────┐
-                                             └─ Corpus production ──────┤
-                                                                        ↓
-                                                        Private-beta launch gate
+Foundation critical path → Ingestion-ready benchmark
+                                  ├─ Product beta build ─────┐
+                                  └─ Corpus production ──────┤
+                                                             ↓
+                                             Private-beta launch gate
 ```
 
 ### Target launch date — changed 2026-08-13
@@ -86,7 +78,15 @@ October 2026 that Alex wants to use as the launch venue.
 
 ---
 
-## Execution model
+## Retired harness record — historical only
+
+The execution-model and Phase 0 material through the beginning of Phase 1
+records completed experiments. It is not the current workflow and should not be
+loaded for ordinary tasks. Do not extend the coordinator, commission its CLI
+adapter, build its deferred safety fence, or revive multi-provider routing
+without a new explicit decision from Alex. Current rules live in `AGENTS.md`.
+
+## Historical execution model
 
 ### Model roles
 
@@ -177,7 +177,7 @@ reviewer verdict, and integration revision.
 
 ---
 
-## Phase 0 — Prepare for long unattended runs
+## Historical Phase 0 — retired from active work
 
 This phase comes first because longer runs must come from a resumable queue of
 bounded packets, not one large prompt. Its output is a safe repo-only harness;
@@ -319,7 +319,7 @@ separate milestone, still blocked on the deferred safety fence.
 - [x] Alex can determine what happened, what changed, what passed, and what
   needs attention from one morning report.
 
-### Overnight unattended runs — settled 2026-08-13; updated 2026-08-13
+### Historical overnight-run record — retired 2026-08-17
 
 **Run loop — DONE (`ac53f76`).** Thin driver over the
 existing one-step runner: pulls work until morning, a stop signal, an
@@ -530,10 +530,72 @@ or more attended repetitions first.
 
 ---
 
+## Current beta critical path
+
+This is the only ordinary-work queue. Work one item at a time in order. A
+finding elsewhere in this file does not enter this queue unless Alex promotes
+it under the Blocker rule in `AGENTS.md`.
+
+### Blocker — must close before private beta
+
+1. **F2 recoverability:** establish the authoritative Supabase backup/PITR,
+   retention, restore scope, RTO/RPO, exclusions, and owner; test the safest
+   available restore scope or record Alex's explicit acceptance of the gap.
+2. **F3 ingestion-default contract:** Alex rules on whether private beta is the
+   Tier-1→Tier-2 trip line; then align registration behavior, run the required
+   dry run and isolated proof, and update architecture records.
+3. **F4 quality decisions:** decide claim-support residual-risk posture and
+   system-prompt review timing. Do not build a sixth probabilistic judge.
+4. **F6 ingestion-ready verdict:** evaluate the fixed benchmark and record
+   accepted exceptions. This closes foundation work as the default activity.
+
+Only one of these may be `IN PROGRESS`. The current item is **F2
+recoverability**; F3 is waiting for Alex's policy ruling and does not authorize
+implementation until then.
+
+### Scheduled — named later phase
+
+- B1–B7 private-beta product work begins after F6.
+- A1–A6 corpus production begins after F6 and follows its separate write and
+  reconciliation contract.
+- Source-ingest migration 088 and its isolated production proof remain a
+  separately approved database-write session within the applicable phase.
+
+### Triggered — dormant until condition occurs
+
+- Public-scale/Tier-2 legal and operational work triggers at public signup or
+  more than roughly 20 beta users.
+- A pre-launch load test remains declined; reopen only after measured beta
+  usage or a demonstrated concurrency failure.
+- Admin notifications trigger when position-refresh work is scheduled.
+- Further harness or coordinator work triggers only if Alex explicitly reverses
+  the 2026-08-17 retirement decision.
+
+### Parked — acknowledged, no current authorization
+
+- The unmerged Claude CLI harness adapter and all deferred harness improvements.
+- Missing-author cleanup, pending/draft quote-status cleanup, chapter-detector
+  expansion, one-off visibility reviews, the `jewish_perspectives` drop, and
+  the broader Manna rebrand unless separately promoted or reached in their
+  scheduled phase.
+- Horizon items and open decisions whose recorded trigger has not occurred.
+
+### Anti-Zeno gate
+
+Every session declares one outcome, acceptance criteria, non-goals, and an
+audit/command budget. Adjacent findings receive one of the four classifications
+above and do not expand the session. New blockers require concrete evidence of
+plausible beta harm, the affected surface, and the smallest closure condition.
+Proof is proportional to beta risk, not hypothetical public scale. At close,
+record whether the original outcome completed, unplanned investigations
+started, blockers promoted, and active critical-path count.
+
 ## Phase 1 — Foundation build to the ingestion-ready benchmark
 
-These waves are ordered. Within a wave, the columns show the maximum safe
-parallelism after Opus has issued packets with disjoint ownership.
+These waves are ordered. The three-provider role tables are retained as
+historical planning context, not current dispatch instructions. Codex owns
+current execution under `AGENTS.md`; use subagents only when bounded delegation
+materially helps the active item.
 
 > **F1 (100-generation/100-user concurrency proof) removed 2026-08-13 —**
 > Alex explicitly declined a pre-launch load test. Removed outright, not
@@ -699,7 +761,8 @@ The benchmark passes only when all are true:
 - [ ] **Recoverability:** backup/PITR and restore posture is proven or explicitly
   accepted by Alex.
 - [ ] **Operability:** dependencies reproduce and failures are diagnosable.
-- [ ] **Harness:** the repo-only overnight rehearsal passes.
+- [x] **Historical harness evidence:** the repo-only rehearsal passed before
+  the custom harness was retired; no further harness work is required.
 - [ ] **Records:** `PLAN.md`, `CLAUDE.md`, `ARCHITECTURE.md`, and
   `rhemata-status.md` agree in a separate docs-only close.
 
@@ -868,8 +931,9 @@ These require a fresh specification and do not authorize construction:
 
 ## Standing rules
 
-1. Read `CLAUDE.md` and this file in full before non-trivial writes; load other
-   canonical docs by task surface.
+1. Read `AGENTS.md`, this file's Current beta critical path, and the task's
+   implicated `CLAUDE.md` invariants before non-trivial writes. Full-file reads
+   are reserved for changes to architecture, roadmap, or governing rules.
 2. Run read-only diagnostics and confirm the premise before build work.
 3. Before a full batch, complete a dry run and one isolated real-item proof.
 4. Every batch ends with attempted / stored / errored / skipped reconciliation,
@@ -878,9 +942,10 @@ These require a fresh specification and do not authorize construction:
    explicit cost/allowance limits, and abort behavior.
 6. Any corpus-scale LLM run gets a cost estimate before execution; $50 is the
    ceiling unless Alex explicitly approves more.
-7. Production DB-write sessions use the plain-script path, never the agent
-   harness. The harness may build and test those scripts against fixtures but
-   may not execute the production write.
+7. Production DB-write sessions use the explicitly approved, attended
+   plain-script path in the primary Codex session, never a subagent or automated
+   coordinator. Subagents may build and test scripts against fixtures but may
+   not execute the production write.
 8. Preserve user work in a dirty tree. Git runs from the repo root. Parallel
    writers use isolated worktrees and disjoint file ownership.
 9. Build commits and docs/records commits are always separate.
@@ -891,21 +956,17 @@ These require a fresh specification and do not authorize construction:
     the quote component.
 13. Side-by-side answer/evidence review, not blind reading, is the manual method
     for generation leakage checks.
-14. Mechanical workers never receive theological, answer-path, licensing,
-    production-write, or failure-mode judgment authority.
-    This includes Grok after the 2026-08-13 builder promotion — that change
-    did not grant Grok any of these judgments.
-15. No worker result is complete until the assigned reviewer records a
-    verdict with evidence. Opus is the reviewer of record by default and
-    for all completed O1–O4 work. Sonnet is the default reviewer for
-    harness/repo-only build work Grok performs. Same contract either way:
-    no ACCEPT without recorded acceptance evidence.
+14. Subagents never receive theological, answer-path, licensing,
+    production-write, or failure-mode judgment authority. They perform bounded
+    work with explicit ownership and acceptance criteria.
+15. Independent review is risk-based, not automatic. Require it for answer
+    integrity, identity/data safety, and destructive production operations;
+    otherwise one coherent verification cycle is sufficient.
 16. Destructive filesystem/Git actions, pushes, deploys, migrations, production
     writes, doctrinal content, and material scope changes require Alex.
-17. Harness-tooling review is one round. Multi-round adversarial
-    review is reserved for the answer path. A harness mistake is a
-    failed build or a discarded night's work, not a user-facing
-    theological or accuracy failure.
+17. A discovery does not authorize investigation or construction. Classify it
+    Blocker, Scheduled, Triggered, or Parked and preserve the current session's
+    acceptance boundary unless Alex explicitly changes it.
 
 ---
 
@@ -1062,9 +1123,7 @@ to prevent it from being mistaken for routine extraction.
 
 ---
 
-*v7.0 makes the ingestion-ready benchmark the boundary between foundation work
-and continuous corpus production, adds explicit Claude/Kimi/Grok parallel lanes,
-defines Kimi→Sonnet fallback (Sonnet is also the default reviewer for
-Grok-built harness/repo-only work; Opus remains default judgment elsewhere
-and the reviewer of record for completed O1–O4 work), and places all
-extraction and ingestion work after the build plan.*
+*v7.1 keeps the ingestion-ready benchmark as the foundation boundary, retires
+the custom multi-provider harness from active development, establishes Codex as
+the primary working surface, and freezes the private-beta critical path behind
+the Blocker / Scheduled / Triggered / Parked classification gate.*
