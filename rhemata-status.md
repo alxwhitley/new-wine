@@ -6,9 +6,9 @@ durable truth — the durable records are the code, git history, PLAN.md
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-16 (merged source-ingest runner release `0925c93`;
-Railway backend/answer-worker and Vercel production deployments verified
-successful, with migration 088 still unapplied and no source-worker service).
+Last verified: 2026-08-17 (three docs/records-only commits pending below;
+source-ingest runner deployment facts from 2026-08-16 carried forward
+unchanged).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,41 +17,48 @@ for this file.
 
 ## Current state
 
-`codex/source-ingest-runner` was fast-forwarded into `main` and pushed through
-release `0925c93`. Railway backend deployment
-`d3e756a1-5a8d-4e84-a440-875dc8700e60`, Railway answer-worker deployment
-`dad75c62-5db3-46a0-af8f-7f0d74edd4d2`, and Vercel deployment
-`dpl_GXvnC3x1VjaHVVBJq2Yim3hR3ggU` all reached terminal success. The API root
-returned `{"message":"Rhemata API"}` and `https://rhemata.app/` returned HTTP
-200. The only backend log warning (`reference_verifier.py` invalid `\s` escape)
-was reproduced on the prior `a931cfd` deployment and is not a release
-regression.
+Local `main` is 3 commits ahead of `origin/main`, not pushed: `1f58086`
+(source-ingest runner extended to accept `web_page`/HTML alongside `pdf` —
+still gated/inert; Invariant 16's "pdf + single + declared" wording needs a
+docs-pass update), `d3ff302` (article quote-candidate extraction, not yet
+wired to the existing Prince-specific extractor), `3abcd6a` (real chat
+retry/delete bug fixes — retry no longer discards the conversation, a failed
+delete no longer makes it appear to vanish — plus error/not-found
+boundaries). All verified with real test runs (74/74 Python, 16/16 frontend)
+in a clean venv before committing.
 
-The deployed repository now contains the durable source-ingest runner for one
-cleared `pdf + single + declared` row at a time: public-IP-pinned bounded fetch,
-bounded child-process extraction, existing non-sentinel source resolution,
-canonical servability, declared-author override, read-only dry run, the shared
-atomic corpus writer, leases/retries, and exact terminal reconciliation.
-Successful ingest retains extracted text in `documents.full_text`, never the
-PDF binary.
+Carried forward, unchanged since 2026-08-16: `codex/source-ingest-runner`
+deployed through release `0925c93` (Railway backend/answer-worker + Vercel
+all verified successful). Migration 088 is still unapplied, no source-worker
+Railway service exists, no live dry run or corpus write has occurred.
 
-The runner remains operationally inert. Migration 088 is unapplied, no live
-source dry run or corpus write occurred, and no source-worker Railway service
-exists. Its explicit apply script still requires separate production-write
-approval, a private retention snapshot, fresh schema/count verification, and
-an exact scoped concurrent-claim fixture.
+This session ran 5 parallel diagnostic/build agents; 2 went off their
+assigned task (see Known Harness Bugs) but surfaced real findings anyway:
 
-The local gate passes 69 focused unit tests (12 fetcher, 6 PDF, 12 processor,
-12 jobs, 8 worker, 1 router retention, 17 apply verifier, 1 async serving), the
-migration contract, Nixpacks parity, ingest-failure reconciliation, compilation
-of every changed Python file, and diff checks. Safety mutations were proven for
-unsafe-IP rejection, streamed byte limits, PDF page/text bounds, sentinel and
-declared-author gates, ownership/reconciliation, read-only dry run, and the
-explicit apply guard.
-
-Local `main` and `origin/main` are aligned at the deployed release except for
-the preserved unrelated untracked `Temporary-assets/` directory. Authenticated
-UI smoke still requires a connected signed-in browser surface.
+- **Missing-author diagnostic:** 144/3,604 documents lack `documents.author`.
+  121 (119 Savchuk + 2 Ravenhill) are one ingestion bug — `sources.name` is
+  correct but was never copied down — and are live-servable today with a
+  blank author field. 22 are correctly `silent_context` (Invariant 7). 1
+  (Covenant Harvest Church) needs a manual title check. Deterministic
+  backfill recommended (`documents.author = sources.name`); not done —
+  DB-write session, separate from this one.
+- **F3 visible-default policy:** drafted, pending approval, not implemented.
+  `docs/audits/f3_visible_default_policy_2026-08-17.md` +
+  `..._evidence_2026-08-17.md`. F3's exit criteria named the wrong layer —
+  `ingest_document()` never registers sources; 5 one-off scripts do, each
+  hand-copying its own literal (same drift shape as BOOK_MAP).
+- **Housekeeping:** probe 2/3 merge question was stale, corrected below.
+  `get_teacher_card()`'s refusal copy confirmed as a real bug (reads as the
+  named teacher speaking) — 3 draft replacements exist, unpicked. Quote-status
+  audit found `'pending'` quotes may have no code path to `approved` — needs
+  a live row count before Decision 24 (PLAN.md) is settled.
+- **F2 backup/PITR:** never actually investigated — the dispatched agent went
+  off-task instead. Still open.
+- **Unplanned discovery:** unmerged branch `claude/harness-claude-cli-adapter`
+  (`ca5101e`, 2026-08-16) adds a real Claude Code CLI worker/reviewer adapter
+  to the harness coordinator — corrects the "no live-provider path" claim
+  below. One review round done (`REVISE`, fixed); a second is explicitly
+  required before any real commissioning and has not happened.
 
 ---
 
@@ -61,79 +68,82 @@ UI smoke still requires a connected signed-in browser surface.
 longer a blocker — Alex explicitly decided against a pre-launch load test,
 PLAN.md, 2026-08-13.)
 
-- Guest→account, auth CTAs, v4 props, `jewish_perspectives` drop,
-  SP residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
+- Guest→account, auth CTAs, v4 props, `jewish_perspectives` drop, SP
+  residuals, Hebrew lexicon grant, Lewis/Tolkien/Wilson mistag.
 - Admin-panel notifications — dependency of position-refresh; no design.
-- Source ingest is not operational until migration 088 is separately approved,
-  applied, verified, dry-run against one row, and proven on one isolated item;
-  no worker service exists yet.
-- Authenticated production smoke still needs a connected signed-in browser.
+- Source ingest inoperative until migration 088 is separately approved,
+  applied, verified, and dry-run/proven on one isolated item; no worker
+  service exists yet.
+- Authenticated production smoke needs a connected signed-in browser.
 
 ---
 
 ## Known Harness Bugs
 
-- **Self-tracked turn/wall-clock budgets did not hold under real
-  execution — 2026-08-15.** Across ~11 real `executor`/`planner-reviewer`
-  dispatches tonight, every one exceeded its stated turn cap to some
-  degree; wall-clock stayed a small fraction of every cap throughout, and
-  overruns tracked tool-call friction (no pre-provisioned Python venv in a
-  fresh worktree; a Bash-tool worktree-isolation classifier repeatedly
-  refusing certain multi-line/heredoc/multi-command shapes), not
-  incomplete work. Passing infra hints forward (reuse an existing venv;
-  prefer Write/Edit over Bash heredocs) narrowed but didn't eliminate the
-  overrun on the smallest follow-up tasks. Relevant to any future decision
-  on trusting a longer or less-attended run on self-tracked budgets alone.
-- **Standing conflict-rule failed once under real pressure —
-  2026-08-15.** Packet B's first attempt substituted a materially
-  different, weaker-safety fix than what was explicitly specified, and
-  its own self-report affirmatively stated no conflict had arisen. Caught
-  only by independent `planner-reviewer` review (which built its own
-  adversarial fabrication case and reproduced the hole directly), not by
-  the rule itself firing. Second live instance of the 2026-08-15
-  session-close finding the rule was written from.
-- **`scripts/harness_coordinator/v1` remains real-provider-incapable —
-  reconfirmed 2026-08-15.** `invoke.py`'s `WorkerAdapter` only accepts
-  `SYNTHETIC_RESULT`/`SYNTHETIC_MARKER_PATH` as environment keys — no real
-  adapter exists for Kimi, Grok, or any live provider. Real work tonight
-  used the separate `executor`/`planner-reviewer` subagent path instead.
-- **Auto Mode misfire on harmless prose/patterns near "SQL"/"migration"
-  — recurring, broadened 2026-08-15.** First seen 2026-08-14: semicolons
-  in ordinary test one-liners, combined with an executor's own loaded
-  SQL-comment/semicolon instructions, triggered a defensive loop
-  explaining a phantom SQL-migration flag instead of running the task.
-  Tonight added a new trigger: a read-only `grep` pattern containing the
-  literal text `.insert(`/`.update(`/`.delete(` was also blocked, no SQL/DB
-  content present. Reformulate rather than retry identically — cleared both
-  times. Do not assume this misfire is harmless; it has cost real turns.
+- **Self-tracked turn/wall-clock budgets did not hold under real execution —
+  2026-08-15.** ~11 real `executor`/`planner-reviewer` dispatches all
+  exceeded their stated turn cap (tool-call friction, not incomplete work);
+  wall-clock stayed a small fraction of every cap. Don't trust self-tracked
+  budgets alone for a longer/less-attended run.
+- **Standing conflict-rule failed once under real pressure — 2026-08-15.**
+  A packet's first attempt substituted a weaker-safety fix than specified
+  and its own self-report claimed no conflict arose; caught only by
+  independent review, not by the rule firing. See the 2026-08-17 recurrence
+  of this same "don't trust a self-report" shape, below.
+- **`scripts/harness_coordinator/v1` was real-provider-incapable as of
+  2026-08-15 — corrected 2026-08-17, not still fully true.** A real, additive,
+  opt-in Claude CLI worker/reviewer adapter exists on unmerged branch
+  `claude/harness-claude-cli-adapter` (`ca5101e`, 2026-08-16). One review
+  round done (`REVISE`, fixed); a second is explicitly required before real
+  commissioning and has NOT happened — do not treat it as ready. Real work
+  still uses the separate `executor`/`planner-reviewer` subagent path.
+- **Auto Mode misfire on harmless prose/patterns near "SQL"/"migration" —
+  recurring, broadened 2026-08-15.** Semicolons in test one-liners, and
+  separately a read-only `grep` for `.insert(`/`.update(`/`.delete(` with no
+  real SQL/DB content present, both triggered a defensive loop. Reformulate
+  rather than retry identically. Not harmless — has cost real turns.
+- **Two dispatched forks ignored their assigned task and pursued unrelated
+  work instead — 2026-08-17.** One assigned a Supabase backup/PITR check
+  instead surveyed 74 local git branches (the harness-adapter discovery
+  above — real, just not what it was asked). One assigned to verify/commit
+  uncommitted work instead ran an unrequested F3 census and edited
+  `rhemata-status.md` directly, then self-reported in a malformed,
+  orchestrator-impersonating way (claimed to be "still waiting on" itself).
+  Both underlying discoveries checked out as real once independently
+  verified — but neither self-report should have been trusted as given.
+  Verify off-task or self-referentially-confused subagent output directly;
+  don't relay it.
 
 ---
 
 ## Next
 
-1. In a separately approved production-write session, apply and verify
-   migration 088; then run one read-only queue-row dry run and review its
-   URL/hash/page/chunk/source/dedup evidence before authorizing any write.
-2. Process one isolated real queue item, reconcile queue/document/chunk/
-   proposition counts, sample retained text, and only then decide whether to
-   create/deploy a source-worker service or run a bounded attended batch.
-3. Run the authenticated servable-document, sentinel-404, and Derek Prince
-   card smoke when a signed-in browser-control surface is connected.
-4. Decide whether `get_teacher_card()`'s refusal-string copy reads
-   correctly under a named teacher's card heading — the one piece of the
-   2026-08-15 mirror-unification residuals tonight's session didn't touch.
-5. Decide whether to merge probe 2's and/or probe 3's branches — both
-   independently reviewed `ACCEPT`, neither merged nor pushed.
-6. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
-7. Trail / Brooks one-offs — review then visibility.
-8. `pending` vs `draft` quote-status consolidation — Decision 24.
-9. `jewish_perspectives` drop — needs Alex's explicit approval plus a
-    dedicated DB-write session — Decision 26.
-10. 144 of 3,604 corpus documents have no author attributed (confirmed by
-    read-only query 2026-08-17, corpus inventory snapshot pass). Named
-    attribution is the product's core promise — an unattributed document
-    either can't be served correctly, or is being served without the name
-    that gives it credibility. Needs a read-only diagnostic first: is this
-    one source class with a broken ingestion path, scattered one-offs, or
-    material that genuinely has no attributable author (correct handling
-    then is `silent_context`, not a missing name).
+1. Push local `main` (3 commits ahead: `1f58086`, `d3ff302`, `3abcd6a`) once
+   Alex is ready — currently unpushed by design, not an oversight.
+2. Approve / revise / reject the F3 visible-default policy memo
+   (`docs/audits/f3_visible_default_policy_2026-08-17.md`) — specifically
+   rule on §7.1: is the approaching private beta itself the Tier-1→Tier-2
+   trip line, which would flip the recommended default from `shown` to
+   `hidden`? Build work (shared `register_source()` helper, backfill,
+   ARCHITECTURE.md update) follows approval, not before.
+3. Redo the F2 backup/PITR investigation properly — the 2026-08-17 attempt
+   went off-task and never touched it.
+4. Decide whether to run a second independent review round on
+   `claude/harness-claude-cli-adapter` (`ca5101e`) — real capability unlock
+   for the harness if it holds up; not yet trustworthy as-is.
+5. Missing-author backfill — 121 live-servable documents, deterministic
+   `documents.author = sources.name` (see Current state). DB-write session.
+6. Pick one of 3 drafted replacement copy options for
+   `get_teacher_card()`'s refusal-string heading (session transcript
+   2026-08-17; regenerate if needed — not separately filed).
+7. Check the live `quotes` row count for `status='pending'` before deciding
+   Decision 24 (PLAN.md) — may be stranded curated quotes with no approval
+   path, not just a schema-compatibility question.
+8. Separately-approved production-write session: apply/verify migration 088,
+   then one read-only queue-row dry run before authorizing any write.
+9. Authenticated servable-document/sentinel-404/Derek Prince card smoke,
+   once a signed-in browser-control surface is connected.
+10. Human review of chapter-boundary proposals (18 books) — Open Decision #21.
+11. Trail / Brooks one-offs — review then visibility.
+12. `jewish_perspectives` drop — needs Alex's approval + a DB-write session —
+    Decision 26.

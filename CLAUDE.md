@@ -799,17 +799,28 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- **`scripts/harness_coordinator/v1`'s `invoke.py` has no live-provider call
-  path — confirmed 2026-08-15, before any dispatch was attempted.** Its code
-  only supports a synthetic/placeholder result and a marker-file path; there
-  is no code path that calls a real Kimi, Grok, or other live provider. Any
-  future reference to this system as ready for real unattended
-  multi-provider runs is describing an unbuilt capability. This was
-  discovered, not fixed, this session. The supervised single-agent method
-  used instead that night (direct executor/planner-reviewer invocation from
-  within a session) is a separate, working mechanism — do not conflate the
-  two when reading past references to "the coordinator" or "the harness ran
-  real workers."
+- **`scripts/harness_coordinator/v1`'s `invoke.py` had no live-provider call
+  path as of 2026-08-15 — corrected 2026-08-17, not still fully true as
+  originally stated.** A real (not synthetic) Claude Code CLI worker/reviewer
+  adapter now exists on unmerged branch `claude/harness-claude-cli-adapter`
+  (commit `ca5101e`, 2026-08-16, real `Alex Whitley`-authored commit, verified
+  directly): additive to `invoke.py`'s existing synthetic-only path, opt-in
+  (`run_cli.py --enable-claude-workers`, off by default), hardcoded model/
+  permission-flag ceilings a packet's own content cannot widen, and
+  verification derived from real git diffs/file hashes rather than trusting
+  the CLI's self-report. It went through one independent fresh-context review
+  round (`REVISE`, with reproduced findings, fixed) — its own commit message
+  states a second independent review round is required before it is
+  considered ready for the attended real-CLI commissioning probe or human
+  integration, and that second round has **not** happened. Do not treat this
+  branch as ready or merged; it is neither. Any future reference to real
+  unattended multi-provider runs as proven is still describing an unbuilt
+  capability — only the adapter code itself is new. The supervised
+  single-agent method (direct executor/planner-reviewer invocation from
+  within a session) remains the separate, working, proven mechanism — do not
+  conflate the two when reading past references to "the coordinator" or "the
+  harness ran real workers." Full detail: `rhemata-status.md`'s Known Harness
+  Bugs, 2026-08-17.
 - **A single, confirmed ingestion-chokepoint bypass exists and was
   deliberately left in place — 2026-08-15 diagnostic.** An admin-only
   single-PDF-upload endpoint on the backend inserts `documents`/`chunks`

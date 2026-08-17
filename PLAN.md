@@ -598,6 +598,20 @@ run + isolated registration pass, the `ARCHITECTURE.md` update) remain
 UNMET; the diagnostic only inventoried the bypass, it did not do this row's
 build work.
 
+**Policy drafted 2026-08-17 (Opus), pending Alex's approval — first two exit
+criteria addressed, not yet met.** The exit criteria's own framing was also
+imprecise: `ingest_document()` never registers a source or writes visibility
+at all — registration happens in five independent one-off scripts with
+hand-copied literals (same drift shape as the BOOK_MAP landmine), not at the
+chokepoint. Full policy + live-DB evidence:
+`docs/audits/f3_visible_default_policy_2026-08-17.md` /
+`docs/audits/f3_visible_default_evidence_2026-08-17.md`. Open question for
+Alex (memo §7.1): does the approaching private beta itself count as the
+Tier-1→Tier-2 trip line, flipping the recommended default from `shown` to
+`hidden`? Exit criteria 3-4 (dry run + isolated registration pass,
+`ARCHITECTURE.md` update) remain unmet regardless — build work follows
+approval.
+
 ### F4 — Resolve the remaining pre-benchmark quality decisions
 
 | Claude Code | Kimi via OpenCode Go | Grok |
@@ -820,7 +834,7 @@ The private beta is launch-ready only when:
 | 19 | Archaic commentary modernization | Hold | Licensing plus side-by-side faithfulness-review design |
 | 20 | Generation-output verification guard | Accept residual gap | F4 diagnostic; no sixth judge without new evidence — `reference_verifier.py` solves misattribution, not this (see F4 note, 2026-08-13) |
 | 21 | Numeral-heading chapter detector | Leave unwired | Per-book validation surviving both known regressions |
-| 24 | `pending` vs `draft` quote status | Preserve both | Compatibility audit and migration plan |
+| 24 | `pending` vs `draft` quote status | Preserve both | Audit done 2026-08-17: no code path exists from `pending` to `approved` — if live rows exist, this is stranded curated quotes, not just a naming overlap; check live count before deciding |
 | 25 | Study-panel drag behavior | Swipe-only | Alex finds material mobile benefit |
 | 26 | `jewish_perspectives` table | Leave in place | Explicit approval for a dedicated drop migration |
 
