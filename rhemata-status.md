@@ -129,3 +129,11 @@ PLAN.md, 2026-08-13.)
 8. `pending` vs `draft` quote-status consolidation — Decision 24.
 9. `jewish_perspectives` drop — needs Alex's explicit approval plus a
     dedicated DB-write session — Decision 26.
+10. 144 of 3,604 corpus documents have no author attributed (confirmed by
+    read-only query 2026-08-17, corpus inventory snapshot pass). Named
+    attribution is the product's core promise — an unattributed document
+    either can't be served correctly, or is being served without the name
+    that gives it credibility. Needs a read-only diagnostic first: is this
+    one source class with a broken ingestion path, scattered one-offs, or
+    material that genuinely has no attributable author (correct handling
+    then is `silent_context`, not a missing name).
