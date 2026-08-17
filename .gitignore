@@ -55,6 +55,10 @@ reference_fabrication_review/
 # Source-ingest runner migration snapshots and live verification artifacts.
 source_ingest_runner_review/
 
+# Full-compute source-ingest previews. Contains captured article text and
+# generated review material; local-only and immutable per capture identity.
+source_ingest_preview_review/
+
 # Layer 3 LLM reading-pass live-run review (PLAN.md #45.6, 2026-07-29) —
 # per-item model verdicts + reasons from the first-ever live run of
 # citation_verifier_layers.py's Layer 3, including full proposition text.

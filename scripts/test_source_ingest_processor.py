@@ -488,6 +488,9 @@ class WebPagePrepareIngestTests(unittest.TestCase):
         self.assertFalse(result.duplicate)
         self.assertEqual(result.source_kind, "web_article")
         self.assertEqual(result.citation_mode, "citable")
+        self.assertEqual(result.license_status, "licensed")
+        self.assertEqual(result.source_visibility, "hidden")
+        self.assertFalse(result.metadata_computed)
         self.assertEqual(
             result.extraction_evidence, {"container": "article", "word_count": 7}
         )
@@ -697,6 +700,9 @@ class WebPagePrepareIngestTests(unittest.TestCase):
         self.assertIn("By Jane Doe", result.body_text)
         self.assertEqual(result.source_kind, "web_article")
         self.assertEqual(result.citation_mode, "citable")
+        self.assertEqual(result.license_status, "unlicensed")
+        self.assertEqual(result.source_visibility, "hidden")
+        self.assertTrue(result.metadata_computed)
 
     def test_duplicate_web_page_skips_metadata_but_remains_prepared(self):
         result = prepare_ingest(

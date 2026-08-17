@@ -66,6 +66,9 @@ class PreparedIngest:
     fetched_bytes: int
     duplicate: bool
     extraction_evidence: Dict[str, object] = field(default_factory=dict)
+    license_status: Optional[str] = None
+    source_visibility: Optional[str] = None
+    metadata_computed: bool = False
 
     @property
     def final_url(self) -> str:
@@ -145,6 +148,7 @@ def _base_prepared(
     chunk_count: int,
     duplicate: bool,
     is_web_page: bool,
+    source_policy: Optional[Dict[str, object]],
 ) -> PreparedIngest:
     if is_web_page:
         # extracted is an html_extract.ExtractedArticle: it already carries a
@@ -178,6 +182,8 @@ def _base_prepared(
         fetched_bytes=fetched.byte_count,
         duplicate=duplicate,
         extraction_evidence=evidence,
+        license_status=(source_policy or {}).get("license_status"),
+        source_visibility=(source_policy or {}).get("visibility"),
     )
 
 
@@ -242,6 +248,7 @@ def prepare_ingest(
     if via == "MISS" or source_id == SENTINEL_SOURCE_ID:
         raise AttentionRequired("source_unresolved", "declared source is unresolved")
 
+    source_policy = None
     if is_web_page:
         try:
             source_policy = source_policy_fn(db, source_id)
@@ -303,6 +310,7 @@ def prepare_ingest(
         chunk_count=len(chunks),
         duplicate=duplicate,
         is_web_page=is_web_page,
+        source_policy=source_policy,
     )
     if dry_run or duplicate:
         return prepared
@@ -356,6 +364,9 @@ def prepare_ingest(
         content_sha256=prepared.content_sha256,
         fetched_bytes=prepared.fetched_bytes,
         extraction_evidence=prepared.extraction_evidence,
+        license_status=prepared.license_status,
+        source_visibility=prepared.source_visibility,
+        metadata_computed=True,
         duplicate=False,
     )
 
