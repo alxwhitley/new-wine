@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { streamAsyncChatMessage, fetchWeeklyUsage, Citation } from "@/lib/api";
 import type { VerifiedReference } from "@/lib/study-reference";
+import { withoutFailedTurn } from "@/lib/chat-recovery";
 
 export interface Message {
   role: "user" | "assistant";
@@ -147,6 +148,12 @@ export function useChat(
           onWeeklyLimitReached?.(detail);
           return null;
         }
+        // Unlike the guest/weekly-limit branches above, this path used to
+        // leave the failed question + empty assistant placeholder sitting
+        // permanently in `messages` -- a dead bubble that only disappeared
+        // if the caller wiped the whole conversation. Stripping it here
+        // lets a retry resubmit cleanly in place instead.
+        setMessages((prev) => withoutFailedTurn(prev));
         setError("Something went wrong. Please try again.");
         return null;
       } finally {

@@ -312,7 +312,13 @@ export default function Home() {
 
   function handleRetry() {
     if (!lastQuery) return;
-    handleNewChat();
+    // Deliberately NOT handleNewChat(): retry resubmits the failed
+    // question in the same conversation (useChat's own error handling
+    // already strips the failed turn's empty placeholder -- see
+    // lib/chat-recovery.ts) rather than discarding everything the user
+    // asked before the failure.
+    setIsSourcePanelOpen(false);
+    setSelectedCitation(null);
     handleSend(lastQuery);
   }
 
@@ -324,8 +330,12 @@ export default function Home() {
   }
 
   async function handleDeleteConversation(id: string) {
-    await deleteConversation(id);
-    if (conversationId === id) {
+    const deleted = await deleteConversation(id);
+    // Only clear the visible thread on confirmed success -- a silent
+    // failure (network blip, RLS rejection) must never make an open
+    // conversation appear to vanish while it's still there in Supabase
+    // and the sidebar list.
+    if (deleted && conversationId === id) {
       clearMessages();
     }
   }

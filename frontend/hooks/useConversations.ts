@@ -41,9 +41,15 @@ export function useConversations(userId: string | undefined) {
     [],
   );
 
-  const deleteConversation = useCallback(async (id: string) => {
-    console.log("[DELETE TRACE] 5. deleteConversation called in useConversations for:", id);
-    if (!userId) return;
+  // Returns whether the conversation was actually deleted. Callers must
+  // not treat this as fire-and-forget: clearing a visible chat thread on
+  // the assumption a delete succeeded, when it silently failed, makes the
+  // conversation appear to vanish with no explanation (it's still there,
+  // in Supabase and in the sidebar list) -- see app/page.tsx's
+  // handleDeleteConversation, which only clears the open thread when this
+  // returns true.
+  const deleteConversation = useCallback(async (id: string): Promise<boolean> => {
+    if (!userId) return false;
     try {
       // Verify the conversation belongs to this user before touching messages.
       // The messages table has no user_id column, so we gate the message delete
@@ -56,28 +62,30 @@ export function useConversations(userId: string | undefined) {
         .maybeSingle();
       if (ownErr) {
         console.error("Failed to verify conversation ownership:", ownErr);
-        return;
+        return false;
       }
       if (!owned) {
         console.error("Refusing to delete conversation not owned by user:", id);
-        return;
+        return false;
       }
 
       const { error: msgErr } = await supabase.from("messages").delete().eq("conversation_id", id);
       if (msgErr) {
         console.error("Failed to delete messages:", msgErr);
-        return;
+        return false;
       }
 
       const { error: convErr } = await supabase.from("conversations").delete().eq("id", id).eq("user_id", userId);
       if (convErr) {
         console.error("Failed to delete conversation:", convErr);
-        return;
+        return false;
       }
 
       setConversations((prev) => prev.filter((c) => c.id !== id));
+      return true;
     } catch (err) {
       console.error("Unexpected error deleting conversation:", err);
+      return false;
     }
   }, [userId]);
 
