@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes, async_chat
+from app.routers import search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes, async_chat, corpus_inventory
 
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(document.router, prefix="/document", tags=["document"])
@@ -53,6 +53,15 @@ app.include_router(answer_quotes.router, prefix="/answer-quotes", tags=["answer-
 # emergency pause, not a rollback (there's no other path to roll back to;
 # see async_chat.py's module docstring) -- unaffected by this change.
 app.include_router(async_chat.router, prefix="/async-chat", tags=["async-chat"])
+
+# Corpus inventory export (CORPUS-INV-001, 2026-08-17) -- a read-only,
+# secret-key-gated bibliography CSV (author/title/url) for an external
+# AI agent's dedup use. Deliberately serves the full corpus regardless of
+# license_status/visibility -- see corpus_inventory.py's module docstring
+# for why that bypass is scoped to this bibliography-only surface and must
+# never be extended to content. include_in_schema=False on its own route
+# keeps it out of /docs and /openapi.json; the key is the real gate.
+app.include_router(corpus_inventory.router, prefix="/corpus-inventory", tags=["corpus-inventory"])
 
 @app.get("/")
 async def root():
