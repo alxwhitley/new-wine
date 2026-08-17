@@ -1,4 +1,4 @@
-"""Corpus inventory export -- read-only, secret-key-gated bibliography CSV.
+"""Corpus inventory export -- read-only, publicly reachable bibliography CSV.
 
 CORPUS-INV-001 (2026-08-17). Serves author/title/canonical-URL for the FULL
 corpus, as CSV, so an external AI agent can run dedup checks against what
@@ -25,14 +25,14 @@ column beyond `author, title, url`, or joining in chunk/proposition text, is
 a policy change, not an implementation detail -- it needs a fresh decision,
 not a quiet edit to this file.
 
-Auth: a single shared secret (`CORPUS_INVENTORY_API_KEY` env var) compared
-with `hmac.compare_digest`, never `==` (constant-time, no timing
-side-channel). Missing/unset key, missing caller key, or a mismatch all
-return a bare 404 with no body -- indistinguishable from a route that does
-not exist. Not 401/403: this route is not meant to announce its own
-existence to an unauthenticated prober. `include_in_schema=False` keeps it
-out of /docs and /openapi.json for the same reason -- the key is the real
-gate, but there is no reason to also advertise the path.
+Access: deliberately no auth of any kind (Alex's explicit call, 2026-08-17,
+reversing this endpoint's original secret-key-gated design) -- the payload
+(author/title/URL only, no license/visibility filter) is judged not
+sensitive. Anyone with the URL gets the CSV; there is no key, no admin
+check, nothing to rotate. `include_in_schema=False` keeps it out of /docs
+and /openapi.json purely so it isn't advertised to every API browser --
+that is NOT a security boundary, just an unlisted link, and must not be
+treated as one if this decision is ever revisited.
 
 Read-only: GET only, no other HTTP verb defined in this file, and no
 write-method call (insert, update, delete, upsert) anywhere in this
@@ -42,12 +42,10 @@ scripts/test_corpus_inventory_endpoint.py.
 from __future__ import annotations
 
 import csv
-import hmac
 import io
-import os
-from typing import List, Optional
+from typing import List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter
 from fastapi.responses import Response
 
 from app.db.supabase import get_supabase
@@ -103,13 +101,7 @@ def _rows_to_csv(rows: List[dict]) -> str:
 
 
 @router.get("/export", include_in_schema=False)
-async def export_corpus_inventory(key: Optional[str] = Query(default=None)):
-    expected = os.environ.get("CORPUS_INVENTORY_API_KEY")
-    if not expected or not key or not hmac.compare_digest(key, expected):
-        # Bare 404, no detail -- see module docstring. Do not leak "wrong
-        # key" vs "missing key" vs "unconfigured" via status code or body.
-        raise HTTPException(status_code=404)
-
+async def export_corpus_inventory():
     rows = _fetch_all_documents()
     csv_text = _rows_to_csv(rows)
     return Response(content=csv_text, media_type="text/csv")
