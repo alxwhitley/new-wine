@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import psycopg2
 import shared_ingest
 from app.services.chunker import chunk_text
 from app.services.metadata import extract_metadata
 from app.services.source_resolver import is_source_servable
-from source_ingest_queue.fetcher import FetchRejected, FetchTransient, fetch_pdf
+from source_ingest_queue.fetcher import FetchRejected, FetchTransient, fetch_html, fetch_pdf
+from source_ingest_queue.html_extract import HtmlRejected, extract_article_bounded
 from source_ingest_queue.pdf import PdfRejected, extract_pdf_bounded
 from source_resolver import SENTINEL_SOURCE_ID, resolve_source_id
 
 
+_SOURCE_FORMATS = frozenset({"pdf", "web_page"})
 _SOURCE_TYPES = frozenset(
     {"book", "article", "sermon", "commentary", "essay", "letter", "other"}
 )
@@ -63,6 +65,7 @@ class PreparedIngest:
     content_sha256: str
     fetched_bytes: int
     duplicate: bool
+    extraction_evidence: Dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -78,7 +81,7 @@ class ProcessOutcome:
 
 def classify_row(row: dict) -> Optional[str]:
     """Return the first unsupported-policy reason, or None when runnable."""
-    if row.get("source_format") != "pdf":
+    if row.get("source_format") not in _SOURCE_FORMATS:
         return "unsupported_source_format"
     if row.get("source_scope") != "single":
         return "unsupported_source_scope"
@@ -117,8 +120,19 @@ def _base_prepared(
     fetched,
     chunk_count: int,
     duplicate: bool,
+    is_web_page: bool,
 ) -> PreparedIngest:
-    fallback_title = Path(fetched.filename).stem.replace("_", " ").strip()
+    if is_web_page:
+        # extracted is an html_extract.ExtractedArticle: it already carries a
+        # real title (from <title>/<h1>) and structural extraction evidence,
+        # both stronger signals than anything derivable from the URL alone.
+        fallback_title = (extracted.title or "").strip()
+        page_count = 1  # one article page; not a paginated-document concept
+        evidence: Dict[str, object] = dict(extracted.evidence)
+    else:
+        fallback_title = Path(fetched.filename).stem.replace("_", " ").strip()
+        page_count = extracted.page_count
+        evidence = {"page_count": extracted.page_count}
     return PreparedIngest(
         row_id=str(row.get("id") or ""),
         source_id=source_id,
@@ -134,11 +148,12 @@ def _base_prepared(
         year=None,
         topic_tags=[],
         bible_references=[],
-        page_count=extracted.page_count,
+        page_count=page_count,
         chunk_count=chunk_count,
         content_sha256=fetched.sha256,
         fetched_bytes=fetched.byte_count,
         duplicate=duplicate,
+        extraction_evidence=evidence,
     )
 
 
@@ -150,31 +165,46 @@ def prepare_ingest(
     dry_run: bool,
     fetch_fn: Callable = fetch_pdf,
     extract_fn: Callable = extract_pdf_bounded,
+    html_fetch_fn: Callable = fetch_html,
+    html_extract_fn: Callable = extract_article_bounded,
     resolve_fn: Callable = resolve_source_id,
     servable_fn: Callable = is_source_servable,
     dedup_fn: Callable = shared_ingest.already_ingested,
     chunk_fn: Callable = chunk_text,
     metadata_fn: Callable = extract_metadata,
 ) -> PreparedIngest:
-    """Validate and prepare one row without writing corpus or queue state."""
+    """Validate and prepare one row without writing corpus or queue state.
+
+    source_format selects which fetch/extract pair runs -- pdf uses
+    fetch_fn/extract_fn (fetch_pdf/extract_pdf_bounded by default),
+    web_page uses html_fetch_fn/html_extract_fn (fetch_html/
+    extract_article_bounded by default). Every later boundary (source
+    resolution, servability, dedup, metadata, chunking) is identical for
+    both -- only how raw bytes become plain body text differs."""
     reason = classify_row(row)
     if reason is not None:
         raise AttentionRequired(reason, "queue row is unsupported")
     if not row.get("id") or not row.get("url"):
         raise AttentionRequired("invalid_queue_row", "queue row identity is missing")
 
+    is_web_page = row.get("source_format") == "web_page"
+    active_fetch_fn = html_fetch_fn if is_web_page else fetch_fn
+    active_extract_fn = html_extract_fn if is_web_page else extract_fn
+
     declared_author = row["attribute_to"].strip()
     try:
-        fetched = fetch_fn(row["url"])
+        fetched = active_fetch_fn(row["url"])
     except FetchRejected as exc:
         raise AttentionRequired(exc.code, "source fetch was rejected") from exc
     except FetchTransient as exc:
         raise RetryableIngestError(exc.code, "source fetch failed") from exc
 
     try:
-        extracted = extract_fn(fetched.content)
+        extracted = active_extract_fn(fetched.content)
     except PdfRejected as exc:
         raise AttentionRequired(exc.code, "PDF extraction was rejected") from exc
+    except HtmlRejected as exc:
+        raise AttentionRequired(exc.code, "article extraction was rejected") from exc
 
     try:
         source_id, _normalized_key, via = resolve_fn(
@@ -221,6 +251,7 @@ def prepare_ingest(
         fetched=fetched,
         chunk_count=len(chunks),
         duplicate=duplicate,
+        is_web_page=is_web_page,
     )
     if dry_run or duplicate:
         return prepared
@@ -270,6 +301,7 @@ def prepare_ingest(
         chunk_count=prepared.chunk_count,
         content_sha256=prepared.content_sha256,
         fetched_bytes=prepared.fetched_bytes,
+        extraction_evidence=prepared.extraction_evidence,
         duplicate=False,
     )
 

@@ -222,17 +222,28 @@ def _close_quietly(resource) -> None:
         pass
 
 
-def fetch_pdf(
+def _fetch_bounded(
     url: str,
     *,
-    resolver=resolve_public_addresses,
-    connection_factory=None,
-    timeout_seconds: float = 30.0,
-    max_bytes: int = 50 * 1024 * 1024,
-    max_redirects: int = 3,
-    log_hook: Optional[Callable] = None,
-) -> FetchResult:
-    """Fetch one PDF through a pinned public address."""
+    resolver,
+    connection_factory,
+    timeout_seconds: float,
+    max_bytes: int,
+    max_redirects: int,
+    log_hook: Optional[Callable],
+    accept_header: str,
+    content_type_ok: Callable[[str], bool],
+    oversize_code: str,
+) -> Tuple[bytes, str]:
+    """SSRF-safe, bounded, redirect-following fetch shared by every queued
+    source format. Returns (content, final_url); callers layer their own
+    format-specific result (filename derivation, hashing) on top. Every
+    protection (address pinning, TLS SNI/identity, redirect-loop and
+    HTTPS-downgrade refusal, streamed/declared byte ceiling, transient vs.
+    rejected classification) is identical across formats -- only the Accept
+    header, the acceptable Content-Type set, and the oversize error code
+    vary per caller.
+    """
     if timeout_seconds <= 0 or max_bytes <= 0 or max_redirects < 0:
         raise ValueError("fetch limits must be positive")
     if connection_factory is None:
@@ -285,7 +296,7 @@ def fetch_pdf(
                     _request_target(parsed),
                     body=None,
                     headers={
-                        "Accept": "application/pdf",
+                        "Accept": accept_header,
                         "Host": _host_header(parsed, port),
                     },
                 )
@@ -315,8 +326,8 @@ def fetch_pdf(
                 raise FetchRejected("http_status", "source server rejected the request")
 
             content_type = (response.getheader("Content-Type") or "").split(";", 1)[0]
-            if content_type.strip().lower() != "application/pdf":
-                raise FetchRejected("not_pdf", "response is not application/pdf")
+            if not content_type_ok(content_type):
+                raise FetchRejected("wrong_content_type", "unexpected content type")
 
             declared_length = response.getheader("Content-Length")
             if declared_length is not None:
@@ -329,7 +340,7 @@ def fetch_pdf(
                 if declared_bytes < 0:
                     raise FetchRejected("invalid_response", "Content-Length is invalid")
                 if declared_bytes > max_bytes:
-                    raise FetchRejected("pdf_too_large", "PDF exceeds byte limit")
+                    raise FetchRejected(oversize_code, "response exceeds byte limit")
 
             content = bytearray()
             while True:
@@ -343,16 +354,104 @@ def fetch_pdf(
                     break
                 content.extend(chunk)
                 if len(content) > max_bytes:
-                    raise FetchRejected("pdf_too_large", "PDF exceeds byte limit")
+                    raise FetchRejected(oversize_code, "response exceeds byte limit")
 
-            immutable_content = bytes(content)
-            return FetchResult(
-                content=immutable_content,
-                final_url=current_url,
-                sha256=hashlib.sha256(immutable_content).hexdigest(),
-                byte_count=len(immutable_content),
-                filename=_safe_filename(parsed.path),
-            )
+            return bytes(content), current_url
         finally:
             _close_quietly(response)
             _close_quietly(connection)
+
+
+def fetch_pdf(
+    url: str,
+    *,
+    resolver=resolve_public_addresses,
+    connection_factory=None,
+    timeout_seconds: float = 30.0,
+    max_bytes: int = 50 * 1024 * 1024,
+    max_redirects: int = 3,
+    log_hook: Optional[Callable] = None,
+) -> FetchResult:
+    """Fetch one PDF through a pinned public address."""
+    try:
+        content, final_url = _fetch_bounded(
+            url,
+            resolver=resolver,
+            connection_factory=connection_factory,
+            timeout_seconds=timeout_seconds,
+            max_bytes=max_bytes,
+            max_redirects=max_redirects,
+            log_hook=log_hook,
+            accept_header="application/pdf",
+            content_type_ok=lambda ct: ct.strip().lower() == "application/pdf",
+            oversize_code="pdf_too_large",
+        )
+    except FetchRejected as exc:
+        if exc.code == "wrong_content_type":
+            raise FetchRejected("not_pdf", "response is not application/pdf") from exc
+        raise
+
+    parsed, _port = _validate_url(final_url)
+    return FetchResult(
+        content=content,
+        final_url=final_url,
+        sha256=hashlib.sha256(content).hexdigest(),
+        byte_count=len(content),
+        filename=_safe_filename(parsed.path),
+    )
+
+
+_HTML_MAX_BYTES = 5 * 1024 * 1024  # a single article page, not a PDF-scale ceiling
+
+
+def _safe_html_filename(path: str) -> str:
+    candidate = unquote(path.rsplit("/", 1)[-1]) or "article.html"
+    candidate = re.sub(r"[^A-Za-z0-9._-]+", "_", candidate).strip("._")
+    if not candidate:
+        candidate = "article.html"
+    if not candidate.lower().endswith((".html", ".htm")):
+        candidate += ".html"
+    return candidate[:120]
+
+
+def fetch_html(
+    url: str,
+    *,
+    resolver=resolve_public_addresses,
+    connection_factory=None,
+    timeout_seconds: float = 30.0,
+    max_bytes: int = _HTML_MAX_BYTES,
+    max_redirects: int = 3,
+    log_hook: Optional[Callable] = None,
+) -> FetchResult:
+    """Fetch one HTML article page through the same pinned-address, redirect,
+    and byte-limit protections as fetch_pdf(). Returns the raw HTML bytes for
+    source_ingest_queue.html_extract to isolate the article body from -- this
+    function does no HTML parsing itself."""
+    try:
+        content, final_url = _fetch_bounded(
+            url,
+            resolver=resolver,
+            connection_factory=connection_factory,
+            timeout_seconds=timeout_seconds,
+            max_bytes=max_bytes,
+            max_redirects=max_redirects,
+            log_hook=log_hook,
+            accept_header="text/html,application/xhtml+xml",
+            content_type_ok=lambda ct: ct.strip().lower()
+            in ("text/html", "application/xhtml+xml"),
+            oversize_code="html_too_large",
+        )
+    except FetchRejected as exc:
+        if exc.code == "wrong_content_type":
+            raise FetchRejected("not_html", "response is not text/html") from exc
+        raise
+
+    parsed, _port = _validate_url(final_url)
+    return FetchResult(
+        content=content,
+        final_url=final_url,
+        sha256=hashlib.sha256(content).hexdigest(),
+        byte_count=len(content),
+        filename=_safe_html_filename(parsed.path),
+    )

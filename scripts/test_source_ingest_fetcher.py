@@ -10,6 +10,7 @@ from source_ingest_queue.fetcher import (
     FetchResult,
     FetchTransient,
     _open_pinned_connection,
+    fetch_html,
     fetch_pdf,
     resolve_public_addresses,
 )
@@ -450,6 +451,179 @@ class FetchPdfValidationTests(unittest.TestCase):
                     )
                 self.assertEqual(raised.exception.code, code)
                 self.assertNotIn("detail must stay private", raised.exception.detail)
+
+
+class FetchHtmlValidationTests(unittest.TestCase):
+    """fetch_html() reuses fetch_pdf()'s SSRF/redirect/timeout protections
+    (same _validate_url, resolve_public_addresses, _open_pinned_connection
+    core) but accepts text/html content and returns the raw article HTML
+    for a downstream extractor to isolate the article body from."""
+
+    def test_rejects_malformed_or_unsafe_url_before_resolution(self):
+        unsafe_urls = (
+            "ftp://example.com/post",
+            "https:///post",
+            "https://user:password@example.com/post",
+            "https://example.com/post#private-fragment",
+            "https://example.com/post\r\nX-Test: injected",
+        )
+
+        for url in unsafe_urls:
+            with self.subTest(url=url):
+                resolver_called = []
+                with self.assertRaises(FetchRejected) as raised:
+                    fetch_html(
+                        url,
+                        resolver=lambda *args: resolver_called.append(args),
+                        connection_factory=lambda **kwargs: None,
+                    )
+                self.assertEqual(raised.exception.code, "unsafe_url")
+                self.assertEqual(resolver_called, [])
+
+    def test_fetches_html_using_hostname_and_pinned_address(self):
+        content = "<html><body><article>Hello world</article></body></html>".encode()
+        response = FakeResponse(
+            headers={
+                "Content-Type": "text/html; charset=utf-8",
+                "Content-Length": str(len(content)),
+            },
+            chunks=(content,),
+        )
+        connection = FakeConnection(response)
+        resolved = []
+        opened = []
+
+        def resolver(hostname, port):
+            resolved.append((hostname, port))
+            return ("93.184.216.34",)
+
+        def connection_factory(**kwargs):
+            opened.append(kwargs)
+            return connection
+
+        result = fetch_html(
+            "https://example.com/blog/my-post?utm_source=x",
+            resolver=resolver,
+            connection_factory=connection_factory,
+        )
+
+        self.assertIsInstance(result, FetchResult)
+        self.assertEqual(result.content, content)
+        self.assertEqual(result.byte_count, len(content))
+        self.assertEqual(
+            result.final_url, "https://example.com/blog/my-post?utm_source=x"
+        )
+        self.assertEqual(resolved, [("example.com", 443)])
+        self.assertEqual(
+            connection.requests,
+            [
+                (
+                    "GET",
+                    "/blog/my-post?utm_source=x",
+                    None,
+                    {
+                        "Accept": "text/html,application/xhtml+xml",
+                        "Host": "example.com",
+                    },
+                )
+            ],
+        )
+        self.assertTrue(response.closed)
+        self.assertTrue(connection.closed)
+
+    def test_accepts_xhtml_content_type(self):
+        content = b"<html><body><article>Hi</article></body></html>"
+        response = FakeResponse(headers={"Content-Type": "application/xhtml+xml"}, chunks=(content,))
+
+        result = fetch_html(
+            "https://example.com/post",
+            resolver=lambda *args: ("93.184.216.34",),
+            connection_factory=lambda **kwargs: FakeConnection(response),
+        )
+        self.assertEqual(result.content, content)
+
+    def test_rejects_non_html_content_type(self):
+        response = FakeResponse(headers={"Content-Type": "application/pdf"})
+
+        with self.assertRaises(FetchRejected) as raised:
+            fetch_html(
+                "https://example.com/post",
+                resolver=lambda *args: ("93.184.216.34",),
+                connection_factory=lambda **kwargs: FakeConnection(response),
+            )
+        self.assertEqual(raised.exception.code, "not_html")
+
+    def test_rejects_declared_or_streamed_oversize_body(self):
+        cases = (
+            (
+                "declared",
+                FakeResponse(
+                    headers={"Content-Type": "text/html", "Content-Length": "999999"}
+                ),
+            ),
+            (
+                "streamed",
+                FakeResponse(
+                    headers={"Content-Type": "text/html"},
+                    chunks=(b"a" * 5, b"b" * 5),
+                ),
+            ),
+        )
+        for name, response in cases:
+            with self.subTest(name=name):
+                with self.assertRaises(FetchRejected) as raised:
+                    fetch_html(
+                        "https://example.com/post",
+                        resolver=lambda *args: ("93.184.216.34",),
+                        connection_factory=lambda **kwargs: FakeConnection(response),
+                        max_bytes=8,
+                    )
+                self.assertEqual(raised.exception.code, "html_too_large")
+
+    def test_redirect_and_downgrade_protection_match_fetch_pdf(self):
+        first = FakeResponse(
+            status=302, headers={"Location": "https://cdn.example.org/post?token=two"}
+        )
+        second = FakeResponse(
+            headers={"Content-Type": "text/html"}, chunks=(b"<html>ok</html>",)
+        )
+        responses = [first, second]
+
+        result = fetch_html(
+            "https://example.com/start?secret=one",
+            resolver=lambda hostname, port: {
+                "example.com": ("93.184.216.34",),
+                "cdn.example.org": ("93.184.216.35",),
+            }[hostname],
+            connection_factory=lambda **kwargs: FakeConnection(responses.pop(0)),
+        )
+        self.assertEqual(result.final_url, "https://cdn.example.org/post?token=two")
+
+        with self.assertRaises(FetchRejected) as raised:
+            fetch_html(
+                "https://example.com/start",
+                resolver=lambda *args: ("93.184.216.34",),
+                connection_factory=lambda **kwargs: FakeConnection(
+                    FakeResponse(
+                        status=302,
+                        headers={"Location": "http://example.com/downgraded"},
+                    )
+                ),
+            )
+        self.assertEqual(raised.exception.code, "unsafe_url")
+
+    def test_classifies_connect_and_read_failures_as_transient(self):
+        with self.assertRaises(FetchTransient) as raised:
+            fetch_html(
+                "https://example.com/post",
+                resolver=lambda *args: ("93.184.216.34",),
+                connection_factory=lambda **kwargs: FakeConnection(
+                    FakeResponse(),
+                    connect_error=socket.timeout("connect detail must stay private"),
+                ),
+            )
+        self.assertEqual(raised.exception.code, "connect_timeout")
+        self.assertNotIn("detail must stay private", raised.exception.detail)
 
 
 if __name__ == "__main__":

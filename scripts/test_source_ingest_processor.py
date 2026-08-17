@@ -4,6 +4,7 @@
 import unittest
 
 from source_ingest_queue.fetcher import FetchResult
+from source_ingest_queue.html_extract import ExtractedArticle, HtmlRejected
 from source_ingest_queue.pdf import ExtractedPdf
 from source_ingest_queue.processor import (
     AttentionRequired,
@@ -29,6 +30,18 @@ def valid_row():
     }
 
 
+def valid_web_page_row():
+    return {
+        "id": "44444444-4444-4444-4444-444444444444",
+        "url": "https://example.com/blog/original-post",
+        "source_format": "web_page",
+        "source_scope": "single",
+        "attribution_mode": "declared",
+        "attribute_to": " Derek Prince ",
+        "retain_original_text": True,
+    }
+
+
 def fetched_pdf():
     return FetchResult(
         content=b"pdf bytes",
@@ -39,12 +52,46 @@ def fetched_pdf():
     )
 
 
+def fetched_html():
+    return FetchResult(
+        content=b"<html>raw bytes are irrelevant to these doubles</html>",
+        final_url="https://cdn.example.com/blog/final-post",
+        sha256="def456",
+        byte_count=55,
+        filename="final-post.html",
+    )
+
+
+def extracted_article(**overrides):
+    fields = {
+        "title": "A Real Article Title",
+        "text": "The complete extracted article body text.",
+        "word_count": 7,
+        "evidence": {"container": "article", "word_count": 7},
+    }
+    fields.update(overrides)
+    return ExtractedArticle(**fields)
+
+
 class ClassifyRowTests(unittest.TestCase):
     def test_accepts_only_the_supported_first_slice(self):
         self.assertIsNone(
             classify_row(
                 {
                     "source_format": "pdf",
+                    "source_scope": "single",
+                    "attribution_mode": "declared",
+                    "attribute_to": " Derek Prince ",
+                    "retain_original_text": True,
+                }
+            )
+        )
+
+    def test_accepts_web_page_single_declared(self):
+        self.assertIsNone(
+            classify_row(
+                {
+                    "source_format": "web_page",
                     "source_scope": "single",
                     "attribution_mode": "declared",
                     "attribute_to": " Derek Prince ",
@@ -62,7 +109,8 @@ class ClassifyRowTests(unittest.TestCase):
             "retain_original_text": True,
         }
         cases = (
-            ("source_format", "web_page", "unsupported_source_format"),
+            ("source_format", "video", "unsupported_source_format"),
+            ("source_format", "epub", "unsupported_source_format"),
             ("source_scope", "collection", "unsupported_source_scope"),
             ("attribution_mode", "per_item", "unsupported_attribution_mode"),
             ("attribute_to", "  ", "declared_author_missing"),
@@ -73,6 +121,27 @@ class ClassifyRowTests(unittest.TestCase):
         for field, value, expected in cases:
             with self.subTest(field=field, value=value):
                 row = dict(valid)
+                row[field] = value
+                self.assertEqual(classify_row(row), expected)
+
+    def test_web_page_still_fails_closed_on_unsupported_scope_or_attribution(self):
+        """A single-article web page is now supported, but collection scope
+        and per_item attribution are NOT -- widening one axis (format) must
+        not silently widen the others too."""
+        base = {
+            "source_format": "web_page",
+            "source_scope": "single",
+            "attribution_mode": "declared",
+            "attribute_to": "Derek Prince",
+            "retain_original_text": True,
+        }
+        cases = (
+            ("source_scope", "collection", "unsupported_source_scope"),
+            ("attribution_mode", "per_item", "unsupported_attribution_mode"),
+        )
+        for field, value, expected in cases:
+            with self.subTest(field=field, value=value):
+                row = dict(base)
                 row[field] = value
                 self.assertEqual(classify_row(row), expected)
 
@@ -152,7 +221,7 @@ class PrepareIngestTests(unittest.TestCase):
 
         with self.assertRaises(AttentionRequired) as unsupported:
             prepare_ingest(
-                {**valid_row(), "source_format": "web_page"},
+                {**valid_row(), "source_format": "video"},
                 db=object(),
                 db_params={},
                 dry_run=True,
@@ -294,6 +363,197 @@ class PrepareIngestTests(unittest.TestCase):
                     )
                 self.assertEqual(raised.exception.code, code)
                 self.assertNotIn("raw", raised.exception.detail)
+
+
+class WebPagePrepareIngestTests(unittest.TestCase):
+    """web_page + single + declared uses html_fetch_fn/html_extract_fn
+    (fetch_html/extract_article_bounded by default) instead of the PDF
+    pair, but shares every later boundary (resolve/servable/dedup/metadata)
+    with the PDF path unchanged."""
+
+    def test_dry_run_prepares_from_extracted_article_title_and_evidence(self):
+        calls = []
+
+        def html_fetch(url):
+            calls.append(("fetch", url))
+            return fetched_html()
+
+        def html_extract(content):
+            calls.append(("extract", content))
+            return extracted_article()
+
+        def resolve(given_db, source_name, author):
+            calls.append(("resolve", source_name, author))
+            return "22222222-2222-2222-2222-222222222222", "derek prince", "source_name"
+
+        result = prepare_ingest(
+            valid_web_page_row(),
+            db=object(),
+            db_params={},
+            dry_run=True,
+            html_fetch_fn=html_fetch,
+            html_extract_fn=html_extract,
+            resolve_fn=resolve,
+            servable_fn=lambda *args: True,
+            dedup_fn=lambda *args: False,
+            chunk_fn=lambda text: ["chunk one"],
+            metadata_fn=lambda text: self.fail("dry run called metadata provider"),
+        )
+
+        self.assertIsInstance(result, PreparedIngest)
+        self.assertEqual(result.title, "A Real Article Title")
+        self.assertEqual(result.author, "Derek Prince")
+        self.assertEqual(result.source_name, "Derek Prince")
+        self.assertEqual(result.body_text, "The complete extracted article body text.")
+        self.assertEqual(result.source_url, "https://cdn.example.com/blog/final-post")
+        self.assertEqual(result.content_sha256, "def456")
+        self.assertEqual(result.fetched_bytes, 55)
+        self.assertEqual(result.chunk_count, 1)
+        self.assertFalse(result.duplicate)
+        self.assertEqual(
+            result.extraction_evidence, {"container": "article", "word_count": 7}
+        )
+        self.assertEqual(
+            calls,
+            [
+                ("fetch", "https://example.com/blog/original-post"),
+                ("extract", fetched_html().content),
+                ("resolve", "Derek Prince", None),
+            ],
+        )
+
+    def test_never_infers_or_replaces_the_declared_author(self):
+        """A visible byline inside the extracted article text, and a
+        conflicting model-guessed author from metadata, must both be
+        ignored -- the queue row's declared attribute_to always wins."""
+        result = prepare_ingest(
+            valid_web_page_row(),
+            db=object(),
+            db_params={},
+            dry_run=False,
+            html_fetch_fn=lambda url: fetched_html(),
+            html_extract_fn=lambda content: extracted_article(
+                text="By Jane Doe\n\nThe real article body follows this byline line."
+            ),
+            resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
+            servable_fn=lambda *args: True,
+            dedup_fn=lambda *args: False,
+            chunk_fn=lambda text: [text],
+            metadata_fn=lambda text: {
+                "title": "Model title",
+                "author": "Jane Doe",
+                "source_name": "Jane Doe",
+                "source_type": "article",
+                "year": None,
+                "topic_tags": [],
+            },
+        )
+
+        self.assertEqual(result.author, "Derek Prince")
+        self.assertEqual(result.source_name, "Derek Prince")
+        self.assertIn("By Jane Doe", result.body_text)
+
+    def test_duplicate_web_page_skips_metadata_but_remains_prepared(self):
+        result = prepare_ingest(
+            valid_web_page_row(),
+            db=object(),
+            db_params={},
+            dry_run=False,
+            html_fetch_fn=lambda url: fetched_html(),
+            html_extract_fn=lambda content: extracted_article(),
+            resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
+            servable_fn=lambda *args: True,
+            dedup_fn=lambda *args: True,
+            chunk_fn=lambda text: [text],
+            metadata_fn=lambda text: self.fail("duplicate called metadata provider"),
+        )
+        self.assertTrue(result.duplicate)
+
+    def test_provider_and_extraction_errors_use_stable_codes(self):
+        from source_ingest_queue.fetcher import FetchRejected, FetchTransient
+
+        cases = (
+            (
+                AttentionRequired,
+                "unsafe_url",
+                lambda url: (_ for _ in ()).throw(FetchRejected("unsafe_url", "raw")),
+                lambda content: extracted_article(),
+            ),
+            (
+                RetryableIngestError,
+                "dns_failure",
+                lambda url: (_ for _ in ()).throw(FetchTransient("dns_failure", "raw")),
+                lambda content: extracted_article(),
+            ),
+            (
+                AttentionRequired,
+                "not_html",
+                lambda url: (_ for _ in ()).throw(FetchRejected("not_html", "raw")),
+                lambda content: extracted_article(),
+            ),
+            (
+                AttentionRequired,
+                "no_article_body",
+                lambda url: fetched_html(),
+                lambda content: (_ for _ in ()).throw(
+                    HtmlRejected("no_article_body", "raw")
+                ),
+            ),
+            (
+                AttentionRequired,
+                "login_page",
+                lambda url: fetched_html(),
+                lambda content: (_ for _ in ()).throw(
+                    HtmlRejected("login_page", "raw")
+                ),
+            ),
+            (
+                AttentionRequired,
+                "article_too_thin",
+                lambda url: fetched_html(),
+                lambda content: (_ for _ in ()).throw(
+                    HtmlRejected("article_too_thin", "raw")
+                ),
+            ),
+        )
+
+        for error_type, code, html_fetch, html_extract in cases:
+            with self.subTest(code=code):
+                with self.assertRaises(error_type) as raised:
+                    prepare_ingest(
+                        valid_web_page_row(),
+                        db=object(),
+                        db_params={},
+                        dry_run=True,
+                        html_fetch_fn=html_fetch,
+                        html_extract_fn=html_extract,
+                        resolve_fn=lambda *args: ("source-id", "key", "source_name"),
+                        servable_fn=lambda *args: True,
+                        dedup_fn=lambda *args: False,
+                        chunk_fn=lambda text: [text],
+                    )
+                self.assertEqual(raised.exception.code, code)
+                self.assertNotIn("raw", raised.exception.detail)
+
+    def test_pdf_row_never_calls_html_fetch_or_extract_functions(self):
+        """A pdf-format row must keep using fetch_fn/extract_fn -- the new
+        html_fetch_fn/html_extract_fn parameters must never be invoked."""
+        result = prepare_ingest(
+            valid_row(),
+            db=object(),
+            db_params={},
+            dry_run=True,
+            fetch_fn=lambda url: fetched_pdf(),
+            extract_fn=lambda content: ExtractedPdf("Text", 1),
+            html_fetch_fn=lambda url: self.fail("pdf row called html_fetch_fn"),
+            html_extract_fn=lambda content: self.fail("pdf row called html_extract_fn"),
+            resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
+            servable_fn=lambda *args: True,
+            dedup_fn=lambda *args: False,
+            chunk_fn=lambda text: [text],
+        )
+        self.assertEqual(result.body_text, "Text")
+        self.assertEqual(result.page_count, 1)
 
 
 class ExecuteIngestTests(unittest.TestCase):
