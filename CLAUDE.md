@@ -44,7 +44,7 @@ later session makes deliberately).
    enumerate hundreds of thousands of questions in advance. No human review gate
    anywhere on the serving path. ⚠ *Tension to watch: the position serving path
    stores and re-serves generated positions and has a planned draft-review UI
-   (PLAN.md #48 / Open Decision #20(b)) — reconcile if/when that path goes live.*
+   (`docs/plan-archive.md` #48 / archived Open Decision #20(b)) — reconcile if/when that path goes live.*
 2. **Launch bar is "materially safer,"** not a demonstrated error rate. No public
    claim about fabrication frequency. Deterministic correctness where it can be
    guaranteed; honest disclosure where it cannot.
@@ -270,7 +270,7 @@ SEQUENCE (2026-08-03)".
     from a 4-teacher corpus position to a Prince-only teacher position, not
     a minor drift. **Corrected 2026-08-08 — no longer true: the revised
     one-hop design IS now built.** Open Decision #16 (topic list) is
-    RESOLVED (V1 adopted 2026-08-06/07, six topics — see PLAN.md Phase 3);
+    RESOLVED (V1 adopted 2026-08-06/07, six topics — see `docs/plan-archive.md`);
     the matcher (`match_stored_position()`) shipped 2026-08-07; the
     evidence-injection wiring itself shipped 2026-08-08 (commit `eca8070`,
     `backend/app/services/stored_position_evidence.py` + `producer.py`) and
@@ -617,7 +617,7 @@ different row, per the hard rule above.
     bypass-proofing build): `extract_propositions()`'s strip step arbitrates
     every UNGROUNDED/UNCERTAIN reference through the three-layer citation
     verifier (`scripts/citation_verifier_layers.py`, live-tested 2026-07-29
-    against 42 real corpus items — 78.6% overturn rate, PLAN.md #45.7)
+    against 42 real corpus items — 78.6% overturn rate, `docs/plan-archive.md` #45.7)
     before stripping: confirmed-absent (arbiter denies) strips as before;
     confirmed-present (arbiter overturns) is kept and logged as an overturn.
     Supersedes the 2026-07-28 "strip on mere failure to confirm" posture
@@ -638,8 +638,8 @@ different row, per the hard rule above.
     **Generation has now resumed and the backfill has run (2026-07-30,
     corrects this invariant's own earlier "still unresolved before
     generation resumes" framing — that precondition language predated the
-    run, it is not still open).** PLAN.md #46's human calibration ran and
-    closed 2026-07-30, before the run. The full backfill (PLAN.md #17/#49)
+    run, it is not still open).** `docs/plan-archive.md` #46's human calibration ran and
+    closed 2026-07-30, before the run. The full backfill (`docs/plan-archive.md` #17/#49)
     processed 515 documents, 508 succeeded — see rhemata-status.md for the
     complete accounting. **What remains genuinely unresolved, unchanged by
     that run:** the license gate and Precept-Austin lockout are still only
@@ -651,7 +651,7 @@ different row, per the hard rule above.
     the other 5 share. **All 7 since extracted 2026-08-02** (the 5 sermons via
     the now-fixed parser, the 2 books via the multi-call `process_book_document`
     path): the single-call limitation itself STANDS — the books simply no longer
-    go through the single-call path. See PLAN.md #17.
+    go through the single-call path. See `docs/plan-archive.md` #17.
 
 12. **Position generation must stay structurally source-blind.**
     `scripts/positions.py` has TWO — and only two — functions that call the
@@ -735,7 +735,7 @@ different row, per the hard rule above.
     build/serve time (`contributor_breakdown_from_db()`), NEVER a stored
     taxonomy of which teacher belongs to which family — that standing rule
     (PLAN.md track PL) is unchanged and non-negotiable. **Still open, NOT
-    closed by the ban lift:** PLAN.md Open Decision #13 (who owns the
+    closed by the ban lift:** archived Open Decision #13 in `docs/plan-archive.md` (who owns the
     teacher-vs-corpus scope-boundary judgment call) remains unresolved; the
     threshold that actually decides teacher vs corpus for a topic question
     (`positions.DOMINANCE_THRESHOLD` = 0.60 — a single teacher supplying ≥60%
@@ -1181,7 +1181,7 @@ different row, per the hard rule above.
   is a real concurrency window at the 100-dial.
 
 - **RESOLVED 2026-08-08** — `ingest_helloao.py` now routes through
-  `shared_ingest.ingest_document()` (commit `929bc34`, PLAN.md Phase 5
+  `shared_ingest.ingest_document()` (commit `929bc34`, archived PLAN Phase 5 in `docs/plan-archive.md`
   #13). Verified via `--dry-run`, a real single-item write (independently
   confirmed in the DB, then deleted), and a full unfiltered batch
   (`attempted=198 stored=0 skipped=198 failed=0`, reconciled against the
@@ -1234,7 +1234,7 @@ different row, per the hard rule above.
   full-corpus text sweep for one known leak), but that's evidence, not a
   stored fact for those rows. Treat any claim about which prompt version
   produced any row dated before 2026-07-29 as unverified unless re-checked
-  by the same method (PLAN.md #45.5) — this caveat does NOT extend to the
+  by the same method (`docs/plan-archive.md` #45.5) — this caveat does NOT extend to the
   `v3`/`v3.1` rows written 2026-07-30, which carry real, queried-not-
   inferred provenance.
 - **Citation-fabrication scale claims from 2026-07-28 are superseded — do
@@ -1297,18 +1297,18 @@ different row, per the hard rule above.
   gap named here is now fixed (2026-07-28,
   `scripts/citation_verifier_layers.py`'s Layer 1,
   commit `ff74a42`)** — but that fix lives in the repurposed
-  generation-time verifier (PLAN.md #45.6), not in
+  generation-time verifier (`docs/plan-archive.md` #45.6), not in
   `reference_grounding.find_reference_spans()`, the scanner
   `detect_reference_fabrication.py` actually used to produce the baseline
   below. A trustworthy corpus-wide number still requires an actual
   corpus-wide re-run using the fixed recognition — demoted to later work,
-  not scheduled (PLAN.md #45.6). Local, gitignored
+  not scheduled (`docs/plan-archive.md` #45.6). Local, gitignored
   `reference_fabrication_review/corpus_findings.jsonl` holds the stale
   72-item list; treat every entry in it as a review candidate, not a
   confirmed problem. See also Invariant 11 — the strip mechanism this scan
   fed was itself found to have a backwards default; the re-wiring to a
   confirming step is now DONE (2026-07-30), so this specific blocker on the
-  backfill is cleared, though other preconditions (PLAN.md #49) remain.
+  backfill is cleared, though other archived preconditions (`docs/plan-archive.md` #49) remain.
 - **The book-name map exists as five independent hand-maintained copies
   that will drift out of sync with each other over time.** A 2026-07-28
   blast-radius survey (the BOOK_MAP ordinal/spelled/Roman-numeral fix,
@@ -1352,11 +1352,11 @@ different row, per the hard rule above.
   material without checking with Alex first. Vlad Savchuk and Zac Poonen — 61%
   of the current propositions layer between them — both entered via this
   route; a stale-looking ingest queue is a decision, not an oversight. See
-  `PLAN.md` #44 for the reason (duplicate clip/full-sermon content found the
+  `docs/plan-archive.md` #44 for the reason (duplicate clip/full-sermon content found the
   same day).
 - **No mechanism exists anywhere in this schema to link two documents as one
   work.** The standing "link, don't merge" policy for split-work groups and
-  duplicate clips (`PLAN.md` #44) has no table or column backing it yet —
+  duplicate clips (`docs/plan-archive.md` #44) has no table or column backing it yet —
   confirmed by a direct schema check 2026-07-25. Don't assume a linked-work
   concept is queryable; it has to be designed and built first.
 - **Book-length extraction now has a real, committed path — but it only
@@ -1373,15 +1373,15 @@ different row, per the hard rule above.
   failure mode twice (fixed once, a second mechanism found no clean fix)
   and is not safe to wire in without per-book verification. Do not assume
   `detect_book_chapters()` is live just because it exists in
-  `propositions.py` — check for actual callers. See PLAN.md #50 and Open
-  Decision #21. **This same structural gap is why quote extraction from all
+  `propositions.py` — check for actual callers. See `docs/plan-archive.md` #50
+  and `docs/roadmap.md` Decision 21. **This same structural gap is why quote extraction from all
   53 book-type documents was tabled indefinitely 2026-08-08** (read-only
   diagnostic `docs/audits/book_structure_diagnostic.md`, run that session:
   no body/apparatus or chapter-boundary structure is recorded anywhere in
   the schema for books, `quote_ineligible_reason` covers only 66 of 25,064
   book chunks across 10 of 53 documents, and the detector's two regressions
   above are exactly why it isn't safe to lean on for boundary-finding
-  either — see PLAN.md Phase 4).
+  either — see archived PLAN Phase 4 in `docs/plan-archive.md`).
 - **CORRECTED 2026-08-01 — no longer an open decision.** The two live
   imperfections below (originally found 2026-07-31) are now fixed at the
   data level, not just in code: commit `8e251c8` shipped the byline/
@@ -1397,7 +1397,7 @@ different row, per the hard rule above.
   propositions, same disambiguation method) was extracted and stored as
   proposition_index 149 — 148 → 149 live propositions. See
   `rhemata-status.md`'s "Live-DB corrections + Wesley's Journal real
-  write" entry for the full evidentiary detail. PLAN.md Open Decision #22
+  write" entry for the full evidentiary detail. Archived Open Decision #22 in `docs/plan-archive.md`
   should be closed to match — original text left below for the historical
   record, not because it's still open:
   - Two book documents already have live propositions with small, known,
@@ -1490,13 +1490,16 @@ State lives in repo files. No Notion mirroring, no sync step (retired 2026-07-09
 | `POSITIONING.md` | Messaging, voice, product posture. Source of truth. |
 | `PRODUCT.md` | Who it's for, brand register, design principles, anti-references. Read before UI work. |
 | `DESIGN.md` | Styling-token authority. No hardcoded hex. |
-| `PLAN.md` | Current beta critical path, roadmap, classifications, and open decisions. |
+| `PLAN.md` | Current private-beta Blockers only. Always read before non-trivial work. |
+| `docs/roadmap.md` | Scheduled, Triggered, and Parked work. Load only for planning, classification, or trigger checks. |
+| `docs/plan-archive.md` | Completed, superseded, and historical plan reasoning. Load only when history is needed. |
 | `rhemata-status.md` | Live state only. Overwritten each session. Never durable truth. |
 
 **Writer rules:** terminal authors and writes `CLAUDE.md`, `ARCHITECTURE.md`,
 `HARNESS.md`, `PRODUCT.md`, `DESIGN.md`, `rhemata-status.md` — from
-confirmed-working builds only. `PLAN.md` content is chat-originated: chat decides roadmap, terminal writes
-it verbatim. Terminal is the pen, not the author. Chat never edits any file
+confirmed-working builds only. `PLAN.md` and `docs/roadmap.md` content is
+chat-originated: chat decides priority and classification, terminal writes it
+verbatim. Terminal is the pen, not the author. Chat never edits any file
 directly.
 
 **Eviction rule for this file:** every line must change what you'd do on a normal

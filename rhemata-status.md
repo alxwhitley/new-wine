@@ -2,7 +2,8 @@
 
 Point-in-time state only. Overwritten each session, not appended to. Never
 durable truth — the durable records are the code, git history, PLAN.md
-(roadmap / decisions / findings), and CLAUDE.md (invariants). Corpus, row, and
+(current Blockers), docs/roadmap.md (later classified work),
+docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
@@ -22,6 +23,11 @@ working surface; native agents/worktrees may assist bounded tasks. The custom
 multi-provider coordinator and overnight harness are retired from active
 development. Their code and history remain intact but no follow-up work is
 authorized.
+
+Planning is now split by operational purpose: `PLAN.md` is the short active
+Blocker queue; `docs/roadmap.md` contains Scheduled, Triggered, and Parked work;
+`docs/plan-archive.md` contains completed and superseded history. Ordinary
+sessions do not load the roadmap or archive unless the task needs them.
 
 Carried forward, unchanged since 2026-08-16: `codex/source-ingest-runner`
 deployed through release `0925c93` (Railway backend/answer-worker + Vercel
@@ -51,52 +57,13 @@ the applicable phase.
 **Triggered:** Tier-2 work begins at public signup or more than roughly 20 beta
 users. Load testing reopens only after measured beta evidence or a demonstrated
 concurrency failure. Admin notifications wait for scheduled position-refresh
-work.
+work. The Manna rebrand waits until Alex schedules it as a bounded product
+phase.
 
 **Parked:** custom harness/adapter work, missing-author cleanup, quote-status
 cleanup, chapter-detector expansion, one-off visibility work,
-`jewish_perspectives`, and the broad Manna rebrand unless a recorded trigger
-fires or Alex explicitly promotes an item.
-
----
-
-## Retired harness evidence
-
-The findings below explain the 2026-08-17 retirement decision. They are not an
-active repair queue.
-
-- **Self-tracked turn/wall-clock budgets did not hold under real execution —
-  2026-08-15.** ~11 real `executor`/`planner-reviewer` dispatches all
-  exceeded their stated turn cap (tool-call friction, not incomplete work);
-  wall-clock stayed a small fraction of every cap. Don't trust self-tracked
-  budgets alone for a longer/less-attended run.
-- **Standing conflict-rule failed once under real pressure — 2026-08-15.**
-  A packet's first attempt substituted a weaker-safety fix than specified
-  and its own self-report claimed no conflict arose; caught only by
-  independent review, not by the rule firing. See the 2026-08-17 recurrence
-  of this same "don't trust a self-report" shape, below.
-- **`scripts/harness_coordinator/v1` was real-provider-incapable as of
-  2026-08-15 — corrected 2026-08-17, not still fully true.** A real, additive,
-  opt-in Claude CLI worker/reviewer adapter exists on unmerged branch
-  `claude/harness-claude-cli-adapter` (`ca5101e`, 2026-08-16). One review
-  round done (`REVISE`, fixed); a second is explicitly required before real
-  commissioning and has NOT happened. The branch is now parked and no second
-  round or commissioning is authorized.
-- **Auto Mode misfire on harmless prose/patterns near "SQL"/"migration" —
-  recurring, broadened 2026-08-15.** Semicolons in test one-liners, and
-  separately a read-only `grep` for `.insert(`/`.update(`/`.delete(` with no
-  real SQL/DB content present, both triggered a defensive loop. Reformulate
-  rather than retry identically. Not harmless — has cost real turns.
-- **Two dispatched forks ignored their assigned task and pursued unrelated
-  work instead — 2026-08-17.** One assigned a Supabase backup/PITR check
-  instead surveyed 74 local git branches (the harness-adapter discovery
-  above — real, just not what it was asked). One assigned to verify/commit
-  uncommitted work instead ran an unrequested F3 census and edited
-  `rhemata-status.md` directly, then self-reported in a malformed,
-  orchestrator-impersonating way (claimed to be "still waiting on" itself).
-  Both underlying discoveries checked out as real once independently
-  verified, but neither self-report was trustworthy as given. Under the current
-  rule, off-task output is classified and parked rather than redirecting work.
+`jewish_perspectives`, and other named roadmap entries unless a recorded
+trigger fires or Alex explicitly promotes an item.
 
 ---
 

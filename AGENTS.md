@@ -1,16 +1,17 @@
 # Agent Quick Orientation
 
 This file is the always-read operating contract. `CLAUDE.md` owns product
-invariants and `PLAN.md` owns roadmap state, but their historical sections are
-loaded only when the current task needs them.
+invariants, `PLAN.md` owns the current blocker queue, `docs/roadmap.md` owns
+later classified work, and `docs/plan-archive.md` owns history.
 
 ## Read before write
 
-Before making changes, read this file, the current critical-path section of
-`PLAN.md`, and the specific `CLAUDE.md` invariants implicated by the task. Read
-either governing file in full only when the task changes its architecture,
-roadmap, or governing rules. Do not infer repository conventions from code
-alone.
+Before making changes, read this file, `PLAN.md`, and the specific `CLAUDE.md`
+invariants implicated by the task. Load `docs/roadmap.md` only when planning a
+later phase, classifying a finding, or checking a trigger. Load
+`docs/plan-archive.md` only for historical reasoning. Read `CLAUDE.md` in full
+only when changing architecture or governing rules. Do not infer repository
+conventions from code alone.
 
 ## Beta critical path
 
@@ -86,14 +87,17 @@ through a subagent or automated coordinator.
 
 - Build commits and docs/records commits are always separate. Never bundle them
   in one commit.
-- Closing a roadmap item replaces its existing entry. Never stack a new
-  paragraph on top of the old one.
+- `PLAN.md` contains Blockers only. Scheduled, Triggered, and Parked work belongs
+  in `docs/roadmap.md`; history belongs in `docs/plan-archive.md`.
+- Closing an item replaces its existing entry or moves its durable history to
+  the archive. Never stack a new correction on top of the old entry.
 
 ## Session close
 
 When wrapping up a session:
 
-1. Update the relevant `PLAN.md` entry to its final state, replacing rather than stacking.
+1. Update the owning record: `PLAN.md` for Blockers or `docs/roadmap.md` for
+   later classified work, replacing rather than stacking.
 2. Update the **Current state** section of `rhemata-status.md`; overwrite that session state rather than appending to it.
 3. Make one docs-only commit, separate from every code/build commit.
 
