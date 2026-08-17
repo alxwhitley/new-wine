@@ -4,6 +4,8 @@
 Run from the repository root:
   /private/tmp/rhemata-w1w4-venv/bin/python scripts/test_quote_selection_gate.py
 """
+import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -12,9 +14,13 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
+# async_chat imports auth at module load; this inert URL keeps the test's
+# direct SSE-generator coverage local and prevents any network use.
+os.environ.setdefault("SUPABASE_JWT_JWKS_URL", "https://example.invalid/jwks.json")
+os.environ.setdefault("SUPABASE_URL", "https://example.invalid")
 
 from app.services import quotes
-from app.services.async_answers import producer
+from app.services.async_answers import jobs, producer
 from app.services import (
     position_papers,
     reference_verifier,
@@ -22,6 +28,7 @@ from app.services import (
     stored_position_evidence,
     stored_position_topics,
 )
+from app.routers import async_chat
 
 
 def check(label, condition):
@@ -70,6 +77,95 @@ def _producer_result_with_quote_gate(env_value, selector):
         return producer.produce(object(), "What does the teacher say?")
 
 
+class _CaptureCursor:
+    def __init__(self):
+        self.params = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, _query, params):
+        self.params = params
+
+
+class _CaptureConnection:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def cursor(self, **_kwargs):
+        return self._cursor
+
+
+class _CaptureDb:
+    def __init__(self):
+        self.cursor = _CaptureCursor()
+
+    def run(self, work):
+        work(_CaptureConnection(self.cursor))
+
+
+class _NoopDb:
+    def close(self):
+        pass
+
+
+async def _sse_meta_for_persisted_job(job):
+    """Run the real completed-job SSE generator and return its meta object."""
+    with patch.object(async_chat, "Db", return_value=_NoopDb()), \
+         patch.object(async_chat.jobs, "get_job", return_value=job):
+        response = await async_chat.result("job-1", None, user_id=None)
+        events = []
+        async for chunk in response.body_iterator:
+            events.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+    return next(
+        json.loads(event[len("data: "):].strip())
+        for event in events
+        if event.startswith("data: ") and "quote_ids" in event
+    )
+
+
+def _persist_and_serialize_quote_ids(result):
+    """Exercise the real jobs.complete -> async_chat.result quote-ID contract.
+
+    This catches a persistence or SSE mutation that replaces the disabled
+    producer's empty quote-ID list with a nonempty value downstream.
+    """
+    db = _CaptureDb()
+    jobs.complete(
+        db,
+        job_id="job-1",
+        answer=result.answer,
+        outcome=result.outcome,
+        citations=result.citations,
+        verified_references=result.verified_references,
+        retrieved_chunk_ids=result.retrieved_chunk_ids,
+        retrieved_point_ids=result.retrieved_point_ids,
+        model=result.model,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cache_read_tokens=result.cache_read_tokens,
+        cache_write_tokens=result.cache_write_tokens,
+        cost_usd=result.cost_usd,
+        updated_topics=result.updated_topics,
+        quote_ids=result.quote_ids,
+    )
+    persisted_quote_ids = db.cursor.params[13].adapted
+    job = {
+        "status": "done",
+        "answer": result.answer,
+        "outcome": result.outcome,
+        "citations": result.citations,
+        "verified_references": result.verified_references,
+        "quote_ids": persisted_quote_ids,
+        "result_meta": {"updated_topics": result.updated_topics},
+        "evidence_version": "test-evidence",
+    }
+    return persisted_quote_ids, asyncio.run(_sse_meta_for_persisted_job(job))
+
+
 def main():
     print("quote selection containment gate")
     print("=" * 60)
@@ -84,6 +180,9 @@ def main():
 
     disabled_result = _producer_result_with_quote_gate(None, selector_must_not_run)
     check("disabled producer emits no quote IDs", disabled_result.quote_ids == [])
+    persisted_quote_ids, sse_meta = _persist_and_serialize_quote_ids(disabled_result)
+    check("persistence stores disabled answer with no quote IDs", persisted_quote_ids == [])
+    check("SSE serializes disabled answer with no quote IDs", sse_meta["quote_ids"] == [])
 
     enabled_result = _producer_result_with_quote_gate(
         "true", lambda *_args, **_kwargs: ["quote-1"]
