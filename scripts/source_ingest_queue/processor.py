@@ -67,6 +67,11 @@ class PreparedIngest:
     duplicate: bool
     extraction_evidence: Dict[str, object] = field(default_factory=dict)
 
+    @property
+    def final_url(self) -> str:
+        """Worker-facing name for the immutable captured response URL."""
+        return self.source_url
+
 
 @dataclass(frozen=True)
 class ProcessOutcome:

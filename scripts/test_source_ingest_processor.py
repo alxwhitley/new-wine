@@ -237,6 +237,27 @@ class PrepareIngestTests(unittest.TestCase):
             ],
         )
 
+    def test_real_prepared_result_exposes_worker_final_url_contract(self):
+        result = prepare_ingest(
+            valid_row(),
+            db=object(),
+            db_params={},
+            dry_run=True,
+            fetch_fn=lambda url: fetched_pdf(),
+            extract_fn=lambda content: ExtractedPdf("Text", 1),
+            resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
+            servable_fn=lambda *args: True,
+            dedup_fn=lambda *args: False,
+            chunk_fn=lambda text: [text],
+        )
+
+        self.assertIsInstance(result, PreparedIngest)
+        self.assertEqual(
+            getattr(result, "final_url", None),
+            "https://cdn.example.com/final.pdf",
+        )
+        self.assertEqual(result.final_url, result.source_url)
+
     def test_stops_policy_and_attribution_failures_before_later_boundaries(self):
         boundary_calls = []
 
