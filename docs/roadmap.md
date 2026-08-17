@@ -15,9 +15,9 @@ promotes them into `PLAN.md` through the rule in `AGENTS.md`.
 
 ## Scheduled
 
-### Product track — B1-B7, after F6
+### Product track — B1-B7, after the web-article launch gate
 
-This track may run concurrently with corpus production only after F6 passes.
+This track may run concurrently with later corpus production after W8 passes.
 
 1. **B1 — Freeze the private-beta product contract.** Alex approves testable
    criteria for audience, entry path, answer flows, honest-empty behavior,
@@ -45,7 +45,7 @@ This track may run concurrently with corpus production only after F6 passes.
    known non-blockers have consequences and revisit triggers; deployment still
    requires Alex's explicit approval.
 
-### Corpus track — A1-A6, after F6
+### Remaining corpus track — A1-A6, after the web-article proof
 
 Production writes use deterministic, resumable scripts in an attended primary
 Codex session. Each source follows: legal/source approval, immutable inventory
@@ -57,9 +57,10 @@ quarantine. No stage transfers automatically from one source to another.
 1. **A1 — Beta corpus manifest.** Define minimum teacher/source/content-shape
    coverage; re-query live state; classify candidates; fix order, sampling,
    expected counts, cost/storage estimates, and quarantine path.
-2. **A2 — New Wine.** Recount files and live state; create an immutable
-   manifest; dry-run all files; prove one write; run bounded reconciled batches;
-   review extracted content and served evidence.
+2. **A2 — New Wine.** Triggered, not active: resume only when a candidate OCR
+   model wins a blind side-by-side benchmark on named severe-failure pages
+   without degrading good controls, and Alex accepts the result. Then recount,
+   manifest, dry-run, prove one write, and run bounded reconciled batches.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing
@@ -86,7 +87,7 @@ Alex resolves every licensing or theological judgment.
 
 ### Private-beta convergence gate
 
-- F6 remains valid against the release revision.
+- W8 answer integrity remains valid against the release revision.
 - B7 and corpus acceptance pass.
 - A live census re-queries shown sources, documents, chunks, propositions,
   quotes, licenses, and retrievability.
@@ -94,10 +95,13 @@ Alex resolves every licensing or theological judgment.
 - Triggered Tier-2 conditions are either dormant or fully satisfied.
 - Alex approves the deployment and private-beta audience.
 
-### Separately approved database operation
+### Foundation follow-up after the web-article fast path
 
-Migration 088 and its isolated production proof remain Scheduled within the
-applicable source-ingestion phase. Listing it here does not authorize the write.
+Broad visible-default policy, general system-prompt review, broad claim-support
+refinement, and a general ingestion-ready verdict are Scheduled here. They do
+not interrupt the row-pinned hidden article proof without direct Beta Critical
+Path evidence. Migration 088 is already applied and its isolated processor proof
+is complete; it is not future work.
 
 ## Triggered
 

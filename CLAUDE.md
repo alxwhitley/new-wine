@@ -763,16 +763,17 @@ different row, per the hard rule above.
     primary Codex session and are never delegated to a subagent or automated
     coordinator.
 
-16. **The source-ingest queue runner is clearance- and policy-gated, and its
-    migration remains a separate production decision.** The
-    deployed-but-inert first slice accepts only `pdf + single + declared`, claims only
+16. **The source-ingest queue runner is clearance- and policy-gated; migration
+    088 is already applied.** The deployed-but-inert first slice accepts only
+    `pdf + single + declared`, claims only
     `cleared_to_run=true`, resolves an existing non-sentinel source, and must
     pass canonical `is_source_servable()` without creating sources/aliases or
     changing visibility, license status, or safe mode. It retains complete
     extracted text through `shared_ingest.ingest_document()` but never retains
-    the PDF binary. Migration 088, a live dry run, any real item, and worker
-    deployment remain separately approved operations; merging or deploying
-    repository code does not authorize them.
+    the PDF binary. One isolated processor proof completed on 2026-08-17; it was
+    not a deployed-worker proof. Any further real item and worker deployment
+    remain separately approved operations; merging repository code does not
+    authorize them. Never reapply migration 088.
 
 ---
 

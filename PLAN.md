@@ -1,128 +1,99 @@
 # Rhemata — Private-Beta Blocker Plan
 
-> This file is the only active work queue. It contains only work that must close
-> before the private beta can advance. Later work lives in `docs/roadmap.md`;
+> This is the only active work queue. Later work lives in `docs/roadmap.md`;
 > completed and superseded reasoning lives in `docs/plan-archive.md`.
 
-**Goal:** reach an ingestion-ready platform, then complete the product and corpus
-tracks required for a private-beta launch candidate in October 2026.
+**Goal:** begin controlled web-article ingestion quickly without compromising
+propositions, quotes, generated answers, or recoverability.
 
-**Current item:** **F2 recoverability**. Only one blocker may be in progress.
+**Current item:** **W1–W4 repository-only safety block.** The executable plan is
+`docs/superpowers/plans/2026-08-17-web-article-beta-fast-path.md`.
 
-## Working boundary
+## Governing boundary
 
-- Follow the Beta Critical Path and Anti-Zeno rules in `AGENTS.md`.
-- A discovery does not enter this file automatically. Alex must promote it under
-  the Blocker rule with concrete beta harm, evidence, affected surface, and the
-  smallest closure condition.
-- Scheduled, Triggered, and Parked work belongs in `docs/roadmap.md` and does not
-  authorize work during a blocker session.
-- `CLAUDE.md` owns product invariants and landmines. `ARCHITECTURE.md` owns current
-  implementation detail. `rhemata-status.md` owns point-in-time session state.
-- Production database writes remain attended, explicitly approved operations in
-  the primary Codex session. They never run through a subagent or coordinator.
+- A new finding interrupts this queue only if it can plausibly cause theological
+  error, teacher misrepresentation, data loss, a security/privacy breach, or
+  failure of the core beta journey. Everything else is classified Scheduled,
+  Triggered, or Parked in `docs/roadmap.md`.
+- Audits and implementation tasks use named files, acceptance tests, and a stop
+  condition. Adjacent findings are recorded; they do not expand the session.
+- Repository-only work may run back to back. Production database writes,
+  deployments, source-visibility changes, and quote-rail re-enablement are
+  attended gates requiring Alex's explicit approval.
+- Every write path follows dry run → one isolated hidden proof → reconciliation
+  → explicit release → bounded batch. No general worker may claim an unrelated
+  row during the isolated proof.
 
-## Frozen blocker order
+## Active blocker sequence
 
-### F2 — Recoverability
+### W1–W4 — Safe web-article runway
 
-**Status:** IN PROGRESS
+**Status:** IN PROGRESS — repository-only, approximately 3–4 hours.
 
-Close when both are true:
+- [ ] Add a reversible quote-rail flag, default off, with answer-path regression
+  coverage. This contains the systemic topic-label/retrieval defect without
+  deleting or relabeling production quotes.
+- [ ] Add an explicit live `--row-id` worker target so an attended proof cannot
+  claim another cleared row.
+- [ ] Define the first web-article contract: `web_page + single + declared`, an
+  existing non-sentinel source, explicit clearance, licensed/unlicensed hidden
+  staging, `source_kind=web_article`, and `citation_mode=citable`.
+- [ ] Extend preview mode through metadata, chunks, embeddings, propositions,
+  provenance, and structural quote proposals while proving zero database writes.
+- [ ] Stop for code review and verification. Do not deploy, enqueue, ingest, or
+  change production configuration in this block.
 
-- [ ] Record authoritative Supabase backup/PITR status, retention, restore
-  granularity, owner, RTO/RPO, and exclusions.
-- [ ] Test the safest available restore scope. If full-project disaster restore
-  cannot be proven, Alex explicitly accepts, upgrades, or defers the gap.
+### W5–W6 — One quarantined article proof
 
-Already closed: production-relevant dependency pins, backend/worker Python
-parity, and clean-environment backend/admin-auth smoke coverage. Evidence:
-`docs/audits/deps_pin_pydantic_starlette_2026-08-14.md` and
-`docs/audits/nixpacks_python_parity_2026-08-14.md`.
+**Status:** WAITING on W1–W4 and Alex's source/production approval.
 
-**Audit boundary:** authoritative recovery facts, the safest permitted restore
-proof, and the two criteria above. Adjacent Supabase, schema, deployment, or
-harness findings are classified and do not expand the session.
+- [ ] Alex selects the exact article, confirms teacher/source and clearance, and
+  approves deploying quote containment.
+- [ ] Run the full no-write preview and review every proposed proposition beside
+  its source passage; proposals remain ineligible and quotes remain proposals.
+- [ ] Execute exactly one row-pinned write into a hidden source; reconcile
+  attempted/stored/skipped/errored plus document/chunk/proposition state.
+- [ ] Prove rerun idempotency and a row-level rollback procedure before release.
+- [ ] Promote only propositions that pass the canonical eligibility checks;
+  keep the article hidden until answer-integrity review passes.
 
-### F3 — Ingestion-default contract
+### W7–W8 — Quote and answer integrity
 
-**Status:** WAITING FOR ALEX, then queued after F2.
+**Status:** QUEUED after the quarantined proof; quote rail stays off.
 
-Alex first decides whether private beta itself is the Tier-1-to-Tier-2 trip
-line. Policy and evidence are in:
+- [ ] Replace inherited document-first-tag matching with quote/passage relevance,
+  deterministic tie-breaking, and idempotent quote creation.
+- [ ] Test the three demonstrated false positives, true positives, same-label and
+  same-teacher negatives, ties, and the chosen teacher-scope rule.
+- [ ] Audit approved and pending quotes as untrusted legacy data. Re-enable only
+  a small reviewed subset after Alex approves the label and teacher-scope policy.
+- [ ] Prove a baptism regression, an article-supported answer, an honest no-support
+  answer, exact retrieved chunk/citation IDs, no bad quote IDs, and a bounded
+  teacher-card regression before making the article visible.
 
-- `docs/audits/f3_visible_default_policy_2026-08-17.md`
-- `docs/audits/f3_visible_default_evidence_2026-08-17.md`
+### W9 — Recoverability and first small batch
 
-Close when all are true:
+**Status:** QUEUED after W8.
 
-- [ ] Newly registered source classes follow the approved visible-default rule;
-  sentinel, unresolved-alias, empty-shell, and Tier-2 exceptions are explicit.
-- [ ] Schema and registration paths agree without weakening license,
-  retrievability, or serving gates.
-- [ ] One dry run and one isolated real registration pass through the actual
-  chokepoint and reconcile source/document/chunk/proposition state.
-- [ ] `ARCHITECTURE.md` records the approved policy and actual implementation.
+- [ ] Record authoritative Supabase backup/PITR retention, restore granularity,
+  owner, RTO/RPO, and exclusions; prove the safest available restore scope or
+  record Alex's explicit acceptance.
+- [ ] Run one named, costed, resumable web-article batch with immutable inputs,
+  logs, hard reconciliation, quality sampling, and an explicit release decision.
 
-The orphaned admin PDF-upload endpoint is an Alex-accepted named exception, not
-an unlabeled bypass or an implicit repair task.
+## Explicitly outside this finish line
 
-### F4 — Pre-benchmark quality decisions
-
-**Status:** QUEUED after F3.
-
-Close when Alex makes both decisions:
-
-- [ ] **Claim-support residual risk:** accept it, retain a narrow deterministic
-  check, or define evidence sufficient to reopen work. Do not build a sixth
-  probabilistic judge by default. The existing reference verifier closes
-  teacher-name misattribution, not substantive claim-support risk.
-- [ ] **System-prompt review timing:** decide whether review is required at the
-  ingestion-ready benchmark or before private-beta expansion.
-
-Quote hardening is already closed. Evidence:
-`docs/audits/stabilization_track_1_2026-08-15.md`.
-
-### F6 — Ingestion-ready verdict
-
-**Status:** QUEUED after F4.
-
-Close with a recorded PASS or HUMAN_REQUIRED verdict against this fixed gate:
-
-- [ ] **Correctness:** served-answer invariants and ranked failure-mode controls
-  hold; the accepted orphaned admin PDF endpoint exception is named explicitly.
-- [ ] **Ingestion:** shared chokepoint, dry run, isolated-item proof, accounting,
-  and reconciliation are operational.
-- [ ] **Recoverability:** F2 is closed or Alex explicitly accepts the residual.
-- [ ] **Operability:** dependencies reproduce and failures are diagnosable.
-- [ ] **Records:** `PLAN.md`, `CLAUDE.md`, `ARCHITECTURE.md`, and
-  `rhemata-status.md` agree in a separate docs-only close.
-
-Historical custom-harness evidence is sufficient and requires no further work.
-Passing F6 freezes foundation work as the default activity. Later engineering
-must serve the named beta tracks in `docs/roadmap.md` or repair a demonstrated
-regression promoted under the Blocker rule.
-
-## What happens after F6
-
-The product track (B1-B7) and corpus track (A1-A6) begin concurrently under
-their contracts in `docs/roadmap.md`. Migration 088 remains a separately
-approved production database-write session inside the applicable phase.
-
-The launch candidate exists only when the product release candidate, corpus
-acceptance gate, current F6 recheck, live census, representative answer/evidence
-review, and Alex's deployment/audience approval all pass. This later work is
-Scheduled, not authorized by the current blocker queue.
+- **Triggered:** New Wine PDF ingestion resumes only when a candidate OCR model
+  wins a blind side-by-side test on named severe-failure pages without degrading
+  good control pages, and Alex accepts the result.
+- **Scheduled:** broad visible-default policy, general system-prompt review,
+  broad claim-support refinement, product B1–B7, and remaining corpus A1–A6.
+- Migration 088 is already applied. Its isolated processor proof completed on
+  queue row `8e8f23e0-7dc6-4057-aa4d-c07f1b607c99`; never reapply it.
 
 ## Session close
 
-Record only:
-
-1. whether the original outcome and acceptance criteria passed;
-2. discoveries classified as Blocker, Scheduled, Triggered, or Parked;
-3. any scope change Alex explicitly approved; and
-4. the next single blocker.
-
-Track four process measures: original outcome completed, unplanned
-investigations started, findings promoted to Blocker, and active blocker count.
-Healthy target: completed, zero, rare, and one.
+Record only the original outcome, its acceptance result, classified discoveries,
+Alex-approved scope changes, and the next single item. Track: original outcome
+completed, unplanned investigations started, findings promoted to Blocker, and
+active blocker count. Healthy target: completed, zero, rare, and one.

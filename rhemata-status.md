@@ -29,32 +29,32 @@ Blocker queue; `docs/roadmap.md` contains Scheduled, Triggered, and Parked work;
 `docs/plan-archive.md` contains completed and superseded history. Ordinary
 sessions do not load the roadmap or archive unless the task needs them.
 
-Carried forward, unchanged since 2026-08-16: `codex/source-ingest-runner`
-deployed through release `0925c93` (Railway backend/answer-worker + Vercel
-all verified successful). Migration 088 is still unapplied, no source-worker
-Railway service exists, no live dry run or corpus write has occurred.
+`codex/source-ingest-runner` is deployed through release `0925c93`. Migration
+088 is applied. Queue row `8e8f23e0-7dc6-4057-aa4d-c07f1b607c99` completed an
+isolated processor proof into document `35b53381-2153-4936-a97b-641a20e29205`
+(two chunks, zero propositions because the source is public domain). No Railway
+source-worker service exists; this was not a deployed-worker proof.
 
-The F3 visible-default policy is drafted but awaits Alex's Tier-1/Tier-2
-ruling. F2 backup/PITR remains the single active critical-path item because the
-2026-08-17 investigation went off-task and produced no recovery evidence.
+Alex replaced the old F2→F3→F4→F6 order after an ultra adversarial review. The
+active path is controlled web-article ingestion: contain the broken quote rail,
+pin isolated worker execution to one row, add a staged citable article contract,
+and build a full-compute zero-write preview before any production action.
 
 ---
 
 ## Classified work
 
-**Blocker — active:** F2 recoverability. Establish authoritative Supabase
-backup/PITR, retention, restore scope, RTO/RPO, exclusions, and ownership; test
-the safest available restore or record Alex's explicit acceptance.
+**Blocker — active:** W1–W4 repository-only safety block. It may run back to
+back for about 3–4 hours, then stops before deployment or production writes.
 
-**Blocker — waiting:** F3 ingestion-default policy awaits Alex's ruling on
-whether private beta itself is the Tier-1→Tier-2 trip line. F4's two quality
-decisions and the F6 benchmark follow in that order.
+**Blocker — waiting:** one Alex-approved hidden web article; quote relevance and
+answer-integrity repair; recoverability before the first multi-article batch.
 
-**Scheduled:** B1–B7 product work and A1–A6 corpus work begin after F6.
-Migration 088 remains a separately approved database-write operation inside
-the applicable phase.
+**Scheduled:** broad visible-default policy, general prompt/claim-support work,
+B1–B7 product work, and remaining corpus work after the web-article proof.
 
-**Triggered:** Tier-2 work begins at public signup or more than roughly 20 beta
+**Triggered:** New Wine PDF ingestion waits for an Alex-accepted blind OCR
+benchmark win. Tier-2 work begins at public signup or more than roughly 20 beta
 users. Load testing reopens only after measured beta evidence or a demonstrated
 concurrency failure. Admin notifications wait for scheduled position-refresh
 work. The Manna rebrand waits until Alex schedules it as a bounded product
@@ -69,10 +69,10 @@ trigger fires or Alex explicitly promotes an item.
 
 ## Next single item
 
-Redo the bounded F2 backup/PITR investigation. Its audit charter is limited to
-authoritative recovery facts, the safest permitted restore proof, and the two
-F2 exit criteria. Adjacent Supabase, schema, deployment, or harness findings
-must be classified and may not expand the session.
+Execute W1–W4 from
+`docs/superpowers/plans/2026-08-17-web-article-beta-fast-path.md`, then stop at
+the repository-only checkpoint. Do not deploy, enqueue, ingest, change source
+visibility, or alter production configuration in that block.
 
 Process baseline for this records session: original outcome achieved; zero
 unplanned investigations started; zero findings promoted to Blocker; one active

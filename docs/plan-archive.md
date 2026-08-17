@@ -746,3 +746,17 @@ The split intentionally changed document ownership:
 - `PLAN.md` — current Blockers only;
 - `docs/roadmap.md` — Scheduled, Triggered, and Parked work;
 - this file — completed, superseded, and historical reasoning.
+
+## Superseded 2026-08-17 — F2→F3→F4→F6 blocker order
+
+Alex explicitly replaced the frozen F2→F3→F4→F6 sequence after an ultra
+adversarial review found that migration 088 and an isolated processor proof had
+already completed, while the web-article preview and quote-relevance paths had
+larger immediate quality gaps than the plan represented. The active replacement
+is the row-pinned, hidden-source web-article fast path in `PLAN.md` and
+`docs/superpowers/plans/2026-08-17-web-article-beta-fast-path.md`.
+
+Recoverability was reordered, not waived: it remains mandatory before the first
+multi-item production batch. Broad visible-default policy, general prompt and
+claim-support work, and the general ingestion-ready verdict moved to Scheduled.
+New Wine PDF ingestion became Triggered on an Alex-accepted OCR benchmark.
