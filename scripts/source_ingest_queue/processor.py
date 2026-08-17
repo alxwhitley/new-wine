@@ -91,7 +91,26 @@ def classify_row(row: dict) -> Optional[str]:
         return "retention_policy_missing"
     if not (row.get("attribute_to") or "").strip():
         return "declared_author_missing"
+    if row.get("cleared_to_run") is not True:
+        return "queue_not_cleared"
     return None
+
+
+def _read_source_policy(db, source_id: str) -> Optional[Dict[str, object]]:
+    result = (
+        db.table("sources")
+        .select("license_status, visibility")
+        .eq("id", source_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    row = result.data[0]
+    return {
+        "license_status": row.get("license_status"),
+        "visibility": row.get("visibility"),
+    }
 
 
 def _clean_text(value, fallback: str, max_length: int = 500) -> str:
@@ -143,8 +162,8 @@ def _base_prepared(
         filename=fetched.filename,
         source_url=fetched.final_url,
         source_type="other",
-        source_kind="unknown",
-        citation_mode="silent_context",
+        source_kind="web_article" if is_web_page else "unknown",
+        citation_mode="citable" if is_web_page else "silent_context",
         year=None,
         topic_tags=[],
         bible_references=[],
@@ -169,6 +188,7 @@ def prepare_ingest(
     html_extract_fn: Callable = extract_article_bounded,
     resolve_fn: Callable = resolve_source_id,
     servable_fn: Callable = is_source_servable,
+    source_policy_fn: Callable = _read_source_policy,
     dedup_fn: Callable = shared_ingest.already_ingested,
     chunk_fn: Callable = chunk_text,
     metadata_fn: Callable = extract_metadata,
@@ -176,11 +196,11 @@ def prepare_ingest(
     """Validate and prepare one row without writing corpus or queue state.
 
     source_format selects which fetch/extract pair runs -- pdf uses
-    fetch_fn/extract_fn (fetch_pdf/extract_pdf_bounded by default),
+    fetch_fn/extract_fn (fetch_pdf/extract_pdf_bounded by default), while
     web_page uses html_fetch_fn/html_extract_fn (fetch_html/
-    extract_article_bounded by default). Every later boundary (source
-    resolution, servability, dedup, metadata, chunking) is identical for
-    both -- only how raw bytes become plain body text differs."""
+    extract_article_bounded by default). PDF rows retain the canonical
+    serving gate. Web rows instead require an existing licensed/unlicensed,
+    hidden source so preparation cannot make staged text retrievable."""
     reason = classify_row(row)
     if reason is not None:
         raise AttentionRequired(reason, "queue row is unsupported")
@@ -217,14 +237,40 @@ def prepare_ingest(
     if via == "MISS" or source_id == SENTINEL_SOURCE_ID:
         raise AttentionRequired("source_unresolved", "declared source is unresolved")
 
-    try:
-        source_is_servable = servable_fn(db, source_id)
-    except Exception as exc:
-        raise RetryableIngestError(
-            "database_transient", "source visibility check failed"
-        ) from exc
-    if not source_is_servable:
-        raise AttentionRequired("source_not_servable", "declared source is not servable")
+    if is_web_page:
+        try:
+            source_policy = source_policy_fn(db, source_id)
+        except Exception as exc:
+            raise RetryableIngestError(
+                "database_transient", "source policy lookup failed"
+            ) from exc
+        if source_policy is None:
+            raise AttentionRequired("source_missing", "declared source does not exist")
+        if not isinstance(source_policy, dict):
+            raise RetryableIngestError(
+                "database_transient", "source policy response was invalid"
+            )
+        if source_policy.get("license_status") not in ("licensed", "unlicensed"):
+            raise AttentionRequired(
+                "source_license_not_stageable",
+                "declared source license is not permitted for hidden staging",
+            )
+        if source_policy.get("visibility") != "hidden":
+            raise AttentionRequired(
+                "source_visibility_not_hidden",
+                "declared source is not hidden",
+            )
+    else:
+        try:
+            source_is_servable = servable_fn(db, source_id)
+        except Exception as exc:
+            raise RetryableIngestError(
+                "database_transient", "source visibility check failed"
+            ) from exc
+        if not source_is_servable:
+            raise AttentionRequired(
+                "source_not_servable", "declared source is not servable"
+            )
 
     chunks = chunk_fn(extracted.text)
     if not chunks:
@@ -278,6 +324,9 @@ def prepare_ingest(
     citation_mode = metadata.get("citation_mode")
     if citation_mode not in _CITATION_MODES:
         citation_mode = default_citation
+    if is_web_page:
+        source_kind = "web_article"
+        citation_mode = "citable"
     year = metadata.get("year")
     if isinstance(year, bool) or not isinstance(year, int):
         year = None

@@ -2,6 +2,7 @@
 """Behavior checks for queued source preparation and shared-writer execution."""
 
 import unittest
+from types import SimpleNamespace
 
 from source_ingest_queue.fetcher import FetchResult
 from source_ingest_queue.html_extract import ExtractedArticle, HtmlRejected
@@ -27,6 +28,7 @@ def valid_row():
         "attribution_mode": "declared",
         "attribute_to": " Derek Prince ",
         "retain_original_text": True,
+        "cleared_to_run": True,
     }
 
 
@@ -39,6 +41,7 @@ def valid_web_page_row():
         "attribution_mode": "declared",
         "attribute_to": " Derek Prince ",
         "retain_original_text": True,
+        "cleared_to_run": True,
     }
 
 
@@ -74,7 +77,7 @@ def extracted_article(**overrides):
 
 
 class ClassifyRowTests(unittest.TestCase):
-    def test_accepts_only_the_supported_first_slice(self):
+    def test_accepts_cleared_pdf_single_declared_contract(self):
         self.assertIsNone(
             classify_row(
                 {
@@ -83,6 +86,7 @@ class ClassifyRowTests(unittest.TestCase):
                     "attribution_mode": "declared",
                     "attribute_to": " Derek Prince ",
                     "retain_original_text": True,
+                    "cleared_to_run": True,
                 }
             )
         )
@@ -96,6 +100,7 @@ class ClassifyRowTests(unittest.TestCase):
                     "attribution_mode": "declared",
                     "attribute_to": " Derek Prince ",
                     "retain_original_text": True,
+                    "cleared_to_run": True,
                 }
             )
         )
@@ -107,12 +112,14 @@ class ClassifyRowTests(unittest.TestCase):
             "attribution_mode": "declared",
             "attribute_to": "Derek Prince",
             "retain_original_text": True,
+            "cleared_to_run": True,
         }
         cases = (
             ("source_format", "video", "unsupported_source_format"),
             ("source_format", "epub", "unsupported_source_format"),
             ("source_scope", "collection", "unsupported_source_scope"),
             ("attribution_mode", "per_item", "unsupported_attribution_mode"),
+            ("attribution_mode", "inferred", "unsupported_attribution_mode"),
             ("attribute_to", "  ", "declared_author_missing"),
             ("retain_original_text", False, "retention_policy_missing"),
             ("retain_original_text", None, "retention_policy_missing"),
@@ -134,6 +141,7 @@ class ClassifyRowTests(unittest.TestCase):
             "attribution_mode": "declared",
             "attribute_to": "Derek Prince",
             "retain_original_text": True,
+            "cleared_to_run": True,
         }
         cases = (
             ("source_scope", "collection", "unsupported_source_scope"),
@@ -144,6 +152,19 @@ class ClassifyRowTests(unittest.TestCase):
                 row = dict(base)
                 row[field] = value
                 self.assertEqual(classify_row(row), expected)
+
+    def test_refuses_missing_false_or_undecided_queue_clearance(self):
+        for source_format in ("pdf", "web_page"):
+            for clearance in (False, None):
+                with self.subTest(source_format=source_format, clearance=clearance):
+                    row = {**valid_row(), "source_format": source_format}
+                    row["cleared_to_run"] = clearance
+                    self.assertEqual(classify_row(row), "queue_not_cleared")
+
+            with self.subTest(source_format=source_format, clearance="missing"):
+                row = {**valid_row(), "source_format": source_format}
+                row.pop("cleared_to_run")
+                self.assertEqual(classify_row(row), "queue_not_cleared")
 
 
 class PrepareIngestTests(unittest.TestCase):
@@ -230,6 +251,32 @@ class PrepareIngestTests(unittest.TestCase):
         self.assertEqual(unsupported.exception.code, "unsupported_source_format")
         self.assertEqual(boundary_calls, [])
 
+        with self.assertRaises(AttentionRequired) as uncleared:
+            prepare_ingest(
+                {**valid_row(), "cleared_to_run": False},
+                db=object(),
+                db_params={},
+                dry_run=True,
+                fetch_fn=lambda url: boundary_calls.append("fetch"),
+            )
+        self.assertEqual(uncleared.exception.code, "queue_not_cleared")
+        self.assertEqual(boundary_calls, [])
+
+        for missing_field in ("id", "url"):
+            with self.subTest(missing_field=missing_field):
+                invalid_row = valid_row()
+                invalid_row.pop(missing_field)
+                with self.assertRaises(AttentionRequired) as invalid:
+                    prepare_ingest(
+                        invalid_row,
+                        db=object(),
+                        db_params={},
+                        dry_run=True,
+                        fetch_fn=lambda url: boundary_calls.append("fetch"),
+                    )
+                self.assertEqual(invalid.exception.code, "invalid_queue_row")
+                self.assertEqual(boundary_calls, [])
+
         with self.assertRaises(AttentionRequired) as unresolved:
             prepare_ingest(
                 valid_row(),
@@ -291,6 +338,8 @@ class PrepareIngestTests(unittest.TestCase):
         self.assertEqual(result.source_name, "Derek Prince")
         self.assertEqual(result.year, 1984)
         self.assertEqual(result.source_type, "book")
+        self.assertEqual(result.source_kind, "unknown")
+        self.assertEqual(result.citation_mode, "silent_context")
         self.assertEqual(result.topic_tags, ["Prayer"])
 
     def test_duplicate_skips_metadata_but_remains_a_prepared_outcome(self):
@@ -368,8 +417,8 @@ class PrepareIngestTests(unittest.TestCase):
 class WebPagePrepareIngestTests(unittest.TestCase):
     """web_page + single + declared uses html_fetch_fn/html_extract_fn
     (fetch_html/extract_article_bounded by default) instead of the PDF
-    pair, but shares every later boundary (resolve/servable/dedup/metadata)
-    with the PDF path unchanged."""
+    pair, resolves an existing hidden staging source, and leaves the PDF
+    canonical servability path unchanged."""
 
     def test_dry_run_prepares_from_extracted_article_title_and_evidence(self):
         calls = []
@@ -394,7 +443,13 @@ class WebPagePrepareIngestTests(unittest.TestCase):
             html_fetch_fn=html_fetch,
             html_extract_fn=html_extract,
             resolve_fn=resolve,
-            servable_fn=lambda *args: True,
+            servable_fn=lambda *args: self.fail(
+                "hidden web staging called the PDF serving gate"
+            ),
+            source_policy_fn=lambda *args: {
+                "license_status": "licensed",
+                "visibility": "hidden",
+            },
             dedup_fn=lambda *args: False,
             chunk_fn=lambda text: ["chunk one"],
             metadata_fn=lambda text: self.fail("dry run called metadata provider"),
@@ -410,6 +465,8 @@ class WebPagePrepareIngestTests(unittest.TestCase):
         self.assertEqual(result.fetched_bytes, 55)
         self.assertEqual(result.chunk_count, 1)
         self.assertFalse(result.duplicate)
+        self.assertEqual(result.source_kind, "web_article")
+        self.assertEqual(result.citation_mode, "citable")
         self.assertEqual(
             result.extraction_evidence, {"container": "article", "word_count": 7}
         )
@@ -421,6 +478,166 @@ class WebPagePrepareIngestTests(unittest.TestCase):
                 ("resolve", "Derek Prince", None),
             ],
         )
+
+    def test_refuses_alias_miss_or_sentinel_before_reading_source_policy(self):
+        policy_calls = []
+        cases = (
+            (("source-id", "derek prince", "MISS"), "alias miss"),
+            (
+                (SENTINEL_SOURCE_ID, "derek prince", "source_name"),
+                "sentinel id",
+            ),
+        )
+
+        for resolution, label in cases:
+            with self.subTest(label=label):
+                with self.assertRaises(AttentionRequired) as unresolved:
+                    prepare_ingest(
+                        valid_web_page_row(),
+                        db=object(),
+                        db_params={},
+                        dry_run=True,
+                        html_fetch_fn=lambda url: fetched_html(),
+                        html_extract_fn=lambda content: extracted_article(),
+                        resolve_fn=lambda *args, value=resolution: value,
+                        source_policy_fn=lambda *args: policy_calls.append(args),
+                        dedup_fn=lambda *args: False,
+                        chunk_fn=lambda text: [text],
+                    )
+                self.assertEqual(unresolved.exception.code, "source_unresolved")
+                self.assertEqual(policy_calls, [])
+
+    def test_refuses_missing_or_non_staging_source_rights_state(self):
+        cases = (
+            (None, "source_missing"),
+            (
+                {"license_status": "public_domain", "visibility": "hidden"},
+                "source_license_not_stageable",
+            ),
+            (
+                {"license_status": "owned", "visibility": "hidden"},
+                "source_license_not_stageable",
+            ),
+            (
+                {"license_status": "Licensed", "visibility": "hidden"},
+                "source_license_not_stageable",
+            ),
+            (
+                {"license_status": "licensed", "visibility": "shown"},
+                "source_visibility_not_hidden",
+            ),
+            (
+                {"license_status": "unlicensed", "visibility": None},
+                "source_visibility_not_hidden",
+            ),
+        )
+
+        for source_policy, expected_code in cases:
+            with self.subTest(source_policy=source_policy):
+                with self.assertRaises(AttentionRequired) as refused:
+                    prepare_ingest(
+                        valid_web_page_row(),
+                        db=object(),
+                        db_params={},
+                        dry_run=True,
+                        html_fetch_fn=lambda url: fetched_html(),
+                        html_extract_fn=lambda content: extracted_article(),
+                        resolve_fn=lambda *args: (
+                            "source-id",
+                            "derek prince",
+                            "source_name",
+                        ),
+                        servable_fn=lambda *args: self.fail(
+                            "web staging called the PDF serving gate"
+                        ),
+                        source_policy_fn=lambda *args, value=source_policy: value,
+                        dedup_fn=lambda *args: self.fail(
+                            "refused source reached duplicate check"
+                        ),
+                        chunk_fn=lambda text: [text],
+                    )
+                self.assertEqual(refused.exception.code, expected_code)
+
+    def test_default_source_policy_lookup_is_read_only_and_exactly_scoped(self):
+        class SourceDbDouble:
+            def __init__(self):
+                self.calls = []
+
+            def table(self, name):
+                self.calls.append(("table", name))
+                return self
+
+            def select(self, fields):
+                self.calls.append(("select", fields))
+                return self
+
+            def eq(self, field, value):
+                self.calls.append(("eq", field, value))
+                return self
+
+            def limit(self, count):
+                self.calls.append(("limit", count))
+                return self
+
+            def execute(self):
+                self.calls.append(("execute",))
+                return SimpleNamespace(
+                    data=[
+                        {"license_status": "licensed", "visibility": "hidden"}
+                    ]
+                )
+
+        db = SourceDbDouble()
+        result = prepare_ingest(
+            valid_web_page_row(),
+            db=db,
+            db_params={},
+            dry_run=True,
+            html_fetch_fn=lambda url: fetched_html(),
+            html_extract_fn=lambda content: extracted_article(),
+            resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
+            servable_fn=lambda *args: self.fail(
+                "hidden web staging called the PDF serving gate"
+            ),
+            dedup_fn=lambda *args: False,
+            chunk_fn=lambda text: [text],
+        )
+
+        self.assertEqual(result.source_id, "source-id")
+        self.assertEqual(
+            db.calls,
+            [
+                ("table", "sources"),
+                ("select", "license_status, visibility"),
+                ("eq", "id", "source-id"),
+                ("limit", 1),
+                ("execute",),
+            ],
+        )
+
+    def test_source_policy_lookup_failure_is_bounded_retryable(self):
+        with self.assertRaises(RetryableIngestError) as raised:
+            prepare_ingest(
+                valid_web_page_row(),
+                db=object(),
+                db_params={},
+                dry_run=True,
+                html_fetch_fn=lambda url: fetched_html(),
+                html_extract_fn=lambda content: extracted_article(),
+                resolve_fn=lambda *args: (
+                    "source-id",
+                    "derek prince",
+                    "source_name",
+                ),
+                source_policy_fn=lambda *args: (_ for _ in ()).throw(
+                    RuntimeError("raw database response")
+                ),
+                dedup_fn=lambda *args: False,
+                chunk_fn=lambda text: [text],
+            )
+
+        self.assertEqual(raised.exception.code, "database_transient")
+        self.assertNotIn("raw database", raised.exception.detail)
 
     def test_never_infers_or_replaces_the_declared_author(self):
         """A visible byline inside the extracted article text, and a
@@ -436,7 +653,10 @@ class WebPagePrepareIngestTests(unittest.TestCase):
                 text="By Jane Doe\n\nThe real article body follows this byline line."
             ),
             resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
-            servable_fn=lambda *args: True,
+            source_policy_fn=lambda *args: {
+                "license_status": "unlicensed",
+                "visibility": "hidden",
+            },
             dedup_fn=lambda *args: False,
             chunk_fn=lambda text: [text],
             metadata_fn=lambda text: {
@@ -444,6 +664,8 @@ class WebPagePrepareIngestTests(unittest.TestCase):
                 "author": "Jane Doe",
                 "source_name": "Jane Doe",
                 "source_type": "article",
+                "source_kind": "background_note",
+                "citation_mode": "silent_context",
                 "year": None,
                 "topic_tags": [],
             },
@@ -452,6 +674,8 @@ class WebPagePrepareIngestTests(unittest.TestCase):
         self.assertEqual(result.author, "Derek Prince")
         self.assertEqual(result.source_name, "Derek Prince")
         self.assertIn("By Jane Doe", result.body_text)
+        self.assertEqual(result.source_kind, "web_article")
+        self.assertEqual(result.citation_mode, "citable")
 
     def test_duplicate_web_page_skips_metadata_but_remains_prepared(self):
         result = prepare_ingest(
@@ -462,12 +686,17 @@ class WebPagePrepareIngestTests(unittest.TestCase):
             html_fetch_fn=lambda url: fetched_html(),
             html_extract_fn=lambda content: extracted_article(),
             resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
-            servable_fn=lambda *args: True,
+            source_policy_fn=lambda *args: {
+                "license_status": "licensed",
+                "visibility": "hidden",
+            },
             dedup_fn=lambda *args: True,
             chunk_fn=lambda text: [text],
             metadata_fn=lambda text: self.fail("duplicate called metadata provider"),
         )
         self.assertTrue(result.duplicate)
+        self.assertEqual(result.source_kind, "web_article")
+        self.assertEqual(result.citation_mode, "citable")
 
     def test_provider_and_extraction_errors_use_stable_codes(self):
         from source_ingest_queue.fetcher import FetchRejected, FetchTransient
@@ -528,7 +757,10 @@ class WebPagePrepareIngestTests(unittest.TestCase):
                         html_fetch_fn=html_fetch,
                         html_extract_fn=html_extract,
                         resolve_fn=lambda *args: ("source-id", "key", "source_name"),
-                        servable_fn=lambda *args: True,
+                        source_policy_fn=lambda *args: {
+                            "license_status": "licensed",
+                            "visibility": "hidden",
+                        },
                         dedup_fn=lambda *args: False,
                         chunk_fn=lambda text: [text],
                     )
@@ -549,6 +781,9 @@ class WebPagePrepareIngestTests(unittest.TestCase):
             html_extract_fn=lambda content: self.fail("pdf row called html_extract_fn"),
             resolve_fn=lambda *args: ("source-id", "derek prince", "source_name"),
             servable_fn=lambda *args: True,
+            source_policy_fn=lambda *args: self.fail(
+                "pdf row called web source policy lookup"
+            ),
             dedup_fn=lambda *args: False,
             chunk_fn=lambda text: [text],
         )
