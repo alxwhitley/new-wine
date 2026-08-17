@@ -792,17 +792,10 @@ def produce(supabase, question, messages=None, topics_established=None):
         logger.exception("Producer SP1 reference verification failed -- continuing without pointers")
         verified_references = []
 
-    # Quote rail selection (Project 3, wired 2026-08-06) -- this producer is
-    # now the ONLY answer path (2026-08-07, mirror-unification job, all
-    # batches): chat.py, the old synchronous path that never had quote-rail
-    # selection wired in, no longer exists at all -- deleted in batch 4,
-    # after batch 3 removed the frontend's silent fallback that used to make
-    # it a live (if best-effort) target. There is now exactly one answer
-    # path, and it always runs quote selection (subject to the fail-soft
-    # wrapping below) -- "best-effort depending on which path happened to
-    # serve it" no longer applies to anything; there is no other path left
-    # to compare against. See CLAUDE.md's landmine entry on this job for the
-    # full before/after history.
+    # Quote selection is disabled by default while inherited topic labels are
+    # repaired. Existing quote rows stay untouched; the selector remains
+    # available behind this explicit opt-in for the attended re-enablement
+    # gate.
     #
     # Runs post-generation, after verify_references, and only on a non-
     # refused answer (an attribution refusal already empties citations
@@ -815,11 +808,13 @@ def produce(supabase, question, messages=None, topics_established=None):
     quote_ids = []  # type: List[str]
     if not refused:
         try:
-            from app.services.quotes import select_quotes_for_answer
-            from app.services.single_teacher_lock import resolve_source_ids_for_documents
-            considered_doc_ids = [c.get("document_id") for c in chunks if c.get("document_id")]
-            doc_to_source = resolve_source_ids_for_documents(supabase, considered_doc_ids)
-            quote_ids = select_quotes_for_answer(supabase, question, doc_to_source.values())
+            from app.services.quotes import quote_selection_enabled
+            if quote_selection_enabled():
+                from app.services.quotes import select_quotes_for_answer
+                from app.services.single_teacher_lock import resolve_source_ids_for_documents
+                considered_doc_ids = [c.get("document_id") for c in chunks if c.get("document_id")]
+                doc_to_source = resolve_source_ids_for_documents(supabase, considered_doc_ids)
+                quote_ids = select_quotes_for_answer(supabase, question, doc_to_source.values())
         except Exception:
             logger.exception("Producer quote-rail selection failed -- continuing without quotes")
             quote_ids = []
