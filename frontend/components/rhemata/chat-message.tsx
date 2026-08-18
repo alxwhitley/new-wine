@@ -361,26 +361,50 @@ function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
   if (attributed.length === 0) return null;
 
   return (
-    <div className="mt-3 space-y-2">
-      {attributed.map((q) => (
-        <div key={q.id} className="rounded-lg border border-border px-4 py-3">
-          <div className="flex gap-2.5">
-            <Quote className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="font-serif italic text-sm text-foreground leading-relaxed">
-                {q.quote_text}
-              </p>
-              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-muted-foreground">{q.teacher_name}</span>
-                <Badge variant="secondary" className="rounded-md text-xs">
-                  {q.topic}
-                </Badge>
+    <aside
+      className="mt-4 space-y-3 border-t border-border pt-4"
+      aria-label="Verified quotes"
+    >
+      {attributed.map((q) => {
+        const topicLabel = (q.topic_ids && q.topic_ids[0]) || q.topic;
+        return (
+          <figure
+            key={q.id}
+            className="rounded-lg border border-border bg-muted/40 px-4 py-3 shadow-sm"
+          >
+            <div className="flex gap-2.5">
+              <Quote className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="min-w-0 space-y-2">
+                <blockquote className="font-serif italic text-sm text-foreground leading-relaxed m-0">
+                  {q.quote_text}
+                </blockquote>
+                {q.restated_point ? (
+                  <p className="text-xs text-muted-foreground leading-relaxed not-italic m-0">
+                    {q.restated_point}
+                  </p>
+                ) : null}
+                <figcaption className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground/80">{q.teacher_name}</span>
+                  {q.work_title ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="truncate max-w-[18rem]" title={q.work_title}>
+                        {q.work_title}
+                      </span>
+                    </>
+                  ) : null}
+                  {topicLabel ? (
+                    <Badge variant="secondary" className="rounded-md text-xs font-normal">
+                      {topicLabel}
+                    </Badge>
+                  ) : null}
+                </figcaption>
               </div>
             </div>
-          </div>
-        </div>
-      ))}
-    </div>
+          </figure>
+        );
+      })}
+    </aside>
   );
 }
 

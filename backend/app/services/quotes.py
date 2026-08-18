@@ -526,15 +526,83 @@ def revoke_quote(db, quote_id: str, user_id: str):
     return result.data
 
 
+def _restated_point_from_note(reviewer_note: Optional[str]) -> Optional[str]:
+    """Extract the display companion from reviewer_note when stamped by the
+    quality pipeline (`restated\\n\\n[why_quotable: ...]`). Otherwise return
+    the note stripped, or None."""
+    if not reviewer_note:
+        return None
+    marker = "\n\n[why_quotable:"
+    if marker in reviewer_note:
+        head = reviewer_note.split(marker, 1)[0].strip()
+        return head or None
+    cleaned = reviewer_note.strip()
+    return cleaned or None
+
+
+def _work_title_for_quote(db, source_revision_id: Optional[str]) -> Optional[str]:
+    """Document title for the quote's captured chunk, if resolvable."""
+    if not source_revision_id:
+        return None
+    try:
+        rev_rows = (
+            db.table("quote_source_revisions")
+            .select("chunk_id")
+            .eq("id", source_revision_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not rev_rows:
+            return None
+        chunk_id = rev_rows[0].get("chunk_id")
+        if not chunk_id:
+            return None
+        chunk_rows = (
+            db.table("chunks")
+            .select("document_id")
+            .eq("id", chunk_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not chunk_rows:
+            return None
+        document_id = chunk_rows[0].get("document_id")
+        if not document_id:
+            return None
+        doc_rows = (
+            db.table("documents")
+            .select("title")
+            .eq("id", document_id)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not doc_rows:
+            return None
+        title = (doc_rows[0].get("title") or "").strip()
+        return title or None
+    except Exception as e:
+        logger.warning("resolve_quote work_title lookup failed: %s", e)
+        return None
+
+
 def resolve_quote(db, quote_id: str) -> Optional[dict]:
     """THE single resolution point (Step 4). Returns the current approved
     text + metadata, or None if the quote does not exist, is still a draft,
     or has been revoked. Every surface that might show a quote (answers,
     teacher pages, previews, exports, admin tools) must call this function
-    -- nothing else in this codebase should read quotes.quote_text directly."""
+    -- nothing else in this codebase should read quotes.quote_text directly.
+
+    Presentation fields (Task 7 / Settled #28): teacher_name, work_title,
+    topic (primary taxonomy tag), optional topic_ids + restated_point."""
     rows = (
         db.table("quotes")
-        .select("id, quote_text, topic, teacher_source_id, status, approved_at")
+        .select(
+            "id, quote_text, topic, topic_ids, reviewer_note, teacher_source_id, "
+            "status, approved_at, source_revision_id"
+        )
         .eq("id", quote_id)
         .eq("status", "approved")
         .limit(1)
@@ -548,11 +616,19 @@ def resolve_quote(db, quote_id: str) -> Optional[dict]:
     if teacher_name is None:
         source_rows = db.table("sources").select("name").eq("id", quote["teacher_source_id"]).limit(1).execute().data
         teacher_name = source_rows[0]["name"] if source_rows else None
+    topic_ids = quote.get("topic_ids") or None
+    if isinstance(topic_ids, list):
+        topic_ids = [t for t in topic_ids if isinstance(t, str) and t.strip()]
+        if not topic_ids:
+            topic_ids = None
     return {
         "id": quote["id"],
         "quote_text": quote["quote_text"],
         "topic": quote["topic"],
+        "topic_ids": topic_ids,
         "teacher_name": teacher_name,
+        "work_title": _work_title_for_quote(db, quote.get("source_revision_id")),
+        "restated_point": _restated_point_from_note(quote.get("reviewer_note")),
         "approved_at": quote["approved_at"],
     }
 

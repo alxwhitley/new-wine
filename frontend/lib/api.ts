@@ -15,7 +15,13 @@ export interface ResolvedQuote {
   id: string;
   quote_text: string;
   topic: string;
+  /** Passage-level taxonomy tags when present (quality pipeline). */
+  topic_ids?: string[] | null;
   teacher_name: string | null;
+  /** Source work / document title when resolvable. */
+  work_title?: string | null;
+  /** Optional one-sentence companion (not quoted typography). */
+  restated_point?: string | null;
   approved_at: string;
 }
 
