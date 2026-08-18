@@ -53,6 +53,15 @@ propositions/provenance → usage evidence → proposal-only quote spans) exists
 and is mutation-tested to prove it never writes. Full technical detail:
 CLAUDE.md Invariant 16 and the new quote-containment Landmines entry.
 
+A local-only, unpushed commit `cefcae5` ("v11 harness prep") sits in the
+detached-HEAD worktree `~/.codex/worktrees/ca07/rhemata`, authored 2026-08-17
+11:35 — before that same day's later 4f476eb→5af5fba session-close chain that
+retired the harness coordinator (Invariant 15). Its content (a real adapter
+"has run for real across v3-v10") conflicts with that later, already-pushed
+record. Alex's explicit call, this session: trust the later version already on
+`main`; leave `cefcae5` unpushed and untouched. No action needed on it unless
+Alex reopens the coordinator-retirement decision.
+
 ---
 
 ## Classified work

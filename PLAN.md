@@ -6,7 +6,8 @@
 **Goal:** begin controlled web-article ingestion quickly without compromising
 propositions, quotes, generated answers, or recoverability.
 
-**Current item:** **W1–W4 repository-only safety block.** The executable plan is
+**Current item:** **W5–W6 — one quarantined article proof.** Attended,
+human/production-only gate; the executable plan is
 `docs/superpowers/plans/2026-08-17-web-article-beta-fast-path.md`.
 
 ## Governing boundary
@@ -28,24 +29,17 @@ propositions, quotes, generated answers, or recoverability.
 
 ### W1–W4 — Safe web-article runway
 
-**Status:** IN PROGRESS — repository-only, approximately 3–4 hours.
-
-- [ ] Add a reversible quote-rail flag, default off, with answer-path regression
-  coverage. This contains the systemic topic-label/retrieval defect without
-  deleting or relabeling production quotes.
-- [ ] Add an explicit live `--row-id` worker target so an attended proof cannot
-  claim another cleared row.
-- [ ] Define the first web-article contract: `web_page + single + declared`, an
-  existing non-sentinel source, explicit clearance, licensed/unlicensed hidden
-  staging, `source_kind=web_article`, and `citation_mode=citable`.
-- [ ] Extend preview mode through metadata, chunks, embeddings, propositions,
-  provenance, and structural quote proposals while proving zero database writes.
-- [ ] Stop for code review and verification. Do not deploy, enqueue, ingest, or
-  change production configuration in this block.
+**Status:** DONE — merged to `main` 2026-08-18 (PR #1
+`harness/quote-containment-and-staging`, closing commit `a8a7731`, merge
+`923f1ed`). Quote-rail flag (default off), single-row `--row-id` claiming, the
+staged web-article contract, and the zero-write preview all verified live
+against the merged code. Full detail: CLAUDE.md Invariant 16 + the
+quote-containment Landmines entry.
 
 ### W5–W6 — One quarantined article proof
 
-**Status:** WAITING on W1–W4 and Alex's source/production approval.
+**Status:** WAITING on Alex's source/production approval (W1–W4 prerequisite
+is satisfied).
 
 - [ ] Alex selects the exact article, confirms teacher/source and clearance, and
   approves deploying quote containment.
