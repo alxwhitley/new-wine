@@ -435,6 +435,31 @@ PLAN.md's Open Decisions note.
 
 27. **The two ID-confirmed fabricated-proposition passages stay out permanently.** Ravenhill/Philippians 4:8-9 and Conlon/Matthew 7:21-23 (both `eligible=false` since 2026-08-04, Landmines below) are not rewritten and not reinstated — closes the "Alex has not ruled on whether to also correct the stored text" question the Landmines entry left open for these two. Reason: a rewrite risks introducing a newer, subtler error, and two passages is not a real content gap. The Savchuk case is a separate, still-open question — never ID-confirmed against an original finding, unlike these two, so it is not automatically covered by this ruling.
 
+## Settled product decisions (2026-08-19) — quote teacher scope
+
+28. **Teacher scope for served quotes is OPEN** (Alex's decision,
+    2026-08-19) — a relevant quote may appear on any answer about the
+    subject regardless of which teacher's material the answer prose was
+    generated from. Closes the teacher-scope question PLAN.md W7–W8 left
+    open. The accepted risk, recorded verbatim, not softened: Alex was
+    told directly that a quote appearing beside prose built from a
+    different teacher's material can read to a user as that teacher
+    endorsing a claim he did not make — ranked failure mode #2, teacher
+    misrepresentation, and worst with living ministers. Alex accepts
+    this.
+
+    The consequence, recorded as a requirement, not a suggestion: under
+    open scope the entire safety burden falls on PRESENTATION — a served
+    quote must be visually separated from the answer and carry its own
+    teacher and source attribution attached to the quote itself, never
+    inferred from surrounding prose. Presentation must be designed and
+    settled BEFORE the quote rail is re-enabled.
+
+    Also record: open scope makes match quality load-bearing in a way
+    teacher-locked scope did not — under locked, a weak match is a
+    slightly-off quote from the right teacher; under open, a weak match
+    puts the wrong teacher's name beside a claim.
+
 ## Session Routing
 
 Determines which path a session's task runs on — not a judgment call. Read
