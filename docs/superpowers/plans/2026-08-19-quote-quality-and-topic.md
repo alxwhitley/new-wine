@@ -148,10 +148,10 @@ Rules:
 - `quote_text` must equal `window[char_start:char_end]` and be exact substring of source window.
 - Dry-run script: `--doc-ids` or `--limit N`, prints proposals + quality + verify verdicts, **zero DB writes**. Mutation-test that `create_and_approve_quote` / raw INSERT are never called.
 
-- [ ] **Step 1:** Unit tests for JSON parse, taxonomy filter, offset check.
-- [ ] **Step 2:** Implement propose + dry-run CLI with cost projection printed up front.
-- [ ] **Step 3:** Run dry-run on **3** Alex-chosen or first-3 cleared Prince sermons; save report under `docs/audits/` (gitignored if huge) or `quote_propose_review/`.
-- [ ] **Step 4:** Commit code + a short calibration note (docs commit separate if needed).
+- [x] **Step 1:** Unit tests for JSON parse, taxonomy filter, offset check.
+- [x] **Step 2:** Implement propose + dry-run CLI with cost projection printed up front.
+- [x] **Step 3 (estimate-only):** Live projection on first-3 cleared Prince sermons — **~$1.42 / 59 windows**, under ceiling. Paid `--run` held for Alex OK. Note: `docs/audits/quote_propose_calibration_note_2026-08-19.md`.
+- [x] **Step 4:** Commit code + calibration note (separate commits).
 
 ---
 
