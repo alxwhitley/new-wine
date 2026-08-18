@@ -27,21 +27,29 @@ candidate is accepted only if it passes ALL of:
      decision #16, 2026-08-03 section) -- with no human catching a subtle
      mid-sentence trim, this errs toward refusing more real quotes, not
      fewer, at any boundary that cannot be positively confirmed clean.
-  5. speaker confirmation -- the attributed teacher_source_id must equal the
+  5. single-paragraph span -- the candidate must not contain an internal
+     blank-line paragraph break (`\\n\\n`). Open/close terminal punctuation
+     alone does not stop a quote from swallowing the next section's opening
+     sentence after a paragraph break (live failure: Derek Prince, "The New
+     Testament Evangelist", approved quote ending "...Holy Spirit." then
+     "\\n\\nWe come to the seventh unity..."). Refusing multi-paragraph
+     spans is the automatic form of that section-boundary rule. Single
+     newlines inside a paragraph remain allowed.
+  6. speaker confirmation -- the attributed teacher_source_id must equal the
      source document's own source_id. A strong content match is not
      confirmation -- this is the concrete, checkable form that rule takes
      for written, already-attributed documents (see the Savchuk case in
      CLAUDE.md Landmines, the case that motivated this rule).
 
-Checks 1, 2, and 5 are re-checked independently by the database itself
+Checks 1, 2, and 6 are re-checked independently by the database itself
 against the immutable captured snapshot, via the trg_enforce_quote_approval_
 gates trigger (migration 082, gate 4 revised by migration 085's speaker
 gate) -- that trigger is the authoritative backstop for those three. Checks 3
-(sub-chunk exclusion) and 4 (boundary/sentence-completeness) are deliberately
-Python-only, accepted narrower boundaries (same posture as services/quotes.py's
-per-work quote-text cap) -- there is exactly one write path,
-create_and_approve_quote(), and it always runs these checks before any INSERT
-is attempted.
+(sub-chunk exclusion), 4 (boundary/sentence-completeness), and 5
+(single-paragraph span) are deliberately Python-only, accepted narrower
+boundaries (same posture as services/quotes.py's per-work quote-text cap) --
+there is exactly one write path, create_and_approve_quote(), and it always
+runs these checks before any INSERT is attempted.
 """
 from __future__ import annotations
 
@@ -122,6 +130,15 @@ def _has_clean_sentence_boundaries(chunk_content: str, start: int, end: int) -> 
     return True
 
 
+def _has_internal_paragraph_break(quote_text: str) -> bool:
+    """True if the candidate spans more than one blank-line-separated
+    paragraph. A single paragraph may still contain ordinary newlines."""
+    if not quote_text:
+        return False
+    paragraphs = [p for p in quote_text.split("\n\n") if p.strip()]
+    return len(paragraphs) > 1
+
+
 def verify_quote_candidate(
     db, chunk_id: str, quote_text: str, teacher_source_id: str
 ) -> QuoteVerification:
@@ -189,6 +206,14 @@ def verify_quote_candidate(
             "candidate does not open and close on clean sentence boundaries -- "
             "refusing rather than risking a trim that reverses meaning",
             "boundary_proximity",
+        )
+
+    if _has_internal_paragraph_break(quote_text):
+        return QuoteVerification(
+            False,
+            "candidate contains an internal blank-line paragraph break -- "
+            "refusing rather than allowing a quote to swallow the next section",
+            "internal_paragraph_break",
         )
 
     document_id = chunk_row.get("document_id")

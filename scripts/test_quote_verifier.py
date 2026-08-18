@@ -202,6 +202,38 @@ print("\n11. Same candidate, correctly attributed:")
 check("valid == True", result.valid is True)
 check("rule == accepted", result.rule == "accepted")
 
+# 11b. Internal paragraph break -- live failure class from the 2026-08-19
+#     quality sample: Derek Prince "The New Testament Evangelist" quote that
+#     ended a baptism-formula point, then swallowed the next section opener
+#     after a blank line ("We come to the seventh unity..."). Open/close
+#     terminal punctuation alone did not catch this; single-paragraph span
+#     must refuse it. Chunk and text are the live approved row's own span
+#     (read-only fixture); we do not mutate the row here.
+EVANGELIST_CHUNK = "132d897b-c692-43bb-841e-92e9524c70d4"
+evangelist_overrun = (
+    "I don’t believe in the early church there was one unvarying formula that was "
+    "always necessarily applied. When you get to the point of hanging everything on "
+    "a precise form of words, you are no longer moving in the liberty of the Holy Spirit.\n\n"
+    "We come to the seventh unity, one God and Father."
+)
+evangelist_content = (
+    db.table("chunks").select("content").eq("id", EVANGELIST_CHUNK).limit(1).execute().data[0]["content"]
+)
+assert evangelist_overrun in evangelist_content, "fixture error: overrun span not in evangelist chunk"
+# Control: first paragraph alone (no blank-line second section) must still be
+# acceptable on boundaries if it otherwise passes -- proves the refuse is
+# about the internal break, not the chunk.
+evangelist_first_para = evangelist_overrun.split("\n\n", 1)[0]
+assert evangelist_first_para in evangelist_content
+result = verify_quote_candidate(db, EVANGELIST_CHUNK, evangelist_overrun, PRINCE_SOURCE_ID)
+print("\n11b. Multi-paragraph span swallows next section (live evangelist failure):")
+check("valid == False", result.valid is False)
+check("rule == internal_paragraph_break", result.rule == "internal_paragraph_break")
+result = verify_quote_candidate(db, EVANGELIST_CHUNK, evangelist_first_para, PRINCE_SOURCE_ID)
+print("\n11c. Same chunk, first paragraph only (no internal blank line):")
+check("valid == True", result.valid is True, result.reason)
+check("rule == accepted", result.rule == "accepted")
+
 # 12/13. Live re-check: both quotes already approved in production must
 #    still pass the full tightened verifier end to end -- the tightening
 #    must not silently invalidate real served content.
