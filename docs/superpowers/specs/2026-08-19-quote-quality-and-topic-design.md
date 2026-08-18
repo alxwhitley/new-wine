@@ -2,12 +2,19 @@
 
 **Date:** 2026-08-19
 
-**Status:** Confirmed by Alex in design review; ready for implementation planning
+**Status:** Revised after adversarial review (Claude Code + Grok); Alex
+confirmed beta **ships with quoting ON**, so this work is launch-critical.
+Ready for implementation planning only after the preconditions in
+**Blockers before implementation** are met.
 
 **Scope:** Path to extract *quality* quotes, assign *passage-level* topic tags
 from a controlled vocabulary, and surface them on related answers — without
-re-enabling the live quote rail until quality, tagging, presentation, and
-legacy quarantine are in place.
+re-enabling the live quote rail until quality, tagging, presentation, boundary
+hardening, and a gold serving set exist.
+
+**Lane:** Spec/analysis may be authored in Grok. **Implementation is
+answer-accuracy work and is outside Grok’s lane** — build in Codex/Claude
+(attended primary session), not via Grok.
 
 ## Objective
 
@@ -16,20 +23,22 @@ Build a quotes path where:
 1. Extracted quotes are worth serving as standalone excerpts (not merely
    grammatically complete sentences).
 2. Each quote is tagged from its own passage against a controlled topic
-   vocabulary, so it can surface beside related topical answers and support
-   browse/admin by topic.
-3. Answer-time selection ranks primarily by question ↔ `quote_text` embedding
-   similarity (the 2026-08-18 repair), with a soft boost when passage tags
-   overlap the question's topics — never a hard tag gate.
-4. The existing 793 approved/pending quotes are treated as untrusted legacy
-   until re-extracted under this pipeline; the rail stays off until Alex
-   explicitly re-enables it.
+   vocabulary Alex authors, so tags support display, browse/admin, and
+   (later) optional selection boost — never document-tag inheritance.
+3. Answer-time selection ranks by question ↔ `quote_text` embedding
+   similarity (the 2026-08-18 repair). **V1 does not soft-boost from tags.**
+4. The existing 793 approved/pending quotes remain in the database as
+   **live-but-unserved** while `QUOTE_SELECTION_ENABLED` is off during the
+   build; they are not an ambiguous third state. They become selection-
+   ineligible before any re-enable, and are not the v1 serving set.
+5. Private beta **requires quoting on** (Alex, 2026-08-19). This rebuild,
+   vocabulary, presentation, and boundary fix are therefore on the launch
+   critical path — not post-launch.
 
 Success is a small gold set of newly extracted, quality-gated, correctly
-tagged quotes that can attach to related questions under the hybrid selector,
-with presentation that carries teacher/source on the quote itself. It is not
-a full Derek Prince corpus rebuild in one pass, and it does not flip
-`QUOTE_SELECTION_ENABLED`.
+tagged quotes, with presentation that carries teacher/source on the quote
+itself, proven under selection with the rail still off, then an attended
+re-enable. It is not a full Derek Prince corpus rebuild in one pass.
 
 ## Goals (user)
 
@@ -38,65 +47,89 @@ a full Derek Prince corpus rebuild in one pass, and it does not flip
 
 ## Non-goals (this design)
 
-- Turning `QUOTE_SELECTION_ENABLED` on in production.
+- Turning `QUOTE_SELECTION_ENABLED` on without Alex’s attended gate.
 - Salvaging or quietly rewriting the 793 legacy rows in place as the v1
   quality fix.
 - Putting “worth reading” judgments inside `verify_quote_candidate()` (that
-  module stays provenance/authenticity only).
+  module stays provenance/authenticity only — except boundary hardening
+  proven necessary by the known overrun defect).
 - Hard-filtering selection solely by topic tag match.
+- **V1 soft-boost from tags** (deferred; see Selection).
 - Quote extraction from flat book chunks without trustworthy boundaries
   (standing exclusion).
 - Expanding curated teachers beyond the existing confirmed set without a
   separate decision.
-- Changing Settled decision #18’s deterministic authenticity verifier, or
-  #28’s open teacher-scope product rule (presentation is required before
-  re-enable; selection code may still need to catch up to #28 in a later
-  phase).
+- Changing Settled decision #18’s deterministic authenticity auto-approve
+  policy, or #28’s open teacher-scope product rule.
+- Grok implementing code on this path.
+
+## Blockers before implementation
+
+These are deliberate gates, not plan footnotes:
+
+1. **Settled decision (Alex, record in `CLAUDE.md`)** — authorize or refuse
+   a **model-involved quality / serveability gate** on the quote path.
+   Standing posture (Settled #4 / Open Decision #20) rejects model-based
+   judges on the answer path; that shape failed five times. Settled #16
+   already allows AI to *propose* quote candidates. Using a model (or
+   model-shaped fields) as a gate that decides whether a quote may become
+   approved/servable is a taste judgment and needs the same explicit
+   exception treatment as decision #16’s contradiction filter: on the
+   record, wrong in both directions sometimes, logged, measurable.
+   **No implementation of propose→quality→approve until this is written.**
+2. **Controlled vocabulary (Alex)** — closed topic list is a doctrinal /
+   product call. Gates extract tagging. Draft may be proposed in a plan;
+   Alex authors/approves the list before any real tagged write.
+3. **Boundary defect root-cause + fix** — sample quote 7 (“The New
+   Testament Evangelist”) ran past its point and swallowed the next
+   section’s opening line. Authenticity’s boundary check did not catch it.
+   Investigate and harden **before** any rebuild write so new quotes do not
+   inherit the flaw. Proof: that sample (and cousins) fail closed after the
+   fix.
+4. **Named cost estimate** — before any corpus-scale LLM propose run,
+   surface attempted document/chunk counts, expected $/run, and stay under
+   the **$50 ceiling** unless Alex explicitly approves more. No mid-run
+   discovery.
 
 ## Approaches considered
 
 ### A — Tags as the primary selection index — rejected
 
-Retrieve quotes by topic-tag match to the question. Attractive for
-deterministic “related topic” behavior, but it recreates the failure mode
-that forced containment: document-level (and even imperfect passage-level)
-tags caused baptism false positives and exact ties. Wrong or incomplete tags
-become wrong quotes with a teacher’s name attached — worse under open teacher
-scope (#28).
+Retrieves by topic-tag match. Recreates the baptism false-positive / exact-tie
+failure mode. Worse under open teacher scope (#28).
 
-### B — Embedding-only selection + accurate display tags — rejected as incomplete
+### B — Embedding-only selection + accurate display tags — selected for v1
 
-Keep question ↔ `quote_text` as the only selection signal; fix extract quality
-and make `topic` a truthful display label. Correct for relevance ranking, but
-under-delivers the product goal of topic-aware surfacing and browse. Soft
-overlap signal is cheap once tags are trustworthy on *new* rows.
+Keep question ↔ `quote_text` as the only selection signal for v1; fix extract
+quality; make tags truthful for display/browse. Soft tag boost deferred until
+real traffic or a labeled dry harness can evaluate it. (Long-term hybrid
+target retained below as a later enhancement, not a v1 deliverable.)
 
-### C — Hybrid (selected)
+### C — Hybrid text + soft tag boost — deferred (not v1)
 
-1. **LLM proposes** candidate quotes with structured fields (allowed by
-   Settled decision #16: AI may propose, not approve authenticity).
-2. **Deterministic quality rubric** gates “worth serving” before any
-   pending/approved write.
-3. **Existing `verify_quote_candidate()`** gates authenticity/provenance.
-4. **Controlled-vocabulary passage tags** assigned at extract time from the
-   quote (+ bounded surrounding context), never from
-   `documents.topic_tags[0]`.
-5. **Selection:** primary rank = question ↔ `quote_text` cosine (≥ 0.35);
-   soft boost when tags overlap question topics; never hard-exclude on tag
-   miss.
-6. **Legacy:** quarantine the 793; rebuild under this pipeline.
-7. **Presentation:** design visual separation + teacher/source on the quote
-   before any re-enable (#28).
+Same as B, plus a soft boost when tags overlap question topics, never lifting
+sub-floor text matches. Correct long-term shape if boost is measurable; with
+no traffic, it is a dial that cannot be evaluated and is cut from v1.
 
-## Approved product decisions (this design review)
+## Approved product decisions (design review + revision)
 
-1. Hybrid retrieval: text primary, controlled tags soft-boost.
-2. LLM propose + quality rubric + authenticity verify for extraction.
-3. Controlled topic vocabulary (closed list); free-text topics rejected.
-4. Legacy 793 quarantined as untrusted; not the v1 serving set.
-5. Presentation for open teacher scope is required before re-enable.
-6. Quality lives in a separate stage from `verify_quote_candidate`.
-7. Rail remains default-off until Alex’s explicit attended gate.
+1. **Beta ships with quoting ON** — this work is launch-critical (Alex,
+   2026-08-19).
+2. Extraction path: LLM propose + quality gate + authenticity verify —
+   **subject to blocker #1** (settled decision on model-involved quality).
+3. Controlled topic vocabulary (closed list); Alex authors; free-text
+   rejected.
+4. **V1 selection:** question ↔ `quote_text` only; tags for display/browse.
+   Soft boost deferred.
+5. Legacy 793: **live-but-unserved** while the rail is off during the build
+   (explicit, not ambiguous). Selection-ineligible before re-enable; not the
+   v1 serving set.
+6. Presentation for open teacher scope required before re-enable (#28).
+7. Quality lives outside `verify_quote_candidate`, except boundary hardening
+   that belongs in authenticity once root-caused.
+8. Rail remains default-off until Alex’s explicit attended gate after gold
+   set + presentation + regressions.
+9. Implementation outside Grok’s lane.
 
 ## Architecture
 
@@ -104,24 +137,24 @@ overlap signal is cheap once tags are trustworthy on *new* rows.
 Source passage (chunk + bounded neighbors)
         │
         ▼
-LLM propose (structured)
-  quote_text, restated_point, topic_ids[], why_quotable, quality signals
+LLM propose (structured)     [requires settled quality-gate decision]
+  quote_text, restated_point, topic_ids[], why_quotable, …
         │
         ▼
-Deterministic quality rubric  ──fail──► discard / log (never approve)
+Quality gate (per settled decision)  ──fail──► discard / log
         │ pass
         ▼
-verify_quote_candidate()      ──fail──► refuse + quote_verification_log
+verify_quote_candidate()     [boundary hardened before rebuild]
         │ pass
         ▼
-Persist as pending or approved under policy
-  passage-level topic_ids + primary_topic label
-  (legacy rows excluded from selection until re-extract)
+Persist new-pipeline rows (gold set first)
+  passage-level topic_ids + primary_topic
+  legacy 793 remain in DB, live-but-unserved (rail off)
         │
         ▼
 select_quotes_for_answer (flag still default off)
-  score = sim(question, quote_text) [+ soft tag boost]
-  threshold + (score, id) order + MAX_QUOTES_PER_ANSWER
+  score = sim(question, quote_text) only in v1
+  new-pipeline / gold eligible only before re-enable
         │
         ▼
 resolve_quote() → UI
@@ -139,214 +172,223 @@ structured fields per candidate:
 | `quote_text` | Exact contiguous substring of the supplied source text |
 | `char_start` / `char_end` | Offsets into the supplied text (verifier re-checks) |
 | `restated_point` | One-sentence paraphrase of the claim (display companion; not the quote) |
-| `topic_ids` | 1–3 IDs from the controlled vocabulary |
+| `topic_ids` | 1–3 IDs from Alex’s controlled vocabulary |
 | `why_quotable` | Short rationale against the quality rubric |
 | `standalone_ok` | Boolean: readable without the surrounding argument |
 
-Constraints on the propose step:
+Constraints:
 
-- May only quote text present in the supplied window (no paraphrase-as-quote).
-- Prefer 1–3 sentence, complete thoughts; refuse deictic-only openers
-  (“Verse 17…”, “As I said…”) unless the quote itself states the point.
-- Cap proposals per document/chunk (exact caps set in the implementation
-  plan; start conservative).
-- Prompt version + model stamped on every proposal batch (provenance
-  discipline parallel to propositions/positions).
+- May only quote text present in the supplied window.
+- Prefer 1–3 sentence complete thoughts; refuse deictic-only openers unless
+  the quote itself states the point.
+- Cap proposals per document/chunk (implementation plan; start conservative).
+- Prompt version + model stamped on every proposal batch.
 
-### Stage 2 — Quality rubric (deterministic + structured checks)
+### Stage 2 — Quality gate
 
-Separate module (suggested: `quote_quality.py`). Does **not** replace the
-authenticity verifier. Initial rubric dimensions (implementation plan
-calibrates thresholds against a gold set Alex rates):
+Separate from authenticity. Exact mechanism (deterministic-only vs
+model-assisted vs hybrid) is **fixed by the settled decision in blocker #1**,
+not by this spec inventing a judge. Whatever is authorized must:
 
-1. **Standalone** — no unresolved deixis; no mid-connective that only works
-   after prior sentences.
-2. **Complete thought** — ends on a full claim, not a setup clause.
-3. **Substance** — not throat-clearing, not pure verse-read with no
-   teacher claim, not audience banter.
-4. **Boundary hygiene** — does not swallow the next section’s opening
-   sentence (addresses PLAN’s known sample failure; may add checks beyond
-   today’s edge-proximity rules).
-5. **Length band** — keep within a calibrated char/sentence band suitable
-   for the quote rail UI.
+- Keep every accept/refuse explainable and logged.
+- Not revive a free-form claim-support judge (Open Decision #20 shape).
+- Calibrate against a gold set Alex rates before corpus-scale runs.
 
-Fail → do not write a quote row (or write only to a proposal log if one is
-added later). Pass → hand to authenticity verify.
+Illustrative rubric *dimensions* (not yet an authorized judge):
 
-A structured LLM score may *inform* the rubric only if every accept/refuse
-is still explainable by named checks; do not revive a free-form
-“claim-support judge” (Standing: Open Decision #20 shape is rejected). Prefer
-deterministic checks on the proposal fields first; add model-assisted scoring
-only if the gold set proves heuristics insufficient.
+1. Standalone (no unresolved deixis / mid-connective).
+2. Complete thought.
+3. Substance (not throat-clearing, bare verse-read, or banter).
+4. Boundary hygiene (does not swallow the next section — also enforced in
+   authenticity after the root-cause fix).
+5. Length band suitable for the rail UI.
+
+Fail → no quote row (or proposal-log only). Pass → authenticity verify.
 
 ### Stage 3 — Authenticity (`verify_quote_candidate`)
 
-Unchanged contract: exact substring, speaker confirmation, commentary /
+Contract remains: exact substring, speaker confirmation, commentary /
 ineligible exclusions, boundary-proximity/sentence-completeness, document
-clearance at approve time, per-work cap. Auto-approve policy (Settled #18)
-remains: authenticity pass may approve without a human — **quality must
-already have passed upstream**, so weak quotes never reach this call.
+clearance at approve time, per-work cap. Auto-approve (Settled #18) remains
+for authenticity — **quality must already have passed upstream**.
+
+**Change required before rebuild:** root-cause and harden the boundary check
+so the known overrun class fails closed. This is not “optional polish”; it is
+blocker #3.
 
 ### Stage 4 — Persist + tags
 
-- Store passage-level `topic_ids` (controlled vocab) and a `primary_topic`
-  display string derived from the vocab, not from `documents.topic_tags[0]`.
-- Schema change (implementation plan): prefer a dedicated structure
-  (e.g. `topic_ids text[]` + keep `topic` as primary display label, or a
-  join table). Exact migration is planned later; this design requires that
-  selection and display can read passage-level topics without inheriting
-  document tags.
-- Attribution: teacher + work/source title remain available for presentation
-  (work title is attribution, not the topic label — closes the W7 label
-  fork in favor of **semantic topic for the topic chip**, work title on the
-  attribution line).
+- Store passage-level `topic_ids` and `primary_topic` from the controlled
+  vocab — never `documents.topic_tags[0]`.
+- Schema: implementation plan chooses `topic_ids text[]` + display `topic`,
+  or equivalent; plus a `quality_pipeline_version` (or similar) so selection
+  can distinguish new-pipeline rows from legacy.
+- Label policy: **semantic topic** on the topic chip; **work/source title**
+  on the attribution line (closes W7’s label fork).
 
-### Stage 5 — Selection (hybrid)
+### Stage 5 — Selection (v1)
 
 Keep:
 
 - `QUOTE_SELECTION_ENABLED` exact `"true"` opt-in.
-- `QUOTE_PASSAGE_SIMILARITY_THRESHOLD = 0.35` as primary floor on
+- `QUOTE_PASSAGE_SIMILARITY_THRESHOLD = 0.35` on
   `sim(question_emb, quote_text_emb)`.
 - Deterministic `(−score, id)` ordering and `MAX_QUOTES_PER_ANSWER`.
 
-Add:
+V1:
 
-- Soft boost when the quote’s `topic_ids` intersect topics associated with
-  the question (from query expansion / matched background topics / a small
-  question→topic mapper defined in the plan). Boost is additive inside the
-  ranker; a quote below the similarity floor still cannot attach.
-- Selection eligibility: only quotes from the **new pipeline** (or an
-  explicit `quality_pipeline_version` / clearance flag). Legacy rows are
-  ineligible for selection even if `status='approved'`.
+- **No tag soft-boost.**
+- Eligible rows: new-pipeline / gold only. Legacy ineligible at selection
+  time before any re-enable.
 
-Open teacher scope (#28): presentation must ship before re-enable. Selection
-may be widened to allow relevant quotes regardless of whose material wrote
-the answer prose only after that UI contract exists; until then, keep the
-safer retrieved-teacher filter in code if needed as a temporary belt — but
-do not treat that temporary filter as reversing #28.
+Later (Scheduled / triggered after measurement — not launch-blocking once
+v1 quoting works):
+
+- Soft boost when tags overlap question topics; never lift sub-floor matches.
+
+Open teacher scope (#28): presentation before re-enable. Selection widening
+to match #28 only after that UI exists.
 
 ### Stage 6 — Resolve / present
 
-`resolve_quote()` remains the only text resolution point. UI requirements
-before re-enable:
+`resolve_quote()` remains the only text resolution point. Before re-enable:
 
-- Quote visually separated from answer prose (not inline as if the answer
-  voice said it).
-- Teacher name and source/work attribution attached to the quote component.
-- Topic chip shows `primary_topic` (passage-level).
-- Restated point may sit beside the quote if product copy wants it; quote
-  typography remains reserved for verified quote text only (Settled #17
-  spirit).
+- Quote visually separated from answer prose.
+- Teacher name and source/work attribution on the quote component.
+- Topic chip shows passage-level `primary_topic`.
+- Restated point optional beside the quote; quote typography only for
+  verified quote text (Settled #17 spirit).
 
-## Legacy quarantine
+## Legacy: live-but-unserved during the build
 
-Live audit (`docs/audits/quote_legacy_relevance_audit_2026-08-18.md`):
-793 approved/pending; **592/793 (74.7%)** fail passage↔inherited-topic
-relevance; all 592 are Derek Prince. Quality sample
-(`docs/audits/quote_quality_sample_2026-08-19.md`): ~20% judged worth
-serving.
+Live audit: 793 approved/pending; **592/793 (74.7%)** fail
+passage↔inherited-topic relevance (all Derek Prince). Quality sample: ~20%
+judged worth serving.
 
-Policy:
+**Explicit state during build (avoids deadlock and ambiguity):**
 
-1. Do not re-enable the rail on this set.
-2. Mark legacy ineligible for `select_quotes_for_answer` (flag/column/
-   pipeline_version — exact mechanism in implementation plan).
-3. Rebuild via the new propose→quality→verify path into new rows (or
-   replace-in-place only under an attended, reconciled script with hard
-   counts — prefer new rows + deprecate old to avoid silent meaning drift).
-4. Optional: keep legacy rows visible in admin for comparison; they are not
-   serving candidates.
+| State | Meaning |
+|---|---|
+| DB rows exist | Yes — 793 remain queryable in admin |
+| `QUOTE_SELECTION_ENABLED` | Off — **nothing reaches users** |
+| Serving set | Not these rows |
+| Ambiguous “quarantine” | **No** — call this **live-but-unserved** |
+
+Ordering that avoids presentation deadlock:
+
+1. Boundary fix + settled quality decision + Alex vocab (blockers).
+2. Dry-run propose + calibrate on a small slice (costed).
+3. **Gold write** — small attended new-pipeline set (enough real quotes for
+   UI and selection proofs).
+4. Presentation built/verified against gold (and fixtures as needed).
+5. Mark legacy **selection-ineligible** (still in DB; still unserved).
+6. Regressions / W8-style proofs with rail still off.
+7. Attended re-enable on gold (or gold + later bounded rebuild batches).
+
+Do **not** require “full legacy purge first” before presentation has real
+quote shapes to render. Do **not** leave legacy eligible for selection if the
+rail is turned on.
 
 ## Controlled topic vocabulary
 
-- Start from existing product topic surfaces where possible (document
-  `topic_tags` inventory, background topics, house-position pillars) and
-  publish a **closed list** in-repo.
-- LLM propose may only emit IDs from that list; unknown IDs fail the quality
-  / tag gate.
-- Multi-tag allowed (1–3); one primary for display.
-- Vocabulary edits are deliberate docs+code changes, not free-text drift.
+- Closed list in-repo; **Alex authors / approves** (doctrinal/product gate).
+- Propose step may only emit IDs from that list.
+- Multi-tag 1–3; one primary for display.
+- Edits are deliberate docs+code changes.
 
-Exact initial list is an implementation-plan deliverable, reviewed by Alex
-before the first real write batch.
+## Cost
 
-## Phased delivery
+Any LLM propose over more than a tiny calibration slice:
+
+1. Named estimate to Alex before run (docs/chunks in scope, model, $/run).
+2. Design to run once, not iterate live against the corpus.
+3. **$50 hard ceiling** unless Alex explicitly approves more.
+
+First Prince non-book rebuild batch is costed in the implementation plan
+before Phase F-equivalent writes.
+
+## Phased delivery (launch-critical)
 
 | Phase | Work | Stop condition |
 |---|---|---|
-| **A** | Spec (this doc) + implementation plan | Plan reviewed |
-| **B** | Quality module + LLM propose (dry-run) + gold set calibration | Alex-rated sample meets agreed precision; no DB quote writes |
-| **C** | Schema for passage topics + legacy ineligibility; migrate/flag | Legacy cannot be selected; new rows can store topic_ids |
-| **D** | Hybrid selector + tests (rail still off) | Mutation-proven tests; live dry selection on gold set |
-| **E** | Presentation (separation + attribution on quote) | UI contract signed off by Alex |
-| **F** | Small attended re-extract (one teacher/work slice) | Hard reconciliation; quality sample pass |
-| **G** | Attended `QUOTE_SELECTION_ENABLED` decision | Alex only; after W8-style regressions as required by PLAN |
+| **A0** | Alex: settled quality-gate decision in `CLAUDE.md`; author vocab | Decisions recorded |
+| **A1** | Implementation plan (Codex/Claude lane) incl. costed first slice | Plan reviewed |
+| **B** | Boundary root-cause + verifier harden + tests | Sample overrun fails closed; no quote corpus writes yet |
+| **C** | Quality module + LLM propose dry-run; gold calibration | Alex-rated precision; cost within ceiling |
+| **D** | Schema: topic_ids + pipeline_version; gold attended write | Hard reconciliation; gold usable |
+| **E** | Selection: new-pipeline-only eligibility; text-only rank (rail off) | Mutation-proven tests |
+| **F** | Presentation (separation + attribution) against gold | Alex UI sign-off |
+| **G** | Mark legacy selection-ineligible; W8-style regressions | Proofs pass; rail still off |
+| **H** | Attended `QUOTE_SELECTION_ENABLED=true` | Alex only |
 
-Phases B–E are repo-first and may proceed while W5–W6 article proof remains
-a separate attended track. Phase G must not silently expand the private-beta
-gate; it remains an explicit Alex enablement.
+Long-term soft-boost is **out of this launch sequence** (Scheduled after
+measurement).
 
 ## Risks and constraints
 
-- **Misattribution under open scope:** presentation is load-bearing; do not
-  re-enable without it.
-- **LLM propose fabricating span text:** mitigated by exact-substring verify;
-  proposals that are not exact substrings never persist.
-- **Quality rubric gaming / vagueness:** calibrate on a gold set Alex rates;
-  prefer named deterministic checks; avoid opaque judges.
-- **Tag soft-boost overfit:** boost must not pull sub-threshold text matches
-  above the floor; measure false positives on baptism/fasting/marriage
-  clusters already used in calibration.
-- **Cost:** any corpus-scale LLM propose run surfaces a cost estimate before
-  execution ($50 ceiling unless Alex approves more — project rule).
-- **Settled #18:** authenticity approval stays automatic and deterministic;
-  quality is upstream eligibility, not a second human approver.
+- **Launch load:** quoting-on beta adds rebuild + vocab + presentation +
+  boundary fix to the October path — schedule explicitly in `PLAN.md`.
+- **Misattribution under open scope:** presentation is load-bearing.
+- **LLM span fabrication:** exact-substring verify; non-substrings never
+  persist.
+- **Unauthorized model judge:** blocked until settled decision exists.
+- **Boundary inheritance:** rebuild forbidden until harden lands.
+- **Cost overrun:** estimate + $50 ceiling before corpus propose.
+- **Settled #18:** authenticity auto-approve unchanged; quality is upstream.
 
-## Files likely touched (planning hint, not an implementation checklist)
+## Files likely touched (planning hint)
 
-- New: `backend/app/services/quote_quality.py` (or `scripts/` + shared module)
-- New: propose script / prompt templates with version stamps
-- `scripts/quote_candidates.py` — may remain structural helper for non-LLM paths
-- `backend/app/services/quotes.py` — selection hybrid; legacy eligibility
-- `backend/app/services/quote_verifier.py` — unchanged contract; optional
-  boundary strengthening only if proven
-- Migration for topic_ids / pipeline_version / legacy flag
-- Frontend quote component — presentation contract
-- Tests: quality rubric, propose dry-run, hybrid selector, legacy exclusion
+- New quality / propose modules and prompt versions
+- `quote_verifier.py` — boundary harden
+- `quotes.py` — eligibility + selection (no boost in v1)
+- Migration: topic_ids / pipeline_version / legacy selection flag
+- Frontend quote component — presentation
+- Tests for boundary, quality, eligibility, selection
+- `CLAUDE.md` / `PLAN.md` — settled decision + launch blocker placement
+
+**Implementer:** Codex/Claude, not Grok.
 
 ## Evidence already in hand
 
-- Passage-level selection fix and calibration: commit `82ec0f5`,
+- Passage-level selection fix: `82ec0f5`,
   `scripts/test_quote_passage_relevance.py`
-- Legacy relevance audit: `docs/audits/quote_legacy_relevance_audit_2026-08-18.md`
+- Legacy relevance audit:
+  `docs/audits/quote_legacy_relevance_audit_2026-08-18.md`
 - Quality sample: `docs/audits/quote_quality_sample_2026-08-19.md`
-- Containment: `quote_selection_enabled()`, Landmines entry
+- Containment: `quote_selection_enabled()`, Landmines
 - Settled #16/#17/#18/#19/#24/#28; PLAN.md W7–W8 + Quote quality blocker
 
-## Open items for the implementation plan (not blocking this design)
+## Open items for the implementation plan
 
-1. Initial controlled vocabulary draft for Alex’s edit.
-2. Gold-set size and rating rubric worksheet.
-3. Exact schema for `topic_ids` / legacy ineligibility.
-4. Whether first persist status is `pending` vs auto-`approved` after quality
-   + verify (authenticity auto-approve may still apply; product may prefer
-   pending for the first rebuild slice).
-5. Question→topic mapper for soft boost (reuse retrieval topics vs small
-   dedicated map).
-6. Cost estimate for first Prince non-book re-extract slice.
-7. Boundary-overrun root cause for sample quote 7 (investigate during Phase B).
+1. Wording of the settled quality-gate decision for Alex to confirm into
+   `CLAUDE.md`.
+2. Vocabulary worksheet for Alex to author.
+3. Boundary root-cause procedure and regression fixtures.
+4. Exact schema for topic_ids / pipeline_version / legacy ineligibility.
+5. Gold-set size and rating worksheet.
+6. **Named cost estimate** for first rebuild slice.
+7. Whether first persist is `pending` vs auto-`approved` after quality +
+   verify.
+8. PLAN.md update: promote this sequence as launch-critical given quoting-on
+   beta (records session; chat-originated priority).
 
-## Approval
+## Approval trail
 
-Alex confirmed in design review (2026-08-19 session):
+**Initial design review (Alex):** hybrid architecture; LLM propose + rubric +
+verify; controlled vocab; legacy quarantine; presentation before re-enable.
 
-- Hybrid architecture
-- LLM propose + rubric + verify
-- Controlled vocab + soft boost
-- Legacy quarantine + presentation before re-enable
-- Phased rollout A→G as sequenced above
+**Adversarial revision (Claude Code review + Grok response; Alex):**
 
-Next step: implementation plan via `writing-plans` /
-`docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md` after Alex
-reviews this spec file.
+1. Model-involved quality gate → **settled decision before implementation**.
+2. Boundary defect → **root-cause + fix before rebuild**.
+3. Cost → **named estimate + $50 ceiling before corpus propose**.
+4. Soft tag boost → **deferred from v1** (display/browse tags only).
+5. Vocab → **Alex authors** (explicit gate).
+6. Legacy during build → **live-but-unserved** (rail off); gold before
+   selection-ineligibility / presentation deadlock avoided.
+7. Implementation → **outside Grok’s lane**.
+8. **Beta ships quoting ON** → launch-critical (Alex, 2026-08-19).
+
+Next step after Alex accepts this revision: record the quality-gate settled
+decision + start vocab; then implementation plan in the Codex/Claude lane
+(`docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`).
