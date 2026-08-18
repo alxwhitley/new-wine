@@ -1126,15 +1126,16 @@ def build_proposition_payload_context(
 
 
 def build_proposition_payload_item(
-    proposition: dict,
+    content: str,
+    proposition_index: int,
     embedding: List[float],
     *,
     context: PropositionPayloadContext,
 ) -> PropositionPayload:
-    """Build one canonical item without deciding when its embedding runs."""
+    """Build one canonical item from already-snapshotted source values."""
     return PropositionPayload(
-        content=proposition["content"],
-        proposition_index=proposition["proposition_index"],
+        content=content,
+        proposition_index=proposition_index,
         embedding=tuple(float(value) for value in embedding),
         prompt_version=context.prompt_version,
         prompt_fingerprint=context.prompt_fingerprint,
@@ -1161,7 +1162,8 @@ def build_proposition_payload(
     )
     return tuple(
         build_proposition_payload_item(
-            proposition,
+            proposition["content"],
+            proposition["proposition_index"],
             embedding,
             context=context,
         )
@@ -1270,9 +1272,12 @@ def store_propositions(
         inserted = 0
         stored_prop_ids: List[str] = []
         for raw_proposition in propositions:
-            embedding = embed_fn(raw_proposition["content"])
+            content = raw_proposition["content"]
+            proposition_index = raw_proposition["proposition_index"]
+            embedding = embed_fn(content)
             proposition = build_proposition_payload_item(
-                raw_proposition,
+                content,
+                proposition_index,
                 embedding,
                 context=payload_context,
             )

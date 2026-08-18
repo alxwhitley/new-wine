@@ -674,6 +674,57 @@ class CompletePreviewTests(unittest.TestCase):
             ],
         )
 
+    def test_storage_reads_required_proposition_index_before_embedding(self):
+        embedding_calls = []
+
+        def embed(content):
+            embedding_calls.append(content)
+            return [1.0, 2.0, 3.0]
+
+        with self.assertRaises(KeyError):
+            propositions.store_propositions(
+                _RecordingPropositionConnection(),
+                ROW_ID,
+                [{"content": "missing its required index"}],
+                embed,
+                prompt_version="v3.1",
+            )
+
+        self.assertEqual(embedding_calls, [])
+
+    def test_storage_snapshots_content_and_index_before_mutating_embedder_runs(self):
+        raw_proposition = {
+            "proposition_index": 7,
+            "content": "the original teaching",
+        }
+        embedding_inputs = []
+
+        def embed(content):
+            embedding_inputs.append(content)
+            raw_proposition["content"] = "mutated after provider input"
+            raw_proposition["proposition_index"] = 99
+            return [1.0, 2.0, 3.0]
+
+        connection = _RecordingPropositionConnection()
+        propositions.store_propositions(
+            connection,
+            ROW_ID,
+            [raw_proposition],
+            embed,
+            prompt_version="v3.1",
+        )
+
+        stored_rows = [
+            params
+            for sql, params in connection.cursor_value.executed
+            if sql.startswith("INSERT INTO propositions")
+        ]
+        self.assertEqual(embedding_inputs, ["the original teaching"])
+        self.assertEqual(len(stored_rows), 1)
+        self.assertEqual(stored_rows[0][2], "the original teaching")
+        self.assertEqual(stored_rows[0][3], "[1.0,2.0,3.0]")
+        self.assertEqual(stored_rows[0][4], 7)
+
 
 class ProviderEvidenceTests(unittest.TestCase):
     def test_metadata_evidence_wrapper_preserves_legacy_output_and_real_usage(self):
