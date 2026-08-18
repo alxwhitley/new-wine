@@ -198,9 +198,9 @@ Requirements (Settled #28):
 - Teacher name + source/work title on the quote.
 - Topic chip = primary taxonomy tag (`topic` / `topic_ids[0]`).
 
-- [ ] **Step 1:** Implement UI against gold resolve payload.
+- [x] **Step 1:** Implement UI against gold resolve payload (`resolve_quote` adds `work_title` / `topic_ids` / `restated_point`; QuoteRail shows separation + teacher · work + topic chip).
 - [ ] **Step 2:** Alex visual sign-off.
-- [ ] **Step 3:** Commit.
+- [x] **Step 3:** Commit (sign-off still open).
 
 ---
 
