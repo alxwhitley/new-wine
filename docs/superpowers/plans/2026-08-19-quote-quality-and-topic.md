@@ -73,10 +73,10 @@ UPDATE quotes SET selection_eligible = false WHERE quality_pipeline_version IS N
 
 (Rail is off, so this is safe; makes intent explicit.)
 
-- [ ] **Step 1:** Write migration SQL + apply script with `--apply` gate and fresh-connection verify.
-- [ ] **Step 2:** Unit/schema test asserting columns exist and legacy rows are `selection_eligible=false` after apply.
-- [ ] **Step 3:** Do **not** apply to production until Alex approves the attended migration run.
-- [ ] **Step 4:** Commit migration + tests only (no apply in the commit).
+- [x] **Step 1:** Write migration SQL + apply script with `--apply` gate and fresh-connection verify (`ed55817`).
+- [x] **Step 2:** Unit/schema test asserting columns exist and legacy rows are `selection_eligible=false` after apply.
+- [x] **Step 3:** Migration 089 **applied** to production (Alex-attended; recorded 2026-08-19 handoff).
+- [x] **Step 4:** Commit migration + tests only (no apply in the commit).
 
 ---
 
@@ -164,7 +164,10 @@ Rules:
 **Flow per candidate:** quality pass → `verify_quote_candidate` → insert with `quality_pipeline_version='quote_quality_v1'`, `selection_eligible=true`, `topic` = primary taxonomy tag, `topic_ids` = list, `status` per policy (`pending` recommended for first gold; Alex can approve batch).
 
 - [x] **Step 1:** Wire insert; dry-run mode default (`extract_quotes_quality_pipeline.py`; `create_and_approve_quote` accepts `topic_ids` / `quality_pipeline_version` / `status=pending`).
-- [ ] **Step 2:** Alex approves doc list + cost; run `--apply` on ≤10 docs.
+- [ ] **Step 2:** Alex go required — run on the **3 calibration docs only**:
+  `PYTHONUNBUFFERED=1 python3 scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
+  (~59 chunks, ~$1.42; expect ~mid-20s pending rows). Do **not** flip
+  `QUOTE_SELECTION_ENABLED`. Handoff recorded 2026-08-19: wait for explicit go in a fresh session.
 - [ ] **Step 3:** Hard reconciliation: attempted / stored / refused_quality / refused_verify / skipped.
 - [x] **Step 4 (partial):** Script + unit tests committed; apply-run counts wait on Step 2.
 
