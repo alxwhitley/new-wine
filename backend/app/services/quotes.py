@@ -569,34 +569,25 @@ def select_quotes_for_answer(
     travel in the meta frame and be resolved later through resolve_quote(),
     the single resolution point.
 
-    Candidates: status='approved' AND teacher_source_id in
-    considered_teacher_source_ids -- the FULL set of teachers whose material
-    was considered/retrieved for this answer, deliberately NOT narrowed to
-    only the teachers actually cited. This is a looser-matching decision
-    (Alex's explicit call, 2026-08-06): a quote can appear beside an answer
-    that didn't end up citing that teacher at all. Known, accepted residual
-    risk, not a bug -- narrowing to cited-only is a one-line change here
-    (intersect against the answer's own citations) if this proves too loose
-    in practice. Unchanged by the 2026-08-18 relevance rebuild below.
+    Candidates (2026-08-19 quality pipeline): status='approved' AND
+    selection_eligible=true AND quality_pipeline_version IS NOT NULL AND
+    teacher_source_id in considered_teacher_source_ids. Legacy approved
+    rows (null pipeline version / selection_eligible=false after migration
+    089) are never selected even when quote_text would match the question.
+    Teacher scope remains the FULL set of teachers whose material was
+    considered/retrieved for this answer, deliberately NOT narrowed to
+    only the teachers actually cited (Alex's explicit call, 2026-08-06).
 
     Matching (rebuilt 2026-08-18): cosine similarity between an embedding of
     the raw question and an embedding of each candidate's OWN quote_text --
     the exact, verified excerpt quote_verifier.verify_quote_candidate()
-    already confirmed sits inside its source passage. This replaces the
-    original design, which scored against quotes.topic (a tag usually
-    inherited from the source DOCUMENT, not the individual passage) --
-    see QUOTE_PASSAGE_SIMILARITY_THRESHOLD's module comment for the live
-    evidence that made this a real, systemic defect (a perfect score TIE
-    across every quote sharing a document's topic tag, regardless of
-    passage content) and for the new threshold's calibration. Still fully
-    deterministic given the same inputs, no live LLM judgment call.
+    already confirmed sits inside its source passage. V1 does not soft-boost
+    from topic tags. See QUOTE_PASSAGE_SIMILARITY_THRESHOLD's module comment
+    for calibration. Still fully deterministic given the same inputs.
 
     Deterministic tie-breaking: candidates are fetched in an explicit id
     order (never bare DB return order) and scored candidates are sorted by
-    (score descending, quote id ascending) -- a strict total order, so the
-    same question against the same candidate set always yields the same
-    selection, with no dependence on Python's sort stability, dict/set
-    iteration order, or which order Postgres happens to return rows in.
+    (score descending, quote id ascending) -- a strict total order.
 
     Callers MUST wrap this in their own fail-soft try/except (this function
     can raise -- an embedding-API fault, a DB fault) -- it does not swallow
@@ -609,13 +600,22 @@ def select_quotes_for_answer(
 
     rows = (
         db.table("quotes")
-        .select("id, quote_text")
+        .select("id, quote_text, selection_eligible, quality_pipeline_version")
         .eq("status", "approved")
         .in_("teacher_source_id", source_ids)
         .order("id")
         .execute()
         .data
-    )
+    ) or []
+
+    # Application-side eligibility (migration 089). Filtering here — not only
+    # in SQL — keeps FakeDb / older clients honest and matches the predicate
+    # Task 6 requires even if a row omitted the new columns.
+    rows = [
+        r for r in rows
+        if r.get("selection_eligible") is True
+        and r.get("quality_pipeline_version")
+    ]
     if not rows:
         return []
 

@@ -156,16 +156,24 @@ def _unit_vec(angle_degrees):
 QUESTION_VEC = [1.0, 0.0]  # angle 0 -- cosine_similarity(QUESTION_VEC, v) == cos(angle of v)
 
 
+def _pipeline_quote(**fields):
+    """Stamp migration-089 eligibility fields so selection fixtures remain valid."""
+    row = dict(fields)
+    row.setdefault("selection_eligible", True)
+    row.setdefault("quality_pipeline_version", "quote_quality_v1")
+    return row
+
+
 def test_relevance_keys_off_quote_text_not_topic():
     """Two candidates share the SAME quotes.topic value (the old defect's
     exact shape) but have different quote_text. The selector must score --
     and therefore differentiate -- them by quote_text, not topic."""
     db = FakeDb()
     db.tables["quotes"] = [
-        {"id": "q-relevant", "topic": "Holiness", "quote_text": "on-topic passage text",
-         "status": "approved", "teacher_source_id": "teacher-1"},
-        {"id": "q-irrelevant", "topic": "Holiness", "quote_text": "off-topic passage text",
-         "status": "approved", "teacher_source_id": "teacher-1"},
+        _pipeline_quote(id="q-relevant", topic="Holiness", quote_text="on-topic passage text",
+                        status="approved", teacher_source_id="teacher-1"),
+        _pipeline_quote(id="q-irrelevant", topic="Holiness", quote_text="off-topic passage text",
+                        status="approved", teacher_source_id="teacher-1"),
     ]
     embedded_texts = []
 
@@ -198,9 +206,9 @@ def test_threshold_cutoff():
     just_above = quotes.QUOTE_PASSAGE_SIMILARITY_THRESHOLD + 0.001
     just_below = quotes.QUOTE_PASSAGE_SIMILARITY_THRESHOLD - 0.001
     db.tables["quotes"] = [
-        {"id": "q-at", "quote_text": "at-threshold", "status": "approved", "teacher_source_id": "teacher-1"},
-        {"id": "q-above", "quote_text": "above-threshold", "status": "approved", "teacher_source_id": "teacher-1"},
-        {"id": "q-below", "quote_text": "below-threshold", "status": "approved", "teacher_source_id": "teacher-1"},
+        _pipeline_quote(id="q-at", quote_text="at-threshold", status="approved", teacher_source_id="teacher-1"),
+        _pipeline_quote(id="q-above", quote_text="above-threshold", status="approved", teacher_source_id="teacher-1"),
+        _pipeline_quote(id="q-below", quote_text="below-threshold", status="approved", teacher_source_id="teacher-1"),
     ]
     import math
 
@@ -231,7 +239,14 @@ def test_max_quotes_per_answer_cap():
     text_scores = {}
     for i in range(5):
         text = "text-%d" % i
-        rows.append({"id": "q-%d" % i, "quote_text": text, "status": "approved", "teacher_source_id": "teacher-1"})
+        rows.append(
+            _pipeline_quote(
+                id="q-%d" % i,
+                quote_text=text,
+                status="approved",
+                teacher_source_id="teacher-1",
+            )
+        )
         text_scores[text] = 0.9 - (i * 0.05)  # all comfortably above threshold, strictly decreasing
     db.tables["quotes"] = rows
     import math
@@ -264,9 +279,9 @@ def test_deterministic_tie_break():
     produce the identical result."""
     db = FakeDb()
     db.tables["quotes"] = [
-        {"id": "b-quote", "quote_text": "tied text b", "status": "approved", "teacher_source_id": "teacher-1"},
-        {"id": "a-quote", "quote_text": "tied text a", "status": "approved", "teacher_source_id": "teacher-1"},
-        {"id": "c-quote", "quote_text": "tied text c", "status": "approved", "teacher_source_id": "teacher-1"},
+        _pipeline_quote(id="b-quote", quote_text="tied text b", status="approved", teacher_source_id="teacher-1"),
+        _pipeline_quote(id="a-quote", quote_text="tied text a", status="approved", teacher_source_id="teacher-1"),
+        _pipeline_quote(id="c-quote", quote_text="tied text c", status="approved", teacher_source_id="teacher-1"),
     ]
 
     def fake_embed_batch(texts):
@@ -301,8 +316,8 @@ def test_considered_teacher_filtering_unchanged():
     structurally guaranteed, not something this test can violate."""
     db = FakeDb()
     db.tables["quotes"] = [
-        {"id": "q-in-scope", "quote_text": "in scope text", "status": "approved", "teacher_source_id": "teacher-1"},
-        {"id": "q-out-of-scope", "quote_text": "out of scope text", "status": "approved", "teacher_source_id": "teacher-2"},
+        _pipeline_quote(id="q-in-scope", quote_text="in scope text", status="approved", teacher_source_id="teacher-1"),
+        _pipeline_quote(id="q-out-of-scope", quote_text="out of scope text", status="approved", teacher_source_id="teacher-2"),
     ]
 
     def fake_embed_batch(texts):
@@ -314,6 +329,58 @@ def test_considered_teacher_filtering_unchanged():
         "a teacher absent from considered_teacher_source_ids contributes no candidates",
         selected == ["q-in-scope"],
         detail=repr(selected),
+    )
+
+
+def test_legacy_approved_row_never_selected_even_if_text_matches():
+    """Task 6: migration-089 legacy rows stay unserved. An approved legacy
+    quote whose quote_text would score a perfect match must still be
+    excluded when selection_eligible is false or quality_pipeline_version
+    is null."""
+    db = FakeDb()
+    db.tables["quotes"] = [
+        {
+            "id": "q-legacy",
+            "quote_text": "perfect match text",
+            "status": "approved",
+            "teacher_source_id": "teacher-1",
+            "selection_eligible": False,
+            "quality_pipeline_version": None,
+        },
+        {
+            "id": "q-legacy-null-pipeline",
+            "quote_text": "also perfect match text",
+            "status": "approved",
+            "teacher_source_id": "teacher-1",
+            "selection_eligible": True,
+            "quality_pipeline_version": None,
+        },
+        _pipeline_quote(
+            id="q-gold",
+            quote_text="gold pipeline text",
+            status="approved",
+            teacher_source_id="teacher-1",
+        ),
+    ]
+    embedded = []
+
+    def fake_embed_batch(texts):
+        embedded.extend(texts)
+        return [_unit_vec(0) for _ in texts]
+
+    with patch.object(quotes, "embed_batch", side_effect=fake_embed_batch):
+        selected = quotes.select_quotes_for_answer(
+            db, "q", ["teacher-1"], question_embedding=QUESTION_VEC
+        )
+    check(
+        "legacy approved rows are never selected even when text would match",
+        selected == ["q-gold"],
+        detail=repr(selected),
+    )
+    check(
+        "embed_batch only sees pipeline-eligible quote_text",
+        embedded == ["gold pipeline text"],
+        detail=repr(embedded),
     )
 
 
@@ -545,6 +612,7 @@ def main():
     test_max_quotes_per_answer_cap()
     test_deterministic_tie_break()
     test_considered_teacher_filtering_unchanged()
+    test_legacy_approved_row_never_selected_even_if_text_matches()
     test_idempotent_creation_no_duplicate_row()
     test_idempotent_short_circuit_skips_verification()
     test_idempotency_ignores_revoked()
