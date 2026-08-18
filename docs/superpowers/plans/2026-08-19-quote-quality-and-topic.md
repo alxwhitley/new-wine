@@ -163,10 +163,10 @@ Rules:
 
 **Flow per candidate:** quality pass → `verify_quote_candidate` → insert with `quality_pipeline_version='quote_quality_v1'`, `selection_eligible=true`, `topic` = primary taxonomy tag, `topic_ids` = list, `status` per policy (`pending` recommended for first gold; Alex can approve batch).
 
-- [ ] **Step 1:** Wire insert; dry-run mode default.
+- [x] **Step 1:** Wire insert; dry-run mode default (`extract_quotes_quality_pipeline.py`; `create_and_approve_quote` accepts `topic_ids` / `quality_pipeline_version` / `status=pending`).
 - [ ] **Step 2:** Alex approves doc list + cost; run `--apply` on ≤10 docs.
 - [ ] **Step 3:** Hard reconciliation: attempted / stored / refused_quality / refused_verify / skipped.
-- [ ] **Step 4:** Commit script (records of run counts in docs commit).
+- [x] **Step 4 (partial):** Script + unit tests committed; apply-run counts wait on Step 2.
 
 ---
 
