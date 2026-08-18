@@ -59,7 +59,8 @@ Decisions locked in the spec + CLAUDE.md Settled #29:
 - Legacy 793 = **live-but-unserved** while rail is off during build; gold set
   before selection-ineligibility; presentation before re-enable.
 - Boundary overrun must be root-caused and hardened **before** rebuild writes.
-- Implementation outside Grok’s lane.
+- Alex authorized Grok to implement this track (2026-08-19); production
+  quote writes and rail re-enable remain attended Alex gates.
 
 ### Q1 — Pre-implementation gates + implementation plan
 
@@ -102,16 +103,17 @@ visual sign-off, then attended re-enable (Q3).
 
 ### Q3 — Regressions + attended quote-rail re-enable
 
-**Status:** Step 1 (flag-off / selection dry) DONE (`1eec654`,
-`scripts/test_quote_rail_regressions.py`). Remaining steps wait on gold
-writes + presentation sign-off + Alex re-enable. (Absorbs prior W8 quote
-proofs.)
+**Status:** Step 1 DONE (`1eec654`). Gold apply DONE (28 pending). Waiting
+on Alex QuoteRail visual sign-off, pending→approved for gold, then
+attended re-enable + smoke. (Absorbs prior W8 quote proofs.)
 
 - [x] Flag-off regressions: baptism FP class; honest no-support; exact
   chunk IDs; **no bad quote IDs**; bounded teacher-card (no quote rail);
   eligibility mutation. Article-supported answer proof deferred until
   W5–W6 lands a live article.
-- [ ] Attended `QUOTE_SELECTION_ENABLED=true` — Alex only.
+- [ ] Alex QuoteRail visual sign-off + pending→approved for the 28 gold
+  rows.
+- [ ] Attended `QUOTE_SELECTION_ENABLED=true` + smoke — Alex only.
 
 ### W5–W6 — One quarantined article proof
 
