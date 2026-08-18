@@ -9,12 +9,12 @@ scope) are on the launch critical path — without compromising propositions,
 generated answers, or recoverability. Web-article ingestion remains an
 attended parallel track.
 
-**Current item:** **Q1 remainder → Q2 — execute quote quality implementation
-plan.** Spec + Settled #29 accepted. Executable plan:
+**Current item:** **Q2 attended gates → Q3 re-enable.** Repo implementation
+through Task 8 Step 1 is landed (flag-off regressions `1eec654`). Next
+requires Alex: migration 089 apply, gold extract `--apply` (≤10 docs,
+costed), presentation visual sign-off, then attended
+`QUOTE_SELECTION_ENABLED=true`. Plan:
 `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`.
-**Alex authorized Grok to implement this track (2026-08-19)** — exception to
-the usual answer-accuracy lane note for this work only. Production quote
-writes and `QUOTE_SELECTION_ENABLED` remain attended Alex gates.
 
 ## Governing boundary
 
