@@ -7,11 +7,11 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-18. Local `main` fast-forwarded to `origin/main` at
-`923f1ed` (PR #1, `harness/quote-containment-and-staging`, closing commit
-`a8a7731`) during this records update — the merge was already on
-`origin/main` but not yet fast-forwarded locally. The pre-existing untracked
-`Temporary-assets/` directory remains untouched.
+Last verified: 2026-08-18. `main` is at `2ef6860`, three commits ahead of the
+prior close: `189ef42` (harness-retirement scoping clarification), `82ec0f5`
+(quote-relevance rebuild + book-name-map consolidation), `2ef6860` (cleanup
+follow-up). The pre-existing untracked `Temporary-assets/` directory remains
+untouched.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -57,14 +57,46 @@ propositions/provenance → usage evidence → proposal-only quote spans) exists
 and is mutation-tested to prove it never writes. Full technical detail:
 CLAUDE.md Invariant 16 and the new quote-containment Landmines entry.
 
+**Same-day follow-up (2026-08-18, repo-only, no DB writes, none needing
+Alex's attention at build time):** W7's first bullet is DONE (`82ec0f5`) —
+quote-selection relevance is now scored from each quote's own `quote_text`
+instead of the inherited document topic tag that tied every quote in a
+cluster to an identical score (confirmed live: all 14 real "Baptism in the
+Holy Spirit"-tagged quotes scored an exact tie under the old design), with a
+strict deterministic `(score, id)` tie-break and an idempotent
+`create_and_approve_quote()`. Quote rail stays off — `QUOTE_SELECTION_ENABLED`
+untouched. The same commit consolidated the five-copy book-name map (CLAUDE.md
+Landmines entry) into one canonical `backend/app/constants.py` source with a
+generated, drift-gated frontend copy. A further commit (`2ef6860`) deduped a
+second hand-duplicated ordinal-stripping regex (`study.py` /
+`reference_verifier.py`), synced a now-stale quote-analysis script, and
+recorded the book-map consolidation as done in `docs/roadmap.md`. Full detail:
+PLAN.md's W7–W8 entry.
+
+**Open, unverified finding:** an `/code-review` run on this session's changes
+was interrupted by Alex before its adversarial-verify step. One sub-check
+(before the interruption) found the new idempotency check is a non-atomic
+SELECT-then-INSERT with no DB uniqueness constraint or lock backing it — a
+genuine concurrent call could still duplicate a `quotes` row. PLAUSIBLE, not
+CONFIRMED. Recorded in PLAN.md's W7 entry; a future session should re-verify
+and, if it holds, harden before this path sees concurrent traffic.
+
 A local-only, unpushed commit `cefcae5` ("v11 harness prep") sits in the
 detached-HEAD worktree `~/.codex/worktrees/ca07/rhemata`, authored 2026-08-17
 11:35 — before that same day's later 4f476eb→5af5fba session-close chain that
 retired the harness coordinator (Invariant 15). Its content (a real adapter
 "has run for real across v3-v10") conflicts with that later, already-pushed
-record. Alex's explicit call, this session: trust the later version already on
-`main`; leave `cefcae5` unpushed and untouched. No action needed on it unless
-Alex reopens the coordinator-retirement decision.
+record. Alex's explicit call: trust the later version already on `main`; leave
+`cefcae5` unpushed and untouched. No action needed on it unless Alex reopens
+the coordinator-retirement decision.
+
+**Also surfaced, not touched (Alex's explicit "leave it for now"):**
+`.worktrees/` holds ~2.9G, mostly stale — 49 `beta-night1*` worktrees on one
+identical unmerged commit (`2e654e6`, likely retired-harness dispatch
+artifacts) plus 11 other worktrees already fully merged into `main` (0 commits
+ahead). `claude/harness-claude-cli-adapter` (1 ahead) and
+`codex/o3-queue-resume-quarantine` (3 ahead) hold real unmerged work and were
+excluded from that assessment. Nothing pruned.
 
 ---
 
@@ -78,8 +110,9 @@ teacher/source and clearance, and approves deploying this merged containment
 code to the live Railway backend (repo merge alone does not put it into
 production); then approves running a real (non-dry-run) preview; then one
 hidden row-pinned write with reconciliation, idempotency, and rollback proof;
-then eligibility/visibility/quote-repair decisions. Quote relevance repair
-(W7–W8) and recoverability (W9) remain queued behind W5–W6.
+then eligibility/visibility/quote-repair decisions. W7's remaining sub-items
+(teacher-scope/label choice, legacy-quote audit), W8 (article-backed proof),
+and W9 (recoverability) remain queued behind W5–W6.
 
 **Scheduled:** broad visible-default policy, general prompt/claim-support work,
 B1–B7 product work, and remaining corpus work after the web-article proof.
@@ -100,13 +133,17 @@ trigger fires or Alex explicitly promotes an item.
 
 ## Next single item
 
-W1–W4 executed and merged (this update). Next is the attended W5–W6 gate from
-the same plan doc: Alex selects and approves one hidden web article, approves
-deploying quote containment to production, then runs the real preview, the
-single hidden row-pinned write, and idempotency/rollback proof, before any
-eligibility, visibility, or quote-repair decision. No further repository-only
-work is queued ahead of that gate.
+Still the attended W5–W6 gate: Alex selects and approves one hidden web
+article, approves deploying quote containment to production, then runs the
+real preview, the single hidden row-pinned write, and idempotency/rollback
+proof, before any eligibility, visibility, or quote-repair decision. No
+further repository-only work is queued ahead of that gate — W7's first bullet
+was pulled forward and executed same-day since it needed no DB write and no
+Alex decision; nothing else in W7–W9 can move without Alex.
 
-Process baseline for this records session: original outcome (verify the merge,
-record it) achieved; zero unplanned investigations started; zero findings
-promoted to Blocker; zero active blockers, one waiting on Alex.
+Process baseline for this session: two unplanned-but-authorized
+investigations completed (quote relevance + idempotency, book-name-map
+consolidation, both explicitly requested), one small follow-up cleanup pass
+(also requested), zero findings promoted to Blocker, one new finding recorded
+as PLAUSIBLE-not-CONFIRMED (idempotency race), zero active blockers, one
+waiting on Alex.

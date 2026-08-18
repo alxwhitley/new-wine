@@ -814,13 +814,30 @@ different row, per the hard rule above.
   explicit, default-off flag — shipped 2026-08-18 (PLAN.md W1, same PR as the
   Invariant 16 widening above), because the quote rail has a live, systemic
   relevance defect, not because quoting itself was found unsafe.** The defect:
-  quote matching keys off the inherited `quotes.topic` document-level tag
-  rather than the quoted passage itself, so a quote can be selected for an
-  answer its actual text doesn't support — nearly the whole Derek Prince quote
-  corpus inherits one document tag, which is why this isn't a three-row
-  anomaly. The real fix (passage-level relevance, deterministic tie-breaking,
-  a re-audit of existing approved/pending quotes as untrusted legacy data) is
-  still queued, PLAN.md W7–W8 — this session only contained the symptom.
+  quote matching keyed off the inherited `quotes.topic` document-level tag
+  rather than the quoted passage itself, so a quote could be selected for an
+  answer its actual text doesn't support — confirmed live 2026-08-18, not just
+  suspected: 636 approved quotes span only 115 distinct topics ("Holiness"
+  alone covers 49 quotes across 12 different documents), and 14 real quotes
+  tagged "Baptism in the Holy Spirit" scored an exact, identical tie against a
+  real baptism question under the old design, several of them on passages with
+  nothing to do with the question. **RESOLVED same day (commit `82ec0f5`,
+  `backend/app/services/quotes.py::select_quotes_for_answer`) — the passage-
+  level relevance, deterministic tie-breaking, and idempotent-creation part of
+  the fix (PLAN.md W7's first bullet) is built, not queued**: relevance now
+  scores each candidate's own `quote_text`, not `quotes.topic`; selection is a
+  strict `(score, id)` total order query with no DB row-order dependence;
+  `create_and_approve_quote()` returns an existing matching row instead of
+  duplicating one on a repeat call. `scripts/test_quote_passage_relevance.py`
+  covers this with both mocked-embedding mechanism checks and real embedding
+  calls against real corpus text, mutation-proven. **Still queued, unchanged
+  by this fix:** the re-audit of existing approved/pending quotes as untrusted
+  legacy data (PLAN.md W7's third bullet) and everything in W8. **New, PLAUSIBLE
+  not CONFIRMED finding (2026-08-18, `/code-review` interrupted before its
+  adversarial-verify step):** the new idempotency check is a non-atomic
+  SELECT-then-INSERT with no DB uniqueness constraint or lock behind it — a
+  genuine concurrent call could still duplicate a row. A future session should
+  re-verify and, if it holds, harden before this path sees concurrent traffic.
   `quote_selection_enabled()` (`backend/app/services/quotes.py`) requires the
   exact string `"true"` on `QUOTE_SELECTION_ENABLED`; anything else, including
   case variants, is off. With it off (the deployed default): the producer
@@ -1367,17 +1384,40 @@ different row, per the hard rule above.
   fed was itself found to have a backwards default; the re-wiring to a
   confirming step is now DONE (2026-07-30), so this specific blocker on the
   backfill is cleared, though other archived preconditions (`docs/plan-archive.md` #49) remain.
-- **The book-name map exists as five independent hand-maintained copies
-  that will drift out of sync with each other over time.** A 2026-07-28
-  blast-radius survey (the BOOK_MAP ordinal/spelled/Roman-numeral fix,
-  commit `ee267d4`) found five separate maps and four live-serving
-  consumer sites (the mounted `/study/verse` endpoint, the reference
-  verifier on every live chat answer, the Study page's verse-search parser,
-  and the chat-answer scripture underliner). All four sites were fixed
-  together this pass, but the underlying multi-copy structure wasn't —
-  consolidating into one shared map is a parked future session, not
-  scheduled. Fixing a book-name bug at only one of the five copies will
-  silently leave the other four wrong.
+- **RESOLVED 2026-08-18 (commit `82ec0f5`) — the book-name map is no longer
+  independently hand-maintained copies.** A 2026-07-28 blast-radius survey
+  (the BOOK_MAP ordinal/spelled/Roman-numeral fix, commit `ee267d4`) found
+  five separate maps and four live-serving consumer sites, and fixed all four
+  sites for that one bug without consolidating the underlying structure — left
+  as a landmine at the time. Re-inventoried 2026-08-18 rather than assumed:
+  the real count was three hand-typed copies, not five — two of the
+  originally-recorded four consumers (the `/study/verse` endpoint and the
+  reference verifier) already shared `backend/app/constants.py` and were never
+  actually forked. A fifth consumer not in the original four-consumer list at
+  all, `frontend/app/library/page.tsx::VERSE_BOOK_NAMES`, was found in the
+  same pass. `backend/app/constants.py::BOOK_MAP`/`ABBREV_TO_NAME` is now the
+  single canonical source; `frontend/app/study/page.tsx` and
+  `frontend/app/library/page.tsx` import the generated
+  `frontend/lib/generated/book-maps.ts` (produced by
+  `scripts/generate_book_maps_ts.py`, which has a `--check` drift gate) instead
+  of hand-typing their own copies. `frontend/lib/study-reference.ts` imports
+  the same generated module for its code/full-name identity but deliberately
+  keeps its own narrower `BOOK_ABBREVS` overlay hand-maintained — its detector
+  is intentionally more conservative than the search-box parsers (no bare
+  "Jos"/"Ezr"/"Act"-style compact forms) and its ordinal-literal forms
+  ("1st Samuel") are load-bearing there in a way they aren't on the backend
+  (which strips ordinals via `resolve_book_abbrev()` before lookup instead) —
+  this is a flagged, deliberate non-union, not leftover drift.
+  `scripts/test_book_maps_consolidation.py` (34 checks, mutation-proven)
+  covers cross-language byte-identity, the drift gate, and that no consumer
+  still hand-types a local copy. The existing "I Genesis 1:1" regression test
+  in the frontend suite still passes unchanged. Same-day follow-up (commit
+  `2ef6860`) also consolidated a second, smaller duplication this survey
+  didn't originally name: `study.py::parse_ref` and `reference_verifier.py::
+  _parse_verse_or_range` each hand-maintained an identical ordinal-strip-then-
+  normalize-then-lookup sequence (reference_verifier.py's own retired comment
+  said "kept independently in sync ... must be mirrored here") — both now call
+  the shared `app.constants.resolve_book_abbrev()`.
 - **RESOLVED 2026-08-06 — `study-reference.ts::detectVerseReferences` no
   longer underlines an embedded valid substring after an unrecognized
   alphabetic prefix.** The live bug confirmed 2026-07-28 (`"I Genesis 1:1"`

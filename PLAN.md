@@ -53,12 +53,27 @@ is satisfied).
 
 ### W7–W8 — Quote and answer integrity
 
-**Status:** QUEUED after the quarantined proof; quote rail stays off.
+**Status:** W7's first bullet DONE — commit `82ec0f5`, 2026-08-18. Relevance is
+now scored from each quote's own `quote_text` (not the inherited document
+topic tag), tie-breaking is a strict deterministic `(score, id)` order, and
+`create_and_approve_quote()` is idempotent on a repeat call. Covered by
+`scripts/test_quote_passage_relevance.py`, including live evidence against
+real corpus content (the old scoring's exact-tie defect reproduced, then
+gone; real false positives now rejected, a real true positive still
+selected). Quote rail stays off (`QUOTE_SELECTION_ENABLED` untouched).
+**New, unverified finding (2026-08-18, `/code-review` run interrupted before
+its adversarial-verify step):** the idempotency check is a non-atomic
+SELECT-then-INSERT with no DB uniqueness constraint or lock backing it — a
+genuine concurrent call could still duplicate a row. PLAUSIBLE, not
+CONFIRMED; a future session should re-run verification and, if it holds,
+harden it (advisory lock or a real unique index) before this path sees any
+concurrent traffic.
 
-- [ ] Replace inherited document-first-tag matching with quote/passage relevance,
-  deterministic tie-breaking, and idempotent quote creation.
-- [ ] Test the three demonstrated false positives, true positives, same-label and
-  same-teacher negatives, ties, and the chosen teacher-scope rule.
+- [ ] "Chosen teacher-scope rule" sub-item (plan doc Task 9 point 5): Alex
+  still needs to choose the visible quote label/scope policy — a source/work
+  title vs. a semantic topic tag. Everything else in the second bullet
+  (false positives, true positives, same-label/same-teacher negatives, ties)
+  is covered by the same test file above.
 - [ ] Audit approved and pending quotes as untrusted legacy data. Re-enable only
   a small reviewed subset after Alex approves the label and teacher-scope policy.
 - [ ] Prove a baptism regression, an article-supported answer, an honest no-support
