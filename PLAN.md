@@ -53,29 +53,28 @@ is satisfied).
 
 ### W7–W8 — Quote and answer integrity
 
-**Status:** W7's first bullet DONE — commit `82ec0f5`, 2026-08-18. Relevance is
-now scored from each quote's own `quote_text` (not the inherited document
-topic tag), tie-breaking is a strict deterministic `(score, id)` order, and
-`create_and_approve_quote()` is idempotent on a repeat call. Covered by
+**Status:** Two of four items DONE, verified live 2026-08-18 (commit
+`82ec0f5`): passage-level relevance scoring, now scored from each quote's
+own `quote_text` (not the inherited document topic tag), and deterministic
+tie-breaking, a strict `(score, id)` order. `create_and_approve_quote()`
+is also idempotent on a repeat call from that same commit. Covered by
 `scripts/test_quote_passage_relevance.py`, including live evidence against
 real corpus content (the old scoring's exact-tie defect reproduced, then
 gone; real false positives now rejected, a real true positive still
 selected). Quote rail stays off (`QUOTE_SELECTION_ENABLED` untouched).
-**New, unverified finding (2026-08-18, `/code-review` run interrupted before
-its adversarial-verify step):** the idempotency check is a non-atomic
-SELECT-then-INSERT with no DB uniqueness constraint or lock backing it — a
-genuine concurrent call could still duplicate a row. PLAUSIBLE, not
-CONFIRMED; a future session should re-run verification and, if it holds,
-harden it (advisory lock or a real unique index) before this path sees any
-concurrent traffic.
 
 - [ ] "Chosen teacher-scope rule" sub-item (plan doc Task 9 point 5): Alex
   still needs to choose the visible quote label/scope policy — a source/work
   title vs. a semantic topic tag. Everything else in the second bullet
   (false positives, true positives, same-label/same-teacher negatives, ties)
   is covered by the same test file above.
-- [ ] Audit approved and pending quotes as untrusted legacy data. Re-enable only
-  a small reviewed subset after Alex approves the label and teacher-scope policy.
+- [~] **PARTIAL** — legacy-quote audit ran 2026-08-18
+  (docs/audits/quote_legacy_relevance_audit_2026-08-18.md): 793 approved/
+  pending quotes audited, 74.7% (592/793) fail relevance against their own
+  inherited document-level topic label, 592 of 592 affected quotes are in
+  Derek Prince's corpus. No decision has been made on what to do with the
+  flagged rows; nothing was changed. Re-enable only a small reviewed subset
+  after Alex approves the label and teacher-scope policy.
 - [ ] Prove a baptism regression, an article-supported answer, an honest no-support
   answer, exact retrieved chunk/citation IDs, no bad quote IDs, and a bounded
   teacher-card regression before making the article visible.
