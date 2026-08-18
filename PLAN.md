@@ -9,10 +9,12 @@ scope) are on the launch critical path — without compromising propositions,
 generated answers, or recoverability. Web-article ingestion remains an
 attended parallel track.
 
-**Current item:** **Q0–Q1 — quote quality launch path (pre-implementation
-gates + plan).** Spec accepted; executable design is
-`docs/superpowers/specs/2026-08-19-quote-quality-and-topic-design.md`.
-**Implementation is answer-accuracy work — Codex/Claude lane, not Grok.**
+**Current item:** **Q1 remainder → Q2 — execute quote quality implementation
+plan.** Spec + Settled #29 accepted. Executable plan:
+`docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`.
+**Alex authorized Grok to implement this track (2026-08-19)** — exception to
+the usual answer-accuracy lane note for this work only. Production quote
+writes and `QUOTE_SELECTION_ENABLED` remain attended Alex gates.
 
 ## Governing boundary
 
@@ -62,17 +64,19 @@ Decisions locked in the spec + CLAUDE.md Settled #29:
 
 ### Q1 — Pre-implementation gates + implementation plan
 
-**Status:** IN PROGRESS — current item.
+**Status:** DONE enough to execute — boundary harden + plan landed 2026-08-19.
 
 - [x] Spec accepted; Settled #29 recorded (quality-gate exception + taxonomy).
 - [x] Vocabulary source chosen: reuse `scripts/taxonomy.py` `VALID_TAGS`
   (human ref: `docs/taxonomy.md`) — no second list.
-- [ ] Codex/Claude writes implementation plan
-  `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md` including
-  named cost estimate for the first gold/rebuild slice.
-- [ ] Boundary root-cause + verifier harden for sample quote 7 overrun class
-  (rebuild forbidden until this passes).
-- [ ] Stop: plan reviewed; boundary fix proven; no corpus quote writes yet.
+- [x] Implementation plan written (Grok, Alex-authorized):
+  `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md` with named
+  gold-slice cost band (~$15–40 / 10 docs; full Prince non-book out of
+  ceiling).
+- [x] Boundary root-cause + verifier harden (`9a4c141`):
+  `internal_paragraph_break` — live evangelist overrun refuses; first
+  paragraph control passes; `test_quote_verifier.py` all green.
+- [x] Alex authorized Grok to run this plan (this session).
 
 ### Q2 — Gold extract + presentation + legacy selection-ineligibility
 

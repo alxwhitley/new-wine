@@ -13,9 +13,9 @@ from a controlled vocabulary, and surface them on related answers — without
 re-enabling the live quote rail until quality, tagging, presentation, boundary
 hardening, and a gold serving set exist.
 
-**Lane:** Spec/analysis may be authored in Grok. **Implementation is
-answer-accuracy work and is outside Grok’s lane** — build in Codex/Claude
-(attended primary session), not via Grok.
+**Lane:** Alex authorized Grok to **implement** this track (2026-08-19), as an
+explicit one-track exception. Production quote DB writes and
+`QUOTE_SELECTION_ENABLED` flips remain attended Alex gates.
 
 ## Objective
 
