@@ -1,7 +1,7 @@
 # Quote propose calibration note (Task 4)
 
 **Date:** 2026-08-19  
-**Status:** Paid calibration #1 complete; **parser offset repair** landed after 0/59 usable proposals; re-run pending Alex OK.
+**Status:** Paid calibration **#2 complete** after offset repair. Yield usable for gold-path design.
 
 ## What landed
 
@@ -26,8 +26,24 @@
 - Dominant errors: `candidate_*_offset_mismatch` (59/53/26 for cand 0/1/2)
 - Report (gitignored): `quote_propose_review/propose_dry_run_20260818T202504Z.jsonl`
 
+## Paid run #2 (after offset repair, ~7.6 min, exit 0)
+
+Report: `quote_propose_review/propose_dry_run_20260818T203614Z.jsonl`
+
+| Metric | Count |
+|---|---|
+| windows_attempted | 59 |
+| empty windows (no usable parse) | 26 (dominant: `not_substring` — model paraphrased) |
+| proposals_parsed | 47 |
+| quality_pass / quality_fail | **34** / 13 (all fails = `length_band`) |
+| verify_pass among quality_ok | **27** (6 `boundary_proximity`, 1 `subchunk_exclusion`) |
+| windows with ≥1 verify_pass | 21 |
+| quote_rows_written | **0** |
+
+Passage tags look on-topic for these sermons (Fasting and Prayer, Atonement, Spiritual Warfare, etc.) — not document-tag inheritance. Residual losses are expected authenticity gates + short spans + invent/paraphrase.
+
 ## Next (attended)
 
-1. Re-run after offset repair: `python3 scripts/propose_quotes_dry_run.py --limit 3 --run --verify` (~$1.42 again)
-2. Rate quality/tag precision on the new report
-3. Task 5 gold write path (default dry-run; `--apply` only with explicit approval)
+1. Alex spot-rate a handful of the 27 verify-pass quotes (taste + tag fit)
+2. Task 5 gold write path (default dry-run; `--apply` only with explicit approval)
+3. Optional later: prompt nudge against paraphrase / prefer mid-chunk spans to cut `not_substring` + flush-boundary refuses
