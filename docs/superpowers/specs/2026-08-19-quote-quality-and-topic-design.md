@@ -2,10 +2,11 @@
 
 **Date:** 2026-08-19
 
-**Status:** Revised after adversarial review (Claude Code + Grok); Alex
-confirmed beta **ships with quoting ON**, so this work is launch-critical.
-Ready for implementation planning only after the preconditions in
-**Blockers before implementation** are met.
+**Status:** ACCEPTED by Alex (2026-08-19). Revised after adversarial review
+(Claude Code + Grok). Beta **ships with quoting ON** — launch-critical.
+Settled decision #29 recorded. Vocabulary = existing taxonomy (not a new
+list). Ready for Codex/Claude implementation planning; remaining rebuild
+blocker is boundary root-cause + named cost estimate in that plan.
 
 **Scope:** Path to extract *quality* quotes, assign *passage-level* topic tags
 from a controlled vocabulary, and surface them on related answers — without
@@ -22,9 +23,11 @@ Build a quotes path where:
 
 1. Extracted quotes are worth serving as standalone excerpts (not merely
    grammatically complete sentences).
-2. Each quote is tagged from its own passage against a controlled topic
-   vocabulary Alex authors, so tags support display, browse/admin, and
-   (later) optional selection boost — never document-tag inheritance.
+2. Each quote is tagged from its own passage against the **existing product
+   taxonomy** (`scripts/taxonomy.py` `VALID_TAGS`; human ref
+   `docs/taxonomy.md`) — not a second quote-only vocabulary — so tags
+   support display, browse/admin, and (later) optional selection boost;
+   never document-tag inheritance.
 3. Answer-time selection ranks by question ↔ `quote_text` embedding
    similarity (the 2026-08-18 repair). **V1 does not soft-boost from tags.**
 4. The existing 793 approved/pending quotes remain in the database as
@@ -67,29 +70,24 @@ re-enable. It is not a full Derek Prince corpus rebuild in one pass.
 
 These are deliberate gates, not plan footnotes:
 
-1. **Settled decision (Alex, record in `CLAUDE.md`)** — authorize or refuse
-   a **model-involved quality / serveability gate** on the quote path.
-   Standing posture (Settled #4 / Open Decision #20) rejects model-based
-   judges on the answer path; that shape failed five times. Settled #16
-   already allows AI to *propose* quote candidates. Using a model (or
-   model-shaped fields) as a gate that decides whether a quote may become
-   approved/servable is a taste judgment and needs the same explicit
-   exception treatment as decision #16’s contradiction filter: on the
-   record, wrong in both directions sometimes, logged, measurable.
-   **No implementation of propose→quality→approve until this is written.**
-2. **Controlled vocabulary (Alex)** — closed topic list is a doctrinal /
-   product call. Gates extract tagging. Draft may be proposed in a plan;
-   Alex authors/approves the list before any real tagged write.
-3. **Boundary defect root-cause + fix** — sample quote 7 (“The New
-   Testament Evangelist”) ran past its point and swallowed the next
-   section’s opening line. Authenticity’s boundary check did not catch it.
-   Investigate and harden **before** any rebuild write so new quotes do not
-   inherit the flaw. Proof: that sample (and cousins) fail closed after the
-   fix.
-4. **Named cost estimate** — before any corpus-scale LLM propose run,
-   surface attempted document/chunk counts, expected $/run, and stay under
-   the **$50 ceiling** unless Alex explicitly approves more. No mid-run
-   discovery.
+1. **Settled decision #29 (DONE)** — model-involved quote quality /
+   serveability gating authorized as an explicit exception (wrong both
+   ways; logged; quality outside `verify_quote_candidate`). See CLAUDE.md.
+2. **Controlled vocabulary (DONE — reuse existing)** — closed list is
+   `scripts/taxonomy.py` `VALID_TAGS` (258 tags, 15 categories);
+   `docs/taxonomy.md` is the generated human reference; keep
+   `backend/app/constants.py` in sync. **Do not invent a second list.**
+   Edits to the taxonomy remain Alex’s product call and update the shared
+   source, not a quote-only fork.
+3. **Boundary defect root-cause + fix (OPEN — blocks rebuild)** — sample
+   quote 7 (“The New Testament Evangelist”) ran past its point and
+   swallowed the next section’s opening line. Authenticity’s boundary
+   check did not catch it. Investigate and harden **before** any rebuild
+   write. Proof: that sample (and cousins) fail closed after the fix.
+4. **Named cost estimate (OPEN — blocks corpus propose)** — before any
+   corpus-scale LLM propose run, surface attempted document/chunk counts,
+   expected $/run, and stay under the **$50 ceiling** unless Alex
+   explicitly approves more. No mid-run discovery.
 
 ## Approaches considered
 
@@ -117,8 +115,8 @@ no traffic, it is a dial that cannot be evaluated and is cut from v1.
    2026-08-19).
 2. Extraction path: LLM propose + quality gate + authenticity verify —
    **subject to blocker #1** (settled decision on model-involved quality).
-3. Controlled topic vocabulary (closed list); Alex authors; free-text
-   rejected.
+3. Topic vocabulary = existing `scripts/taxonomy.py` / `docs/taxonomy.md`;
+   free-text and quote-only forks rejected.
 4. **V1 selection:** question ↔ `quote_text` only; tags for display/browse.
    Soft boost deferred.
 5. Legacy 793: **live-but-unserved** while the rail is off during the build
@@ -172,7 +170,7 @@ structured fields per candidate:
 | `quote_text` | Exact contiguous substring of the supplied source text |
 | `char_start` / `char_end` | Offsets into the supplied text (verifier re-checks) |
 | `restated_point` | One-sentence paraphrase of the claim (display companion; not the quote) |
-| `topic_ids` | 1–3 IDs from Alex’s controlled vocabulary |
+| `topic_ids` | 1–3 labels from `VALID_TAGS` (taxonomy) |
 | `why_quotable` | Short rationale against the quality rubric |
 | `standalone_ok` | Boolean: readable without the surrounding argument |
 
@@ -291,10 +289,14 @@ rail is turned on.
 
 ## Controlled topic vocabulary
 
-- Closed list in-repo; **Alex authors / approves** (doctrinal/product gate).
-- Propose step may only emit IDs from that list.
+- **Reuse the existing taxonomy** — canonical `scripts/taxonomy.py`
+  `VALID_TAGS`; human-readable `docs/taxonomy.md` (generated from that
+  file — do not hand-edit `taxonomy.md` expecting it to feed back);
+  runtime copy in `backend/app/constants.py` must stay in sync.
+- Propose step may only emit tags from `VALID_TAGS`; unknown tags fail.
 - Multi-tag 1–3; one primary for display.
-- Edits are deliberate docs+code changes.
+- Widening/narrowing the taxonomy is a deliberate shared product change
+  (Alex), not a quote-pipeline fork.
 
 ## Cost
 
@@ -311,7 +313,7 @@ before Phase F-equivalent writes.
 
 | Phase | Work | Stop condition |
 |---|---|---|
-| **A0** | Alex: settled quality-gate decision in `CLAUDE.md`; author vocab | Decisions recorded |
+| **A0** | Settled #29 + taxonomy reuse (DONE) | Recorded |
 | **A1** | Implementation plan (Codex/Claude lane) incl. costed first slice | Plan reviewed |
 | **B** | Boundary root-cause + verifier harden + tests | Sample overrun fails closed; no quote corpus writes yet |
 | **C** | Quality module + LLM propose dry-run; gold calibration | Alex-rated precision; cost within ceiling |
@@ -360,17 +362,14 @@ measurement).
 
 ## Open items for the implementation plan
 
-1. Wording of the settled quality-gate decision for Alex to confirm into
-   `CLAUDE.md`.
-2. Vocabulary worksheet for Alex to author.
-3. Boundary root-cause procedure and regression fixtures.
-4. Exact schema for topic_ids / pipeline_version / legacy ineligibility.
-5. Gold-set size and rating worksheet.
-6. **Named cost estimate** for first rebuild slice.
-7. Whether first persist is `pending` vs auto-`approved` after quality +
+1. Boundary root-cause procedure and regression fixtures.
+2. Exact schema for topic_ids / pipeline_version / legacy ineligibility.
+3. Gold-set size and rating worksheet.
+4. **Named cost estimate** for first rebuild slice.
+5. Whether first persist is `pending` vs auto-`approved` after quality +
    verify.
-8. PLAN.md update: promote this sequence as launch-critical given quoting-on
-   beta (records session; chat-originated priority).
+6. Wire propose tagging to `scripts/taxonomy.py` `VALID_TAGS` (single import
+   path — avoid a third hand-maintained copy).
 
 ## Approval trail
 
@@ -379,16 +378,16 @@ verify; controlled vocab; legacy quarantine; presentation before re-enable.
 
 **Adversarial revision (Claude Code review + Grok response; Alex):**
 
-1. Model-involved quality gate → **settled decision before implementation**.
-2. Boundary defect → **root-cause + fix before rebuild**.
+1. Model-involved quality gate → Settled **#29** recorded.
+2. Boundary defect → **root-cause + fix before rebuild** (still open).
 3. Cost → **named estimate + $50 ceiling before corpus propose**.
 4. Soft tag boost → **deferred from v1** (display/browse tags only).
-5. Vocab → **Alex authors** (explicit gate).
+5. Vocab → **reuse `taxonomy.py` / `taxonomy.md`** (Alex confirmed).
 6. Legacy during build → **live-but-unserved** (rail off); gold before
    selection-ineligibility / presentation deadlock avoided.
 7. Implementation → **outside Grok’s lane**.
 8. **Beta ships quoting ON** → launch-critical (Alex, 2026-08-19).
 
-Next step after Alex accepts this revision: record the quality-gate settled
-decision + start vocab; then implementation plan in the Codex/Claude lane
-(`docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`).
+**Accepted** by Alex 2026-08-19. PLAN.md current item = Q1 (implementation
+plan + boundary harden). Next: Codex/Claude writes
+`docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`.

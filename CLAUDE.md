@@ -476,6 +476,38 @@ PLAN.md's Open Decisions note.
     separation, teacher and source attribution attached to the quote
     itself, settled before the quote rail is re-enabled) is unchanged.
 
+29. **Model-involved quote quality / serveability gating is an authorized
+    exception** (Alex's decision, 2026-08-19) — parallel posture to Settled
+    decision #16's contradiction filter, not a silent revival of Open
+    Decision #20's failed claim-support judges. Standing rule (Settled #4 /
+    Open Decision #20): do not build a model-based judge on the answer path;
+    that shape failed five times. Settled #16 already allows an AI to
+    *propose* quote candidates. What this decision additionally authorizes:
+    a quality / serveability gate on the quote extract path that may use
+    model proposals and/or model-shaped structured fields to decide whether
+    a candidate may proceed toward pending/approved — a **taste** judgment
+    ("worth serving as a standalone quote"), not a truth/claim-support
+    judgment on a served answer.
+
+    Recorded honestly, not softened: this gate will be wrong in both
+    directions (over-refuse good quotes; under-refuse weak ones). Alex was
+    told that and accepts it. Every accept/refuse must be logged with enough
+    detail to reconstruct why; prefer named rubric dimensions over opaque
+    scores. Authenticity remains solely
+    `verify_quote_candidate()` / Settled #18 (deterministic). Quality does
+    **not** live inside that verifier.
+
+    Controlled topic labels for new-pipeline quotes are the existing product
+    taxonomy — canonical `scripts/taxonomy.py` `VALID_TAGS` (258 tags, 15
+    categories); `docs/taxonomy.md` is the generated human reference; keep
+    `backend/app/constants.py` in sync. Do **not** invent a second quote-only
+    vocabulary. Passage-level tags must be chosen from that closed list,
+    never inherited from `documents.topic_tags[0]`. Soft tag-boost in
+    selection is deferred from v1 (display/browse only); question ↔
+    `quote_text` remains the selection signal until a later measured
+    enhancement. Full design:
+    `docs/superpowers/specs/2026-08-19-quote-quality-and-topic-design.md`.
+
 ## Session Routing
 
 Determines which path a session's task runs on — not a judgment call. Read

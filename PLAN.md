@@ -3,12 +3,16 @@
 > This is the only active work queue. Later work lives in `docs/roadmap.md`;
 > completed and superseded reasoning lives in `docs/plan-archive.md`.
 
-**Goal:** begin controlled web-article ingestion quickly without compromising
-propositions, quotes, generated answers, or recoverability.
+**Goal:** private beta ships with **quoting ON**, so quality quotes (correctly
+tagged from the existing taxonomy, safe presentation under open teacher
+scope) are on the launch critical path — without compromising propositions,
+generated answers, or recoverability. Web-article ingestion remains an
+attended parallel track.
 
-**Current item:** **W5–W6 — one quarantined article proof.** Attended,
-human/production-only gate; the executable plan is
-`docs/superpowers/plans/2026-08-17-web-article-beta-fast-path.md`.
+**Current item:** **Q0–Q1 — quote quality launch path (pre-implementation
+gates + plan).** Spec accepted; executable design is
+`docs/superpowers/specs/2026-08-19-quote-quality-and-topic-design.md`.
+**Implementation is answer-accuracy work — Codex/Claude lane, not Grok.**
 
 ## Governing boundary
 
@@ -24,6 +28,8 @@ human/production-only gate; the executable plan is
 - Every write path follows dry run → one isolated hidden proof → reconciliation
   → explicit release → bounded batch. No general worker may claim an unrelated
   row during the isolated proof.
+- Corpus-scale LLM quote propose runs require a **named cost estimate** before
+  execution and a **$50 ceiling** unless Alex explicitly approves more.
 
 ## Active blocker sequence
 
@@ -36,10 +42,65 @@ staged web-article contract, and the zero-write preview all verified live
 against the merged code. Full detail: CLAUDE.md Invariant 16 + the
 quote-containment Landmines entry.
 
+### Q0 — Quote quality design accepted (launch-critical)
+
+**Status:** DONE 2026-08-19 — revised spec committed (`95c7ae0` and follow-ups).
+Alex accepted the adversarial revision. Beta **ships with quoting ON**, so this
+track is launch-critical (not post-launch).
+
+Decisions locked in the spec + CLAUDE.md Settled #29:
+
+- LLM propose + quality/serveability gate + authenticity verify (quality gate
+  is an explicit authorized exception; wrong both ways; logged).
+- Topic labels = existing taxonomy (`scripts/taxonomy.py` / `docs/taxonomy.md`),
+  passage-level — not a new vocabulary, not document-tag inheritance.
+- V1 selection = question ↔ `quote_text` only; tag soft-boost deferred.
+- Legacy 793 = **live-but-unserved** while rail is off during build; gold set
+  before selection-ineligibility; presentation before re-enable.
+- Boundary overrun must be root-caused and hardened **before** rebuild writes.
+- Implementation outside Grok’s lane.
+
+### Q1 — Pre-implementation gates + implementation plan
+
+**Status:** IN PROGRESS — current item.
+
+- [x] Spec accepted; Settled #29 recorded (quality-gate exception + taxonomy).
+- [x] Vocabulary source chosen: reuse `scripts/taxonomy.py` `VALID_TAGS`
+  (human ref: `docs/taxonomy.md`) — no second list.
+- [ ] Codex/Claude writes implementation plan
+  `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md` including
+  named cost estimate for the first gold/rebuild slice.
+- [ ] Boundary root-cause + verifier harden for sample quote 7 overrun class
+  (rebuild forbidden until this passes).
+- [ ] Stop: plan reviewed; boundary fix proven; no corpus quote writes yet.
+
+### Q2 — Gold extract + presentation + legacy selection-ineligibility
+
+**Status:** QUEUED after Q1.
+
+- [ ] Costed dry-run propose + Alex-rated calibration on a small slice.
+- [ ] Schema: passage `topic_ids` / pipeline_version; attended gold write;
+  hard reconciliation.
+- [ ] Selection eligibility = new-pipeline/gold only; rail still off.
+- [ ] Presentation: visual separation + teacher/source on the quote (#28).
+- [ ] Mark legacy 793 selection-ineligible (rows remain; live-but-unserved
+  → explicitly unselectable).
+
+### Q3 — Regressions + attended quote-rail re-enable
+
+**Status:** QUEUED after Q2. (Absorbs prior W8 quote proofs.)
+
+- [ ] Baptism regression; article-supported answer if article path is live;
+  honest no-support; exact chunk/citation IDs; **no bad quote IDs**; bounded
+  teacher-card regression.
+- [ ] Attended `QUOTE_SELECTION_ENABLED=true` — Alex only.
+
 ### W5–W6 — One quarantined article proof
 
 **Status:** WAITING on Alex's source/production approval (W1–W4 prerequisite
-is satisfied).
+is satisfied). **Not the current item** — attended parallel track; does not
+displace Q1–Q3 unless Alex reorders. Quote containment deploy remains part of
+its checklist where still relevant.
 
 - [ ] Alex selects the exact article, confirms teacher/source and clearance, and
   approves deploying quote containment.
@@ -51,70 +112,26 @@ is satisfied).
 - [ ] Promote only propositions that pass the canonical eligibility checks;
   keep the article hidden until answer-integrity review passes.
 
-### W7–W8 — Quote and answer integrity
+### W7–W8 — Quote and answer integrity (partially superseded)
 
-**Status:** Two of four items DONE, verified live 2026-08-18 (commit
-`82ec0f5`): passage-level relevance scoring, now scored from each quote's
-own `quote_text` (not the inherited document topic tag), and deterministic
-tie-breaking, a strict `(score, id)` order. `create_and_approve_quote()`
-is also idempotent on a repeat call from that same commit. Covered by
-`scripts/test_quote_passage_relevance.py`, including live evidence against
-real corpus content (the old scoring's exact-tie defect reproduced, then
-gone; real false positives now rejected, a real true positive still
-selected). Quote rail stays off (`QUOTE_SELECTION_ENABLED` untouched).
+**Status:** Relevance + idempotency DONE (`82ec0f5`). Remaining work folded
+into Q1–Q3 above.
 
-- [ ] "Chosen teacher-scope rule" sub-item (plan doc Task 9 point 5): Alex
-  still needs to choose the visible quote label/scope policy — a source/work
-  title vs. a semantic topic tag. Everything else in the second bullet
-  (false positives, true positives, same-label/same-teacher negatives, ties)
-  is covered by the same test file above.
-- [~] **PARTIAL** — legacy-quote audit ran 2026-08-18
-  (docs/audits/quote_legacy_relevance_audit_2026-08-18.md): 793 approved/
-  pending quotes audited, 74.7% (592/793) fail relevance against their own
-  inherited document-level topic label, 592 of 592 affected quotes are in
-  Derek Prince's corpus. No decision has been made on what to do with the
-  flagged rows; nothing was changed. Re-enable only a small reviewed subset
-  after Alex approves the label and teacher-scope policy.
-- [ ] Prove a baptism regression, an article-supported answer, an honest no-support
-  answer, exact retrieved chunk/citation IDs, no bad quote IDs, and a bounded
-  teacher-card regression before making the article visible.
-
-### Quote quality — no quality bar exists anywhere in the quote pipeline
-
-**Status:** OPEN, not scoped. Required before the quote rail is re-enabled.
-
-Finding, 2026-08-19: Alex read a 20-quote random sample
-(docs/audits/quote_quality_sample_2026-08-19.md) and assessed roughly 20%
-as quotes worth serving. The rest are grammatically complete but
-substantively weak — mid-argument connective sentences, or sentences
-referencing context the reader cannot see ("Verse 17, this is a wonderful
-verse").
-
-Root cause is by design, not a defect: when per-quote human approval was
-removed 2026-08-08 (Settled decision #18), every replacement check was
-deterministic — exact-substring match, speaker confirmation,
-sentence-boundary/completeness, commentary exclusion, document clearance,
-per-work cap. None of them assess whether a quote is worth reading.
-Nothing in the pipeline ever has.
-
-Required before the quote rail is re-enabled: a process for producing
-quality quotes. Not scoped yet. Deliberately not solved this session —
-Alex's explicit call to log it rather than chase it.
-
-Two open sub-questions, both unresolved and not investigated:
-(a) What selected the candidate spans in the first place — whether an LLM
-proposed them (permitted under Settled decision #16) or a mechanical rule
-did. This changes what the fix looks like and has not been checked.
-(b) The boundary-proximity/sentence-completeness check (Settled decision
-#18) did not catch a real failure in the sample: quote 7 (Derek Prince,
-"The New Testament Evangelist") runs past the end of its own point and
-swallows the opening sentence of the next section ("We come to the
-seventh unity, one God and Father."). One confirmed case, cause unknown,
-not investigated.
+- [x] Passage-level relevance + deterministic tie-break + idempotent create.
+- [x] Teacher scope OPEN — Settled #28; presentation required before re-enable.
+- [x] Visible label policy — **semantic topic** (taxonomy tag) on the topic
+  chip; **work/source title** on the attribution line (spec).
+- [x] Legacy audit ran; disposition = live-but-unserved during build, then
+  selection-ineligible before re-enable; rebuild via new pipeline (not
+  salvage-in-place as v1).
+- [x] Candidate origin for bulk Prince path — **mechanical** (not LLM); closed
+  by read-only pipeline map 2026-08-19.
+- [ ] Boundary overrun investigation — moved to **Q1** (must precede rebuild).
+- [ ] Answer-integrity proofs + re-enable — moved to **Q3**.
 
 ### W9 — Recoverability and first small batch
 
-**Status:** QUEUED after W8.
+**Status:** QUEUED after article path / Q3 as applicable.
 
 - [ ] Record authoritative Supabase backup/PITR retention, restore granularity,
   owner, RTO/RPO, and exclusions; prove the safest available restore scope or
@@ -124,11 +141,9 @@ not investigated.
 
 ## Explicitly outside this finish line
 
-- **Triggered:** New Wine PDF ingestion resumes only when a candidate OCR model
-  wins a blind side-by-side test on named severe-failure pages without degrading
-  good control pages, and Alex accepts the result.
-- **Scheduled:** broad visible-default policy, general system-prompt review,
-  broad claim-support refinement, product B1–B7, and remaining corpus A1–A6.
+- **Triggered / Scheduled later:** tag soft-boost in quote selection (after
+  measurement); full Prince corpus rebuild beyond the gold slice; New Wine OCR
+  resume; product B1–B7; corpus A1–A6.
 - Migration 088 is already applied. Its isolated processor proof completed on
   queue row `8e8f23e0-7dc6-4057-aa4d-c07f1b607c99`; never reapply it.
 
