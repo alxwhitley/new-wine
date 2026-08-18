@@ -371,6 +371,9 @@ def _creation_lock(chunk_id: str, quote_text: str, teacher_source_id: str):
             conn.close()
 
 
+QUALITY_PIPELINE_VERSION_V1 = "quote_quality_v1"
+
+
 def create_and_approve_quote(
     db,
     chunk_id: str,
@@ -379,34 +382,38 @@ def create_and_approve_quote(
     topic: str,
     reviewer_note: str,
     user_id: str,
+    *,
+    topic_ids: Optional[List[str]] = None,
+    quality_pipeline_version: Optional[str] = None,
+    selection_eligible: Optional[bool] = None,
+    status: str = "approved",
 ):
-    """Create and approve a quote in one action. There is no human approval
-    step (removed 2026-08-08) -- a candidate is saved as approved directly
-    once it passes every check in quote_verifier.verify_quote_candidate()
-    (exact-substring match, exclusion zone, boundary/sentence-completeness,
-    speaker confirmation). Refusals are final: this function raises rather
-    than saving a draft for later reconsideration. The database's own
-    trigger (migration 082, gates revised by migration 085) re-checks the
-    exact-match, commentary, clearance, and speaker gates as the
-    authoritative backstop, against the immutable snapshot this function
-    captures, not a later re-read of the chunk. Also runs the per-work
-    quote cap (_enforce_quote_cap, Settled decision #16) -- application-
-    level only, not DB-trigger-enforced; see that function's docstring.
-    Every acceptance and refusal is logged via _log_quote_decision().
+    """Create a quote after verify_quote_candidate passes.
 
-    Idempotent (2026-08-18): re-running this over the exact same
-    (chunk_id, quote_text, teacher_source_id) a prior call already created
-    returns that existing row unchanged rather than inserting a duplicate
-    quote_source_revisions/quotes pair. This is a pure idempotency
-    short-circuit, not a promotion path -- a matching PENDING row (e.g. one
-    a batch extractor inserted directly) is returned as-is, still pending,
-    never silently flipped to approved by this check. Deliberately narrow:
-    it only recognizes the exact triple a genuine rerun produces, not any
-    fuzzy/overlapping candidate."""
+    Default status is ``approved`` (Settled #18 auto-approve). The quality
+    pipeline (Task 5) may pass ``status='pending'`` for the first gold set
+    so Alex can batch-review before anything is selection-eligible as
+    approved. Optional ``topic_ids`` / ``quality_pipeline_version`` /
+    ``selection_eligible`` stamp migration-089 columns; when a pipeline
+    version is set and selection_eligible is omitted, eligibility defaults
+    to True.
+
+    Refusals are final: this function raises rather than saving a draft for
+    later reconsideration. The database trigger re-checks exact-match,
+    commentary, clearance, and speaker gates against the immutable snapshot.
+    Also runs the per-work quote cap (_enforce_quote_cap). Every acceptance
+    and refusal is logged via _log_quote_decision().
+
+    Idempotent (2026-08-18): re-running over the exact same
+    (chunk_id, quote_text, teacher_source_id) returns the existing row
+    unchanged — including a matching PENDING row, never silently flipped
+    to approved by this check."""
     _require_confirmed_teacher(teacher_source_id)
     for label, value in (("quote_text", quote_text), ("topic", topic), ("reviewer_note", reviewer_note)):
         if not value or not value.strip():
             raise ValueError("%s is required" % label)
+    if status not in ("approved", "pending"):
+        raise ValueError("status must be 'approved' or 'pending', got %r" % status)
 
     with _creation_lock(chunk_id, quote_text, teacher_source_id):
         existing = _find_existing_quote_for_passage(db, chunk_id, quote_text, teacher_source_id)
@@ -466,21 +473,30 @@ def create_and_approve_quote(
         )
 
         now = datetime.now(timezone.utc).isoformat()
+        row = {
+            "source_revision_id": revision["id"],
+            "teacher_source_id": teacher_source_id,
+            "quote_text": quote_text,
+            "topic": topic.strip(),
+            "reviewer_note": reviewer_note.strip(),
+            "status": status,
+            "created_by": user_id,
+        }
+        if status == "approved":
+            row["approved_by"] = user_id
+            row["approved_at"] = now
+        if topic_ids is not None:
+            row["topic_ids"] = list(topic_ids)
+        if quality_pipeline_version is not None:
+            row["quality_pipeline_version"] = quality_pipeline_version
+            if selection_eligible is None:
+                selection_eligible = True
+        if selection_eligible is not None:
+            row["selection_eligible"] = bool(selection_eligible)
+
         quote = (
             db.table("quotes")
-            .insert(
-                {
-                    "source_revision_id": revision["id"],
-                    "teacher_source_id": teacher_source_id,
-                    "quote_text": quote_text,
-                    "topic": topic.strip(),
-                    "reviewer_note": reviewer_note.strip(),
-                    "status": "approved",
-                    "created_by": user_id,
-                    "approved_by": user_id,
-                    "approved_at": now,
-                }
-            )
+            .insert(row)
             .execute()
             .data[0]
         )
