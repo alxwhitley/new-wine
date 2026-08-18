@@ -857,12 +857,27 @@ different row, per the hard rule above.
   covers this with both mocked-embedding mechanism checks and real embedding
   calls against real corpus text, mutation-proven. **Still queued, unchanged
   by this fix:** the re-audit of existing approved/pending quotes as untrusted
-  legacy data (PLAN.md W7's third bullet) and everything in W8. **New, PLAUSIBLE
-  not CONFIRMED finding (2026-08-18, `/code-review` interrupted before its
-  adversarial-verify step):** the new idempotency check is a non-atomic
-  SELECT-then-INSERT with no DB uniqueness constraint or lock behind it — a
-  genuine concurrent call could still duplicate a row. A future session should
-  re-verify and, if it holds, harden before this path sees concurrent traffic.
+  legacy data (PLAN.md W7's third bullet) and everything in W8. **RESOLVED
+  2026-08-19 — the idempotency race flagged 2026-08-18 (PLAUSIBLE, not
+  CONFIRMED at the time) is closed.** The idempotency check
+  (`_find_existing_quote_for_passage`) was a non-atomic SELECT-then-INSERT
+  with no DB uniqueness constraint or lock behind it — a genuine concurrent
+  call could duplicate a row. Closed by wrapping
+  `create_and_approve_quote()`'s check-then-insert body in a Postgres
+  session-level advisory lock (`quotes.py::_creation_lock`), keyed on the
+  exact `(chunk_id, quote_text, teacher_source_id)` triple; no migration
+  required. Mutation-proven with real threads racing the real function
+  (`scripts/test_quote_creation_race.py`): the lock wiring was temporarily
+  removed from `create_and_approve_quote()` and the protected-race test's
+  assertions failed reliably; restoring it passed again. Commits `aac7f7e`,
+  `046180d`, `46a6a5f`.
+  **Correction, same session: an earlier claim that migration 088 provided
+  a unique-constraint backstop on the quotes tables was FALSE.** Migration
+  088 is `source_ingest_runner.sql` (Invariant 16) — unrelated to quotes.
+  No unique constraint of any kind existed on `quotes` or
+  `quote_source_revisions` before this fix; the race was fully open until
+  the advisory lock closed it. Recorded here as a correction, not silently
+  dropped.
   `quote_selection_enabled()` (`backend/app/services/quotes.py`) requires the
   exact string `"true"` on `QUOTE_SELECTION_ENABLED`; anything else, including
   case variants, is off. With it off (the deployed default): the producer
