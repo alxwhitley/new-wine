@@ -65,6 +65,10 @@ source_ingest_preview_review/
 # Same rationale as the review queues above — local-only, not for git history.
 layer3_llm_reading_pass_review/
 
+# Quote propose dry-run / calibration reports (Task 4 quality pipeline).
+# May contain full chunk/quote text from live corpus windows — local-only.
+quote_propose_review/
+
 # Generator bypass-proofing live-proof review (PLAN.md #45.8, 2026-07-30) —
 # Phase 5's live-run output: real extraction/arbitration results and
 # would-have-been storage payloads for the three-document proof, storage
