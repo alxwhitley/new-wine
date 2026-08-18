@@ -1102,6 +1102,47 @@ class PropositionPayload(NamedTuple):
     embedding_model: str
 
 
+class PropositionPayloadContext(NamedTuple):
+    """Derived provenance shared by bulk preview and interleaved storage."""
+
+    prompt_version: str
+    prompt_fingerprint: str
+    model: str
+    embedding_model: str
+
+
+def build_proposition_payload_context(
+    *,
+    prompt_version: str,
+    model: str = EXTRACTION_MODEL,
+    embedding_model: str = "text-embedding-3-small",
+) -> PropositionPayloadContext:
+    return PropositionPayloadContext(
+        prompt_version=prompt_version,
+        prompt_fingerprint=prompt_fingerprint(prompt_version),
+        model=model,
+        embedding_model=embedding_model,
+    )
+
+
+def build_proposition_payload_item(
+    proposition: dict,
+    embedding: List[float],
+    *,
+    context: PropositionPayloadContext,
+) -> PropositionPayload:
+    """Build one canonical item without deciding when its embedding runs."""
+    return PropositionPayload(
+        content=proposition["content"],
+        proposition_index=proposition["proposition_index"],
+        embedding=tuple(float(value) for value in embedding),
+        prompt_version=context.prompt_version,
+        prompt_fingerprint=context.prompt_fingerprint,
+        model=context.model,
+        embedding_model=context.embedding_model,
+    )
+
+
 def build_proposition_payload(
     propositions: List[dict],
     embeddings: List[List[float]],
@@ -1113,18 +1154,18 @@ def build_proposition_payload(
     """Build the one ordered, immutable proposition payload consumers use."""
     if len(propositions) != len(embeddings):
         raise ValueError("proposition embedding count mismatch")
-    fingerprint = prompt_fingerprint(prompt_version)
+    context = build_proposition_payload_context(
+        prompt_version=prompt_version,
+        model=model,
+        embedding_model=embedding_model,
+    )
     return tuple(
-        PropositionPayload(
-            content=prop["content"],
-            proposition_index=prop["proposition_index"],
-            embedding=tuple(float(value) for value in embedding),
-            prompt_version=prompt_version,
-            prompt_fingerprint=fingerprint,
-            model=model,
-            embedding_model=embedding_model,
+        build_proposition_payload_item(
+            proposition,
+            embedding,
+            context=context,
         )
-        for prop, embedding in zip(propositions, embeddings)
+        for proposition, embedding in zip(propositions, embeddings)
     )
 
 
@@ -1143,10 +1184,11 @@ def store_propositions(
     keyword-only-in-practice parameter, default True): when True --
     every existing caller, since this is the default -- the
     `DELETE FROM propositions WHERE document_id = %s` below remains the
-    first database statement, after the canonical payload and all embeddings
-    have been computed in memory. When False, that DELETE is skipped entirely;
-    everything else (the INSERT, the proposition_chunks cartesian-product
-    insert, and the final commit) runs unchanged. This exists for
+    first database statement. Each proposition is then embedded and inserted
+    before the next proposition is embedded, preserving the legacy provider/
+    persistence side-effect order. When False, that DELETE is skipped entirely;
+    everything else (the interleaved embed/INSERT loop, the proposition_chunks
+    cartesian-product insert, and the final commit) runs unchanged. This exists for
     _extract_and_store_book_chapters() below,
     which issues its OWN single, document-level DELETE once before its
     chapter loop (never once per chapter) and then calls this function once
@@ -1211,13 +1253,10 @@ def store_propositions(
     Commits the transaction. Returns count inserted.
     fts column is GENERATED ALWAYS AS STORED — not included in INSERT.
     """
-    # Compute the complete canonical payload before the first database
-    # statement. A prompt, validation, or embedding failure therefore leaves
-    # existing proposition rows untouched, while the persistence block below
-    # consumes the same ordered payload that preview reviews.
-    payload = build_proposition_payload(
-        propositions,
-        [embed_fn(prop["content"]) for prop in propositions],
+    # Derive prompt provenance before the first database statement, matching
+    # the legacy sequencing. Canonical item construction stays shared with the
+    # preview, but embedding remains interleaved with each INSERT below.
+    payload_context = build_proposition_payload_context(
         prompt_version=prompt_version,
     )
 
@@ -1230,7 +1269,13 @@ def store_propositions(
 
         inserted = 0
         stored_prop_ids: List[str] = []
-        for proposition in payload:
+        for raw_proposition in propositions:
+            embedding = embed_fn(raw_proposition["content"])
+            proposition = build_proposition_payload_item(
+                raw_proposition,
+                embedding,
+                context=payload_context,
+            )
             embedding_str = "[" + ",".join(
                 str(value) for value in proposition.embedding
             ) + "]"

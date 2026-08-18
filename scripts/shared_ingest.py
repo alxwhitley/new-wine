@@ -184,6 +184,8 @@ class EmbeddingBatchComputation(NamedTuple):
     model: str
     usage: Optional[Dict[str, int]]
     cost_usd: Optional[float]
+    response_models: Tuple[Optional[str], ...] = ()
+    model_status: str = "unavailable"
 
 
 def _get_openai_client() -> OpenAI:
@@ -213,6 +215,8 @@ def _embedding_response_usage(response) -> Optional[Dict[str, int]]:
 
 def _embed_batch_verified_with_evidence(
     texts: List[str],
+    *,
+    _collect_provider_evidence: bool = True,
 ) -> EmbeddingBatchComputation:
     """Batch-embed texts, sub-batched at EMBED_BATCH_SIZE (matching
     backend/app/services/embeddings.py's own sub-batch size), verifying the
@@ -235,7 +239,7 @@ def _embed_batch_verified_with_evidence(
     client = _get_openai_client()
     embeddings: List[Optional[List[float]]] = [None] * len(texts)
     usage_rows: List[Dict[str, int]] = []
-    response_models = set()
+    response_models: List[Optional[str]] = []
     costs: List[float] = []
     every_cost_available = True
     for start in range(0, len(texts), EMBED_BATCH_SIZE):
@@ -245,15 +249,21 @@ def _embed_batch_verified_with_evidence(
             model=EMBEDDING_MODEL,
             dimensions=1536,
         )
-        response_models.add(getattr(response, "model", None) or EMBEDDING_MODEL)
-        response_usage = _embedding_response_usage(response)
-        if response_usage is not None:
-            usage_rows.append(response_usage)
-        raw_cost = getattr(response, "cost_usd", None)
-        if isinstance(raw_cost, (int, float)) and not isinstance(raw_cost, bool):
-            costs.append(float(raw_cost))
-        else:
-            every_cost_available = False
+        if _collect_provider_evidence:
+            raw_model = getattr(response, "model", None)
+            response_models.append(
+                raw_model.strip()
+                if isinstance(raw_model, str) and raw_model.strip()
+                else None
+            )
+            response_usage = _embedding_response_usage(response)
+            if response_usage is not None:
+                usage_rows.append(response_usage)
+            raw_cost = getattr(response, "cost_usd", None)
+            if isinstance(raw_cost, (int, float)) and not isinstance(raw_cost, bool):
+                costs.append(float(raw_cost))
+            else:
+                every_cost_available = False
         data = response.data
         if len(data) != len(batch):
             raise EmbeddingAlignmentError(
@@ -274,28 +284,48 @@ def _embed_batch_verified_with_evidence(
             f"embed batch never returned an item for position(s) {missing} "
             f"out of {len(texts)} -- refusing to proceed with gaps"
         )
-    if len(response_models) != 1:
-        raise EmbeddingAlignmentError("embedding provider returned inconsistent models")
     usage = None
-    if len(usage_rows) == (len(texts) + EMBED_BATCH_SIZE - 1) // EMBED_BATCH_SIZE:
+    batch_count = (len(texts) + EMBED_BATCH_SIZE - 1) // EMBED_BATCH_SIZE
+    if _collect_provider_evidence and len(usage_rows) == batch_count:
         common_fields = set.intersection(*(set(row) for row in usage_rows))
         usage = {
             field: sum(row[field] for row in usage_rows)
             for field in ("input_tokens", "output_tokens", "total_tokens")
             if field in common_fields
         } or None
+    observed_models = {model for model in response_models if model is not None}
+    if not _collect_provider_evidence or not observed_models:
+        model = EMBEDDING_MODEL
+        model_status = "unavailable"
+    elif len(observed_models) == 1 and all(
+        model is not None for model in response_models
+    ):
+        model = next(iter(observed_models))
+        model_status = "available"
+    else:
+        model = EMBEDDING_MODEL
+        model_status = "ambiguous"
     output = [embedding for embedding in embeddings if embedding is not None]
     return EmbeddingBatchComputation(
         output=output,
-        model=next(iter(response_models)),
+        model=model,
         usage=usage,
-        cost_usd=sum(costs) if every_cost_available else None,
+        cost_usd=(
+            sum(costs)
+            if _collect_provider_evidence and every_cost_available
+            else None
+        ),
+        response_models=tuple(response_models),
+        model_status=model_status,
     )
 
 
 def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
     """Legacy aligned-embedding API; evidence callers use its companion."""
-    return _embed_batch_verified_with_evidence(texts).output
+    return _embed_batch_verified_with_evidence(
+        texts,
+        _collect_provider_evidence=False,
+    ).output
 
 
 def _embed_chunks(

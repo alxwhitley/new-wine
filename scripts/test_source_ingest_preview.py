@@ -555,17 +555,17 @@ class CompletePreviewTests(unittest.TestCase):
         )
 
     def test_preview_and_storage_both_consume_the_canonical_payload_boundary(self):
-        original_builder = propositions.build_proposition_payload
+        original_builder = propositions.build_proposition_payload_item
 
         def mutate_canonical_payload(*args, **kwargs):
-            return tuple(
-                item._replace(content="canonical:" + item.content)
-                for item in original_builder(*args, **kwargs)
+            item = original_builder(*args, **kwargs)
+            return item._replace(
+                content="canonical:" + item.content,
             )
 
         with patch.object(
             propositions,
-            "build_proposition_payload",
+            "build_proposition_payload_item",
             new=mutate_canonical_payload,
         ):
             report = build_preview(
@@ -601,6 +601,78 @@ class CompletePreviewTests(unittest.TestCase):
             "a reward for merit.",
         )
         self.assertEqual(report["propositions"][0]["content"], stored_rows[0][2])
+
+    def test_storage_preserves_legacy_delete_embed_insert_event_order(self):
+        events = []
+        test_case = self
+
+        class EventCursor:
+            def __enter__(self):
+                events.append("cursor_enter")
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                events.append("cursor_exit")
+                return False
+
+            def execute(self, sql, params=None):
+                normalized = " ".join(sql.split())
+                if normalized.startswith("DELETE FROM propositions"):
+                    events.append("delete")
+                elif normalized.startswith("INSERT INTO propositions"):
+                    events.append("insert:" + params[2])
+                else:
+                    test_case.fail("unexpected SQL: " + normalized)
+
+        class EventConnection:
+            def cursor(self):
+                events.append("cursor_open")
+                return EventCursor()
+
+            def commit(self):
+                events.append("commit")
+
+            def rollback(self):
+                events.append("rollback")
+
+        raw_propositions = [
+            {"proposition_index": 1, "content": "first teaching"},
+            {"proposition_index": 2, "content": "second teaching"},
+        ]
+
+        def embed(content):
+            events.append("embed:" + content)
+            return [1.0, 2.0, 3.0]
+
+        def record_links(cursor, sql, rows, **kwargs):
+            events.append("links:" + str(len(rows)))
+
+        with patch.object(propositions, "execute_values", new=record_links):
+            inserted = propositions.store_propositions(
+                EventConnection(),
+                ROW_ID,
+                raw_propositions,
+                embed,
+                prompt_version="v3.1",
+                chunk_ids=["chunk-a"],
+            )
+
+        self.assertEqual(inserted, 2)
+        self.assertEqual(
+            events,
+            [
+                "cursor_open",
+                "cursor_enter",
+                "delete",
+                "embed:first teaching",
+                "insert:first teaching",
+                "embed:second teaching",
+                "insert:second teaching",
+                "links:2",
+                "cursor_exit",
+                "commit",
+            ],
+        )
 
 
 class ProviderEvidenceTests(unittest.TestCase):
@@ -699,6 +771,116 @@ class ProviderEvidenceTests(unittest.TestCase):
             {"input_tokens": 12, "total_tokens": 12},
         )
         self.assertIsNone(computation.cost_usd)
+
+    def test_legacy_embedding_accepts_multi_batch_response_model_label_variation(self):
+        def create(**kwargs):
+            text = kwargs["input"][0]
+            position = 1 if text == "first" else 2
+            return SimpleNamespace(
+                object="list",
+                model="provider-batch-model-%d" % position,
+                data=[
+                    SimpleNamespace(
+                        object="embedding",
+                        index=0,
+                        embedding=[float(position), 0.0, 0.0],
+                    )
+                ],
+                usage=SimpleNamespace(
+                    prompt_tokens=position,
+                    total_tokens=position,
+                ),
+            )
+
+        client = SimpleNamespace(
+            embeddings=SimpleNamespace(create=create),
+        )
+        with patch.object(
+            shared_ingest,
+            "EMBED_BATCH_SIZE",
+            new=1,
+        ), patch.object(
+            shared_ingest,
+            "_get_openai_client",
+            return_value=client,
+        ):
+            try:
+                legacy = shared_ingest._embed_batch_verified(["first", "second"])
+            except shared_ingest.EmbeddingAlignmentError as exc:
+                self.fail("legacy embedding rejected provider model labels: %s" % exc)
+            computation = shared_ingest._embed_batch_verified_with_evidence(
+                ["first", "second"]
+            )
+
+        self.assertEqual(legacy, [[1.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+        self.assertEqual(computation.output, legacy)
+        self.assertEqual(computation.model, shared_ingest.EMBEDDING_MODEL)
+        self.assertEqual(computation.model_status, "ambiguous")
+        self.assertEqual(
+            computation.response_models,
+            ("provider-batch-model-1", "provider-batch-model-2"),
+        )
+        self.assertEqual(
+            computation.usage,
+            {"input_tokens": 3, "total_tokens": 3},
+        )
+
+    def test_preview_surfaces_ambiguous_embedding_model_evidence(self):
+        def create(**kwargs):
+            text = kwargs["input"][0]
+            position = 1 if text == "first" else 2
+            return SimpleNamespace(
+                object="list",
+                model="provider-batch-model-%d" % position,
+                data=[
+                    SimpleNamespace(
+                        object="embedding",
+                        index=0,
+                        embedding=[float(position), 0.0, 0.0],
+                    )
+                ],
+                usage=SimpleNamespace(
+                    prompt_tokens=position,
+                    total_tokens=position,
+                ),
+            )
+
+        client = SimpleNamespace(
+            embeddings=SimpleNamespace(create=create),
+        )
+        with patch.object(
+            shared_ingest,
+            "EMBED_BATCH_SIZE",
+            new=1,
+        ), patch.object(
+            shared_ingest,
+            "_get_openai_client",
+            return_value=client,
+        ):
+            chunk_computation = preview_module._default_chunk_embeddings(
+                ["first", "second"]
+            )
+            proposition_computation = (
+                preview_module._default_proposition_embeddings(["first", "second"])
+            )
+
+        expected_evidence = {
+            "status": "ambiguous",
+            "response_models": [
+                "provider-batch-model-1",
+                "provider-batch-model-2",
+            ],
+        }
+        self.assertEqual(
+            chunk_computation.details,
+            {"model_evidence": expected_evidence},
+        )
+        self.assertEqual(
+            proposition_computation.details,
+            {"model_evidence": expected_evidence},
+        )
+        self.assertEqual(chunk_computation.model, shared_ingest.EMBEDDING_MODEL)
+        self.assertEqual(proposition_computation.model, shared_ingest.EMBEDDING_MODEL)
 
     def test_proposition_evidence_wrapper_preserves_grounded_legacy_output(self):
         self.assertTrue(

@@ -506,13 +506,46 @@ def _default_metadata(text: str) -> metadata_service.MetadataComputation:
     return metadata_service.extract_metadata_with_evidence(text)
 
 
+def _embedding_model_evidence(
+    computations: Sequence[shared_ingest.EmbeddingBatchComputation],
+) -> Tuple[str, Dict[str, object]]:
+    response_models = [
+        model
+        for computation in computations
+        for model in computation.response_models
+    ]
+    observed_models = {
+        model for model in response_models if isinstance(model, str)
+    }
+    statuses = [computation.model_status for computation in computations]
+    if statuses and all(status == "available" for status in statuses):
+        status = "available" if len(observed_models) == 1 else "ambiguous"
+    elif statuses and all(status == "unavailable" for status in statuses):
+        status = "unavailable"
+    else:
+        status = "ambiguous"
+    model = (
+        next(iter(observed_models))
+        if status == "available"
+        else EMBEDDING_MODEL
+    )
+    return model, {
+        "model_evidence": {
+            "status": status,
+            "response_models": response_models,
+        }
+    }
+
+
 def _default_chunk_embeddings(texts: List[str]) -> ModelComputation:
     computation = shared_ingest._embed_batch_verified_with_evidence(texts)
+    model, details = _embedding_model_evidence([computation])
     return ModelComputation(
         output=computation.output,
-        model=computation.model,
+        model=model,
         usage=computation.usage,
         cost_usd=computation.cost_usd,
+        details=details,
     )
 
 
@@ -551,16 +584,21 @@ def _default_propositions(
 
 def _default_proposition_embeddings(texts: List[str]) -> ModelComputation:
     if not texts:
-        return ModelComputation(output=[], model=EMBEDDING_MODEL)
+        return ModelComputation(
+            output=[],
+            model=EMBEDDING_MODEL,
+            details={
+                "model_evidence": {
+                    "status": "unavailable",
+                    "response_models": [],
+                }
+            },
+        )
     computations = [
         shared_ingest._embed_batch_verified_with_evidence([text])
         for text in texts
     ]
-    models = {item.model for item in computations}
-    if len(models) != 1:
-        raise PreviewValidationError(
-            "proposition embedding provider returned inconsistent models"
-        )
+    model, details = _embedding_model_evidence(computations)
     usage = None
     if all(item.usage is not None for item in computations):
         common_fields = set.intersection(
@@ -579,9 +617,10 @@ def _default_proposition_embeddings(texts: List[str]) -> ModelComputation:
     )
     return ModelComputation(
         output=[vector for item in computations for vector in item.output],
-        model=next(iter(models)),
+        model=model,
         usage=usage,
         cost_usd=cost_usd,
+        details=details,
     )
 
 
