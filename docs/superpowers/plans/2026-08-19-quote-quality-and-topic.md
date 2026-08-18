@@ -164,12 +164,15 @@ Rules:
 **Flow per candidate:** quality pass → `verify_quote_candidate` → insert with `quality_pipeline_version='quote_quality_v1'`, `selection_eligible=true`, `topic` = primary taxonomy tag, `topic_ids` = list, `status` per policy (`pending` recommended for first gold; Alex can approve batch).
 
 - [x] **Step 1:** Wire insert; dry-run mode default (`extract_quotes_quality_pipeline.py`; `create_and_approve_quote` accepts `topic_ids` / `quality_pipeline_version` / `status=pending`).
-- [ ] **Step 2:** Alex go required — run on the **3 calibration docs only**:
-  `PYTHONUNBUFFERED=1 python3 scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
-  (~59 chunks, ~$1.42; expect ~mid-20s pending rows). Do **not** flip
-  `QUOTE_SELECTION_ENABLED`. Handoff recorded 2026-08-19: wait for explicit go in a fresh session.
-- [ ] **Step 3:** Hard reconciliation: attempted / stored / refused_quality / refused_verify / skipped.
-- [x] **Step 4 (partial):** Script + unit tests committed; apply-run counts wait on Step 2.
+- [x] **Step 2:** Applied on the **3 calibration docs** (Alex go, 2026-08-19):
+  `PYTHONUNBUFFERED=1 …/python scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
+  (~59 chunks, ~$1.42 est). `QUOTE_SELECTION_ENABLED` untouched.
+- [x] **Step 3:** Hard reconciliation — script: windows=59 proposals=42
+  refused_quality=11 refused_verify=3 skipped_dup=0 stored=28 errors=0;
+  live DB: 28/28 IDs pending + `quote_quality_v1` + `selection_eligible=true`
+  + `topic_ids` set. Report:
+  `quote_propose_review/gold_pipeline_apply_20260818T212522Z.json`.
+- [x] **Step 4:** Apply-run complete; visual sign-off + re-enable remain Q3.
 
 ---
 

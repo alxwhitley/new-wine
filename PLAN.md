@@ -9,19 +9,10 @@ scope) are on the launch critical path — without compromising propositions,
 generated answers, or recoverability. Web-article ingestion remains an
 attended parallel track.
 
-**Current item:** **Q2 Task 5 — attended gold write on the 3 calibration
-docs.** Wait for Alex’s explicit go; do **not** run `--apply` without it.
-Command (only after go):
-
-`PYTHONUNBUFFERED=1 python3 scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
-
-Scope: first 3 cleared Prince non-book docs (~59 chunks, ~$1.42). Expect
-~mid-20s pending rows (`quality_pipeline_version=quote_quality_v1`,
-`selection_eligible=true`, `topic_ids` set). **Keep
-`QUOTE_SELECTION_ENABLED` off.** Migration 089 is already applied. Flag-off
-regressions (Task 8 Step 1) already landed (`1eec654`). After apply: hard
-reconciliation, then Alex QuoteRail visual sign-off, then attended
-re-enable. Plan:
+**Current item:** **Q2 remainder → Q3 — QuoteRail visual sign-off, then
+attended re-enable.** Task 5 gold apply on the 3 calibration docs is DONE
+(28 pending rows, live-reconciled). **Keep `QUOTE_SELECTION_ENABLED` off**
+until Alex signs off presentation and explicitly flips it. Plan:
 `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`.
 
 ## Governing boundary
@@ -88,9 +79,8 @@ Decisions locked in the spec + CLAUDE.md Settled #29:
 
 ### Q2 — Gold extract + presentation + legacy selection-ineligibility
 
-**Status:** Schema + selection filter + presentation code DONE; migration
-089 **applied**. Calibration #2 yield = 27 verify-pass. **Next:** attended
-gold `--apply` on the 3 calibration docs (Alex go required).
+**Status:** Gold apply DONE on 3 calibration docs. **Next:** Alex QuoteRail
+visual sign-off, then attended re-enable (Q3).
 
 - [x] Costed dry-run propose + calibration note (paid #2: 27 verify-pass /
   ~$1.42 / 59 windows) —
@@ -98,9 +88,13 @@ gold `--apply` on the 3 calibration docs (Alex go required).
 - [x] Schema committed + migration 089 applied (topic_ids /
   quality_pipeline_version / selection_eligible; legacy
   selection_eligible=false).
-- [ ] Attended gold write on 3 calibration docs (`--limit 3 --apply
-  --status pending`) + hard reconciliation.
-- [x] Selection eligibility = new-pipeline/gold only in code; rail still off.
+- [x] Attended gold write on 3 calibration docs (`--limit 3 --apply
+  --status pending`) + hard reconciliation — **stored=28**,
+  refused_quality=11, refused_verify=3, errors=0; live DB 28/28 pending
+  with `quote_quality_v1` + `selection_eligible=true` + `topic_ids` set
+  (report `quote_propose_review/gold_pipeline_apply_20260818T212522Z.json`).
+- [x] Selection eligibility = new-pipeline/gold only in code; rail still off
+  (pending gold also requires `status=approved` before selection).
 - [x] Presentation code: visual separation + teacher/source on the quote
   (#28) — Alex visual sign-off still open.
 - [x] Legacy 793 selection-ineligible via migration 089 backfill (rows

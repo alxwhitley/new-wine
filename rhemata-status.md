@@ -7,11 +7,12 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-19 (handoff). `main` tip includes quote-quality
-track through Task 8 Step 1 (`1eec654` regressions) and handoff docs
-(`57faa67`). Migration 089 applied. Next single item: attended Task 5
-gold `--apply` on the 3 calibration docs — **wait for Alex’s explicit
-go**; do not flip `QUOTE_SELECTION_ENABLED`. Untracked
+Last verified: 2026-08-19 (gold apply). Task 5 `--limit 3 --apply` DONE:
+28 pending gold quotes live-reconciled; report
+`quote_propose_review/gold_pipeline_apply_20260818T212522Z.json`.
+`QUOTE_SELECTION_ENABLED` still off. Next: Alex QuoteRail visual
+sign-off, then attended re-enable (note: gold rows are `pending` —
+selection also needs `status=approved`). Untracked
 `Temporary-assets/` and `docs/audits/quote_quality_sample_2026-08-19.md`
 remain deliberately uncommitted.
 
@@ -22,21 +23,15 @@ for this file.
 
 ## Current state
 
-**Handoff (do not `--apply` without go):** Task 5 gold write on the 3
-calibration Prince non-book docs (~59 chunks, ~$1.42). Command after
-explicit go:
-
-`PYTHONUNBUFFERED=1 python3 scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
-
-Expect ~mid-20s pending rows (`quote_quality_v1`, `selection_eligible=true`,
-`topic_ids` set). Rail stays off. Already done on this track: Tasks 1–4,
-6–7; Task 5 script wired; migration 089 applied; calibration #2 = 27
-verify-pass; Task 8 Step 1 flag-off regressions. Still after apply: hard
-reconciliation, Alex QuoteRail visual sign-off, attended re-enable.
+**Gold apply complete.** 3 calibration docs, 59 windows → **28 pending**
+rows (`quote_quality_v1`, `selection_eligible=true`, `topic_ids` set);
+refused_quality=11, refused_verify=3, errors=0; live 28/28. Rail still
+off. Next single item: Alex QuoteRail visual sign-off, then decide
+pending→approved policy and attended `QUOTE_SELECTION_ENABLED=true`.
 
 Refs: `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`,
 `docs/audits/quote_propose_calibration_note_2026-08-19.md`,
-`scripts/extract_quotes_quality_pipeline.py`.
+`quote_propose_review/gold_pipeline_apply_20260818T212522Z.json`.
 
 Rhemata uses the Beta Critical Path model; Codex is the primary surface.
 Custom multi-provider coordinator / overnight harness remain retired.

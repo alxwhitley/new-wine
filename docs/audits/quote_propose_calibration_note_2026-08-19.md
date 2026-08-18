@@ -42,12 +42,26 @@ Report: `quote_propose_review/propose_dry_run_20260818T203614Z.jsonl`
 
 Passage tags look on-topic for these sermons (Fasting and Prayer, Atonement, Spiritual Warfare, etc.) — not document-tag inheritance. Residual losses are expected authenticity gates + short spans + invent/paraphrase.
 
+## Gold apply (attended, DONE 2026-08-19)
+
+Command:
+
+`PYTHONUNBUFFERED=1 …/python scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
+
+| Metric | Count |
+|---|---|
+| windows_attempted | 59 |
+| proposals_parsed | 42 |
+| refused_quality | 11 |
+| refused_verify | 3 |
+| skipped_dup | 0 |
+| **stored (pending)** | **28** |
+| errors | 0 |
+
+Live DB hard check: 28/28 stored IDs present; all `pending`, `quality_pipeline_version=quote_quality_v1`, `selection_eligible=true`, `topic_ids` non-empty. Report: `quote_propose_review/gold_pipeline_apply_20260818T212522Z.json`. Rail flag untouched.
+
 ## Next (attended)
 
-1. **Task 5 gold apply on these same 3 docs** — only after Alex’s explicit go in a fresh session. Command:
-
-   `PYTHONUNBUFFERED=1 python3 scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
-
-   Expect ~mid-20s pending rows (`quote_quality_v1`, `selection_eligible=true`, `topic_ids` set). Keep `QUOTE_SELECTION_ENABLED` off. Migration 089 already applied; Task 8 Step 1 regressions already landed.
-2. Hard reconciliation after apply; then Alex QuoteRail visual sign-off; then attended re-enable.
+1. Alex QuoteRail visual sign-off (Settled #28 presentation).
+2. Attended `QUOTE_SELECTION_ENABLED=true` + smoke (Q3) — gold rows are still `pending`; selection also requires `status=approved`.
 3. Optional later: prompt nudge against paraphrase / prefer mid-chunk spans to cut `not_substring` + flush-boundary refuses
