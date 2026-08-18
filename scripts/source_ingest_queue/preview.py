@@ -6,18 +6,20 @@ import hashlib
 import json
 import math
 import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import propositions
 import shared_ingest
+from app.services import metadata as metadata_service
 from app.services.chunker import chunk_text
 from quote_candidates import generate_candidate_spans
 from source_ingest_queue.processor import PreparedIngest, prepare_ingest
 
 
-SCHEMA_VERSION = "source_ingest_preview.v1"
+SCHEMA_VERSION = "source_ingest_preview.v2"
 PROMPT_VERSION = "v3.1"
 EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_REVIEW_DIR = Path(__file__).resolve().parents[2] / "source_ingest_preview_review"
@@ -35,6 +37,7 @@ class ModelComputation:
     model: str
     usage: Optional[Mapping[str, object]] = None
     cost_usd: Optional[float] = None
+    details: Optional[Mapping[str, object]] = None
 
 
 class PreviewValidationError(ValueError):
@@ -68,7 +71,7 @@ def write_preview_report(
     *,
     review_dir: Path = DEFAULT_REVIEW_DIR,
 ) -> Path:
-    """Create a mode-0600 canonical report, never replacing existing bytes."""
+    """Atomically publish a mode-0600 report without following local links."""
     report_id = report.get("report_id")
     if (
         not isinstance(report_id, str)
@@ -80,7 +83,14 @@ def write_preview_report(
     attribution = report.get("attribution")
     if not isinstance(capture, Mapping) or not isinstance(attribution, Mapping):
         raise PreviewValidationError("report identity evidence is missing")
-    expected_report_id = _identity_digest(
+    capture_id = report.get("capture_id")
+    if (
+        not isinstance(capture_id, str)
+        or len(capture_id) != 64
+        or any(ch not in "0123456789abcdef" for ch in capture_id)
+    ):
+        raise PreviewValidationError("capture_id is not a lowercase SHA-256 digest")
+    expected_capture_id = _capture_identity_digest(
         schema_version=report.get("schema_version"),
         row_id=capture.get("row_id"),
         url=capture.get("url"),
@@ -88,41 +98,173 @@ def write_preview_report(
         fetched_bytes=capture.get("fetched_bytes"),
         source_id=attribution.get("source_id"),
     )
-    if report_id != expected_report_id:
-        raise PreviewValidationError("report_id does not match capture identity")
+    if capture_id != expected_capture_id:
+        raise PreviewValidationError("capture_id does not match capture identity")
+    if report_id != _content_report_digest(report):
+        raise PreviewValidationError("report_id does not match report content")
     payload = canonical_preview_json(report).encode("utf-8")
     directory = Path(review_dir)
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if directory.is_symlink() or not directory.is_dir():
-        raise PreviewValidationError("review_dir must be a real directory")
     path = directory / (report_id + ".json")
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        directory_descriptor = os.open(directory, directory_flags)
+    except OSError as exc:
+        raise PreviewValidationError("review_dir must be a real directory") from exc
+    temporary_name: Optional[str] = None
 
-    def _accept_existing() -> Path:
-        if path.is_symlink() or not path.is_file():
-            raise PreviewCollisionError("preview identity is occupied by a non-file")
-        if path.read_bytes() != payload:
+    def _validate_regular_artifact(info: os.stat_result) -> None:
+        if not stat.S_ISREG(info.st_mode):
+            raise PreviewCollisionError(
+                "preview identity is occupied by a non-regular file"
+            )
+        if stat.S_IMODE(info.st_mode) != 0o600:
+            raise PreviewCollisionError("preview artifact mode is not 0600")
+        if info.st_nlink != 1:
+            raise PreviewCollisionError("preview artifact has an unsafe link count")
+
+    def _accept_existing() -> Optional[Path]:
+        final_name = report_id + ".json"
+        try:
+            path_info = os.stat(
+                final_name,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            return None
+        _validate_regular_artifact(path_info)
+        if path_info.st_size != len(payload):
+            raise PreviewCollisionError("preview identity already has different bytes")
+        read_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(
+                final_name,
+                read_flags,
+                dir_fd=directory_descriptor,
+            )
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise PreviewCollisionError(
+                "preview identity could not be opened without following links"
+            ) from exc
+        try:
+            opened_info = os.fstat(descriptor)
+            _validate_regular_artifact(opened_info)
+            if opened_info.st_size != len(payload):
+                raise PreviewCollisionError(
+                    "preview identity already has different bytes"
+                )
+            if (opened_info.st_dev, opened_info.st_ino) != (
+                path_info.st_dev,
+                path_info.st_ino,
+            ):
+                raise PreviewCollisionError("preview identity changed during validation")
+            chunks = []
+            while True:
+                chunk = os.read(descriptor, 64 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            final_info = os.fstat(descriptor)
+            _validate_regular_artifact(final_info)
+            try:
+                final_path_info = os.stat(
+                    final_name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError as exc:
+                raise PreviewCollisionError(
+                    "preview identity disappeared during validation"
+                ) from exc
+            if (final_path_info.st_dev, final_path_info.st_ino) != (
+                final_info.st_dev,
+                final_info.st_ino,
+            ):
+                raise PreviewCollisionError("preview identity changed during validation")
+        finally:
+            os.close(descriptor)
+        if b"".join(chunks) != payload:
             raise PreviewCollisionError("preview identity already has different bytes")
         return path
 
-    if path.exists() or path.is_symlink():
-        return _accept_existing()
     try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        return _accept_existing()
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(payload)
-        handle.flush()
-        os.fsync(handle.fileno())
-        os.fchmod(handle.fileno(), 0o600)
-    return path
+        directory_info = os.fstat(directory_descriptor)
+        if not stat.S_ISDIR(directory_info.st_mode):
+            raise PreviewValidationError("review_dir must be a real directory")
+        existing = _accept_existing()
+        if existing is not None:
+            return existing
+
+        candidate_name = ".%s.%s.tmp" % (report_id, os.urandom(16).hex())
+        temporary_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        temporary_flags |= getattr(os, "O_NOFOLLOW", 0)
+        temporary_descriptor = os.open(
+            candidate_name,
+            temporary_flags,
+            0o600,
+            dir_fd=directory_descriptor,
+        )
+        temporary_name = candidate_name
+        try:
+            os.fchmod(temporary_descriptor, 0o600)
+            temporary_info = os.fstat(temporary_descriptor)
+            _validate_regular_artifact(temporary_info)
+            remaining = memoryview(payload)
+            while remaining:
+                written = os.write(temporary_descriptor, remaining)
+                if written <= 0:
+                    raise OSError("preview artifact write made no progress")
+                remaining = remaining[written:]
+            os.fsync(temporary_descriptor)
+        finally:
+            os.close(temporary_descriptor)
+
+        final_name = report_id + ".json"
+        try:
+            os.link(
+                temporary_name,
+                final_name,
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except FileExistsError:
+            existing = _accept_existing()
+            if existing is None:
+                raise PreviewCollisionError(
+                    "preview identity changed during atomic publication"
+                )
+            return existing
+
+        os.unlink(temporary_name, dir_fd=directory_descriptor)
+        temporary_name = None
+        os.fsync(directory_descriptor)
+        published = _accept_existing()
+        if published is None:
+            raise PreviewCollisionError("published preview identity disappeared")
+        return published
+    finally:
+        try:
+            if temporary_name is not None:
+                try:
+                    os.unlink(temporary_name, dir_fd=directory_descriptor)
+                except FileNotFoundError:
+                    pass
+                else:
+                    os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
 
 
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _identity_digest(
+def _capture_identity_digest(
     *,
     schema_version: object,
     row_id: object,
@@ -144,8 +286,8 @@ def _identity_digest(
     return _sha256_text(_canonical_json(identity))
 
 
-def _report_id(prepared: PreparedIngest) -> str:
-    return _identity_digest(
+def _capture_id(prepared: PreparedIngest) -> str:
+    return _capture_identity_digest(
         schema_version=SCHEMA_VERSION,
         row_id=prepared.row_id,
         url=prepared.source_url,
@@ -155,8 +297,14 @@ def _report_id(prepared: PreparedIngest) -> str:
     )
 
 
-def _stable_item_id(report_id: str, kind: str, index: int, digest: str) -> str:
-    return _sha256_text("%s:%s:%d:%s" % (report_id, kind, index, digest))
+def _content_report_digest(report: Mapping[str, object]) -> str:
+    report_content = dict(report)
+    report_content.pop("report_id", None)
+    return _sha256_text(_canonical_json(report_content))
+
+
+def _stable_item_id(capture_id: str, kind: str, index: int, digest: str) -> str:
+    return _sha256_text("%s:%s:%d:%s" % (capture_id, kind, index, digest))
 
 
 def _validate_prepared(prepared: PreparedIngest) -> None:
@@ -234,11 +382,27 @@ def _normalize_computation(
         cost = float(cost)
         if not math.isfinite(cost) or cost < 0:
             raise PreviewValidationError("%s cost_usd is invalid" % boundary)
-    evidence = {
+    details = result.details
+    if details is not None:
+        if not isinstance(details, Mapping):
+            raise PreviewValidationError("%s details must be an object" % boundary)
+        details = dict(details)
+        _canonical_json(details)
+    evidence: Dict[str, object] = {
         "model": result.model.strip(),
-        "usage": usage,
-        "cost_usd": cost,
+        "usage": (
+            {"status": "available", **usage}
+            if usage is not None
+            else {"status": "unavailable"}
+        ),
+        "cost_usd": (
+            {"status": "available", "value": cost}
+            if cost is not None
+            else {"status": "unavailable"}
+        ),
     }
+    if details is not None:
+        evidence["details"] = details
     return result.output, evidence
 
 
@@ -259,9 +423,10 @@ def _validate_embeddings(
     expected_count: int,
     expected_dimensions: int,
     boundary: str,
-) -> List[Dict[str, object]]:
+) -> Tuple[List[List[float]], List[Dict[str, object]]]:
     if not isinstance(raw_embeddings, list) or len(raw_embeddings) != expected_count:
         raise PreviewValidationError("%s embedding count mismatch" % boundary)
+    normalized_vectors: List[List[float]] = []
     evidence: List[Dict[str, object]] = []
     for vector in raw_embeddings:
         if not isinstance(vector, (list, tuple)) or len(vector) != expected_dimensions:
@@ -274,13 +439,14 @@ def _validate_embeddings(
             if not math.isfinite(number):
                 raise PreviewValidationError("%s embedding value is not finite" % boundary)
             normalized.append(0.0 if number == 0 else number)
+        normalized_vectors.append(normalized)
         evidence.append(
             {
                 "dimensions": expected_dimensions,
                 "sha256": _sha256_text(_canonical_json(normalized)),
             }
         )
-    return evidence
+    return normalized_vectors, evidence
 
 
 def _validate_propositions(raw: object) -> List[Dict[str, object]]:
@@ -301,12 +467,11 @@ def _validate_propositions(raw: object) -> List[Dict[str, object]]:
             raise PreviewValidationError("proposition_index values must be unique")
         if not isinstance(content, str) or not content.strip():
             raise PreviewValidationError("proposition content must be non-empty text")
-        content = content.strip()
         if len(content) > _MAX_PROPOSITION_CHARS:
             raise PreviewValidationError("proposition content is too large")
         seen_indexes.add(index)
         propositions_out.append({"proposition_index": index, "content": content})
-    return sorted(propositions_out, key=lambda item: int(item["proposition_index"]))
+    return propositions_out
 
 
 def _validate_quote_spans(
@@ -337,10 +502,17 @@ def _validate_quote_spans(
     return spans
 
 
+def _default_metadata(text: str) -> metadata_service.MetadataComputation:
+    return metadata_service.extract_metadata_with_evidence(text)
+
+
 def _default_chunk_embeddings(texts: List[str]) -> ModelComputation:
+    computation = shared_ingest._embed_batch_verified_with_evidence(texts)
     return ModelComputation(
-        output=shared_ingest._embed_batch_verified(texts),
-        model=EMBEDDING_MODEL,
+        output=computation.output,
+        model=computation.model,
+        usage=computation.usage,
+        cost_usd=computation.cost_usd,
     )
 
 
@@ -351,22 +523,75 @@ def _default_propositions(
     speaker: str,
     prompt_version: str,
 ) -> ModelComputation:
+    computation = propositions.extract_propositions_with_evidence(
+        text,
+        doc_id=document_id,
+        speaker=speaker,
+        prompt_version=prompt_version,
+        grounding_review_sink=None,
+    )
+    grounding = computation.grounding
     return ModelComputation(
-        output=propositions.extract_propositions(
-            text,
-            doc_id=document_id,
-            speaker=speaker,
-            prompt_version=prompt_version,
-        ),
-        model=propositions.EXTRACTION_MODEL,
+        output=computation.output,
+        model=computation.model,
+        usage=computation.usage,
+        cost_usd=computation.cost_usd,
+        details={
+            "reference_grounding": {
+                "references_found": grounding.n_found,
+                "references_grounded": grounding.n_grounded,
+                "references_stripped_fabricated": grounding.n_stripped_fabricated,
+                "references_stripped_uncertain": grounding.n_stripped_uncertain,
+                "references_kept_arbitration": grounding.n_kept_arbitration,
+                "arbitration_items": len(grounding.review_records),
+            }
+        },
     )
 
 
 def _default_proposition_embeddings(texts: List[str]) -> ModelComputation:
-    return ModelComputation(
-        output=shared_ingest._embed_batch_verified(texts),
-        model=EMBEDDING_MODEL,
+    if not texts:
+        return ModelComputation(output=[], model=EMBEDDING_MODEL)
+    computations = [
+        shared_ingest._embed_batch_verified_with_evidence([text])
+        for text in texts
+    ]
+    models = {item.model for item in computations}
+    if len(models) != 1:
+        raise PreviewValidationError(
+            "proposition embedding provider returned inconsistent models"
+        )
+    usage = None
+    if all(item.usage is not None for item in computations):
+        common_fields = set.intersection(
+            *(set(item.usage or {}) for item in computations)
+        )
+        usage = {
+            field: sum((item.usage or {})[field] for item in computations)
+            for field in _USAGE_FIELDS
+            if field in common_fields
+        } or None
+    costs = [item.cost_usd for item in computations]
+    cost_usd = (
+        sum(float(value) for value in costs if value is not None)
+        if all(value is not None for value in costs)
+        else None
     )
+    return ModelComputation(
+        output=[vector for item in computations for vector in item.output],
+        model=next(iter(models)),
+        usage=usage,
+        cost_usd=cost_usd,
+    )
+
+
+def _unavailable_computation(reason: str) -> Dict[str, object]:
+    return {
+        "model": None,
+        "usage": {"status": "unavailable"},
+        "cost_usd": {"status": "unavailable"},
+        "reason": reason,
+    }
 
 
 def _known_usage(computations: Sequence[Mapping[str, object]]) -> Dict[str, int]:
@@ -374,6 +599,8 @@ def _known_usage(computations: Sequence[Mapping[str, object]]) -> Dict[str, int]
     for computation in computations:
         usage = computation.get("usage")
         if not isinstance(usage, Mapping):
+            continue
+        if usage.get("status") != "available":
             continue
         for field in _USAGE_FIELDS:
             value = usage.get(field)
@@ -384,7 +611,13 @@ def _known_usage(computations: Sequence[Mapping[str, object]]) -> Dict[str, int]
 
 def _known_cost(computations: Sequence[Mapping[str, object]]) -> Optional[float]:
     values = [item.get("cost_usd") for item in computations]
-    known = [float(value) for value in values if isinstance(value, (int, float))]
+    known = [
+        float(value["value"])
+        for value in values
+        if isinstance(value, Mapping)
+        and value.get("status") == "available"
+        and isinstance(value.get("value"), (int, float))
+    ]
     return round(sum(known), 12) if known else None
 
 
@@ -409,7 +642,25 @@ def build_preview(
     ):
         raise PreviewValidationError("expected embedding dimensions must be positive")
 
-    report_id = _report_id(prepared)
+    capture_id = _capture_id(prepared)
+    if isinstance(
+        prepared.metadata_computation,
+        metadata_service.MetadataComputation,
+    ):
+        metadata_boundary = prepared.metadata_computation
+        metadata_computation = _normalize_computation(
+            ModelComputation(
+                output=metadata_boundary.output,
+                model=metadata_boundary.model,
+                usage=metadata_boundary.usage,
+                cost_usd=metadata_boundary.cost_usd,
+            ),
+            boundary="metadata",
+        )[1]
+    else:
+        metadata_computation = _unavailable_computation(
+            "metadata provider evidence was not retained by preparation"
+        )
     chunks = _validate_chunks(chunk_fn(prepared.body_text))
     if len(chunks) != prepared.chunk_count:
         raise PreviewValidationError("prepared and preview chunk counts differ")
@@ -417,7 +668,7 @@ def build_preview(
     raw_chunk_embeddings, chunk_computation = _normalize_computation(
         chunk_embeddings_fn(chunks), boundary="chunk_embeddings"
     )
-    chunk_embedding_evidence = _validate_embeddings(
+    _chunk_embedding_vectors, chunk_embedding_evidence = _validate_embeddings(
         raw_chunk_embeddings,
         expected_count=len(chunks),
         expected_dimensions=expected_embedding_dimensions,
@@ -429,7 +680,7 @@ def build_preview(
         digest = _sha256_text(content)
         chunk_rows.append(
             {
-                "id": _stable_item_id(report_id, "chunk", index, digest),
+                "id": _stable_item_id(capture_id, "chunk", index, digest),
                 "index": index,
                 "content": content,
                 "content_sha256": digest,
@@ -441,7 +692,7 @@ def build_preview(
     raw_propositions, proposition_computation = _normalize_computation(
         proposition_model_fn(
             prepared.body_text,
-            document_id=report_id,
+            document_id=capture_id,
             speaker=prepared.author,
             prompt_version=PROMPT_VERSION,
         ),
@@ -453,7 +704,7 @@ def build_preview(
         proposition_embeddings_fn(proposition_contents),
         boundary="proposition_embeddings",
     )
-    proposition_embedding_evidence = _validate_embeddings(
+    proposition_embedding_vectors, proposition_embedding_evidence = _validate_embeddings(
         raw_proposition_embeddings,
         expected_count=len(validated_propositions),
         expected_dimensions=expected_embedding_dimensions,
@@ -461,26 +712,33 @@ def build_preview(
     )
 
     chunk_ids = [str(chunk["id"]) for chunk in chunk_rows]
+    proposition_payload = propositions.build_proposition_payload(
+        validated_propositions,
+        proposition_embedding_vectors,
+        prompt_version=PROMPT_VERSION,
+        model=str(proposition_computation["model"]),
+        embedding_model=str(proposition_embedding_computation["model"]),
+    )
     fingerprint = propositions.prompt_fingerprint(PROMPT_VERSION)
     proposition_rows: List[Dict[str, object]] = []
-    for item, embedding in zip(validated_propositions, proposition_embedding_evidence):
-        index = int(item["proposition_index"])
-        content = str(item["content"])
+    for item, embedding in zip(proposition_payload, proposition_embedding_evidence):
+        index = item.proposition_index
+        content = item.content
         digest = _sha256_text(content)
         proposition_rows.append(
             {
-                "id": _stable_item_id(report_id, "proposition", index, digest),
+                "id": _stable_item_id(capture_id, "proposition", index, digest),
                 "proposition_index": index,
                 "content": content,
                 "content_sha256": digest,
-                "prompt_version": PROMPT_VERSION,
-                "prompt_fingerprint": fingerprint,
-                "model": proposition_computation["model"],
+                "prompt_version": item.prompt_version,
+                "prompt_fingerprint": item.prompt_fingerprint,
+                "model": item.model,
                 "eligible": False,
                 "chunk_ids": list(chunk_ids),
                 "embedding": {
                     **embedding,
-                    "model": proposition_embedding_computation["model"],
+                    "model": item.embedding_model,
                 },
             }
         )
@@ -498,7 +756,12 @@ def build_preview(
             digest = _sha256_text(text)
             quote_rows.append(
                 {
-                    "id": _stable_item_id(report_id, "quote_proposal", len(quote_rows), digest),
+                    "id": _stable_item_id(
+                        capture_id,
+                        "quote_proposal",
+                        len(quote_rows),
+                        digest,
+                    ),
                     "status": "proposal",
                     "chunk_id": chunk["id"],
                     "chunk_index": chunk["index"],
@@ -514,14 +777,29 @@ def build_preview(
                 }
             )
 
+    grounding_details = proposition_computation.get("details")
+    grounding = (
+        grounding_details.get("reference_grounding")
+        if isinstance(grounding_details, Mapping)
+        else None
+    )
+    arbitration_computation = _unavailable_computation(
+        "reference-grounding arbitration boundary does not expose provider evidence"
+    )
+    arbitration_computation["items"] = (
+        grounding.get("arbitration_items", 0)
+        if isinstance(grounding, Mapping)
+        else 0
+    )
     computations = (
+        metadata_computation,
         chunk_computation,
         proposition_computation,
         proposition_embedding_computation,
     )
     report: Dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
-        "report_id": report_id,
+        "capture_id": capture_id,
         "mode": "full_compute_zero_database_write",
         "capture": {
             "row_id": prepared.row_id,
@@ -555,6 +833,7 @@ def build_preview(
         "propositions": proposition_rows,
         "quote_spans": quote_rows,
         "computation": {
+            "metadata": metadata_computation,
             "chunk_embeddings": {
                 **chunk_computation,
                 "items": len(chunk_rows),
@@ -569,6 +848,7 @@ def build_preview(
                 **proposition_embedding_computation,
                 "items": len(proposition_rows),
             },
+            "reference_grounding_arbitration": arbitration_computation,
             "known_tokens": _known_usage(computations),
             "known_cost_usd": _known_cost(computations),
         },
@@ -583,6 +863,7 @@ def build_preview(
             "quotes_approved": 0,
         },
     }
+    report["report_id"] = _content_report_digest(report)
     canonical_preview_json(report)
     return report
 
@@ -608,6 +889,7 @@ def preview_row(
     if reserved:
         raise PreviewValidationError("prepare_options contains reserved arguments")
     build_kwargs = dict(preview_options or {})
+    prepare_kwargs.setdefault("metadata_fn", _default_metadata)
     prepared = prepare_fn(
         row,
         db=db,

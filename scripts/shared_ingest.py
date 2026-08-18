@@ -31,7 +31,7 @@ import os
 import sys
 import uuid
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 
 import psycopg2
 from psycopg2.extras import execute_values
@@ -176,6 +176,14 @@ class EmbeddingAlignmentError(Exception):
 
 
 _openai_client: Optional[OpenAI] = None
+EMBEDDING_MODEL = "text-embedding-3-small"
+
+
+class EmbeddingBatchComputation(NamedTuple):
+    output: List[List[float]]
+    model: str
+    usage: Optional[Dict[str, int]]
+    cost_usd: Optional[float]
 
 
 def _get_openai_client() -> OpenAI:
@@ -185,7 +193,27 @@ def _get_openai_client() -> OpenAI:
     return _openai_client
 
 
-def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
+def _embedding_response_usage(response) -> Optional[Dict[str, int]]:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    normalized = {}
+    for destination, candidates in (
+        ("input_tokens", ("input_tokens", "prompt_tokens")),
+        ("output_tokens", ("output_tokens", "completion_tokens")),
+        ("total_tokens", ("total_tokens",)),
+    ):
+        for candidate in candidates:
+            value = getattr(usage, candidate, None)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                normalized[destination] = value
+                break
+    return normalized or None
+
+
+def _embed_batch_verified_with_evidence(
+    texts: List[str],
+) -> EmbeddingBatchComputation:
     """Batch-embed texts, sub-batched at EMBED_BATCH_SIZE (matching
     backend/app/services/embeddings.py's own sub-batch size), verifying the
     OpenAI response's own `item.index` against intended position within
@@ -199,20 +227,33 @@ def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
     Raises EmbeddingAlignmentError (never silently truncates, reorders, or
     proceeds) on: a sub-batch returning a different item count than it was
     sent, an item.index outside the sub-batch's range, or any position no
-    item was ever written to. Returns a list the same length as `texts`,
-    in the same order.
+    item was ever written to. The computation output is a list the same
+    length as `texts`, in the same order, alongside provider evidence.
     """
     if not texts:
-        return []
+        return EmbeddingBatchComputation([], EMBEDDING_MODEL, None, None)
     client = _get_openai_client()
     embeddings: List[Optional[List[float]]] = [None] * len(texts)
+    usage_rows: List[Dict[str, int]] = []
+    response_models = set()
+    costs: List[float] = []
+    every_cost_available = True
     for start in range(0, len(texts), EMBED_BATCH_SIZE):
         batch = texts[start:start + EMBED_BATCH_SIZE]
         response = client.embeddings.create(
             input=batch,
-            model="text-embedding-3-small",
+            model=EMBEDDING_MODEL,
             dimensions=1536,
         )
+        response_models.add(getattr(response, "model", None) or EMBEDDING_MODEL)
+        response_usage = _embedding_response_usage(response)
+        if response_usage is not None:
+            usage_rows.append(response_usage)
+        raw_cost = getattr(response, "cost_usd", None)
+        if isinstance(raw_cost, (int, float)) and not isinstance(raw_cost, bool):
+            costs.append(float(raw_cost))
+        else:
+            every_cost_available = False
         data = response.data
         if len(data) != len(batch):
             raise EmbeddingAlignmentError(
@@ -233,7 +274,28 @@ def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
             f"embed batch never returned an item for position(s) {missing} "
             f"out of {len(texts)} -- refusing to proceed with gaps"
         )
-    return embeddings
+    if len(response_models) != 1:
+        raise EmbeddingAlignmentError("embedding provider returned inconsistent models")
+    usage = None
+    if len(usage_rows) == (len(texts) + EMBED_BATCH_SIZE - 1) // EMBED_BATCH_SIZE:
+        common_fields = set.intersection(*(set(row) for row in usage_rows))
+        usage = {
+            field: sum(row[field] for row in usage_rows)
+            for field in ("input_tokens", "output_tokens", "total_tokens")
+            if field in common_fields
+        } or None
+    output = [embedding for embedding in embeddings if embedding is not None]
+    return EmbeddingBatchComputation(
+        output=output,
+        model=next(iter(response_models)),
+        usage=usage,
+        cost_usd=sum(costs) if every_cost_available else None,
+    )
+
+
+def _embed_batch_verified(texts: List[str]) -> List[List[float]]:
+    """Legacy aligned-embedding API; evidence callers use its companion."""
+    return _embed_batch_verified_with_evidence(texts).output
 
 
 def _embed_chunks(

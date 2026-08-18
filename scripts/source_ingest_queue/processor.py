@@ -9,7 +9,7 @@ from typing import Callable, Dict, List, Optional
 import psycopg2
 import shared_ingest
 from app.services.chunker import chunk_text
-from app.services.metadata import extract_metadata
+from app.services.metadata import MetadataComputation, extract_metadata
 from app.services.source_resolver import is_source_servable
 from source_ingest_queue.fetcher import FetchRejected, FetchTransient, fetch_html, fetch_pdf
 from source_ingest_queue.html_extract import HtmlRejected, extract_article_bounded
@@ -69,6 +69,7 @@ class PreparedIngest:
     license_status: Optional[str] = None
     source_visibility: Optional[str] = None
     metadata_computed: bool = False
+    metadata_computation: Optional[MetadataComputation] = None
 
     @property
     def final_url(self) -> str:
@@ -316,11 +317,17 @@ def prepare_ingest(
         return prepared
 
     try:
-        metadata = metadata_fn(extracted.text)
+        metadata_result = metadata_fn(extracted.text)
     except Exception as exc:
         raise RetryableIngestError(
             "metadata_provider_failure", "metadata extraction failed"
         ) from exc
+    metadata_computation = None
+    if isinstance(metadata_result, MetadataComputation):
+        metadata = metadata_result.output
+        metadata_computation = metadata_result
+    else:
+        metadata = metadata_result
     if not isinstance(metadata, dict):
         raise RetryableIngestError(
             "metadata_provider_failure", "metadata response was invalid"
@@ -367,6 +374,7 @@ def prepare_ingest(
         license_status=prepared.license_status,
         source_visibility=prepared.source_visibility,
         metadata_computed=True,
+        metadata_computation=metadata_computation,
         duplicate=False,
     )
 
