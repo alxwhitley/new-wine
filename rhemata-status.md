@@ -24,7 +24,11 @@ Rhemata now uses a Beta Critical Path operating model. Codex is the primary
 working surface; native agents/worktrees may assist bounded tasks. The custom
 multi-provider coordinator and overnight harness are retired from active
 development. Their code and history remain intact but no follow-up work is
-authorized.
+authorized. This retirement is scoped to the custom multi-provider
+coordinator and its unattended dispatch mechanism only; it places no
+restriction on ordinary Codex sessions continuing bounded repo-only work
+while Alex is away from the keyboard — a normal working session is not an
+overnight harness run.
 
 Planning is now split by operational purpose: `PLAN.md` is the short active
 Blocker queue; `docs/roadmap.md` contains Scheduled, Triggered, and Parked work;

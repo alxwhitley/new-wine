@@ -446,7 +446,11 @@ fit one row, it's two sessions, not one hybrid session — split it.
 surface. Its native agents and worktrees may support bounded repo work. The
 custom multi-provider coordinator and overnight harness are retired from active
 development; the historical detail below no longer authorizes dispatch,
-commissioning, adapter work, or safety-fence work.
+commissioning, adapter work, or safety-fence work. This retirement is scoped
+to the custom multi-provider coordinator and its unattended dispatch
+mechanism only. It places no restriction on ordinary Codex sessions
+continuing bounded repo-only work while Alex is away from the keyboard; a
+normal working session is not an overnight harness run.
 
 **Hard rule — no exceptions.** Any session that writes to the database, by
 any mechanism (a `psycopg2` script, migration apply, SQL statement, or write
@@ -761,7 +765,11 @@ different row, per the hard rule above.
     reversing this decision. Repo work defaults to Codex's native workflow.
     Production database writes remain attended plain-script operations in the
     primary Codex session and are never delegated to a subagent or automated
-    coordinator.
+    coordinator. This retirement is scoped to the custom multi-provider
+    coordinator and its unattended dispatch mechanism only — it does not
+    restrict an ordinary Codex session from continuing bounded repo-only work
+    while Alex is away from the keyboard; a normal working session is not an
+    overnight harness run.
 
 16. **The source-ingest queue runner is clearance- and policy-gated; migration
     088 is already applied. Widened 2026-08-18 (PLAN.md W1–W4, PR #1
