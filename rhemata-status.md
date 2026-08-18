@@ -7,11 +7,17 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-18. `main` is at `2ef6860`, three commits ahead of the
-prior close: `189ef42` (harness-retirement scoping clarification), `82ec0f5`
-(quote-relevance rebuild + book-name-map consolidation), `2ef6860` (cleanup
-follow-up). The pre-existing untracked `Temporary-assets/` directory remains
-untouched.
+Last verified: 2026-08-19. `main` is at `642d023`, eight commits ahead of
+the previously recorded position (`2ef6860`): `2361e66` (prior session's
+own close commit), `aac7f7e` (legacy quote audit script), `046180d`
+(legacy quote audit results), `46a6a5f` (idempotency-race fix), `65404fc`
+(new blocker: quote quality), `5e6a8c9` (new settled decision: quote
+teacher scope open), `f4f07e0` (W7–W8 status update), `642d023`
+(idempotency-race Landmine resolved + migration-088 correction). The
+pre-existing untracked `Temporary-assets/` directory remains untouched. A
+20-quote read-only quote sample (`docs/audits/quote_quality_sample_2026-08-19.md`)
+was also pulled this session and deliberately left uncommitted, per
+instruction.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -57,29 +63,54 @@ propositions/provenance → usage evidence → proposal-only quote spans) exists
 and is mutation-tested to prove it never writes. Full technical detail:
 CLAUDE.md Invariant 16 and the new quote-containment Landmines entry.
 
-**Same-day follow-up (2026-08-18, repo-only, no DB writes, none needing
-Alex's attention at build time):** W7's first bullet is DONE (`82ec0f5`) —
-quote-selection relevance is now scored from each quote's own `quote_text`
-instead of the inherited document topic tag that tied every quote in a
-cluster to an identical score (confirmed live: all 14 real "Baptism in the
-Holy Spirit"-tagged quotes scored an exact tie under the old design), with a
-strict deterministic `(score, id)` tie-break and an idempotent
-`create_and_approve_quote()`. Quote rail stays off — `QUOTE_SELECTION_ENABLED`
-untouched. The same commit consolidated the five-copy book-name map (CLAUDE.md
-Landmines entry) into one canonical `backend/app/constants.py` source with a
-generated, drift-gated frontend copy. A further commit (`2ef6860`) deduped a
-second hand-duplicated ordinal-stripping regex (`study.py` /
-`reference_verifier.py`), synced a now-stale quote-analysis script, and
-recorded the book-map consolidation as done in `docs/roadmap.md`. Full detail:
-PLAN.md's W7–W8 entry.
+**2026-08-18 (repo-only, no DB writes):** W7's first two items are DONE
+(`82ec0f5`) — quote-selection relevance is now scored from each quote's
+own `quote_text` instead of the inherited document topic tag that tied
+every quote in a cluster to an identical score (confirmed live: all 14
+real "Baptism in the Holy Spirit"-tagged quotes scored an exact tie under
+the old design), with a strict deterministic `(score, id)` tie-break and
+an idempotent `create_and_approve_quote()`. Quote rail stays off —
+`QUOTE_SELECTION_ENABLED` untouched. The same commit consolidated the
+five-copy book-name map (CLAUDE.md Landmines entry) into one canonical
+`backend/app/constants.py` source with a generated, drift-gated frontend
+copy. A further commit (`2ef6860`) deduped a second hand-duplicated
+ordinal-stripping regex (`study.py` / `reference_verifier.py`), synced a
+now-stale quote-analysis script, and recorded the book-map consolidation
+as done in `docs/roadmap.md`.
 
-**Open, unverified finding:** an `/code-review` run on this session's changes
-was interrupted by Alex before its adversarial-verify step. One sub-check
-(before the interruption) found the new idempotency check is a non-atomic
-SELECT-then-INSERT with no DB uniqueness constraint or lock backing it — a
-genuine concurrent call could still duplicate a `quotes` row. PLAUSIBLE, not
-CONFIRMED. Recorded in PLAN.md's W7 entry; a future session should re-verify
-and, if it holds, harden before this path sees concurrent traffic.
+**2026-08-19 (read-only audit + repo-only fix, no DB writes):** the legacy
+quote-relevance audit ran (`docs/audits/quote_legacy_relevance_audit_2026-08-18.md`,
+via the `rhemata_readonly_analysis` role) — 793 approved/pending quotes
+audited, 74.7% (592/793) fail relevance against their own inherited
+document-level topic label, 592 of 592 affected quotes are in Derek
+Prince's corpus. No decision made on the flagged rows; nothing changed.
+A 20-quote random read-only sample was also pulled for Alex
+(`docs/audits/quote_quality_sample_2026-08-19.md`, deliberately
+uncommitted) — Alex assessed roughly 20% as worth serving. **New blocker
+logged in PLAN.md:** "Quote quality — no quality bar exists anywhere in
+the quote pipeline," not scoped this session.
+
+The idempotency race flagged 2026-08-18 (PLAUSIBLE, not CONFIRMED) is now
+RESOLVED: closed via a Postgres session-level advisory lock in
+`create_and_approve_quote()` (`quotes.py::_creation_lock`), no migration
+required, mutation-proven with real threads racing the real function
+(commits `aac7f7e`, `046180d`, `46a6a5f`). **Correction:** an earlier
+claim that migration 088 provided a unique-constraint backstop on quotes
+was false — migration 088 is `source_ingest_runner.sql`, unrelated; no
+unique constraint of any kind existed on the quotes tables before this
+fix.
+
+**New settled decision, 2026-08-19 (CLAUDE.md #28):** quote teacher scope
+is OPEN — a relevant quote may appear on any answer about the subject
+regardless of which teacher's material the answer prose was generated
+from. Alex's explicit decision; accepted risk (teacher misrepresentation,
+ranked failure mode #2) recorded verbatim in CLAUDE.md. Requires
+presentation (visual separation, attribution attached to the quote
+itself, never inferred from surrounding prose) to be designed and settled
+before the quote rail is re-enabled.
+
+Full detail: PLAN.md's W7–W8 entry and its new "Quote quality" blocker;
+CLAUDE.md's quote-containment Landmines entry and settled decision #28.
 
 A local-only, unpushed commit `cefcae5` ("v11 harness prep") sits in the
 detached-HEAD worktree `~/.codex/worktrees/ca07/rhemata`, authored 2026-08-17
@@ -102,7 +133,11 @@ excluded from that assessment. Nothing pruned.
 
 ## Classified work
 
-**Blocker — active:** none. W1–W4 (repository-only) is complete and merged.
+**Blocker — active:** none currently being worked. One new blocker logged,
+not scoped: "Quote quality — no quality bar exists anywhere in the quote
+pipeline" (PLAN.md) — required before the quote rail is re-enabled;
+deliberately not solved this session, Alex's explicit call. W1–W4
+(repository-only) is complete and merged.
 
 **Blocker — waiting:** W5–W6, all human/production-only gates, unchanged by the
 merge — Alex selects and approves one hidden web article, confirms
@@ -111,8 +146,13 @@ code to the live Railway backend (repo merge alone does not put it into
 production); then approves running a real (non-dry-run) preview; then one
 hidden row-pinned write with reconciliation, idempotency, and rollback proof;
 then eligibility/visibility/quote-repair decisions. W7's remaining sub-items
-(teacher-scope/label choice, legacy-quote audit), W8 (article-backed proof),
-and W9 (recoverability) remain queued behind W5–W6.
+— the visible quote label choice (source/work title vs. semantic topic tag;
+teacher scope itself is now decided, CLAUDE.md #28, open scope) and the
+legacy-quote audit (now PARTIAL — ran, no decision on the flagged rows) —
+W8 (article-backed proof), and W9 (recoverability) remain queued behind
+W5–W6. Presentation design for open-scope quotes (visual separation,
+attribution attached to the quote itself) is also required before the
+quote rail is re-enabled, per CLAUDE.md #28, and is not yet done.
 
 **Scheduled:** broad visible-default policy, general prompt/claim-support work,
 B1–B7 product work, and remaining corpus work after the web-article proof.
@@ -137,13 +177,18 @@ Still the attended W5–W6 gate: Alex selects and approves one hidden web
 article, approves deploying quote containment to production, then runs the
 real preview, the single hidden row-pinned write, and idempotency/rollback
 proof, before any eligibility, visibility, or quote-repair decision. No
-further repository-only work is queued ahead of that gate — W7's first bullet
-was pulled forward and executed same-day since it needed no DB write and no
-Alex decision; nothing else in W7–W9 can move without Alex.
+further repository-only work is queued ahead of that gate. The new "Quote
+quality" blocker and the presentation-design requirement from CLAUDE.md #28
+are additional prerequisites for quote-rail re-enablement specifically —
+neither is scoped yet and neither changes the current W5–W6 priority.
 
-Process baseline for this session: two unplanned-but-authorized
-investigations completed (quote relevance + idempotency, book-name-map
-consolidation, both explicitly requested), one small follow-up cleanup pass
-(also requested), zero findings promoted to Blocker, one new finding recorded
-as PLAUSIBLE-not-CONFIRMED (idempotency race), zero active blockers, one
-waiting on Alex.
+Process baseline for this session (2026-08-19): one read-only audit
+completed (legacy quote relevance, explicitly requested), one read-only
+quote sample pulled for Alex (explicitly requested, deliberately
+uncommitted), one repo-only fix completed with a mutation-proven test
+(idempotency race, explicitly requested), one prior PLAUSIBLE-not-CONFIRMED
+finding closed, one prior factual claim (migration 088) corrected, one new
+finding promoted to Blocker (quote quality, not scoped — Alex's explicit
+call to log rather than chase), one new settled decision recorded (quote
+teacher scope, open), zero database writes, zero deploys, zero active
+blockers being worked, one waiting on Alex.
