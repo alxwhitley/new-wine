@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-Read-only analysis of QUOTE_TOPIC_SIMILARITY_THRESHOLD effects.
+Read-only analysis of QUOTE_PASSAGE_SIMILARITY_THRESHOLD effects.
 
-Reconstructs the quote-topic / question similarity scores that the live answer
-path actually evaluated, using the same embedding model and cosine-similarity
-implementation as production. Compares the current 0.40 threshold against lower
-alternatives (0.35, 0.30, 0.25) and emits a markdown report.
+Reconstructs the quote-passage / question similarity scores the live answer
+path would evaluate today, using the same embedding model and cosine-
+similarity implementation as production. Scores each candidate against the
+quote's own quote_text (2026-08-18 relevance rebuild -- see
+app.services.quotes.select_quotes_for_answer's docstring), NOT against
+quotes.topic, which this report scored against before that rebuild and which
+production no longer uses for selection. Compares the current 0.35 threshold
+against lower alternatives (0.30, 0.25, 0.20) and emits a markdown report.
 
 No DB writes. No change to production behavior or to the threshold constant.
 
@@ -36,9 +40,9 @@ from services.embeddings import cosine_similarity, embed_batch, embed_text  # no
 
 # Production constants at the time of analysis (kept inline so this script does
 # not depend on the full quotes module import tree).
-QUOTE_TOPIC_SIMILARITY_THRESHOLD = 0.40
+QUOTE_PASSAGE_SIMILARITY_THRESHOLD = 0.35
 MAX_QUOTES_PER_ANSWER = 3
-TEST_THRESHOLDS = [0.40, 0.35, 0.30, 0.25]
+TEST_THRESHOLDS = [0.35, 0.30, 0.25, 0.20]
 
 REPORT_DIR = repo_root / "reports"
 
@@ -133,7 +137,7 @@ def build_report(
     jobs: List[dict],
     quotes: Dict[str, dict],
     question_embeddings: Dict[str, List[float]],
-    topic_embeddings: Dict[str, List[float]],
+    text_embeddings: Dict[str, List[float]],
 ) -> str:
     # Pair-level scoring, restricted to quotes whose teacher was considered.
     pairs: List[dict] = []
@@ -148,7 +152,7 @@ def build_report(
             if quote["teacher_source_id"] not in considered_teachers:
                 continue
             q_vec = question_embeddings[question]
-            t_vec = topic_embeddings[quote["topic"]]
+            t_vec = text_embeddings[quote["quote_text"]]
             score = cosine_similarity(q_vec, t_vec)
             pair = {
                 "job_id": job["id"],
@@ -198,7 +202,7 @@ def build_report(
             job_selections[threshold][job_id] = selected_ids
 
     baseline_job_ids_with_quotes: set = set()
-    for job_id, selected_ids in job_selections[QUOTE_TOPIC_SIMILARITY_THRESHOLD].items():
+    for job_id, selected_ids in job_selections[QUOTE_PASSAGE_SIMILARITY_THRESHOLD].items():
         if selected_ids:
             baseline_job_ids_with_quotes.add(job_id)
 
@@ -216,8 +220,8 @@ def build_report(
 
         newly_selected_pairs = []
         newly_selected_job_ids: set = set()
-        if threshold != QUOTE_TOPIC_SIMILARITY_THRESHOLD:
-            baseline_ids = job_selections[QUOTE_TOPIC_SIMILARITY_THRESHOLD]
+        if threshold != QUOTE_PASSAGE_SIMILARITY_THRESHOLD:
+            baseline_ids = job_selections[QUOTE_PASSAGE_SIMILARITY_THRESHOLD]
             for job_id, selected_ids in job_selections[threshold].items():
                 baseline_for_job = set(baseline_ids.get(job_id, []))
                 new_ids = set(selected_ids) - baseline_for_job
@@ -242,7 +246,7 @@ def build_report(
     qualifying_but_empty = []
     for job in jobs:
         job_id = job["id"]
-        selected_at_40 = job_selections[QUOTE_TOPIC_SIMILARITY_THRESHOLD].get(job_id, [])
+        selected_at_40 = job_selections[QUOTE_PASSAGE_SIMILARITY_THRESHOLD].get(job_id, [])
         if selected_at_40 and not job["quote_ids"]:
             best = by_job[job_id][0]["score"] if by_job[job_id] else None
             qualifying_but_empty.append(
@@ -252,7 +256,7 @@ def build_report(
     # Build markdown.
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     lines: List[str] = [
-        "# Quote-Topic Similarity Threshold Analysis",
+        "# Quote-Passage Similarity Threshold Analysis",
         "",
         f"Generated: {now}",
         f"Script: `scripts/analyze_quote_threshold.py`",
@@ -261,7 +265,7 @@ def build_report(
         "",
         "This report reconstructs the similarity scores the live answer path used",
         "to decide which approved quotes to attach to served answers. It is",
-        "**read-only**: no database writes, no change to `QUOTE_TOPIC_SIMILARITY_THRESHOLD`,",
+        "**read-only**: no database writes, no change to `QUOTE_PASSAGE_SIMILARITY_THRESHOLD`,",
         "and no change to production quote-serving behavior.",
         "",
         "How the scores were produced:",
@@ -273,8 +277,8 @@ def build_report(
         "   by resolving `retrieved_chunk_ids` -> `documents.source_id`. Only quotes from",
         "   those teachers were treated as candidates, matching `select_quotes_for_answer()`'s",
         "   `considered_teacher_source_ids` filter.",
-        "4. Re-embedded each unique question and each quote topic with the production",
-        "   model (`text-embedding-3-small`, 1536 dimensions) using the same",
+        "4. Re-embedded each unique question and each quote's own quote_text with the",
+        "   production model (`text-embedding-3-small`, 1536 dimensions) using the same",
         "   `app.services.embeddings.embed_text()` / `embed_batch()` functions.",
         "5. Computed cosine similarity with the shared `cosine_similarity()` function.",
         "6. Applied the same top-`MAX_QUOTES_PER_ANSWER` cap the selector uses, per job.",
@@ -313,14 +317,14 @@ def build_report(
     lines.extend(
         [
             "",
-            "## Distribution at the current 0.40 threshold",
+            f"## Distribution at the current {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f} threshold",
             "",
             "Scores for candidate pairs that were **served** (present in `answer_jobs.quote_ids`)",
-            "vs. **rejected** (candidate pairs that scored below 0.40, were pushed out by the",
+            f"vs. **rejected** (candidate pairs that scored below {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}, were pushed out by the",
             "top-3 cap, or were never evaluated because the selector returned no IDs for the job).",
             "",
             f"- Pairs served in production: **{served_stats['count']}**",
-            f"- Pairs the selector algorithm would select at 0.40: **{len([p for p in pairs if p['score'] >= QUOTE_TOPIC_SIMILARITY_THRESHOLD])}**",
+            f"- Pairs the selector algorithm would select at {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}: **{len([p for p in pairs if p['score'] >= QUOTE_PASSAGE_SIMILARITY_THRESHOLD])}**",
         ]
     )
     if qualifying_but_empty:
@@ -379,11 +383,11 @@ def build_report(
             "",
             "- **Selected pairs**: total (question, quote) pairs that would be selected.",
             "- **Jobs with any quote**: distinct answered jobs receiving at least one quote.",
-            "- **New pairs vs 0.40**: pairs that qualify at this threshold but not at 0.40.",
-            "- **New jobs vs 0.40**: jobs that would receive a quote for the first time",
-            "  at this threshold (i.e., they received none at 0.40 but would receive at least one here).",
+            f"- **New pairs vs {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}**: pairs that qualify at this threshold but not at {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}.",
+            f"- **New jobs vs {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}**: jobs that would receive a quote for the first time",
+            f"  at this threshold (i.e., they received none at {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f} but would receive at least one here).",
             "",
-            "| Threshold | Selected pairs | Jobs with any quote | New pairs vs 0.40 | New jobs vs 0.40 |",
+            f"| Threshold | Selected pairs | Jobs with any quote | New pairs vs {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f} | New jobs vs {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f} |",
             "| --- | --- | --- | --- | --- |",
         ]
     )
@@ -399,7 +403,7 @@ def build_report(
             "",
             "## Samples of newly qualifying pairs",
             "",
-            "For each threshold below 0.40, every pair that newly qualifies is shown, because the",
+            f"For each threshold below {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}, every pair that newly qualifies is shown, because the",
             "corpus is small enough to review exhaustively. The 'Verdict' column is a plain-text",
             "first impression for human review, not a model-based label.",
             "",
@@ -407,7 +411,7 @@ def build_report(
     )
 
     for row in threshold_rows:
-        if row["threshold"] == QUOTE_TOPIC_SIMILARITY_THRESHOLD:
+        if row["threshold"] == QUOTE_PASSAGE_SIMILARITY_THRESHOLD:
             continue
         lines.append(f"### Threshold {row['threshold']:.2f}")
         lines.append("")
@@ -417,13 +421,13 @@ def build_report(
             continue
 
         lines.append(
-            "| Score | Question | Topic | Teacher | Served at 0.40? | Verdict |"
+            f"| Score | Question | Topic | Teacher | Served at {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}? | Verdict |"
         )
         lines.append("| --- | --- | --- | --- | --- | --- |")
         for p in sorted(
             row["newly_selected_pairs"], key=lambda x: x["score"], reverse=True
         ):
-            verdict = human_verdict(p["question"], p["topic"])
+            verdict = human_verdict(p["question"], p["quote_text"])
             question = p["question"].replace("\n", " ")
             if len(question) > 80:
                 question = question[:77] + "..."
@@ -440,7 +444,7 @@ def build_report(
             "Complete list of every (question, quote) candidate pair, sorted by score descending.",
             "Job IDs are shown so duplicate questions can be disambiguated.",
             "",
-            "| Score | Job | Question | Topic | Teacher | Served at 0.40? |",
+            f"| Score | Job | Question | Topic | Teacher | Served at {QUOTE_PASSAGE_SIMILARITY_THRESHOLD:.2f}? |",
             "| --- | --- | --- | --- | --- | --- |",
         ]
     )
@@ -459,7 +463,7 @@ def build_report(
             "",
             "This report presents the evidence; it does **not** recommend a threshold value.",
             "The data above shows how many additional quotes would be served at each lower",
-            "threshold and provides concrete question/topic pairs for human sanity-checking.",
+            "threshold and provides concrete question/quote pairs for human sanity-checking.",
             "",
         ]
     )
@@ -473,20 +477,27 @@ def fmt(value: Optional[float]) -> str:
     return f"{value:.4f}"
 
 
-def human_verdict(question: str, topic: str) -> str:
-    """Plain-text first impression for the sample table."""
-    q = question.lower()
-    t = topic.lower()
-    if t in q or any(word in q for word in t.split()):
-        return "looks like a direct topic match"
-    if t == "fasting" and any(word in q for word in ["fast", "fasting", "food", "eat", "abstain"]):
-        return "looks like a reasonable topic match"
-    if t == "waiting on god" and any(
-        word in q
-        for word in ["wait", "waiting", "patience", "patient", "god's timing", "timing"]
-    ):
-        return "looks like a reasonable topic match"
-    return "likely false positive"
+_STOPWORDS = {
+    "the", "and", "for", "you", "your", "with", "that", "this", "what", "how",
+    "does", "did", "will", "can", "are", "was", "were", "have", "has", "had",
+    "from", "about", "into", "then", "than", "when", "where", "who", "why",
+}
+
+
+def human_verdict(question: str, quote_text: str) -> str:
+    """Plain-text first impression for the sample table -- word overlap
+    between the question and the quote's OWN text, not its topic tag (the
+    2026-08-18 relevance rebuild moved scoring off the topic tag; this
+    heuristic follows). Not a model-based label."""
+    def _words(s: str) -> set:
+        return {w.strip(".,;:!?\"'") for w in s.lower().split() if len(w) > 3} - _STOPWORDS
+
+    overlap = _words(question) & _words(quote_text)
+    if len(overlap) >= 3:
+        return "strong word overlap with the question"
+    if len(overlap) >= 1:
+        return "some word overlap with the question"
+    return "no obvious word overlap -- inspect manually"
 
 
 def main() -> None:
@@ -504,16 +515,16 @@ def main() -> None:
 
             # Deduplicate texts before embedding.
             unique_questions = sorted({job["question"] for job in jobs})
-            unique_topics = sorted({q["topic"] for q in quotes.values()})
+            unique_texts = sorted({q["quote_text"] for q in quotes.values()})
 
             question_embeddings = {
                 text: vec for text, vec in zip(unique_questions, embed_all(unique_questions))
             }
-            topic_embeddings = {
-                text: vec for text, vec in zip(unique_topics, embed_all(unique_topics))
+            text_embeddings = {
+                text: vec for text, vec in zip(unique_texts, embed_all(unique_texts))
             }
 
-        report = build_report(jobs, quotes, question_embeddings, topic_embeddings)
+        report = build_report(jobs, quotes, question_embeddings, text_embeddings)
 
         REPORT_DIR.mkdir(exist_ok=True)
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")

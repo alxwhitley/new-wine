@@ -139,8 +139,8 @@ procedure; test guest-limit abuse; recheck admin minimums and the quote verifier
 
 Also parked: the unmerged Claude CLI harness adapter and all harness
 improvements; missing-author cleanup; one-off visibility reviews; quote-status
-cleanup; `jewish_perspectives`; the teacher-card refusal-copy question; shared
-BOOK_MAP consolidation; and extraction-attempt history instrumentation.
+cleanup; `jewish_perspectives`; the teacher-card refusal-copy question; and
+extraction-attempt history instrumentation.
 
 ### Horizon — requires a fresh specification
 

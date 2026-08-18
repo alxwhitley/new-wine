@@ -1,5 +1,8 @@
 """Shared constants for the Rhemata backend."""
 
+import re
+from typing import Optional
+
 # Bible book name -> 3-letter abbreviation mapping.
 #
 # This is the canonical source for book-name recognition across the whole
@@ -120,6 +123,32 @@ ABBREV_TO_NAME = {
     "JAS": "James", "1PE": "1 Peter", "2PE": "2 Peter", "1JN": "1 John",
     "2JN": "2 John", "3JN": "3 John", "JUD": "Jude", "REV": "Revelation",
 }
+
+
+def resolve_book_abbrev(book_raw: str) -> Optional[str]:
+    """Resolve an already-lowercased, stripped raw book-name capture (e.g.
+    the first group of a `"<book> <chapter>:<verse>"` regex match) to its
+    3-letter BOOK_MAP abbreviation, or None if it matches no known form.
+
+    Shared by app.routers.study.parse_ref and app.services.reference_
+    verifier._parse_verse_or_range, which each used to hand-maintain an
+    identical copy of this exact normalize-then-look-up sequence --
+    confirmed byte-identical, 2026-08-18. Edit here, not at either call
+    site; a future edit to only one copy is exactly how this drifted
+    silently before.
+    """
+    # Strip an ordinal suffix ("1st", "2nd", "3rd") glued directly onto the
+    # leading digit BEFORE the space-insertion step below. Without this,
+    # "1st samuel" normalizes to "1 st samuel" (space inserted after the
+    # bare digit, "st" left stuck to "samuel") which matches no BOOK_MAP key
+    # no matter how the map is widened. \b requires the suffix to end at a
+    # non-word boundary so this never fires inside "1thessalonians"/"2third"
+    # -style tokens where the letters "th"/"rd" are followed by more letters.
+    stripped = re.sub(r'^(\d)(?:st|nd|rd|th)\b', r'\1', book_raw)
+    # Normalize spacing for numbered books: "1 cor" -> "1 cor", "1cor" -> "1 cor"
+    normalized = re.sub(r'^(\d)\s*', r'\1 ', stripped).strip()
+    return BOOK_MAP.get(normalized) or BOOK_MAP.get(normalized.rstrip('s'))
+
 
 # ── Topic taxonomy (257 tags, 15 categories) ─────────────────────────────────
 # Keep in sync with scripts/taxonomy.py and taxonomy.md.
