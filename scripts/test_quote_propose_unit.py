@@ -96,15 +96,15 @@ def test_parse_happy_path() -> None:
         check("isinstance ProposedQuote", isinstance(c, ProposedQuote))
 
 
-def test_offset_mismatch_refused() -> None:
-    print("\n3. offset mismatch refused:")
+def test_offset_mismatch_repaired_when_unique() -> None:
+    print("\n3. wrong offsets repaired when quote_text is unique substring:")
     window, quote, start, end = _window_with_quote()
     tag = sorted(VALID_TAGS)[0]
     payload = {
         "candidates": [
             {
                 "quote_text": quote,
-                "char_start": start + 1,  # wrong
+                "char_start": start + 1,  # wrong on purpose
                 "char_end": end,
                 "restated_point": "x",
                 "topic_ids": [tag],
@@ -114,8 +114,12 @@ def test_offset_mismatch_refused() -> None:
         ]
     }
     cands, errors = parse_propose_response(json.dumps(payload), window)
-    check("zero candidates", cands == [])
-    check("offset_mismatch logged", any("offset_mismatch" in e for e in errors), str(errors))
+    check("one candidate after repair", len(cands) == 1, str(errors))
+    check("offsets_repaired logged", any("offsets_repaired" in e for e in errors), str(errors))
+    if cands:
+        check("repaired start", cands[0].char_start == start)
+        check("repaired end", cands[0].char_end == end)
+        check("text unchanged", cands[0].quote_text == quote)
 
 
 def test_invented_quote_refused() -> None:
@@ -136,10 +140,33 @@ def test_invented_quote_refused() -> None:
             }
         ]
     }
-    # Offsets point at real window slice which won't equal fake → mismatch.
     cands, errors = parse_propose_response(json.dumps(payload), window)
     check("zero candidates", cands == [])
-    check("has error", len(errors) >= 1)
+    check("not_substring logged", any("not_substring" in e for e in errors), str(errors))
+
+
+def test_ambiguous_substring_refused() -> None:
+    print("\n4b. ambiguous duplicate substring refused:")
+    quote = "Amen. Praise God forevermore and walk in faith daily now."
+    # Pad so length clears quality band concerns; uniqueness is what matters here.
+    window = quote + " middle " + quote
+    tag = sorted(VALID_TAGS)[0]
+    payload = {
+        "candidates": [
+            {
+                "quote_text": quote,
+                "char_start": 0,
+                "char_end": 3,  # wrong
+                "restated_point": "x",
+                "topic_ids": [tag],
+                "why_quotable": "y",
+                "standalone_ok": True,
+            }
+        ]
+    }
+    cands, errors = parse_propose_response(json.dumps(payload), window)
+    check("zero candidates", cands == [])
+    check("ambiguous logged", any("ambiguous_substring" in e for e in errors), str(errors))
 
 
 def test_no_valid_tags_refused() -> None:
@@ -295,8 +322,9 @@ def main() -> int:
     print("=" * 60)
     test_filter_topic_ids()
     test_parse_happy_path()
-    test_offset_mismatch_refused()
+    test_offset_mismatch_repaired_when_unique()
     test_invented_quote_refused()
+    test_ambiguous_substring_refused()
     test_no_valid_tags_refused()
     test_markdown_fence_and_standalone_false()
     test_propose_from_window_uses_model_fn()

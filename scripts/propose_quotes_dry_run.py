@@ -219,6 +219,8 @@ def evaluate_proposals_for_chunk(
                 "quality_rule": "no_candidates",
                 "quality_reason": "model returned no usable candidates",
                 "parse_errors": list(batch.parse_errors),
+                # Keep raw so offset/parse failures are diagnosable without a re-spend.
+                "raw_response": batch.raw_response,
                 "wrote": False,
             }
         )
@@ -380,7 +382,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     for i, chunk in enumerate(chunks, 1):
         print(
             "[%d/%d] %s chunk %s"
-            % (i, len(chunks), chunk["title"], chunk["chunk_index"])
+            % (i, len(chunks), chunk["title"], chunk["chunk_index"]),
+            flush=True,
         )
         rows = evaluate_proposals_for_chunk(
             chunk,
@@ -394,7 +397,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             if r.get("quote_text"):
                 print(
                     "  -> quality=%s/%s topics=%s"
-                    % (r["quality_ok"], r["quality_rule"], r.get("topic_ids"))
+                    % (r["quality_ok"], r["quality_rule"], r.get("topic_ids")),
+                    flush=True,
+                )
+            elif r.get("parse_errors"):
+                print(
+                    "  -> no usable candidates; parse_errors=%s"
+                    % (r.get("parse_errors"),),
+                    flush=True,
                 )
 
     # Hard reconciliation counts (attempted windows / proposals / quality / verify).

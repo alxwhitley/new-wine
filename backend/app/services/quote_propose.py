@@ -212,19 +212,27 @@ def parse_propose_response(
             errors.append("candidate_%d_bad_offsets" % i)
             continue
 
-        if char_start < 0 or char_end <= char_start or char_end > len(source_window):
-            errors.append("candidate_%d_offset_out_of_range" % i)
-            continue
-
-        sliced = source_window[char_start:char_end]
-        if sliced != quote_text:
-            # Strict: do not silently repair by searching for quote_text.
-            errors.append("candidate_%d_offset_mismatch" % i)
-            continue
-
-        if quote_text not in source_window:
-            errors.append("candidate_%d_not_substring" % i)
-            continue
+        # Models routinely emit wrong char offsets even when quote_text is an
+        # exact copy. Prefer declared offsets when they match; otherwise recover
+        # from a unique exact substring match. Ambiguous duplicates refuse —
+        # never guess which occurrence was meant.
+        if (
+            0 <= char_start < char_end <= len(source_window)
+            and source_window[char_start:char_end] == quote_text
+        ):
+            pass  # offsets already authoritative
+        else:
+            occurrences = source_window.count(quote_text)
+            if occurrences == 1:
+                char_start = source_window.index(quote_text)
+                char_end = char_start + len(quote_text)
+                errors.append("candidate_%d_offsets_repaired" % i)
+            elif occurrences == 0:
+                errors.append("candidate_%d_not_substring" % i)
+                continue
+            else:
+                errors.append("candidate_%d_ambiguous_substring" % i)
+                continue
 
         topic_ids = filter_topic_ids(
             item.get("topic_ids") or [],
