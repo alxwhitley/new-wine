@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import Dict, NamedTuple, Optional
 
 from groq import Groq
 
@@ -11,6 +12,13 @@ GROQ_MODEL = "llama-3.3-70b-versatile"
 _client = None
 
 
+class MetadataComputation(NamedTuple):
+    output: dict
+    model: str
+    usage: Optional[Dict[str, int]]
+    cost_usd: Optional[float]
+
+
 def _get_client():
     global _client
     if _client is None:
@@ -18,7 +26,26 @@ def _get_client():
     return _client
 
 
-def extract_metadata(text: str) -> dict:
+def _response_usage(response) -> Optional[Dict[str, int]]:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    fields = (
+        ("input_tokens", "input_tokens", "prompt_tokens"),
+        ("output_tokens", "output_tokens", "completion_tokens"),
+        ("total_tokens", "total_tokens"),
+    )
+    normalized = {}
+    for destination, *candidates in fields:
+        for candidate in candidates:
+            value = getattr(usage, candidate, None)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                normalized[destination] = value
+                break
+    return normalized or None
+
+
+def extract_metadata_with_evidence(text: str) -> MetadataComputation:
     words = text.split()[:1000]
     sample = " ".join(words)
 
@@ -59,4 +86,20 @@ def extract_metadata(text: str) -> dict:
     else:
         result["source_kind"] = "unknown"
         result["citation_mode"] = "silent_context"
-    return result
+    raw_cost = getattr(response, "cost_usd", None)
+    cost_usd = (
+        float(raw_cost)
+        if isinstance(raw_cost, (int, float)) and not isinstance(raw_cost, bool)
+        else None
+    )
+    return MetadataComputation(
+        output=result,
+        model=getattr(response, "model", None) or GROQ_MODEL,
+        usage=_response_usage(response),
+        cost_usd=cost_usd,
+    )
+
+
+def extract_metadata(text: str) -> dict:
+    """Legacy metadata API; evidence-aware callers use the companion boundary."""
+    return extract_metadata_with_evidence(text).output

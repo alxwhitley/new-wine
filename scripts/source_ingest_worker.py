@@ -12,6 +12,7 @@ import socket
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import unquote, urlparse, urlsplit, urlunsplit
@@ -37,6 +38,28 @@ from source_ingest_queue.processor import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("source_ingest_worker")
+
+
+def _uuid_argument(value: str) -> str:
+    try:
+        return str(uuid.UUID(value))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a UUID") from exc
+
+
+def _parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Durable source-ingest worker")
+    parser.add_argument("--once", action="store_true", help="drain ready work and exit")
+    parser.add_argument("--poll-interval", type=float, default=2.0)
+    parser.add_argument("--max-idle", type=float, default=None)
+    parser.add_argument("--dry-run-row", default=None, metavar="UUID")
+    parser.add_argument("--row-id", type=_uuid_argument, default=None, metavar="UUID")
+    args = parser.parse_args(argv)
+    if args.row_id is not None and not args.once:
+        parser.error("--row-id requires --once")
+    if args.row_id is not None and args.dry_run_row is not None:
+        parser.error("--row-id cannot be combined with --dry-run-row")
+    return args
 
 
 def _db_params_from_env() -> dict:
@@ -149,6 +172,7 @@ class Worker:
         max_idle: Optional[float] = None,
         worker_id: Optional[str] = None,
         lease_seconds: int = 300,
+        only_row_id: Optional[str] = None,
     ):
         self._db_factory = db_factory
         self._supabase_factory = supabase_factory
@@ -162,6 +186,7 @@ class Worker:
         self.max_idle = max_idle
         self.worker_id = worker_id or "%s-%d" % (socket.gethostname(), os.getpid())
         self.lease_seconds = lease_seconds
+        self.only_row_id = only_row_id
         self._heartbeat_interval = max(1.0, min(30.0, lease_seconds / 3.0))
         self._db = None
         self._supabase = None
@@ -191,9 +216,15 @@ class Worker:
             self._db.close()
             self._db = None
 
-    def tick(self) -> bool:
+    def tick(self, *, only_row_id: Optional[str] = None) -> bool:
         db = self._job_db()
-        row = self._jobs.claim_next(db, self.worker_id, self.lease_seconds)
+        target_row_id = self.only_row_id if only_row_id is None else only_row_id
+        row = self._jobs.claim_next(
+            db,
+            self.worker_id,
+            self.lease_seconds,
+            only_row_id=target_row_id,
+        )
         if not row:
             return False
 
@@ -303,7 +334,7 @@ class Worker:
         try:
             while not self._stop.is_set():
                 try:
-                    did_work = self.tick()
+                    did_work = self.tick(only_row_id=self.only_row_id)
                 except Exception:
                     logger.error("[%s] worker tick failed", self.worker_id)
                     self._stop.wait(min(5.0, max(0.1, self.poll_interval * 5)))
@@ -324,17 +355,13 @@ class Worker:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Durable source-ingest worker")
-    parser.add_argument("--once", action="store_true", help="drain ready work and exit")
-    parser.add_argument("--poll-interval", type=float, default=2.0)
-    parser.add_argument("--max-idle", type=float, default=None)
-    parser.add_argument("--dry-run-row", default=None, metavar="UUID")
-    args = parser.parse_args()
+    args = _parse_args()
 
     worker = Worker(
         poll_interval=args.poll_interval,
         once=args.once,
         max_idle=args.max_idle,
+        only_row_id=args.row_id,
     )
 
     def _handle(sig, frame):

@@ -24,13 +24,23 @@ review queue; see _log_quote_decision().
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Mapping, Optional, Tuple
 
 from app.services.embeddings import cosine_similarity, embed_batch, embed_text
 from app.services.quote_verifier import verify_quote_candidate
 
 logger = logging.getLogger(__name__)
+
+
+def quote_selection_enabled(env: Mapping[str, str] = os.environ) -> bool:
+    """Return whether live answers may attach existing quote IDs.
+
+    The quote rail is contained by default while the inherited topic labels
+    are repaired. Only the explicit lowercase opt-in enables selection.
+    """
+    return env.get("QUOTE_SELECTION_ENABLED") == "true"
 
 # The two teachers this rail is currently scoped to -- an application-level
 # curation decision (docs/audits/quote_rail_project3_audit_2026-08-06.md),

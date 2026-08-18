@@ -198,7 +198,11 @@ def _write_grounding_review_records(records: List[dict]) -> bool:
         GROUNDING_REVIEW_DIR.mkdir(parents=True, exist_ok=True)
         with open(GROUNDING_REVIEW_PATH, "a", encoding="utf-8") as f:
             for record in records:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                persisted_record = dict(record)
+                persisted_record.setdefault(
+                    "written_at", datetime.now(timezone.utc).isoformat()
+                )
+                f.write(json.dumps(persisted_record, ensure_ascii=False) + "\n")
         return True
     except Exception as exc:
         logger.error(
@@ -400,7 +404,6 @@ def _strip_ungrounded_references(
                 n_uncertain += 1
 
         review_records.append({
-            "written_at": datetime.now(timezone.utc).isoformat(),
             "document_id": document_id,
             "proposition_index": proposition_index,
             "reference": span.raw,
@@ -826,11 +829,15 @@ def _repair_unescaped_quotes(raw: str) -> str:
     return ''.join(out)
 
 
+_DEFAULT_GROUNDING_REVIEW_SINK = object()
+
+
 def extract_propositions(
     text: str,
     doc_id: str = "",
     speaker: Optional[str] = None,
     prompt_version: str = DEFAULT_PROMPT_VERSION,
+    grounding_review_sink=_DEFAULT_GROUNDING_REVIEW_SINK,
 ) -> List[dict]:
     """Send text to Groq and return parsed proposition list.
 
@@ -865,66 +872,41 @@ def extract_propositions(
     docstring for the exhaustive found/grounded/stripped accounting this
     guarantees.
     """
-    if prompt_version in ("v3.1", "v4"):
-        if not speaker:
-            raise ValueError(
-                f"prompt_version={prompt_version!r} requires a non-empty speaker name"
-            )
-        prompt = _select_prompt_template(prompt_version).format(speaker=speaker)
-    else:
-        prompt = _select_prompt_template(prompt_version)
-    try:
-        client = _get_groq()
-        # Allowed-reference-list block (PLAN.md #45 Phase 1, 2026-07-29) is
-        # appended unconditionally here -- this single line is downstream of
-        # the v3/v4 branch above, so it structurally covers BOTH prompt
-        # versions with no separate wiring and no opt-out parameter. It is
-        # concatenated as SEPARATE text after the tuned prompt constant, not
-        # injected into EXTRACTION_PROMPT/EXTRACTION_PROMPT_V4 themselves --
-        # those constants' literal text, and therefore prompt_fingerprint()'s
-        # digest of them, is unchanged by this addition.
-        msg = f"{prompt}\n\n---\n\n{text}" + _build_allowed_reference_block(text)
-        resp = client.chat.completions.create(
-            model=EXTRACTION_MODEL,
-            messages=[{"role": "user", "content": msg}],
-            temperature=0.2,
-            max_tokens=8192,
-        )
-        raw = resp.choices[0].message.content.strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            # The model-emitted nested-quotation defect: unescaped inner quotes in
-            # a `content` value. Repair deterministically and re-parse ONCE (not a
-            # model retry). If the repair still doesn't parse, the outer except
-            # below raises PropositionExtractionFailed -- never a silent bad write.
-            parsed = json.loads(_repair_unescaped_quotes(raw))
-    except Exception as exc:
-        logger.warning("PROPOSITION_EXTRACT_FAIL doc=%r error=%s", doc_id, exc)
-        raise PropositionExtractionFailed(str(exc)) from exc
-
-    return _apply_reference_grounding(parsed, text, doc_id)
+    return extract_propositions_with_evidence(
+        text,
+        doc_id=doc_id,
+        speaker=speaker,
+        prompt_version=prompt_version,
+        grounding_review_sink=grounding_review_sink,
+    ).output
 
 
-def _apply_reference_grounding(propositions: List[dict], text: str, doc_id: str) -> List[dict]:
-    """Applies the always-on reference-grounding strip (see
-    extract_propositions()'s own docstring) to every proposition in
-    `propositions`, against source text `text`. Runs OUTSIDE
-    extract_propositions()'s own try/except that raises
-    PropositionExtractionFailed -- a bug here must never be reported as a
-    network/parse failure of the model call, which already completed
-    successfully by the time this runs.
+class ReferenceGroundingComputation(NamedTuple):
+    propositions: List[dict]
+    review_records: List[dict]
+    n_found: int
+    n_grounded: int
+    n_stripped_fabricated: int
+    n_stripped_uncertain: int
+    n_kept_arbitration: int
 
-    Returns a NEW list, same length and same proposition_index values as
-    `propositions` -- only `content` is ever rewritten, and only to remove
-    stripped reference spans; no proposition is ever added or dropped here.
-    Asserts the exhaustive accounting (every reference found lands in
-    exactly one of grounded / stripped-fabricated / stripped-uncertain /
-    kept-via-arbitration -- PLAN.md #45 Phase 1, 2026-07-29 arbitration
-    build added the fourth bucket; see _strip_ungrounded_references()'s own
-    docstring for what each one means) before returning."""
+
+class PropositionExtractionComputation(NamedTuple):
+    """Provider evidence plus the exact grounded legacy extraction output."""
+
+    output: List[dict]
+    model: str
+    usage: Optional[Dict[str, int]]
+    cost_usd: Optional[float]
+    grounding: ReferenceGroundingComputation
+
+
+def compute_reference_grounding(
+    propositions: List[dict],
+    text: str,
+    doc_id: str,
+) -> ReferenceGroundingComputation:
+    """Return the complete grounding result without writing review records."""
     result: List[dict] = []
     all_review_records: List[dict] = []
     total_found = 0
@@ -956,21 +938,145 @@ def _apply_reference_grounding(propositions: List[dict], text: str, doc_id: str)
     ), (
         "reference-grounding accounting failed to reconcile: found=%d != "
         "grounded=%d + fabricated=%d + uncertain=%d + kept_arbitration=%d" % (
-            total_found, total_grounded, total_fabricated, total_uncertain,
+            total_found,
+            total_grounded,
+            total_fabricated,
+            total_uncertain,
             total_kept_arbitration,
         )
     )
+    return ReferenceGroundingComputation(
+        propositions=result,
+        review_records=all_review_records,
+        n_found=total_found,
+        n_grounded=total_grounded,
+        n_stripped_fabricated=total_fabricated,
+        n_stripped_uncertain=total_uncertain,
+        n_kept_arbitration=total_kept_arbitration,
+    )
 
-    if all_review_records:
-        _write_grounding_review_records(all_review_records)
+
+def _proposition_response_usage(response) -> Optional[Dict[str, int]]:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    normalized: Dict[str, int] = {}
+    for destination, candidates in (
+        ("input_tokens", ("input_tokens", "prompt_tokens")),
+        ("output_tokens", ("output_tokens", "completion_tokens")),
+        ("total_tokens", ("total_tokens",)),
+    ):
+        for candidate in candidates:
+            value = getattr(usage, candidate, None)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                normalized[destination] = value
+                break
+    return normalized or None
+
+
+def _publish_reference_grounding(
+    computation: ReferenceGroundingComputation,
+    doc_id: str,
+    review_sink=_DEFAULT_GROUNDING_REVIEW_SINK,
+) -> None:
+    if review_sink is _DEFAULT_GROUNDING_REVIEW_SINK:
+        review_sink = _write_grounding_review_records
+    if computation.review_records and review_sink is not None:
+        review_sink(computation.review_records)
 
     logger.info(
         "REFERENCE_GROUNDING doc=%r found=%d grounded=%d stripped_fabricated=%d "
         "stripped_uncertain=%d kept_arbitration=%d",
-        doc_id, total_found, total_grounded, total_fabricated, total_uncertain,
-        total_kept_arbitration,
+        doc_id,
+        computation.n_found,
+        computation.n_grounded,
+        computation.n_stripped_fabricated,
+        computation.n_stripped_uncertain,
+        computation.n_kept_arbitration,
     )
-    return result
+
+
+def extract_propositions_with_evidence(
+    text: str,
+    doc_id: str = "",
+    speaker: Optional[str] = None,
+    prompt_version: str = DEFAULT_PROMPT_VERSION,
+    grounding_review_sink=_DEFAULT_GROUNDING_REVIEW_SINK,
+) -> PropositionExtractionComputation:
+    """Run the legacy extraction/grounding path and retain provider evidence."""
+    if prompt_version in ("v3.1", "v4"):
+        if not speaker:
+            raise ValueError(
+                f"prompt_version={prompt_version!r} requires a non-empty speaker name"
+            )
+        prompt = _select_prompt_template(prompt_version).format(speaker=speaker)
+    else:
+        prompt = _select_prompt_template(prompt_version)
+    try:
+        client = _get_groq()
+        # Keep the closed reference block outside the tuned prompt literal so its
+        # fingerprint and the legacy provider request remain unchanged.
+        msg = f"{prompt}\n\n---\n\n{text}" + _build_allowed_reference_block(text)
+        response = client.chat.completions.create(
+            model=EXTRACTION_MODEL,
+            messages=[{"role": "user", "content": msg}],
+            temperature=0.2,
+            max_tokens=8192,
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = json.loads(_repair_unescaped_quotes(raw))
+    except Exception as exc:
+        logger.warning("PROPOSITION_EXTRACT_FAIL doc=%r error=%s", doc_id, exc)
+        raise PropositionExtractionFailed(str(exc)) from exc
+
+    grounding = compute_reference_grounding(parsed, text, doc_id)
+    _publish_reference_grounding(grounding, doc_id, grounding_review_sink)
+    raw_cost = getattr(response, "cost_usd", None)
+    cost_usd = (
+        float(raw_cost)
+        if isinstance(raw_cost, (int, float)) and not isinstance(raw_cost, bool)
+        else None
+    )
+    return PropositionExtractionComputation(
+        output=grounding.propositions,
+        model=getattr(response, "model", None) or EXTRACTION_MODEL,
+        usage=_proposition_response_usage(response),
+        cost_usd=cost_usd,
+        grounding=grounding,
+    )
+
+
+def _apply_reference_grounding(
+    propositions: List[dict],
+    text: str,
+    doc_id: str,
+    *,
+    review_sink=_DEFAULT_GROUNDING_REVIEW_SINK,
+) -> List[dict]:
+    """Applies the always-on reference-grounding strip (see
+    extract_propositions()'s own docstring) to every proposition in
+    `propositions`, against source text `text`. Runs OUTSIDE
+    extract_propositions()'s own try/except that raises
+    PropositionExtractionFailed -- a bug here must never be reported as a
+    network/parse failure of the model call, which already completed
+    successfully by the time this runs.
+
+    Returns a NEW list, same length and same proposition_index values as
+    `propositions` -- only `content` is ever rewritten, and only to remove
+    stripped reference spans; no proposition is ever added or dropped here.
+    Asserts the exhaustive accounting (every reference found lands in
+    exactly one of grounded / stripped-fabricated / stripped-uncertain /
+    kept-via-arbitration -- PLAN.md #45 Phase 1, 2026-07-29 arbitration
+    build added the fourth bucket; see _strip_ungrounded_references()'s own
+    docstring for what each one means) before returning."""
+    computation = compute_reference_grounding(propositions, text, doc_id)
+    _publish_reference_grounding(computation, doc_id, review_sink)
+    return computation.propositions
 
 
 def get_license_status(conn, source_id: str) -> Optional[str]:
@@ -982,6 +1088,87 @@ def get_license_status(conn, source_id: str) -> Optional[str]:
         )
         row = cur.fetchone()
     return row[0] if row else None
+
+
+class PropositionPayload(NamedTuple):
+    """Immutable DB-ready proposition computation shared by preview/storage."""
+
+    content: str
+    proposition_index: int
+    embedding: Tuple[float, ...]
+    prompt_version: str
+    prompt_fingerprint: str
+    model: str
+    embedding_model: str
+
+
+class PropositionPayloadContext(NamedTuple):
+    """Derived provenance shared by bulk preview and interleaved storage."""
+
+    prompt_version: str
+    prompt_fingerprint: str
+    model: str
+    embedding_model: str
+
+
+def build_proposition_payload_context(
+    *,
+    prompt_version: str,
+    model: str = EXTRACTION_MODEL,
+    embedding_model: str = "text-embedding-3-small",
+) -> PropositionPayloadContext:
+    return PropositionPayloadContext(
+        prompt_version=prompt_version,
+        prompt_fingerprint=prompt_fingerprint(prompt_version),
+        model=model,
+        embedding_model=embedding_model,
+    )
+
+
+def build_proposition_payload_item(
+    content: str,
+    proposition_index: int,
+    embedding: List[float],
+    *,
+    context: PropositionPayloadContext,
+) -> PropositionPayload:
+    """Build one canonical item from already-snapshotted source values."""
+    return PropositionPayload(
+        content=content,
+        proposition_index=proposition_index,
+        embedding=tuple(float(value) for value in embedding),
+        prompt_version=context.prompt_version,
+        prompt_fingerprint=context.prompt_fingerprint,
+        model=context.model,
+        embedding_model=context.embedding_model,
+    )
+
+
+def build_proposition_payload(
+    propositions: List[dict],
+    embeddings: List[List[float]],
+    *,
+    prompt_version: str,
+    model: str = EXTRACTION_MODEL,
+    embedding_model: str = "text-embedding-3-small",
+) -> Tuple[PropositionPayload, ...]:
+    """Build the one ordered, immutable proposition payload consumers use."""
+    if len(propositions) != len(embeddings):
+        raise ValueError("proposition embedding count mismatch")
+    context = build_proposition_payload_context(
+        prompt_version=prompt_version,
+        model=model,
+        embedding_model=embedding_model,
+    )
+    return tuple(
+        build_proposition_payload_item(
+            proposition["content"],
+            proposition["proposition_index"],
+            embedding,
+            context=context,
+        )
+        for proposition, embedding in zip(propositions, embeddings)
+    )
 
 
 def store_propositions(
@@ -997,13 +1184,14 @@ def store_propositions(
 
     clear_existing (book-chapter build, additive, trailing
     keyword-only-in-practice parameter, default True): when True --
-    every existing caller, since this is the default -- behavior is
-    BYTE-IDENTICAL to before this parameter existed: the
-    `DELETE FROM propositions WHERE document_id = %s` below runs as the
-    first statement, exactly as always. When False, that DELETE is skipped
-    entirely; everything else (the embed loop, the INSERT, the
-    proposition_chunks cartesian-product insert, the final commit) runs
-    unchanged. This exists for _extract_and_store_book_chapters() below,
+    every existing caller, since this is the default -- the
+    `DELETE FROM propositions WHERE document_id = %s` below remains the
+    first database statement. Each proposition is then embedded and inserted
+    before the next proposition is embedded, preserving the legacy provider/
+    persistence side-effect order. When False, that DELETE is skipped entirely;
+    everything else (the interleaved embed/INSERT loop, the proposition_chunks
+    cartesian-product insert, and the final commit) runs unchanged. This exists for
+    _extract_and_store_book_chapters() below,
     which issues its OWN single, document-level DELETE once before its
     chapter loop (never once per chapter) and then calls this function once
     per chapter with clear_existing=False, so a later chapter's store call
@@ -1067,18 +1255,12 @@ def store_propositions(
     Commits the transaction. Returns count inserted.
     fts column is GENERATED ALWAYS AS STORED — not included in INSERT.
     """
-    # Derived internally, every call, from the required prompt_version --
-    # never caller-suppliable (see docstring above). Computed before the
-    # DELETE/cursor block below on purpose: prompt_fingerprint() itself can
-    # raise (an unrecognized prompt_version still resolves to
-    # _select_prompt_template()'s v3 fallback today, so this is a defensive
-    # ordering choice, not a currently-reachable failure) -- if it ever did
-    # raise, this ordering guarantees that failure happens BEFORE the
-    # existing DELETE FROM propositions runs, never after, so a bad
-    # prompt_version can never wipe a document's existing rows and then
-    # fail before reinserting anything.
-    fingerprint = prompt_fingerprint(prompt_version)
-    model = EXTRACTION_MODEL
+    # Derive prompt provenance before the first database statement, matching
+    # the legacy sequencing. Canonical item construction stays shared with the
+    # preview, but embedding remains interleaved with each INSERT below.
+    payload_context = build_proposition_payload_context(
+        prompt_version=prompt_version,
+    )
 
     with conn.cursor() as cur:
         if clear_existing:
@@ -1089,11 +1271,19 @@ def store_propositions(
 
         inserted = 0
         stored_prop_ids: List[str] = []
-        for prop in propositions:
-            content = prop["content"]
-            prop_index = prop["proposition_index"]
+        for raw_proposition in propositions:
+            content = raw_proposition["content"]
+            proposition_index = raw_proposition["proposition_index"]
             embedding = embed_fn(content)
-            embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
+            proposition = build_proposition_payload_item(
+                content,
+                proposition_index,
+                embedding,
+                context=payload_context,
+            )
+            embedding_str = "[" + ",".join(
+                str(value) for value in proposition.embedding
+            ) + "]"
             prop_id = str(uuid.uuid4())
             cur.execute(
                 """INSERT INTO propositions
@@ -1103,12 +1293,12 @@ def store_propositions(
                 (
                     prop_id,
                     document_id,
-                    content,
+                    proposition.content,
                     embedding_str,
-                    prop_index,
-                    prompt_version,
-                    fingerprint,
-                    model,
+                    proposition.proposition_index,
+                    proposition.prompt_version,
+                    proposition.prompt_fingerprint,
+                    proposition.model,
                 ),
             )
             stored_prop_ids.append(prop_id)

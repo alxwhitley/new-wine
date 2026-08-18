@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Deterministic orchestration checks for the source-ingest worker."""
 
+import io
 import threading
 import unittest
+from contextlib import redirect_stderr
 from types import SimpleNamespace
 
 import source_ingest_worker
@@ -23,8 +25,8 @@ class FakeJobs:
         self.calls = []
         self.stage_results = []
 
-    def claim_next(self, db, worker_id, lease_seconds):
-        self.calls.append(("claim", db, worker_id, lease_seconds))
+    def claim_next(self, db, worker_id, lease_seconds, *, only_row_id=None):
+        self.calls.append(("claim", db, worker_id, lease_seconds, only_row_id))
         if not self.claims:
             return None
         claim = self.claims.pop(0)
@@ -55,6 +57,24 @@ class FakeJobs:
     def get_row(self, db, row_id, *, read_only=False):
         self.calls.append(("get", row_id, read_only))
         return {"id": row_id, "url": "https://example.com/doc.pdf"}
+
+
+class RowPinnedJobs(FakeJobs):
+    """Queue double that exposes an unrelated ready row if the pin is omitted."""
+
+    def __init__(self, *, row_states, fallback_id):
+        super().__init__()
+        self.row_states = dict(row_states)
+        self.fallback_id = fallback_id
+
+    def claim_next(self, db, worker_id, lease_seconds, *, only_row_id=None):
+        self.calls.append(("claim", db, worker_id, lease_seconds, only_row_id))
+        if only_row_id is None:
+            return {"id": self.fallback_id}
+        if self.row_states.get(only_row_id) == "claimable":
+            self.row_states.pop(only_row_id)
+            return {"id": only_row_id}
+        return None
 
 
 class FakeHeartbeat:
@@ -231,6 +251,118 @@ class WorkerTickTests(unittest.TestCase):
         self.assertGreaterEqual(len(jobs.calls), 2)
         self.assertEqual(jobs.calls[0][0], "claim")
         self.assertEqual(jobs.calls[1][0], "claim")
+
+
+class RowPinTests(unittest.TestCase):
+    ROW_ID = "11111111-1111-1111-1111-111111111111"
+    OTHER_READY_ID = "22222222-2222-2222-2222-222222222222"
+
+    def worker(self, jobs, prepare_fn=None, execute_fn=None):
+        return source_ingest_worker.Worker(
+            db_factory=FakeDb,
+            supabase_factory=lambda: "supabase",
+            prepare_fn=prepare_fn or (lambda row, **kwargs: prepared()),
+            execute_fn=execute_fn or (lambda value, **kwargs: outcome()),
+            jobs_api=jobs,
+            db_params_factory=lambda: {"dbname": "test"},
+            heartbeat_factory=FakeHeartbeat,
+            worker_id="worker-1",
+            poll_interval=0,
+            once=True,
+            only_row_id=self.ROW_ID,
+        )
+
+    def test_pinned_tick_claims_the_target_instead_of_another_ready_row(self):
+        jobs = RowPinnedJobs(
+            row_states={
+                self.ROW_ID: "claimable",
+                self.OTHER_READY_ID: "claimable",
+            },
+            fallback_id=self.OTHER_READY_ID,
+        )
+        prepared_rows = []
+        worker = self.worker(
+            jobs,
+            prepare_fn=lambda row, **kwargs: (
+                prepared_rows.append(row["id"]) or prepared()
+            ),
+        )
+
+        self.assertTrue(worker.tick())
+
+        self.assertEqual(prepared_rows, [self.ROW_ID])
+        self.assertEqual(jobs.calls[0][-1], self.ROW_ID)
+
+    def test_unclaimable_pinned_target_never_claims_another_ready_row(self):
+        cases = (
+            ({}, "missing"),
+            ({self.ROW_ID: "uncleared"}, "uncleared"),
+            ({self.ROW_ID: "not_ready"}, "not-ready"),
+            ({self.ROW_ID: "leased"}, "leased"),
+        )
+        for target_state, label in cases:
+            with self.subTest(label=label):
+                jobs = RowPinnedJobs(
+                    row_states={
+                        **target_state,
+                        self.OTHER_READY_ID: "claimable",
+                    },
+                    fallback_id=self.OTHER_READY_ID,
+                )
+                worker = self.worker(
+                    jobs,
+                    prepare_fn=lambda *args, **kwargs: self.fail(
+                        "unrelated row was processed"
+                    ),
+                )
+
+                self.assertFalse(worker.tick())
+                self.assertEqual(
+                    jobs.calls,
+                    [("claim", worker._db, "worker-1", 300, self.ROW_ID)],
+                )
+
+    def test_retry_does_not_fall_back_to_another_ready_row(self):
+        jobs = RowPinnedJobs(
+            row_states={self.ROW_ID: "claimable"},
+            fallback_id=self.OTHER_READY_ID,
+        )
+
+        def retry(*args, **kwargs):
+            raise RetryableIngestError("temporary", "retry later", attempted=False)
+
+        worker = self.worker(jobs, execute_fn=retry)
+
+        self.assertTrue(worker.tick())
+        self.assertFalse(worker.tick())
+
+        claim_calls = [call for call in jobs.calls if call[0] == "claim"]
+        self.assertEqual([call[-1] for call in claim_calls], [self.ROW_ID, self.ROW_ID])
+        self.assertNotIn(self.OTHER_READY_ID, [call[1] for call in jobs.calls if call[0] == "stage"])
+
+
+class RowPinCliTests(unittest.TestCase):
+    ROW_ID = "11111111-1111-1111-1111-111111111111"
+
+    def test_row_id_requires_once_and_accepts_a_uuid(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                source_ingest_worker._parse_args(["--row-id", self.ROW_ID])
+
+        args = source_ingest_worker._parse_args(["--once", "--row-id", self.ROW_ID])
+        self.assertEqual(args.row_id, self.ROW_ID)
+
+    def test_row_id_rejects_malformed_uuid(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                source_ingest_worker._parse_args(["--once", "--row-id", "not-a-uuid"])
+
+    def test_row_id_rejects_dry_run_combination(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                source_ingest_worker._parse_args(
+                    ["--once", "--row-id", self.ROW_ID, "--dry-run-row", self.ROW_ID]
+                )
 
 
 class DryRunTests(unittest.TestCase):

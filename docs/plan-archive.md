@@ -3,9 +3,9 @@
 > This is the archive for `/PLAN.md`. It holds the full pre-v6 file verbatim:
 > the version-history changelog, every roadmap item's build/decision narrative
 > (including items now marked done in the lean PLAN.md), resolved Open Decisions,
-> and the superseded/killed log. The **active roadmap lives in `/PLAN.md`** — read
-> that first; come here only for "why was X decided that way" / "what actually
-> happened in that session" detail that the lean file intentionally omits.
+> and the superseded/killed log. The **active blocker queue lives in `/PLAN.md`**;
+> later work lives in `/docs/roadmap.md`. Come here only for "why was X decided
+> that way" or "what happened in that session" detail.
 >
 > Archived 2026-08-07 as PLAN.md v5.33 → v6.0's restructure (leaner, phased,
 > parallelism-annotated active roadmap — the running version-history changelog
@@ -710,3 +710,53 @@ SP2 Phases 1–9 are now all DONE. Phase 10 (records correction) is this update 
 - Quotes in hybrid proposition cards — superseded by the separate verified table (#21).
 - "Precept Austin gift" — reversed; PA permanently excluded.
 - Launch-blocking framing — launch ~mid-2027; runway is for doing architecture right.
+
+---
+
+## Archived 2026-08-17 — PLAN.md v7.1 split
+
+Commit `95dc61c` is the exact, complete v7.1 plan immediately before the split
+into the current blocker plan and `docs/roadmap.md`. Use `git show
+95dc61c:PLAN.md` when exact wording or the full evidence narrative is required.
+
+The material retired from ordinary context includes:
+
+- the custom multi-provider coordinator, model-role tables, packet state
+  machine, O1-O6 harness construction/rehearsal, overnight probes, and deferred
+  safety-fence design;
+- completed foundation narratives and dated evidence already represented in
+  code, audits, git history, `CLAUDE.md`, or `ARCHITECTURE.md`;
+- F5's reconstruction of the stale 19/17 finding set and the accepted orphaned
+  admin PDF-upload exception;
+- completed dependency, quote-hardening, answer-path, study-panel, position,
+  citation, and ingestion foundations;
+- superseded provider-specific assignments in F2-F6 and B1-B7.
+
+The custom harness was retired on 2026-08-17 after attended experiments showed
+that self-tracked turn budgets and the conflict rule were not reliable enough,
+and two dispatched forks pursued unrelated investigations. An additive Claude
+CLI adapter remains on the unmerged branch
+`claude/harness-claude-cli-adapter` at `ca5101e`, without its required second
+review or commissioning. It is historical/parked evidence, not an active repair
+queue. Codex-native bounded agents remain the default workflow under
+`AGENTS.md`.
+
+The split intentionally changed document ownership:
+
+- `PLAN.md` — current Blockers only;
+- `docs/roadmap.md` — Scheduled, Triggered, and Parked work;
+- this file — completed, superseded, and historical reasoning.
+
+## Superseded 2026-08-17 — F2→F3→F4→F6 blocker order
+
+Alex explicitly replaced the frozen F2→F3→F4→F6 sequence after an ultra
+adversarial review found that migration 088 and an isolated processor proof had
+already completed, while the web-article preview and quote-relevance paths had
+larger immediate quality gaps than the plan represented. The active replacement
+is the row-pinned, hidden-source web-article fast path in `PLAN.md` and
+`docs/superpowers/plans/2026-08-17-web-article-beta-fast-path.md`.
+
+Recoverability was reordered, not waived: it remains mandatory before the first
+multi-item production batch. Broad visible-default policy, general prompt and
+claim-support work, and the general ingestion-ready verdict moved to Scheduled.
+New Wine PDF ingestion became Triggered on an Alex-accepted OCR benchmark.

@@ -44,7 +44,7 @@ later session makes deliberately).
    enumerate hundreds of thousands of questions in advance. No human review gate
    anywhere on the serving path. ⚠ *Tension to watch: the position serving path
    stores and re-serves generated positions and has a planned draft-review UI
-   (PLAN.md #48 / Open Decision #20(b)) — reconcile if/when that path goes live.*
+   (`docs/plan-archive.md` #48 / archived Open Decision #20(b)) — reconcile if/when that path goes live.*
 2. **Launch bar is "materially safer,"** not a demonstrated error rate. No public
    claim about fabrication frequency. Deterministic correctness where it can be
    guaranteed; honest disclosure where it cannot.
@@ -270,7 +270,7 @@ SEQUENCE (2026-08-03)".
     from a 4-teacher corpus position to a Prince-only teacher position, not
     a minor drift. **Corrected 2026-08-08 — no longer true: the revised
     one-hop design IS now built.** Open Decision #16 (topic list) is
-    RESOLVED (V1 adopted 2026-08-06/07, six topics — see PLAN.md Phase 3);
+    RESOLVED (V1 adopted 2026-08-06/07, six topics — see `docs/plan-archive.md`);
     the matcher (`match_stored_position()`) shipped 2026-08-07; the
     evidence-injection wiring itself shipped 2026-08-08 (commit `eca8070`,
     `backend/app/services/stored_position_evidence.py` + `producer.py`) and
@@ -442,36 +442,28 @@ this table first, identify the session type from objective properties of the
 task (not vibes), then follow its assigned path. If a task doesn't cleanly
 fit one row, it's two sessions, not one hybrid session — split it.
 
+**Current operating decision, 2026-08-17:** Codex is the primary working
+surface. Its native agents and worktrees may support bounded repo work. The
+custom multi-provider coordinator and overnight harness are retired from active
+development; the historical detail below no longer authorizes dispatch,
+commissioning, adapter work, or safety-fence work.
+
 **Hard rule — no exceptions.** Any session that writes to the database, by
-any mechanism (a `psycopg2` script, a migration apply, an SQL Editor
-statement, a write RPC), runs on the plain script path. Never
-`executor`/`planner-reviewer`. This holds regardless of how cleanly a prior
-harness session went — the 2026-07-25 document-linking build (migration 071)
-was a clean harness result and does not change this rule. Reason: the
-harness's write recorder is real ground truth for what it *does* record
-(`guard_pretooluse.py`, record-primary since commit `96bc3ff`), but
-`BASH_WRITE_INDICATORS` still deliberately over-flags benign Bash calls as
-writes (documented, open — `rhemata-status.md`'s "Known Harness Bugs"). A
-false-positive write flag costs real data-risk turns on a genuine DB-write
-session in a way it doesn't on a repo-only session, where the worst case is
-an extra review cycle. (The 2026-07-18 12-turn stall this over-flagging
-behavior is related to was itself fixed 2026-07-19, commit `d9ab1cc` — the
-residual risk named here is the over-flagging pattern, not that closed bug.)
-**Revisit trigger:** once the over-flagging classifier is narrowed (its own
-dedicated session, flagged but not scheduled) and a second clean DB-write
-harness session is deliberately run and reviewed, this rule gets revisited —
-not before, and not by default.
+any mechanism (a `psycopg2` script, migration apply, SQL statement, or write
+RPC), runs as an attended, explicitly approved plain-script operation. Never
+delegate a production database write to a subagent or automated coordinator;
+execute it only in the primary Codex session.
 
 | Session type | Objective trigger criteria | Path | Also load | Skip | Reason |
 |---|---|---|---|---|---|
 | **Database write** | Any Bash-run script, migration apply, or SQL statement performs INSERT/UPDATE/DELETE/ALTER/schema DDL against Supabase — including via `psycopg2` or the SQL Editor. | **Plain script.** Never harness. | N/A — harness not used | N/A — harness not used | Hard rule above. |
 | **Read-only diagnostic / audit** | Zero `Edit`/`Write` calls, zero DB mutation — SELECT-only queries, file reads, greps, read-only script runs. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | No build-then-judge loop needed for a single read-only pass; harness review overhead buys nothing here. |
-| **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or multiple ordered steps (new feature, new script plus its own verification, a refactor) — zero DB writes anywhere in the session. | **Harness** (`executor`/`planner-reviewer`). Permitted builders: Claude Code or Grok. Default reviewer for Grok-built work: Sonnet (Opus remains available). | `HARNESS.md` (always, for harness sessions); `ARCHITECTURE.md` (near-universal for build work); `PRODUCT.md` + `DESIGN.md` only if the task touches UI; `POSITIONING.md` only if it touches copy. | `PRODUCT.md`/`DESIGN.md`/`POSITIONING.md` unless the task's own surface requires them. | This is what the harness exists for — multi-step work that benefits from a planning/review split. |
+| **Repo-only multi-step build** | Task ships a working repo change across multiple files and/or ordered steps, with zero DB writes. | **Codex native workflow.** One primary agent; bounded subagents only when tasks are independent and ownership is explicit. | `ARCHITECTURE.md` for architecture; `PRODUCT.md` + `DESIGN.md` for UI; `POSITIONING.md` for copy. | Unrelated governing docs and historical harness material. | Keeps execution on the supported surface without multiplying discovery. |
 | **Repo-only single-script / trivial edit** | A single mechanical edit or one-shot script, no multi-step build sequence — zero DB writes anywhere in the session. | **Plain / direct terminal.** | N/A — harness not used | N/A — harness not used | A planning/review loop is overhead a one-shot change doesn't need. |
 | **Docs/records-only** | Task's only output is a change to `CLAUDE.md` / `PLAN.md` / `POSITIONING.md` / `DESIGN.md` / `rhemata-status.md`. | **Plain — chat proposes, terminal commits**, per the Project Knowledge Read Contract's propose→commit rule. | N/A — harness not used | N/A — harness not used | Structurally enforced, not just preferred: `guard_pretooluse.py` denies `Edit`/`Write` on all five governed files for any subagent — the harness physically cannot do this work. |
 
-**Harness builders and reviewers (settled 2026-08-13) — budget-driven swap,
-not a capability upgrade.** For this row — remaining repo-only multi-step
+**Historical harness builders and reviewers — retired 2026-08-17.** The
+following records the former model and is not an active instruction. For this row — remaining repo-only multi-step
 harness builds — Grok is a second permitted builder alongside Claude Code.
 The coordinator run loop is done (`ac53f76`, simulated workers). The
 safety fence is deferred, not cancelled: it gets built if a real
@@ -490,16 +482,13 @@ for review on anything Alex routes to it, and remains the reviewer of
 record for all existing completed O1–O4 work; this does not retroactively
 change any past verdict.
 
-**Stall-risk mitigation for harness sessions (repo-only multi-step build
-row):** if a harness session shows the same flagged-item count across ≥3
-consecutive turns with no underlying action changing (the 2026-07-18 stall's
-signature), abort to the plain path immediately rather than keep retrying —
-and log the abort in `rhemata-status.md`'s Known Harness Bugs section with
-the turn count and the flagged item, even if you route around it rather than
-fixing it that session.
+**Historical stall-risk evidence:** if an agent workflow shows the same
+flagged-item count across three consecutive turns with no underlying action
+changing (the 2026-07-18 stall's signature), stop retrying. Under the current
+rule, classify and park the finding unless it satisfies the Blocker gate.
 
 **The upcoming closeness check (Phase 2, paraphrase wording gate) falls
-under Repo-only multi-step build → harness**, for the build-and-test work
+under Repo-only multi-step build → Codex native workflow**, for build-and-test work
 itself (new detection script, its own verification pass, no DB write). If a
 later session runs that check against real corpus data and writes
 flags/results back to the database, *that* session is a **Database write**
@@ -628,7 +617,7 @@ different row, per the hard rule above.
     bypass-proofing build): `extract_propositions()`'s strip step arbitrates
     every UNGROUNDED/UNCERTAIN reference through the three-layer citation
     verifier (`scripts/citation_verifier_layers.py`, live-tested 2026-07-29
-    against 42 real corpus items — 78.6% overturn rate, PLAN.md #45.7)
+    against 42 real corpus items — 78.6% overturn rate, `docs/plan-archive.md` #45.7)
     before stripping: confirmed-absent (arbiter denies) strips as before;
     confirmed-present (arbiter overturns) is kept and logged as an overturn.
     Supersedes the 2026-07-28 "strip on mere failure to confirm" posture
@@ -649,8 +638,8 @@ different row, per the hard rule above.
     **Generation has now resumed and the backfill has run (2026-07-30,
     corrects this invariant's own earlier "still unresolved before
     generation resumes" framing — that precondition language predated the
-    run, it is not still open).** PLAN.md #46's human calibration ran and
-    closed 2026-07-30, before the run. The full backfill (PLAN.md #17/#49)
+    run, it is not still open).** `docs/plan-archive.md` #46's human calibration ran and
+    closed 2026-07-30, before the run. The full backfill (`docs/plan-archive.md` #17/#49)
     processed 515 documents, 508 succeeded — see rhemata-status.md for the
     complete accounting. **What remains genuinely unresolved, unchanged by
     that run:** the license gate and Precept-Austin lockout are still only
@@ -662,7 +651,7 @@ different row, per the hard rule above.
     the other 5 share. **All 7 since extracted 2026-08-02** (the 5 sermons via
     the now-fixed parser, the 2 books via the multi-call `process_book_document`
     path): the single-call limitation itself STANDS — the books simply no longer
-    go through the single-call path. See PLAN.md #17.
+    go through the single-call path. See `docs/plan-archive.md` #17.
 
 12. **Position generation must stay structurally source-blind.**
     `scripts/positions.py` has TWO — and only two — functions that call the
@@ -746,7 +735,7 @@ different row, per the hard rule above.
     build/serve time (`contributor_breakdown_from_db()`), NEVER a stored
     taxonomy of which teacher belongs to which family — that standing rule
     (PLAN.md track PL) is unchanged and non-negotiable. **Still open, NOT
-    closed by the ban lift:** PLAN.md Open Decision #13 (who owns the
+    closed by the ban lift:** archived Open Decision #13 in `docs/plan-archive.md` (who owns the
     teacher-vs-corpus scope-boundary judgment call) remains unresolved; the
     threshold that actually decides teacher vs corpus for a topic question
     (`positions.DOMINANCE_THRESHOLD` = 0.60 — a single teacher supplying ≥60%
@@ -765,43 +754,36 @@ different row, per the hard rule above.
     unblock a migration" — nullable provenance is exactly how Invariant
     10's hole opened in the first place.
 
-15. **Overnight harness runs may parallelize ingestion and app-build
-    work in two lanes.** Settled 2026-08-13; updated the same day.
-    The coordinator run loop is built (`ac53f76`, simulated workers
-    through a full night). The safety fence (per-worker access
-    permissions) is deferred, not cancelled, and is not a launch
-    blocker — the intended path to real overnight workers is a
-    narrow file allowlist plus Alex reading the morning report daily
-    for a week. **Revisit trigger:** the fence gets built if a real
-    overnight run causes damage that cannot be recovered from git, or
-    before any harness work reaches anything outside the repository.
-    Real AI workers running overnight is a separate milestone, still
-    blocked on that deferred fence. The two lanes are safe to run
-    concurrently because they are disjoint: separate worktrees,
-    separate file ownership; ingestion never touches app code, and
-    app builds never touch the corpus write path. This does NOT relax
-    the standing harness/DB-write separation — production database
-    writes still never run through the harness itself, day or night,
-    regardless of this decision.
+15. **The custom multi-provider coordinator and overnight harness are
+    retired from active development.** Settled 2026-08-17. Existing code,
+    branches, tests, and historical evidence remain intact, but no current
+    task may extend, commission, or depend on them without Alex explicitly
+    reversing this decision. Repo work defaults to Codex's native workflow.
+    Production database writes remain attended plain-script operations in the
+    primary Codex session and are never delegated to a subagent or automated
+    coordinator.
 
-16. **The source-ingest queue runner is clearance- and policy-gated, and its
-    migration remains a separate production decision.** The
-    deployed-but-inert first slice accepts only `pdf + single + declared`, claims only
+16. **The source-ingest queue runner is clearance- and policy-gated; migration
+    088 is already applied.** The deployed-but-inert first slice accepts only
+    `pdf + single + declared`, claims only
     `cleared_to_run=true`, resolves an existing non-sentinel source, and must
     pass canonical `is_source_servable()` without creating sources/aliases or
     changing visibility, license status, or safe mode. It retains complete
     extracted text through `shared_ingest.ingest_document()` but never retains
-    the PDF binary. Migration 088, a live dry run, any real item, and worker
-    deployment remain separately approved operations; merging or deploying
-    repository code does not authorize them.
+    the PDF binary. One isolated processor proof completed on 2026-08-17; it was
+    not a deployed-worker proof. Any further real item and worker deployment
+    remain separately approved operations; merging repository code does not
+    authorize them. Never reapply migration 088.
 
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- **`scripts/harness_coordinator/v1`'s `invoke.py` had no live-provider call
+- **PARKED — `scripts/harness_coordinator/v1` and its unmerged CLI adapter.**
+  The following is historical evidence, not authorized follow-up work.
+  `scripts/harness_coordinator/v1`'s `invoke.py` had no live-provider call
   path as of 2026-08-15 — corrected 2026-08-17, not still fully true as
-  originally stated.** A real (not synthetic) Claude Code CLI worker/reviewer
+  originally stated. A real (not synthetic) Claude Code CLI worker/reviewer
   adapter now exists on unmerged branch `claude/harness-claude-cli-adapter`
   (commit `ca5101e`, 2026-08-16, real `Alex Whitley`-authored commit, verified
   directly): additive to `invoke.py`'s existing synthetic-only path, opt-in
@@ -819,8 +801,8 @@ different row, per the hard rule above.
   single-agent method (direct executor/planner-reviewer invocation from
   within a session) remains the separate, working, proven mechanism — do not
   conflate the two when reading past references to "the coordinator" or "the
-  harness ran real workers." Full detail: `rhemata-status.md`'s Known Harness
-  Bugs, 2026-08-17.
+  harness ran real workers." Full detail: `rhemata-status.md`'s Retired harness
+  evidence, 2026-08-17.
 - **A single, confirmed ingestion-chokepoint bypass exists and was
   deliberately left in place — 2026-08-15 diagnostic.** An admin-only
   single-PDF-upload endpoint on the backend inserts `documents`/`chunks`
@@ -1200,7 +1182,7 @@ different row, per the hard rule above.
   is a real concurrency window at the 100-dial.
 
 - **RESOLVED 2026-08-08** — `ingest_helloao.py` now routes through
-  `shared_ingest.ingest_document()` (commit `929bc34`, PLAN.md Phase 5
+  `shared_ingest.ingest_document()` (commit `929bc34`, archived PLAN Phase 5 in `docs/plan-archive.md`
   #13). Verified via `--dry-run`, a real single-item write (independently
   confirmed in the DB, then deleted), and a full unfiltered batch
   (`attempted=198 stored=0 skipped=198 failed=0`, reconciled against the
@@ -1253,7 +1235,7 @@ different row, per the hard rule above.
   full-corpus text sweep for one known leak), but that's evidence, not a
   stored fact for those rows. Treat any claim about which prompt version
   produced any row dated before 2026-07-29 as unverified unless re-checked
-  by the same method (PLAN.md #45.5) — this caveat does NOT extend to the
+  by the same method (`docs/plan-archive.md` #45.5) — this caveat does NOT extend to the
   `v3`/`v3.1` rows written 2026-07-30, which carry real, queried-not-
   inferred provenance.
 - **Citation-fabrication scale claims from 2026-07-28 are superseded — do
@@ -1316,18 +1298,18 @@ different row, per the hard rule above.
   gap named here is now fixed (2026-07-28,
   `scripts/citation_verifier_layers.py`'s Layer 1,
   commit `ff74a42`)** — but that fix lives in the repurposed
-  generation-time verifier (PLAN.md #45.6), not in
+  generation-time verifier (`docs/plan-archive.md` #45.6), not in
   `reference_grounding.find_reference_spans()`, the scanner
   `detect_reference_fabrication.py` actually used to produce the baseline
   below. A trustworthy corpus-wide number still requires an actual
   corpus-wide re-run using the fixed recognition — demoted to later work,
-  not scheduled (PLAN.md #45.6). Local, gitignored
+  not scheduled (`docs/plan-archive.md` #45.6). Local, gitignored
   `reference_fabrication_review/corpus_findings.jsonl` holds the stale
   72-item list; treat every entry in it as a review candidate, not a
   confirmed problem. See also Invariant 11 — the strip mechanism this scan
   fed was itself found to have a backwards default; the re-wiring to a
   confirming step is now DONE (2026-07-30), so this specific blocker on the
-  backfill is cleared, though other preconditions (PLAN.md #49) remain.
+  backfill is cleared, though other archived preconditions (`docs/plan-archive.md` #49) remain.
 - **The book-name map exists as five independent hand-maintained copies
   that will drift out of sync with each other over time.** A 2026-07-28
   blast-radius survey (the BOOK_MAP ordinal/spelled/Roman-numeral fix,
@@ -1371,11 +1353,11 @@ different row, per the hard rule above.
   material without checking with Alex first. Vlad Savchuk and Zac Poonen — 61%
   of the current propositions layer between them — both entered via this
   route; a stale-looking ingest queue is a decision, not an oversight. See
-  `PLAN.md` #44 for the reason (duplicate clip/full-sermon content found the
+  `docs/plan-archive.md` #44 for the reason (duplicate clip/full-sermon content found the
   same day).
 - **No mechanism exists anywhere in this schema to link two documents as one
   work.** The standing "link, don't merge" policy for split-work groups and
-  duplicate clips (`PLAN.md` #44) has no table or column backing it yet —
+  duplicate clips (`docs/plan-archive.md` #44) has no table or column backing it yet —
   confirmed by a direct schema check 2026-07-25. Don't assume a linked-work
   concept is queryable; it has to be designed and built first.
 - **Book-length extraction now has a real, committed path — but it only
@@ -1392,15 +1374,15 @@ different row, per the hard rule above.
   failure mode twice (fixed once, a second mechanism found no clean fix)
   and is not safe to wire in without per-book verification. Do not assume
   `detect_book_chapters()` is live just because it exists in
-  `propositions.py` — check for actual callers. See PLAN.md #50 and Open
-  Decision #21. **This same structural gap is why quote extraction from all
+  `propositions.py` — check for actual callers. See `docs/plan-archive.md` #50
+  and `docs/roadmap.md` Decision 21. **This same structural gap is why quote extraction from all
   53 book-type documents was tabled indefinitely 2026-08-08** (read-only
   diagnostic `docs/audits/book_structure_diagnostic.md`, run that session:
   no body/apparatus or chapter-boundary structure is recorded anywhere in
   the schema for books, `quote_ineligible_reason` covers only 66 of 25,064
   book chunks across 10 of 53 documents, and the detector's two regressions
   above are exactly why it isn't safe to lean on for boundary-finding
-  either — see PLAN.md Phase 4).
+  either — see archived PLAN Phase 4 in `docs/plan-archive.md`).
 - **CORRECTED 2026-08-01 — no longer an open decision.** The two live
   imperfections below (originally found 2026-07-31) are now fixed at the
   data level, not just in code: commit `8e251c8` shipped the byline/
@@ -1416,7 +1398,7 @@ different row, per the hard rule above.
   propositions, same disambiguation method) was extracted and stored as
   proposition_index 149 — 148 → 149 live propositions. See
   `rhemata-status.md`'s "Live-DB corrections + Wesley's Journal real
-  write" entry for the full evidentiary detail. PLAN.md Open Decision #22
+  write" entry for the full evidentiary detail. Archived Open Decision #22 in `docs/plan-archive.md`
   should be closed to match — original text left below for the historical
   record, not because it's still open:
   - Two book documents already have live propositions with small, known,
@@ -1468,10 +1450,14 @@ within days and has already caused one round of false blockers.
 
 - Alex works fast — short messages, direct feedback.
 - Surface risks before building, not after.
-- All code changes stay in Claude Code. Don't suggest manual edits unless trivial.
+- Codex is the primary working surface. Use native subagents only for bounded,
+  independent work; do not revive the custom coordinator by default.
 - Read output directly — never ask Alex to copy-paste terminal output.
 - Check actual files before assuming structure.
 - Never log planned work as done. Never claim build state you can't see.
+- Follow `AGENTS.md`'s Beta Critical Path: discovery does not authorize an
+  investigation, every finding is classified, and the active session stops
+  when its original acceptance criteria pass.
 - **When an explicit instruction conflicts with what you directly know to be
   true from evidence already in hand, stop and report the conflict — do not
   silently decide which is right and act on your own resolution, even if
@@ -1499,19 +1485,22 @@ State lives in repo files. No Notion mirroring, no sync step (retired 2026-07-09
 
 | File | Owns |
 |---|---|
-| `CLAUDE.md` | This file. Invariants, stack, working rules. Always loaded. |
+| `CLAUDE.md` | Product invariants, stack, and landmines. Load implicated sections; read in full for governing changes. |
 | `ARCHITECTURE.md` | Tree, schema, scripts, env vars, commands. Load on demand. |
-| `HARNESS.md` | Executor/planner-reviewer gate design. Harness sessions only. |
+| `HARNESS.md` | Historical custom-harness design. Load only if Alex explicitly reopens that work. |
 | `POSITIONING.md` | Messaging, voice, product posture. Source of truth. |
 | `PRODUCT.md` | Who it's for, brand register, design principles, anti-references. Read before UI work. |
 | `DESIGN.md` | Styling-token authority. No hardcoded hex. |
-| `PLAN.md` | Roadmap, standing session rules, open decisions, findings log. |
+| `PLAN.md` | Current private-beta Blockers only. Always read before non-trivial work. |
+| `docs/roadmap.md` | Scheduled, Triggered, and Parked work. Load only for planning, classification, or trigger checks. |
+| `docs/plan-archive.md` | Completed, superseded, and historical plan reasoning. Load only when history is needed. |
 | `rhemata-status.md` | Live state only. Overwritten each session. Never durable truth. |
 
 **Writer rules:** terminal authors and writes `CLAUDE.md`, `ARCHITECTURE.md`,
 `HARNESS.md`, `PRODUCT.md`, `DESIGN.md`, `rhemata-status.md` — from
-confirmed-working builds only. `PLAN.md` content is chat-originated: chat decides roadmap, terminal writes
-it verbatim. Terminal is the pen, not the author. Chat never edits any file
+confirmed-working builds only. `PLAN.md` and `docs/roadmap.md` content is
+chat-originated: chat decides priority and classification, terminal writes it
+verbatim. Terminal is the pen, not the author. Chat never edits any file
 directly.
 
 **Eviction rule for this file:** every line must change what you'd do on a normal
