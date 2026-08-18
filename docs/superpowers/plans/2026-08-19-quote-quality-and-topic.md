@@ -209,7 +209,11 @@ Requirements (Settled #28):
 **Files:**
 - Create/extend: `scripts/test_quote_rail_regressions.py` (baptism false-positive class, no bad quote ids, etc.)
 
-- [ ] **Step 1:** Run regressions with flag off (selection dry).
+- [x] **Step 1:** Run regressions with flag off (selection dry) —
+  `scripts/test_quote_rail_regressions.py` (`1eec654`): flag-off
+  producer/SSE, no bad/legacy IDs, baptism FP class, honest no-support,
+  teacher-card no quote surface, presentation source contract, eligibility
+  mutation. Article-supported proof explicitly deferred until W5–W6.
 - [ ] **Step 2:** Alex sets `QUOTE_SELECTION_ENABLED=true` in deployed env only after sign-off.
 - [ ] **Step 3:** Smoke one real answer; confirm quote IDs are gold-pipeline only.
 - [ ] **Step 4:** Docs/status update.

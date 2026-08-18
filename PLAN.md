@@ -92,11 +92,15 @@ Decisions locked in the spec + CLAUDE.md Settled #29:
 
 ### Q3 — Regressions + attended quote-rail re-enable
 
-**Status:** QUEUED after Q2. (Absorbs prior W8 quote proofs.)
+**Status:** Step 1 (flag-off / selection dry) DONE (`1eec654`,
+`scripts/test_quote_rail_regressions.py`). Remaining steps wait on gold
+writes + presentation sign-off + Alex re-enable. (Absorbs prior W8 quote
+proofs.)
 
-- [ ] Baptism regression; article-supported answer if article path is live;
-  honest no-support; exact chunk/citation IDs; **no bad quote IDs**; bounded
-  teacher-card regression.
+- [x] Flag-off regressions: baptism FP class; honest no-support; exact
+  chunk IDs; **no bad quote IDs**; bounded teacher-card (no quote rail);
+  eligibility mutation. Article-supported answer proof deferred until
+  W5–W6 lands a live article.
 - [ ] Attended `QUOTE_SELECTION_ENABLED=true` — Alex only.
 
 ### W5–W6 — One quarantined article proof
