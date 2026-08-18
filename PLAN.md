@@ -80,6 +80,39 @@ concurrent traffic.
   answer, exact retrieved chunk/citation IDs, no bad quote IDs, and a bounded
   teacher-card regression before making the article visible.
 
+### Quote quality — no quality bar exists anywhere in the quote pipeline
+
+**Status:** OPEN, not scoped. Required before the quote rail is re-enabled.
+
+Finding, 2026-08-19: Alex read a 20-quote random sample
+(docs/audits/quote_quality_sample_2026-08-19.md) and assessed roughly 20%
+as quotes worth serving. The rest are grammatically complete but
+substantively weak — mid-argument connective sentences, or sentences
+referencing context the reader cannot see ("Verse 17, this is a wonderful
+verse").
+
+Root cause is by design, not a defect: when per-quote human approval was
+removed 2026-08-08 (Settled decision #18), every replacement check was
+deterministic — exact-substring match, speaker confirmation,
+sentence-boundary/completeness, commentary exclusion, document clearance,
+per-work cap. None of them assess whether a quote is worth reading.
+Nothing in the pipeline ever has.
+
+Required before the quote rail is re-enabled: a process for producing
+quality quotes. Not scoped yet. Deliberately not solved this session —
+Alex's explicit call to log it rather than chase it.
+
+Two open sub-questions, both unresolved and not investigated:
+(a) What selected the candidate spans in the first place — whether an LLM
+proposed them (permitted under Settled decision #16) or a mechanical rule
+did. This changes what the fix looks like and has not been checked.
+(b) The boundary-proximity/sentence-completeness check (Settled decision
+#18) did not catch a real failure in the sample: quote 7 (Derek Prince,
+"The New Testament Evangelist") runs past the end of its own point and
+swallows the opening sentence of the next section ("We come to the
+seventh unity, one God and Father."). One confirmed case, cause unknown,
+not investigated.
+
 ### W9 — Recoverability and first small batch
 
 **Status:** QUEUED after W8.
