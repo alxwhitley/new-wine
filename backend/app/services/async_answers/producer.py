@@ -132,8 +132,12 @@ def current_policy(supabase) -> Dict[str, Any]:
     this to build the enqueue key; the producer regenerates under current filters
     at run time (documented cache-staleness tradeoff at zero users)."""
     from app.services import answer_toolbox
+    from app.services.quotes import quote_selection_enabled
     filters = get_disabled_filters()
     include_copyrighted = bool(filters["include_copyrighted"]) and answer_toolbox.INCLUDE_COPYRIGHTED_ENV
+    # Quote attachment changes the delivered answer payload, so durable reuse
+    # and single-flight identity must change with the effective gate state.
+    quote_policy = "true" if quote_selection_enabled() else "false"
     snapshot = {
         "source_kinds": sorted(filters.get("source_kinds") or []),
         "source_names": sorted(filters.get("source_names") or []),
@@ -143,7 +147,7 @@ def current_policy(supabase) -> Dict[str, Any]:
         "filters": snapshot,
         "evidence_version": get_corpus_version(supabase),  # real shared signal (mig 079)
         "prompt_version": PROMPT_VERSION,
-        "policy_version": POLICY_VERSION,
+        "policy_version": "%s:quote_selection=%s" % (POLICY_VERSION, quote_policy),
     }
 
 

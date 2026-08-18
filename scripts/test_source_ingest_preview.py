@@ -303,7 +303,7 @@ class CompletePreviewTests(unittest.TestCase):
         self.assertIs(proposition["eligible"], False)
         self.assertEqual(proposition["prompt_version"], "v3.1")
         self.assertEqual(len(proposition["prompt_fingerprint"]), 64)
-        self.assertEqual(proposition["model"], "test-proposition-model")
+        self.assertEqual(proposition["model"], propositions.EXTRACTION_MODEL)
         self.assertEqual(proposition["chunk_ids"], [chunk["id"]])
         self.assertNotIn("ignored_untrusted_field", proposition)
 
@@ -319,6 +319,10 @@ class CompletePreviewTests(unittest.TestCase):
         computation = first["computation"]
         self.assertEqual(computation["chunk_embeddings"]["usage"]["input_tokens"], 40)
         self.assertEqual(computation["proposition_extraction"]["usage"]["output_tokens"], 20)
+        self.assertEqual(
+            computation["proposition_extraction"]["model"],
+            "test-proposition-model",
+        )
         self.assertEqual(computation["known_cost_usd"], 0.0035)
         self.assertEqual(
             computation["known_tokens"],
@@ -481,6 +485,7 @@ class CompletePreviewTests(unittest.TestCase):
         )
 
     def test_preview_proposition_payload_matches_the_real_storage_payload(self):
+        provider_model_alias = "provider-resolved-proposition-model"
         raw_propositions = [
             {
                 "proposition_index": 2,
@@ -502,7 +507,7 @@ class CompletePreviewTests(unittest.TestCase):
             chunk_embeddings_fn=chunk_embeddings,
             proposition_model_fn=lambda *args, **kwargs: ModelComputation(
                 output=raw_propositions,
-                model=propositions.EXTRACTION_MODEL,
+                model=provider_model_alias,
             ),
             proposition_embeddings_fn=lambda texts: ModelComputation(
                 output=[vector_for(text) for text in texts],
@@ -526,6 +531,16 @@ class CompletePreviewTests(unittest.TestCase):
         ]
 
         self.assertTrue(connection.committed)
+        self.assertEqual(
+            report["computation"]["proposition_extraction"]["model"],
+            provider_model_alias,
+        )
+        self.assertTrue(
+            all(
+                row["model"] == propositions.EXTRACTION_MODEL
+                for row in report["propositions"]
+            )
+        )
         self.assertEqual(
             [
                 (

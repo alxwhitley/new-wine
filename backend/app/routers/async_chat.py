@@ -62,6 +62,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.auth import get_optional_user
 from app.db.supabase import get_supabase
+from app.services import quotes as quotes_service
 from app.services.async_answers import conversation_store, jobs
 from app.services.async_answers.config import load_config
 from app.services.async_answers.db import Db
@@ -272,6 +273,12 @@ async def result(
                 message_id = conversation_store.assistant_message_id(conv_id, str(job_id))
                 await run_in_threadpool(_persist, job, user_id, conv_id)
 
+            # Re-check at delivery so an idempotent or already-completed job
+            # cannot expose persisted quote IDs after the rail is disabled.
+            deliverable_quote_ids = []
+            if quotes_service.quote_selection_enabled():
+                deliverable_quote_ids = job.get("quote_ids") or []
+
             yield _sse(json.dumps({
                 "citations": job.get("citations") or [],
                 "verified_references": job.get("verified_references") or [],
@@ -280,7 +287,7 @@ async def result(
                 # answers today (2 approved quotes corpus-wide). The client
                 # resolves these through the new public /answer-quotes/resolve
                 # endpoint at render time -- never embed the text here.
-                "quote_ids": job.get("quote_ids") or [],
+                "quote_ids": deliverable_quote_ids,
                 "outcome": job.get("outcome"),
                 "evidence_version": job.get("evidence_version"),
                 "topics_established": rmeta.get("updated_topics") or {},

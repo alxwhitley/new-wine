@@ -56,7 +56,7 @@ reference_fabrication_review/
 source_ingest_runner_review/
 
 # Full-compute source-ingest previews. Contains captured article text and
-# generated review material; local-only and immutable per capture identity.
+# generated review material; local-only and immutable per report identity.
 source_ingest_preview_review/
 
 # Layer 3 LLM reading-pass live-run review (PLAN.md #45.6, 2026-07-29) —

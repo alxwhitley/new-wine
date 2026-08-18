@@ -751,11 +751,13 @@ def build_preview(
     )
 
     chunk_ids = [str(chunk["id"]) for chunk in chunk_rows]
+    # Provider response labels remain computation evidence. Proposed storage
+    # rows use the same canonical model provenance as the production writer.
     proposition_payload = propositions.build_proposition_payload(
         validated_propositions,
         proposition_embedding_vectors,
         prompt_version=PROMPT_VERSION,
-        model=str(proposition_computation["model"]),
+        model=propositions.EXTRACTION_MODEL,
         embedding_model=str(proposition_embedding_computation["model"]),
     )
     fingerprint = propositions.prompt_fingerprint(PROMPT_VERSION)

@@ -9,6 +9,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -112,9 +113,11 @@ class _NoopDb:
         pass
 
 
-async def _sse_meta_for_persisted_job(job):
+async def _sse_meta_for_persisted_job(job, env_value=None):
     """Run the real completed-job SSE generator and return its meta object."""
-    with patch.object(async_chat, "Db", return_value=_NoopDb()), \
+    environment = {} if env_value is None else {"QUOTE_SELECTION_ENABLED": env_value}
+    with patch.dict(os.environ, environment, clear=True), \
+         patch.object(async_chat, "Db", return_value=_NoopDb()), \
          patch.object(async_chat.jobs, "get_job", return_value=job):
         response = await async_chat.result("job-1", None, user_id=None)
         events = []
@@ -166,6 +169,57 @@ def _persist_and_serialize_quote_ids(result):
     return persisted_quote_ids, asyncio.run(_sse_meta_for_persisted_job(job))
 
 
+def _policy_with_quote_flag(env_value):
+    environment = {} if env_value is None else {"QUOTE_SELECTION_ENABLED": env_value}
+    with patch.dict(os.environ, environment, clear=True), \
+         patch.object(
+             producer,
+             "get_disabled_filters",
+             return_value={
+                 "source_kinds": ["commentary"],
+                 "source_names": ["Excluded Source"],
+                 "include_copyrighted": False,
+             },
+         ), \
+         patch.object(producer, "get_corpus_version", return_value="test-corpus"):
+        return producer.current_policy(object())
+
+
+class _ShareableCursor:
+    def __init__(self, existing_job, status):
+        self._existing_job = existing_job
+        self._status = status
+        self._query = ""
+        self._params = ()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, query, params):
+        self._query = " ".join(query.split())
+        self._params = params
+
+    def fetchone(self):
+        if self._params[0] != self._existing_job["dedup_key"]:
+            return None
+        if self._status == "done" and "status = 'done'" in self._query:
+            return self._existing_job
+        if self._status == "queued" and "status IN ('queued','running')" in self._query:
+            return self._existing_job
+        return None
+
+
+class _ShareableDb:
+    def __init__(self, existing_job, status):
+        self._cursor = _ShareableCursor(existing_job, status)
+
+    def run(self, work):
+        return work(_CaptureConnection(self._cursor))
+
+
 def main():
     print("quote selection containment gate")
     print("=" * 60)
@@ -174,6 +228,85 @@ def main():
     check("false flag disables quote selection", quotes.quote_selection_enabled({"QUOTE_SELECTION_ENABLED": "false"}) is False)
     check("only exact true flag enables quote selection", quotes.quote_selection_enabled({"QUOTE_SELECTION_ENABLED": "true"}) is True)
     check("case variants do not enable quote selection", quotes.quote_selection_enabled({"QUOTE_SELECTION_ENABLED": "TRUE"}) is False)
+
+    disabled_policy = _policy_with_quote_flag(None)
+    enabled_policy = _policy_with_quote_flag("true")
+    check(
+        "quote gate preserves legacy answer policy fields",
+        set(disabled_policy) == {
+            "filters", "evidence_version", "prompt_version", "policy_version"
+        },
+    )
+    check(
+        "off/on answer policy identities differ",
+        disabled_policy["policy_version"] != enabled_policy["policy_version"],
+    )
+    disabled_key = jobs.compute_dedup_key(
+        "What does the teacher say?",
+        disabled_policy["filters"],
+        disabled_policy["evidence_version"],
+        disabled_policy["prompt_version"],
+        disabled_policy["policy_version"],
+    )
+    enabled_key = jobs.compute_dedup_key(
+        "What does the teacher say?",
+        enabled_policy["filters"],
+        enabled_policy["evidence_version"],
+        enabled_policy["prompt_version"],
+        enabled_policy["policy_version"],
+    )
+    check("off/on dedup identities differ", disabled_key != enabled_key)
+
+    reuse_cfg = SimpleNamespace(reuse_ttl_seconds=300)
+    completed_off_job = {"id": "completed-off", "dedup_key": disabled_key}
+    check(
+        "same-state completed answer remains reusable",
+        jobs._find_shareable(
+            _ShareableDb(completed_off_job, "done"),
+            disabled_key,
+            None,
+            reuse_cfg,
+        )["reason"] == "reuse",
+    )
+    check(
+        "completed answer reuse does not cross quote-flag state",
+        jobs._find_shareable(
+            _ShareableDb(completed_off_job, "done"),
+            enabled_key,
+            None,
+            reuse_cfg,
+        ) is None,
+    )
+    active_off_job = {"id": "active-off", "dedup_key": disabled_key}
+    check(
+        "in-flight single-flight does not cross quote-flag state",
+        jobs._find_shareable(
+            _ShareableDb(active_off_job, "queued"),
+            enabled_key,
+            None,
+            reuse_cfg,
+        ) is None,
+    )
+
+    preexisting_job = {
+        "status": "done",
+        "answer": "A previously completed answer.",
+        "outcome": "answered",
+        "citations": [],
+        "verified_references": [],
+        "quote_ids": ["persisted-quote-1", "persisted-quote-2"],
+        "result_meta": {"updated_topics": {}},
+        "evidence_version": "test-evidence",
+    }
+    check(
+        "disabled delivery suppresses persisted quote IDs",
+        asyncio.run(_sse_meta_for_persisted_job(preexisting_job))["quote_ids"] == [],
+    )
+    check(
+        "exact true delivery preserves persisted quote IDs",
+        asyncio.run(_sse_meta_for_persisted_job(preexisting_job, "true"))["quote_ids"]
+        == ["persisted-quote-1", "persisted-quote-2"],
+    )
 
     def selector_must_not_run(*_args, **_kwargs):
         raise AssertionError("disabled producer called quote selector")
