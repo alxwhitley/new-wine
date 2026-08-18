@@ -764,21 +764,70 @@ different row, per the hard rule above.
     coordinator.
 
 16. **The source-ingest queue runner is clearance- and policy-gated; migration
-    088 is already applied.** The deployed-but-inert first slice accepts only
-    `pdf + single + declared`, claims only
-    `cleared_to_run=true`, resolves an existing non-sentinel source, and must
-    pass canonical `is_source_servable()` without creating sources/aliases or
-    changing visibility, license status, or safe mode. It retains complete
-    extracted text through `shared_ingest.ingest_document()` but never retains
-    the PDF binary. One isolated processor proof completed on 2026-08-17; it was
-    not a deployed-worker proof. Any further real item and worker deployment
-    remain separately approved operations; merging repository code does not
-    authorize them. Never reapply migration 088.
+    088 is already applied. Widened 2026-08-18 (PLAN.md W1–W4, PR #1
+    `harness/quote-containment-and-staging`, merge `923f1ed`, closing commit
+    `a8a7731`) to accept a second source format, gated differently from the
+    first — read the whole entry, not just the opening clause.** The
+    deployed-but-inert slice accepts `pdf + single + declared` OR
+    `web_page + single + declared`
+    (`scripts/source_ingest_queue/processor.py::_SOURCE_FORMATS`), claims only
+    `cleared_to_run=true`, and resolves an existing non-sentinel source. A PDF
+    row still must pass canonical `is_source_servable()`, unchanged. A
+    web-article row instead requires the resolved source to already have
+    `license_status IN ('licensed','unlicensed')` AND `visibility='hidden'` —
+    hidden staging exists so preparing a web article can never make it
+    retrievable; the runner never creates sources/aliases and never itself
+    changes visibility, license status, or safe mode for either format. It
+    retains complete extracted text through `shared_ingest.ingest_document()`
+    but never retains the PDF binary. Live worker execution is further
+    restricted: `scripts/source_ingest_worker.py --row-id UUID` requires
+    `--once` and is parameterized straight into `claim_next(...,
+    only_row_id=...)` (`scripts/source_ingest_queue/jobs.py`) — the claiming
+    SQL adds `AND id = %s` to the ready-row query, so a target row that isn't
+    claimable returns no row rather than silently claiming a different one (no
+    fallback/silent document substitution). A full-compute, zero-database-write
+    preview pipeline (`scripts/source_ingest_queue/preview.py`) computes
+    metadata, chunks, embeddings, propositions/provenance, usage/cost evidence,
+    and proposal-only quote spans for a queued row before any write is made —
+    mutation-tested to prove `shared_ingest.ingest_document`,
+    `propositions.store_propositions`, and `quotes.create_and_approve_quote`
+    are never called (`scripts/test_source_ingest_preview.py`). One isolated
+    processor proof (PDF path) completed 2026-08-17; it was not a
+    deployed-worker proof, and no web-article row has been run for real yet.
+    Any further real item, worker deployment, or web-article production write
+    remains a separately approved operation; merging this repository code does
+    not authorize them. Never reapply migration 088.
 
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **Quote selection on the async answer path is now contained behind an
+  explicit, default-off flag — shipped 2026-08-18 (PLAN.md W1, same PR as the
+  Invariant 16 widening above), because the quote rail has a live, systemic
+  relevance defect, not because quoting itself was found unsafe.** The defect:
+  quote matching keys off the inherited `quotes.topic` document-level tag
+  rather than the quoted passage itself, so a quote can be selected for an
+  answer its actual text doesn't support — nearly the whole Derek Prince quote
+  corpus inherits one document tag, which is why this isn't a three-row
+  anomaly. The real fix (passage-level relevance, deterministic tie-breaking,
+  a re-audit of existing approved/pending quotes as untrusted legacy data) is
+  still queued, PLAN.md W7–W8 — this session only contained the symptom.
+  `quote_selection_enabled()` (`backend/app/services/quotes.py`) requires the
+  exact string `"true"` on `QUOTE_SELECTION_ENABLED`; anything else, including
+  case variants, is off. With it off (the deployed default): the producer
+  never calls the selector and emits no `quote_ids` on a fresh answer; the
+  reuse/dedup key (`current_policy()`'s `policy_version`,
+  `async_answers/producer.py`) changes with the flag so a cached/reused answer
+  can never cross flag state; an in-flight single-flight job likewise can
+  never cross flag state; and SSE delivery re-checks the flag at read time, so
+  an already-completed job's persisted `quote_ids` are suppressed if the flag
+  is off when it's served. This covers fresh, cached, idempotent-redelivery,
+  and in-flight answers alike — proven in
+  `scripts/test_quote_selection_gate.py`, not just asserted. Existing approved
+  quote rows are untouched by any of this. Turning the flag on in the deployed
+  environment is the attended re-enablement gate PLAN.md W5 still requires
+  Alex's explicit approval for — merging this code does not authorize it.
 - **PARKED — `scripts/harness_coordinator/v1` and its unmerged CLI adapter.**
   The following is historical evidence, not authorized follow-up work.
   `scripts/harness_coordinator/v1`'s `invoke.py` had no live-provider call

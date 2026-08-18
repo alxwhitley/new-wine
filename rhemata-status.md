@@ -7,8 +7,10 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-17. Local `main` and `origin/main` were synchronized at
-`4f476eb` before this records update. The pre-existing untracked
+Last verified: 2026-08-18. Local `main` fast-forwarded to `origin/main` at
+`923f1ed` (PR #1, `harness/quote-containment-and-staging`, closing commit
+`a8a7731`) during this records update — the merge was already on
+`origin/main` but not yet fast-forwarded locally. The pre-existing untracked
 `Temporary-assets/` directory remains untouched.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
@@ -35,20 +37,36 @@ isolated processor proof into document `35b53381-2153-4936-a97b-641a20e29205`
 (two chunks, zero propositions because the source is public domain). No Railway
 source-worker service exists; this was not a deployed-worker proof.
 
-Alex replaced the old F2→F3→F4→F6 order after an ultra adversarial review. The
-active path is controlled web-article ingestion: contain the broken quote rail,
-pin isolated worker execution to one row, add a staged citable article contract,
-and build a full-compute zero-write preview before any production action.
+Alex replaced the old F2→F3→F4→F6 order after an ultra adversarial review with
+the controlled web-article path (PLAN.md W1–W9). **W1–W4 (the repository-only
+safety block) merged to `main` 2026-08-18** and is verified live in the code,
+not just claimed: quote selection is now contained behind a default-off,
+exact-opt-in flag (`QUOTE_SELECTION_ENABLED`) whose effect holds across fresh,
+cached, idempotent-redelivery, and in-flight answers; live `--row-id` worker
+execution is restricted to `--once` with parameterized, no-fallback single-row
+claiming (a target row that isn't claimable returns no row, never a silent
+substitute); hidden `web_page + single + declared` staging is now available
+for existing non-sentinel sources with `license_status IN
+('licensed','unlicensed')`; and a deterministic, zero-database-write
+full-compute preview pipeline (metadata → chunks → embeddings →
+propositions/provenance → usage evidence → proposal-only quote spans) exists
+and is mutation-tested to prove it never writes. Full technical detail:
+CLAUDE.md Invariant 16 and the new quote-containment Landmines entry.
 
 ---
 
 ## Classified work
 
-**Blocker — active:** W1–W4 repository-only safety block. It may run back to
-back for about 3–4 hours, then stops before deployment or production writes.
+**Blocker — active:** none. W1–W4 (repository-only) is complete and merged.
 
-**Blocker — waiting:** one Alex-approved hidden web article; quote relevance and
-answer-integrity repair; recoverability before the first multi-article batch.
+**Blocker — waiting:** W5–W6, all human/production-only gates, unchanged by the
+merge — Alex selects and approves one hidden web article, confirms
+teacher/source and clearance, and approves deploying this merged containment
+code to the live Railway backend (repo merge alone does not put it into
+production); then approves running a real (non-dry-run) preview; then one
+hidden row-pinned write with reconciliation, idempotency, and rollback proof;
+then eligibility/visibility/quote-repair decisions. Quote relevance repair
+(W7–W8) and recoverability (W9) remain queued behind W5–W6.
 
 **Scheduled:** broad visible-default policy, general prompt/claim-support work,
 B1–B7 product work, and remaining corpus work after the web-article proof.
@@ -69,11 +87,13 @@ trigger fires or Alex explicitly promotes an item.
 
 ## Next single item
 
-Execute W1–W4 from
-`docs/superpowers/plans/2026-08-17-web-article-beta-fast-path.md`, then stop at
-the repository-only checkpoint. Do not deploy, enqueue, ingest, change source
-visibility, or alter production configuration in that block.
+W1–W4 executed and merged (this update). Next is the attended W5–W6 gate from
+the same plan doc: Alex selects and approves one hidden web article, approves
+deploying quote containment to production, then runs the real preview, the
+single hidden row-pinned write, and idempotency/rollback proof, before any
+eligibility, visibility, or quote-repair decision. No further repository-only
+work is queued ahead of that gate.
 
-Process baseline for this records session: original outcome achieved; zero
-unplanned investigations started; zero findings promoted to Blocker; one active
-critical-path item.
+Process baseline for this records session: original outcome (verify the merge,
+record it) achieved; zero unplanned investigations started; zero findings
+promoted to Blocker; zero active blockers, one waiting on Alex.
