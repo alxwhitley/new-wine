@@ -181,8 +181,8 @@ Rules:
 # Rank: sim(question, quote_text) >= 0.35; no tag boost
 ```
 
-- [ ] **Step 1:** Failing test: legacy approved row never selected even if text matches.
-- [ ] **Step 2:** Implement filter; tests green; commit.
+- [x] **Step 1:** Failing test: legacy approved row never selected even if text matches.
+- [x] **Step 2:** Implement filter; tests green; commit.
 
 ---
 
