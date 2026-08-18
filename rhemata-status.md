@@ -112,6 +112,11 @@ before the quote rail is re-enabled.
 Full detail: PLAN.md's W7–W8 entry and its new "Quote quality" blocker;
 CLAUDE.md's quote-containment Landmines entry and settled decision #28.
 
+Quote rail remains off in production: `QUOTE_SELECTION_ENABLED` is absent
+from both Railway services entirely (`rhemata` and `answer-worker`,
+checked directly via `railway variables`), which reads as off —
+`quote_selection_enabled()` requires the exact string `"true"`.
+
 A local-only, unpushed commit `cefcae5` ("v11 harness prep") sits in the
 detached-HEAD worktree `~/.codex/worktrees/ca07/rhemata`, authored 2026-08-17
 11:35 — before that same day's later 4f476eb→5af5fba session-close chain that
