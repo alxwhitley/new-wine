@@ -50,32 +50,54 @@ CONFIRMED_TEACHER_SOURCE_IDS = {
     "d26f77e7-6ce0-4311-991b-03d9900a6045": "Andrew Murray",
 }
 
-# ── Live-answer selection (2026-08-06 wiring session) ────────────────────────
+# ── Live-answer selection (2026-08-06 wiring session; relevance rebuilt 2026-08-18) ──
 #
-# QUOTE_TOPIC_SIMILARITY_THRESHOLD -- PROVISIONAL, needs real-USAGE
-# calibration (no real question traffic has exercised this yet -- only 2
-# approved quotes exist corpus-wide), but NOT a blind guess: an initial 0.75
-# (chosen by analogy to position_papers.py's anchor-vs-anchor similarities,
-# which run much higher because both sides of that comparison are similarly-
-# shaped phrases) turned out badly miscalibrated for this comparison shape --
-# a full question sentence against a short 2-4 word topic tag scores
-# structurally lower. Caught live, 2026-08-06, by this session's own
-# end-to-end test: the real "waiting on God" match scored 0.579, well under
-# 0.75, so nothing was ever selected. Recalibrated against 10 real embedding
-# calls (4 genuine question/topic matches, 6 genuine non-matches, both
-# corpus topics, varied question phrasing):
-#   matches:     0.4968, 0.5469, 0.5790, 0.5854
-#   non-matches: 0.0844, 0.1116, 0.1451, 0.1818, 0.2482, 0.2560
-# Clean separation with a ~0.24 gap between the closest match (0.4968) and
-# the closest non-match (0.2560). 0.40 sits in that gap -- a real measured
-# margin, not a round number, same evidentiary posture as position_papers.py's
-# own TIE_BREAK_EPSILON comment. Still provisional: n=10 hand-written
-# questions, not real traffic, and both corpus topics happen to be short
-# noun phrases -- a future quote with a longer or oddly-worded topic tag
-# could sit outside this calibration. Revisit once real traffic and more
-# quote volume exist, exactly as dominance.py's own threshold note describes
-# for its own constant.
-QUOTE_TOPIC_SIMILARITY_THRESHOLD = 0.40
+# QUOTE_PASSAGE_SIMILARITY_THRESHOLD replaces QUOTE_TOPIC_SIMILARITY_THRESHOLD
+# (the original 2026-08-06 constant, which scored a question against
+# quotes.topic). That design was contained behind QUOTE_SELECTION_ENABLED's
+# default-off flag 2026-08-17 (CLAUDE.md Landmines) after being found to have
+# a systemic relevance defect, confirmed live against the real corpus
+# 2026-08-18: `topic` is typically the source DOCUMENT's own first
+# `topic_tags` entry (scripts/extract_quote_candidates_derek_prince.py::
+# _topic_for_document()), not anything specific to the individual quoted
+# passage -- so every quote pulled from the same document, or from different
+# documents that merely share a first tag, scores IDENTICALLY regardless of
+# what its own text says. Confirmed live: all 14 real approved quotes tagged
+# "Baptism in the Holy Spirit" score exactly 0.7553 against a real baptism
+# question -- a perfect tie -- even though several of those 14 passages (a
+# Hebrew/Greek grammar aside, an unrelated book title mid-resurrection-
+# discourse, a list of seven forms of prayer) have nothing to do with the
+# question. The tie also exposed a second, independent bug: the query had no
+# ORDER BY, so which quotes made the top-MAX_QUOTES_PER_ANSWER cut on a tie
+# depended on Postgres's unspecified return order for an unordered SELECT,
+# not on any property of the quotes themselves -- fixed below by scoring
+# real text (which essentially never ties on unrelated passages) plus an
+# explicit id tie-break and an explicit query ORDER BY, so a tie can no
+# longer happen by construction.
+#
+# PROVISIONAL, same posture as the constant it replaces -- calibrated against
+# real embedding calls, not a blind guess, but still a small n, not real
+# question traffic. Calibrated 2026-08-18 against real text-embedding-3-small
+# calls across 4 real questions and 3 real approved-quote clusters (baptism
+# in the Holy Spirit, fasting, marriage), plus one shared unrelated
+# "finances/giving" negative-control question run against every cluster.
+# On-topic passages that directly address their cluster's own question
+# scored 0.4569-0.6251. Off-topic passages -- both within an on-topic
+# cluster (real content that has nothing to do with the question despite
+# sharing the OLD topic tag) and under the unrelated negative-control
+# question against any cluster -- scored 0.1136-0.3173. The two bands
+# overlap narrowly (0.3173-0.3595): no single threshold cleanly separates
+# every real match from every real non-match, because semantic similarity
+# on real prose is not that tidy. 0.35 sits inside that overlap, above every
+# observed non-match, at the cost of excluding a couple of weaker genuine
+# matches (0.3595, 0.3656) -- the accepted trade given this file's standing
+# "refuse rather than risk it" posture (same posture as quote_verifier.py's
+# boundary-proximity check, and Settled decision #16): a missed true
+# positive costs nothing (the answer already reads fine with no quote
+# attached); a false positive is the exact defect this replaces. Revisit
+# once real traffic and more quote volume exist, same as the constant this
+# replaces and dominance.py's own threshold note.
+QUOTE_PASSAGE_SIMILARITY_THRESHOLD = 0.35
 
 # How many quotes may attach to a single answer. Provisional, same posture as
 # the threshold above -- irrelevant at today's volume (2 approved quotes
@@ -240,6 +262,42 @@ def _log_quote_decision(
         logger.warning("quote_verification_log write failed (decision=%s, rule=%s): %s", decision, rule, e)
 
 
+def _find_existing_quote_for_passage(
+    db, chunk_id: str, quote_text: str, teacher_source_id: str
+) -> Optional[dict]:
+    """Idempotency lookup for create_and_approve_quote(): has this exact
+    (chunk, quote_text, teacher) triple already been created? Matches only
+    the exact triple a rerun with identical inputs would produce -- not
+    fuzzy/overlap matching, a different, unbuilt feature. Ignores revoked
+    rows: a revoked quote does not block re-creating the same passage,
+    since revocation is a deliberate state change (Settled decision #16),
+    not evidence the passage itself is unusable. Deterministic even if more
+    than one match somehow already exists (e.g. a pre-existing duplicate
+    from before this check existed): oldest created_at wins, id as a final
+    tie-break -- never DB return order."""
+    revisions = (
+        db.table("quote_source_revisions").select("id").eq("chunk_id", chunk_id).execute().data
+    )
+    revision_ids = [r["id"] for r in revisions]
+    if not revision_ids:
+        return None
+    rows = (
+        db.table("quotes")
+        .select("id, source_revision_id, teacher_source_id, quote_text, topic, "
+                "reviewer_note, status, created_by, approved_by, approved_at")
+        .in_("source_revision_id", revision_ids)
+        .eq("quote_text", quote_text)
+        .eq("teacher_source_id", teacher_source_id)
+        .neq("status", "revoked")
+        .order("created_at")
+        .order("id")
+        .limit(1)
+        .execute()
+        .data
+    )
+    return rows[0] if rows else None
+
+
 def create_and_approve_quote(
     db,
     chunk_id: str,
@@ -261,11 +319,30 @@ def create_and_approve_quote(
     captures, not a later re-read of the chunk. Also runs the per-work
     quote cap (_enforce_quote_cap, Settled decision #16) -- application-
     level only, not DB-trigger-enforced; see that function's docstring.
-    Every acceptance and refusal is logged via _log_quote_decision()."""
+    Every acceptance and refusal is logged via _log_quote_decision().
+
+    Idempotent (2026-08-18): re-running this over the exact same
+    (chunk_id, quote_text, teacher_source_id) a prior call already created
+    returns that existing row unchanged rather than inserting a duplicate
+    quote_source_revisions/quotes pair. This is a pure idempotency
+    short-circuit, not a promotion path -- a matching PENDING row (e.g. one
+    a batch extractor inserted directly) is returned as-is, still pending,
+    never silently flipped to approved by this check. Deliberately narrow:
+    it only recognizes the exact triple a genuine rerun produces, not any
+    fuzzy/overlapping candidate."""
     _require_confirmed_teacher(teacher_source_id)
     for label, value in (("quote_text", quote_text), ("topic", topic), ("reviewer_note", reviewer_note)):
         if not value or not value.strip():
             raise ValueError("%s is required" % label)
+
+    existing = _find_existing_quote_for_passage(db, chunk_id, quote_text, teacher_source_id)
+    if existing is not None:
+        logger.info(
+            "create_and_approve_quote: idempotent no-op -- quote %s already exists "
+            "for this exact chunk/text/teacher (status=%s)",
+            existing["id"], existing["status"],
+        )
+        return existing
 
     chunk_lookup = db.table("chunks").select("document_id").eq("id", chunk_id).limit(1).execute().data
     document_id_for_log = chunk_lookup[0]["document_id"] if chunk_lookup else None
@@ -410,13 +487,26 @@ def select_quotes_for_answer(
     that didn't end up citing that teacher at all. Known, accepted residual
     risk, not a bug -- narrowing to cited-only is a one-line change here
     (intersect against the answer's own citations) if this proves too loose
-    in practice.
+    in practice. Unchanged by the 2026-08-18 relevance rebuild below.
 
-    Matching: cosine similarity between an embedding of the raw question and
-    an embedding of each candidate's short `topic` tag (e.g. "fasting",
-    "waiting on God") -- fully deterministic given the same inputs, no live
-    LLM judgment call. See QUOTE_TOPIC_SIMILARITY_THRESHOLD's module-level
-    comment for why 0.75 and its provisional status.
+    Matching (rebuilt 2026-08-18): cosine similarity between an embedding of
+    the raw question and an embedding of each candidate's OWN quote_text --
+    the exact, verified excerpt quote_verifier.verify_quote_candidate()
+    already confirmed sits inside its source passage. This replaces the
+    original design, which scored against quotes.topic (a tag usually
+    inherited from the source DOCUMENT, not the individual passage) --
+    see QUOTE_PASSAGE_SIMILARITY_THRESHOLD's module comment for the live
+    evidence that made this a real, systemic defect (a perfect score TIE
+    across every quote sharing a document's topic tag, regardless of
+    passage content) and for the new threshold's calibration. Still fully
+    deterministic given the same inputs, no live LLM judgment call.
+
+    Deterministic tie-breaking: candidates are fetched in an explicit id
+    order (never bare DB return order) and scored candidates are sorted by
+    (score descending, quote id ascending) -- a strict total order, so the
+    same question against the same candidate set always yields the same
+    selection, with no dependence on Python's sort stability, dict/set
+    iteration order, or which order Postgres happens to return rows in.
 
     Callers MUST wrap this in their own fail-soft try/except (this function
     can raise -- an embedding-API fault, a DB fault) -- it does not swallow
@@ -429,9 +519,10 @@ def select_quotes_for_answer(
 
     rows = (
         db.table("quotes")
-        .select("id, topic")
+        .select("id, quote_text")
         .eq("status", "approved")
         .in_("teacher_source_id", source_ids)
+        .order("id")
         .execute()
         .data
     )
@@ -439,20 +530,20 @@ def select_quotes_for_answer(
         return []
 
     q_vec = question_embedding if question_embedding is not None else embed_text(question)
-    topic_vecs = embed_batch([r["topic"] for r in rows])
+    text_vecs = embed_batch([r["quote_text"] for r in rows])
 
     scored = []  # type: List[Tuple[float, str]]
-    for row, topic_vec in zip(rows, topic_vecs):
-        score = cosine_similarity(q_vec, topic_vec)
-        if score >= QUOTE_TOPIC_SIMILARITY_THRESHOLD:
+    for row, text_vec in zip(rows, text_vecs):
+        score = cosine_similarity(q_vec, text_vec)
+        if score >= QUOTE_PASSAGE_SIMILARITY_THRESHOLD:
             scored.append((score, row["id"]))
 
-    scored.sort(key=lambda pair: pair[0], reverse=True)
+    scored.sort(key=lambda pair: (-pair[0], pair[1]))
     selected = [quote_id for _, quote_id in scored[:MAX_QUOTES_PER_ANSWER]]
     if selected:
         logger.info(
             "quote_rail: selected %d quote(s) for question=%r | scores=%s | threshold=%.2f",
             len(selected), question, [round(s, 4) for s, _ in scored[:MAX_QUOTES_PER_ANSWER]],
-            QUOTE_TOPIC_SIMILARITY_THRESHOLD,
+            QUOTE_PASSAGE_SIMILARITY_THRESHOLD,
         )
     return selected

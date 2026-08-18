@@ -24,6 +24,7 @@ import type { WordDefinition } from "@/components/rhemata/word-definition-card";
 import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
 import { useCommentarySearch, type CommentaryResult } from "@/hooks/useCommentarySearch";
 import { formatCommentaryContent } from "@/lib/format-commentary-content";
+import { BOOK_MAP, ABBREV_TO_NAME } from "@/lib/generated/book-maps";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,112 +56,10 @@ interface CorpusResult {
 }
 
 // ── Book maps ────────────────────────────────────────────────────────────────
-
-const BOOK_MAP: Record<string, string> = {
-  genesis: "GEN", gen: "GEN",
-  exodus: "EXO", exo: "EXO", exod: "EXO",
-  leviticus: "LEV", lev: "LEV",
-  numbers: "NUM", num: "NUM",
-  deuteronomy: "DEU", deut: "DEU", deu: "DEU",
-  joshua: "JOS", josh: "JOS", jos: "JOS",
-  judges: "JDG", judg: "JDG", jdg: "JDG",
-  ruth: "RUT", rut: "RUT",
-  "1 samuel": "1SA", "1samuel": "1SA", "1 sam": "1SA", "1sam": "1SA", "1sa": "1SA",
-  "first samuel": "1SA", "i samuel": "1SA",
-  "2 samuel": "2SA", "2samuel": "2SA", "2 sam": "2SA", "2sam": "2SA", "2sa": "2SA",
-  "second samuel": "2SA", "ii samuel": "2SA",
-  "1 kings": "1KI", "1kings": "1KI", "1 kgs": "1KI", "1kgs": "1KI", "1ki": "1KI",
-  "first kings": "1KI", "i kings": "1KI",
-  "2 kings": "2KI", "2kings": "2KI", "2 kgs": "2KI", "2kgs": "2KI", "2ki": "2KI",
-  "second kings": "2KI", "ii kings": "2KI",
-  "1 chronicles": "1CH", "1chronicles": "1CH", "1 chr": "1CH", "1chr": "1CH", "1ch": "1CH",
-  "first chronicles": "1CH", "i chronicles": "1CH",
-  "2 chronicles": "2CH", "2chronicles": "2CH", "2 chr": "2CH", "2chr": "2CH", "2ch": "2CH",
-  "second chronicles": "2CH", "ii chronicles": "2CH",
-  ezra: "EZR", ezr: "EZR",
-  nehemiah: "NEH", neh: "NEH",
-  esther: "EST", esth: "EST", est: "EST",
-  job: "JOB",
-  psalms: "PSA", psalm: "PSA", psa: "PSA", ps: "PSA",
-  proverbs: "PRO", prov: "PRO", pro: "PRO",
-  ecclesiastes: "ECC", eccl: "ECC", ecc: "ECC",
-  "song of solomon": "SNG", "song of songs": "SNG", song: "SNG", sng: "SNG", sos: "SNG",
-  isaiah: "ISA", isa: "ISA",
-  jeremiah: "JER", jer: "JER",
-  lamentations: "LAM", lam: "LAM",
-  ezekiel: "EZK", ezek: "EZK", ezk: "EZK",
-  daniel: "DAN", dan: "DAN",
-  hosea: "HOS", hos: "HOS",
-  joel: "JOL", jol: "JOL",
-  amos: "AMO", amo: "AMO",
-  obadiah: "OBA", obad: "OBA", oba: "OBA",
-  jonah: "JON", jon: "JON",
-  micah: "MIC", mic: "MIC",
-  nahum: "NAM", nah: "NAM", nam: "NAM",
-  habakkuk: "HAB", hab: "HAB",
-  zephaniah: "ZEP", zeph: "ZEP", zep: "ZEP",
-  haggai: "HAG", hag: "HAG",
-  zechariah: "ZEC", zech: "ZEC", zec: "ZEC",
-  malachi: "MAL", mal: "MAL",
-  matthew: "MAT", matt: "MAT", mat: "MAT",
-  mark: "MRK", mrk: "MRK",
-  luke: "LUK", luk: "LUK",
-  john: "JHN", jhn: "JHN",
-  acts: "ACT", act: "ACT",
-  romans: "ROM", rom: "ROM",
-  "1 corinthians": "1CO", "1corinthians": "1CO", "1 cor": "1CO", "1cor": "1CO", "1co": "1CO",
-  "first corinthians": "1CO", "i corinthians": "1CO",
-  "2 corinthians": "2CO", "2corinthians": "2CO", "2 cor": "2CO", "2cor": "2CO", "2co": "2CO",
-  "second corinthians": "2CO", "ii corinthians": "2CO",
-  galatians: "GAL", gal: "GAL",
-  ephesians: "EPH", eph: "EPH",
-  philippians: "PHP", phil: "PHP", php: "PHP",
-  colossians: "COL", col: "COL",
-  "1 thessalonians": "1TH", "1thessalonians": "1TH", "1 thess": "1TH", "1thess": "1TH", "1th": "1TH",
-  "first thessalonians": "1TH", "i thessalonians": "1TH",
-  "2 thessalonians": "2TH", "2thessalonians": "2TH", "2 thess": "2TH", "2thess": "2TH", "2th": "2TH",
-  "second thessalonians": "2TH", "ii thessalonians": "2TH",
-  "1 timothy": "1TI", "1timothy": "1TI", "1 tim": "1TI", "1tim": "1TI", "1ti": "1TI",
-  "first timothy": "1TI", "i timothy": "1TI",
-  "2 timothy": "2TI", "2timothy": "2TI", "2 tim": "2TI", "2tim": "2TI", "2ti": "2TI",
-  "second timothy": "2TI", "ii timothy": "2TI",
-  titus: "TIT", tit: "TIT",
-  philemon: "PHM", phlm: "PHM", phm: "PHM",
-  hebrews: "HEB", heb: "HEB",
-  james: "JAS", jas: "JAS",
-  "1 peter": "1PE", "1peter": "1PE", "1 pet": "1PE", "1pet": "1PE", "1pe": "1PE",
-  "first peter": "1PE", "i peter": "1PE",
-  "2 peter": "2PE", "2peter": "2PE", "2 pet": "2PE", "2pet": "2PE", "2pe": "2PE",
-  "second peter": "2PE", "ii peter": "2PE",
-  "1 john": "1JN", "1john": "1JN", "1 jn": "1JN", "1jn": "1JN",
-  "first john": "1JN", "i john": "1JN",
-  "2 john": "2JN", "2john": "2JN", "2 jn": "2JN", "2jn": "2JN",
-  "second john": "2JN", "ii john": "2JN",
-  "3 john": "3JN", "3john": "3JN", "3 jn": "3JN", "3jn": "3JN",
-  "third john": "3JN", "iii john": "3JN",
-  jude: "JUD", jud: "JUD",
-  revelation: "REV", rev: "REV",
-};
-
-const ABBREV_TO_NAME: Record<string, string> = {
-  GEN: "Genesis", EXO: "Exodus", LEV: "Leviticus", NUM: "Numbers",
-  DEU: "Deuteronomy", JOS: "Joshua", JDG: "Judges", RUT: "Ruth",
-  "1SA": "1 Samuel", "2SA": "2 Samuel", "1KI": "1 Kings", "2KI": "2 Kings",
-  "1CH": "1 Chronicles", "2CH": "2 Chronicles", EZR: "Ezra", NEH: "Nehemiah",
-  EST: "Esther", JOB: "Job", PSA: "Psalms", PRO: "Proverbs",
-  ECC: "Ecclesiastes", SNG: "Song of Solomon", ISA: "Isaiah", JER: "Jeremiah",
-  LAM: "Lamentations", EZK: "Ezekiel", DAN: "Daniel", HOS: "Hosea",
-  JOL: "Joel", AMO: "Amos", OBA: "Obadiah", JON: "Jonah",
-  MIC: "Micah", NAM: "Nahum", HAB: "Habakkuk", ZEP: "Zephaniah",
-  HAG: "Haggai", ZEC: "Zechariah", MAL: "Malachi",
-  MAT: "Matthew", MRK: "Mark", LUK: "Luke", JHN: "John",
-  ACT: "Acts", ROM: "Romans", "1CO": "1 Corinthians", "2CO": "2 Corinthians",
-  GAL: "Galatians", EPH: "Ephesians", PHP: "Philippians", COL: "Colossians",
-  "1TH": "1 Thessalonians", "2TH": "2 Thessalonians", "1TI": "1 Timothy",
-  "2TI": "2 Timothy", TIT: "Titus", PHM: "Philemon", HEB: "Hebrews",
-  JAS: "James", "1PE": "1 Peter", "2PE": "2 Peter", "1JN": "1 John",
-  "2JN": "2 John", "3JN": "3 John", JUD: "Jude", REV: "Revelation",
-};
+// BOOK_MAP / ABBREV_TO_NAME now come from the generated shared module
+// (frontend/lib/generated/book-maps.ts, sourced from backend/app/constants.py)
+// instead of a hand-typed local copy — see CLAUDE.md Landmines, "The
+// book-name map exists as five independent hand-maintained copies."
 
 function parseRef(ref: string): { abbrev: string; chapter: number; verse: number } | null {
   const trimmed = ref.trim();

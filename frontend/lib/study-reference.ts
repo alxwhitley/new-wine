@@ -14,6 +14,8 @@
 // against SP1's backend-verified pointers by source_id, exactly like verses
 // gate by identity.
 
+import { ABBREV_TO_NAME } from "./generated/book-maps.ts";
+
 export type StudyReference =
   | {
       type: "verse";
@@ -44,77 +46,103 @@ export function referenceKey(ref: StudyReference): string {
 }
 
 // Book name/abbreviation -> canonical 3-letter code, matching the same
-// codes already live in the `verses` table (see app/study/page.tsx's
-// BOOK_MAP/ABBREV_TO_NAME, which this intentionally mirrors rather than
-// imports — that file is spec-mandated read-only this session).
-const BOOKS: Array<{ code: string; full: string; abbrevs: string[] }> = [
-  { code: "GEN", full: "Genesis", abbrevs: ["Gen"] },
-  { code: "EXO", full: "Exodus", abbrevs: ["Exod", "Exo"] },
-  { code: "LEV", full: "Leviticus", abbrevs: ["Lev"] },
-  { code: "NUM", full: "Numbers", abbrevs: ["Num"] },
-  { code: "DEU", full: "Deuteronomy", abbrevs: ["Deut", "Deu"] },
-  { code: "JOS", full: "Joshua", abbrevs: ["Josh"] },
-  { code: "JDG", full: "Judges", abbrevs: ["Judg"] },
-  { code: "RUT", full: "Ruth", abbrevs: [] },
-  { code: "1SA", full: "1 Samuel", abbrevs: ["1 Sam", "1st Samuel", "First Samuel", "I Samuel"] },
-  { code: "2SA", full: "2 Samuel", abbrevs: ["2 Sam", "2nd Samuel", "Second Samuel", "II Samuel"] },
-  { code: "1KI", full: "1 Kings", abbrevs: ["1 Kgs", "1st Kings", "First Kings", "I Kings"] },
-  { code: "2KI", full: "2 Kings", abbrevs: ["2 Kgs", "2nd Kings", "Second Kings", "II Kings"] },
-  { code: "1CH", full: "1 Chronicles", abbrevs: ["1 Chr", "1st Chronicles", "First Chronicles", "I Chronicles"] },
-  { code: "2CH", full: "2 Chronicles", abbrevs: ["2 Chr", "2nd Chronicles", "Second Chronicles", "II Chronicles"] },
-  { code: "EZR", full: "Ezra", abbrevs: [] },
-  { code: "NEH", full: "Nehemiah", abbrevs: ["Neh"] },
-  { code: "EST", full: "Esther", abbrevs: ["Esth"] },
-  { code: "JOB", full: "Job", abbrevs: [] },
-  { code: "PSA", full: "Psalms", abbrevs: ["Psalm", "Ps"] },
-  { code: "PRO", full: "Proverbs", abbrevs: ["Prov"] },
-  { code: "ECC", full: "Ecclesiastes", abbrevs: ["Eccl"] },
-  { code: "SNG", full: "Song of Solomon", abbrevs: ["Song of Songs", "Song"] },
-  { code: "ISA", full: "Isaiah", abbrevs: ["Isa"] },
-  { code: "JER", full: "Jeremiah", abbrevs: ["Jer"] },
-  { code: "LAM", full: "Lamentations", abbrevs: ["Lam"] },
-  { code: "EZK", full: "Ezekiel", abbrevs: ["Ezek"] },
-  { code: "DAN", full: "Daniel", abbrevs: ["Dan"] },
-  { code: "HOS", full: "Hosea", abbrevs: ["Hos"] },
-  { code: "JOL", full: "Joel", abbrevs: [] },
-  { code: "AMO", full: "Amos", abbrevs: [] },
-  { code: "OBA", full: "Obadiah", abbrevs: ["Obad"] },
-  { code: "JON", full: "Jonah", abbrevs: [] },
-  { code: "MIC", full: "Micah", abbrevs: [] },
-  { code: "NAM", full: "Nahum", abbrevs: ["Nah"] },
-  { code: "HAB", full: "Habakkuk", abbrevs: [] },
-  { code: "ZEP", full: "Zephaniah", abbrevs: ["Zeph"] },
-  { code: "HAG", full: "Haggai", abbrevs: [] },
-  { code: "ZEC", full: "Zechariah", abbrevs: ["Zech"] },
-  { code: "MAL", full: "Malachi", abbrevs: [] },
-  { code: "MAT", full: "Matthew", abbrevs: ["Matt"] },
-  { code: "MRK", full: "Mark", abbrevs: ["Mrk"] },
-  { code: "LUK", full: "Luke", abbrevs: ["Luk"] },
-  { code: "JHN", full: "John", abbrevs: ["Jn"] },
-  { code: "ACT", full: "Acts", abbrevs: [] },
-  { code: "ROM", full: "Romans", abbrevs: ["Rom"] },
-  { code: "1CO", full: "1 Corinthians", abbrevs: ["1 Cor", "1st Corinthians", "First Corinthians", "I Corinthians"] },
-  { code: "2CO", full: "2 Corinthians", abbrevs: ["2 Cor", "2nd Corinthians", "Second Corinthians", "II Corinthians"] },
-  { code: "GAL", full: "Galatians", abbrevs: ["Gal"] },
-  { code: "EPH", full: "Ephesians", abbrevs: ["Eph"] },
-  { code: "PHP", full: "Philippians", abbrevs: ["Phil"] },
-  { code: "COL", full: "Colossians", abbrevs: ["Col"] },
-  { code: "1TH", full: "1 Thessalonians", abbrevs: ["1 Thess", "1st Thessalonians", "First Thessalonians", "I Thessalonians"] },
-  { code: "2TH", full: "2 Thessalonians", abbrevs: ["2 Thess", "2nd Thessalonians", "Second Thessalonians", "II Thessalonians"] },
-  { code: "1TI", full: "1 Timothy", abbrevs: ["1 Tim", "1st Timothy", "First Timothy", "I Timothy"] },
-  { code: "2TI", full: "2 Timothy", abbrevs: ["2 Tim", "2nd Timothy", "Second Timothy", "II Timothy"] },
-  { code: "TIT", full: "Titus", abbrevs: ["Tit"] },
-  { code: "PHM", full: "Philemon", abbrevs: ["Phlm"] },
-  { code: "HEB", full: "Hebrews", abbrevs: ["Heb"] },
-  { code: "JAS", full: "James", abbrevs: ["Jas"] },
-  { code: "1PE", full: "1 Peter", abbrevs: ["1 Pet", "1st Peter", "First Peter", "I Peter"] },
-  { code: "2PE", full: "2 Peter", abbrevs: ["2 Pet", "2nd Peter", "Second Peter", "II Peter"] },
-  { code: "1JN", full: "1 John", abbrevs: ["1 Jn", "1st John", "First John", "I John"] },
-  { code: "2JN", full: "2 John", abbrevs: ["2 Jn", "2nd John", "Second John", "II John"] },
-  { code: "3JN", full: "3 John", abbrevs: ["3 Jn", "3rd John", "Third John", "III John"] },
-  { code: "JUD", full: "Jude", abbrevs: [] },
-  { code: "REV", full: "Revelation", abbrevs: ["Rev"] },
-];
+// codes already live in the `verses` table. The (code, full name) identity
+// below is imported from the generated shared module (backend/app/
+// constants.py's ABBREV_TO_NAME, via frontend/lib/generated/book-maps.ts)
+// so it can never drift from app/study/page.tsx or app/library/page.tsx.
+//
+// BOOK_ABBREVS below is deliberately NOT sourced from the shared module and
+// stays hand-curated here. Two reasons this is not full-union duplication:
+//   1. This file's own detector is "deliberately conservative" by design
+//      (see the file-top comment) — it scans free-form generated answer
+//      prose, not an isolated search-box string, so it accepts a narrower
+//      set of short/compact forms (e.g. no bare "Jos", "Act", "Ezr") than
+//      the search-box parsers in app/study/page.tsx and
+//      backend/app/constants.py accept. Widening this list is a detection-
+//      policy decision, not a de-duplication, and needs its own sign-off.
+//   2. The ordinal-literal forms here ("1st Samuel", "2nd Corinthians",
+//      "3rd John") are NOT BOOK_MAP keys on the backend at all — the
+//      backend instead strips the ordinal suffix before lookup
+//      (app.routers.study.parse_ref / reference_verifier._parse_verse_or_
+//      range). This file has no such strip-first step, so these literal
+//      forms are load-bearing here specifically (confirmed still true by
+//      the 2026-07-28 ordinal/spelled/Roman-numeral fix commit, ee267d4).
+// A pre-existing, unrelated asymmetry found while consolidating (not
+// changed here, since this task is a de-dup, not a behavior change): this
+// file accepts "Jn" but not "Jhn"; the backend accepts "jhn" but has no
+// "jn" key — so "Jn 3:16" and "Jhn 3:16" resolve on only one side each.
+const BOOK_ABBREVS: Record<string, string[]> = {
+  GEN: ["Gen"],
+  EXO: ["Exod", "Exo"],
+  LEV: ["Lev"],
+  NUM: ["Num"],
+  DEU: ["Deut", "Deu"],
+  JOS: ["Josh"],
+  JDG: ["Judg"],
+  RUT: [],
+  "1SA": ["1 Sam", "1st Samuel", "First Samuel", "I Samuel"],
+  "2SA": ["2 Sam", "2nd Samuel", "Second Samuel", "II Samuel"],
+  "1KI": ["1 Kgs", "1st Kings", "First Kings", "I Kings"],
+  "2KI": ["2 Kgs", "2nd Kings", "Second Kings", "II Kings"],
+  "1CH": ["1 Chr", "1st Chronicles", "First Chronicles", "I Chronicles"],
+  "2CH": ["2 Chr", "2nd Chronicles", "Second Chronicles", "II Chronicles"],
+  EZR: [],
+  NEH: ["Neh"],
+  EST: ["Esth"],
+  JOB: [],
+  PSA: ["Psalm", "Ps"],
+  PRO: ["Prov"],
+  ECC: ["Eccl"],
+  SNG: ["Song of Songs", "Song"],
+  ISA: ["Isa"],
+  JER: ["Jer"],
+  LAM: ["Lam"],
+  EZK: ["Ezek"],
+  DAN: ["Dan"],
+  HOS: ["Hos"],
+  JOL: [],
+  AMO: [],
+  OBA: ["Obad"],
+  JON: [],
+  MIC: [],
+  NAM: ["Nah"],
+  HAB: [],
+  ZEP: ["Zeph"],
+  HAG: [],
+  ZEC: ["Zech"],
+  MAL: [],
+  MAT: ["Matt"],
+  MRK: ["Mrk"],
+  LUK: ["Luk"],
+  JHN: ["Jn"],
+  ACT: [],
+  ROM: ["Rom"],
+  "1CO": ["1 Cor", "1st Corinthians", "First Corinthians", "I Corinthians"],
+  "2CO": ["2 Cor", "2nd Corinthians", "Second Corinthians", "II Corinthians"],
+  GAL: ["Gal"],
+  EPH: ["Eph"],
+  PHP: ["Phil"],
+  COL: ["Col"],
+  "1TH": ["1 Thess", "1st Thessalonians", "First Thessalonians", "I Thessalonians"],
+  "2TH": ["2 Thess", "2nd Thessalonians", "Second Thessalonians", "II Thessalonians"],
+  "1TI": ["1 Tim", "1st Timothy", "First Timothy", "I Timothy"],
+  "2TI": ["2 Tim", "2nd Timothy", "Second Timothy", "II Timothy"],
+  TIT: ["Tit"],
+  PHM: ["Phlm"],
+  HEB: ["Heb"],
+  JAS: ["Jas"],
+  "1PE": ["1 Pet", "1st Peter", "First Peter", "I Peter"],
+  "2PE": ["2 Pet", "2nd Peter", "Second Peter", "II Peter"],
+  "1JN": ["1 Jn", "1st John", "First John", "I John"],
+  "2JN": ["2 Jn", "2nd John", "Second John", "II John"],
+  "3JN": ["3 Jn", "3rd John", "Third John", "III John"],
+  JUD: [],
+  REV: ["Rev"],
+};
+
+const BOOKS: Array<{ code: string; full: string; abbrevs: string[] }> = Object.entries(
+  ABBREV_TO_NAME
+).map(([code, full]) => ({ code, full, abbrevs: BOOK_ABBREVS[code] ?? [] }));
 
 // Longest-name-first so multi-word names ("1 Corinthians") aren't cut short
 // by a shorter alternative earlier in the list.

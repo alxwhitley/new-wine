@@ -1,6 +1,17 @@
 """Shared constants for the Rhemata backend."""
 
-# Bible book name -> 3-letter abbreviation mapping
+# Bible book name -> 3-letter abbreviation mapping.
+#
+# This is the canonical source for book-name recognition across the whole
+# product. frontend/app/study/page.tsx, frontend/app/library/page.tsx, and
+# (for the code<->full-name identity only) frontend/lib/study-reference.ts
+# no longer hand-type their own copies of this or ABBREV_TO_NAME below —
+# they import frontend/lib/generated/book-maps.ts, generated from this file
+# by scripts/generate_book_maps_ts.py. Edit BOOK_MAP/ABBREV_TO_NAME here,
+# then run `python3.12 scripts/generate_book_maps_ts.py` to regenerate;
+# `python3.12 scripts/generate_book_maps_ts.py --check` fails if the
+# generated file has drifted. See CLAUDE.md Landmines, "The book-name map
+# exists as five independent hand-maintained copies."
 BOOK_MAP = {
     # Old Testament
     "genesis": "GEN", "gen": "GEN",
