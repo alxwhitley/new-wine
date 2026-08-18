@@ -7,17 +7,13 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-19. `main` is at `642d023`, eight commits ahead of
-the previously recorded position (`2ef6860`): `2361e66` (prior session's
-own close commit), `aac7f7e` (legacy quote audit script), `046180d`
-(legacy quote audit results), `46a6a5f` (idempotency-race fix), `65404fc`
-(new blocker: quote quality), `5e6a8c9` (new settled decision: quote
-teacher scope open), `f4f07e0` (W7–W8 status update), `642d023`
-(idempotency-race Landmine resolved + migration-088 correction). The
-pre-existing untracked `Temporary-assets/` directory remains untouched. A
-20-quote read-only quote sample (`docs/audits/quote_quality_sample_2026-08-19.md`)
-was also pulled this session and deliberately left uncommitted, per
-instruction.
+Last verified: 2026-08-19 (handoff). `main` tip includes quote-quality
+track through Task 8 Step 1 (`1eec654` regressions) and handoff docs
+(`57faa67`). Migration 089 applied. Next single item: attended Task 5
+gold `--apply` on the 3 calibration docs — **wait for Alex’s explicit
+go**; do not flip `QUOTE_SELECTION_ENABLED`. Untracked
+`Temporary-assets/` and `docs/audits/quote_quality_sample_2026-08-19.md`
+remain deliberately uncommitted.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -26,15 +22,24 @@ for this file.
 
 ## Current state
 
-Rhemata now uses a Beta Critical Path operating model. Codex is the primary
-working surface; native agents/worktrees may assist bounded tasks. The custom
-multi-provider coordinator and overnight harness are retired from active
-development. Their code and history remain intact but no follow-up work is
-authorized. This retirement is scoped to the custom multi-provider
-coordinator and its unattended dispatch mechanism only; it places no
-restriction on ordinary Codex sessions continuing bounded repo-only work
-while Alex is away from the keyboard — a normal working session is not an
-overnight harness run.
+**Handoff (do not `--apply` without go):** Task 5 gold write on the 3
+calibration Prince non-book docs (~59 chunks, ~$1.42). Command after
+explicit go:
+
+`PYTHONUNBUFFERED=1 python3 scripts/extract_quotes_quality_pipeline.py --limit 3 --apply --status pending`
+
+Expect ~mid-20s pending rows (`quote_quality_v1`, `selection_eligible=true`,
+`topic_ids` set). Rail stays off. Already done on this track: Tasks 1–4,
+6–7; Task 5 script wired; migration 089 applied; calibration #2 = 27
+verify-pass; Task 8 Step 1 flag-off regressions. Still after apply: hard
+reconciliation, Alex QuoteRail visual sign-off, attended re-enable.
+
+Refs: `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`,
+`docs/audits/quote_propose_calibration_note_2026-08-19.md`,
+`scripts/extract_quotes_quality_pipeline.py`.
+
+Rhemata uses the Beta Critical Path model; Codex is the primary surface.
+Custom multi-provider coordinator / overnight harness remain retired.
 
 Planning is now split by operational purpose: `PLAN.md` is the short active
 Blocker queue; `docs/roadmap.md` contains Scheduled, Triggered, and Parked work;
