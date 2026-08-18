@@ -460,6 +460,22 @@ PLAN.md's Open Decisions note.
     slightly-off quote from the right teacher; under open, a weak match
     puts the wrong teacher's name beside a claim.
 
+    **Corpus concentration, confirmed live 2026-08-19 via the
+    `rhemata_readonly_analysis` role:** of 793 quotes in the corpus, all
+    but one are Derek Prince's; Andrew Murray has exactly 1. A 20-quote
+    random sample drew 20 Derek Prince quotes, consistent with that
+    distribution. Consequence, recorded so a future session does not read
+    "open scope" more generally than it operates: with this corpus, open
+    teacher scope means in practice that Derek Prince quotes may appear
+    beneath answers generated from every other teacher's material,
+    because there are no other teachers' quotes to serve. Every
+    cross-teacher quote appearance is Prince's name beside another
+    teacher's teaching. Alex confirmed the open-scope decision after
+    being told this directly. This raises the presentation requirement's
+    importance rather than changing it — the requirement above (visual
+    separation, teacher and source attribution attached to the quote
+    itself, settled before the quote rail is re-enabled) is unchanged.
+
 ## Session Routing
 
 Determines which path a session's task runs on — not a judgment call. Read

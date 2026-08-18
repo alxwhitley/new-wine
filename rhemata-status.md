@@ -107,7 +107,10 @@ from. Alex's explicit decision; accepted risk (teacher misrepresentation,
 ranked failure mode #2) recorded verbatim in CLAUDE.md. Requires
 presentation (visual separation, attribution attached to the quote
 itself, never inferred from surrounding prose) to be designed and settled
-before the quote rail is re-enabled.
+before the quote rail is re-enabled. Corpus fact bearing on this decision
+(confirmed live 2026-08-19): of 793 quotes, all but one are Derek
+Prince's — so in practice, open scope means Prince quotes may appear
+beneath any other teacher's answer, never the reverse.
 
 Full detail: PLAN.md's W7–W8 entry and its new "Quote quality" blocker;
 CLAUDE.md's quote-containment Landmines entry and settled decision #28.
