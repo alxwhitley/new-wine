@@ -23,8 +23,10 @@ review queue; see _log_quote_decision().
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Iterable, List, Mapping, Optional, Tuple
 
@@ -298,6 +300,77 @@ def _find_existing_quote_for_passage(
     return rows[0] if rows else None
 
 
+def _advisory_lock_key(chunk_id: str, quote_text: str, teacher_source_id: str) -> int:
+    """Deterministic signed-64-bit key for pg_advisory_lock(bigint), derived
+    from the exact triple _find_existing_quote_for_passage() matches on. The
+    same triple always hashes to the same key (SHA-256, not Python's salted
+    hash()), so two callers racing the same passage always contend for the
+    same lock; two callers on different passages essentially never collide
+    (a collision would only cost unrelated over-serialization, never a
+    missed duplicate -- see _creation_lock's docstring)."""
+    raw = "\x1f".join((chunk_id, teacher_source_id, quote_text)).encode("utf-8")
+    digest = hashlib.sha256(raw).digest()[:8]
+    return int.from_bytes(digest, byteorder="big", signed=True)
+
+
+@contextmanager
+def _creation_lock(chunk_id: str, quote_text: str, teacher_source_id: str):
+    """Makes a concurrent duplicate quote creation genuinely impossible, not
+    merely unlikely (2026-08-18 hardening -- CLAUDE.md Landmines' logged
+    idempotency finding: _find_existing_quote_for_passage() was a bare
+    SELECT with no lock behind it, so two callers racing the exact same
+    (chunk_id, quote_text, teacher_source_id) triple could both see "not
+    found" and both insert).
+
+    A DB-level UNIQUE constraint was the other option and was rejected: the
+    identity this function guards spans two tables (quote_source_revisions.
+    chunk_id, quotes.quote_text/teacher_source_id), so expressing it as a
+    real constraint would mean denormalizing chunk_id onto quotes plus a
+    partial unique index (excluding revoked rows, which must not block
+    recreation) -- schema DDL, i.e. a migration, for a race window this
+    session's scope explicitly prefers to close in code alone if genuinely
+    possible. A Postgres session-level advisory lock closes it just as
+    completely with no schema change: pg_advisory_lock is a true
+    cross-session mutex the database itself enforces, not an
+    application-level convention -- two processes (or two Postgres sessions
+    from the same process) requesting the same key are strictly
+    serialized by Postgres, regardless of which connection later performs
+    the actual idempotency SELECT or INSERT.
+
+    Opens its own short-lived psycopg2 connection via
+    app.services.async_answers.db.connect() (the existing SUPABASE_DB_URL
+    helper this codebase already uses for the same class of problem --
+    source_ingest_queue's FOR UPDATE SKIP LOCKED claiming) because the
+    PostgREST client (`db`, supabase-py) create_and_approve_quote()
+    otherwise uses has no session/transaction concept to hold a lock on;
+    each PostgREST call is its own independent, auto-committing request.
+    The lock is session-scoped (pg_advisory_lock, not the _xact_ variant)
+    because the guarded work happens over `db`, a separate connection --
+    holding the lock only needs the dedicated connection to stay open and
+    unlock explicitly, not an open transaction wrapping the guarded calls.
+
+    Not on the hot per-answer path: create_and_approve_quote() is the
+    admin-only quote-creation call (backend/app/routers/quotes.py), not
+    select_quotes_for_answer() (the live per-answer read path) -- a fresh
+    connection per creation call is deliberately not optimized for
+    throughput here."""
+    from app.services.async_answers.db import connect
+
+    key = _advisory_lock_key(chunk_id, quote_text, teacher_source_id)
+    conn = connect()
+    conn.autocommit = True
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT pg_advisory_lock(%s)", (key,))
+        yield
+    finally:
+        try:
+            cur.execute("SELECT pg_advisory_unlock(%s)", (key,))
+        finally:
+            cur.close()
+            conn.close()
+
+
 def create_and_approve_quote(
     db,
     chunk_id: str,
@@ -335,94 +408,95 @@ def create_and_approve_quote(
         if not value or not value.strip():
             raise ValueError("%s is required" % label)
 
-    existing = _find_existing_quote_for_passage(db, chunk_id, quote_text, teacher_source_id)
-    if existing is not None:
-        logger.info(
-            "create_and_approve_quote: idempotent no-op -- quote %s already exists "
-            "for this exact chunk/text/teacher (status=%s)",
-            existing["id"], existing["status"],
+    with _creation_lock(chunk_id, quote_text, teacher_source_id):
+        existing = _find_existing_quote_for_passage(db, chunk_id, quote_text, teacher_source_id)
+        if existing is not None:
+            logger.info(
+                "create_and_approve_quote: idempotent no-op -- quote %s already exists "
+                "for this exact chunk/text/teacher (status=%s)",
+                existing["id"], existing["status"],
+            )
+            return existing
+
+        chunk_lookup = db.table("chunks").select("document_id").eq("id", chunk_id).limit(1).execute().data
+        document_id_for_log = chunk_lookup[0]["document_id"] if chunk_lookup else None
+
+        verification = verify_quote_candidate(db, chunk_id, quote_text, teacher_source_id)
+        if not verification.valid:
+            _log_quote_decision(
+                db,
+                chunk_id=chunk_id,
+                document_id=document_id_for_log,
+                teacher_source_id=teacher_source_id,
+                quote_text=quote_text,
+                decision="refused",
+                rule=verification.rule,
+                reason=verification.reason,
+                submitted_by=user_id,
+            )
+            raise ValueError("verifier rejected candidate: %s" % verification.reason)
+
+        chunk_rows = db.table("chunks").select("content, document_id").eq("id", chunk_id).limit(1).execute().data
+        if not chunk_rows:
+            raise ValueError("chunk %s not found" % chunk_id)
+        passage_text = chunk_rows[0]["content"]
+        document_id = chunk_rows[0]["document_id"]
+
+        try:
+            _enforce_quote_cap(db, document_id, quote_text)
+        except ValueError as e:
+            _log_quote_decision(
+                db,
+                chunk_id=chunk_id,
+                document_id=document_id,
+                teacher_source_id=teacher_source_id,
+                quote_text=quote_text,
+                decision="refused",
+                rule="quote_cap_exceeded",
+                reason=str(e),
+                submitted_by=user_id,
+            )
+            raise
+
+        revision = (
+            db.table("quote_source_revisions")
+            .insert({"chunk_id": chunk_id, "passage_text": passage_text, "captured_by": user_id})
+            .execute()
+            .data[0]
         )
-        return existing
 
-    chunk_lookup = db.table("chunks").select("document_id").eq("id", chunk_id).limit(1).execute().data
-    document_id_for_log = chunk_lookup[0]["document_id"] if chunk_lookup else None
-
-    verification = verify_quote_candidate(db, chunk_id, quote_text, teacher_source_id)
-    if not verification.valid:
-        _log_quote_decision(
-            db,
-            chunk_id=chunk_id,
-            document_id=document_id_for_log,
-            teacher_source_id=teacher_source_id,
-            quote_text=quote_text,
-            decision="refused",
-            rule=verification.rule,
-            reason=verification.reason,
-            submitted_by=user_id,
+        now = datetime.now(timezone.utc).isoformat()
+        quote = (
+            db.table("quotes")
+            .insert(
+                {
+                    "source_revision_id": revision["id"],
+                    "teacher_source_id": teacher_source_id,
+                    "quote_text": quote_text,
+                    "topic": topic.strip(),
+                    "reviewer_note": reviewer_note.strip(),
+                    "status": "approved",
+                    "created_by": user_id,
+                    "approved_by": user_id,
+                    "approved_at": now,
+                }
+            )
+            .execute()
+            .data[0]
         )
-        raise ValueError("verifier rejected candidate: %s" % verification.reason)
 
-    chunk_rows = db.table("chunks").select("content, document_id").eq("id", chunk_id).limit(1).execute().data
-    if not chunk_rows:
-        raise ValueError("chunk %s not found" % chunk_id)
-    passage_text = chunk_rows[0]["content"]
-    document_id = chunk_rows[0]["document_id"]
-
-    try:
-        _enforce_quote_cap(db, document_id, quote_text)
-    except ValueError as e:
         _log_quote_decision(
             db,
             chunk_id=chunk_id,
             document_id=document_id,
             teacher_source_id=teacher_source_id,
             quote_text=quote_text,
-            decision="refused",
-            rule="quote_cap_exceeded",
-            reason=str(e),
+            decision="accepted",
+            rule="accepted",
+            reason=None,
             submitted_by=user_id,
         )
-        raise
-
-    revision = (
-        db.table("quote_source_revisions")
-        .insert({"chunk_id": chunk_id, "passage_text": passage_text, "captured_by": user_id})
-        .execute()
-        .data[0]
-    )
-
-    now = datetime.now(timezone.utc).isoformat()
-    quote = (
-        db.table("quotes")
-        .insert(
-            {
-                "source_revision_id": revision["id"],
-                "teacher_source_id": teacher_source_id,
-                "quote_text": quote_text,
-                "topic": topic.strip(),
-                "reviewer_note": reviewer_note.strip(),
-                "status": "approved",
-                "created_by": user_id,
-                "approved_by": user_id,
-                "approved_at": now,
-            }
-        )
-        .execute()
-        .data[0]
-    )
-
-    _log_quote_decision(
-        db,
-        chunk_id=chunk_id,
-        document_id=document_id,
-        teacher_source_id=teacher_source_id,
-        quote_text=quote_text,
-        decision="accepted",
-        rule="accepted",
-        reason=None,
-        submitted_by=user_id,
-    )
-    return quote
+        return quote
 
 
 def revoke_quote(db, quote_id: str, user_id: str):

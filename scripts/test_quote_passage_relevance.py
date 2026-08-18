@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import sys
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -317,6 +318,21 @@ def test_considered_teacher_filtering_unchanged():
 
 
 # ── Idempotent creation ─────────────────────────────────────────────────
+#
+# create_and_approve_quote() now wraps its check-then-insert body in
+# _creation_lock() (2026-08-18 concurrency hardening -- see quotes.py and
+# scripts/test_quote_creation_race.py, which covers the lock's actual
+# cross-thread mutual-exclusion behavior with a real advisory-lock
+# simulation). These tests are single-threaded and only care about the
+# idempotency business logic, not locking mechanics, so _creation_lock is
+# patched to a real no-op here -- otherwise every call below would try to
+# open a genuine psycopg2 connection via SUPABASE_DB_URL, which is not
+# available (or wanted) in this repo-only mocked-embeddings suite.
+
+@contextmanager
+def _noop_lock(*_args, **_kwargs):
+    yield
+
 
 PRINCE_ID = next(iter(quotes.CONFIRMED_TEACHER_SOURCE_IDS))
 
@@ -343,12 +359,13 @@ def _seed_creation_fixture():
 
 def test_idempotent_creation_no_duplicate_row():
     db = _seed_creation_fixture()
-    first = quotes.create_and_approve_quote(
-        db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "first call", "user-1"
-    )
-    second = quotes.create_and_approve_quote(
-        db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "second call", "user-1"
-    )
+    with patch.object(quotes, "_creation_lock", _noop_lock):
+        first = quotes.create_and_approve_quote(
+            db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "first call", "user-1"
+        )
+        second = quotes.create_and_approve_quote(
+            db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "second call", "user-1"
+        )
     check(
         "re-running creation over the same passage returns the same quote id",
         first["id"] == second["id"],
@@ -368,17 +385,18 @@ def test_idempotent_creation_no_duplicate_row():
 
 def test_idempotent_short_circuit_skips_verification():
     db = _seed_creation_fixture()
-    quotes.create_and_approve_quote(
-        db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "first call", "user-1"
-    )
-
-    def must_not_run(*_args, **_kwargs):
-        raise AssertionError("idempotent path re-invoked the verifier")
-
-    with patch.object(quotes, "verify_quote_candidate", side_effect=must_not_run):
-        result = quotes.create_and_approve_quote(
-            db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "second call", "user-1"
+    with patch.object(quotes, "_creation_lock", _noop_lock):
+        quotes.create_and_approve_quote(
+            db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "first call", "user-1"
         )
+
+        def must_not_run(*_args, **_kwargs):
+            raise AssertionError("idempotent path re-invoked the verifier")
+
+        with patch.object(quotes, "verify_quote_candidate", side_effect=must_not_run):
+            result = quotes.create_and_approve_quote(
+                db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "Test Topic", "second call", "user-1"
+            )
     check(
         "the idempotent short-circuit returns the existing row without re-running the verifier",
         result["status"] == "approved",
@@ -409,9 +427,10 @@ def test_idempotency_ignores_revoked():
             "created_at": "2026-01-01T00:00:00+00:00",
         }
     )
-    result = quotes.create_and_approve_quote(
-        db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "New Topic", "fresh call after revocation", "user-1"
-    )
+    with patch.object(quotes, "_creation_lock", _noop_lock):
+        result = quotes.create_and_approve_quote(
+            db, "chunk-1", CANDIDATE_TEXT, PRINCE_ID, "New Topic", "fresh call after revocation", "user-1"
+        )
     check(
         "a revoked prior quote for the same passage does not block recreation",
         result["id"] != "old-revoked-quote" and result["status"] == "approved",
