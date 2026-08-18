@@ -928,19 +928,34 @@ different row, per the hard rule above.
   dropped.
   `quote_selection_enabled()` (`backend/app/services/quotes.py`) requires the
   exact string `"true"` on `QUOTE_SELECTION_ENABLED`; anything else, including
-  case variants, is off. With it off (the deployed default): the producer
-  never calls the selector and emits no `quote_ids` on a fresh answer; the
-  reuse/dedup key (`current_policy()`'s `policy_version`,
-  `async_answers/producer.py`) changes with the flag so a cached/reused answer
-  can never cross flag state; an in-flight single-flight job likewise can
-  never cross flag state; and SSE delivery re-checks the flag at read time, so
-  an already-completed job's persisted `quote_ids` are suppressed if the flag
-  is off when it's served. This covers fresh, cached, idempotent-redelivery,
-  and in-flight answers alike — proven in
-  `scripts/test_quote_selection_gate.py`, not just asserted. Existing approved
-  quote rows are untouched by any of this. Turning the flag on in the deployed
-  environment is the attended re-enablement gate PLAN.md W5 still requires
-  Alex's explicit approval for — merging this code does not authorize it.
+  case variants, is off. With it off: the producer never calls the selector
+  and emits no `quote_ids` on a fresh answer; the reuse/dedup key
+  (`current_policy()`'s `policy_version`, `async_answers/producer.py`) changes
+  with the flag so a cached/reused answer can never cross flag state; an
+  in-flight single-flight job likewise can never cross flag state; and SSE
+  delivery re-checks the flag at read time, so an already-completed job's
+  persisted `quote_ids` are suppressed if the flag is off when it's served.
+  Proven in `scripts/test_quote_selection_gate.py`. **Corrected 2026-08-19 —
+  the deployed default is no longer off.** Alex attended
+  `QUOTE_SELECTION_ENABLED=true` on Railway `rhemata` + `answer-worker` after
+  promoting the 28 gold `quote_quality_v1` rows to approved; smoke job
+  `6e1e0b62-…` ran with `policy_v3:quote_selection=true` and returned only
+  gold-pipeline eligible IDs. Selection still requires
+  `status=approved AND selection_eligible AND quality_pipeline_version IS NOT
+  NULL` — legacy rows stay unserved. Visual/taste polish on Settled #28
+  presentation remains deferred to Claude; flipping the flag off again is
+  still the seconds-reversible kill switch (exact `"true"` only).
+- **Railway `rhemata` service builder can silently drift to Railpack without
+  `rootDirectory=/backend`.** Observed 2026-08-19: GitHub-triggered deploys
+  after `ad0dc0a` failed with connect-deadline / snapshot errors while the
+  service manifest showed `RAILPACK` and no backend root — prior SUCCESS
+  deploys had been NIXPACKS + `backend/` + `/backend/railway.toml`. Brief
+  production API outage until rollback, then `serviceInstanceUpdate` restored
+  NIXPACKS + `/backend` + railway.toml fields and `serviceInstanceDeployV2`
+  at `ad0dc0a` succeeded. `answer-worker` (repo-root Nixpacks) was unaffected
+  in kind. Before trusting a failed `rhemata` deploy as a code problem, check
+  builder + rootDirectory on the deployment meta; do not flip quote or other
+  env gates onto an older live image that lacks the matching code.
 - **PARKED — `scripts/harness_coordinator/v1` and its unmerged CLI adapter.**
   The following is historical evidence, not authorized follow-up work.
   `scripts/harness_coordinator/v1`'s `invoke.py` had no live-provider call

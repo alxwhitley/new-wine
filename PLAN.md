@@ -9,10 +9,11 @@ scope) are on the launch critical path — without compromising propositions,
 generated answers, or recoverability. Web-article ingestion remains an
 attended parallel track.
 
-**Current item:** **Q2 remainder → Q3 — QuoteRail visual sign-off, then
-attended re-enable.** Task 5 gold apply on the 3 calibration docs is DONE
-(28 pending rows, live-reconciled). **Keep `QUOTE_SELECTION_ENABLED` off**
-until Alex signs off presentation and explicitly flips it. Plan:
+**Current item:** **QuoteRail design polish (Claude)** — functional Q2/Q3
+re-enable is DONE (28 gold rows approved; `QUOTE_SELECTION_ENABLED=true`;
+smoke gold-only). Visual/taste pass on Settled #28 presentation is deferred
+to Claude by Alex (2026-08-19). Parallel blocker still waiting: **W5–W6**
+quarantined article proof. Plan:
 `docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`.
 
 ## Governing boundary
@@ -80,8 +81,9 @@ Decisions locked in the spec + CLAUDE.md Settled #29:
 
 ### Q2 — Gold extract + presentation + legacy selection-ineligibility
 
-**Status:** Gold apply DONE on 3 calibration docs. **Next:** Alex QuoteRail
-visual sign-off, then attended re-enable (Q3).
+**Status:** DONE enough for re-enable 2026-08-19. Gold apply + eligibility +
+presentation code landed; **visual/taste sign-off deferred to Claude** (Alex)
+while the functional rail is live.
 
 - [x] Costed dry-run propose + calibration note (paid #2: 27 verify-pass /
   ~$1.42 / 59 windows) —
@@ -91,29 +93,30 @@ visual sign-off, then attended re-enable (Q3).
   selection_eligible=false).
 - [x] Attended gold write on 3 calibration docs (`--limit 3 --apply
   --status pending`) + hard reconciliation — **stored=28**,
-  refused_quality=11, refused_verify=3, errors=0; live DB 28/28 pending
-  with `quote_quality_v1` + `selection_eligible=true` + `topic_ids` set
-  (report `quote_propose_review/gold_pipeline_apply_20260818T212522Z.json`).
-- [x] Selection eligibility = new-pipeline/gold only in code; rail still off
-  (pending gold also requires `status=approved` before selection).
+  refused_quality=11, refused_verify=3, errors=0; later promoted
+  pending→approved (28/28) for re-enable.
+- [x] Selection eligibility = new-pipeline/gold only in code.
 - [x] Presentation code: visual separation + teacher/source on the quote
-  (#28) — Alex visual sign-off still open.
+  (#28) — **functional fields live**; design polish deferred to Claude.
 - [x] Legacy 793 selection-ineligible via migration 089 backfill (rows
   remain; unselectable).
 
 ### Q3 — Regressions + attended quote-rail re-enable
 
-**Status:** Step 1 DONE (`1eec654`). Gold apply DONE (28 pending). Waiting
-on Alex QuoteRail visual sign-off, pending→approved for gold, then
-attended re-enable + smoke. (Absorbs prior W8 quote proofs.)
+**Status:** DONE 2026-08-19 — flag on + smoke gold-only. (Absorbs prior W8
+quote proofs.) Residual: QuoteRail design polish (Claude), not a re-enable
+gate.
 
 - [x] Flag-off regressions: baptism FP class; honest no-support; exact
   chunk IDs; **no bad quote IDs**; bounded teacher-card (no quote rail);
   eligibility mutation. Article-supported answer proof deferred until
   W5–W6 lands a live article.
-- [ ] Alex QuoteRail visual sign-off + pending→approved for the 28 gold
-  rows.
-- [ ] Attended `QUOTE_SELECTION_ENABLED=true` + smoke — Alex only.
+- [x] Pending→approved for the 28 gold rows (attended; 28/28 reconciled).
+- [x] Attended `QUOTE_SELECTION_ENABLED=true` on Railway `rhemata` +
+  `answer-worker` + smoke — job `6e1e0b62-…`,
+  `policy_v3:quote_selection=true`, 3 quote IDs all
+  `quote_quality_v1` / approved / selection_eligible; resolve returns
+  work_title + topic_ids + restated_point.
 
 ### W5–W6 — One quarantined article proof
 
