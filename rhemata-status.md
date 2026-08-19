@@ -7,8 +7,8 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-19 (session close — master ingestion-candidate
-spreadsheet built, two-tab split, Round 1–3 candidates + URLs loaded).
+Last verified: 2026-08-19 (session close — pre-beta research pass, two
+production fixes shipped and deployed, one live migration applied).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,70 +17,88 @@ for this file.
 
 ## Current state
 
-Codex is the primary working surface; custom multi-provider coordinator /
-overnight harness remain retired (Invariant 15). Beta Critical Path
-operating model; `PLAN.md` = blockers (still empty — W1–W9 finish-line
-closed 2026-08-19, untouched this session); `docs/roadmap.md` = later work.
+`PLAN.md`'s private-beta blocker queue stayed empty all session (still **0**
+active blockers) — this session's work came from `docs/roadmap.md`'s
+Scheduled B1-B7/A1-A6 tracks instead, via ad hoc read-only research, not a
+formal blocker promotion.
 
-**This session — built the master ingestion-candidate spreadsheet system,
-end to end, across four turns.** Repo-file work throughout, plus one real
-database write (the sync script's `--apply`, attended and Alex-approved
-after reviewing a dry run) and one read-only corpus cross-check. No
-migrations; admin panel and frontend untouched. Full mechanics recorded in
-CLAUDE.md's Landmines section — not repeated here.
+**1. Five parallel read-only research forks**, each logging to
+`docs/audits/2026-08/` (commit `0de185d`): product-contract-vs-code gap
+check (B1/B2), account-deletion table/FK scope (B4), security/privacy/abuse
+code-reading snapshot (B5), a live corpus census (A1), and verification of
+two suspect Discovery-tab ingestion URLs.
 
-1. Built `docs/ingestion/master_ingestion_queue.xlsx` (tracked in git, not
-   gitignored like the YouTube/magazine trackers) from the 6 live
-   `source_ingest_queue` rows plus the 6 hardcoded frontend research-target
-   cards. Verified by re-reading the finished file, not by trusting the
-   write.
-2. Built `scripts/sync_master_ingestion_queue.py` — dry-run-by-default,
-   `--apply` required to write. A synthetic-scenario test caught and fixed
-   a real bug before it ever touched the real database: blank sheet cells
-   would have nulled out NOT-NULL execution-tracking columns on overwrite.
-   Ran `--apply` once for real, Alex-approved: a genuine no-op (0 creates,
-   0 overwrites) — the real-write path is still unproven against an actual
-   change.
-3. Restructured the workbook into two tabs on Alex's decision: Discovery
-   (raw, unvetted — the sync script structurally cannot open this tab) and
-   Queue (vetted, matches `source_ingest_queue`'s shape). All 12
-   pre-existing rows verified preserved across the split. Loaded 112
-   unique candidates from a Round 1–3 research pass into Discovery, all
-   `verification_status=unverified`. Cross-checked by name against the
-   live `sources` table (read-only role): 4 already in the corpus (Bill
-   Johnson, Randy Clark, Daniel Kolenda, Craig Keener) — flagged, not
-   silently treated as new.
-4. Filled Discovery-tab URLs for 109 of the 112 from a second research
-   pass; 3 explicitly-ambiguous names left blank with a note instead of a
-   guessed URL. Renamed the URL columns to carry the tab's existing
-   `claimed_` convention for unverified guesses. Two rows flagged
-   known-suspect for Alex to manually check before trusting at all: Loren
-   Cunningham and Reinhard Bonnke, both deceased, both listed with clean
-   live-looking personal domains.
+**2. Fixed a real B5 finding same session** (commit `f14c7e1`): `GET
+/study/teacher/{source_id}` (`get_teacher_card()`) had zero query metering
+before its live Anthropic generation — any authenticated user could loop it
+for unlimited free generations. Now shares `enforce_query_limit()` with
+`/async-chat/submit` (same weekly quota pool, not a separate limit). Three
+fake-DB regression tests updated for the RPC-call bookkeeping this changes;
+`test_debate_topics.py`'s live Tier B section updated to use a real test
+account (not run this session — real cost/DB writes).
 
-All 3 commits from this session pushed to origin (`e0eb606`, `4af426e`,
-`f2a9196`). No open blocker created.
+**3. Fixed a real B4 finding same session, migration + code** (commit
+`25d2625`, migration **090 applied to production, verified 28/28**):
+`pastors_cards.user_id`, `quotes.{created_by,approved_by,revoked_by}`,
+`quote_source_revisions.captured_by`, `document_quote_clearance.cleared_by`
+all referenced `auth.users` with `NO ACTION` — deleting either of the 2 real
+admin accounts referenced across these tables would have raised a live
+FK-violation error. Fixed via Alex's chosen design: each actor column gets a
+NOT-NULL `*_email` snapshot captured at write time
+(`app.auth.resolve_user_email()`), the FK becomes `ON DELETE SET NULL`, and
+`quotes.approved_by`'s CHECK + `enforce_quote_approval_gates()` trigger were
+narrowed to only require a real `approved_by` at the moment a row
+transitions into `'approved'` (gates 2-4 + speaker-confirmation untouched).
+Deploy-ordered correctly: code pushed to `origin/main` in the same session
+right after the migration, so the previously-deployed backend's window of
+failing new quote/card/clearance writes (NOT NULL violation) should be
+closed once Railway's auto-deploy completes — **not independently confirmed
+this session; verify the `rhemata` Railway deployment succeeded before
+trusting new quote/pastors-card/clearance writes.**
+
+**4. Fixed two stale doc claims** (commit `5e0511d`): POSITIONING.md said
+verbatim quoting was "not live yet" (it's been live since earlier the same
+day); PRODUCT.md still named John Bevere as an example covered teacher
+(pulled from marketing 2026-08-06, zero corpus docs).
+
+All 4 commits pushed to `origin/main`: `0de185d`, `5e0511d`, `f14c7e1`,
+`25d2625`.
 
 ---
 
-## Classified work
+## Findings surfaced this session, not yet acted on
 
-Unchanged from last close except one resolution: the "real DB-backed
-future-ingestion-candidates table" item flagged Deferred/non-blocking at
-last close is now resolved by this session's work — Alex's decision was a
-spreadsheet, not a database table, so that open question is closed, not
-still pending.
-
-Still outstanding, still not triaged into `docs/roadmap.md`: the frontend
-lint debt (27 pre-existing `react-hooks/set-state-in-effect` errors) and the
-parked harness-adapter git stash on `claude/harness-claude-cli-adapter`.
+- **A1 census**: Bill Johnson, Randy Clark, and Craig Keener each have a
+  `sources` row but **zero documents** — contradicts the prior session's
+  ingestion-spreadsheet cross-check, which only confirmed the row exists.
+  CLF Church (15 docs) and Rhemata's own content (9 docs) have **zero
+  eligible propositions** — first-party material sitting unprocessed, not a
+  corpus-acquisition gap.
+- **Reinhard Bonnke's** Discovery-tab URL (`reinhardbonnke.com`) has an
+  expired TLS cert and no corroboration from CfaN's own site — don't ingest
+  from it as-is. **Darlene Cunningham's** URL has the same unverified-
+  personal-domain pattern and was never checked (flagged in passing, out of
+  original scope).
+- B5 snapshot: no retention/TTL logic anywhere for user data; CORS
+  `allow_origins` value not traced to its actual source; no dependency or
+  security-header scan run. `/corpus-inventory/export`'s public,
+  unauthenticated endpoint reconfirmed as Alex's existing accepted
+  exception, not a new gap.
+- B4 audit: `rhemata_readonly_analysis` has no grant on any PII table
+  (conversations, messages, saved_words, etc.) — row counts there need an
+  attended service-role session. Also observed live this session: the role
+  *can* `CREATE TEMP TABLE` (ordinary Postgres default privilege, session-
+  local, not a real write hole on any real table — confirmed, not a gap).
+- Full cascading account deletion (the Supabase Admin API call + snapshot
+  ordering) is still **not built** — migration 090 only removed the
+  database-level blocker; `POST /account/delete-request` is still a stub.
 
 ---
 
 ## Next single item
 
-Nothing blocking. Options for Alex: promote a Discovery-tab candidate
-through real vetting to prove the Queue → database `--apply` path against
-an actual change (only proven as a no-op so far); manually check the two
-flagged deceased-person URLs before trusting them; or pick up
-`docs/roadmap.md`'s B1/A1 items. Active blocker count **0**.
+Confirm the Railway `rhemata` deploy from this session's push succeeded
+(builder has drifted before — see CLAUDE.md Landmines) before trusting new
+quote/pastors-card/clearance writes in production. After that: Alex's call
+among the surfaced findings above, or pick up `docs/roadmap.md`'s remaining
+B1/B4/B5 scope. Active blocker count **0**.

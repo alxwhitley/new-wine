@@ -1578,12 +1578,28 @@ different row, per the hard rule above.
   construction — the known fabrication contains no checkable specifics at
   all. Don't treat either check, if one gets built, as covering this failure
   class without re-confirming against it directly.
-- **Delete account is a stub, not real deletion.** `POST /account/delete-request`
+- **Delete account is still a stub, not real deletion — but the database-level
+  blocker that would have prevented it is gone.** `POST /account/delete-request`
   only inserts a row into `deletion_requests` for manual admin follow-up
   (Admin panel → Contributors → "Account Deletion Requests"). No cascading
   deletion of `conversations`, `saved_words`, `pastors_cards`, `user_roles`,
   or the Supabase auth user exists anywhere in the codebase. A submitted
-  request means nothing has been removed yet.
+  request means nothing has been removed yet. **What changed 2026-08-19**
+  (migration 090, `docs/audits/2026-08/b4_account_deletion_scope_2026-08-19.md`):
+  `pastors_cards.user_id`, `quotes.{created_by,approved_by,revoked_by}`,
+  `quote_source_revisions.captured_by`, and
+  `document_quote_clearance.cleared_by` used to `REFERENCES auth.users(id)`
+  with no `ON DELETE` action (`NO ACTION`) — deleting either of the 2 real
+  admin accounts referenced across those tables would have raised a live
+  FK-violation error, not just "the feature isn't built." Each actor column
+  now has a companion `NOT NULL *_email` snapshot captured at write time
+  (`app.auth.resolve_user_email()`), and the FK itself is `ON DELETE SET
+  NULL`; `quotes.approved_by`'s CHECK + `enforce_quote_approval_gates()`
+  trigger were narrowed to require a real `approved_by` only at the moment a
+  row transitions into `'approved'`, not forever after. This closes the
+  schema-level blocker only — a real deletion implementation (the Supabase
+  Admin API call, ordering, audit-trail snapshot before the
+  `deletion_requests` row itself cascades away) is still unbuilt.
 - **YouTube ingestion has stopped — Alex's decision, 2026-07-25.** Do not run
   `run_queue_triage.py` / `run_queue_ingest.py` or otherwise pull new YouTube
   material without checking with Alex first. Vlad Savchuk and Zac Poonen — 61%
