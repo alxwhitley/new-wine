@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.auth import require_user
 from app.constants import ABBREV_TO_NAME, resolve_book_abbrev
 from app.db.supabase import get_supabase
+from app.services.async_answers.metering import enforce_query_limit
 from app.services.embeddings import embed_text
 from app.services.source_filter import get_disabled_filters, is_chunk_disabled
 from app.services.source_resolver import is_source_servable
@@ -972,6 +973,15 @@ async def get_teacher_card(
     user_id: str = Depends(require_user),
 ):
     db = get_supabase()
+
+    # Fail-closed usage metering (B5 gap, 2026-08-19: this route ran a live
+    # Anthropic generation with no query-count ceiling at all -- any
+    # authenticated user could loop it with varying `question` values for
+    # unlimited free generations at real cost). `require_user` guarantees
+    # user_id is never empty, so this always takes enforce_query_limit's
+    # authenticated weekly-limit branch, sharing the same limit as
+    # /async-chat/submit -- anon_id/client_ip are unused on that branch.
+    enforce_query_limit(db, user_id, None, None)
 
     profile_result = (
         db.table("teacher_profiles")

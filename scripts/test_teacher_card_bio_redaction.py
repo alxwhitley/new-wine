@@ -377,7 +377,10 @@ def test_check3_commentary_heavy_candidate_count_before_after():
          _Patch(study, "embed_text", lambda q: [0.0] * 1536), \
          _Patch(study, "is_source_servable", lambda _db, _sid: True):
         result_before = asyncio.run(study.get_teacher_card("src-heavy", "What does this teacher say?", user_id="test"))
-    rpc_calls_before = list(db.rpc_calls)
+    # rpc_calls also carries the enforce_query_limit metering call (2026-08-19
+    # fix -- get_teacher_card now meters before doing any work), so filter to
+    # match_teacher_chunks specifically before counting/inspecting.
+    rpc_calls_before = [c for c in db.rpc_calls if c[0] == "match_teacher_chunks"]
     db.rpc_calls = []
 
     # AFTER: real, current code (TEACHER_CARD_CANDIDATE_DOC_LIMIT = 200, as shipped).
@@ -386,7 +389,7 @@ def test_check3_commentary_heavy_candidate_count_before_after():
          _Patch(study, "embed_text", lambda q: [0.0] * 1536), \
          _Patch(study, "is_source_servable", lambda _db, _sid: True):
         result_after = asyncio.run(study.get_teacher_card("src-heavy", "What does this teacher say?", user_id="test"))
-    rpc_calls_after = list(db.rpc_calls)
+    rpc_calls_after = [c for c in db.rpc_calls if c[0] == "match_teacher_chunks"]
 
     before_ids = rpc_calls_before[0][1].get("document_ids") if rpc_calls_before else []
     after_ids = rpc_calls_after[0][1].get("document_ids") if rpc_calls_after else []

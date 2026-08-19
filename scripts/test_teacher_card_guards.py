@@ -360,9 +360,13 @@ def test_guard2_commentary_document_excluded_from_rpc_call():
          _Patch(study, "is_source_servable", lambda _db, _sid: True):
         result = asyncio.run(study.get_teacher_card("src-teacher", "What does this teacher say?", user_id="test"))
 
-    _check("exactly 1 RPC call to match_teacher_chunks was made", len(db.rpc_calls) == 1)
-    if db.rpc_calls:
-        sent_document_ids = db.rpc_calls[0][1].get("document_ids")
+    # rpc_calls also carries the enforce_query_limit metering call (2026-08-19
+    # fix -- get_teacher_card now meters before doing any work), so filter to
+    # this guard's own RPC rather than asserting on the raw list length.
+    match_calls = [c for c in db.rpc_calls if c[0] == "match_teacher_chunks"]
+    _check("exactly 1 RPC call to match_teacher_chunks was made", len(match_calls) == 1)
+    if match_calls:
+        sent_document_ids = match_calls[0][1].get("document_ids")
         _check("RPC document_ids contains ONLY the non-commentary doc", sent_document_ids == ["doc-ordinary"])
         _check("RPC document_ids does NOT contain the word_study doc", "doc-commentary" not in (sent_document_ids or []))
     _check(
@@ -396,7 +400,10 @@ def test_guard2_all_documents_commentary_falls_back_to_no_works_shape():
          _Patch(study, "is_source_servable", lambda _db, _sid: True):
         result = asyncio.run(study.get_teacher_card("src-commentary-only", "What does this teacher say?", user_id="test"))
 
-    _check("zero RPC calls were made (filtering emptied document_ids before the RPC)", len(db.rpc_calls) == 0)
+    # rpc_calls also carries the enforce_query_limit metering call (2026-08-19
+    # fix); this guard only claims match_teacher_chunks itself was skipped.
+    match_calls = [c for c in db.rpc_calls if c[0] == "match_teacher_chunks"]
+    _check("zero RPC calls to match_teacher_chunks were made (filtering emptied document_ids before the RPC)", len(match_calls) == 0)
     _check("zero Anthropic calls were made", len(client.messages.calls) == 0)
     _check("position is None (the existing no-content fallback shape)", result.get("position") is None)
     _check(

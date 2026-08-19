@@ -29,6 +29,17 @@ a real, non-empty `position` either way. Requires SUPABASE_URL/
 SUPABASE_SERVICE_KEY + the Anthropic key to be set (backend/app/.env),
 same as scripts/test_teacher_card.py.
 
+get_teacher_card() now meters every call via enforce_query_limit() (2026-08-19
+fix for the previously-unmetered teacher-card cost/abuse gap), which writes to
+the real `user_usage` table and requires a user_id that is an actual
+auth.users row (a placeholder string 400s on the RPC's uuid param, and a
+syntactically-valid-but-nonexistent UUID FK-violates). Tier B therefore
+resolves a real test user (TEST_EMAIL, same account scripts/test_metering.py
+uses) via the admin API rather than a fake id, and each of the 2 calls below
+consumes one real slot against that account's weekly query limit -- a live
+side effect, not just an Anthropic cost, disclosed here so it isn't a
+surprise when this script is next run.
+
 Run: python3 scripts/test_debate_topics.py
 """
 import asyncio
@@ -189,6 +200,11 @@ def test_teacher_card_prompt_routing():
 
 DEREK_PRINCE_SOURCE_ID = None  # resolved live below, not hardcoded
 
+# Real, existing auth.users account -- get_teacher_card()'s metering call
+# (enforce_query_limit) FK-references auth.users, so this can no longer be a
+# placeholder string. Same account scripts/test_metering.py uses.
+TEST_EMAIL = "creative@clf-church.com"
+
 
 async def _resolve_derek_prince_source_id():
     from app.db.supabase import get_supabase
@@ -204,6 +220,13 @@ async def _resolve_derek_prince_source_id():
     return None
 
 
+def _resolve_test_user_id():
+    from app.db.supabase import get_supabase
+    db = get_supabase()
+    link = db.auth.admin.generate_link({"type": "magiclink", "email": TEST_EMAIL})
+    return link.user.id
+
+
 async def _run_tier_b():
     print("\n" + "=" * 78)
     print("Tier B: get_teacher_card() end-to-end (live Anthropic + DB calls)")
@@ -215,15 +238,18 @@ async def _run_tier_b():
         print("  Skipping Tier B -- could not resolve Derek Prince's source_id.")
         return
 
+    test_user_id = _resolve_test_user_id()
+    print(f"  Metering against real test account: {TEST_EMAIL} ({test_user_id})")
+
     debate_question = "What does Derek Prince teach about the timing of the rapture and the tribulation?"
     _check("debate question classifies as DEBATE", dt.classify_topic(debate_question) == dt.DEBATE)
-    debate_card = await study.get_teacher_card(source_id, debate_question, user_id="test-debate-topics-script")
+    debate_card = await study.get_teacher_card(source_id, debate_question, user_id=test_user_id)
     _check("debate-topic card returns a non-empty position", bool((debate_card or {}).get("position")))
     print(f"\n  -- debate-topic position (first 200 chars) --\n  {(debate_card.get('position') or '')[:200]}\n")
 
     ordinary_question = "What does Derek Prince teach about tithing and financial stewardship?"
     _check("ordinary question classifies as DEBATE default (not settled)", dt.classify_topic(ordinary_question) == dt.DEBATE)
-    ordinary_card = await study.get_teacher_card(source_id, ordinary_question, user_id="test-debate-topics-script")
+    ordinary_card = await study.get_teacher_card(source_id, ordinary_question, user_id=test_user_id)
     _check("ordinary-topic card returns a non-empty position", bool((ordinary_card or {}).get("position")))
     print(f"\n  -- ordinary-topic position (first 200 chars) --\n  {(ordinary_card.get('position') or '')[:200]}\n")
 
