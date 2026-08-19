@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, field_validator
 
-from app.auth import get_optional_user, get_user_role, require_contributor, require_admin_role
+from app.auth import get_optional_user, get_user_role, require_contributor, require_admin_role, resolve_user_email
 from app.constants import TAXONOMY_LIST, VALID_TAGS
 from app.db.supabase import get_supabase
 
@@ -287,6 +287,7 @@ async def create_card(
         db.table("pastors_cards")
         .insert({
             "user_id": user_id,
+            "author_email": resolve_user_email(db, user_id),
             "verse_id": body.verse_id,
             "content": body.content,
             "topic_tags": topic_tags,

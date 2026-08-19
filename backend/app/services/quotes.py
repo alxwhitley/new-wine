@@ -30,6 +30,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Iterable, List, Mapping, Optional, Tuple
 
+from app.auth import resolve_user_email
 from app.services.embeddings import cosine_similarity, embed_batch, embed_text
 from app.services.quote_verifier import verify_quote_candidate
 
@@ -187,7 +188,12 @@ def clear_document(db, document_id: str, cleared_by: str, note: str):
     if existing:
         return {"already_cleared": True}
     db.table("document_quote_clearance").insert(
-        {"document_id": document_id, "cleared_by": cleared_by, "note": note.strip()}
+        {
+            "document_id": document_id,
+            "cleared_by": cleared_by,
+            "cleared_by_email": resolve_user_email(db, cleared_by),
+            "note": note.strip(),
+        }
     ).execute()
     return {"already_cleared": False}
 
@@ -465,9 +471,18 @@ def create_and_approve_quote(
             )
             raise
 
+        # user_id is the same caller for capture/creation/(auto-)approval on
+        # this path, so one lookup covers all three snapshot columns below.
+        user_email = resolve_user_email(db, user_id)
+
         revision = (
             db.table("quote_source_revisions")
-            .insert({"chunk_id": chunk_id, "passage_text": passage_text, "captured_by": user_id})
+            .insert({
+                "chunk_id": chunk_id,
+                "passage_text": passage_text,
+                "captured_by": user_id,
+                "captured_by_email": user_email,
+            })
             .execute()
             .data[0]
         )
@@ -481,9 +496,11 @@ def create_and_approve_quote(
             "reviewer_note": reviewer_note.strip(),
             "status": status,
             "created_by": user_id,
+            "created_by_email": user_email,
         }
         if status == "approved":
             row["approved_by"] = user_id
+            row["approved_by_email"] = user_email
             row["approved_at"] = now
         if topic_ids is not None:
             row["topic_ids"] = list(topic_ids)
@@ -519,7 +536,12 @@ def revoke_quote(db, quote_id: str, user_id: str):
     now = datetime.now(timezone.utc).isoformat()
     result = (
         db.table("quotes")
-        .update({"status": "revoked", "revoked_by": user_id, "revoked_at": now})
+        .update({
+            "status": "revoked",
+            "revoked_by": user_id,
+            "revoked_by_email": resolve_user_email(db, user_id),
+            "revoked_at": now,
+        })
         .eq("id", quote_id)
         .execute()
     )

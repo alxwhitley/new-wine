@@ -56,6 +56,26 @@ def get_user_role(user_id: str) -> str:
     return "user"
 
 
+def resolve_user_email(db, user_id: Optional[str]) -> Optional[str]:
+    """Resolve user_id to its current email via the Admin API (service_role).
+    Callers snapshot this at write time on provenance-tracking actor columns
+    (quotes.created_by_email and peers, migration 090) so who-did-it survives
+    as a permanent, readable fact even after the account itself is deleted --
+    the live account row's own email becomes unrecoverable at that point.
+    Fails soft (returns None) rather than blocking the write on a lookup
+    hiccup; a NOT-NULL snapshot column then fails the write itself with a
+    real DB error if this returns None, which is the correct behavior for a
+    fresh write by a currently-authenticated user (the lookup should not
+    normally fail)."""
+    if not user_id:
+        return None
+    try:
+        return db.auth.admin.get_user_by_id(user_id).user.email
+    except Exception:
+        logger.exception("resolve_user_email: lookup failed for user_id=%s", user_id)
+        return None
+
+
 def require_user(request: Request) -> str:
     """FastAPI dependency: verify user is authenticated. No role check -- any
     logged-in user (role 'user', 'contributor', or 'admin') passes. Use this
