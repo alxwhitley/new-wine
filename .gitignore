@@ -10,14 +10,10 @@ node_modules/
 frontend/node_modules
 /sources/
 scripts/youtube_cookies.txt
-logs/
-scripts/logs/
-license-mapping/
+*.log
 
 # Local read-only mirror of Notion canonical docs — Notion is source of truth
 notion-sync/
-logs/
-*.log
 
 # Isolated git worktrees for session-scoped implementation work
 .worktrees/
@@ -31,90 +27,18 @@ logs/
 # Subagent-driven-development scratch state (progress ledger, briefs, reports)
 .superpowers/
 
-# Closeness-check review queue (PLAN.md #45 Phase 5) — QUOTE_CANDIDATE/
-# HOLD_TOO_LITTLE statements withheld from the DB, local-only. Contains raw
-# extracted-statement text derived from copyrighted source material; a
-# worse fit for permanent git history than for the database it came from.
-closeness_review/
-
-# Reference-grounding review queue (PLAN.md #45, 2026-07-28) — every
-# UNGROUNDED/UNCERTAIN scripture reference stripped from a proposition's
-# content by extract_propositions(), local-only. Same rationale as
-# closeness_review/ above — a worse fit for permanent git history than for
-# the database it came from.
-reference_grounding_review/
-
-# Reference-fabrication corpus-detection review queue (PLAN.md #45,
-# 2026-07-28, Part 2 — scripts/detect_reference_fabrication.py). Every
-# UNGROUNDED/UNCERTAIN scripture reference found by a corpus-wide,
-# read-only detection pass over `propositions.content` against full
-# reconstructed source text, local-only. Same rationale as
-# closeness_review/ and reference_grounding_review/ above.
-reference_fabrication_review/
-
-# Source-ingest runner migration snapshots and live verification artifacts.
-source_ingest_runner_review/
-
-# Full-compute source-ingest previews. Contains captured article text and
-# generated review material; local-only and immutable per report identity.
-source_ingest_preview_review/
-
-# Layer 3 LLM reading-pass live-run review (PLAN.md #45.6, 2026-07-29) —
-# per-item model verdicts + reasons from the first-ever live run of
-# citation_verifier_layers.py's Layer 3, including full proposition text.
-# Same rationale as the review queues above — local-only, not for git history.
-layer3_llm_reading_pass_review/
-
-# Quote propose dry-run / calibration reports (Task 4 quality pipeline).
-# May contain full chunk/quote text from live corpus windows — local-only.
-quote_propose_review/
-
-# Generator bypass-proofing live-proof review (PLAN.md #45.8, 2026-07-30) —
-# Phase 5's live-run output: real extraction/arbitration results and
-# would-have-been storage payloads for the three-document proof, storage
-# itself always intercepted, never written. Same rationale as the review
-# queues above — local-only, not for git history.
-generator_live_proof_review/
-
-# PLAN.md #46 human-calibration judging set (2026-07-30) — contains
-# reconstructed full source passages from copyrighted third-party
-# transcripts, for Alex's own reading/judging pass. Same rationale as the
-# review queues above — a worse fit for permanent git history than for the
-# database it came from.
-calibration_review/
-
-# Full propositions backfill run log (PLAN.md #17/#49, 2026-07-30) —
-# incremental per-document JSONL checkpoint for the v3.1-prompt full
-# backfill run (scripts/run_full_backfill.py). Contains generated
-# proposition content for crash-recovery/resumability purposes only; the
-# database itself is the durable record. Same rationale as the review
-# queues above — local-only, not for git history.
-backfill_run_review/
-
-# PLAN.md #46 position-layer calibration batch (2026-07-30) — draft position
-# text generated via the real gather_evidence()/generate_position_text()
-# path, for Alex's blind-judging pass. Nothing here is stored to the
-# positions/position_evidence tables. Same rationale as the review queues
-# above — local-only, not for git history.
-position_calibration_review/
-
-# Book-chapter live-proof review (2026-07-31) — real Run A/Run B proposition
-# output, reconciliation dicts, grounding/arbitration evidence, and
-# redundancy-check results for the Andrew Murray "The True Vine" chapter-
-# scoped extraction proof (scripts/propositions.py's split_book_into_
-# chapters()/_extract_and_store_book_chapters()/process_book_document()).
-# Storage was always intercepted this session, never written. Same
-# rationale as the review queues above — local-only, not for git history.
-book_chapter_live_proof_review/
-
-# Overnight corpus data-quality sweep (read-only, rhemata_readonly_analysis).
-# Progressive findings JSONL/MD + calibration report; may contain excerpts
-# of copyrighted corpus text. Local-only, not for git history.
-corpus_data_quality_review/
-
-# Non-teacher span proposals (read-only follow-on to type-5 sweep).
-# Verbatim corpus excerpts for human review only; nothing applied.
-non_teacher_span_proposals/
+# Consolidated local-only scratch, month-bucketed (2026-08-19 reorg) — review
+# queues (closeness/reference-grounding/reference-fabrication/source-ingest-
+# preview/layer3/quote-propose/generator-live-proof/calibration/backfill-run/
+# position-calibration/book-chapter-live-proof/corpus-data-quality/non-
+# teacher-span), run logs, and license-mapping working sets. All of it is
+# either raw/copyrighted corpus excerpts (worse fit for permanent git history
+# than the database it's derived from) or regeneratable run output — same
+# rationale that applied to each of the ~13 individual patterns this line
+# replaces. `local/_backups/` is the one exception inside this tree that IS
+# git-tracked (moved from root `recovery/`, unaffected by this ignore rule
+# since .gitignore never untracks an already-tracked file).
+local/
 
 # Phase 2 teacher-name guard live-run artifact (local, regenerated on demand)
 scripts/teacher_name_guard_live_results.json

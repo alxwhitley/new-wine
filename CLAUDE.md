@@ -140,7 +140,7 @@ SEQUENCE (2026-08-03)".
     choice that forecloses horizontal scaling is flagged and refused at review.
     Real per-answer COST must be measured before Project 1 is designed — cost may
     be the true ceiling; do NOT size from the partial extraction-cost figure on
-    record. **MEASURED 2026-08-03 (`docs/audits/per_answer_cost_measurement_2026-08-03.md`):
+    record. **MEASURED 2026-08-03 (`docs/audits/2026-08/per_answer_cost_measurement_2026-08-03.md`):
     median normal answer $0.039 (house-voice ~$0.015; teacher card ~$0.015/open)
     — cost is comfortable, NOT the ceiling; the real open ceiling at 100
     concurrent is provider rate limits (RPM/ITPM/OTPM), unchecked from the repo
@@ -290,7 +290,7 @@ SEQUENCE (2026-08-03)".
     standing. Full diagnostic,
     pressure test, remediation, and revised design (with a ranked list of
     what's still weak even after the revision):
-    `docs/audits/position_layer_revival_diagnostic_2026-08-04.md`.
+    `docs/audits/2026-08/position_layer_revival_diagnostic_2026-08-04.md`.
 
 ## Settled product decisions (2026-08-06) — position papers as fence; do not reopen
 
@@ -677,7 +677,7 @@ different row, per the hard rule above.
     of the correction below.
 
     **The correction (2026-07-28 dry-run,
-    `docs/audits/reference_grounding_dry_run_2026-07-28.md`):** the original
+    `docs/audits/2026-07/reference_grounding_dry_run_2026-07-28.md`):** the original
     design stripped a reference whenever it could NOT be confirmed
     grounded — which also silently strips references the source genuinely
     gives but the scanner just can't recognize (spoken forms, "chapter N"
@@ -1005,7 +1005,7 @@ different row, per the hard rule above.
   attempted/stored chunk counts without document contents; a simulated
   second-batch failure is mutation-proven in
   `scripts/test_ingest_failure_reconciliation.py`. Full detail:
-  `docs/audits/stabilization_track_1_2026-08-15.md`.
+  `docs/audits/2026-08/stabilization_track_1_2026-08-15.md`.
 - **Single-author answer attribution is now a producer contract, not a prompt
   preference (`ec42398`, 2026-08-15).** When citable evidence has exactly one
   named author, an answer that omits that full name is regenerated once with
@@ -1208,7 +1208,7 @@ different row, per the hard rule above.
   genuinely open. When a "works here, broken there" behavior gap appears, check the
   transitive dep versions BEFORE assuming a code difference — that diagnostic lesson
   still stands regardless of this fix. **Closed 2026-08-14**
-  (`docs/audits/deps_pin_pydantic_starlette_2026-08-14.md`): pinning was actioned, not
+  (`docs/audits/2026-08/deps_pin_pydantic_starlette_2026-08-14.md`): pinning was actioned, not
   merely offered. That same audit found the original `da27fe4` 422-vs-401 shape does
   NOT actually reproduce on the now-pinned stack (pydantic 2.13.4 / starlette 0.52.1 /
   Python 3.12 — both the buggy and fixed `_RequireRole.__call__` shapes return 401
@@ -1372,7 +1372,7 @@ different row, per the hard rule above.
   skips. The genuine backfill set is only what the ACTUAL gate admits (license IN
   `licensed`/`unlicensed`, not Precept Austin, ≥50 words) — re-derived live
   2026-08-02 as exactly 7 documents, now extracted (0 remaining; build `05aa519`;
-  `docs/audits/backfill_reverification_2026-08-02.md`, commit `122ad48`). This is
+  `docs/audits/2026-08/backfill_reverification_2026-08-02.md`, commit `122ad48`). This is
   the concrete danger the long-stale "781-docs" figure created: a future run must
   enumerate its targets, never sweep the zero-prop set.
 - **The corpus has NO record of extraction attempts** — no completion timestamp
@@ -1435,7 +1435,7 @@ different row, per the hard rule above.
   construction — nothing to parse. **Documented here since 2026-07-24/
   2026-07-28 but never actually remediated until 2026-08-04 — found still
   live and `eligible=true` by the position-layer design pressure test
-  (`docs/audits/position_layer_revival_diagnostic_2026-08-04.md`,
+  (`docs/audits/2026-08/position_layer_revival_diagnostic_2026-08-04.md`,
   "Fabricated-proposition remediation"), because neither case is a
   closeness or citation-existence failure (both real citations resolve
   fine; the defect is pairing a real citation with the wrong claim), so
@@ -1577,7 +1577,7 @@ different row, per the hard rule above.
   `propositions.py` — check for actual callers. See `docs/plan-archive.md` #50
   and `docs/roadmap.md` Decision 21. **This same structural gap is why quote extraction from all
   53 book-type documents was tabled indefinitely 2026-08-08** (read-only
-  diagnostic `docs/audits/book_structure_diagnostic.md`, run that session:
+  diagnostic `docs/audits/2026-08/book_structure_diagnostic.md`, run that session:
   no body/apparatus or chapter-boundary structure is recorded anywhere in
   the schema for books, `quote_ineligible_reason` covers only 66 of 25,064
   book chunks across 10 of 53 documents, and the detector's two regressions
@@ -1715,7 +1715,14 @@ not always-loaded here; procedure unchanged, only the load path.
 
 **Repo root is reserved.** Only these markdown files may live at root:
 `CLAUDE.md`, `ARCHITECTURE.md`, `HARNESS.md`, `PLAN.md`, `POSITIONING.md`,
-`PRODUCT.md`, `DESIGN.md`, `rhemata-status.md` — plus tooling config. Every other markdown
-file goes in a folder: audits and one-off reports to `docs/audits/`, marketing
-source markdown to `docs/`. A new file at root is a mistake, not a decision.
-`CLAUDE.md` must stay at root — Claude Code looks for it there.
+`PRODUCT.md`, `DESIGN.md`, `rhemata-status.md`, `AGENTS.md` — plus tooling config. Every other markdown
+file goes in a folder: audits and one-off reports to `docs/audits/YYYY-MM/`
+(month-bucketed as of the 2026-08-19 reorg — new audits should follow the
+same convention going forward), marketing source markdown to `docs/marketing/`.
+One-off scripts that have finished their job go to `scripts/archive/YYYY-MM/`,
+not `scripts/` itself — reserve the flat `scripts/` root for live/reusable
+modules, documented commands, production entrypoints, and the `test_*.py`
+regression suite. Already-gitignored local-only scratch (review queues, run
+logs, working sets) consolidates under `local/YYYY-MM/` rather than scattering
+at repo root. A new file at root is a mistake, not a decision. `CLAUDE.md`
+must stay at root — Claude Code looks for it there.

@@ -11,8 +11,8 @@ attended parallel track.
 
 **Current item:** *none on the private-beta blocker queue* — W5–W6 smoke + W9
 batch (write/shown/eligibility **12/24**) DONE 2026-08-19. Audits:
-`docs/audits/w5_savchuk_article_answer_smoke_2026-08-19.md`,
-`docs/audits/w9_web_article_batch_write_2026-08-19.md`. Optional non-blockers:
+`docs/audits/2026-08/w5_savchuk_article_answer_smoke_2026-08-19.md`,
+`docs/audits/2026-08/w9_web_article_batch_write_2026-08-19.md`. Optional non-blockers:
 staging display rename; async smoke on a new article.
 
 ## Governing boundary
@@ -85,7 +85,7 @@ visual/taste polish (`9b7fb45`).
 
 - [x] Costed dry-run propose + calibration note (paid #2: 27 verify-pass /
   ~$1.42 / 59 windows) —
-  `docs/audits/quote_propose_calibration_note_2026-08-19.md`.
+  `docs/audits/2026-08/quote_propose_calibration_note_2026-08-19.md`.
 - [x] Schema committed + migration 089 applied (topic_ids /
   quality_pipeline_version / selection_eligible; legacy
   selection_eligible=false).
@@ -125,21 +125,21 @@ smoke all closed.
   (pastorvlad.org prayer-language; staging `Vlad Savchuk (web staging)`;
   live Savchuk unchanged; quote rail already on / gold-only.)
 - [x] Full no-write preview + Alex accept
-  (`docs/audits/w5_savchuk_web_article_preview_2026-08-19.md`).
+  (`docs/audits/2026-08/w5_savchuk_web_article_preview_2026-08-19.md`).
 - [x] One row-pinned write + reconcile (doc `c97533db-…`: 1/1/0/0; 4 chunks;
   12 props; 0 quotes) —
-  `docs/audits/w5_savchuk_web_article_write_2026-08-19.md`.
+  `docs/audits/2026-08/w5_savchuk_web_article_write_2026-08-19.md`.
 - [x] Idempotent rerun (skipped=1) + rollback procedure documented
   (`export_restore_document.py`; not executed — article retained).
 - [x] Eligibility: Alex taste-pattern KEEP P1/P3/P7/P12 (4 true / 8 false) —
-  `docs/audits/w5_savchuk_eligibility_review_2026-08-19.md`.
+  `docs/audits/2026-08/w5_savchuk_eligibility_review_2026-08-19.md`.
 - [x] Staging visibility → `shown` (Alex); `match_chunks` probe hits all 4
   article chunks for a prayer-language question.
 - [x] Answer-integrity / article-supported async smoke — job
   `94cf9284-be14-481c-8f4c-38e2c4fdb81c`; 2 article chunks retrieved + cited;
   prose tracks article; speaker label still “Vlad Savchuk (web staging)” on
   citations (optional rename, non-blocking) —
-  `docs/audits/w5_savchuk_article_answer_smoke_2026-08-19.md`.
+  `docs/audits/2026-08/w5_savchuk_article_answer_smoke_2026-08-19.md`.
 
 ### W7–W8 — Quote and answer integrity (partially superseded)
 
@@ -166,7 +166,7 @@ shown + eligibility (**12/24** KEEP, Alex-approved).
 - [x] Record authoritative Supabase backup/PITR retention, restore granularity,
   owner, RTO/RPO, and exclusions; prove the safest available restore scope or
   record Alex's explicit acceptance.
-  (`docs/audits/w9_recoverability_inventory_2026-08-19.md` — dashboard:
+  (`docs/audits/2026-08/w9_recoverability_inventory_2026-08-19.md` — dashboard:
   scheduled daily physical backups enabled, 7 days visible, PITR disabled;
   Alex accepted ~24h RPO and unproven project RTO without a restore drill.)
 - [x] Run one named, costed, resumable web-article batch with immutable inputs,
@@ -174,8 +174,8 @@ shown + eligibility (**12/24** KEEP, Alex-approved).
   Active trio (Vlad bylines): tenways, planted-not-buried, signs-the-enemy…
   — queue **3/3/0/0**; staging `shown`; Lana row quarantined; eligibility
   **12/24**. Manifest + write audit:
-  `docs/audits/w9_web_article_batch_manifest_2026-08-19.md`,
-  `docs/audits/w9_web_article_batch_write_2026-08-19.md`.
+  `docs/audits/2026-08/w9_web_article_batch_manifest_2026-08-19.md`,
+  `docs/audits/2026-08/w9_web_article_batch_write_2026-08-19.md`.
 
 ## Explicitly outside this finish line
 

@@ -218,7 +218,7 @@ def find_occurrences(answer_text: str, raw: str) -> List[int]:
 
 
 def _parse_verse_or_range(ref: str) -> Optional[Tuple[str, int, int, Optional[int]]]:
-    """Parse 'Romans 8:28' or 'Romans 8:26-28' / 'Romans 8:26–28' /
+    r"""Parse 'Romans 8:28' or 'Romans 8:26-28' / 'Romans 8:26–28' /
     'Romans 8:26—28' (em-dash — confirmed the model reaches for these
     constantly in its own prose) into (abbrev, chapter, verse_start,
     verse_end_or_None). Reuses the same
