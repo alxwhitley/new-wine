@@ -440,7 +440,7 @@ def _strip_ungrounded_references(
 # "v3" actually means there -- referencing it in both places means the
 # extraction call and its provenance stamp can never name two different
 # versions by accident).
-EXTRACTION_MODEL = "llama-3.3-70b-versatile"
+EXTRACTION_MODEL = "openai/gpt-oss-120b"
 DEFAULT_PROMPT_VERSION = "v3"
 
 # ── Prompt ────────────────────────────────────────────────────────────────────
