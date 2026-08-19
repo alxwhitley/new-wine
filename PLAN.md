@@ -9,12 +9,11 @@ scope) are on the launch critical path — without compromising propositions,
 generated answers, or recoverability. Web-article ingestion remains an
 attended parallel track.
 
-**Current item:** **W5–W6 answer-integrity smoke** — Savchuk web article is
-live on staging source `Vlad Savchuk (web staging)` (`33cfa6b5-…`, shown +
-unlicensed; doc `c97533db-…`; 4/12 props eligible). QuoteRail polish + Q0–Q3
-re-enable + W9 inventory are DONE. Next: async article-supported answer
-smoke (citations may still say “web staging”). Write audit:
-`docs/audits/w5_savchuk_web_article_write_2026-08-19.md`.
+**Current item:** *none on the private-beta blocker queue* — W5–W6 smoke + W9
+batch (write/shown/eligibility **12/24**) DONE 2026-08-19. Audits:
+`docs/audits/w5_savchuk_article_answer_smoke_2026-08-19.md`,
+`docs/audits/w9_web_article_batch_write_2026-08-19.md`. Optional non-blockers:
+staging display rename; async smoke on a new article.
 
 ## Governing boundary
 
@@ -118,8 +117,8 @@ visual/taste polish (`9b7fb45`).
 
 ### W5–W6 — One quarantined article proof
 
-**Status:** Write + eligibility + staging→shown DONE 2026-08-19.
-**Current residual:** answer-integrity / article-supported async smoke.
+**Status:** DONE 2026-08-19 — write + eligibility + shown + answer-integrity
+smoke all closed.
 
 - [x] Alex selects the exact article, confirms teacher/source and clearance, and
   approves deploying quote containment.
@@ -136,8 +135,11 @@ visual/taste polish (`9b7fb45`).
   `docs/audits/w5_savchuk_eligibility_review_2026-08-19.md`.
 - [x] Staging visibility → `shown` (Alex); `match_chunks` probe hits all 4
   article chunks for a prayer-language question.
-- [ ] Answer-integrity / article-supported async smoke (still open;
-  speaker label may read “Vlad Savchuk (web staging)”).
+- [x] Answer-integrity / article-supported async smoke — job
+  `94cf9284-be14-481c-8f4c-38e2c4fdb81c`; 2 article chunks retrieved + cited;
+  prose tracks article; speaker label still “Vlad Savchuk (web staging)” on
+  citations (optional rename, non-blocking) —
+  `docs/audits/w5_savchuk_article_answer_smoke_2026-08-19.md`.
 
 ### W7–W8 — Quote and answer integrity (partially superseded)
 
@@ -158,8 +160,8 @@ into Q1–Q3 above.
 
 ### W9 — Recoverability and first small batch
 
-**Status:** Inventory DONE 2026-08-19 (Alex accepted daily-only / PITR off).
-Batch half still QUEUED after W5–W6.
+**Status:** DONE 2026-08-19 — inventory + named 3-article batch write/reconcile/
+shown + eligibility (**12/24** KEEP, Alex-approved).
 
 - [x] Record authoritative Supabase backup/PITR retention, restore granularity,
   owner, RTO/RPO, and exclusions; prove the safest available restore scope or
@@ -167,8 +169,13 @@ Batch half still QUEUED after W5–W6.
   (`docs/audits/w9_recoverability_inventory_2026-08-19.md` — dashboard:
   scheduled daily physical backups enabled, 7 days visible, PITR disabled;
   Alex accepted ~24h RPO and unproven project RTO without a restore drill.)
-- [ ] Run one named, costed, resumable web-article batch with immutable inputs,
+- [x] Run one named, costed, resumable web-article batch with immutable inputs,
   logs, hard reconciliation, quality sampling, and an explicit release decision.
+  Active trio (Vlad bylines): tenways, planted-not-buried, signs-the-enemy…
+  — queue **3/3/0/0**; staging `shown`; Lana row quarantined; eligibility
+  **12/24**. Manifest + write audit:
+  `docs/audits/w9_web_article_batch_manifest_2026-08-19.md`,
+  `docs/audits/w9_web_article_batch_write_2026-08-19.md`.
 
 ## Explicitly outside this finish line
 

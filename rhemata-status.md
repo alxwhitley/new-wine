@@ -7,10 +7,8 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-19 (session close). Quote polish + W5 write/eligibility
-+ W9 inventory recorded locally (commits through `2a19658` + this close).
-`Temporary-assets/` left untracked on purpose. **Not pushed** — `main` ahead
-of `origin/main`.
+Last verified: 2026-08-19 (session close — W5 smoke + W9 batch/eligibility).
+`Temporary-assets/` left untracked on purpose.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -24,53 +22,42 @@ overnight harness remain retired (Invariant 15). Beta Critical Path
 operating model; `PLAN.md` = blockers; `docs/roadmap.md` = later work.
 
 **Quote rail (live):** Gold **28/28** approved + `selection_eligible` +
-`quote_quality_v1`. `QUOTE_SELECTION_ENABLED=true`. Settled #28 presentation
-polish landed (`9b7fb45` — attribution leads, `bg-popover` card, outline
-topic chip). Legacy rows remain selection-ineligible.
+`quote_quality_v1`. `QUOTE_SELECTION_ENABLED=true`. Legacy rows
+selection-ineligible.
 
-**W5–W6 web article:** Vlad Savchuk pastorvlad prayer-language article
-ingested under staging source `Vlad Savchuk (web staging)`
-(`33cfa6b5-…`, **shown** + unlicensed). Doc `c97533db-…`: 4 chunks, 12
-props, **4 eligible** (P1/P3/P7/P12), 0 quotes. Live Savchuk unchanged.
-Idempotent rerun proven. Retrieval probe sees all 4 chunks. **Async
-answer-integrity smoke still open.**
+**W5–W6:** DONE — Savchuk prayer-language article + async smoke
+`94cf9284-…` (article cited). Audit:
+`docs/audits/w5_savchuk_article_answer_smoke_2026-08-19.md`.
 
-**Ingest model:** Groq metadata + proposition `EXTRACTION_MODEL` →
-`openai/gpt-oss-120b` (`87c192f`) after `llama-3.3-70b-versatile` 404.
-`answer_toolbox` query-expansion model not swapped this session.
+**W9:** DONE — inventory accepted; 3 Vlad pastorvlad articles written
+(**3/3/0/0**), staging `shown`, eligibility **12/24** KEEP (Alex-approved).
+Lana intrusive-thoughts quarantined. Staging source `33cfa6b5-…` has 4 docs.
+Audits: `docs/audits/w9_web_article_batch_*.md`.
 
-**W9:** Daily physical backups on, PITR off, ~7-day retention; Alex accepted
-~24h RPO / unproven project RTO
-(`docs/audits/w9_recoverability_inventory_2026-08-19.md`). Batch half still
-queued after W5 close.
+**Ingest model:** Groq metadata + prop extract → `openai/gpt-oss-120b`
+(stack table in CLAUDE.md already notes query-expansion still on
+`llama-3.3-70b-versatile`, unverified).
 
-**Deploy note (prior):** Railway `rhemata` had briefly drifted to Railpack;
-restored NIXPACKS + `/backend`. Confirm builder before trusting a failed
-deploy as a code bug.
+**Recoverability:** Daily backups on, PITR off; Alex accepted ~24h RPO.
+
+**Blocker queue:** empty (W1–W9 finish-line closed).
 
 ---
 
 ## Classified work
 
-**Blocker — active next:** W5–W6 answer-integrity / article-supported async
-smoke.
+**Deferred / non-blocking:** optional staging display rename (“web staging”);
+optional async smoke on a new W9 article.
 
-**Blocker — waiting:** W9 first small web-article batch (after W5 smoke).
-
-**Scheduled / Triggered / Parked:** unchanged in `docs/roadmap.md`
-(tag soft-boost, full Prince rebuild, New Wine OCR, Manna rebrand, harness
-parked, etc.).
+**Scheduled / Triggered / Parked:** unchanged in `docs/roadmap.md`.
 
 ---
 
 ## Next single item
 
-1. Async answer smoke for the Savchuk web article (confirm citations /
-   propositions; optional rename away from “web staging” label).
-2. Then W9 batch half when ready.
+Alex picks from `docs/roadmap.md` (or promotes a deferred item). No private-
+beta blocker remains on PLAN.md.
 
-Process baseline (this close): original parallel tracks (QuoteRail polish
-via Claude, W9 inventory, W5 article proof through eligibility+shown)
-completed; answer smoke deferred by Alex (“commit and stop”); zero
-unapproved investigations; no new Blocker promotion; one active item
-(answer-integrity smoke). Local commits not pushed.
+Process baseline: original outcomes (W5 smoke, W9 batch + eligibility)
+completed; Lana byline quarantined (classified, not pursued as Vlad); zero
+unapproved investigations; no new Blocker promotion; active blocker count **0**.

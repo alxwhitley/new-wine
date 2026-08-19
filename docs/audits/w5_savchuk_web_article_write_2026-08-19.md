@@ -74,10 +74,11 @@ Footprint if deleted now: 1 document, 4 chunks, 12 propositions, 48 `proposition
 - Retrieval probe (`match_chunks`, question “How do I develop my prayer language
   in private?”): all 4 article chunks in top 50 (ranks ~2, 3, 6, 7).
 
-## Still open
+## Still open / follow-ups
 
-- [ ] Full answer-integrity smoke via async `/async-chat` (citations naming
-  “Vlad Savchuk (web staging)” — awkward speaker label still present).
+- [x] Full answer-integrity smoke via async `/async-chat` — DONE 2026-08-19
+  (`docs/audits/w5_savchuk_article_answer_smoke_2026-08-19.md`, job
+  `94cf9284-…`). Citations still name “Vlad Savchuk (web staging)”.
 - [ ] CLAUDE.md stack table still names `llama-3.3-70b-versatile` — update on
   docs commit.
 - [ ] Optional rename of staging source display / speaker attribution so answers
