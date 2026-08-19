@@ -883,6 +883,42 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **A tracked master spreadsheet for ingestion candidates now exists —
+  separate from, and layered on top of, `source_ingest_queue` (Invariant
+  16), not a replacement for it.** Built 2026-08-19:
+  `docs/ingestion/master_ingestion_queue.xlsx`, deliberately tracked in git
+  (unlike the gitignored YouTube/magazine trackers — git history is this
+  file's backup/recovery mechanism). Two tabs: **Discovery** (raw, unvetted
+  candidates — a real reusable sync script, `scripts/
+  sync_master_ingestion_queue.py`, structurally never opens this tab, so a
+  Discovery row cannot reach the database through that path) and **Queue**
+  (vetted rows shaped to match `source_ingest_queue` exactly). **Alex's
+  explicit, standing decision: the spreadsheet is the single master source
+  of truth for ingestion candidates; on any disagreement with the database
+  it silently overwrites.** The sync script is dry-run-by-default,
+  `--apply` required to write (same convention as
+  `scripts/apply_migration_088.py`) — creates missing Queue rows, overwrites
+  differing fields, never deletes (a database row with no Queue counterpart
+  is reported as an orphan for a manual decision, never removed
+  automatically). It has been run for real (`--apply`) exactly once so far
+  and that run was a genuine no-op (0 creates, 0 overwrites) — **the
+  real-write path itself is still unproven against an actual change.**
+  **The admin panel's existing ingest-queue submission form is a
+  deliberately accepted trap, not a bug**: it still writes straight to
+  `source_ingest_queue`, is NOT part of the sync, and anything submitted
+  through it will be silently overwritten by the next `--apply` run unless
+  someone also adds it to the Queue tab by hand — raised to Alex directly
+  and left as-is on purpose. Discovery-tab fields named with a `claimed_`
+  prefix (`claimed_main_url`, `claimed_blog_or_articles_url`,
+  `claimed_licensing_status`, `claimed_platform_size`,
+  `claimed_written_content_exists`) are guesses from automated research
+  passes, never a confirmed site visit — treat as unverified regardless of
+  how confident the source wording sounds. At least two rows are flagged
+  known-suspect and unchecked: Loren Cunningham and Reinhard Bonnke, both
+  deceased, both listed with clean, live-looking personal domains — a
+  specific red-flag pattern in this data, not yet manually verified either
+  way.
+
 - **Quote selection on the async answer path is now contained behind an
   explicit, default-off flag — shipped 2026-08-18 (PLAN.md W1, same PR as the
   Invariant 16 widening above), because the quote rail has a live, systemic
