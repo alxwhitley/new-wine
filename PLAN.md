@@ -9,11 +9,11 @@ scope) are on the launch critical path — without compromising propositions,
 generated answers, or recoverability. Web-article ingestion remains an
 attended parallel track.
 
-**Current item:** **W5–W6 eligibility + answer-integrity** — quarantined Savchuk
-web article is written under hidden staging (`c97533db-…`, 12 ineligible
-props). QuoteRail design polish (Claude) and Q0–Q3 functional re-enable are
-DONE. Next: review/promote eligible propositions only; keep staging hidden
-until answer-integrity sign-off. Write audit:
+**Current item:** **W5–W6 answer-integrity smoke** — Savchuk web article is
+live on staging source `Vlad Savchuk (web staging)` (`33cfa6b5-…`, shown +
+unlicensed; doc `c97533db-…`; 4/12 props eligible). QuoteRail polish + Q0–Q3
+re-enable + W9 inventory are DONE. Next: async article-supported answer
+smoke (citations may still say “web staging”). Write audit:
 `docs/audits/w5_savchuk_web_article_write_2026-08-19.md`.
 
 ## Governing boundary
@@ -81,9 +81,8 @@ Decisions locked in the spec + CLAUDE.md Settled #29:
 
 ### Q2 — Gold extract + presentation + legacy selection-ineligibility
 
-**Status:** DONE enough for re-enable 2026-08-19. Gold apply + eligibility +
-presentation code landed; **visual/taste sign-off deferred to Claude** (Alex)
-while the functional rail is live.
+**Status:** DONE 2026-08-19 — gold + eligibility + presentation + Claude
+visual/taste polish (`9b7fb45`).
 
 - [x] Costed dry-run propose + calibration note (paid #2: 27 verify-pass /
   ~$1.42 / 59 windows) —
@@ -96,16 +95,15 @@ while the functional rail is live.
   refused_quality=11, refused_verify=3, errors=0; later promoted
   pending→approved (28/28) for re-enable.
 - [x] Selection eligibility = new-pipeline/gold only in code.
-- [x] Presentation code: visual separation + teacher/source on the quote
-  (#28) — **functional fields live**; design polish deferred to Claude.
+- [x] Presentation code + Settled #28 polish: attribution leads; lifted
+  `bg-popover` card; outline topic chip (`9b7fb45`, DESIGN.md token).
 - [x] Legacy 793 selection-ineligible via migration 089 backfill (rows
   remain; unselectable).
 
 ### Q3 — Regressions + attended quote-rail re-enable
 
-**Status:** DONE 2026-08-19 — flag on + smoke gold-only. (Absorbs prior W8
-quote proofs.) Residual: QuoteRail design polish (Claude), not a re-enable
-gate.
+**Status:** DONE 2026-08-19 — flag on + smoke gold-only + polish landed.
+(Absorbs prior W8 quote proofs.)
 
 - [x] Flag-off regressions: baptism FP class; honest no-support; exact
   chunk IDs; **no bad quote IDs**; bounded teacher-card (no quote rail);
@@ -120,30 +118,26 @@ gate.
 
 ### W5–W6 — One quarantined article proof
 
-**Status:** Write + idempotency DONE 2026-08-19. **Current:** eligibility
-promotion + answer-integrity (article stays on hidden staging).
+**Status:** Write + eligibility + staging→shown DONE 2026-08-19.
+**Current residual:** answer-integrity / article-supported async smoke.
 
 - [x] Alex selects the exact article, confirms teacher/source and clearance, and
   approves deploying quote containment.
-  (URL: pastorvlad.org prayer-language article; staging source
-  `Vlad Savchuk (web staging)` unlicensed+hidden; live Savchuk unchanged;
-  quote rail already on / gold-only.)
-- [x] Run the full no-write preview and review every proposed proposition beside
-  its source passage; proposals remain ineligible and quotes remain proposals.
-  (`docs/audits/w5_savchuk_web_article_preview_2026-08-19.md` — Alex accepted.)
-- [x] Execute exactly one row-pinned write into a hidden source; reconcile
-  attempted/stored/skipped/errored plus document/chunk/proposition state.
-  (doc `c97533db-…`: attempted=1 stored=1 skipped=0 errored=0; 4 chunks;
-  12 props all eligible=false; 0 quotes.)
-- [x] Prove rerun idempotency and a row-level rollback procedure before release.
-  (Rerun skipped=1, no duplicate; rollback via
-  `export_restore_document.py` documented, not executed — article retained.)
-- [x] Promote only propositions that pass the canonical eligibility checks
-  (Alex taste-pattern: P1/P3/P7/P12 → 4 eligible; 8 remain false;
-  `docs/audits/w5_savchuk_eligibility_review_2026-08-19.md`).
-- [x] Visibility: Alex flipped staging → `shown` 2026-08-19 after eligibility
-  (source `33cfa6b5-…` now shown+unlicensed; live Savchuk unchanged).
-- [ ] Answer-integrity review / article-supported smoke (still open).
+  (pastorvlad.org prayer-language; staging `Vlad Savchuk (web staging)`;
+  live Savchuk unchanged; quote rail already on / gold-only.)
+- [x] Full no-write preview + Alex accept
+  (`docs/audits/w5_savchuk_web_article_preview_2026-08-19.md`).
+- [x] One row-pinned write + reconcile (doc `c97533db-…`: 1/1/0/0; 4 chunks;
+  12 props; 0 quotes) —
+  `docs/audits/w5_savchuk_web_article_write_2026-08-19.md`.
+- [x] Idempotent rerun (skipped=1) + rollback procedure documented
+  (`export_restore_document.py`; not executed — article retained).
+- [x] Eligibility: Alex taste-pattern KEEP P1/P3/P7/P12 (4 true / 8 false) —
+  `docs/audits/w5_savchuk_eligibility_review_2026-08-19.md`.
+- [x] Staging visibility → `shown` (Alex); `match_chunks` probe hits all 4
+  article chunks for a prayer-language question.
+- [ ] Answer-integrity / article-supported async smoke (still open;
+  speaker label may read “Vlad Savchuk (web staging)”).
 
 ### W7–W8 — Quote and answer integrity (partially superseded)
 
