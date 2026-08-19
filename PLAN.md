@@ -9,12 +9,12 @@ scope) are on the launch critical path — without compromising propositions,
 generated answers, or recoverability. Web-article ingestion remains an
 attended parallel track.
 
-**Current item:** **QuoteRail design polish (Claude)** — functional Q2/Q3
-re-enable is DONE (28 gold rows approved; `QUOTE_SELECTION_ENABLED=true`;
-smoke gold-only). Visual/taste pass on Settled #28 presentation is deferred
-to Claude by Alex (2026-08-19). Parallel blocker still waiting: **W5–W6**
-quarantined article proof. Plan:
-`docs/superpowers/plans/2026-08-19-quote-quality-and-topic.md`.
+**Current item:** **W5–W6 eligibility + answer-integrity** — quarantined Savchuk
+web article is written under hidden staging (`c97533db-…`, 12 ineligible
+props). QuoteRail design polish (Claude) and Q0–Q3 functional re-enable are
+DONE. Next: review/promote eligible propositions only; keep staging hidden
+until answer-integrity sign-off. Write audit:
+`docs/audits/w5_savchuk_web_article_write_2026-08-19.md`.
 
 ## Governing boundary
 
@@ -120,20 +120,30 @@ gate.
 
 ### W5–W6 — One quarantined article proof
 
-**Status:** WAITING on Alex's source/production approval (W1–W4 prerequisite
-is satisfied). **Not the current item** — attended parallel track; does not
-displace Q1–Q3 unless Alex reorders. Quote containment deploy remains part of
-its checklist where still relevant.
+**Status:** Write + idempotency DONE 2026-08-19. **Current:** eligibility
+promotion + answer-integrity (article stays on hidden staging).
 
-- [ ] Alex selects the exact article, confirms teacher/source and clearance, and
+- [x] Alex selects the exact article, confirms teacher/source and clearance, and
   approves deploying quote containment.
-- [ ] Run the full no-write preview and review every proposed proposition beside
+  (URL: pastorvlad.org prayer-language article; staging source
+  `Vlad Savchuk (web staging)` unlicensed+hidden; live Savchuk unchanged;
+  quote rail already on / gold-only.)
+- [x] Run the full no-write preview and review every proposed proposition beside
   its source passage; proposals remain ineligible and quotes remain proposals.
-- [ ] Execute exactly one row-pinned write into a hidden source; reconcile
+  (`docs/audits/w5_savchuk_web_article_preview_2026-08-19.md` — Alex accepted.)
+- [x] Execute exactly one row-pinned write into a hidden source; reconcile
   attempted/stored/skipped/errored plus document/chunk/proposition state.
-- [ ] Prove rerun idempotency and a row-level rollback procedure before release.
-- [ ] Promote only propositions that pass the canonical eligibility checks;
-  keep the article hidden until answer-integrity review passes.
+  (doc `c97533db-…`: attempted=1 stored=1 skipped=0 errored=0; 4 chunks;
+  12 props all eligible=false; 0 quotes.)
+- [x] Prove rerun idempotency and a row-level rollback procedure before release.
+  (Rerun skipped=1, no duplicate; rollback via
+  `export_restore_document.py` documented, not executed — article retained.)
+- [x] Promote only propositions that pass the canonical eligibility checks
+  (Alex taste-pattern: P1/P3/P7/P12 → 4 eligible; 8 remain false;
+  `docs/audits/w5_savchuk_eligibility_review_2026-08-19.md`).
+- [x] Visibility: Alex flipped staging → `shown` 2026-08-19 after eligibility
+  (source `33cfa6b5-…` now shown+unlicensed; live Savchuk unchanged).
+- [ ] Answer-integrity review / article-supported smoke (still open).
 
 ### W7–W8 — Quote and answer integrity (partially superseded)
 
@@ -154,11 +164,15 @@ into Q1–Q3 above.
 
 ### W9 — Recoverability and first small batch
 
-**Status:** QUEUED after article path / Q3 as applicable.
+**Status:** Inventory DONE 2026-08-19 (Alex accepted daily-only / PITR off).
+Batch half still QUEUED after W5–W6.
 
-- [ ] Record authoritative Supabase backup/PITR retention, restore granularity,
+- [x] Record authoritative Supabase backup/PITR retention, restore granularity,
   owner, RTO/RPO, and exclusions; prove the safest available restore scope or
   record Alex's explicit acceptance.
+  (`docs/audits/w9_recoverability_inventory_2026-08-19.md` — dashboard:
+  scheduled daily physical backups enabled, 7 days visible, PITR disabled;
+  Alex accepted ~24h RPO and unproven project RTO without a restore drill.)
 - [ ] Run one named, costed, resumable web-article batch with immutable inputs,
   logs, hard reconciliation, quality sampling, and an explicit release decision.
 
