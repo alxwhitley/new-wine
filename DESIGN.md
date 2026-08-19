@@ -121,6 +121,7 @@
 | Suggestion chips (empty state) | `rounded-lg bg-popover text-muted-foreground hover:bg-accent hover:text-foreground` — lifted fill, no border, muted text = one tier below the input |
 | Sidebar | shadcn Sidebar primitives with the `--sidebar-*` tokens |
 | "New Chat" CTA | `ghost` variant + `border border-border text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground` — no gold, no fill at rest; hover matches the Chat/Discover/Study nav links below it |
+| Verified quote card (QuoteRail, Settled #28) | `rounded-lg border border-border bg-popover` — flat cards are the default (Library book cards above), but a served quote must never read as continuous with the generated answer prose above it, so it earns the same lifted treatment as the chat prompt cluster. Figcaption (teacher name, `text-sm font-semibold text-foreground`, + work title) leads the card, before the blockquote — attribution must be read before the quoted words, never inferred from surrounding context or discovered after. Topic chip inside the card uses `variant="outline"`, not the general Topic tag pills' `secondary` — inside this card the chip is the least important element and must not out-contrast the teacher attribution above it. |
 
 ## Migration Bans
 1. No hardcoded hex anywhere (`#1f1e1d`, `#262624`, `#d4b96a`, `#b49238` all dead — search and destroy)

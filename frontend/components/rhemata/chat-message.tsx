@@ -352,12 +352,14 @@ function FeedbackButtons({
   );
 }
 
-function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
-  const quotes = useResolvedQuotes(quoteIds);
+/** Presentational QuoteRail (Settled #28). Exported for local visual preview. */
+export function QuoteRailView({ quotes }: { quotes: ResolvedQuote[] }) {
   // teacher_name is required for display -- a quote whose backend source
   // lookup failed (teacher_name: null) must never render, since named-voice
   // attribution is the entire reason this surface exists (CLAUDE.md).
-  const attributed = quotes.filter((q): q is ResolvedQuote & { teacher_name: string } => !!q.teacher_name);
+  const attributed = quotes.filter(
+    (q): q is ResolvedQuote & { teacher_name: string } => !!q.teacher_name
+  );
   if (attributed.length === 0) return null;
 
   return (
@@ -370,11 +372,27 @@ function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
         return (
           <figure
             key={q.id}
-            className="rounded-lg border border-border bg-muted/40 px-4 py-3 shadow-sm"
+            className="rounded-lg border border-border bg-popover px-4 py-3"
           >
             <div className="flex gap-2.5">
               <Quote className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
               <div className="min-w-0 space-y-2">
+                {/* Attribution leads, not trails — a reader must know whose
+                    words these are before reading them, never after. Under
+                    open quote scope (Settled #28) this quote's teacher can
+                    differ from the answer prose above it; attribution can
+                    never be left to infer from context. */}
+                <figcaption className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-foreground">{q.teacher_name}</span>
+                  {q.work_title ? (
+                    <span className="flex items-baseline gap-1.5 min-w-0 text-xs text-muted-foreground">
+                      <span aria-hidden="true">·</span>
+                      <span className="truncate max-w-[14rem]" title={q.work_title}>
+                        {q.work_title}
+                      </span>
+                    </span>
+                  ) : null}
+                </figcaption>
                 <blockquote className="font-serif italic text-sm text-foreground leading-relaxed m-0">
                   {q.quote_text}
                 </blockquote>
@@ -383,22 +401,11 @@ function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
                     {q.restated_point}
                   </p>
                 ) : null}
-                <figcaption className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground/80">{q.teacher_name}</span>
-                  {q.work_title ? (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span className="truncate max-w-[18rem]" title={q.work_title}>
-                        {q.work_title}
-                      </span>
-                    </>
-                  ) : null}
-                  {topicLabel ? (
-                    <Badge variant="secondary" className="rounded-md text-xs font-normal">
-                      {topicLabel}
-                    </Badge>
-                  ) : null}
-                </figcaption>
+                {topicLabel ? (
+                  <Badge variant="outline" className="rounded-md text-xs font-normal">
+                    {topicLabel}
+                  </Badge>
+                ) : null}
               </div>
             </div>
           </figure>
@@ -406,6 +413,11 @@ function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
       })}
     </aside>
   );
+}
+
+function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
+  const quotes = useResolvedQuotes(quoteIds);
+  return <QuoteRailView quotes={quotes} />;
 }
 
 // Memoized: react-markdown's own <Markdown> component re-creates its whole
