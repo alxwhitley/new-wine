@@ -14,7 +14,7 @@ Curious lay believers in the charismatic / Spirit-filled tradition — not semin
 
 ## Product Purpose
 
-Rhemata is a RAG-powered theological research tool for the charismatic tradition. It surfaces answers from a curated corpus — sermons, magazine articles, Bible study materials, and books from teachers like Derek Prince, Ern Baxter, and John Bevere — in response to natural-language questions, with inline citations. The study layer adds interlinear Bible text, lexicon lookups, and word studies. Success looks like: a lay reader asks a genuine spiritual question and gets a grounded, cited answer in seconds, with a clear path to go deeper.
+Rhemata is a RAG-powered theological research tool for the charismatic tradition. It surfaces answers from a curated corpus — sermons, magazine articles, Bible study materials, and books from teachers like Derek Prince, Andrew Murray, and Jack Deere — in response to natural-language questions, with inline citations. The study layer adds interlinear Bible text, lexicon lookups, and word studies. Success looks like: a lay reader asks a genuine spiritual question and gets a grounded, cited answer in seconds, with a clear path to go deeper.
 
 ## Brand Personality
 
