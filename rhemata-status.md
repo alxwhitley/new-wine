@@ -43,14 +43,17 @@ services (not dashboard status alone):**
    `rhemata.app` still serves `x-vercel-cache: PRERENDER` — static caching
    survived, which is exactly what skipping a nonce-based CSP protected.
 
-**Deploy verification:** Railway `rhemata` + `answer-worker` both SUCCESS
-twice (deps, then headers); Vercel Ready both times. Builder/rootDirectory
-drift (the past-outage landmine) did not occur. The worker has no automatic
-health check, so it was proven by hand: a real question submitted to
-production returned a real answer — 7 citations across Derek Prince, Andrew
-Murray and Savchuk articles, 3 verified references, `outcome=answered`, and
-1 quote ID served. `/study/teachers` and `/answer-quotes/resolve` both
-functional post-deploy.
+**Deploy verification:** Railway `rhemata` + `answer-worker` both SUCCESS on
+all three pushes (deps `3a30639`, headers `9b816a8`, and the docs commit
+`cbafeb7` — Railway rebuilds on any push to `main`, including docs-only);
+Vercel Ready each time. Builder/rootDirectory drift (the past-outage
+landmine) did not occur on any of them. The worker has no automatic health
+check, so it was proven by hand: a real question submitted to production
+returned a real answer — 7 citations across Derek Prince, Andrew Murray and
+Savchuk articles, 3 verified references, `outcome=answered`, and 1 quote ID
+served. `/study/teachers` and `/answer-quotes/resolve` both functional
+post-deploy; final post-`cbafeb7` check confirmed API + frontend 200 and the
+API's `nosniff` still present.
 
 **Four standing findings investigated and closed as needing no work** —
 `docs/audits/2026-08/findings_corrections_2026-08-24.md`. One matters beyond
