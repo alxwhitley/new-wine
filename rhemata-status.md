@@ -7,8 +7,8 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-19 (session close — pre-beta research pass, two
-production fixes shipped and deployed, one live migration applied).
+Last verified: 2026-08-24 (security + dependency session; 3 commits shipped
+and deployed, all verified live in production).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,88 +17,89 @@ for this file.
 
 ## Current state
 
-`PLAN.md`'s private-beta blocker queue stayed empty all session (still **0**
-active blockers) — this session's work came from `docs/roadmap.md`'s
-Scheduled B1-B7/A1-A6 tracks instead, via ad hoc read-only research, not a
-formal blocker promotion.
+`PLAN.md`'s private-beta blocker queue is still **0** active blockers. This
+session's work came from `docs/roadmap.md`'s Scheduled B5 track, pulled
+forward by Alex's explicit approval — not a blocker promotion.
 
-**1. Five parallel read-only research forks**, each logging to
-`docs/audits/2026-08/` (commit `0de185d`): product-contract-vs-code gap
-check (B1/B2), account-deletion table/FK scope (B4), security/privacy/abuse
-code-reading snapshot (B5), a live corpus census (A1), and verification of
-two suspect Discovery-tab ingestion URLs.
+**Shipped and live in production, all three verified against the running
+services (not dashboard status alone):**
 
-**2. Fixed a real B5 finding same session** (commit `f14c7e1`): `GET
-/study/teacher/{source_id}` (`get_teacher_card()`) had zero query metering
-before its live Anthropic generation — any authenticated user could loop it
-for unlimited free generations. Now shares `enforce_query_limit()` with
-`/async-chat/submit` (same weekly quota pool, not a separate limit). Three
-fake-DB regression tests updated for the RPC-call bookkeeping this changes;
-`test_debate_topics.py`'s live Tier B section updated to use a real test
-account (not run this session — real cost/DB writes).
+1. **Backend dependency bumps** (`3a30639`) — `python-dotenv` 1.2.1→1.2.3,
+   `python-multipart` 0.0.20→0.0.32, `PyJWT` 2.12.1→2.13.0. Verified under
+   `python3.12` (not the machine's default 3.9): clean venv install,
+   `pip check` clean, 7 regression scripts pass, `app.main` loads all 83
+   routes. `starlette` and `pdfminer-six` deliberately NOT bumped — both
+   blocked by an exact/narrow parent pin (see roadmap).
+2. **Frontend lockfile fix** (`09b102a`) — `npm audit fix`, no `--force`.
+   28 patch-level entries moved; the two that close advisories are `ws`
+   8.20.0→8.21.3 and `postcss` 8.5.8→8.5.26. Frontend advisories 5 → 3; the
+   3 remaining all sit inside `next`'s own tree and need the deferred major
+   bump. `npm run build` clean, 17 routes, static/dynamic split unchanged.
+3. **Baseline security headers** (`9b816a8`) — frontend gets
+   `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy:
+   strict-origin-when-cross-origin`, `Permissions-Policy` (camera/mic/
+   geolocation off); API gets `nosniff` + its own HSTS. **Confirmed live on
+   both origins**, including `X-Frame-Options: DENY` on `/admin`. Critically,
+   `rhemata.app` still serves `x-vercel-cache: PRERENDER` — static caching
+   survived, which is exactly what skipping a nonce-based CSP protected.
 
-**3. Fixed a real B4 finding same session, migration + code** (commit
-`25d2625`, migration **090 applied to production, verified 28/28**):
-`pastors_cards.user_id`, `quotes.{created_by,approved_by,revoked_by}`,
-`quote_source_revisions.captured_by`, `document_quote_clearance.cleared_by`
-all referenced `auth.users` with `NO ACTION` — deleting either of the 2 real
-admin accounts referenced across these tables would have raised a live
-FK-violation error. Fixed via Alex's chosen design: each actor column gets a
-NOT-NULL `*_email` snapshot captured at write time
-(`app.auth.resolve_user_email()`), the FK becomes `ON DELETE SET NULL`, and
-`quotes.approved_by`'s CHECK + `enforce_quote_approval_gates()` trigger were
-narrowed to only require a real `approved_by` at the moment a row
-transitions into `'approved'` (gates 2-4 + speaker-confirmation untouched).
-Deploy-ordered correctly: code pushed to `origin/main` in the same session
-right after the migration, so the previously-deployed backend's window of
-failing new quote/card/clearance writes (NOT NULL violation) should be
-closed once Railway's auto-deploy completes — **not independently confirmed
-this session; verify the `rhemata` Railway deployment succeeded before
-trusting new quote/pastors-card/clearance writes.**
+**Deploy verification:** Railway `rhemata` + `answer-worker` both SUCCESS
+twice (deps, then headers); Vercel Ready both times. Builder/rootDirectory
+drift (the past-outage landmine) did not occur. The worker has no automatic
+health check, so it was proven by hand: a real question submitted to
+production returned a real answer — 7 citations across Derek Prince, Andrew
+Murray and Savchuk articles, 3 verified references, `outcome=answered`, and
+1 quote ID served. `/study/teachers` and `/answer-quotes/resolve` both
+functional post-deploy.
 
-**4. Fixed two stale doc claims** (commit `5e0511d`): POSITIONING.md said
-verbatim quoting was "not live yet" (it's been live since earlier the same
-day); PRODUCT.md still named John Bevere as an example covered teacher
-(pulled from marketing 2026-08-06, zero corpus docs).
+**Four standing findings investigated and closed as needing no work** —
+`docs/audits/2026-08/findings_corrections_2026-08-24.md`. One matters beyond
+itself: a subagent claimed CLAUDE.md's "2,409 legacy propositions have NULL
+provenance permanently" was outdated and should be corrected. Direct live
+query shows that claim is **wrong** — only `prompt_version` was backfilled,
+to the sentinel `legacy_unknown`; `prompt_fingerprint` and `model` are still
+NULL on exactly those 2,409 rows. CLAUDE.md is correct and was left
+unchanged. Acting on the subagent's claim would have deleted a true,
+load-bearing caveat from a governing doc.
 
-All 4 commits pushed to `origin/main`: `0de185d`, `5e0511d`, `f14c7e1`,
-`25d2625`.
+Also closed: the "24 stuck documents" are not stuck (all 24 are `owned` +
+`shown`, already retrievable in answers; propositions aren't on the answer
+path) and 9 of them are position papers that must **never** be extracted per
+Settled #8. The three empty teacher rows (Bill Johnson, Craig Keener, Randy
+Clark) contradict nothing and have no user-facing effect.
 
 ---
 
-## Findings surfaced this session, not yet acted on
+## Findings surfaced, not yet acted on
 
-- **A1 census**: Bill Johnson, Randy Clark, and Craig Keener each have a
-  `sources` row but **zero documents** — contradicts the prior session's
-  ingestion-spreadsheet cross-check, which only confirmed the row exists.
-  CLF Church (15 docs) and Rhemata's own content (9 docs) have **zero
-  eligible propositions** — first-party material sitting unprocessed, not a
-  corpus-acquisition gap.
-- **Reinhard Bonnke's** Discovery-tab URL (`reinhardbonnke.com`) has an
-  expired TLS cert and no corroboration from CfaN's own site — don't ingest
-  from it as-is. **Darlene Cunningham's** URL has the same unverified-
-  personal-domain pattern and was never checked (flagged in passing, out of
-  original scope).
-- B5 snapshot: no retention/TTL logic anywhere for user data; CORS
-  `allow_origins` value not traced to its actual source; no dependency or
-  security-header scan run. `/corpus-inventory/export`'s public,
-  unauthenticated endpoint reconfirmed as Alex's existing accepted
-  exception, not a new gap.
-- B4 audit: `rhemata_readonly_analysis` has no grant on any PII table
-  (conversations, messages, saved_words, etc.) — row counts there need an
-  attended service-role session. Also observed live this session: the role
-  *can* `CREATE TEMP TABLE` (ordinary Postgres default privilege, session-
-  local, not a real write hole on any real table — confirmed, not a gap).
-- Full cascading account deletion (the Supabase Admin API call + snapshot
-  ordering) is still **not built** — migration 090 only removed the
-  database-level blocker; `POST /account/delete-request` is still a stub.
+- **Scheduled** (`docs/roadmap.md`, new "Dependency and hardening follow-up"
+  section): starlette+fastapi coupled bump — do the read-only exploitability
+  triage of its 7 advisories first, the same pass that reduced 3 alarming
+  Next.js CVEs to zero live attack surface; pdfplumber+pdfminer coupled bump;
+  CSP on the frontend; the deferred Next.js major bump.
+- **Triggered** (`docs/roadmap.md`): JWKS unknown-`kid` rate limit — PyJWT
+  2.13.0 already fixed the amplifying half (cache-wipe on failed fetch); the
+  residual is un-amplified and belongs at the edge, not in `auth.py`.
+- Public `/docs` + `/openapi.json` on the API list every route including
+  admin ones. Routes stay auth-gated, so this is a map, not an open door.
+  Left as-is deliberately — Alex may use it; not yet formally classified.
+- `darlenecunningham.com` confirmed to be an unrelated living romance
+  novelist, not the YWAM co-founder. Spreadsheet NOT updated — its Read Me
+  reserves `verification_status` for Alex personally, and precedent (Bonnke,
+  2026-08-19) is to record and let him mark it.
+- Staging source name still reads `"Vlad Savchuk (web staging)"` on
+  citations — attended one-row `sources.name` UPDATE whenever Alex wants it.
+- Carried, not re-checked this session: Bonnke URL suspect (expired cert, no
+  CfaN corroboration); no retention/TTL logic for user data;
+  `rhemata_readonly_analysis` has no grant on PII tables; full cascading
+  account deletion still unbuilt (migration 090 removed only the DB-level
+  blocker — `POST /account/delete-request` is still a stub).
 
 ---
 
 ## Next single item
 
-Confirm the Railway `rhemata` deploy from this session's push succeeded
-(builder has drifted before — see CLAUDE.md Landmines) before trusting new
-quote/pastors-card/clearance writes in production. After that: Alex's call
-among the surfaced findings above, or pick up `docs/roadmap.md`'s remaining
-B1/B4/B5 scope. Active blocker count **0**.
+Alex's call. If continuing the security track, the highest-value next step is
+the read-only exploitability triage of starlette's 7 advisories — cheap, and
+it decides whether the risky coupled fastapi bump is worth doing at all.
+Active blocker count **0**.

@@ -103,6 +103,40 @@ not interrupt the row-pinned hidden article proof without direct Beta Critical
 Path evidence. Migration 088 is already applied and its isolated processor proof
 is complete; it is not future work.
 
+### Dependency and hardening follow-up (from the 2026-08-24 scan)
+
+Scan + exploitability triage: `docs/audits/2026-08/dependency_scan_2026-08-24.md`.
+The bumps that were safe shipped 2026-08-24 (`3a30639`, `09b102a`); baseline
+security headers shipped the same day (`9b816a8`). What remains, each blocked
+on a real coupling rather than on effort:
+
+1. **starlette + fastapi coupled bump.** 7 starlette advisories. All fix
+   versions are `>=1.0.0`, but pinned `fastapi==0.128.8` declares
+   `starlette<1.0.0` — neither moves alone. This is Invariant 14's landmine
+   territory: the `da27fe4` 422-vs-401 admin-auth bug came from exactly this
+   version interaction and reproduced locally but NOT in the deployed
+   container. **Do the read-only exploitability triage of the 7 advisories
+   first** — the same pass done for the Next.js CVEs turned 3 alarming-looking
+   entries into zero live attack surface, and may do so here. Triage is cheap;
+   the bump is not.
+2. **pdfplumber + pdfminer-six coupled bump.** 2 advisories.
+   `pdfplumber==0.11.6` exact-pins `pdfminer.six==20250327`. Sits behind PDF
+   ingestion, so a bad bump is a corpus-quality risk (altered text extraction),
+   not only a security one. Lower urgency — not on the live answer path.
+3. **Content-Security-Policy on the frontend.** Deliberately not shipped with
+   the other headers. A real CSP on App Router needs per-request middleware to
+   mint a nonce, which opts every page out of static prerendering — the live
+   homepage currently serves `x-vercel-cache: PRERENDER` and would lose it.
+   The injection surface is also minimal today: no `dangerouslySetInnerHTML`
+   anywhere, and the markdown renderer escapes HTML by default. Revisit if the
+   app ever renders untrusted HTML, or at the Tier 2 gate. Report-only mode was
+   considered and rejected as decoration without a reporting endpoint.
+4. **Next.js major bump (`16.3.2`).** Alex deferred 2026-08-24 on evidence:
+   all 3 next-specific CVEs have zero live attack surface here (no
+   `rewrites()`, `dangerouslyAllowSVG` unset, no `"use server"` anywhere). The
+   3 residual frontend advisories all sit inside `next`'s own dependency tree
+   and only clear with this bump. Revisit at the next planned Next.js upgrade.
+
 ## Triggered
 
 ### Tier 2 — public signup or more than roughly 20 beta users
@@ -118,6 +152,7 @@ procedure; test guest-limit abuse; recheck admin minimums and the quote verifier
 |---|---|
 | Load/concurrency testing | Measured beta evidence or a demonstrated concurrency failure |
 | Admin notifications | Scheduled position-refresh/content-review work |
+| JWKS unknown-`kid` rate limit | Observed abuse traffic against `/` auth, or Tier 2 below. PyJWT 2.13.0 (shipped `3a30639`) already fixed the amplifying half — the cache-wipe-on-failed-fetch. The residual is un-amplified (one unknown-`kid` token = one outbound JWKS request) and belongs at the edge, not in `auth.py` |
 | Custom harness or coordinator | Alex explicitly reverses the 2026-08-17 retirement decision |
 | Decision 3: near-1930 public-domain titles | Title-level publication evidence; annual January 1 recheck |
 | Decision 11: Hebrew lexicon/TBESH | Written permission from Online Bible |
