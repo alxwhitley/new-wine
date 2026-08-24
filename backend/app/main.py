@@ -1,7 +1,7 @@
 import logging
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -21,6 +21,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Baseline security headers for API responses. The frontend gets its own set
+# via frontend/next.config.ts; this origin (Railway) sent none at all.
+#
+# Deliberately minimal, because this origin serves JSON to a browser app on a
+# different origin, not HTML documents:
+#   - X-Frame-Options / Referrer-Policy / Permissions-Policy are omitted --
+#     they govern document framing and navigation, which JSON responses don't
+#     do. CORS (above) is what actually restricts who may read these responses.
+#   - Content-Security-Policy is omitted for the same reason.
+#   - HSTS is included because this origin serves over HTTPS and, unlike the
+#     Vercel-hosted frontend, nothing upstream adds it. includeSubDomains and
+#     preload are left OFF on purpose: this is a *.up.railway.app hostname, so
+#     asserting a policy over sibling subdomains (or entering the preload list)
+#     would reach beyond what this service owns.
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault(
+        "Strict-Transport-Security", "max-age=63072000"
+    )
+    return response
 
 from app.routers import search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes, async_chat, corpus_inventory
 
