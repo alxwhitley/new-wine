@@ -845,6 +845,7 @@ class ApprovedPropositionSet:
     model: str
     prompt_version: str
     prompt_fingerprint: str
+    proposition_artifact_hash: str
     propositions: Tuple[Tuple[int, str], ...]
 
     def validate(self) -> None:
@@ -853,6 +854,7 @@ class ApprovedPropositionSet:
         _require_nonempty(self.model, "approved_model_required")
         _require_nonempty(self.prompt_version, "approved_prompt_version_required")
         _require_sha256(self.prompt_fingerprint, "approved_prompt_fingerprint_invalid")
+        _require_sha256(self.proposition_artifact_hash, "approved_proposition_artifact_hash_invalid")
         if not isinstance(self.propositions, tuple) or not self.propositions:
             raise ArtifactValidationError("approved_propositions_required")
         expected_index = 1
@@ -866,7 +868,9 @@ class ApprovedPropositionSet:
             expected_index += 1
 
     @classmethod
-    def from_review(cls, review: PropositionReview) -> "ApprovedPropositionSet":
+    def from_review(
+        cls, review: PropositionReview, proposition_artifact_hash: str
+    ) -> "ApprovedPropositionSet":
         review.validate()
         if review.status != "passed":
             raise ArtifactValidationError("proposition_not_supported")
@@ -878,6 +882,7 @@ class ApprovedPropositionSet:
             model=review.model,
             prompt_version=review.prompt_version,
             prompt_fingerprint=review.prompt_fingerprint,
+            proposition_artifact_hash=proposition_artifact_hash,
             propositions=tuple(
                 (proposition.proposition_index, proposition.content)
                 for proposition in review.propositions
@@ -900,6 +905,7 @@ class ApprovedPropositionSet:
             "model": self.model,
             "prompt_version": self.prompt_version,
             "prompt_fingerprint": self.prompt_fingerprint,
+            "proposition_artifact_hash": self.proposition_artifact_hash,
             "propositions": [list(item) for item in self.propositions],
         }
 
@@ -907,7 +913,7 @@ class ApprovedPropositionSet:
     def from_dict(cls, raw: Mapping[str, Any]) -> "ApprovedPropositionSet":
         raw = _require_exact_keys(
             raw,
-            {"article_id", "article_hash", "model", "prompt_version", "prompt_fingerprint", "propositions"},
+            {"article_id", "article_hash", "model", "prompt_version", "prompt_fingerprint", "proposition_artifact_hash", "propositions"},
             "approved_proposition_set_invalid",
         )
         try:
@@ -917,6 +923,7 @@ class ApprovedPropositionSet:
                 model=raw["model"],
                 prompt_version=raw["prompt_version"],
                 prompt_fingerprint=raw["prompt_fingerprint"],
+                proposition_artifact_hash=raw["proposition_artifact_hash"],
                 propositions=tuple(tuple(item) for item in raw["propositions"]),
             )
         except (AttributeError, KeyError, TypeError) as exc:
@@ -1030,7 +1037,9 @@ class IssueDecision:
             ),
             gate_results={"ocr": True, "articles": True, "propositions": True},
             approved_propositions=tuple(
-                ApprovedPropositionSet.from_review(review)
+                ApprovedPropositionSet.from_review(
+                    review, artifacts.proposition_artifact_hashes[review.article_id]
+                )
                 for review in artifacts.proposition_reviews
             ),
         )
@@ -1079,6 +1088,11 @@ class IssueDecision:
             proposition_count += len(approved.propositions)
             if self.article_hashes.get(approved.article_id) != approved.article_hash:
                 raise ArtifactValidationError("approved_article_hash_mismatch")
+            if (
+                self.proposition_artifact_hashes.get(approved.article_id)
+                != approved.proposition_artifact_hash
+            ):
+                raise ArtifactValidationError("approved_proposition_artifact_hash_mismatch")
         if self.state == "approved":
             if set(self.proposition_artifact_hashes) != seen_ids:
                 raise ArtifactValidationError("proposition_artifact_reconciliation_failed")

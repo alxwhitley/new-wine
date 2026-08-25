@@ -264,7 +264,7 @@ def test_approved_proposition_set_preserves_order_and_requires_provenance(
 ):
     """Ingestion receives only exact reviewed proposition content and provenance."""
     review = valid_issue_artifacts.proposition_reviews[0]
-    approved = ApprovedPropositionSet.from_review(review)
+    approved = ApprovedPropositionSet.from_review(review, sha("a"))
 
     assert approved.propositions == ((1, "The author teaches grace."),)
     with pytest.raises(ArtifactValidationError, match="approved_model_required"):
@@ -342,7 +342,7 @@ def test_quarantined_review_cannot_be_converted_to_approved_set(valid_issue_arti
     )
 
     with pytest.raises(ArtifactValidationError, match="proposition_not_supported"):
-        ApprovedPropositionSet.from_review(review)
+        ApprovedPropositionSet.from_review(review, sha("a"))
 
 
 def test_article_source_pages_must_exist_in_ocr_manifest(valid_issue_artifacts):
@@ -426,6 +426,16 @@ def test_approved_decision_reconciles_article_hashes(valid_issue_artifacts):
 
     with pytest.raises(ArtifactValidationError, match="approved_article_hash_mismatch"):
         replace(decision, article_hashes={"a1": sha("c")}).validate()
+
+
+def test_approved_decision_binds_each_article_to_its_proposition_artifact(
+    valid_issue_artifacts,
+):
+    """A valid-looking hash for the same article ID cannot swap review evidence."""
+    decision = IssueDecision.approve(valid_issue_artifacts)
+
+    with pytest.raises(ArtifactValidationError, match="approved_proposition_artifact_hash_mismatch"):
+        replace(decision, proposition_artifact_hashes={"a1": sha("b")}).validate()
 
 
 if __name__ == "__main__":
