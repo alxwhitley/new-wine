@@ -564,7 +564,12 @@ documents written. **This proves the refusal path, not the success path —
 the crawler has not yet actually stored a document.** Its input is
 restricted to `docs/ingestion/master_ingestion_queue.xlsx`'s `Approved
 Sites` tab, and only a row with `approved` literally `TRUE` — Alex
-controls that list directly. Full mechanism: Invariant 16.
+controls that list directly. **`--site NAME` is optional as of
+2026-08-25** — omitting it loops the crawler over every `approved=TRUE`
+row in one invocation, each still gated independently (own crawl, own
+byline check, own `--max-candidates`/`--max-pages` caps); scope is
+unchanged, this only removes the need to name a site per run. Full
+mechanism: Invariant 16.
 
 Separately, and unchanged by the carve-out above: Claude Code's Auto Mode
 still blocks this session from executing the write itself, reconfirmed
@@ -970,6 +975,33 @@ different row, per the hard rule above.
   deceased, both listed with clean, live-looking personal domains — a
   specific red-flag pattern in this data, not yet manually verified either
   way.
+
+  **Two local review tools now exist for this Discovery backlog (built
+  2026-08-25) — check for these before rebuilding either.**
+  `scripts/review_discovery_candidates.py`: a local FastAPI page
+  (`python3.12 scripts/review_discovery_candidates.py`), one Discovery
+  candidate at a time (name + link only, nothing else), Yes writes an
+  Approved Sites row automatically and marks the row `verified`, No marks
+  it `rejected` permanently — no forms, no session state, every page load
+  re-reads the sheet fresh. Refuses to run or write while Excel has the
+  file open (checks for the `~$` lock file).
+  `scripts/check_discovery_blog_links.py`: a one-shot live fetch+link-check
+  per unverified candidate (reuses the crawler's own SSRF-safe fetch and
+  post-link detection), labels a new `auto_link_check` column
+  (`looks_like_blog` / `no_blog_detected` / `check_failed`, cached so
+  reruns only cost new candidates) — the review tool skips
+  `no_blog_detected` rows automatically. A `check_failed` fetch is never
+  treated as "no blog"; it stays visible for manual review. Real run
+  2026-08-25 against all 109 unverified candidates: only 26
+  `looks_like_blog`, 2 `no_blog_detected`, **81 `check_failed`** — mostly
+  sites bot-blocking the fetch, most likely because
+  `source_ingest_queue/fetcher.py` sends no `User-Agent` header at all.
+  Not fixed this session — would likely also raise the crawler's own real
+  success rate on approved sites, not just this checker's, but touches
+  shared SSRF-hardened fetch infrastructure so wants a deliberate decision
+  before changing it. Both tools add `reviewed_at`/`review_notes`
+  (manual-review provenance, separate from `claimed_*`/`agent_verified_*`)
+  and `auto_link_check`/`auto_link_check_at` columns to Discovery.
 
 - **Quote selection on the async answer path is now contained behind an
   explicit, default-off flag — shipped 2026-08-18 (PLAN.md W1, same PR as the

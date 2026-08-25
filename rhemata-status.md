@@ -7,9 +7,9 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-25 (mobile answer continuity, source visibility,
-accessibility, and prompt alignment; commits `f76e526` and `c386e52` shipped
-and production verified live).
+Last verified: 2026-08-25 (Discovery review tooling + a real one-shot
+attended web ingestion; commits `b996ed7`, `720e1c8`, `ba63f54` shipped and
+DB-verified live).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -18,104 +18,110 @@ for this file.
 
 ## Current state
 
-`PLAN.md`'s private-beta blocker queue remains **0** active blockers. This
-session was ad hoc web-ingestion tooling work, not a blocker-queue item — no
-production deploy; changes are repo/script + one DB record (a source
-visibility flip).
+`PLAN.md`'s private-beta blocker queue is unaffected — still **0** active
+blockers. This session was ad hoc ingestion-tooling work plus one real
+attended ingestion, not a blocker-queue item. No production deploy;
+changes are repo/script work plus DB writes executed by Alex in an
+attended terminal (Claude Code Auto Mode still blocks direct writes from
+this session — same reconfirmed block as before, not re-tested further).
 
-**Master ingestion spreadsheet** (`docs/ingestion/master_ingestion_queue.xlsx`):
-a real live-verification pass ran over all 118 Discovery candidates (13
-mechanically excluded first — no written content, archival/reference, no
-URL on file; 105 checked live). Two new Discovery columns
-(`agent_verified_has_blog`, `agent_verification_notes`) record findings
-without touching `verification_status`, which stays reserved for Alex.
-Result: 18 cleared into a new `Approved Sites` tab (proposed, `approved`
-blank except Craig S. Keener — Alex's explicit call, this session), 8 more
-have real content but need per-post byline filtering before they're safe,
-79 not cleared. Recurring finding across ~5 independent candidates (Lisa
-Chan/Francis Chan, Todd Korpi/Tara Korpi, Peter Youngren/Taina Youngren,
-Lydia Stanley Morris/Nathan Morris, Heidi Baker/Rolland Baker): a
-"single-teacher" domain silently carrying a family member's byline is
-structural and recurring in this candidate pool, not the one-off it looked
-like — this is why the crawler's byline gate (below) is unconditional, not
-a one-time fix. Also found: several Discovery research-pass claims that
-don't check out at all — Taehyun Lee's claimed affiliation matches no real
-faculty record, Will Ford's domain is compromised (serving gambling spam).
+**Discovery review tooling, built and committed (`b996ed7`):**
+`scripts/review_discovery_candidates.py` — a local one-candidate-at-a-time
+FastAPI page (name + link only, Yes/No, no forms, no session state) that
+writes straight to the `Approved Sites` tab or marks a row `rejected`.
+`scripts/check_discovery_blog_links.py` — a one-shot live fetch+link-check
+per unverified candidate, reusing the crawler's own fetch/link-discovery,
+labeling a new `auto_link_check` column so the review tool can skip
+confirmed dead candidates automatically. Both are documented in CLAUDE.md's
+Landmines so a future session finds them before rebuilding either.
 
-**Autonomous site-ingest crawler — built, and Alex's explicit, narrowly
-scoped exception to the DB-write-attended hard rule (CLAUDE.md Session
-Routing + Invariant 16).** `source_ingest_queue` web-article writes via
-`scripts/site_ingest_crawler.py` may now run unattended, gated by a new
-deterministic byline-verification step (`source_ingest_queue/
-byline_verify.py` — meta/JSON-LD/"By Name" signal extraction + token-
-overlap comparison, mutation-proven against the shared-surname failure
-mode above) replacing per-item human review. `link_discovery.py` does
-same-domain post/pagination discovery. `scripts/
-test_site_ingest_crawler.py`: 49/49. Two real bugs were caught by running
-it live (not by review) and fixed before being called done: a false
-"already known" dedup count that was actually a check-budget truncation,
-and header/footer/aside nav links being treated as post candidates.
+Ran the checker for real against all 109 unverified Discovery candidates:
+26 `looks_like_blog`, 2 `no_blog_detected` (now auto-skipped), **81
+`check_failed`** — mostly sites bot-blocking the fetch, most likely because
+the shared fetcher sends no `User-Agent` header. Net filtering benefit was
+much smaller than hoped because of that block rate. Not fixed this
+session — flagged as a real, separate decision (touches shared SSRF-
+hardened infrastructure the production crawler also depends on).
 
-**Live proof, Craig Keener, independently re-verified against the DB
-afterward:** visibility flipped `shown`→`hidden`
-(`63119173-a295-4ec0-90e5-f3a55dcc8970`). Crawler correctly byline-
-confirmed his real "My testimony" post via its own `<meta name="author">`
-tag and queued it automatically (`9a32fc5d-680b-4c9f-a1f4-80cdaaae1b0b`);
-the existing content-quality gate then correctly refused it
-(`article_too_thin` — checked live, a genuine ~15-word video-embed
-wrapper, not an extraction bug). Zero documents written; zero corpus
-pollution. **This proves the refusal path only — no document has actually
-been stored by this crawler yet.** 11 of 15 discovered candidate URLs on
-his site (real essays: "Animal rights ethics," "Barak to the barracks,"
-"Bar exam," "Shooting star") were never checked this run (budget-capped
-at 4 checked, 1 confirmed-write cap).
+`scripts/site_ingest_crawler.py`: `--site NAME` is now optional — omitting
+it loops over every `Approved Sites` row with `approved=TRUE` in one
+invocation, same per-site gates as before. Scope of the unattended-write
+carve-out is unchanged, only the CLI ergonomics.
 
-**Claude Code Auto Mode blocks direct production DB writes — reconfirmed,
-not a fluke.** Both real writes this session (the visibility flip, the
-crawler `--apply`) were blocked consistently across genuinely reformulated
-retries. Routed through the 2026-08-13 Grok-execution pattern a second
-time (Claude writes/reviews, Grok executes verbatim, Claude independently
-re-verifies after) — both writes above are that verified result. **Alex's
-stated preference: route ingestion execution to Grok directly going
-forward rather than alternating mid-task.**
+**Incident, caught and resolved, not caused by this session's tooling:**
+before any of the above ran, the live spreadsheet's `Approved Sites` tab
+and two Discovery columns were found missing from the on-disk file
+(uncommitted local Excel edits). Restored via `git checkout` to the exact
+last-committed state; confirmed byte-identical after.
+
+**Watchman Nee — first real document write of this specific pipeline,
+attended, DB-verified:** Alex asked to ingest
+`watchmannee.org/major-teachings.html`. Investigation found this page and
+4 others on the same site are Living Stream Ministry material explicitly
+credited to Witness Lee, not Nee's own writing — third-person exposition
+throughout, no quote/excerpt markers. Flagged directly with the textual
+evidence; **Alex's explicit decision was to attribute to Watchman Nee
+anyway**, recorded in full in the new source's own `notes` column so this
+reads as deliberate, not an oversight. Two of the five pages were ingested
+(the other three excluded: one has no citation at all on the page; two mix
+an unconfirmed-author narrative with direct first-person Nee quotes in the
+same page — `attribution_mode='per_item'` is schema-only, the processor
+hard-refuses anything but `'declared'`, so mixed-authorship pages can't be
+split correctly today).
+
+A real mistake was made and caught by the processor's own gate, not by
+review: the registration script set the new source `visibility='shown'`
+(the general new-material-default policy, Settled #12) instead of
+`'hidden'` — what Invariant 16 already documents as required for a *new
+web-article* source specifically. Both queue rows correctly refused
+(`source_visibility_not_hidden`, `attempts` stayed 0, nothing written
+incorrectly). Fixed with a follow-up attended script; both rows retried
+successfully. **Final, DB-verified state:** source `df64f6c3-…`
+("Watchman Nee", `unlicensed`/`hidden` — not currently servable in any
+answer), two documents stored (`a3e8c760-…` "Major Teachings": 10
+chunks/12 propositions; `57d5f55d-…` "Other Crucial Scriptural Teachings":
+17 chunks/20 propositions). Making this source visible/live is a separate,
+later, deliberate decision — not done this session.
+
+All of this session's code + the staging/fix scripts are committed:
+`b996ed7`, `720e1c8`, `ba63f54`.
 
 ---
 
 ## Findings surfaced, not yet acted on
 
-- **Scheduled** (`docs/roadmap.md`, new "Dependency and hardening follow-up"
-  section): starlette+fastapi coupled bump — do the read-only exploitability
-  triage of its 7 advisories first, the same pass that reduced 3 alarming
-  Next.js CVEs to zero live attack surface; pdfplumber+pdfminer coupled bump;
-  CSP on the frontend; the deferred Next.js major bump.
-- **Scheduled** (`docs/roadmap.md`): quote accuracy and relevance repair before
-  any attended re-enable; the live rail remains off.
-- **Scheduled** (`docs/roadmap.md`, B6): model-generation latency benchmark;
-  current production evidence is 61–64s generation with sub-second queue time.
-- **Triggered** (`docs/roadmap.md`): JWKS unknown-`kid` rate limit — PyJWT
-  2.13.0 already fixed the amplifying half (cache-wipe on failed fetch); the
-  residual is un-amplified and belongs at the edge, not in `auth.py`.
-- Public `/docs` + `/openapi.json` on the API list every route including
-  admin ones. Routes stay auth-gated, so this is a map, not an open door.
-  Left as-is deliberately — Alex may use it; not yet formally classified.
-- Staging source name still reads `"Vlad Savchuk (web staging)"` on
-  citations — attended one-row `sources.name` UPDATE whenever Alex wants it.
-- Carried, not re-checked this session: Bonnke URL suspect (expired cert, no
-  CfaN corroboration); no retention/TTL logic for user data;
+- Whether `source_ingest_queue/fetcher.py` should send a realistic
+  User-Agent header — the real driver behind the 81/109 `check_failed`
+  rate above; would likely also raise the production crawler's real
+  success rate on approved sites, not just the checker's. Not decided or
+  built this session — touches shared SSRF-hardened fetch infrastructure.
+- The three excluded `watchmannee.org` pages (`christian-faith.html` — no
+  citation at all; `life-ministry.html` / `watchman-nee-testimony.html` —
+  mixed unconfirmed-narrative + direct Nee quotes) remain un-ingested;
+  need either `attribution_mode='per_item'` actually implemented, or a
+  manual excerpt-only approach, before they can go in correctly attributed.
+- 81 of 109 Discovery candidates remain `check_failed` in the review tool —
+  unresolved either way, still visible for Alex to review manually.
+- **Scheduled** (`docs/roadmap.md`): quote accuracy/relevance repair before
+  any attended re-enable; the live rail remains off. B6 model-generation
+  latency benchmark (61–64s generation, sub-second queue time as of last
+  measurement). Starlette+FastAPI / pdfplumber+pdfminer coupled dependency
+  bumps; frontend CSP; the deferred Next.js major bump.
+- Carried, not re-checked this session: Bonnke URL suspect (expired cert,
+  no CfaN corroboration); staging source name still reads `"Vlad Savchuk
+  (web staging)"` on citations; no retention/TTL logic for user data;
   `rhemata_readonly_analysis` has no grant on PII tables; full cascading
-  account deletion still unbuilt (migration 090 removed only the DB-level
-  blocker — `POST /account/delete-request` is still a stub).
+  account deletion still unbuilt (`POST /account/delete-request` is still
+  a stub).
 
 ---
 
 ## Next single item
 
-Alex's call, and he's routing ingestion work to Grok directly now rather
-than alternating with this session mid-task: the next crawler run should
-check Craig Keener's remaining 11 discovered candidates (or a fresh
-`--max-pages`/`--max-candidates` pass) to get this system's first actual
-document write, then re-verify independently. Unrelated: the next measured
-UX item is still the B6 answer-generation latency benchmark, or the quote
-track if picked up instead (define the representative accuracy/relevance
-acceptance set before changing selection or extraction). Active blocker
-count **0**.
+Alex's call. Two independent threads are open, neither blocking the
+other: (1) keep working through the Discovery backlog with
+`review_discovery_candidates.py` — 105+ candidates still need a Yes/No,
+and (2) decide whether/when to make the Watchman Nee source
+visible/servable, or leave it staged indefinitely. Separately worth
+deciding: the fetcher User-Agent question above, since it affects both the
+checker and the production crawler. Active blocker count **0**.
