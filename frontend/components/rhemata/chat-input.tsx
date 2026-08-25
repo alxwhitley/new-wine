@@ -4,13 +4,20 @@ import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChatFocus } from "@/contexts/chat-focus-context";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  /** Parent owns horizontal spacing, as in the empty-state prompt cluster. */
+  embedded?: boolean;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  disabled,
+  embedded = false,
+}: ChatInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { setInputFocused } = useChatFocus();
@@ -32,8 +39,14 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="shrink-0 bg-background px-4 md:px-12 pb-2 md:pb-6">
-      <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
+    <div className={cn(
+      "shrink-0 bg-background",
+      embedded ? undefined : "px-4 pb-2 md:px-12 md:pb-6",
+    )}>
+      <form
+        onSubmit={handleSubmit}
+        className={cn("mx-auto", embedded ? "max-w-none" : "max-w-2xl")}
+      >
         <div className="flex items-end gap-2 rounded-2xl border border-border bg-popover px-4 py-1.5 focus-within:ring-1 focus-within:ring-ring md:py-2">
           <textarea
             ref={textareaRef}
@@ -46,7 +59,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             aria-label="Ask a question about Scripture or theology"
             disabled={disabled}
             rows={1}
-            className="min-w-0 flex-1 resize-none bg-transparent py-0 text-sm leading-normal text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 min-h-6 max-h-[200px]"
+            className="min-h-11 min-w-0 max-h-[200px] flex-1 resize-none bg-transparent py-2.5 text-sm leading-normal text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
               target.style.height = "auto";

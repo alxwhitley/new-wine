@@ -452,20 +452,20 @@ export default function Home() {
                 {greeting}
               </h2>
 
-              <div className="w-full max-w-2xl mt-8">
-                <ChatInput onSend={handleSend} disabled={chatLoading} />
-              </div>
+              <div className="mt-8 w-full max-w-xl">
+                <ChatInput onSend={handleSend} disabled={chatLoading} embedded />
 
-              <div className="flex flex-col items-center w-full max-w-xl mt-2 gap-2 mx-auto">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleSend(s)}
-                    className="w-full min-h-[44px] text-left rounded-lg bg-popover px-4 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    {s}
-                  </button>
-                ))}
+                <div className="mt-2 flex w-full flex-col items-center gap-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleSend(s)}
+                      className="w-full min-h-[44px] text-left rounded-lg bg-popover px-4 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {chatError && (
