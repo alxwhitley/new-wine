@@ -22,6 +22,7 @@ from magazine_review.ocr import OCRReviewConfig, VerifiedIssueTranscript
 from magazine_review.schemas import (
     ArticleManifest,
     ArticleRecord,
+    ArtifactValidationError,
     OCRManifest,
     OCRPage,
     PropositionEvidence,
@@ -333,6 +334,11 @@ def test_technical_exception_is_not_content_quarantine(
     assert calls["segment"] == 0
     assert calls["proposition"] == 0
     assert decision.usage["errored"] == 1
+
+
+def test_orchestrator_usage_rejects_negative_values() -> None:
+    with pytest.raises(ArtifactValidationError, match="usage_invalid"):
+        runner._sum_numeric([-1], "usage_invalid")
 
 
 def test_article_and_proposition_quarantines_stop_immediately(
@@ -789,20 +795,50 @@ def test_article_technical_exception_is_pipeline_error_and_stops_propositions(
     monkeypatch, one_page_pdf: Path, tmp_path: Path
 ) -> None:
     """An article provider failure is technical and cannot reach propositions."""
-    _, _, _, calls = install_passing_stages(monkeypatch, one_page_pdf)
+    _, articles, _, calls = install_passing_stages(monkeypatch, one_page_pdf)
+    pending_reasons = {
+        "start_coherent": "semantic_review_required",
+        "end_coherent": "semantic_review_required",
+        "transitions_ok": "semantic_review_required",
+        "attribution_ok": "semantic_review_required",
+    }
+    pending_article = replace(
+        articles.articles[0],
+        start_coherent=False,
+        end_coherent=False,
+        transitions_ok=False,
+        attribution_ok=False,
+        verdict=False,
+        failure_reasons=pending_reasons,
+        reasons=tuple(pending_reasons.values()),
+    )
+    segmented = replace(
+        articles,
+        articles=(pending_article,),
+        reviewer_usage={},
+        reviewer_cost_usd=0.0,
+        issue_coverage_complete=False,
+        status="quarantined",
+        quarantine_reasons=("semantic_review_required",),
+    )
+    segmented.validate()
+    monkeypatch.setattr(runner, "segment_articles", lambda *args, **kwargs: segmented)
 
     def article_timeout(*args, **kwargs):
         raise TimeoutError("article provider timeout")
 
     monkeypatch.setattr(runner, "review_articles_against_issue", article_timeout)
 
-    decision = runner.review_issue(
-        one_page_pdf, tmp_path / "artifacts", review_config(one_page_pdf)
-    )
+    artifact_dir = tmp_path / "artifacts"
+    decision = runner.review_issue(one_page_pdf, artifact_dir, review_config(one_page_pdf))
 
     assert decision.state == "pipeline_error"
     assert decision.reasons == ("articles:TimeoutError:article provider timeout",)
     assert calls["proposition"] == 0
+    assert decision.usage["article_segmentation"] == 28
+    assert decision.usage["article_review"] == 0
+    assert decision.cost_usd == pytest.approx(0.32)
+    assert not (artifact_dir / runner.ARTICLE_MANIFEST_NAME).exists()
 
 
 def test_proposition_technical_exception_is_pipeline_error(

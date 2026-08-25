@@ -1253,6 +1253,7 @@ def store_propositions(
     prompt_version: str,
     chunk_ids: Optional[List[str]] = None,
     clear_existing: bool = True,
+    commit: bool = True,
 ) -> int:
     """Clear existing propositions for document_id, then embed and insert new ones.
 
@@ -1271,6 +1272,10 @@ def store_propositions(
     per chapter with clear_existing=False, so a later chapter's store call
     never wipes an earlier chapter's just-stored rows for the same
     document_id.
+
+    ``commit=False`` keeps the delete/inserts in the caller's transaction so
+    reviewed ingestion can reconcile the exact approved count before making
+    any article write durable. The default preserves direct-call behavior.
 
     prompt_version (bypass-proofing Phase 4, PLAN.md #45, 2026-07-29,
     REQUIRED -- no default): an unstamped write is now IMPOSSIBLE, not
@@ -1399,7 +1404,8 @@ def store_propositions(
                     template="(%s, %s)",
                 )
 
-    conn.commit()
+    if commit:
+        conn.commit()
     return inserted
 
 
@@ -1877,6 +1883,7 @@ def process_document(
     speaker: Optional[str] = None,
     prompt_version: Optional[str] = None,
     _reviewed_propositions: Optional[_ValidatedReviewedPropositions] = None,
+    _defer_reviewed_commit: bool = False,
 ) -> str:
     """Top-level entry point for ingest scripts.
 
@@ -2033,7 +2040,14 @@ def process_document(
                 conn, document_id, props, embed_fn,
                 prompt_version=prompt_version,
                 chunk_ids=chunk_ids,
+                commit=_reviewed_propositions is None,
             )
+            if _reviewed_propositions is not None:
+                if count != len(props):
+                    conn.rollback()
+                    return "error"
+                if not _defer_reviewed_commit:
+                    conn.commit()
             return f"stored:{count}"
 
         # GATE ON. Lazy import — closeness_check (and its own DB-adjacent

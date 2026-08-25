@@ -198,6 +198,20 @@ def test_raw_list_extraction_is_a_technical_error(article_manifest, raw):
     assert reviewer.requests == []
 
 
+def test_reviewer_usage_rejects_negative_values(article_manifest) -> None:
+    response = review_response(article_manifest)
+    response["usage"] = {"input_tokens": -1}
+
+    with pytest.raises(
+        PropositionReviewError, match="proposition_reviewer_usage_invalid"
+    ):
+        review_issue_propositions(
+            article_manifest,
+            extractor=lambda **_: extraction(proposition()),
+            reviewer=RecordingReviewer(response),
+        )
+
+
 def test_evidence_must_round_trip(article_manifest):
     """A plausible quote with shifted offsets is not exact review evidence."""
     response = review_response(article_manifest, evidence_start=1)

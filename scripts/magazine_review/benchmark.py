@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+import fitz
+
 
 FIXTURE_CLASSES = frozenset({"severe_failure", "good_control"})
 REQUIRED_SCORING_FIELDS = frozenset(
@@ -21,6 +23,10 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 class BenchmarkInputError(ValueError):
     """Raised when immutable benchmark evidence is missing or inconsistent."""
+
+
+def _reject_nonfinite_json_constant(_value: str) -> None:
+    raise ValueError("nonfinite_json_constant")
 
 
 @dataclass(frozen=True)
@@ -233,13 +239,24 @@ def load_and_verify_fixtures(manifest_path: Path) -> tuple[BenchmarkFixture, ...
     """Load the selected fixture pages and verify every recorded PDF hash first."""
     path = Path(manifest_path)
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(
+            path.read_text(encoding="utf-8"),
+            parse_constant=_reject_nonfinite_json_constant,
+        )
     except FileNotFoundError as exc:
         raise BenchmarkInputError("manifest_not_found") from exc
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, ValueError) as exc:
         raise BenchmarkInputError("manifest_invalid_json") from exc
 
-    if not isinstance(raw, Mapping) or not isinstance(raw.get("fixtures"), list):
+    try:
+        json.dumps(raw, allow_nan=False, separators=(",", ":"), sort_keys=True)
+    except (TypeError, ValueError) as exc:
+        raise BenchmarkInputError("manifest_invalid_json") from exc
+    if (
+        not isinstance(raw, Mapping)
+        or set(raw) != {"fixtures"}
+        or not isinstance(raw.get("fixtures"), list)
+    ):
         raise BenchmarkInputError("fixtures_required")
     if not raw["fixtures"]:
         raise BenchmarkInputError("fixtures_empty")
@@ -254,11 +271,28 @@ def load_and_verify_fixtures(manifest_path: Path) -> tuple[BenchmarkFixture, ...
         actual_hash = _sha256_file(fixture.pdf_path)
         if actual_hash != fixture.pdf_sha256:
             raise BenchmarkInputError("pdf_sha256_mismatch")
+    page_counts: dict[Path, int] = {}
+    for fixture in fixtures:
+        if fixture.pdf_path not in page_counts:
+            try:
+                with fitz.open(str(fixture.pdf_path)) as document:
+                    page_counts[fixture.pdf_path] = document.page_count
+            except Exception as exc:
+                raise BenchmarkInputError("pdf_invalid") from exc
+        if fixture.page_number > page_counts[fixture.pdf_path]:
+            raise BenchmarkInputError("page_number_out_of_bounds")
     return fixtures
 
 
 def _parse_fixture(raw: object, manifest_dir: Path) -> BenchmarkFixture:
-    if not isinstance(raw, Mapping):
+    fixture_fields = {
+        "pdf_path",
+        "pdf_sha256",
+        "page_number",
+        "fixture_class",
+        "human_scoring",
+    }
+    if not isinstance(raw, Mapping) or set(raw) != fixture_fields:
         raise BenchmarkInputError("fixture_invalid")
     pdf_path_raw = raw.get("pdf_path")
     pdf_sha256 = raw.get("pdf_sha256")
@@ -281,8 +315,8 @@ def _parse_fixture(raw: object, manifest_dir: Path) -> BenchmarkFixture:
         raise BenchmarkInputError("fixture_class_invalid")
     if not isinstance(human_scoring, Mapping):
         raise BenchmarkInputError("human_scoring_required")
-    if not REQUIRED_SCORING_FIELDS.issubset(human_scoring):
-        raise BenchmarkInputError("human_scoring_fields_missing")
+    if set(human_scoring) != REQUIRED_SCORING_FIELDS:
+        raise BenchmarkInputError("human_scoring_fields_invalid")
 
     return BenchmarkFixture(
         pdf_path=pdf_path,

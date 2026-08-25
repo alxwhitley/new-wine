@@ -191,6 +191,24 @@ def substantive_body_text():
     )
 
 
+def reviewed_capability(article_text=None, proposition_count=2):
+    article_text = article_text or substantive_body_text()
+    propositions = tuple(
+        (index, f"Approved proposition {index}.")
+        for index in range(1, proposition_count + 1)
+    )
+    return props_mod._ValidatedReviewedPropositions(
+        article_id="reviewed-article",
+        article_hash=hashlib.sha256(article_text.encode("utf-8")).hexdigest(),
+        speaker="Ada North",
+        model=props_mod.EXTRACTION_MODEL,
+        prompt_version="v3.1",
+        prompt_fingerprint=props_mod.prompt_fingerprint("v3.1"),
+        proposition_artifact_hash="b" * 64,
+        propositions=propositions,
+    )
+
+
 class SharedWriterHappyPathTests(unittest.TestCase):
     def test_approved_set_crosses_atomic_writer_without_regeneration(self):
         article_text = substantive_body_text()
@@ -376,6 +394,59 @@ class SharedWriterHappyPathTests(unittest.TestCase):
 
 
 class SharedWriterFailureAndBoundaryTests(unittest.TestCase):
+    def test_reviewed_writer_rolls_back_every_non_exact_storage_result(self):
+        """Reviewed ingestion succeeds only for exactly stored:{approved_count}."""
+        article_text = substantive_body_text()
+        capability = reviewed_capability(article_text)
+        rejected_results = (
+            "skipped_precept_austin",
+            "skipped_licensed",
+            "too_thin_to_extract",
+            "no_propositions",
+            "stored:0",
+            "stored:1",
+            "stored:3",
+            "stored:2:flagged:1",
+            "error",
+        )
+
+        for prop_result in rejected_results:
+            with self.subTest(prop_result=prop_result):
+                conn = FakeConn(
+                    license_status="unlicensed", chunk_id_rows=["chunk-a"]
+                )
+                with _Patched(
+                    (shared_ingest, "psycopg2", FakePsycopg2Module(conn)),
+                    (shared_ingest, "execute_values", fake_execute_values),
+                    (shared_ingest, "already_ingested", lambda *a, **k: False),
+                    (
+                        shared_ingest,
+                        "_get_openai_client",
+                        lambda: FakeOpenAIClient([]),
+                    ),
+                    (props_mod, "process_document", lambda *a, **k: prop_result),
+                ):
+                    result = shared_ingest.ingest_document(
+                        db=object(),
+                        db_params={},
+                        title="Reviewed article",
+                        body_text=article_text,
+                        filename="reviewed.md",
+                        author="Ada North",
+                        source_name="New Wine Magazine",
+                        source_id="22222222-2222-2222-2222-222222222222",
+                        skip_dedup=True,
+                        _reviewed_propositions=capability,
+                    )
+
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(
+                    result["reason"], "reviewed_proposition_reconciliation_failed"
+                )
+                self.assertIsNone(result["doc_id"])
+                self.assertTrue(conn.rolled_back)
+                self.assertFalse(conn.committed)
+
     def test_proposition_generation_failure_leaves_no_partial_document_chunks_or_propositions(self):
         conn = FakeConn(license_status="unlicensed", chunk_id_rows=["chunk-a"])
 

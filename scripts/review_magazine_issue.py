@@ -47,6 +47,7 @@ from magazine_review.schemas import (
     OCRManifest,
     PropositionReview,
     StageIdentity,
+    validated_usage,
 )
 from propositions import (
     EXTRACTION_MODEL,
@@ -348,14 +349,10 @@ def _artifact_hash(path: Path) -> str:
 
 
 def _sum_numeric(values: Sequence[float | int], reason: str) -> float | int:
-    if any(
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        for value in values
-    ):
-        raise ArtifactValidationError(reason)
-    total = math.fsum(values)
+    normalized = validated_usage(
+        {str(index): value for index, value in enumerate(values)}, reason
+    )
+    total = math.fsum(normalized.values())
     if not math.isfinite(total):
         raise ArtifactValidationError(reason)
     if all(isinstance(value, int) for value in values):
@@ -626,9 +623,9 @@ def review_issue(
         article_path = output_dir / ARTICLE_MANIFEST_NAME
         articles = _load_matching_article(article_path, transcript)
         if articles is None:
-            proposed = segment_articles(transcript, config.article_client)
+            articles = segment_articles(transcript, config.article_client)
             articles = review_articles_against_issue(
-                transcript, proposed, config.article_client
+                transcript, articles, config.article_client
             )
             article_hash = write_artifact(article_path, articles)
         else:

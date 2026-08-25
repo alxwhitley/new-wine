@@ -5,8 +5,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
+import fitz
 import pytest
 
 from magazine_review.benchmark import (
@@ -56,7 +60,12 @@ def write_manifest(
     fixture_classes: tuple[str, str] = ("severe_failure", "good_control"),
 ) -> Path:
     pdf_path = tmp_path / "issue.pdf"
-    pdf_path.write_bytes(b"fixed benchmark page")
+    document = fitz.open()
+    for page_number in range(1, 8):
+        page = document.new_page()
+        page.insert_text((72, 72), f"fixed benchmark page {page_number}")
+    document.save(pdf_path)
+    document.close()
     manifest_path = tmp_path / "fixtures.json"
     manifest_path.write_text(
         json.dumps(
@@ -210,6 +219,123 @@ def test_cli_dry_run_verifies_fixture_identity_without_provider_calls(tmp_path):
     assert dry_run["dry_run"] is True
     assert dry_run["fixture_count"] == 2
     assert dry_run["result_count"] == 0
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_manifest_rejects_nonfinite_nested_scoring_before_provider_call(
+    tmp_path, constant
+):
+    manifest_path = write_manifest(tmp_path)
+    raw = manifest_path.read_text(encoding="utf-8").replace(
+        '"omissions": []', f'"omissions": [{constant}]', 1
+    )
+    manifest_path.write_text(raw, encoding="utf-8")
+    providers = [
+        FakeProvider("one", "model-1"),
+        FakeProvider("two", "model-2"),
+        FakeProvider("three", "model-3"),
+    ]
+
+    with pytest.raises(BenchmarkInputError, match="manifest_invalid_json"):
+        run_benchmark(manifest_path, providers, tmp_path / "report.json")
+
+    assert all(provider.calls == [] for provider in providers)
+
+
+def test_manifest_rejects_unknown_nested_scoring_field_before_provider_call(tmp_path):
+    manifest_path = write_manifest(tmp_path)
+    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    raw["fixtures"][0]["human_scoring"]["unreviewed_extra"] = []
+    manifest_path.write_text(json.dumps(raw), encoding="utf-8")
+    providers = [
+        FakeProvider("one", "model-1"),
+        FakeProvider("two", "model-2"),
+        FakeProvider("three", "model-3"),
+    ]
+
+    with pytest.raises(BenchmarkInputError, match="human_scoring_fields_invalid"):
+        run_benchmark(manifest_path, providers, tmp_path / "report.json")
+
+    assert all(provider.calls == [] for provider in providers)
+
+
+def test_manifest_rejects_out_of_bounds_pdf_page_before_provider_call(tmp_path):
+    manifest_path = write_manifest(tmp_path)
+    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    raw["fixtures"][1]["page_number"] = 8
+    manifest_path.write_text(json.dumps(raw), encoding="utf-8")
+    providers = [
+        FakeProvider("one", "model-1"),
+        FakeProvider("two", "model-2"),
+        FakeProvider("three", "model-3"),
+    ]
+
+    with pytest.raises(BenchmarkInputError, match="page_number_out_of_bounds"):
+        run_benchmark(manifest_path, providers, tmp_path / "report.json")
+
+    assert all(provider.calls == [] for provider in providers)
+
+
+def test_cli_loads_configured_provider_factory_without_network(tmp_path):
+    manifest_path = write_manifest(tmp_path)
+    providers = [
+        FakeProvider("one", "model-1"),
+        FakeProvider("two", "model-2"),
+        FakeProvider("three", "model-3"),
+    ]
+
+    exit_code = main(
+        ["--manifest", str(manifest_path), "--output", str(tmp_path / "report.json")],
+        provider_factory=lambda _manifest: providers,
+        environ={},
+    )
+
+    assert exit_code == 0
+    assert all(len(provider.calls) == 2 for provider in providers)
+
+
+def test_shell_main_dry_run_uses_environment_factory_and_makes_zero_calls(tmp_path):
+    manifest_path = write_manifest(tmp_path)
+    factory_module = tmp_path / "offline_benchmark_factory.py"
+    factory_module.write_text(
+        "from magazine_review.benchmark import BenchmarkCandidate, OCRResponse\n"
+        "class Provider:\n"
+        "    def __init__(self, name):\n"
+        "        self.candidate = BenchmarkCandidate(name, name + '-model')\n"
+        "    def transcribe(self, fixture):\n"
+        "        raise AssertionError('dry run called provider')\n"
+        "def build(manifest):\n"
+        "    return [Provider('one'), Provider('two'), Provider('three')]\n",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "shell-dry-run.json"
+    environment = dict(os.environ)
+    environment["MAGAZINE_OCR_BENCHMARK_PROVIDER_FACTORY"] = (
+        "offline_benchmark_factory:build"
+    )
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [str(tmp_path), str(Path(__file__).resolve().parent)]
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).resolve().parent / "benchmark_magazine_ocr.py"),
+            "--manifest",
+            str(manifest_path),
+            "--output",
+            str(output_path),
+            "--dry-run",
+        ],
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+        env=environment,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(output_path.read_text(encoding="utf-8"))["dry_run"] is True
 
 
 if __name__ == "__main__":

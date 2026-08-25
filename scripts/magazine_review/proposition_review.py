@@ -22,6 +22,7 @@ from .schemas import (
     PropositionEvidence,
     PropositionReview,
     StageIdentity,
+    validated_usage,
 )
 
 
@@ -165,19 +166,10 @@ def _require_exact_keys(
 
 
 def _usage(value: object, reason: str) -> dict[str, float | int]:
-    mapping = _require_mapping(value, reason)
-    result: dict[str, float | int] = {}
-    for key, amount in mapping.items():
-        if (
-            not isinstance(key, str)
-            or not key
-            or isinstance(amount, bool)
-            or not isinstance(amount, (int, float))
-            or not math.isfinite(amount)
-        ):
-            raise PropositionReviewError(reason)
-        result[key] = amount
-    return result
+    try:
+        return validated_usage(value, reason)
+    except ArtifactValidationError as exc:
+        raise PropositionReviewError(reason) from exc
 
 
 def _cost(value: object, reason: str) -> float:

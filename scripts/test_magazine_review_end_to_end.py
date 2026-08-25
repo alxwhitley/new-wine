@@ -183,6 +183,15 @@ class _FixtureArticleClient:
                 "ocr_identity": request["ocr_identity"],
                 "transcript_hash": request["transcript_hash"],
                 "article_set_hash": request["article_set_hash"],
+                "issue_coverage_complete": response.get(
+                    "issue_coverage_complete", True
+                ),
+                "missing_substantive_spans": copy.deepcopy(
+                    response.get("missing_substantive_spans", [])
+                ),
+                "missing_articles": copy.deepcopy(
+                    response.get("missing_articles", [])
+                ),
                 "articles": copy.deepcopy(response["articles"]),
             }
         else:

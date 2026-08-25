@@ -149,6 +149,9 @@ def passing_review_response(transcript, articles):
             "ocr_identity": transcript.ocr_identity,
             "transcript_hash": digest(transcript.text),
             "article_set_hash": article_set_hash,
+            "issue_coverage_complete": True,
+            "missing_substantive_spans": [],
+            "missing_articles": [],
             "articles": [
                 {
                     "article_id": article["article_id"],
@@ -270,6 +273,37 @@ def test_mid_thought_ending_quarantines_issue(verified_issue):
         "end_coherent": "ending_mid_thought"
     }
     assert manifest.articles[0].verdict is False
+
+
+def test_issue_coverage_verdict_quarantines_whole_omitted_article(verified_issue):
+    """Per-proposal passes cannot hide a second substantive article omitted upstream."""
+    proposal = two_proposals(verified_issue)[:1]
+    response = passing_review_response(verified_issue, proposal)
+    missing_start = verified_issue.text.index("SECOND VOICE")
+    response["output"].update(
+        issue_coverage_complete=False,
+        missing_articles=["Second Voice by Ben South"],
+        missing_substantive_spans=[
+            {
+                "transcript_start": missing_start,
+                "transcript_end": len(verified_issue.text),
+                "reason": "substantive authored article absent from proposed set",
+            }
+        ],
+    )
+    client = FakeStructuredClient(
+        segmentation_response(verified_issue, proposal), response
+    )
+
+    reviewed = review_articles_against_issue(
+        verified_issue, segment_articles(verified_issue, client), client
+    )
+
+    assert reviewed.status == "quarantined"
+    assert reviewed.issue_coverage_complete is False
+    assert reviewed.missing_articles == ("Second Voice by Ben South",)
+    assert reviewed.missing_substantive_spans[0][0] == missing_start
+    assert "missing_article:Second Voice by Ben South" in reviewed.quarantine_reasons
 
 
 @pytest.mark.parametrize(

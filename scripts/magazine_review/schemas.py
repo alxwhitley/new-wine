@@ -8,6 +8,7 @@ import math
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
+from types import MappingProxyType
 from typing import Any, Mapping, Sequence, Tuple
 
 from .transcript import canonical_verified_transcript
@@ -113,14 +114,46 @@ def _require_exact_keys(raw: object, keys: set[str], reason: str) -> Mapping[str
     return raw
 
 
-def _require_usage(value: object, reason: str) -> Mapping[str, float | int]:
+def _deep_freeze(value: Any) -> Any:
+    """Copy JSON-like values into immutable containers."""
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {key: _deep_freeze(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_deep_freeze(item) for item in value)
+    return value
+
+
+def _deep_thaw(value: Any) -> Any:
+    """Return detached canonical-JSON containers from frozen values."""
+    if isinstance(value, Mapping):
+        return {key: _deep_thaw(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_deep_thaw(item) for item in value]
+    return value
+
+
+def validated_usage(value: object, reason: str) -> dict[str, float | int]:
+    """Return a detached finite, nonnegative usage mapping."""
     if not isinstance(value, Mapping):
         raise ArtifactValidationError(reason)
+    result: dict[str, float | int] = {}
     for name, amount in value.items():
         _require_nonempty(name, reason)
-        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
+        if (
+            isinstance(amount, bool)
+            or not isinstance(amount, (int, float))
+            or not math.isfinite(amount)
+            or amount < 0
+        ):
             raise ArtifactValidationError(reason)
-    return value
+        result[name] = amount
+    return result
+
+
+def _require_usage(value: object, reason: str) -> Mapping[str, float | int]:
+    return validated_usage(value, reason)
 
 
 def _require_cost(value: object, reason: str) -> float:
@@ -180,6 +213,12 @@ class StageIdentity:
     prompt_fingerprint: str
     renderer_settings: Mapping[str, Any]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "input_hashes", _deep_freeze(self.input_hashes))
+        object.__setattr__(
+            self, "renderer_settings", _deep_freeze(self.renderer_settings)
+        )
+
     def validate(self) -> None:
         _require_positive_int(self.schema_version, "schema_version_invalid")
         if not isinstance(self.input_hashes, Mapping) or not self.input_hashes:
@@ -201,10 +240,10 @@ class StageIdentity:
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
-            "input_hashes": dict(self.input_hashes),
+            "input_hashes": _deep_thaw(self.input_hashes),
             "model": self.model,
             "prompt_fingerprint": self.prompt_fingerprint,
-            "renderer_settings": dict(self.renderer_settings),
+            "renderer_settings": _deep_thaw(self.renderer_settings),
         }
 
     @classmethod
@@ -266,7 +305,8 @@ class OCRPage:
     def validate(self) -> None:
         _require_positive_int(self.page_number, "page_number_invalid")
         _require_sha256(self.image_hash, "page_image_hash_invalid")
-        _require_nonempty(self.initial_text, "initial_text_required")
+        if not isinstance(self.initial_text, str):
+            raise ArtifactValidationError("initial_text_required")
         if hashlib.sha256(self.initial_text.encode("utf-8")).hexdigest() != self.initial_text_hash:
             raise ArtifactValidationError("initial_text_hash_mismatch")
         _require_nonempty(self.initial_provider, "initial_provider_required")
@@ -280,6 +320,8 @@ class OCRPage:
         if not isinstance(self.reviewer_complete, bool):
             raise ArtifactValidationError("reviewer_complete_invalid")
         _string_tuple(self.reviewer_reasons, "reviewer_reasons_invalid")
+        if self.reviewer_complete != (not self.reviewer_reasons):
+            raise ArtifactValidationError("reviewer_first_verdict_inconsistent")
         _require_usage(self.reviewer_usage, "reviewer_usage_invalid")
         _require_cost(self.reviewer_cost_usd, "reviewer_cost_invalid")
         _require_timestamp(self.reviewer_timestamp, "reviewer_timestamp_required")
@@ -309,10 +351,18 @@ class OCRPage:
             self.text != self.initial_text or self.final_text_hash != self.initial_text_hash
         ):
             raise ArtifactValidationError("final_ocr_provenance_mismatch")
+        if self.repair_attempts == 0 and (
+            self.complete != self.reviewer_complete
+            or self.reasons != self.reviewer_reasons
+        ):
+            raise ArtifactValidationError("final_review_provenance_mismatch")
         if self.repair_attempts == 1:
+            if self.reviewer_complete:
+                raise ArtifactValidationError("repair_requires_failed_first_review")
             if not all(value is not None for value in repair_values):
                 raise ArtifactValidationError("repair_evidence_required")
-            _require_nonempty(self.repaired_text, "repaired_text_required")
+            if not isinstance(self.repaired_text, str):
+                raise ArtifactValidationError("repaired_text_required")
             if hashlib.sha256(self.repaired_text.encode("utf-8")).hexdigest() != self.repaired_text_hash:
                 raise ArtifactValidationError("repaired_text_hash_mismatch")
             _require_nonempty(self.repair_provider, "repair_provider_required")
@@ -326,6 +376,8 @@ class OCRPage:
         if not isinstance(self.complete, bool):
             raise ArtifactValidationError("page_complete_invalid")
         _string_tuple(self.reasons, "page_reasons_invalid")
+        if self.complete != (not self.reasons):
+            raise ArtifactValidationError("page_final_verdict_inconsistent")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -655,6 +707,9 @@ class ArticleManifest:
     reviewer_prompt_fingerprint: str
     reviewer_usage: Mapping[str, float | int]
     reviewer_cost_usd: float
+    issue_coverage_complete: bool = True
+    missing_substantive_spans: Tuple[Tuple[int, int, str], ...] = ()
+    missing_articles: Tuple[str, ...] = ()
     status: str = "passed"
     quarantine_reasons: Tuple[str, ...] = ()
 
@@ -675,6 +730,30 @@ class ArticleManifest:
         _require_sha256(self.reviewer_prompt_fingerprint, "article_reviewer_prompt_fingerprint_invalid")
         _require_usage(self.reviewer_usage, "article_reviewer_usage_invalid")
         _require_cost(self.reviewer_cost_usd, "article_reviewer_cost_invalid")
+        if not isinstance(self.issue_coverage_complete, bool):
+            raise ArtifactValidationError("article_issue_coverage_invalid")
+        if not isinstance(self.missing_substantive_spans, tuple):
+            raise ArtifactValidationError("article_missing_spans_invalid")
+        for span in self.missing_substantive_spans:
+            if not isinstance(span, tuple) or len(span) != 3:
+                raise ArtifactValidationError("article_missing_spans_invalid")
+            start = _require_nonnegative_int(span[0], "article_missing_spans_invalid")
+            end = _require_nonnegative_int(span[1], "article_missing_spans_invalid")
+            _require_nonempty(span[2], "article_missing_spans_invalid")
+            if end <= start or end > len(self.transcript):
+                raise ArtifactValidationError("article_missing_spans_invalid")
+        _string_tuple(self.missing_articles, "article_missing_articles_invalid")
+        if self.issue_coverage_complete and (
+            self.missing_substantive_spans or self.missing_articles
+        ):
+            raise ArtifactValidationError("article_issue_coverage_inconsistent")
+        if (
+            not self.issue_coverage_complete
+            and not self.missing_substantive_spans
+            and not self.missing_articles
+            and self.quarantine_reasons != ("semantic_review_required",)
+        ):
+            raise ArtifactValidationError("article_issue_coverage_evidence_required")
         if not isinstance(self.articles, tuple) or not self.articles:
             raise ArtifactValidationError("articles_required")
         seen_ids = set()
@@ -691,7 +770,10 @@ class ArticleManifest:
             seen_ids.add(article.article_id)
             seen_filenames.add(article.filename)
             previous_end = article.transcript_end
-        if self.status == "passed" and not all(article.verdict for article in self.articles):
+        if self.status == "passed" and (
+            not all(article.verdict for article in self.articles)
+            or not self.issue_coverage_complete
+        ):
             raise ArtifactValidationError("article_verdict_failed")
 
     def article_by_id(self, article_id: str) -> ArticleRecord:
@@ -716,6 +798,16 @@ class ArticleManifest:
             "reviewer_prompt_fingerprint": self.reviewer_prompt_fingerprint,
             "reviewer_usage": dict(self.reviewer_usage),
             "reviewer_cost_usd": self.reviewer_cost_usd,
+            "issue_coverage_complete": self.issue_coverage_complete,
+            "missing_substantive_spans": [
+                {
+                    "transcript_start": start,
+                    "transcript_end": end,
+                    "reason": reason,
+                }
+                for start, end, reason in self.missing_substantive_spans
+            ],
+            "missing_articles": list(self.missing_articles),
             "status": self.status,
             "quarantine_reasons": list(self.quarantine_reasons),
         }
@@ -727,7 +819,8 @@ class ArticleManifest:
             {
                 "identity", "issue_hash", "ocr_artifact_hash", "transcript", "articles", "segmentation_model",
                 "segmentation_prompt_fingerprint", "segmentation_usage", "segmentation_cost_usd", "reviewer_model",
-                "reviewer_prompt_fingerprint", "reviewer_usage", "reviewer_cost_usd", "status", "quarantine_reasons",
+                "reviewer_prompt_fingerprint", "reviewer_usage", "reviewer_cost_usd", "issue_coverage_complete",
+                "missing_substantive_spans", "missing_articles", "status", "quarantine_reasons",
             },
             "article_manifest_invalid",
         )
@@ -746,6 +839,16 @@ class ArticleManifest:
                 reviewer_prompt_fingerprint=raw["reviewer_prompt_fingerprint"],
                 reviewer_usage=raw["reviewer_usage"],
                 reviewer_cost_usd=raw["reviewer_cost_usd"],
+                issue_coverage_complete=raw["issue_coverage_complete"],
+                missing_substantive_spans=tuple(
+                    (
+                        item["transcript_start"],
+                        item["transcript_end"],
+                        item["reason"],
+                    )
+                    for item in raw["missing_substantive_spans"]
+                ),
+                missing_articles=tuple(raw["missing_articles"]),
                 status=raw["status"],
                 quarantine_reasons=tuple(raw["quarantine_reasons"]),
             )

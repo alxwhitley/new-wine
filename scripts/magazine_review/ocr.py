@@ -249,13 +249,17 @@ def _prompt_fingerprint(value: str) -> str:
     return _sha256_text(value)
 
 
-def _stage_identity(pdf_hash: str, config: OCRReviewConfig) -> StageIdentity:
-    repair_candidate = config.repair_provider.candidate
+def _expected_stage_identity(
+    pdf_hash: str,
+    accepted_candidate: BenchmarkCandidate,
+    benchmark_decision_hash: str,
+) -> StageIdentity:
+    repair_candidate = BenchmarkCandidate("Gemini", PAGE_REVIEW_MODEL)
     model_identity = json.dumps(
         {
-            "initial_provider": config.accepted_candidate.provider,
-            "initial_model": config.accepted_candidate.model,
-            "reviewer_model": config.reviewer.model,
+            "initial_provider": accepted_candidate.provider,
+            "initial_model": accepted_candidate.model,
+            "reviewer_model": PAGE_REVIEW_MODEL,
             "repair_provider": repair_candidate.provider,
             "repair_model": repair_candidate.model,
         },
@@ -275,7 +279,7 @@ def _stage_identity(pdf_hash: str, config: OCRReviewConfig) -> StageIdentity:
         schema_version=1,
         input_hashes={
             "issue.pdf": pdf_hash,
-            "accepted_benchmark_decision": config.benchmark_decision_hash,
+            "accepted_benchmark_decision": benchmark_decision_hash,
         },
         model=model_identity,
         prompt_fingerprint=_prompt_fingerprint(prompts),
@@ -283,6 +287,12 @@ def _stage_identity(pdf_hash: str, config: OCRReviewConfig) -> StageIdentity:
     )
     identity.validate()
     return identity
+
+
+def _stage_identity(pdf_hash: str, config: OCRReviewConfig) -> StageIdentity:
+    return _expected_stage_identity(
+        pdf_hash, config.accepted_candidate, config.benchmark_decision_hash
+    )
 
 
 def _render_pages(pdf_path: Path, pdf_hash: str) -> tuple[RenderedPage, ...]:
@@ -310,6 +320,56 @@ def _render_pages(pdf_path: Path, pdf_hash: str) -> tuple[RenderedPage, ...]:
                 )
             )
     return tuple(pages)
+
+
+def validate_current_ocr_manifest(
+    pdf_path: Path,
+    manifest: OCRManifest,
+    *,
+    accepted_candidate: BenchmarkCandidate,
+    benchmark_decision_hash: str,
+    render_pages: Callable[[Path, str], tuple[RenderedPage, ...]] | None = None,
+) -> None:
+    """Revalidate durable OCR evidence against current code and source renders."""
+    manifest.validate()
+    _validate_candidate(accepted_candidate, "accepted_candidate_invalid")
+    if _SHA256_RE.fullmatch(benchmark_decision_hash) is None:
+        raise OCRReviewError("benchmark_decision_hash_invalid")
+    issue_path = Path(pdf_path)
+    pdf_hash = _sha256_bytes(issue_path.read_bytes())
+    if manifest.pdf_hash != pdf_hash:
+        raise ArtifactValidationError("current_ocr_pdf_mismatch")
+    expected_identity = _expected_stage_identity(
+        pdf_hash, accepted_candidate, benchmark_decision_hash
+    )
+    if manifest.identity != expected_identity:
+        raise ArtifactValidationError("current_ocr_identity_mismatch")
+    renderer = render_pages or _render_pages
+    rendered = renderer(issue_path, pdf_hash)
+    if (
+        manifest.page_count != len(rendered)
+        or tuple(page.image_hash for page in manifest.pages)
+        != tuple(page.image_hash for page in rendered)
+    ):
+        raise ArtifactValidationError("current_ocr_render_mismatch")
+    initial_prompt = _prompt_fingerprint(INITIAL_OCR_INSTRUCTIONS)
+    review_prompt = _prompt_fingerprint(PAGE_REVIEW_INSTRUCTIONS)
+    repair_prompt = _prompt_fingerprint(REPAIR_OCR_INSTRUCTIONS)
+    for page in manifest.pages:
+        if (
+            page.initial_provider != accepted_candidate.provider
+            or page.initial_model != accepted_candidate.model
+            or page.initial_prompt_fingerprint != initial_prompt
+            or page.reviewer_model != PAGE_REVIEW_MODEL
+            or page.reviewer_prompt_fingerprint != review_prompt
+        ):
+            raise ArtifactValidationError("current_ocr_page_identity_mismatch")
+        if page.repair_attempts and (
+            page.repair_provider != "Gemini"
+            or page.repair_model != PAGE_REVIEW_MODEL
+            or page.repair_prompt_fingerprint != repair_prompt
+        ):
+            raise ArtifactValidationError("current_ocr_repair_identity_mismatch")
 
 
 def _validate_accounting(
@@ -342,7 +402,7 @@ def _validate_accounting(
 def _validate_ocr_response(response: object, reason_prefix: str) -> OCRResponse:
     if not isinstance(response, OCRResponse):
         raise OCRReviewError(f"{reason_prefix}_response_invalid")
-    if not isinstance(response.text, str) or not response.text.strip():
+    if not isinstance(response.text, str):
         raise OCRReviewError(f"{reason_prefix}_text_invalid")
     usage, cost = _validate_accounting(response.usage, response.cost_usd, reason_prefix)
     return OCRResponse(text=response.text, usage=usage, cost_usd=cost)

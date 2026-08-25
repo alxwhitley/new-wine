@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Mapping, Type
 
 from .schemas import (
-    ApprovedPropositionSet,
     ArticleManifest,
     ArtifactValidationError,
     IssueDecision,
@@ -24,7 +23,6 @@ _ARTIFACT_TYPES: Mapping[str, Type[Any]] = {
     "ArticleManifest": ArticleManifest,
     "PropositionReview": PropositionReview,
     "IssueDecision": IssueDecision,
-    "ApprovedPropositionSet": ApprovedPropositionSet,
 }
 
 

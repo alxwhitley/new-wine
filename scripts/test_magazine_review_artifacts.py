@@ -47,6 +47,37 @@ def valid_identity() -> StageIdentity:
     )
 
 
+def test_stage_identity_deep_freezes_nested_inputs() -> None:
+    """Mutable caller-owned mappings cannot silently change a resume digest."""
+    input_hashes = {"issue.pdf": sha("a")}
+    renderer_settings = {
+        "renderer": {"dpi": 300, "channels": ["R", "G", "B"]}
+    }
+    identity = StageIdentity(
+        schema_version=1,
+        input_hashes=input_hashes,
+        model="openai/gpt-oss-120b",
+        prompt_fingerprint=sha("b"),
+        renderer_settings=renderer_settings,
+    )
+    original = identity.to_dict()
+    original_digest = identity.digest
+
+    input_hashes["issue.pdf"] = sha("c")
+    renderer_settings["renderer"]["dpi"] = 72
+    renderer_settings["renderer"]["channels"].append("A")
+
+    assert identity.to_dict() == original
+    assert identity.digest == original_digest
+    with pytest.raises(TypeError):
+        identity.renderer_settings["renderer"]["dpi"] = 72
+
+
+def test_artifact_usage_rejects_negative_values(valid_issue_artifacts) -> None:
+    with pytest.raises(ArtifactValidationError, match="ocr_usage_invalid"):
+        replace(valid_issue_artifacts.ocr, usage={"input_tokens": -1}).validate()
+
+
 @pytest.fixture
 def valid_issue_artifacts() -> IssueArtifacts:
     identity = valid_identity()
@@ -450,6 +481,11 @@ def test_approved_proposition_set_preserves_order_and_requires_provenance(
         replace(approved, model="").validate()
 
 
+def test_approved_proposition_set_is_embedded_transport_only() -> None:
+    """Approved sets without a stage identity are not standalone artifacts."""
+    assert "ApprovedPropositionSet" not in artifact_store._ARTIFACT_TYPES
+
+
 def test_predecessor_links_allow_distinct_stage_identities(valid_issue_artifacts):
     """Each provider stage has its own identity; hashes, not equality, link it."""
     article_identity = replace(valid_identity(), model="article-model", prompt_fingerprint=sha("d"))
@@ -581,6 +617,8 @@ def test_repaired_final_ocr_text_must_equal_repair_evidence(valid_issue_artifact
     repaired = replace(
         page,
         repair_attempts=1,
+        reviewer_complete=False,
+        reviewer_reasons=("first_review_failed",),
         repaired_text=repaired_text,
         repaired_text_hash=text_hash(repaired_text),
         repair_provider="Gemini",
@@ -593,6 +631,29 @@ def test_repaired_final_ocr_text_must_equal_repair_evidence(valid_issue_artifact
 
     with pytest.raises(ArtifactValidationError, match="final_ocr_provenance_mismatch"):
         repaired.validate()
+
+
+def test_repair_evidence_requires_recorded_failed_first_review(valid_issue_artifacts):
+    """A passing first verdict cannot coexist with a later repair attempt."""
+    page = valid_issue_artifacts.ocr.pages[0]
+    repaired_text = page.text
+    contradictory = replace(
+        page,
+        repair_attempts=1,
+        reviewer_complete=True,
+        reviewer_reasons=(),
+        repaired_text=repaired_text,
+        repaired_text_hash=text_hash(repaired_text),
+        repair_provider="Gemini",
+        repair_model="gemini-3.6-flash",
+        repair_prompt_fingerprint=sha("a"),
+        repair_usage={"input_tokens": 1},
+        repair_cost_usd=0.01,
+        repair_timestamp="2026-08-25T00:00:02Z",
+    )
+
+    with pytest.raises(ArtifactValidationError, match="repair_requires_failed_first_review"):
+        contradictory.validate()
 
 
 def test_approved_decision_reconciles_totals_and_artifact_keys(valid_issue_artifacts):

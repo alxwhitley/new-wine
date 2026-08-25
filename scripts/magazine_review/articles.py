@@ -32,7 +32,9 @@ REVIEW_INSTRUCTIONS = (
     "fresh context. For every article decide whether its beginning is genuine, ending "
     "is coherent, cross-page transitions are intact, content is omitted or duplicated, "
     "adjacent material bleeds into it, and author attribution is correct. Report a "
-    "specific reason for every failed field."
+    "specific reason for every failed field. Also issue one binding whole-issue "
+    "coverage verdict and identify every substantive authored article omitted from "
+    "the proposed set, with its exact transcript span and a specific reason."
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SEMANTIC_FIELDS = (
@@ -326,12 +328,30 @@ def _review_schema() -> dict[str, object]:
                     "ocr_identity",
                     "transcript_hash",
                     "article_set_hash",
+                    "issue_coverage_complete",
+                    "missing_substantive_spans",
+                    "missing_articles",
                     "articles",
                 ],
                 "properties": {
                     "ocr_identity": {"type": "string"},
                     "transcript_hash": {"type": "string"},
                     "article_set_hash": {"type": "string"},
+                    "issue_coverage_complete": {"type": "boolean"},
+                    "missing_substantive_spans": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["transcript_start", "transcript_end", "reason"],
+                            "properties": {
+                                "transcript_start": {"type": "integer", "minimum": 0},
+                                "transcript_end": {"type": "integer", "minimum": 1},
+                                "reason": {"type": "string", "minLength": 1},
+                            },
+                        },
+                    },
+                    "missing_articles": string_list,
                     "articles": {"type": "array", "minItems": 1, "items": article},
                 },
             },
@@ -482,6 +502,7 @@ def segment_articles(
         reviewer_prompt_fingerprint=_config_fingerprint(_review_config()),
         reviewer_usage={},
         reviewer_cost_usd=0.0,
+        issue_coverage_complete=False,
         status="quarantined",
         quarantine_reasons=("semantic_review_required",),
     )
@@ -567,7 +588,15 @@ def review_articles_against_issue(
     )
     output = _require_exact_keys(
         output,
-        {"ocr_identity", "transcript_hash", "article_set_hash", "articles"},
+        {
+            "ocr_identity",
+            "transcript_hash",
+            "article_set_hash",
+            "issue_coverage_complete",
+            "missing_substantive_spans",
+            "missing_articles",
+            "articles",
+        },
         "article_review_output_invalid",
     )
     if output["ocr_identity"] != transcript.ocr_identity:
@@ -576,6 +605,30 @@ def review_articles_against_issue(
         raise ArticleReviewError("review_transcript_lineage_mismatch")
     if output["article_set_hash"] != article_set_hash:
         raise ArticleReviewError("review_article_set_lineage_mismatch")
+    issue_coverage_complete = _require_bool(
+        output["issue_coverage_complete"], "article_issue_coverage_invalid"
+    )
+    missing_articles = _require_string_list(
+        output["missing_articles"], "article_missing_articles_invalid"
+    )
+    raw_missing_spans = output["missing_substantive_spans"]
+    if not isinstance(raw_missing_spans, list):
+        raise ArticleReviewError("article_missing_spans_invalid")
+    missing_spans: list[tuple[int, int, str]] = []
+    for raw_span in raw_missing_spans:
+        span = _require_exact_keys(
+            raw_span,
+            {"transcript_start", "transcript_end", "reason"},
+            "article_missing_spans_invalid",
+        )
+        start = _require_int(span["transcript_start"], "article_missing_spans_invalid")
+        end = _require_int(span["transcript_end"], "article_missing_spans_invalid")
+        reason = _require_nonempty(span["reason"], "article_missing_spans_invalid")
+        if start < 0 or end <= start or end > len(transcript.text):
+            raise ArticleReviewError("article_missing_spans_invalid")
+        missing_spans.append((start, end, reason))
+    if issue_coverage_complete != (not missing_spans and not missing_articles):
+        raise ArticleReviewError("article_issue_coverage_inconsistent")
     raw_reviews = output["articles"]
     if not isinstance(raw_reviews, list):
         raise ArticleReviewError("review_articles_invalid")
@@ -599,6 +652,12 @@ def review_articles_against_issue(
     }
     reviewed_articles: list[ArticleRecord] = []
     quarantine_reasons: list[str] = []
+    for missing_article in missing_articles:
+        quarantine_reasons.append(f"missing_article:{missing_article}")
+    for start, end, reason in missing_spans:
+        quarantine_reasons.append(
+            f"missing_substantive_span:{start}:{end}:{reason}"
+        )
     for article, raw in zip(manifest.articles, raw_reviews):
         review = _require_exact_keys(raw, review_keys, "article_review_invalid")
         start_coherent = _require_bool(review["start_coherent"], "article_review_invalid")
@@ -671,6 +730,9 @@ def review_articles_against_issue(
         reviewer_prompt_fingerprint=_config_fingerprint(_review_config()),
         reviewer_usage=usage,
         reviewer_cost_usd=cost,
+        issue_coverage_complete=issue_coverage_complete,
+        missing_substantive_spans=tuple(missing_spans),
+        missing_articles=missing_articles,
         status=status,
         quarantine_reasons=tuple(quarantine_reasons),
     )

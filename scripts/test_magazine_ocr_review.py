@@ -19,6 +19,7 @@ from magazine_review.ocr import (
     PageReviewResponse,
     VerifiedIssueTranscript,
     review_issue_ocr,
+    validate_current_ocr_manifest,
 )
 from magazine_review.schemas import ArtifactValidationError
 
@@ -346,6 +347,63 @@ def test_initial_provider_must_match_explicit_accepted_benchmark_candidate(
     assert initial.page_numbers == []
     assert reviewer.page_numbers == []
     assert repair.page_numbers == []
+
+
+def test_image_only_page_accepts_exact_empty_text_only_after_passing_review(
+    one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A genuinely text-free page may pass, retaining the exact empty-text hash."""
+    initial = FakeOCRProvider(
+        BenchmarkCandidate("accepted-provider", "accepted-model"), {1: ""}
+    )
+    reviewer = FakeReviewer([review(True, reason="image-only page has no visible text")])
+    repair = FakeOCRProvider(
+        BenchmarkCandidate("Gemini", "gemini-3.6-flash"), {1: "unused"}
+    )
+
+    manifest = review_issue_ocr(
+        one_page_pdf,
+        config(initial=initial, reviewer=reviewer, repair=repair),
+        tmp_path / "artifacts",
+    )
+
+    assert manifest.status == "passed"
+    assert manifest.pages[0].text == ""
+    assert manifest.pages[0].final_text_hash == hashlib.sha256(b"").hexdigest()
+    assert repair.page_numbers == []
+
+
+def test_current_ocr_validator_rejects_stale_identity_and_render(
+    one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """Ingestion-time validation must bind both current config and rendered bytes."""
+    review_config = passing_config({1: "verified page"})
+    manifest = review_issue_ocr(
+        one_page_pdf, review_config, tmp_path / "artifacts"
+    )
+
+    with pytest.raises(ArtifactValidationError, match="current_ocr_identity_mismatch"):
+        validate_current_ocr_manifest(
+            one_page_pdf,
+            replace(manifest, identity=replace(manifest.identity, model="stale")),
+            accepted_candidate=review_config.accepted_candidate,
+            benchmark_decision_hash=review_config.benchmark_decision_hash,
+        )
+
+    rendered = list(
+        __import__("magazine_review.ocr", fromlist=["_render_pages"])._render_pages(
+            one_page_pdf, manifest.pdf_hash
+        )
+    )
+    rendered[0] = replace(rendered[0], image_hash=sha("stale render"))
+    with pytest.raises(ArtifactValidationError, match="current_ocr_render_mismatch"):
+        validate_current_ocr_manifest(
+            one_page_pdf,
+            manifest,
+            accepted_candidate=review_config.accepted_candidate,
+            benchmark_decision_hash=review_config.benchmark_decision_hash,
+            render_pages=lambda _path, _hash: tuple(rendered),
+        )
 
 
 def test_review_pipeline_legacy_entry_uses_verified_pages_without_moving_pdf(

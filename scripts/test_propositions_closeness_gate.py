@@ -198,6 +198,30 @@ def test_approved_propositions_bypass_generation_but_store_exact_text(monkeypatc
     assert conn.committed
     assert not conn.rolled_back
 
+    mismatched_conn = FakeConn(license_status="licensed")
+    storage_kwargs = []
+
+    def mismatched_storage(*args, **kwargs):
+        storage_kwargs.append(kwargs)
+        return 1
+
+    monkeypatch.setattr(props_mod, "store_propositions", mismatched_storage)
+    mismatch = props_mod.process_document(
+        mismatched_conn,
+        "document-id",
+        "source-id",
+        article_text,
+        fake_embed_fn,
+        speaker="Ada North",
+        prompt_version="v3.1",
+        _reviewed_propositions=capability,
+    )
+
+    assert mismatch == "error"
+    assert storage_kwargs[0]["commit"] is False
+    assert mismatched_conn.rolled_back
+    assert not mismatched_conn.committed
+
 
 def main() -> None:
     print("=" * 78)

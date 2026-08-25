@@ -719,8 +719,27 @@ def ingest_document(
             conn, doc_id, _resolved_id, body_text, embed_text, chunk_ids=chunk_ids,
             speaker=speaker, prompt_version="v3.1",
             _reviewed_propositions=_reviewed_propositions,
+            _defer_reviewed_commit=_reviewed_propositions is not None,
         )
         print(f"  propositions: {prop_result}")
+
+        if _reviewed_propositions is not None:
+            expected_result = f"stored:{len(_reviewed_propositions.propositions)}"
+            if prop_result != expected_result:
+                conn.rollback()
+                conn.close()
+                print(
+                    "  ✗ Reviewed proposition reconciliation failed — "
+                    "rolled back, nothing written for this document"
+                )
+                return {
+                    "status": "failed",
+                    "reason": "reviewed_proposition_reconciliation_failed",
+                    "doc_id": None,
+                    "source_id": _resolved_id,
+                    "chunks": [],
+                    "propositions": prop_result,
+                }
 
         if prop_result == "error":
             conn.rollback()  # harmless no-op if process_document() already rolled back

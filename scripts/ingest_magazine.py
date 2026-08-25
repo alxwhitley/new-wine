@@ -33,7 +33,12 @@ from app.services.chunker import chunk_text
 from bible_refs import extract_bible_references
 from magazine_review import articles as article_review_module
 from magazine_review.artifacts import load_valid_artifact_bytes
-from magazine_review.ocr import VerifiedIssueTranscript
+from magazine_review.benchmark import BenchmarkCandidate
+from magazine_review.ocr import (
+    PAGE_REVIEW_MODEL,
+    VerifiedIssueTranscript,
+    validate_current_ocr_manifest,
+)
 from magazine_review.proposition_review import (
     REVIEW_MODEL as PROPOSITION_REVIEW_MODEL,
     REVIEW_PROMPT_FINGERPRINT as PROPOSITION_REVIEW_PROMPT_FINGERPRINT,
@@ -221,13 +226,15 @@ def _proposition_review_path(artifact_dir: Path, article_id: str) -> Path:
     return Path(artifact_dir) / f"{PROPOSITION_PREFIX}{stable_name}.json"
 
 
-def _reviewed_file_path(issue_hash: str, article_id: str) -> str:
+def _reviewed_file_path(
+    issue_hash: str, approval_digest: str, article_id: str
+) -> str:
     stable_article = re.sub(r"[^A-Za-z0-9._-]+", "_", article_id).strip("._")
     if not stable_article:
         stable_article = "article"
     identity_suffix = hashlib.sha256(article_id.encode("utf-8")).hexdigest()[:12]
     return (
-        f"new-wine-reviewed/{issue_hash}/"
+        f"new-wine-reviewed/v2/{issue_hash}/{approval_digest}/"
         f"{stable_article}-{identity_suffix}.md"
     )
 
@@ -284,6 +291,32 @@ def validate_reviewed_issue(
     matching_pdfs = [path for path in pdf_files if _sha256_file(path) == decision.issue_hash]
     if len(pdf_files) != 1 or len(matching_pdfs) != 1:
         raise propositions.ApprovedArtifactMismatch("reviewed_issue_pdf_mismatch")
+    durable = decision.identity.renderer_settings
+    try:
+        accepted_raw = durable["accepted_candidate"]
+        repair_raw = durable["repair_candidate"]
+        accepted_candidate = BenchmarkCandidate(
+            provider=accepted_raw["provider"], model=accepted_raw["model"]
+        )
+        if (
+            durable["ocr_reviewer_model"] != PAGE_REVIEW_MODEL
+            or repair_raw
+            != {"provider": "Gemini", "model": PAGE_REVIEW_MODEL}
+        ):
+            raise KeyError("stale OCR durable identity")
+        benchmark_decision_hash = decision.identity.input_hashes[
+            "accepted_benchmark_decision"
+        ]
+        validate_current_ocr_manifest(
+            matching_pdfs[0],
+            ocr,
+            accepted_candidate=accepted_candidate,
+            benchmark_decision_hash=benchmark_decision_hash,
+        )
+    except Exception as exc:
+        raise propositions.ApprovedArtifactMismatch(
+            str(exc).strip() or "current_ocr_validation_failed"
+        ) from exc
 
     article_by_id = {article.article_id: article for article in articles.articles}
     approved_by_id = {
@@ -390,7 +423,7 @@ def validate_reviewed_issue(
                 snapshot=snapshot,
                 article_id=article_id,
                 stable_file_path=_reviewed_file_path(
-                    decision.issue_hash, article_id
+                    decision.issue_hash, decision_hash, article_id
                 ),
                 propositions=capability,
             )
@@ -523,6 +556,17 @@ def _ingest_article_snapshot(
         content_fn=_content_always_with_header,
         _reviewed_propositions=_reviewed_propositions,
     )
+
+    if _reviewed_propositions is not None and result["status"] == "processed":
+        expected_result = f"stored:{len(_reviewed_propositions.propositions)}"
+        if result.get("propositions") != expected_result:
+            logger.error(
+                "Reviewed proposition reconciliation failed for %s: %r != %r",
+                md_path.name,
+                result.get("propositions"),
+                expected_result,
+            )
+            return ("failed", "reviewed_proposition_reconciliation_failed")
 
     if result["status"] == "processed":
         print(f"  Ingested: {title} ({len(result['chunks'])} chunks)")

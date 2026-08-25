@@ -16,6 +16,7 @@ import pytest
 import ingest_magazine
 import propositions
 import review_magazine_issue as review_runner
+from magazine_review import ocr as ocr_module
 from magazine_review.articles import (
     ARTICLE_MODEL,
     _config_fingerprint as article_config_fingerprint,
@@ -34,6 +35,7 @@ from magazine_review.schemas import (
     ApprovedPropositionSet,
     ArticleManifest,
     ArticleRecord,
+    ArtifactValidationError,
     IssueDecision,
     OCRManifest,
     OCRPage,
@@ -97,9 +99,6 @@ def write_reviewed_fixture(
     issue_dir.mkdir()
     artifact_dir.mkdir()
 
-    pdf_bytes = b"reviewed issue PDF bytes"
-    pdf_hash = digest(pdf_bytes)
-    (issue_dir / "reviewed-issue.pdf").write_bytes(pdf_bytes)
     specs = [
         {
             "article_id": ARTICLE_ID,
@@ -129,6 +128,20 @@ def write_reviewed_fixture(
     if len(specs) != article_count:
         raise ValueError("fixture supports one or two articles")
     page_text = "\n\n".join(str(spec["body"]) for spec in specs)
+    pdf_path = issue_dir / "reviewed-issue.pdf"
+    document = fitz.open()
+    page = document.new_page(width=612, height=792)
+    page.insert_text((36, 72), "Reviewed New Wine issue fixture")
+    document.save(pdf_path)
+    document.close()
+    pdf_hash = digest(pdf_path.read_bytes())
+    current_config = review_config(pdf_path)
+    ocr_identity = ocr_module._expected_stage_identity(
+        pdf_hash,
+        current_config.ocr.accepted_candidate,
+        current_config.ocr.benchmark_decision_hash,
+    )
+    rendered_page = ocr_module._render_pages(pdf_path, pdf_hash)[0]
     for spec in specs:
         md_text = (
             "---\n"
@@ -148,23 +161,27 @@ def write_reviewed_fixture(
         )
 
     ocr = OCRManifest(
-        identity=identity("issue.pdf", pdf_hash),
+        identity=ocr_identity,
         pdf_hash=pdf_hash,
         page_count=1,
         pages=(
             OCRPage(
                 page_number=1,
-                image_hash=digest("page-image"),
+                image_hash=rendered_page.image_hash,
                 initial_text=page_text,
                 initial_text_hash=digest(page_text),
-                initial_provider="offline",
-                initial_model="offline-ocr",
-                initial_prompt_fingerprint=digest("ocr-prompt"),
+                initial_provider=current_config.ocr.accepted_candidate.provider,
+                initial_model=current_config.ocr.accepted_candidate.model,
+                initial_prompt_fingerprint=digest(
+                    ocr_module.INITIAL_OCR_INSTRUCTIONS
+                ),
                 initial_usage={"input_tokens": 1},
                 initial_cost_usd=0.01,
                 initial_timestamp="2026-08-25T00:00:00Z",
-                reviewer_model="offline-reviewer",
-                reviewer_prompt_fingerprint=digest("ocr-review-prompt"),
+                reviewer_model=ocr_module.PAGE_REVIEW_MODEL,
+                reviewer_prompt_fingerprint=digest(
+                    ocr_module.PAGE_REVIEW_INSTRUCTIONS
+                ),
                 reviewer_complete=True,
                 reviewer_reasons=(),
                 reviewer_usage={"input_tokens": 1},
@@ -313,7 +330,7 @@ def write_reviewed_fixture(
             ApprovedPropositionSet.from_review(review, proposition_hash)
         )
     decision = IssueDecision(
-        identity=identity("issue.pdf", pdf_hash),
+        identity=review_runner._decision_identity(pdf_hash, current_config),
         issue_hash=pdf_hash,
         state="approved",
         ocr_artifact_hash=ocr_hash,
@@ -373,6 +390,12 @@ def test_task6_canonical_artifacts_validate_without_any_write_boundary(
     monkeypatch.setattr(ingest_magazine, "get_db", forbidden)
     monkeypatch.setattr(ingest_magazine.shared_ingest, "ingest_document", forbidden)
     monkeypatch.setattr(ingest_magazine, "chunk_text", forbidden)
+    # This fixture replaces the OCR stage wholesale with a task-orchestrator
+    # double; the current OCR validator itself is covered with real renders in
+    # test_magazine_ocr_review.py.
+    monkeypatch.setattr(
+        ingest_magazine, "validate_current_ocr_manifest", lambda *a, **k: None
+    )
 
     approval = ingest_magazine.validate_reviewed_issue(issue_dir, artifact_dir)
 
@@ -427,8 +450,49 @@ def test_reviewed_issue_passes_exact_approved_set_and_never_moves(
     assert calls[0]["skip_dedup"] is False
     assert calls[0]["filename"] == calls[0]["file_path"]
     assert decision.issue_hash in calls[0]["file_path"]
+    assert digest((artifact_dir / "issue_decision.json").read_bytes()) in calls[0]["file_path"]
     assert issue_dir.is_dir()
     assert (issue_dir / "reviewed-issue.pdf").is_file()
+
+
+def test_reviewed_storage_identity_changes_with_approval_digest() -> None:
+    """A changed reviewed artifact cannot hit the prior approval's dedup key."""
+    first = ingest_magazine._reviewed_file_path(
+        "a" * 64, "b" * 64, ARTICLE_ID
+    )
+    changed = ingest_magazine._reviewed_file_path(
+        "a" * 64, "c" * 64, ARTICLE_ID
+    )
+
+    assert first != changed
+    assert first.startswith("new-wine-reviewed/v2/")
+    assert "b" * 64 in first
+
+
+def test_reviewed_issue_counts_processed_count_mismatch_as_errored(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A writer label cannot turn a proposition mismatch into stored success."""
+    issue_dir, artifact_dir, _decision = write_reviewed_fixture(tmp_path)
+
+    monkeypatch.setattr(ingest_magazine, "get_db", lambda: object())
+    monkeypatch.setattr(ingest_magazine, "extract_bible_references", lambda text: [])
+    monkeypatch.setattr(
+        ingest_magazine.shared_ingest,
+        "ingest_document",
+        lambda **kwargs: {
+            "status": "processed",
+            "reason": None,
+            "doc_id": "doc",
+            "source_id": "source",
+            "chunks": ["chunk"],
+            "propositions": "stored:1",
+        },
+    )
+
+    stats = ingest_magazine.ingest_reviewed_issue(issue_dir, artifact_dir)
+
+    assert stats == {"attempted": 1, "stored": 0, "errored": 1, "skipped": 0}
 
 
 def test_model_drift_refuses_before_database_or_embedding(
@@ -451,6 +515,36 @@ def test_model_drift_refuses_before_database_or_embedding(
 
     with pytest.raises(propositions.ApprovedArtifactMismatch):
         ingest_magazine.ingest_reviewed_issue(issue_dir, artifact_dir)
+
+
+def test_current_ocr_validator_runs_before_database_boundary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A stale current render/config refusal must happen before DB or embeddings."""
+    issue_dir, artifact_dir, _decision = write_reviewed_fixture(tmp_path)
+    calls = []
+
+    def stale_ocr(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise ArtifactValidationError("current_ocr_render_mismatch")
+
+    forbidden = lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("current OCR validation must precede external boundaries")
+    )
+    monkeypatch.setattr(
+        ingest_magazine, "validate_current_ocr_manifest", stale_ocr
+    )
+    monkeypatch.setattr(ingest_magazine, "get_db", forbidden)
+    monkeypatch.setattr(ingest_magazine.shared_ingest, "ingest_document", forbidden)
+    monkeypatch.setattr(ingest_magazine, "extract_bible_references", forbidden)
+
+    with pytest.raises(
+        propositions.ApprovedArtifactMismatch,
+        match="current_ocr_render_mismatch",
+    ):
+        ingest_magazine.ingest_reviewed_issue(issue_dir, artifact_dir)
+
+    assert len(calls) == 1
 
 
 def test_current_proposition_review_identity_drift_refuses_before_database(
@@ -542,11 +636,12 @@ def test_reviewed_markdown_is_read_once_and_snapshot_is_carried_to_writer(
     monkeypatch.setattr(
         ingest_magazine.shared_ingest,
         "ingest_document",
-        lambda **kwargs: {
-            "status": "processed",
-            "reason": None,
-            "chunks": ["chunk"],
-        },
+            lambda **kwargs: {
+                "status": "processed",
+                "reason": None,
+                "chunks": ["chunk"],
+                "propositions": "stored:2",
+            },
     )
 
     stats = ingest_magazine.ingest_reviewed_issue(issue_dir, artifact_dir)
@@ -608,7 +703,12 @@ def test_reviewed_retry_after_partial_failure_is_idempotent_and_reconciled(
             raise RuntimeError("simulated second-article writer failure")
         persisted.add(stable_path)
         inserted.append(stable_path)
-        return {"status": "processed", "reason": None, "chunks": ["chunk"]}
+        return {
+            "status": "processed",
+            "reason": None,
+            "chunks": ["chunk"],
+            "propositions": f"stored:{len(kwargs['_reviewed_propositions'].propositions)}",
+        }
 
     monkeypatch.setattr(ingest_magazine, "get_db", lambda: object())
     monkeypatch.setattr(ingest_magazine, "extract_bible_references", lambda text: [])
