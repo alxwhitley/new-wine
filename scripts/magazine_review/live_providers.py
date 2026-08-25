@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import math
 import os
@@ -221,6 +222,27 @@ def _structured_json(text: str) -> object:
             raise LiveProviderError("gemini_review_json_invalid") from fenced_error
 
 
+def _page_review_json(text: str, *, page_number: int) -> object:
+    """Add bounded, non-secret evidence when a page review is not valid JSON."""
+    try:
+        return _structured_json(text)
+    except LiveProviderError as exc:
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        preview_parts: list[str] = []
+        preview_length = 0
+        for character in text:
+            escaped = character.encode("unicode_escape").decode("ascii")
+            if preview_length + len(escaped) > 400:
+                break
+            preview_parts.append(escaped)
+            preview_length += len(escaped)
+        preview = "".join(preview_parts)
+        raise LiveProviderError(
+            "gemini_review_json_invalid:"
+            f"page={page_number}:sha256={digest}:preview={preview}"
+        ) from exc
+
+
 def _image_part(image_bytes: bytes) -> dict[str, object]:
     return {
         "inlineData": {
@@ -378,7 +400,7 @@ class GeminiLivePageReviewer(_GeminiBoundary):
             },
             maximum_call_cost_usd=self._maximum_cost(prompt, 2048),
         )
-        review = _structured_json(text)
+        review = _page_review_json(text, page_number=page.page_number)
         if not isinstance(review, dict):
             raise LiveProviderError("gemini_review_shape_invalid")
         return PageReviewResponse(review=review, usage=usage, cost_usd=cost)

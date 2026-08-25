@@ -18,6 +18,7 @@ from magazine_review.live_providers import (
     _budgeted_proposition_extractor,
     _cost_budget,
     _groq_factory,
+    _page_review_json,
     build_live_provider_adapters,
 )
 from review_magazine_issue import AcceptedBenchmarkDecision
@@ -466,3 +467,17 @@ def test_groq_client_disables_hidden_sdk_retries(monkeypatch) -> None:
 
     assert first is not None
     assert captured == {"api_key": "groq-key", "max_retries": 0}
+
+
+def test_invalid_gemini_review_records_bounded_page_diagnostic() -> None:
+    invalid_response = "preface\n\u2603" + ("\U0001f642" * 400)
+
+    with pytest.raises(RuntimeError) as raised:
+        _page_review_json(invalid_response, page_number=7)
+
+    message = str(raised.value)
+    assert message.startswith("gemini_review_json_invalid:page=7:sha256=")
+    preview = message.split(":preview=", 1)[1]
+    assert preview.startswith(r"preface\n\u2603")
+    assert len(preview) <= 400
+    assert not preview.endswith(("\\", "\\U", "\\U0", "\\U00", "\\U000"))
