@@ -57,8 +57,9 @@ document_ids, not a per-chunk query.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
+from app.services.source_resolver import normalize_alias_key
 from app.services.debate_topics import matched_settled_topic
 from app.services.dominance import DOMINANCE_THRESHOLD, determine_scope
 
@@ -68,6 +69,35 @@ logger = logging.getLogger(__name__)
 # `collapsed` list already uses internally (post document-level collapse,
 # pre per-author cap).
 ChunkEntry = Tuple[str, Tuple[float, dict]]
+
+
+def resolve_explicit_teacher_source(question, db):
+    # type: (str, object) -> Tuple[str, Optional[str]]
+    """Resolve one explicitly named source, preserving multi-source queries.
+
+    Returns (status, source_id), where status is one of ``none``, ``single``,
+    ``multiple``, or ``failed``. The caller fails closed only for ``failed``;
+    ``multiple`` deliberately preserves comparative/multi-teacher retrieval.
+    """
+    normalized = normalize_alias_key(question)
+    try:
+        result = db.table("source_aliases").select("alias_key, source_id").execute()
+    except Exception:
+        logger.exception("explicit_teacher_lock: source alias resolution failed")
+        return "failed", None
+
+    source_ids = {
+        row["source_id"]
+        for row in (result.data or [])
+        if row.get("alias_key")
+        and row.get("source_id")
+        and row["alias_key"] in normalized
+    }
+    if not source_ids:
+        return "none", None
+    if len(source_ids) > 1:
+        return "multiple", None
+    return "single", next(iter(source_ids))
 
 
 def resolve_source_ids_for_documents(db, document_ids):
@@ -105,6 +135,78 @@ def resolve_source_ids_for_documents(db, document_ids):
             len(unique_ids),
         )
         return {}
+
+
+def resolve_canonical_source_name(db, source_id):
+    # type: (object, str) -> Optional[str]
+    """Resolve the user-facing canonical name for a source, failing closed."""
+    try:
+        result = (
+            db.table("sources")
+            .select("name")
+            .eq("id", source_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        logger.exception(
+            "explicit_teacher_lock: canonical source-name lookup failed"
+        )
+        return None
+    if not result.data:
+        return None
+    name = (result.data[0].get("name") or "").strip()
+    return name or None
+
+
+def filter_chunks_to_source(chunks, source_id, db):
+    # type: (List[dict], str, object) -> List[dict]
+    """Keep one source's chunks and label them with its canonical name."""
+    doc_to_source = resolve_source_ids_for_documents(
+        db, [chunk.get("document_id", "") for chunk in chunks]
+    )
+    canonical_name = resolve_canonical_source_name(db, source_id)
+    if not canonical_name:
+        return []
+    return [
+        dict(chunk, author=canonical_name) for chunk in chunks
+        if doc_to_source.get(chunk.get("document_id", "")) == source_id
+    ]
+
+
+def apply_explicit_teacher_lock(question, collapsed, db):
+    # type: (str, List[ChunkEntry], object) -> Tuple[List[ChunkEntry], Optional[str], bool]
+    """Strictly bind a single explicitly named teacher to canonical evidence.
+
+    Returns (entries, source_id, applied). ``applied`` is false for generic and
+    multi-teacher questions. Alias/document lookup failure returns no entries so
+    the answer path fails closed before generation.
+    """
+    status, source_id = resolve_explicit_teacher_source(question, db)
+    if status in ("none", "multiple"):
+        return collapsed, None, False
+    if status == "failed" or source_id is None:
+        return [], None, True
+
+    doc_to_source = resolve_source_ids_for_documents(
+        db,
+        [chunk.get("document_id", "") for _, (_, chunk) in collapsed],
+    )
+    canonical_name = resolve_canonical_source_name(db, source_id)
+    if not canonical_name:
+        return [], source_id, True
+    locked = [
+        (cid, (score, dict(chunk, author=canonical_name)))
+        for cid, (score, chunk) in collapsed
+        if doc_to_source.get(chunk.get("document_id", "")) == source_id
+    ]
+    logger.info(
+        "explicit_teacher_lock: LOCKED to source_id=%s (%d/%d chunks)",
+        source_id,
+        len(locked),
+        len(collapsed),
+    )
+    return locked, source_id, True
 
 
 def apply_single_teacher_lock(question, collapsed, db):

@@ -55,6 +55,7 @@ import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -181,9 +182,28 @@ def _ensure_single_author_label(answer: str, permitted_names: List[str]) -> str:
     return "**Source voice: %s**\n\n%s" % (names[0], answer)
 
 
+def _bounded_neighbor_expansion(chunks, neighbors, max_chunks=12):
+    # type: (List[dict], List[dict], int) -> List[dict]
+    """Merge ranked chunks with neighbors under a hard total-size cap."""
+    expanded = []  # type: List[dict]
+    seen_ids = set()
+    for chunk in list(chunks) + list(neighbors):
+        if len(expanded) >= max_chunks:
+            break
+        chunk_id = chunk.get("id")
+        if chunk_id in seen_ids:
+            continue
+        seen_ids.add(chunk_id)
+        expanded.append(chunk)
+    return expanded
+
+
 # ---- retrieval (MIRROR of chat.chat() ~L754-993; DRIFT POINT) ---------------
-def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
-    # type: (object, str, Optional[set], Optional[str]) -> Tuple[List[dict], List[dict], int, bool]
+def _retrieve(
+    db, question, injected_doc_ids=None, matched_pillar_key=None, trace=None,
+    experimental_teacher_source_lock=False,
+):
+    # type: (object, str, Optional[set], Optional[str], Optional[Any], bool) -> Tuple[List[dict], List[dict], int, bool]
     # Shared retrieval leaf helpers now live in answer_toolbox.py (moved from
     # chat.py 2026-08-07, mirror-unification batch 1) -- neither this module
     # nor chat.py owns them; both import from the toolbox. Of the 3 names
@@ -209,14 +229,19 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     # this one name would be a real behavior change, not just a
     # dependency-hop reduction -- so it stays as a module-attribute access.
     from app.services import answer_toolbox
-    from app.services.single_teacher_lock import apply_single_teacher_lock
+    from app.services.single_teacher_lock import (
+        apply_explicit_teacher_lock,
+        apply_single_teacher_lock,
+        filter_chunks_to_source,
+    )
     from app.services.position_papers import get_paper_body
     from app.services import position_paper_exclusion
 
     filters = get_disabled_filters()
     include_copyrighted = bool(filters["include_copyrighted"]) and answer_toolbox.INCLUDE_COPYRIGHTED_ENV
 
-    variants, keywords = answer_toolbox.expand_query(question)
+    with _trace_span(trace, "retrieval.query_expansion"):
+        variants, keywords = answer_toolbox.expand_query(question)
     variant_weights = [1.0, 0.7, 0.7]
     FTS_WEIGHT = 1.0
 
@@ -231,34 +256,35 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
                 all_scores[cid] = (weighted, chunk)
 
     first_embedding = None  # type: Optional[List[float]]
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        if keywords:
-            variant_futures = [
-                ex.submit(answer_toolbox.hybrid_search_rrf, variant, db,
-                          include_copyrighted=include_copyrighted, run_fts=False)
-                for variant in variants
-            ]
-            fts_future = ex.submit(answer_toolbox.hybrid_search_rrf, keywords, db,
-                                   include_copyrighted=include_copyrighted, run_vector=False)
-            for i, future in enumerate(variant_futures):
-                weight = variant_weights[i] if i < len(variant_weights) else 0.5
-                variant_scores, embedding = future.result()
-                if i == 0:
-                    first_embedding = embedding
-                _merge(variant_scores, weight)
-            fts_scores, _ = fts_future.result()
-            _merge(fts_scores, FTS_WEIGHT)
-        else:
-            futures = [
-                ex.submit(answer_toolbox.hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
-                for variant in variants
-            ]
-            for i, future in enumerate(futures):
-                weight = variant_weights[i] if i < len(variant_weights) else 0.5
-                variant_scores, embedding = future.result()
-                if i == 0:
-                    first_embedding = embedding
-                _merge(variant_scores, weight)
+    with _trace_span(trace, "retrieval.search"):
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            if keywords:
+                variant_futures = [
+                    ex.submit(answer_toolbox.hybrid_search_rrf, variant, db,
+                              include_copyrighted=include_copyrighted, run_fts=False)
+                    for variant in variants
+                ]
+                fts_future = ex.submit(answer_toolbox.hybrid_search_rrf, keywords, db,
+                                       include_copyrighted=include_copyrighted, run_vector=False)
+                for i, future in enumerate(variant_futures):
+                    weight = variant_weights[i] if i < len(variant_weights) else 0.5
+                    variant_scores, embedding = future.result()
+                    if i == 0:
+                        first_embedding = embedding
+                    _merge(variant_scores, weight)
+                fts_scores, _ = fts_future.result()
+                _merge(fts_scores, FTS_WEIGHT)
+            else:
+                futures = [
+                    ex.submit(answer_toolbox.hybrid_search_rrf, variant, db, include_copyrighted=include_copyrighted)
+                    for variant in variants
+                ]
+                for i, future in enumerate(futures):
+                    weight = variant_weights[i] if i < len(variant_weights) else 0.5
+                    variant_scores, embedding = future.result()
+                    if i == 0:
+                        first_embedding = embedding
+                    _merge(variant_scores, weight)
 
     # Filter disabled source_kinds / source_names.
     all_scores = {
@@ -320,46 +346,64 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     # (calls apply_single_teacher_lock directly, imported from its real home
     # single_teacher_lock.py -- same function chat.py calls) so this and
     # chat.py can never independently drift on the lock decision itself.
-    locked_chunks, locked = apply_single_teacher_lock(question, collapsed, db)
-    if locked:
-        # Per-author cap skipped, not reapplied -- moot once already
-        # restricted to one teacher (see single_teacher_lock.py).
-        author_capped = locked_chunks
-    else:
-        # Per-author cap -- max 3 chunks per author.
-        author_counts = {}  # type: Dict[str, int]
-        author_capped = []
-        for cid, (score, chunk) in collapsed:
-            author = chunk.get("author") or "Unknown"
-            author_counts[author] = author_counts.get(author, 0) + 1
-            if author_counts[author] <= 3:
-                author_capped.append((cid, (score, chunk)))
+    explicit_source_id = None  # type: Optional[str]
+    explicit_lock_applied = False
+    if experimental_teacher_source_lock:
+        with _trace_span(trace, "retrieval.teacher_source_lock"):
+            author_capped, explicit_source_id, explicit_lock_applied = (
+                apply_explicit_teacher_lock(question, collapsed, db)
+            )
+    if not explicit_lock_applied:
+        locked_chunks, locked = apply_single_teacher_lock(question, collapsed, db)
+        if locked:
+            # Per-author cap skipped, not reapplied -- moot once already
+            # restricted to one teacher (see single_teacher_lock.py).
+            author_capped = locked_chunks
+        else:
+            # Per-author cap -- max 3 chunks per author.
+            author_counts = {}  # type: Dict[str, int]
+            author_capped = []
+            for cid, (score, chunk) in collapsed:
+                author = chunk.get("author") or "Unknown"
+                author_counts[author] = author_counts.get(author, 0) + 1
+                if author_counts[author] <= 3:
+                    author_capped.append((cid, (score, chunk)))
 
     top_chunks = author_capped[:30]
     chunks = [chunk for _, (_, chunk) in top_chunks]
 
     # Cohere rerank -- 30 -> 8.
-    co = answer_toolbox._get_cohere()
-    if co and len(chunks) > 0:
-        try:
-            docs = [c.get("content", "") for c in chunks]
-            rerank_result = co.rerank(model="rerank-v3.5", query=question, documents=docs, top_n=8)
-            chunks = [chunks[r.index] for r in rerank_result.results]
-        except Exception:
-            logger.exception("Cohere rerank failed (producer), using RRF top 8")
-            chunks = chunks[:8]
+    with _trace_span(trace, "retrieval.rerank"):
+        co = answer_toolbox._get_cohere()
+        if co and len(chunks) > 0:
+            try:
+                docs = [c.get("content", "") for c in chunks]
+                rerank_result = co.rerank(model="rerank-v3.5", query=question, documents=docs, top_n=8)
+                chunks = [chunks[r.index] for r in rerank_result.results]
+            except Exception:
+                logger.exception("Cohere rerank failed (producer), using RRF top 8")
+                chunks = chunks[:8]
 
     citable_count = sum(1 for c in chunks if answer_toolbox._is_citable(c))
 
     # Neighbor expansion, cap 12.
-    seen_ids = {c["id"] for c in chunks}
-    neighbors = answer_toolbox.fetch_neighbor_chunks_batch(chunks, seen_ids, db)
-    expanded = list(chunks)
-    for n in neighbors:
-        if len(expanded) >= 12:
-            break
-        seen_ids.add(n["id"])
-        expanded.append(n)
+    with _trace_span(trace, "retrieval.neighbors"):
+        neighbor_seed = chunks[:12] if experimental_teacher_source_lock else chunks
+        seen_ids = {c["id"] for c in neighbor_seed}
+        neighbors = answer_toolbox.fetch_neighbor_chunks_batch(
+            neighbor_seed, seen_ids, db
+        )
+        if experimental_teacher_source_lock:
+            expanded = _bounded_neighbor_expansion(neighbor_seed, neighbors)
+        else:
+            expanded = list(chunks)
+            for n in neighbors:
+                if len(expanded) >= 12:
+                    break
+                seen_ids.add(n["id"])
+                expanded.append(n)
+        if explicit_source_id:
+            expanded = filter_chunks_to_source(expanded, explicit_source_id, db)
 
     # Defense-in-depth: decision #5 hard exclude after neighbor expansion
     # (primary gate is Step 2.6 above). Mirrors chat.chat().
@@ -375,29 +419,31 @@ def _retrieve(db, question, injected_doc_ids=None, matched_pillar_key=None):
     # import. Full reasoning (Alex's ruling, 2026-08-06, CLAUDE.md Settled
     # decision #9) unchanged by the retarget.
     fallback_to_paper_voice = False
-    if matched_pillar_key and chunks:
-        house_position_text = get_paper_body(matched_pillar_key)
-        if house_position_text:
-            chunks, excluded_authors = position_paper_exclusion.exclude_contradicting_teachers(
-                matched_pillar_key, house_position_text, question, chunks,
-            )
-            if excluded_authors and not chunks:
-                fallback_to_paper_voice = True
+    with _trace_span(trace, "retrieval.position_exclusion"):
+        if matched_pillar_key and chunks:
+            house_position_text = get_paper_body(matched_pillar_key)
+            if house_position_text:
+                chunks, excluded_authors = position_paper_exclusion.exclude_contradicting_teachers(
+                    matched_pillar_key, house_position_text, question, chunks,
+                )
+                if excluded_authors and not chunks:
+                    fallback_to_paper_voice = True
 
     # Conditional lexicon retrieval (word-study questions).
-    if answer_toolbox.is_word_study_query(question):
-        try:
-            from app.services.embeddings import embed_text
-            lex_embedding = first_embedding if first_embedding else embed_text(question)
-            lex_result = db.rpc("match_lexicon_chunks", {
-                "query_embedding": lex_embedding, "match_count": 5,
-            }).execute()
-            if lex_result.data:
-                for lc in lex_result.data:
-                    lc["_lexicon"] = True
-                chunks.extend(lex_result.data)
-        except Exception:
-            logger.exception("Lexicon retrieval failed (producer), continuing without")
+    with _trace_span(trace, "retrieval.lexicon"):
+        if not explicit_lock_applied and answer_toolbox.is_word_study_query(question):
+            try:
+                from app.services.embeddings import embed_text
+                lex_embedding = first_embedding if first_embedding else embed_text(question)
+                lex_result = db.rpc("match_lexicon_chunks", {
+                    "query_embedding": lex_embedding, "match_count": 5,
+                }).execute()
+                if lex_result.data:
+                    for lc in lex_result.data:
+                        lc["_lexicon"] = True
+                    chunks.extend(lex_result.data)
+            except Exception:
+                logger.exception("Lexicon retrieval failed (producer), continuing without")
 
     citations = [
         {
@@ -476,7 +522,7 @@ def _build_history(messages: List[Dict[str, Any]], context: str, question: str) 
 
 
 # ---- generation with usage capture (MIRROR of chat._stream_answer; DRIFT POINT) --
-def _generate_and_capture(history, permitted_names=None):
+def _generate_and_capture(history, permitted_names=None, trace=None, stage_name="generation"):
     from app.services import answer_toolbox
     system = answer_toolbox.ANSWER_SYSTEM_BLOCKS
     if permitted_names is not None:
@@ -504,27 +550,42 @@ def _generate_and_capture(history, permitted_names=None):
     stop_reason = None
     usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
 
-    stream = client.messages.create(
-        model=model_used, max_tokens=GEN_MAX_TOKENS, thinking={"type": "disabled"}, system=system, messages=history, stream=True,
-    )
-    for ev in stream:
-        if ev.type == "message_start":
-            u = getattr(getattr(ev, "message", None), "usage", None)
-            if u is not None:
-                usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
-                usage["cache_read_tokens"] = getattr(u, "cache_read_input_tokens", 0) or 0
-                usage["cache_write_tokens"] = getattr(u, "cache_creation_input_tokens", 0) or 0
-        elif ev.type == "content_block_delta" and hasattr(ev.delta, "text"):
-            raw_full.append(ev.delta.text)
-        elif ev.type == "message_delta":
-            d = getattr(ev, "delta", None)
-            sr = getattr(d, "stop_reason", None)
-            if sr:
-                stop_reason = sr
-            u = getattr(ev, "usage", None)
-            out = getattr(u, "output_tokens", None) if u is not None else None
-            if out is not None:
-                usage["output_tokens"] = out
+    def _run_stream(trace_stage=None):
+        nonlocal stop_reason
+        stream = client.messages.create(
+            model=model_used, max_tokens=GEN_MAX_TOKENS, thinking={"type": "disabled"}, system=system, messages=history, stream=True,
+        )
+        for ev in stream:
+            if trace is not None:
+                trace.mark(trace_stage, "first_event_ms")
+            if ev.type == "message_start":
+                u = getattr(getattr(ev, "message", None), "usage", None)
+                if u is not None:
+                    usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
+                    usage["cache_read_tokens"] = getattr(u, "cache_read_input_tokens", 0) or 0
+                    usage["cache_write_tokens"] = getattr(u, "cache_creation_input_tokens", 0) or 0
+            elif ev.type == "content_block_delta" and hasattr(ev.delta, "text"):
+                if trace is not None and ev.delta.text:
+                    trace.mark(trace_stage, "first_text_ms")
+                raw_full.append(ev.delta.text)
+            elif ev.type == "message_delta":
+                d = getattr(ev, "delta", None)
+                sr = getattr(d, "stop_reason", None)
+                if sr:
+                    stop_reason = sr
+                u = getattr(ev, "usage", None)
+                out = getattr(u, "output_tokens", None) if u is not None else None
+                if out is not None:
+                    usage["output_tokens"] = out
+
+    if trace is None:
+        _run_stream()
+    else:
+        with trace.span(stage_name) as trace_stage:
+            _run_stream(trace_stage)
+            trace_stage.update(usage)
+            trace_stage["model"] = model_used
+            trace_stage["stop_reason"] = stop_reason
 
     raw_output = "".join(raw_full)
     answer = answer_toolbox._extract_answer_from_raw(raw_output, stop_reason) or answer_toolbox._NO_ANSWER_FALLBACK
@@ -624,8 +685,46 @@ def _inject_background_topics(db, question, messages, topics_established):
     return topic_context_parts, injected_doc_ids, updated_topics
 
 
-def produce(supabase, question, messages=None, topics_established=None):
-    # type: (object, str, Optional[List[Dict[str, Any]]], Optional[Dict[str, int]]) -> ProducerResult
+def _trace_span(trace, name):
+    return trace.span(name) if trace is not None else nullcontext({})
+
+
+def _match_stored_position_for_answer(
+    question, matched_pillar_key, experimental_teacher_routing=False,
+):
+    """Resolve stored-topic routing, with an opt-in B6 candidate veto.
+
+    The default is the current production behavior. The experimental branch is
+    used only by the read-only benchmark until blind quality review approves it.
+    """
+    from app.services import answer_intent, stored_position_topics
+
+    if matched_pillar_key:
+        return None
+    if (
+        experimental_teacher_routing
+        and answer_intent.requires_teacher_specific_retrieval(question)
+    ):
+        return None
+    return stored_position_topics.match_stored_position(question)
+
+
+def produce(
+    supabase, question, messages=None, topics_established=None, trace=None,
+    experimental_teacher_routing=False,
+):
+    with _trace_span(trace, "producer.total"):
+        return _produce(
+            supabase, question, messages, topics_established, trace,
+            experimental_teacher_routing,
+        )
+
+
+def _produce(
+    supabase, question, messages=None, topics_established=None, trace=None,
+    experimental_teacher_routing=False,
+):
+    # type: (object, str, Optional[List[Dict[str, Any]]], Optional[Dict[str, int]], Optional[Any], bool) -> ProducerResult
     """Position-paper interception -> background-topic injection -> retrieve ->
     buffered generation -> ungrounded-attribution resolution (regenerate-once-
     then-refuse) -> verify_references. Matches chat.py's ordering exactly. Raises
@@ -635,7 +734,6 @@ def produce(supabase, question, messages=None, topics_established=None):
         verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
     )
     from app.services.position_papers import match_position_paper, render_paper_voice_with_disclaimer, get_paper_body
-    from app.services.stored_position_topics import match_stored_position
     from app.services.stored_position_evidence import fetch_stored_position_evidence
     messages = messages or []
     topics_established = topics_established or {}
@@ -645,7 +743,8 @@ def produce(supabase, question, messages=None, topics_established=None):
     # paper is constraining silent context, never a served answer: retrieval
     # below runs completely normally on a match, same as a non-match. See
     # position_papers.py's module docstring for the full architecture.
-    matched_pillar_key = match_position_paper(question)
+    with _trace_span(trace, "routing"):
+        matched_pillar_key = match_position_paper(question)
 
     # Stored-position evidence injection (Project 2 "one-hop", PLAN.md Phase 3
     # item 5; CLAUDE.md Settled decision #18) -- a materially different
@@ -660,33 +759,37 @@ def produce(supabase, question, messages=None, topics_established=None):
     # debate topics (decision #11) and paper-fenced topics (baptism/tongues)
     # by construction, so overlap is not expected in practice, but this
     # ordering makes the precedence explicit rather than accidental.
-    matched_topic_key = None if matched_pillar_key else match_stored_position(question)
-    stored_evidence_chunks = (
-        fetch_stored_position_evidence(supabase, matched_topic_key)
-        if matched_topic_key else None
-    )
+        matched_topic_key = _match_stored_position_for_answer(
+            question, matched_pillar_key, experimental_teacher_routing,
+        )
+    with _trace_span(trace, "retrieval") if matched_topic_key else nullcontext():
+        stored_evidence_chunks = (
+            fetch_stored_position_evidence(supabase, matched_topic_key)
+            if matched_topic_key else None
+        )
 
     # Background-topic injection (chat.py Step 0.5).
-    topic_context_parts, injected_doc_ids, updated_topics = _inject_background_topics(
-        supabase, question, messages, topics_established)
+    with _trace_span(trace, "background_context"):
+        topic_context_parts, injected_doc_ids, updated_topics = _inject_background_topics(
+            supabase, question, messages, topics_established)
 
     # Position-paper fence injection -- MIRROR of chat.chat()'s Step 0.6.
     # _PILLAR_BY_KEY is not itself rebound, but accessed via the module
     # (answer_toolbox._PILLAR_BY_KEY) for the same consistent-access reason
     # chat.py now uses -- see answer_toolbox.py's REBOUND-GLOBAL warning.
-    if matched_pillar_key:
-        pillar = answer_toolbox._PILLAR_BY_KEY.get(matched_pillar_key)
-        if pillar and pillar["document_id"] not in injected_doc_ids:
-            paper_body = get_paper_body(matched_pillar_key)
-            if paper_body:
-                topic_context_parts.append(
-                    "[House Position] (citation_mode=silent_context) This is "
-                    "Rhemata's own settled house position on %s. It bounds what "
-                    "this answer may claim — do not state anything that "
-                    "contradicts it. Never cite, name, quote, or copy its exact "
-                    "wording into your answer.\n\n%s" % (pillar["voice_topic_name"], paper_body)
-                )
-                injected_doc_ids.add(pillar["document_id"])
+        if matched_pillar_key:
+            pillar = answer_toolbox._PILLAR_BY_KEY.get(matched_pillar_key)
+            if pillar and pillar["document_id"] not in injected_doc_ids:
+                paper_body = get_paper_body(matched_pillar_key)
+                if paper_body:
+                    topic_context_parts.append(
+                        "[House Position] (citation_mode=silent_context) This is "
+                        "Rhemata's own settled house position on %s. It bounds what "
+                        "this answer may claim — do not state anything that "
+                        "contradicts it. Never cite, name, quote, or copy its exact "
+                        "wording into your answer.\n\n%s" % (pillar["voice_topic_name"], paper_body)
+                    )
+                    injected_doc_ids.add(pillar["document_id"])
 
     if stored_evidence_chunks:
         # Narrowed evidence path: skip normal _retrieve() entirely. Every
@@ -717,9 +820,18 @@ def produce(supabase, question, messages=None, topics_established=None):
             matched_topic_key, len(chunks),
         )
     else:
-        chunks, citations, citable_count, fallback_to_paper_voice = _retrieve(
-            supabase, question, injected_doc_ids, matched_pillar_key,
-        )
+        retrieval_options = {}
+        if experimental_teacher_routing:
+            retrieval_options["experimental_teacher_source_lock"] = True
+        with _trace_span(trace, "retrieval"):
+            chunks, citations, citable_count, fallback_to_paper_voice = _retrieve(
+                supabase,
+                question,
+                injected_doc_ids,
+                matched_pillar_key,
+                trace=trace,
+                **retrieval_options,
+            )
 
     # Sanctioned No-Oracle-Rule fallback -- MIRROR of chat.chat()'s generate()
     # fallback_to_paper_voice branch. Fires ONLY when exclusion emptied a
@@ -749,52 +861,63 @@ def produce(supabase, question, messages=None, topics_established=None):
             outcome="no_material", updated_topics=updated_topics,
         )
 
-    context = _build_context(chunks, citable_count, topic_context_parts)
-    history = _build_history(messages, context, question)
+    with _trace_span(trace, "context_build"):
+        context = _build_context(chunks, citable_count, topic_context_parts)
+        history = _build_history(messages, context, question)
 
-    grounding = build_retrieval_grounding(chunks, supabase)
-    permitted_names = sorted({
-        (c.get("author") or "").strip() for c in chunks
-        if answer_toolbox._is_citable(c) and (c.get("author") or "").strip()
-    })
+    with _trace_span(trace, "grounding"):
+        grounding = build_retrieval_grounding(chunks, supabase)
+        permitted_names = sorted({
+            (c.get("author") or "").strip() for c in chunks
+            if answer_toolbox._is_citable(c) and (c.get("author") or "").strip()
+        })
 
-    answer, raw_output, _sr, usage, model_used = _generate_and_capture(history)
+    answer, raw_output, _sr, usage, model_used = _generate_and_capture(
+        history, trace=trace, stage_name="generation.primary"
+    )
     total_usage = dict(usage)
 
     refused = False
-    try:
-        name_universe = build_name_universe(supabase)
+    with _trace_span(trace, "attribution_validation"):
+        try:
+            name_universe = build_name_universe(supabase)
 
-        def _has_ungrounded(ans, raw):
-            if answer_toolbox._ungrounded_reference_teachers(ans, raw, grounding, supabase):
-                return True
-            if ungrounded_prose_teachers(ans, name_universe, grounding, supabase):
-                return True
-            return False
+            def _has_ungrounded(ans, raw):
+                if answer_toolbox._ungrounded_reference_teachers(ans, raw, grounding, supabase):
+                    return True
+                if ungrounded_prose_teachers(ans, name_universe, grounding, supabase):
+                    return True
+                return False
 
-        needs_single_author = _missing_required_single_author(answer, permitted_names)
-        if _has_ungrounded(answer, raw_output) or needs_single_author:
-            answer2, raw2, _sr2, usage2, model_used = _generate_and_capture(history, permitted_names=permitted_names)
-            total_usage = _add_usage(total_usage, usage2)
-            if _has_ungrounded(answer2, raw2):
-                logger.warning("Producer regeneration still credits an ungrounded teacher -- clean refusal")
-                answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
-            else:
-                answer, raw_output = answer2, raw2
-                if _missing_required_single_author(answer, permitted_names):
-                    logger.warning(
-                        "Producer regeneration omitted the sole citable author -- adding deterministic source label"
-                    )
-                    answer = _ensure_single_author_label(answer, permitted_names)
-    except Exception:
-        logger.exception("Producer attribution-resolution failed -- refusing cleanly (fail closed)")
-        answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
+            needs_single_author = _missing_required_single_author(answer, permitted_names)
+            if _has_ungrounded(answer, raw_output) or needs_single_author:
+                answer2, raw2, _sr2, usage2, model_used = _generate_and_capture(
+                    history,
+                    permitted_names=permitted_names,
+                    trace=trace,
+                    stage_name="generation.attribution_retry",
+                )
+                total_usage = _add_usage(total_usage, usage2)
+                if _has_ungrounded(answer2, raw2):
+                    logger.warning("Producer regeneration still credits an ungrounded teacher -- clean refusal")
+                    answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
+                else:
+                    answer, raw_output = answer2, raw2
+                    if _missing_required_single_author(answer, permitted_names):
+                        logger.warning(
+                            "Producer regeneration omitted the sole citable author -- adding deterministic source label"
+                        )
+                        answer = _ensure_single_author_label(answer, permitted_names)
+        except Exception:
+            logger.exception("Producer attribution-resolution failed -- refusing cleanly (fail closed)")
+            answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
 
-    try:
-        verified_references = [] if refused else verify_references(answer, raw_output, supabase, grounding)
-    except Exception:
-        logger.exception("Producer SP1 reference verification failed -- continuing without pointers")
-        verified_references = []
+    with _trace_span(trace, "reference_verification"):
+        try:
+            verified_references = [] if refused else verify_references(answer, raw_output, supabase, grounding)
+        except Exception:
+            logger.exception("Producer SP1 reference verification failed -- continuing without pointers")
+            verified_references = []
 
     # Quote selection is disabled by default while inherited topic labels are
     # repaired. Existing quote rows stay untouched; the selector remains
@@ -810,18 +933,19 @@ def produce(supabase, question, messages=None, topics_established=None):
     # select_quotes_for_answer() itself (which does not swallow its own
     # errors; see its docstring).
     quote_ids = []  # type: List[str]
-    if not refused:
-        try:
-            from app.services.quotes import quote_selection_enabled
-            if quote_selection_enabled():
-                from app.services.quotes import select_quotes_for_answer
-                from app.services.single_teacher_lock import resolve_source_ids_for_documents
-                considered_doc_ids = [c.get("document_id") for c in chunks if c.get("document_id")]
-                doc_to_source = resolve_source_ids_for_documents(supabase, considered_doc_ids)
-                quote_ids = select_quotes_for_answer(supabase, question, doc_to_source.values())
-        except Exception:
-            logger.exception("Producer quote-rail selection failed -- continuing without quotes")
-            quote_ids = []
+    with _trace_span(trace, "quote_selection"):
+        if not refused:
+            try:
+                from app.services.quotes import quote_selection_enabled
+                if quote_selection_enabled():
+                    from app.services.quotes import select_quotes_for_answer
+                    from app.services.single_teacher_lock import resolve_source_ids_for_documents
+                    considered_doc_ids = [c.get("document_id") for c in chunks if c.get("document_id")]
+                    doc_to_source = resolve_source_ids_for_documents(supabase, considered_doc_ids)
+                    quote_ids = select_quotes_for_answer(supabase, question, doc_to_source.values())
+            except Exception:
+                logger.exception("Producer quote-rail selection failed -- continuing without quotes")
+                quote_ids = []
 
     cost = estimate_cost_usd(
         total_usage["input_tokens"], total_usage["output_tokens"],

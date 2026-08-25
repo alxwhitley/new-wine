@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "constraints": {
+    "quote_selection_enabled": false,
+    "generation_model": "claude-sonnet-5",
+    "prompt_version": "prompt_6ea8b855b412",
+    "policy_version": "policy_v3:quote_selection=false",
+    "model_change_allowed": false,
+    "prompt_change_allowed": false,
+    "retrieval_change_allowed": false
+  },
+  "comparison_contract": {
+    "repetitions_per_variant": 2,
+    "cost_ceiling_usd_per_variant": 2.5,
+    "latency": {
+      "minimum_median_improvement_fraction": 0.2,
+      "minimum_paired_case_wins": 10,
+      "allow_p90_regression": false
+    },
+    "quality_axes": [
+      "theological_accuracy",
+      "teacher_representation",
+      "retrieval_depth",
+      "citation_source_faithfulness",
+      "durable_job_recoverability"
+    ],
+    "hard_failures": [
+      "theological_error",
+      "teacher_misrepresentation",
+      "material_retrieval_depth_regression",
+      "citation_or_source_faithfulness_failure",
+      "durable_job_recoverability_regression",
+      "core_answer_failure",
+      "quote_delivery"
+    ],
+    "human_review_required": true,
+    "blind_fields_hidden": [
+      "variant",
+      "model",
+      "trace",
+      "cost_usd",
+      "input_tokens",
+      "output_tokens",
+      "cache_read_tokens",
+      "cache_write_tokens"
+    ],
+    "review_scale": [
+      "pass",
+      "minor_concern",
+      "hard_failure"
+    ],
+    "durable_job_recoverability_evidence": "post-approval attended durable-job smoke"
+  },
+  "cases": [
+    {
+      "id": "stored_position_sanctification",
+      "category": "stored_position",
+      "question": "What is sanctification?",
+      "messages": []
+    },
+    {
+      "id": "conversation_history_sanctification",
+      "category": "conversation_history",
+      "question": "As a follow-up, please explain how sanctification relates to the work of the Holy Spirit in ordinary daily life.",
+      "messages": [
+        {"role": "user", "content": "What is sanctification?"},
+        {"role": "assistant", "content": "I previously answered your question about sanctification."}
+      ]
+    },
+    {
+      "id": "paper_fence_baptism",
+      "category": "position_paper",
+      "question": "What is the baptism of the Holy Spirit?",
+      "messages": []
+    },
+    {
+      "id": "paper_fence_tongues",
+      "category": "position_paper",
+      "question": "Is speaking in tongues for today?",
+      "messages": []
+    },
+    {
+      "id": "debate_healing",
+      "category": "debate",
+      "question": "Why does God heal some people when they pray and not others?",
+      "messages": []
+    },
+    {
+      "id": "debate_prophetic_accountability",
+      "category": "debate",
+      "question": "How should a prophetic word be tested and held accountable in the church?",
+      "messages": []
+    },
+    {
+      "id": "debate_apostolic_authority",
+      "category": "debate",
+      "question": "Do apostles still have authority over the church today?",
+      "messages": []
+    },
+    {
+      "id": "debate_eschatology",
+      "category": "debate",
+      "question": "How should Christians understand the timing of the rapture and tribulation?",
+      "messages": []
+    },
+    {
+      "id": "named_teacher_deliverance",
+      "category": "named_teacher",
+      "question": "What does Derek Prince teach about deliverance and spiritual warfare?",
+      "messages": []
+    },
+    {
+      "id": "scripture_range",
+      "category": "scripture",
+      "question": "What does Romans 8:26-28 teach about the Spirit's help in our weakness?",
+      "messages": []
+    },
+    {
+      "id": "word_study_power",
+      "category": "word_study",
+      "question": "What is the meaning of the Greek word translated 'power' in Acts 1:8?",
+      "messages": []
+    },
+    {
+      "id": "web_article_prayer_language",
+      "category": "web_article",
+      "question": "What does Vlad Savchuk teach about developing a prayer language?",
+      "messages": []
+    }
+  ]
+}
