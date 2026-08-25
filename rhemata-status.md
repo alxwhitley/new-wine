@@ -18,55 +18,66 @@ for this file.
 
 ## Current state
 
-`PLAN.md`'s private-beta blocker queue remains **0** active blockers. The quote
-rail remains off under Alex's 2026-08-25 containment decision. This session
-completed the recommended mobile hardening pass without changing retrieval,
-prompting, model selection, or answer-quality policy.
+`PLAN.md`'s private-beta blocker queue remains **0** active blockers. This
+session was ad hoc web-ingestion tooling work, not a blocker-queue item — no
+production deploy; changes are repo/script + one DB record (a source
+visibility flip).
 
-**Shipped and live:**
+**Master ingestion spreadsheet** (`docs/ingestion/master_ingestion_queue.xlsx`):
+a real live-verification pass ran over all 118 Discovery candidates (13
+mechanically excluded first — no written content, archival/reference, no
+URL on file; 105 checked live). Two new Discovery columns
+(`agent_verified_has_blog`, `agent_verification_notes`) record findings
+without touching `verification_status`, which stays reserved for Alex.
+Result: 18 cleared into a new `Approved Sites` tab (proposed, `approved`
+blank except Craig S. Keener — Alex's explicit call, this session), 8 more
+have real content but need per-post byline filtering before they're safe,
+79 not cleared. Recurring finding across ~5 independent candidates (Lisa
+Chan/Francis Chan, Todd Korpi/Tara Korpi, Peter Youngren/Taina Youngren,
+Lydia Stanley Morris/Nathan Morris, Heidi Baker/Rolland Baker): a
+"single-teacher" domain silently carrying a family member's byline is
+structural and recurring in this candidate pool, not the one-off it looked
+like — this is why the crawler's byline gate (below) is unconditional, not
+a one-time fix. Also found: several Discovery research-pass claims that
+don't check out at all — Taehyun Lee's claimed affiliation matches no real
+faculty record, Will Ford's domain is compromised (serving gambling spam).
 
-1. **Mobile answer continuity** (`f76e526`). Guest conversations survive a
-   reload; an in-flight durable job reconnects by ID, clears partial replay
-   text, resumes its verified answer, and retains reconnect state across
-   transient delivery failures. Authenticated history remains server-owned.
-2. **Sources always visible when available.** Answers whose stored citations
-   lack usable inline `[N]` markers now show an accessible Sources fallback;
-   source metadata is preserved across guest reloads and validated before use.
-3. **Mobile accessibility hardened.** Drawer and feedback dialogs expose proper
-   semantics, closed navigation is inert, focus returns to the menu trigger,
-   interactive targets are at least 44px, and dismissing feedback no longer
-   submits a negative rating.
-4. **Empty-state prompt alignment corrected** (`c386e52`). The composer and
-   suggestion bars share the same mobile container width; single-line prompt
-   text is vertically centered with the send control, while multiline input
-   remains bottom-aligned.
-5. **Honest latency presentation.** Long client-paced reveals are capped at six
-   seconds without removing streaming or taking scroll control from the reader;
-   the loading state says answers may take about a minute and can be left while
-   the tab remains open.
-6. **Earlier mobile containment remains live.** The PWA shell stays locked to
-   the viewport, streaming does not auto-scroll, send reveals a new turn once,
-   the multiline composer remains bottom-aligned, and the top-left drawer opens
-   from the left (`732bb6d`–`08fc91d`). The quote rail remains disabled.
+**Autonomous site-ingest crawler — built, and Alex's explicit, narrowly
+scoped exception to the DB-write-attended hard rule (CLAUDE.md Session
+Routing + Invariant 16).** `source_ingest_queue` web-article writes via
+`scripts/site_ingest_crawler.py` may now run unattended, gated by a new
+deterministic byline-verification step (`source_ingest_queue/
+byline_verify.py` — meta/JSON-LD/"By Name" signal extraction + token-
+overlap comparison, mutation-proven against the shared-surname failure
+mode above) replacing per-item human review. `link_discovery.py` does
+same-domain post/pagination discovery. `scripts/
+test_site_ingest_crawler.py`: 49/49. Two real bugs were caught by running
+it live (not by review) and fixed before being called done: a false
+"already known" dedup count that was actually a check-budget truncation,
+and header/footer/aside nav links being treated as post candidates.
 
-**Verification:** frontend tests 26/26, scoped changed-file lint, diff check,
-Impeccable detector, and the 17-route production build passed. The final
-390×844 browser regression verified viewport containment (`390×844`, root
-scroll `0,0`), left-opening navigation and focus return, 44px targets, reload
-restoration, two-source fallback, feedback Escape with zero submissions, and
-durable-job reconnect with pending state cleared. Two read-only production job
-diagnoses confirmed 4/6 stored citations despite zero inline markers, queue
-under one second, and 61–64s model generation; the remaining model latency is
-Scheduled under B6 rather than traded for answer quality. Final Vercel
-deployment `dpl_FqLqu22mVZYhKdSUzYbsQsvinyiX` reached Ready and was aliased to
-`rhemata.app`. Live prompt geometry passed with matching `x=16`, `width=358`
-composer/suggestion edges, centered 44px textarea/send controls, and `0px`
-multiline bottom delta.
+**Live proof, Craig Keener, independently re-verified against the DB
+afterward:** visibility flipped `shown`→`hidden`
+(`63119173-a295-4ec0-90e5-f3a55dcc8970`). Crawler correctly byline-
+confirmed his real "My testimony" post via its own `<meta name="author">`
+tag and queued it automatically (`9a32fc5d-680b-4c9f-a1f4-80cdaaae1b0b`);
+the existing content-quality gate then correctly refused it
+(`article_too_thin` — checked live, a genuine ~15-word video-embed
+wrapper, not an extraction bug). Zero documents written; zero corpus
+pollution. **This proves the refusal path only — no document has actually
+been stored by this crawler yet.** 11 of 15 discovered candidate URLs on
+his site (real essays: "Animal rights ethics," "Barak to the barracks,"
+"Bar exam," "Shooting star") were never checked this run (budget-capped
+at 4 checked, 1 confirmed-write cap).
 
-**Session measures:** original outcome completed; unplanned investigations 0;
-findings promoted to Blocker 0; active critical-path item count 0. Alex-approved
-scope: the full recommended mobile hardening pass, prompt-cluster alignment,
-and production deployment.
+**Claude Code Auto Mode blocks direct production DB writes — reconfirmed,
+not a fluke.** Both real writes this session (the visibility flip, the
+crawler `--apply`) were blocked consistently across genuinely reformulated
+retries. Routed through the 2026-08-13 Grok-execution pattern a second
+time (Claude writes/reviews, Grok executes verbatim, Claude independently
+re-verifies after) — both writes above are that verified result. **Alex's
+stated preference: route ingestion execution to Grok directly going
+forward rather than alternating mid-task.**
 
 ---
 
@@ -87,10 +98,6 @@ and production deployment.
 - Public `/docs` + `/openapi.json` on the API list every route including
   admin ones. Routes stay auth-gated, so this is a map, not an open door.
   Left as-is deliberately — Alex may use it; not yet formally classified.
-- `darlenecunningham.com` confirmed to be an unrelated living romance
-  novelist, not the YWAM co-founder. Spreadsheet NOT updated — its Read Me
-  reserves `verification_status` for Alex personally, and precedent (Bonnke,
-  2026-08-19) is to record and let him mark it.
 - Staging source name still reads `"Vlad Savchuk (web staging)"` on
   citations — attended one-row `sources.name` UPDATE whenever Alex wants it.
 - Carried, not re-checked this session: Bonnke URL suspect (expired cert, no
@@ -103,7 +110,12 @@ and production deployment.
 
 ## Next single item
 
-Alex's call. The next measured UX item is the B6 answer-generation latency
-benchmark; if continuing the quote track instead, define the representative
-accuracy/relevance acceptance set before changing selection or extraction.
-Active blocker count **0**.
+Alex's call, and he's routing ingestion work to Grok directly now rather
+than alternating with this session mid-task: the next crawler run should
+check Craig Keener's remaining 11 discovered candidates (or a fresh
+`--max-pages`/`--max-candidates` pass) to get this system's first actual
+document write, then re-verify independently. Unrelated: the next measured
+UX item is still the B6 answer-generation latency benchmark, or the quote
+track if picked up instead (define the representative accuracy/relevance
+acceptance set before changing selection or extraction). Active blocker
+count **0**.

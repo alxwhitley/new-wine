@@ -546,6 +546,35 @@ RPC), runs as an attended, explicitly approved plain-script operation. Never
 delegate a production database write to a subagent or automated coordinator;
 execute it only in the primary Codex session.
 
+**One narrow, explicit carve-out from that rule (Alex, 2026-08-25):**
+`source_ingest_queue` web-article writes made by `scripts/
+site_ingest_crawler.py` may run unattended — no per-item human review —
+provided every one of its deterministic gates passes: the existing
+processor gates (license, hidden visibility, format/scope, source
+resolution — unchanged) plus a new automated byline-verification gate
+(`source_ingest_queue/byline_verify.py`) that hard-refuses on any mismatch
+or on finding no confirming signal at all — never a guess. This is the
+only carve-out; every other write in this repo — migrations, admin
+actions, every other table — stays under the hard rule above, unchanged.
+Live-proved once (2026-08-25, Craig Keener): the crawler correctly
+byline-confirmed and queued a real post, then the existing content gate
+correctly refused it downstream (`article_too_thin` — checked against the
+live page, a real ~15-word video wrapper, not an extraction bug); zero
+documents written. **This proves the refusal path, not the success path —
+the crawler has not yet actually stored a document.** Its input is
+restricted to `docs/ingestion/master_ingestion_queue.xlsx`'s `Approved
+Sites` tab, and only a row with `approved` literally `TRUE` — Alex
+controls that list directly. Full mechanism: Invariant 16.
+
+Separately, and unchanged by the carve-out above: Claude Code's Auto Mode
+still blocks this session from executing the write itself, reconfirmed
+2026-08-25 across reformulated retries (see the Landmines entry on this).
+The crawler code can be built and reviewed in a Claude Code session; the
+actual `--apply` execution still has to happen somewhere that block
+doesn't apply — a plain terminal, Codex, or (as done 2026-08-25, second
+occurrence of the 2026-08-13 pattern) a Grok handoff, script written and
+reviewed here, executed verbatim, result independently re-verified after.
+
 | Session type | Objective trigger criteria | Path | Also load | Skip | Reason |
 |---|---|---|---|---|---|
 | **Database write** | Any Bash-run script, migration apply, or SQL statement performs INSERT/UPDATE/DELETE/ALTER/schema DDL against Supabase — including via `psycopg2` or the SQL Editor. | **Plain script.** Never harness. | N/A — harness not used | N/A — harness not used | Hard rule above. |
@@ -888,11 +917,19 @@ different row, per the hard rule above.
     mutation-tested to prove `shared_ingest.ingest_document`,
     `propositions.store_propositions`, and `quotes.create_and_approve_quote`
     are never called (`scripts/test_source_ingest_preview.py`). One isolated
-    processor proof (PDF path) completed 2026-08-17; it was not a
-    deployed-worker proof, and no web-article row has been run for real yet.
-    Any further real item, worker deployment, or web-article production write
-    remains a separately approved operation; merging this repository code does
-    not authorize them. Never reapply migration 088.
+    processor proof (PDF path) completed 2026-08-17. **Corrected 2026-08-25
+    — the line that stood here since 2026-08-18 ("no web-article row has
+    been run for real yet") went stale the very next day and was never
+    fixed: PLAN.md's W5/W9 (2026-08-19) already ran real, attended
+    web-article writes through this exact runner (one Savchuk article, then
+    a 3-article batch).** Any further real item or web-article production
+    write remains a separately approved operation by default; merging this
+    repository code does not authorize them on its own — **except through
+    the narrow, explicit exception recorded in the Session Routing "Hard
+    rule" section above (2026-08-25): `scripts/site_ingest_crawler.py` may
+    write through this same runner unattended, for web-article rows only,
+    gated by an added deterministic byline-verification step
+    (`source_ingest_queue/byline_verify.py`).** Never reapply migration 088.
 
 ---
 
@@ -1096,7 +1133,12 @@ different row, per the hard rule above.
   and the result was independently verified against the live DB
   afterward via the read-only role. If this keeps recurring, it needs
   a deliberate decision from Alex on the general pattern, not a fresh
-  ad hoc call each session.
+  ad hoc call each session. **It recurred, 2026-08-25** (a source
+  visibility flip plus a `site_ingest_crawler.py --apply` run, both
+  blocked consistently across multiple genuinely-reformulated retries,
+  not just one attempt) — same pattern, same shape, Alex's explicit
+  call again in the moment. Still not promoted to a standing practice
+  with its own procedure; still one explicit call at a time.
 
 - **Auto Mode misfire on harmless prose mentioning "SQL"/"migration" —
   2026-08-14, upgraded same day.** A separate behavior of the same Auto
