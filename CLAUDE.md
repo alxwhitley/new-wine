@@ -952,7 +952,21 @@ different row, per the hard rule above.
     source promotion is a separate explicit operation. The credential-free
     fake-provider proof in `scripts/test_magazine_review_end_to_end.py` builds
     confidence in this mechanism but does not open roadmap trigger A2 or select
-    an OCR model.
+    an OCR model. **Planning snapshot, 2026-08-25—explicitly unstable:** the
+    initial OCR winner is still pending among Gemini 2.5 Flash, Google
+    Enterprise Document OCR, and Gemini 3.6 Flash; page-completeness review and
+    the one permitted targeted retry use Gemini 3.6 Flash; segmentation uses
+    Groq `openai/gpt-oss-120b` at low reasoning, while issue-wide article review
+    uses it at medium reasoning; proposition extraction remains the existing
+    GPT-OSS 120B v3.1 path and support review uses GPT-OSS 120B at medium
+    reasoning. The Groq planning price snapshot is **$0.15 per million input
+    tokens and $0.60 per million output tokens**. The accepted design's Google
+    snapshot points to the official Gemini API pricing, Gemini Batch API, and
+    Google Document AI pricing sources: Enterprise Document OCR is priced per
+    page, and eligible Gemini Batch/Flex processing is discounted; no Google
+    dollar amount is made durable here. Recheck every model's availability and
+    all provider prices at the official sources before the paid blind benchmark
+    or any paid review run.
 
 ---
 

@@ -64,7 +64,18 @@ quarantine. No stage transfers automatically from one source to another.
    controls, a candidate wins without degrading those controls, and Alex
    accepts the winner. Then recount, manifest, dry-run one complete real issue,
    obtain separate approval for one attended write, reconcile it, and only
-   afterward run bounded reconciled batches.
+   afterward run bounded reconciled batches. **Unstable planning snapshot,
+   2026-08-25:** the initial OCR candidates are Gemini 2.5 Flash, Google
+   Enterprise Document OCR, and Gemini 3.6 Flash; Gemini 3.6 Flash handles page
+   completeness review and the one targeted retry; Groq
+   `openai/gpt-oss-120b` handles low-reasoning segmentation, medium-reasoning
+   issue-wide article review, existing v3.1 proposition extraction, and
+   medium-reasoning proposition support review. Groq was listed at $0.15/M
+   input and $0.60/M output; the accepted design's official Google sources list
+   Enterprise Document OCR per-page pricing and discounted eligible Gemini
+   Batch/Flex processing. Recheck model availability and every price at those
+   official sources before the paid benchmark or any paid run; this snapshot
+   does not activate A2.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing
