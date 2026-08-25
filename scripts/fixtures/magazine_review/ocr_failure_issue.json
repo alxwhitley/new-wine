@@ -10,6 +10,13 @@
     {
       "page_number": 1,
       "visible_text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching. The second column supplies the qualification that completes it.",
+      "image_bytes_base64": "Zml4dHVyZS1yZW5kZXJlZC1vY3ItZmFpbHVyZS1wYWdlLTEtdjE=",
+      "image_sha256": "30de11c75779ba456fcad1a2929125a19e2e9c0eeef1b8bc4849332683aeff3e",
+      "image_width": 432,
+      "image_height": 648,
+      "expected_repair_targets": [
+        "right-hand column containing the necessary qualification"
+      ],
       "initial_ocr": {
         "text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching.",
         "usage": {
@@ -21,6 +28,7 @@
       },
       "reviews": [
         {
+          "reviewed_text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching.",
           "verdict": {
             "complete": false,
             "missing_regions": [
@@ -38,6 +46,7 @@
           "cost_usd": 0.002
         },
         {
+          "reviewed_text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching. The second column supplies",
           "verdict": {
             "complete": false,
             "missing_regions": [

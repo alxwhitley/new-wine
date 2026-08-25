@@ -682,7 +682,19 @@ def test_reviewed_dry_run_validates_and_makes_no_database_or_embedding_call(
         issue_dir, artifact_dir, dry_run=True
     )
 
-    assert stats == {"attempted": 1, "stored": 0, "errored": 0, "skipped": 1}
+    assert stats == {
+        "attempted": 1,
+        "stored": 0,
+        "errored": 0,
+        "skipped": 1,
+        "preview_articles": [
+            {
+                "article_id": ARTICLE_ID,
+                "article_hash": digest(ARTICLE_BODY),
+                "proposition_texts": list(APPROVED_CONTENT),
+            }
+        ],
+    }
     output = capsys.readouterr().out
     assert "approved propositions: 2" in output
     assert "issue decision sha256:" in output

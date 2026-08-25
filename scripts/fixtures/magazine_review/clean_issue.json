@@ -10,6 +10,11 @@
     {
       "page_number": 1,
       "visible_text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
+      "image_bytes_base64": "Zml4dHVyZS1yZW5kZXJlZC1jbGVhbi1wYWdlLTEtdjE=",
+      "image_sha256": "27082b2fe362d56cd515e27327884438acea798227afb737691dcbc762e566ab",
+      "image_width": 432,
+      "image_height": 648,
+      "expected_repair_targets": [],
       "initial_ocr": {
         "text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
         "usage": {
@@ -21,6 +26,7 @@
       },
       "reviews": [
         {
+          "reviewed_text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
           "verdict": {
             "complete": true,
             "missing_regions": [],
@@ -45,6 +51,11 @@
     {
       "page_number": 2,
       "visible_text": "NEW WINE SUBSCRIPTION NOTICE\nRenew for twelve monthly issues. Send the enclosed card with your mailing address.",
+      "image_bytes_base64": "Zml4dHVyZS1yZW5kZXJlZC1jbGVhbi1wYWdlLTItdjE=",
+      "image_sha256": "774d566de22a38298c8d68379aaea654b8e25a3f8e3a3769f886c4d217913f35",
+      "image_width": 432,
+      "image_height": 648,
+      "expected_repair_targets": [],
       "initial_ocr": {
         "text": "NEW WINE SUBSCRIPTION NOTICE\nRenew for twelve monthly issues. Send the enclosed card with your mailing address.",
         "usage": {
@@ -56,6 +67,7 @@
       },
       "reviews": [
         {
+          "reviewed_text": "NEW WINE SUBSCRIPTION NOTICE\nRenew for twelve monthly issues. Send the enclosed card with your mailing address.",
           "verdict": {
             "complete": true,
             "missing_regions": [],
@@ -217,10 +229,22 @@
     "proposition_count": 2,
     "cost_usd": 0.124,
     "dry_ingest": {
-      "attempted": 1,
-      "stored": 0,
-      "errored": 0,
-      "skipped": 1,
+      "result": {
+        "attempted": 1,
+        "stored": 0,
+        "errored": 0,
+        "skipped": 1,
+        "preview_articles": [
+          {
+            "article_id": "grace-for-the-journey",
+            "article_hash": "a7a60b6aecc4e7263492be74053f5d204f4a9bf3159480ec5438126d8fd2f3b5",
+            "proposition_texts": [
+              "Ada North teaches that grace is received by faith, not earned by effort.",
+              "Ada North teaches that grace received from God should form humble, generous service to neighbors."
+            ]
+          }
+        ]
+      },
       "db_calls": 0,
       "embedding_calls": 0,
       "generation_calls": 0,

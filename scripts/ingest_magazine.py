@@ -628,7 +628,11 @@ def ingest_issue(
 def ingest_reviewed_issue(
     issue_dir: Path, artifact_dir: Path, dry_run: bool = False
 ) -> Dict:
-    """Ingest one fully approved issue without promoting or moving sources."""
+    """Ingest one fully approved issue without promoting or moving sources.
+
+    A dry run returns the exact validated article/proposition payload it would
+    send through shared ingestion, in addition to reconciliation counts.
+    """
     approval = validate_reviewed_issue(issue_dir, artifact_dir)
     proposition_count = sum(
         len(article.propositions.propositions) for article in approval.articles
@@ -643,6 +647,18 @@ def ingest_reviewed_issue(
         "errored": 0,
         "skipped": 0,
     }
+    if dry_run:
+        stats["preview_articles"] = [
+            {
+                "article_id": article.article_id,
+                "article_hash": article.propositions.article_hash,
+                "proposition_texts": [
+                    content
+                    for _index, content in article.propositions.propositions
+                ],
+            }
+            for article in approval.articles
+        ]
     for article in approval.articles:
         try:
             status, _reason = _ingest_reviewed_article(

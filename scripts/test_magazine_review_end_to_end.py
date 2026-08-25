@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import json
@@ -18,7 +19,14 @@ import propositions
 import review_magazine_issue as runner
 import shared_ingest
 from magazine_review.benchmark import BenchmarkCandidate, OCRResponse
-from magazine_review.ocr import OCRReviewConfig, PageReviewResponse
+from magazine_review.ocr import (
+    INITIAL_OCR_INSTRUCTIONS,
+    PAGE_REVIEW_INSTRUCTIONS,
+    REPAIR_OCR_INSTRUCTIONS,
+    OCRReviewConfig,
+    PageReviewResponse,
+    RenderedPage,
+)
 from magazine_review.schemas import OCRManifest
 from magazine_review.transcript import canonical_verified_transcript
 from propositions import PropositionExtractionComputation, ReferenceGroundingComputation
@@ -59,6 +67,32 @@ class ExternalCalls:
     proposition_review: int = 0
 
 
+def _fixture_image(page: dict[str, Any]) -> bytes:
+    image_bytes = base64.b64decode(page["image_bytes_base64"], validate=True)
+    assert hashlib.sha256(image_bytes).hexdigest() == page["image_sha256"], (
+        "fixture_image_hash_mismatch"
+    )
+    return image_bytes
+
+
+def _fixture_rendered_pages(
+    pdf_path: Path, pdf_hash: str, pages: list[dict[str, Any]]
+) -> tuple[RenderedPage, ...]:
+    assert hashlib.sha256(pdf_path.read_bytes()).hexdigest() == pdf_hash
+    return tuple(
+        RenderedPage(
+            pdf_path=pdf_path,
+            pdf_hash=pdf_hash,
+            page_number=page["page_number"],
+            image_bytes=_fixture_image(page),
+            image_hash=page["image_sha256"],
+            width=page["image_width"],
+            height=page["image_height"],
+        )
+        for page in pages
+    )
+
+
 class _FixtureOCRProvider:
     def __init__(
         self,
@@ -76,6 +110,17 @@ class _FixtureOCRProvider:
     def transcribe(self, page_fixture) -> OCRResponse:
         page = self._pages[page_fixture.page_number]
         key = "repaired_ocr" if self._repair else "initial_ocr"
+        assert page_fixture.image_bytes == _fixture_image(page)
+        assert page_fixture.image_hash == page["image_sha256"]
+        assert page_fixture.pdf_sha256 == hashlib.sha256(
+            page_fixture.pdf_path.read_bytes()
+        ).hexdigest()
+        assert page_fixture.instructions == (
+            REPAIR_OCR_INSTRUCTIONS if self._repair else INITIAL_OCR_INSTRUCTIONS
+        )
+        assert page_fixture.target_regions == (
+            tuple(page["expected_repair_targets"]) if self._repair else ()
+        )
         if self._repair:
             self._calls.repair_ocr += 1
         else:
@@ -95,16 +140,20 @@ class _FixturePageReviewer:
 
     def __init__(self, pages: list[dict[str, Any]], calls: ExternalCalls) -> None:
         self._responses = [
-            (page["page_number"], response)
+            (page, response)
             for page in pages
             for response in page["reviews"]
         ]
         self._calls = calls
 
-    def review(self, page, _ocr_text: str, _instructions: str) -> PageReviewResponse:
+    def review(self, page, ocr_text: str, instructions: str) -> PageReviewResponse:
         self._calls.page_review += 1
         expected_page, response = self._responses.pop(0)
-        assert page.page_number == expected_page
+        assert page.page_number == expected_page["page_number"]
+        assert page.image_bytes == _fixture_image(expected_page)
+        assert page.image_hash == expected_page["image_sha256"]
+        assert ocr_text == response["reviewed_text"]
+        assert instructions == PAGE_REVIEW_INSTRUCTIONS
         return PageReviewResponse(
             review=copy.deepcopy(response["verdict"]),
             usage=dict(response["usage"]),
@@ -241,12 +290,18 @@ class FixtureRun:
     artifact_dir: Path
 
 
-def _run_fixture(name: str, tmp_path: Path) -> FixtureRun:
+def _run_fixture(name: str, tmp_path: Path, monkeypatch) -> FixtureRun:
     fixture = _load_fixture(name)
     issue_dir = tmp_path / fixture["issue"]["directory"]
     artifact_dir = tmp_path / f"{name}-artifacts"
     pdf_path = _build_pdf(issue_dir, fixture)
     pages = fixture["pages"]
+    monkeypatch.setattr(
+        "magazine_review.ocr._render_pages",
+        lambda rendered_pdf_path, pdf_hash: _fixture_rendered_pages(
+            rendered_pdf_path, pdf_hash, pages
+        ),
+    )
     calls = ExternalCalls()
     accepted = BenchmarkCandidate("fixture-accepted-ocr", "fixture-ocr-v1")
     repair = BenchmarkCandidate("Gemini", "gemini-3.6-flash")
@@ -310,7 +365,7 @@ def _run_fixture(name: str, tmp_path: Path) -> FixtureRun:
 @dataclass(frozen=True)
 class DryIngestPreview:
     proposition_texts: tuple[str, ...]
-    stats: dict[str, int]
+    stats: dict[str, Any]
     db_calls: int
     embedding_calls: int
     generation_calls: int
@@ -318,14 +373,6 @@ class DryIngestPreview:
 
 
 def _preview_ingest(run: FixtureRun, monkeypatch) -> DryIngestPreview:
-    approval = ingest_magazine.validate_reviewed_issue(
-        run.issue_dir, run.artifact_dir
-    )
-    proposition_texts = tuple(
-        content
-        for article in approval.articles
-        for _index, content in article.propositions.propositions
-    )
     boundary_calls = {"db": 0, "embedding": 0, "generation": 0, "move": 0}
 
     def forbidden(boundary: str):
@@ -341,11 +388,17 @@ def _preview_ingest(run: FixtureRun, monkeypatch) -> DryIngestPreview:
     monkeypatch.setattr(shared_ingest, "_embed_batch_verified", forbidden("embedding"))
     monkeypatch.setattr(propositions, "extract_propositions", forbidden("generation"))
     monkeypatch.setattr(propositions, "_get_groq", forbidden("generation"))
+    monkeypatch.setattr(ingest_magazine, "extract_bible_references", lambda _text: [])
     monkeypatch.setattr(ingest_magazine.shutil, "move", forbidden("move"))
     monkeypatch.setattr(ingest_magazine.shutil, "rmtree", forbidden("move"))
 
     stats = ingest_magazine.ingest_reviewed_issue(
         run.issue_dir, run.artifact_dir, dry_run=True
+    )
+    proposition_texts = tuple(
+        text
+        for article in stats["preview_articles"]
+        for text in article["proposition_texts"]
     )
     return DryIngestPreview(
         proposition_texts=proposition_texts,
@@ -361,11 +414,18 @@ def test_clean_issue_approves_and_dry_ingest_matches_exact_propositions(
     tmp_path: Path, monkeypatch
 ) -> None:
     """Regeneration, partial review, or a write-bearing preview must fail."""
-    run = _run_fixture("clean_issue", tmp_path)
+    run = _run_fixture("clean_issue", tmp_path, monkeypatch)
 
-    assert run.decision.state == "approved"
-    assert run.decision.totals == {"pages": 2, "articles": 1, "propositions": 2}
-    assert run.decision.cost_usd == pytest.approx(0.124)
+    expected = run.fixture["expected"]
+
+    assert run.decision.state == expected["state"]
+    assert run.decision.totals == {
+        "pages": expected["page_count"],
+        "articles": expected["article_count"],
+        "propositions": expected["proposition_count"],
+    }
+    assert len(run.decision.approved_propositions) == expected["eligible_article_count"]
+    assert run.decision.cost_usd == pytest.approx(expected["cost_usd"])
     assert run.calls == ExternalCalls(
         initial_ocr=2,
         page_review=2,
@@ -381,30 +441,53 @@ def test_clean_issue_approves_and_dry_ingest_matches_exact_propositions(
 
     preview = _preview_ingest(run, monkeypatch)
 
+    assert preview.stats == expected["dry_ingest"]["result"]
+    assert preview.stats["preview_articles"] == [
+        {
+            "article_id": "grace-for-the-journey",
+            "article_hash": hashlib.sha256(
+                run.fixture["article_review"]["segmentation"]["articles"][0][
+                    "text"
+                ].encode("utf-8")
+            ).hexdigest(),
+            "proposition_texts": [
+                "Ada North teaches that grace is received by faith, not earned by effort.",
+                "Ada North teaches that grace received from God should form humble, generous service to neighbors.",
+            ],
+        }
+    ]
     assert preview.proposition_texts == (
         "Ada North teaches that grace is received by faith, not earned by effort.",
         "Ada North teaches that grace received from God should form humble, generous service to neighbors.",
     )
-    assert preview.stats == {"attempted": 1, "stored": 0, "errored": 0, "skipped": 1}
-    assert preview.db_calls == 0
-    assert preview.embedding_calls == 0
-    assert preview.generation_calls == 0
-    assert preview.move_calls == 0
+    assert preview.db_calls == expected["dry_ingest"]["db_calls"]
+    assert preview.embedding_calls == expected["dry_ingest"]["embedding_calls"]
+    assert preview.generation_calls == expected["dry_ingest"]["generation_calls"]
+    assert preview.move_calls == expected["dry_ingest"]["move_calls"]
     assert {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(run.issue_dir.iterdir())
     } == source_before
 
 
-def test_unrepaired_ocr_failure_blocks_entire_issue(tmp_path: Path) -> None:
+def test_unrepaired_ocr_failure_blocks_entire_issue(
+    tmp_path: Path, monkeypatch
+) -> None:
     """One failed repair must make every downstream article ineligible."""
-    run = _run_fixture("ocr_failure_issue", tmp_path)
+    run = _run_fixture("ocr_failure_issue", tmp_path, monkeypatch)
 
-    assert run.decision.state == "quarantined"
-    assert run.decision.reasons == ("page:1:ocr_incomplete_after_repair",)
-    assert run.decision.totals == {"pages": 1, "articles": 0, "propositions": 0}
+    expected = run.fixture["expected"]
+
+    assert run.decision.state == expected["state"]
+    assert run.decision.reasons == tuple(expected["quarantine_reasons"])
+    assert run.decision.totals == {
+        "pages": expected["page_count"],
+        "articles": expected["article_count"],
+        "propositions": expected["proposition_count"],
+    }
     assert run.decision.approved_propositions == ()
-    assert run.decision.cost_usd == pytest.approx(0.029)
+    assert len(run.decision.approved_propositions) == expected["eligible_article_count"]
+    assert run.decision.cost_usd == pytest.approx(expected["cost_usd"])
     assert run.calls == ExternalCalls(
         initial_ocr=1,
         page_review=2,
@@ -413,3 +496,25 @@ def test_unrepaired_ocr_failure_blocks_entire_issue(tmp_path: Path) -> None:
         proposition_extraction=0,
         proposition_review=0,
     )
+    assert (
+        run.calls.article_model
+        + run.calls.proposition_extraction
+        + run.calls.proposition_review
+    ) == expected["downstream_calls"]
+
+
+def test_fixture_image_tamper_is_refused_before_review(tmp_path: Path) -> None:
+    """Changing fixture image bytes without its hash must stop before OCR."""
+    fixture = copy.deepcopy(_load_fixture("clean_issue"))
+    issue_dir = tmp_path / "tampered-image"
+    pdf_path = _build_pdf(issue_dir, fixture)
+    fixture["pages"][0]["image_bytes_base64"] = base64.b64encode(
+        b"tampered-rendered-page"
+    ).decode("ascii")
+
+    with pytest.raises(AssertionError, match="fixture_image_hash_mismatch"):
+        _fixture_rendered_pages(
+            pdf_path,
+            hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
+            fixture["pages"],
+        )
