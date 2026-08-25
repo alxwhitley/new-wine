@@ -138,7 +138,7 @@ def _validate_verified_transcript(transcript: VerifiedIssueTranscript) -> str:
         _require_sha256(page.image_hash, "verified_page_image_hash_invalid")
         start = _require_int(page.transcript_start, "verified_page_span_invalid")
         end = _require_int(page.transcript_end, "verified_page_span_invalid")
-        if start < previous_end or start >= end or end > len(transcript.text):
+        if start < previous_end or start > end or end > len(transcript.text):
             raise ArticleReviewError("verified_page_span_invalid")
         marker = f"=== PAGE {page.page_number} ===\n"
         marker_start = start - len(marker)

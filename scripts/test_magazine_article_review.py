@@ -224,6 +224,33 @@ def test_segmentation_uses_complete_issue_low_reasoning_and_strict_json(verified
     assert [article.source_pages for article in manifest.articles] == [(1, 2), (2,)]
 
 
+def test_blank_image_page_reaches_article_segmentation() -> None:
+    """A passed image-only page may have a zero-length transcript span."""
+    transcript = verified_transcript(
+        "",
+        "SECOND VOICE\nBy Ben South\nA substantive article reaches its conclusion.",
+    )
+    proposal = proposed_article(
+        transcript,
+        article_id="second-voice",
+        filename="second-voice.txt",
+        title="Second Voice",
+        author="Ben South",
+        source_pages=[2],
+        start_text="SECOND VOICE",
+        end_text="reaches its conclusion.",
+    )
+    client = FakeStructuredClient(segmentation_response(transcript, [proposal]))
+
+    manifest = segment_articles(transcript, client)
+
+    assert transcript.pages[0].transcript_start == transcript.pages[0].transcript_end
+    assert manifest.articles[0].source_pages == (2,)
+    assert client.last_request["pages"][0]["transcript_start"] == client.last_request[
+        "pages"
+    ][0]["transcript_end"]
+
+
 def test_reviewer_receives_complete_issue_and_all_articles(verified_issue):
     """Reviewing isolated excerpts cannot detect omissions, duplication, or bleed."""
     proposals = two_proposals(verified_issue)
