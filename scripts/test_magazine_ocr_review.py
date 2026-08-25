@@ -11,6 +11,7 @@ import fitz
 import pytest
 
 import extract_magazine
+from magazine_review.artifacts import write_artifact
 from magazine_review.benchmark import BenchmarkCandidate, OCRResponse
 from magazine_review.ocr import (
     OCRReviewConfig,
@@ -295,6 +296,31 @@ def test_matching_manifest_resumes_without_provider_or_reviewer_calls(
     assert resumed_config.repair_provider.page_numbers == []
 
 
+def test_render_hash_mismatch_recomputes_instead_of_resuming_stale_manifest(
+    two_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A changed deterministic render must recompute rather than abort or resume."""
+    artifact_dir = tmp_path / "artifacts"
+    first = review_issue_ocr(
+        two_page_pdf,
+        passing_config({1: "old first page", 2: "old second page"}),
+        artifact_dir,
+    )
+    stale_first_page = replace(first.pages[0], image_hash=sha("stale-render"))
+    stale = replace(first, pages=(stale_first_page, first.pages[1]))
+    write_artifact(artifact_dir / "ocr_manifest.json", stale)
+    refreshed_config = passing_config({1: "new first page", 2: "new second page"})
+
+    refreshed = review_issue_ocr(two_page_pdf, refreshed_config, artifact_dir)
+
+    assert refreshed_config.initial_provider.page_numbers == [1, 2]
+    assert refreshed_config.reviewer.page_numbers == [1, 2]
+    assert refreshed_config.repair_provider.page_numbers == []
+    assert refreshed.pages[0].image_hash == first.pages[0].image_hash
+    assert refreshed.pages[0].text == "new first page"
+    assert refreshed != stale
+
+
 def test_initial_provider_must_match_explicit_accepted_benchmark_candidate(
     one_page_pdf: Path, tmp_path: Path
 ) -> None:
@@ -420,6 +446,57 @@ def test_review_config_requires_artifact_directory_before_any_page_call(
         )
 
     assert review_config.initial_provider.page_numbers == []
+
+
+def test_legacy_cli_entry_point_passes_only_existing_options() -> None:
+    """Adding review-only arguments to the legacy entry point must fail this test."""
+    calls: list[dict[str, object]] = []
+
+    exit_code = extract_magazine.main(
+        ["--time-limit", "1.5", "--max-issues", "2"],
+        runner=lambda **kwargs: calls.append(kwargs),
+    )
+
+    assert exit_code == 0
+    assert calls == [{"time_limit_min": 1.5, "max_issues": 2}]
+
+
+def test_review_flags_are_deferred_to_the_task_6_entry_point() -> None:
+    """The legacy CLI must not advertise an unusable review configuration."""
+    calls: list[dict[str, object]] = []
+
+    with pytest.raises(SystemExit) as exc:
+        extract_magazine.main(
+            ["--review-pipeline", "--artifact-dir", "/tmp/review-artifacts"],
+            runner=lambda **kwargs: calls.append(kwargs),
+        )
+
+    assert exc.value.code == 2
+    assert calls == []
+
+
+def test_default_run_calls_the_legacy_issue_path_without_review_arguments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Default batch execution must keep its pre-review process_issue boundary."""
+    queue_dir = tmp_path / "queue"
+    extracted_dir = tmp_path / "extracted"
+    queue_dir.mkdir()
+    pdf_path = queue_dir / "legacy.pdf"
+    pdf_path.write_bytes(b"process_issue is injected and will not open this fixture")
+    calls: list[Path] = []
+
+    def legacy_process_issue(candidate: Path) -> str:
+        calls.append(candidate)
+        return "processed"
+
+    monkeypatch.setattr(extract_magazine, "TO_EXTRACT_DIR", queue_dir)
+    monkeypatch.setattr(extract_magazine, "EXTRACTED_DIR", extracted_dir)
+    monkeypatch.setattr(extract_magazine, "process_issue", legacy_process_issue)
+
+    extract_magazine.run(max_issues=1)
+
+    assert calls == [pdf_path]
 
 
 if __name__ == "__main__":

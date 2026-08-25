@@ -1249,14 +1249,7 @@ def process_issue(
 
 # -- MAIN --------------------------------------------------------------------
 
-def run(
-    time_limit_min=None,
-    max_issues=None,
-    *,
-    review_pipeline=False,
-    artifact_dir=None,
-    review_config=None,
-):
+def run(time_limit_min=None, max_issues=None):
     """Scan 01_to_extract/ and process all PDFs.
     If time_limit_min is set, stop after the current PDF once the limit is reached.
     If max_issues is set, stop after that many issues have been attempted (processed + failed)."""
@@ -1286,12 +1279,7 @@ def run(
             print(f"\nMax issues reached ({max_issues}) — stopping.")
             break
 
-        result = process_issue(
-            pdf_path,
-            review_pipeline=review_pipeline,
-            artifact_dir=artifact_dir,
-            review_config=review_config,
-        )
+        result = process_issue(pdf_path)
         if result == "processed":
             processed += 1
         else:
@@ -1302,22 +1290,18 @@ def run(
     print(f"Done. {processed} processed, {failed} failed. ({elapsed:.1f} min)")
 
 
-if __name__ == "__main__":
+def main(argv=None, *, runner=None) -> int:
+    """Parse the unchanged legacy batch CLI and run it."""
     parser = argparse.ArgumentParser(description="New Wine Magazine extraction pipeline")
     parser.add_argument("--time-limit", type=float, default=None,
                         help="Stop after this many minutes (finishes current PDF first)")
     parser.add_argument("--max-issues", type=int, default=None,
                         help="Stop after this many issues have been attempted (processed + failed)")
-    parser.add_argument("--review-pipeline", action="store_true",
-                        help="Use the opt-in reviewed OCR page stage")
-    parser.add_argument("--artifact-dir", type=Path, default=None,
-                        help="Root directory for review artifacts (required with --review-pipeline)")
-    args = parser.parse_args()
-    if args.review_pipeline != (args.artifact_dir is not None):
-        parser.error("--review-pipeline and --artifact-dir must be supplied together")
-    run(
-        time_limit_min=args.time_limit,
-        max_issues=args.max_issues,
-        review_pipeline=args.review_pipeline,
-        artifact_dir=args.artifact_dir,
-    )
+    args = parser.parse_args(argv)
+    selected_runner = runner or run
+    selected_runner(time_limit_min=args.time_limit, max_issues=args.max_issues)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

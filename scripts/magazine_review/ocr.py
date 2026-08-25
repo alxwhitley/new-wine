@@ -473,7 +473,7 @@ def _matching_resume(
     if value.page_count != len(rendered_pages) or tuple(
         page.image_hash for page in value.pages
     ) != tuple(page.image_hash for page in rendered_pages):
-        raise ArtifactValidationError("ocr_render_identity_mismatch")
+        return None
     return value
 
 
