@@ -1,5 +1,6 @@
 import base64
 import json
+from collections import namedtuple
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,11 +9,15 @@ import pytest
 from magazine_review.benchmark import BenchmarkCandidate
 from magazine_review.ocr import IssuePageOCRFixture, RenderedPage
 from magazine_review.live_providers import (
+    CostBudget,
     GEMINI_REVIEW_MODEL,
     GROQ_MODEL,
     GeminiLiveOCRProvider,
     GeminiLivePageReviewer,
     GroqStructuredOutputClient,
+    _budgeted_proposition_extractor,
+    _cost_budget,
+    _groq_factory,
     build_live_provider_adapters,
 )
 from review_magazine_issue import AcceptedBenchmarkDecision
@@ -32,7 +37,9 @@ def _decision() -> AcceptedBenchmarkDecision:
 
 
 def test_factory_is_lazy_and_preserves_the_accepted_model_split() -> None:
-    adapters = build_live_provider_adapters(_decision(), environ={})
+    adapters = build_live_provider_adapters(
+        _decision(), environ={"MAGAZINE_REVIEW_COST_CEILING_USD": "1.25"}
+    )
 
     assert adapters.initial_ocr_provider.candidate == BenchmarkCandidate(
         provider="Gemini", model="gemini-3.7-flash"
@@ -43,7 +50,7 @@ def test_factory_is_lazy_and_preserves_the_accepted_model_split() -> None:
     )
     assert adapters.article_client.model == GROQ_MODEL
     assert adapters.proposition_reviewer.model == GROQ_MODEL
-    assert adapters.proposition_extractor is None
+    assert callable(adapters.proposition_extractor)
     assert adapters.proposition_extractor_model == GROQ_MODEL
 
 
@@ -65,6 +72,7 @@ def test_gemini_ocr_sends_the_full_png_at_high_resolution_and_accounts_cost() ->
         "gemini-3.7-flash",
         api_key=lambda: "gemini-key",
         post_json=post,
+        budget=CostBudget(1.25),
     )
     fixture = IssuePageOCRFixture(
         pdf_path=Path("issue.pdf"),
@@ -137,7 +145,9 @@ def test_gemini_page_reviewer_uses_strict_schema_and_parses_verdict() -> None:
         }
 
     reviewer = GeminiLivePageReviewer(
-        api_key=lambda: "gemini-key", post_json=post
+        api_key=lambda: "gemini-key",
+        post_json=post,
+        budget=CostBudget(1.25),
     )
     page = RenderedPage(
         pdf_path=Path("issue.pdf"),
@@ -192,7 +202,9 @@ def test_groq_client_forwards_strict_schema_reasoning_and_returns_envelope() -> 
     client = SimpleNamespace(
         chat=SimpleNamespace(completions=Completions())
     )
-    adapter = GroqStructuredOutputClient(client_factory=lambda: client)
+    adapter = GroqStructuredOutputClient(
+        client_factory=lambda: client, budget=CostBudget(1.25)
+    )
     schema = {
         "type": "json_schema",
         "json_schema": {
@@ -248,6 +260,7 @@ def test_gemini_ocr_allows_a_visually_verified_blank_page() -> None:
                 "totalTokenCount": 1120,
             },
         },
+        budget=CostBudget(1.25),
     )
     fixture = IssuePageOCRFixture(
         pdf_path=Path("issue.pdf"),
@@ -285,6 +298,7 @@ def test_gemini_rejects_unreconciled_usage_instead_of_recording_zero_cost(
             "candidates": [{"content": {"parts": [{"text": "text"}]}}],
             "usageMetadata": usage,
         },
+        budget=CostBudget(1.25),
     )
     fixture = IssuePageOCRFixture(
         pdf_path=Path("issue.pdf"),
@@ -319,7 +333,9 @@ def test_groq_rejects_unreconciled_usage_instead_of_undercounting_cost() -> None
             )
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=Completions()))
-    adapter = GroqStructuredOutputClient(client_factory=lambda: client)
+    adapter = GroqStructuredOutputClient(
+        client_factory=lambda: client, budget=CostBudget(1.25)
+    )
 
     with pytest.raises(RuntimeError, match="provider_usage_invalid"):
         adapter.complete(
@@ -343,3 +359,103 @@ def test_groq_rejects_unreconciled_usage_instead_of_undercounting_cost() -> None
                 },
             }
         )
+
+
+def test_budget_refuses_an_unsafe_call_before_contacting_provider() -> None:
+    calls = []
+    provider = GeminiLiveOCRProvider(
+        "gemini-3.7-flash",
+        api_key=lambda: "gemini-key",
+        post_json=lambda *args: calls.append(args),
+        budget=CostBudget(0.01),
+    )
+    fixture = IssuePageOCRFixture(
+        pdf_path=Path("issue.pdf"),
+        pdf_sha256="a" * 64,
+        page_number=1,
+        fixture_class="good_control",
+        human_scoring={},
+        image_bytes=b"page",
+        image_hash="b" * 64,
+        instructions="Transcribe everything.",
+        target_regions=(),
+    )
+
+    with pytest.raises(RuntimeError, match="cost_ceiling_would_be_exceeded"):
+        provider.transcribe(fixture)
+    assert calls == []
+
+
+def test_budgeted_extractor_accounts_normalized_legacy_usage(monkeypatch) -> None:
+    computation = namedtuple("Computation", "usage cost_usd")(
+        {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120},
+        None,
+    )
+    monkeypatch.setattr(
+        "propositions.extract_propositions_with_evidence",
+        lambda **_kwargs: computation,
+    )
+    budget = CostBudget(1.25)
+
+    result = _budgeted_proposition_extractor(budget)(text="article")
+
+    assert result.cost_usd == pytest.approx(0.000027)
+    assert budget.spent_usd == pytest.approx(0.000027)
+
+
+@pytest.mark.parametrize("value", [None, "1.26", "not-a-number"])
+def test_live_factory_budget_is_required_and_cannot_exceed_approval(value) -> None:
+    environ = {}
+    if value is not None:
+        environ["MAGAZINE_REVIEW_COST_CEILING_USD"] = value
+
+    with pytest.raises(RuntimeError, match="cost_ceiling_(required|invalid)"):
+        _cost_budget(environ)
+
+
+def test_failed_paid_call_keeps_its_reservation_and_blocks_reuse() -> None:
+    calls = []
+    budget = CostBudget(0.05)
+
+    def fail(*args):
+        calls.append(args)
+        raise RuntimeError("network failed after contact")
+
+    provider = GeminiLiveOCRProvider(
+        "gemini-3.7-flash",
+        api_key=lambda: "gemini-key",
+        post_json=fail,
+        budget=budget,
+    )
+    fixture = IssuePageOCRFixture(
+        pdf_path=Path("issue.pdf"),
+        pdf_sha256="a" * 64,
+        page_number=1,
+        fixture_class="good_control",
+        human_scoring={},
+        image_bytes=b"page",
+        image_hash="b" * 64,
+        instructions="Transcribe everything.",
+        target_regions=(),
+    )
+
+    with pytest.raises(RuntimeError, match="network failed"):
+        provider.transcribe(fixture)
+    with pytest.raises(RuntimeError, match="cost_ceiling_would_be_exceeded"):
+        provider.transcribe(fixture)
+    assert len(calls) == 1
+
+
+def test_groq_client_disables_hidden_sdk_retries(monkeypatch) -> None:
+    captured = {}
+
+    def fake_groq(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("groq.Groq", fake_groq)
+
+    first = _groq_factory(lambda: "groq-key")()
+
+    assert first is not None
+    assert captured == {"api_key": "groq-key", "max_retries": 0}
