@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChatFocus } from "@/contexts/chat-focus-context";
@@ -12,6 +12,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [input, setInput] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { setInputFocused } = useChatFocus();
 
   const handleSubmit = (e: FormEvent) => {
@@ -19,6 +20,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     if (input.trim() && !disabled) {
       onSend(input.trim());
       setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
     }
   };
 
@@ -32,8 +34,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   return (
     <div className="shrink-0 bg-background px-4 md:px-12 pb-2 md:pb-6">
       <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
-        <div className="flex items-center gap-2 rounded-2xl border border-border bg-popover px-4 py-1.5 md:py-2">
+        <div className="flex items-end gap-2 rounded-2xl border border-border bg-popover px-4 py-1.5 md:py-2">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
