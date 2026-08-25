@@ -371,7 +371,7 @@ export default function Home() {
 
   return (
     // Outermost shell: sidebar tone, full viewport
-    <div className="flex h-dvh-safe overflow-hidden bg-sidebar">
+    <div className="fixed inset-0 flex h-dvh-safe overflow-hidden overscroll-none bg-sidebar">
       {/* Sidebar sits directly on this canvas */}
       <Sidebar
         conversations={conversations}
