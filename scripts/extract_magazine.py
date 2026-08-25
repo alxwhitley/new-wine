@@ -19,7 +19,7 @@ import argparse
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 
 import fitz  # PyMuPDF
 from PIL import Image
@@ -52,6 +52,7 @@ TRACKER_PATH = ROOT / "sources" / "magazine" / "rhemata_tracker.xlsx"
 
 GEMINI_MODEL = "gemini-2.5-flash"
 GROQ_MODEL = "llama-3.3-70b-versatile"
+REVIEW_PIPELINE_GROQ_MODEL = "openai/gpt-oss-120b"
 
 SAFETY_SETTINGS = [
     types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
@@ -849,7 +850,7 @@ def _parse_groq_json(raw_response: str):
     return json.loads(json_str)
 
 
-def pass2_segment(issue_dir: Path, meta: Dict) -> int:
+def pass2_segment(issue_dir: Path, meta: Dict, *, model: str = GROQ_MODEL) -> int:
     """Segment raw text into individual article .md files. Returns article count."""
     print(f"  PASS 2: Article segmentation via Groq...")
 
@@ -867,7 +868,7 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
     # Step 1: Get article metadata index (small response, no body text)
     print(f"  Step 2a: Extracting article index from TOC...")
     toc_response = get_groq().chat.completions.create(
-        model=GROQ_MODEL,
+        model=model,
         max_tokens=2048,
         messages=[
             {"role": "system", "content": PASS2_TOC_SYSTEM},
@@ -898,7 +899,7 @@ def pass2_segment(issue_dir: Path, meta: Dict) -> int:
             print(f"    Stitched continuation spans: {spans}")
 
         body_response = get_groq().chat.completions.create(
-            model=GROQ_MODEL,
+            model=model,
             max_tokens=8192,
             messages=[
                 {"role": "system", "content": PASS2_BODY_SYSTEM},
@@ -1122,8 +1123,19 @@ def pass3_qa(issue_dir: Path, issue: str = "") -> Dict[str, int]:
 
 # -- PROCESS SINGLE ISSUE ---------------------------------------------------
 
-def process_issue(pdf_path: Path) -> str:
+def process_issue(
+    pdf_path: Path,
+    *,
+    review_pipeline: bool = False,
+    artifact_dir: Optional[Path] = None,
+    review_config: Any = None,
+) -> str:
     """Run all 3 passes on a single PDF. Returns 'processed' or 'failed'."""
+    if review_pipeline and artifact_dir is None:
+        raise ValueError("review_pipeline_artifact_dir_required")
+    if review_pipeline and review_config is None:
+        raise ValueError("accepted_benchmark_configuration_required")
+
     filename = pdf_path.name
     issue_stem = pdf_path.stem
     meta = parse_issue_meta(filename)
@@ -1137,8 +1149,33 @@ def process_issue(pdf_path: Path) -> str:
     init_tracker()
 
     try:
-        # Pass 1: Vision extraction
-        page_count = pass1_extract(pdf_path, issue_dir)
+        # Pass 1: legacy extraction, or the explicitly opted-in reviewed page stage.
+        if review_pipeline:
+            from magazine_review.ocr import (
+                VerifiedIssueTranscript,
+                review_issue_ocr,
+            )
+
+            issue_artifact_dir = Path(artifact_dir) / issue_stem
+            manifest = review_issue_ocr(pdf_path, review_config, issue_artifact_dir)
+            if manifest.status == "quarantined":
+                update_tracker_row(filename, {
+                    "Issue": meta.get("issue"),
+                    "Year": meta.get("year"),
+                    "Pages": manifest.page_count,
+                    "Pass1": "quarantined",
+                    "Status": "quarantined: OCR review",
+                })
+                print("  Issue quarantined by OCR review; downstream stages skipped")
+                return "failed"
+            verified = VerifiedIssueTranscript.from_manifest(manifest)
+            issue_dir.mkdir(parents=True, exist_ok=True)
+            (issue_dir / "raw_text.txt").write_text(
+                verified.text, encoding="utf-8"
+            )
+            page_count = manifest.page_count
+        else:
+            page_count = pass1_extract(pdf_path, issue_dir)
 
         if page_count < 0:
             # Missing pages after all retries — abort before Pass 2
@@ -1163,7 +1200,12 @@ def process_issue(pdf_path: Path) -> str:
         })
 
         # Pass 2: Article segmentation
-        article_count = pass2_segment(issue_dir, meta)
+        if review_pipeline:
+            article_count = pass2_segment(
+                issue_dir, meta, model=REVIEW_PIPELINE_GROQ_MODEL
+            )
+        else:
+            article_count = pass2_segment(issue_dir, meta)
         update_tracker_row(filename, {
             "Articles": article_count,
             "Pass2": "complete",
@@ -1180,11 +1222,13 @@ def process_issue(pdf_path: Path) -> str:
             "Status": "complete",
         })
 
-        # Move PDF into the extracted issue folder alongside the .md files
-        # so it rides with the folder through 03_approved/ until ingest archives it
-        dest = issue_dir / filename
-        pdf_path.rename(dest)
-        print(f"  PDF moved to: {dest}")
+        if review_pipeline:
+            print(f"  Review mode retained PDF at: {pdf_path}")
+        else:
+            # Preserve the legacy promotion behavior outside the opt-in review path.
+            dest = issue_dir / filename
+            pdf_path.rename(dest)
+            print(f"  PDF moved to: {dest}")
 
         print(f"  DONE: {filename}")
         return "processed"
@@ -1192,13 +1236,14 @@ def process_issue(pdf_path: Path) -> str:
     except Exception as e:
         logger.exception("Failed processing %s", filename)
         update_tracker_row(filename, {"Status": f"failed: {str(e)[:100]}"})
-        try:
-            PDF_FAILED_DIR.mkdir(parents=True, exist_ok=True)
-            failed_dest = PDF_FAILED_DIR / filename
-            pdf_path.rename(failed_dest)
-            print(f"  PDF moved to failed queue: {failed_dest}")
-        except Exception:
-            logger.exception("Could not move failed PDF %s to %s", filename, PDF_FAILED_DIR)
+        if not review_pipeline:
+            try:
+                PDF_FAILED_DIR.mkdir(parents=True, exist_ok=True)
+                failed_dest = PDF_FAILED_DIR / filename
+                pdf_path.rename(failed_dest)
+                print(f"  PDF moved to failed queue: {failed_dest}")
+            except Exception:
+                logger.exception("Could not move failed PDF %s to %s", filename, PDF_FAILED_DIR)
         return "failed"
 
 
@@ -1245,11 +1290,18 @@ def run(time_limit_min=None, max_issues=None):
     print(f"Done. {processed} processed, {failed} failed. ({elapsed:.1f} min)")
 
 
-if __name__ == "__main__":
+def main(argv=None, *, runner=None) -> int:
+    """Parse the unchanged legacy batch CLI and run it."""
     parser = argparse.ArgumentParser(description="New Wine Magazine extraction pipeline")
     parser.add_argument("--time-limit", type=float, default=None,
                         help="Stop after this many minutes (finishes current PDF first)")
     parser.add_argument("--max-issues", type=int, default=None,
                         help="Stop after this many issues have been attempted (processed + failed)")
-    args = parser.parse_args()
-    run(time_limit_min=args.time_limit, max_issues=args.max_issues)
+    args = parser.parse_args(argv)
+    selected_runner = runner or run
+    selected_runner(time_limit_min=args.time_limit, max_issues=args.max_issues)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

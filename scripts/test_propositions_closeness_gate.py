@@ -65,6 +65,7 @@ What this proves, both sides of the (now-collapsed) partition:
 
 Run: python3 scripts/test_propositions_closeness_gate.py
 """
+import hashlib
 import sys
 from pathlib import Path
 
@@ -74,6 +75,7 @@ if str(_SCRIPTS) not in sys.path:
 
 import closeness_check as cc  # noqa: E402
 import propositions as props_mod  # noqa: E402
+from magazine_review.schemas import ApprovedPropositionSet  # noqa: E402
 
 
 # ── Fake conn/cursor (DB-free) ─────────────────────────────────────────────
@@ -137,6 +139,88 @@ class FakeConn:
 
 def fake_embed_fn(text: str):
     return [0.01, 0.02, 0.03]
+
+
+def test_approved_propositions_bypass_generation_but_store_exact_text(monkeypatch):
+    """Removing the approved branch would regenerate or lose byte identity."""
+    article_text = (
+        "The reviewed article teaches that grace forms a faithful community, "
+        "and it explains how patient prayer shapes ordinary disciples over a "
+        "long season of shared life. This fixture continues with enough real "
+        "words to cross the existing substantive floor while preserving the "
+        "exact reviewed article bytes used for the approval hash and storage "
+        "bridge. Nothing in this fixture calls a provider or real database, "
+        "because both external boundaries are replaced with in-memory fakes."
+    )
+    approved = ApprovedPropositionSet(
+        article_id="article-one",
+        article_hash=hashlib.sha256(article_text.encode("utf-8")).hexdigest(),
+        model=props_mod.EXTRACTION_MODEL,
+        prompt_version="v3.1",
+        prompt_fingerprint=props_mod.prompt_fingerprint("v3.1"),
+        proposition_artifact_hash="a" * 64,
+        propositions=(
+            (1, "First exact reviewed teaching point.\nIt keeps this newline."),
+            (2, "Second exact reviewed teaching point with  two spaces."),
+        ),
+    )
+
+    def forbidden_generation(*args, **kwargs):
+        raise AssertionError("approved propositions must not be regenerated")
+
+    monkeypatch.setattr(props_mod, "extract_propositions", forbidden_generation)
+    conn = FakeConn(license_status="licensed")
+
+    capability = props_mod._ValidatedReviewedPropositions(
+        article_id=approved.article_id,
+        article_hash=approved.article_hash,
+        speaker="Ada North",
+        model=approved.model,
+        prompt_version=approved.prompt_version,
+        prompt_fingerprint=approved.prompt_fingerprint,
+        proposition_artifact_hash=approved.proposition_artifact_hash,
+        propositions=approved.propositions,
+    )
+
+    result = props_mod.process_document(
+        conn,
+        "document-id",
+        "source-id",
+        article_text,
+        fake_embed_fn,
+        speaker="Ada North",
+        prompt_version="v3.1",
+        _reviewed_propositions=capability,
+    )
+
+    assert result == "stored:2"
+    assert conn.inserted_contents() == [content for _, content in approved.propositions]
+    assert conn.committed
+    assert not conn.rolled_back
+
+    mismatched_conn = FakeConn(license_status="licensed")
+    storage_kwargs = []
+
+    def mismatched_storage(*args, **kwargs):
+        storage_kwargs.append(kwargs)
+        return 1
+
+    monkeypatch.setattr(props_mod, "store_propositions", mismatched_storage)
+    mismatch = props_mod.process_document(
+        mismatched_conn,
+        "document-id",
+        "source-id",
+        article_text,
+        fake_embed_fn,
+        speaker="Ada North",
+        prompt_version="v3.1",
+        _reviewed_propositions=capability,
+    )
+
+    assert mismatch == "error"
+    assert storage_kwargs[0]["commit"] is False
+    assert mismatched_conn.rolled_back
+    assert not mismatched_conn.committed
 
 
 def main() -> None:

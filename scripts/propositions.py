@@ -129,6 +129,7 @@ import os
 import re
 import unicodedata
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
@@ -137,6 +138,7 @@ from groq import Groq
 from psycopg2.extras import execute_values
 
 import reference_grounding as rg
+from magazine_review.schemas import ApprovedPropositionSet, ArtifactValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -732,6 +734,78 @@ class PropositionExtractionFailed(Exception):
     """
 
 
+class ApprovedArtifactMismatch(ValueError):
+    """The reviewed proposition transport no longer matches current inputs."""
+
+
+def _validate_approved_propositions(
+    approved: ApprovedPropositionSet,
+    text: str,
+    prompt_version: str,
+    *,
+    speaker: Optional[str] = None,
+) -> List[dict]:
+    """Validate one frozen review result and return its exact storage shape."""
+    if not isinstance(approved, ApprovedPropositionSet):
+        raise ApprovedArtifactMismatch("approved_proposition_set_required")
+    try:
+        approved.validate()
+    except ArtifactValidationError as exc:
+        raise ApprovedArtifactMismatch(str(exc)) from exc
+    if prompt_version in ("v3.1", "v4") and (
+        not isinstance(speaker, str) or not speaker.strip()
+    ):
+        raise ApprovedArtifactMismatch("approved_speaker_required")
+    if approved.prompt_version != prompt_version:
+        raise ApprovedArtifactMismatch("approved_prompt_version_mismatch")
+    if approved.prompt_fingerprint != prompt_fingerprint(prompt_version):
+        raise ApprovedArtifactMismatch("approved_prompt_fingerprint_mismatch")
+    if approved.model != EXTRACTION_MODEL:
+        raise ApprovedArtifactMismatch("approved_model_mismatch")
+    article_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if approved.article_hash != article_hash:
+        raise ApprovedArtifactMismatch("approved_article_hash_mismatch")
+    return approved.as_storage_list()
+
+
+@dataclass(frozen=True)
+class _ValidatedReviewedPropositions:
+    """Private generation-bypass capability created after full issue review.
+
+    A bare ``ApprovedPropositionSet`` is deliberately not accepted by either
+    ingestion chokepoint. The magazine validator constructs this immutable
+    transport only after the decision, predecessor artifacts, current stage
+    identity, attribution, and source snapshot have all reconciled.
+    """
+
+    article_id: str
+    article_hash: str
+    speaker: str
+    model: str
+    prompt_version: str
+    prompt_fingerprint: str
+    proposition_artifact_hash: str
+    propositions: Tuple[Tuple[int, str], ...]
+
+    def as_storage_list(
+        self, *, text: str, speaker: Optional[str], prompt_version: str
+    ) -> List[dict]:
+        if hashlib.sha256(text.encode("utf-8")).hexdigest() != self.article_hash:
+            raise ApprovedArtifactMismatch("reviewed_capability_article_mismatch")
+        if speaker != self.speaker:
+            raise ApprovedArtifactMismatch("reviewed_capability_speaker_mismatch")
+        if prompt_version != self.prompt_version:
+            raise ApprovedArtifactMismatch("reviewed_capability_prompt_mismatch")
+        if self.model != EXTRACTION_MODEL:
+            raise ApprovedArtifactMismatch("reviewed_capability_model_mismatch")
+        if self.prompt_fingerprint != prompt_fingerprint(prompt_version):
+            raise ApprovedArtifactMismatch("reviewed_capability_fingerprint_mismatch")
+        return [
+            {"proposition_index": index, "content": content}
+            for index, content in self.propositions
+        ]
+
+
 def _select_prompt_template(prompt_version: str) -> str:
     """Return the raw, unformatted instruction template for prompt_version --
     the exact text before any speaker/content substitution is filled in.
@@ -1179,6 +1253,7 @@ def store_propositions(
     prompt_version: str,
     chunk_ids: Optional[List[str]] = None,
     clear_existing: bool = True,
+    commit: bool = True,
 ) -> int:
     """Clear existing propositions for document_id, then embed and insert new ones.
 
@@ -1197,6 +1272,10 @@ def store_propositions(
     per chapter with clear_existing=False, so a later chapter's store call
     never wipes an earlier chapter's just-stored rows for the same
     document_id.
+
+    ``commit=False`` keeps the delete/inserts in the caller's transaction so
+    reviewed ingestion can reconcile the exact approved count before making
+    any article write durable. The default preserves direct-call behavior.
 
     prompt_version (bypass-proofing Phase 4, PLAN.md #45, 2026-07-29,
     REQUIRED -- no default): an unstamped write is now IMPOSSIBLE, not
@@ -1325,7 +1404,8 @@ def store_propositions(
                     template="(%s, %s)",
                 )
 
-    conn.commit()
+    if commit:
+        conn.commit()
     return inserted
 
 
@@ -1802,6 +1882,8 @@ def process_document(
     chunk_ids: Optional[List[str]] = None,
     speaker: Optional[str] = None,
     prompt_version: Optional[str] = None,
+    _reviewed_propositions: Optional[_ValidatedReviewedPropositions] = None,
+    _defer_reviewed_commit: bool = False,
 ) -> str:
     """Top-level entry point for ingest scripts.
 
@@ -1927,8 +2009,19 @@ def process_document(
             return "too_thin_to_extract"
 
         prompt_version = prompt_version or DEFAULT_PROMPT_VERSION
-        props = extract_propositions(
-            text, doc_id=document_id, speaker=speaker, prompt_version=prompt_version,
+        props = (
+            _reviewed_propositions.as_storage_list(
+                text=text,
+                speaker=speaker,
+                prompt_version=prompt_version,
+            )
+            if _reviewed_propositions is not None
+            else extract_propositions(
+                text,
+                doc_id=document_id,
+                speaker=speaker,
+                prompt_version=prompt_version,
+            )
         )
         if not props:
             return "no_propositions"
@@ -1947,7 +2040,14 @@ def process_document(
                 conn, document_id, props, embed_fn,
                 prompt_version=prompt_version,
                 chunk_ids=chunk_ids,
+                commit=_reviewed_propositions is None,
             )
+            if _reviewed_propositions is not None:
+                if count != len(props):
+                    conn.rollback()
+                    return "error"
+                if not _defer_reviewed_commit:
+                    conn.commit()
             return f"stored:{count}"
 
         # GATE ON. Lazy import — closeness_check (and its own DB-adjacent

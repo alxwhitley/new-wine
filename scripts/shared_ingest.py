@@ -28,6 +28,7 @@ existing convention in source_resolver.py.
 """
 
 import os
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -46,6 +47,48 @@ import propositions
 
 
 # ── Dedup ─────────────────────────────────────────────────────────────────────
+
+_REVIEWED_FILE_PATH_RE = re.compile(
+    r"^new-wine-reviewed/v2/(?P<issue_hash>[0-9a-f]{64})/"
+    r"(?P<approval_hash>[0-9a-f]{64})/(?P<article_file>[^/]+\.md)$"
+)
+
+
+def reviewed_document_identity_status(
+    db_params: dict, current_file_path: str
+) -> Tuple[str, Optional[str]]:
+    """Return absent/exact/conflict for one stable reviewed issue/article.
+
+    Approval hashes deliberately remain in the stored path for auditability,
+    but deduplication is anchored to issue hash plus article filename. A prior
+    row for that stable identity with another approval hash is a conflict, not
+    permission to insert a second retrievable version.
+    """
+    match = _REVIEWED_FILE_PATH_RE.fullmatch(current_file_path)
+    if match is None:
+        raise ValueError("reviewed_file_path_invalid")
+    identity_prefix = f"new-wine-reviewed/v2/{match.group('issue_hash')}/"
+    identity_suffix = f"/{match.group('article_file')}"
+    conn = psycopg2.connect(**db_params)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, file_path FROM documents "
+                "WHERE file_path LIKE %s "
+                "AND right(file_path, length(%s)) = %s",
+                (f"%{identity_prefix}%", identity_suffix, identity_suffix),
+            )
+            rows = [(str(row[0]), str(row[1])) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+    exact = [doc_id for doc_id, path in rows if path.endswith(current_file_path)]
+    conflicts = [doc_id for doc_id, path in rows if not path.endswith(current_file_path)]
+    if conflicts or len(exact) > 1:
+        return ("conflict", (conflicts or exact)[0])
+    if exact:
+        return ("exact", exact[0])
+    return ("absent", None)
 
 def already_ingested(
     db_params: dict,
@@ -486,6 +529,9 @@ def ingest_document(
     chunk_fn: Callable[[str], List[str]] = chunk_text,
     embed_text_fn: Optional[Callable[[int, str], str]] = None,
     content_fn: Optional[Callable[[int, str], str]] = None,
+    _reviewed_propositions: Optional[
+        propositions._ValidatedReviewedPropositions
+    ] = None,
 ) -> dict:
     """Resolve -> compute (chunk + embed + paraphrase) -> write, in that
     order. The document record, all of its chunks, and its propositions
@@ -715,8 +761,28 @@ def ingest_document(
         prop_result = propositions.process_document(
             conn, doc_id, _resolved_id, body_text, embed_text, chunk_ids=chunk_ids,
             speaker=speaker, prompt_version="v3.1",
+            _reviewed_propositions=_reviewed_propositions,
+            _defer_reviewed_commit=_reviewed_propositions is not None,
         )
         print(f"  propositions: {prop_result}")
+
+        if _reviewed_propositions is not None:
+            expected_result = f"stored:{len(_reviewed_propositions.propositions)}"
+            if prop_result != expected_result:
+                conn.rollback()
+                conn.close()
+                print(
+                    "  ✗ Reviewed proposition reconciliation failed — "
+                    "rolled back, nothing written for this document"
+                )
+                return {
+                    "status": "failed",
+                    "reason": "reviewed_proposition_reconciliation_failed",
+                    "doc_id": None,
+                    "source_id": _resolved_id,
+                    "chunks": [],
+                    "propositions": prop_result,
+                }
 
         if prop_result == "error":
             conn.rollback()  # harmless no-op if process_document() already rolled back

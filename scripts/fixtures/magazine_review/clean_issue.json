@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "issue": {
+    "directory": "NewWineMagazine_Issue_01-1974",
+    "filename": "NewWineMagazine_Issue_01-1974.pdf",
+    "label": "January 1974",
+    "date": "1974-01-01"
+  },
+  "pages": [
+    {
+      "page_number": 1,
+      "visible_text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
+      "image_bytes_base64": "Zml4dHVyZS1yZW5kZXJlZC1jbGVhbi1wYWdlLTEtdjE=",
+      "image_sha256": "27082b2fe362d56cd515e27327884438acea798227afb737691dcbc762e566ab",
+      "image_width": 432,
+      "image_height": 648,
+      "expected_repair_targets": [],
+      "initial_ocr": {
+        "text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 20,
+          "total_tokens": 30
+        },
+        "cost_usd": 0.01
+      },
+      "reviews": [
+        {
+          "reviewed_text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
+          "verdict": {
+            "complete": true,
+            "missing_regions": [],
+            "reading_order_errors": [],
+            "duplicated_text": [],
+            "reason": "All visible title, byline, body, and punctuation are present in reading order."
+          },
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 4,
+            "total_tokens": 9
+          },
+          "cost_usd": 0.002
+        }
+      ],
+      "repaired_ocr": null,
+      "ocr_transcript_start": 0,
+      "ocr_transcript_end": 250,
+      "verified_transcript_start": 15,
+      "verified_transcript_end": 265
+    },
+    {
+      "page_number": 2,
+      "visible_text": "NEW WINE SUBSCRIPTION NOTICE\nRenew for twelve monthly issues. Send the enclosed card with your mailing address.",
+      "image_bytes_base64": "Zml4dHVyZS1yZW5kZXJlZC1jbGVhbi1wYWdlLTItdjE=",
+      "image_sha256": "774d566de22a38298c8d68379aaea654b8e25a3f8e3a3769f886c4d217913f35",
+      "image_width": 432,
+      "image_height": 648,
+      "expected_repair_targets": [],
+      "initial_ocr": {
+        "text": "NEW WINE SUBSCRIPTION NOTICE\nRenew for twelve monthly issues. Send the enclosed card with your mailing address.",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 20,
+          "total_tokens": 30
+        },
+        "cost_usd": 0.01
+      },
+      "reviews": [
+        {
+          "reviewed_text": "NEW WINE SUBSCRIPTION NOTICE\nRenew for twelve monthly issues. Send the enclosed card with your mailing address.",
+          "verdict": {
+            "complete": true,
+            "missing_regions": [],
+            "reading_order_errors": [],
+            "duplicated_text": [],
+            "reason": "The non-article subscription notice is transcribed completely."
+          },
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 4,
+            "total_tokens": 9
+          },
+          "cost_usd": 0.002
+        }
+      ],
+      "repaired_ocr": null,
+      "ocr_transcript_start": 250,
+      "ocr_transcript_end": 361,
+      "verified_transcript_start": 282,
+      "verified_transcript_end": 393
+    }
+  ],
+  "verified_transcript": {
+    "eligible": true,
+    "text": "=== PAGE 1 ===\nGRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.\n\n=== PAGE 2 ===\nNEW WINE SUBSCRIPTION NOTICE\nRenew for twelve monthly issues. Send the enclosed card with your mailing address.",
+    "pages": [
+      {
+        "page_number": 1,
+        "transcript_start": 15,
+        "transcript_end": 265
+      },
+      {
+        "page_number": 2,
+        "transcript_start": 282,
+        "transcript_end": 393
+      }
+    ]
+  },
+  "article_review": {
+    "must_not_run": false,
+    "segmentation": {
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 40,
+        "total_tokens": 140
+      },
+      "cost_usd": 0.02,
+      "articles": [
+        {
+          "article_id": "grace-for-the-journey",
+          "filename": "grace-for-the-journey.txt",
+          "title": "Grace for the Journey",
+          "author": "Ada North",
+          "source_pages": [
+            1
+          ],
+          "transcript_start": 15,
+          "transcript_end": 265,
+          "text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility."
+        }
+      ]
+    },
+    "review": {
+      "usage": {
+        "input_tokens": 110,
+        "output_tokens": 30,
+        "total_tokens": 140
+      },
+      "cost_usd": 0.03,
+      "articles": [
+        {
+          "article_id": "grace-for-the-journey",
+          "start_coherent": true,
+          "end_coherent": true,
+          "transitions_ok": true,
+          "omissions": [],
+          "duplications": [],
+          "adjacent_bleed": [],
+          "attribution_ok": true,
+          "failure_reasons": {}
+        }
+      ]
+    }
+  },
+  "proposition_review": {
+    "must_not_run": false,
+    "extraction": {
+      "model": "openai/gpt-oss-120b",
+      "speaker": "Ada North",
+      "article_text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
+      "propositions": [
+        {
+          "proposition_index": 1,
+          "content": "Ada North teaches that grace is received by faith, not earned by effort."
+        },
+        {
+          "proposition_index": 2,
+          "content": "Ada North teaches that grace received from God should form humble, generous service to neighbors."
+        }
+      ],
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 20,
+        "total_tokens": 100
+      },
+      "cost_usd": 0.04,
+      "grounding_totals": {
+        "found": 0,
+        "grounded": 0,
+        "stripped_fabricated": 0,
+        "stripped_uncertain": 0,
+        "kept_arbitration": 0
+      }
+    },
+    "review": {
+      "usage": {
+        "input_tokens": 60,
+        "output_tokens": 20,
+        "total_tokens": 80
+      },
+      "cost_usd": 0.01,
+      "propositions": [
+        {
+          "proposition_index": 1,
+          "content": "Ada North teaches that grace is received by faith, not earned by effort.",
+          "evidence_text": "Grace is received by faith, not earned by effort.",
+          "evidence_start": 35,
+          "evidence_end": 84,
+          "supported": true,
+          "missing_qualification": false,
+          "overstatement": false,
+          "attribution_ok": true,
+          "reviewer_reasons": [
+            "The proposition preserves the faith-versus-effort contrast stated in the exact passage."
+          ]
+        },
+        {
+          "proposition_index": 2,
+          "content": "Ada North teaches that grace received from God should form humble, generous service to neighbors.",
+          "evidence_text": "This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility.",
+          "evidence_start": 85,
+          "evidence_end": 250,
+          "supported": true,
+          "missing_qualification": false,
+          "overstatement": false,
+          "attribution_ok": true,
+          "reviewer_reasons": [
+            "The two sentences explicitly connect God's gift with generous and humble service to neighbors."
+          ]
+        }
+      ]
+    }
+  },
+  "expected": {
+    "state": "approved",
+    "eligible_article_count": 1,
+    "page_count": 2,
+    "article_count": 1,
+    "proposition_count": 2,
+    "cost_usd": 0.124,
+    "dry_ingest": {
+      "result": {
+        "attempted": 1,
+        "stored": 0,
+        "errored": 0,
+        "skipped": 1,
+        "preview_articles": [
+          {
+            "article_id": "grace-for-the-journey",
+            "article_hash": "a7a60b6aecc4e7263492be74053f5d204f4a9bf3159480ec5438126d8fd2f3b5",
+            "proposition_texts": [
+              "Ada North teaches that grace is received by faith, not earned by effort.",
+              "Ada North teaches that grace received from God should form humble, generous service to neighbors."
+            ]
+          }
+        ]
+      },
+      "db_calls": 0,
+      "embedding_calls": 0,
+      "generation_calls": 0,
+      "move_calls": 0
+    }
+  }
+}

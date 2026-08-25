@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "issue": {
+    "directory": "NewWineMagazine_Issue_02-1974",
+    "filename": "NewWineMagazine_Issue_02-1974.pdf",
+    "label": "February 1974",
+    "date": "1974-02-01"
+  },
+  "pages": [
+    {
+      "page_number": 1,
+      "visible_text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching. The second column supplies the qualification that completes it.",
+      "image_bytes_base64": "Zml4dHVyZS1yZW5kZXJlZC1vY3ItZmFpbHVyZS1wYWdlLTEtdjE=",
+      "image_sha256": "30de11c75779ba456fcad1a2929125a19e2e9c0eeef1b8bc4849332683aeff3e",
+      "image_width": 432,
+      "image_height": 648,
+      "expected_repair_targets": [
+        "right-hand column containing the necessary qualification"
+      ],
+      "initial_ocr": {
+        "text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching.",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 20,
+          "total_tokens": 30
+        },
+        "cost_usd": 0.01
+      },
+      "reviews": [
+        {
+          "reviewed_text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching.",
+          "verdict": {
+            "complete": false,
+            "missing_regions": [
+              "right-hand column containing the necessary qualification"
+            ],
+            "reading_order_errors": [],
+            "duplicated_text": [],
+            "reason": "The right-hand column is missing."
+          },
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 4,
+            "total_tokens": 9
+          },
+          "cost_usd": 0.002
+        },
+        {
+          "reviewed_text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching. The second column supplies",
+          "verdict": {
+            "complete": false,
+            "missing_regions": [
+              "the end of the right-hand column after the word supplies"
+            ],
+            "reading_order_errors": [],
+            "duplicated_text": [],
+            "reason": "The one permitted repair still ends mid-sentence and omits the qualification."
+          },
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 4,
+            "total_tokens": 9
+          },
+          "cost_usd": 0.002
+        }
+      ],
+      "repaired_ocr": {
+        "text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching. The second column supplies",
+        "usage": {
+          "input_tokens": 12,
+          "output_tokens": 24,
+          "total_tokens": 36
+        },
+        "cost_usd": 0.015
+      },
+      "ocr_transcript_start": 0,
+      "ocr_transcript_end": 99,
+      "verified_transcript_start": 15,
+      "verified_transcript_end": 114
+    }
+  ],
+  "verified_transcript": {
+    "eligible": false,
+    "text": "=== PAGE 1 ===\nTHE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching. The second column supplies",
+    "pages": [
+      {
+        "page_number": 1,
+        "transcript_start": 15,
+        "transcript_end": 114
+      }
+    ]
+  },
+  "article_review": {
+    "must_not_run": true,
+    "segmentation": {
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 30,
+        "total_tokens": 130
+      },
+      "cost_usd": 0.02,
+      "articles": []
+    },
+    "review": {
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "total_tokens": 120
+      },
+      "cost_usd": 0.03,
+      "articles": []
+    }
+  },
+  "proposition_review": {
+    "must_not_run": true,
+    "extraction": {
+      "model": "openai/gpt-oss-120b",
+      "speaker": "Ben South",
+      "article_text": "THE WHOLE COUNSEL\nBy Ben South\nThe first column introduces the teaching. The second column supplies",
+      "propositions": [],
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 0,
+        "total_tokens": 80
+      },
+      "cost_usd": 0.04,
+      "grounding_totals": {
+        "found": 0,
+        "grounded": 0,
+        "stripped_fabricated": 0,
+        "stripped_uncertain": 0,
+        "kept_arbitration": 0
+      }
+    },
+    "review": {
+      "usage": {
+        "input_tokens": 60,
+        "output_tokens": 0,
+        "total_tokens": 60
+      },
+      "cost_usd": 0.01,
+      "propositions": []
+    }
+  },
+  "expected": {
+    "state": "quarantined",
+    "eligible_article_count": 0,
+    "page_count": 1,
+    "article_count": 0,
+    "proposition_count": 0,
+    "cost_usd": 0.029,
+    "quarantine_reasons": [
+      "page:1:ocr_incomplete_after_repair"
+    ],
+    "downstream_calls": 0
+  }
+}
