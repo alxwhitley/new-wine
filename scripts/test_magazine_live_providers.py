@@ -174,6 +174,7 @@ def test_gemini_page_reviewer_uses_strict_schema_and_parses_verdict() -> None:
     config = calls[0]["generationConfig"]
     assert "temperature" not in config
     assert config["mediaResolution"] == "MEDIA_RESOLUTION_HIGH"
+    assert config["thinkingConfig"] == {"thinkingLevel": "LOW"}
     assert config["responseMimeType"] == "application/json"
     assert set(config["responseJsonSchema"]["required"]) == {
         "complete",

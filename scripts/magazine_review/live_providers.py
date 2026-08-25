@@ -393,6 +393,7 @@ class GeminiLivePageReviewer(_GeminiBoundary):
                 ],
                 "generationConfig": {
                     "maxOutputTokens": 2048,
+                    "thinkingConfig": {"thinkingLevel": "LOW"},
                     "mediaResolution": "MEDIA_RESOLUTION_HIGH",
                     "responseMimeType": "application/json",
                     "responseJsonSchema": _PAGE_REVIEW_SCHEMA,
