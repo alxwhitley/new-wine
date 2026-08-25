@@ -103,7 +103,9 @@ def load_valid_artifact(path: Path, expected_identity: StageIdentity) -> Any:
         raw = json.loads(raw_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ArtifactValidationError("artifact_invalid_json") from exc
-    if not isinstance(raw, Mapping):
+    if not isinstance(raw, Mapping) or set(raw) != {
+        "artifact_type", "identity", "payload", "payload_sha256"
+    }:
         raise ArtifactValidationError("artifact_envelope_invalid")
     artifact_type = raw.get("artifact_type")
     identity_raw = raw.get("identity")

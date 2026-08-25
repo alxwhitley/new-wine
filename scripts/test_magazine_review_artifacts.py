@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 
@@ -31,6 +32,10 @@ def sha(char: str) -> str:
     return char * 64
 
 
+def text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def valid_identity() -> StageIdentity:
     return StageIdentity(
         schema_version=1,
@@ -52,11 +57,37 @@ def valid_issue_artifacts() -> IssueArtifacts:
             OCRPage(
                 page_number=1,
                 image_hash=sha("c"),
+                initial_text=ARTICLE_TEXT,
+                initial_text_hash=text_hash(ARTICLE_TEXT),
+                initial_provider="Gemini",
+                initial_model="gemini-3.6-flash",
+                initial_prompt_fingerprint=sha("f"),
+                initial_usage={"input_tokens": 1},
+                initial_cost_usd=0.01,
+                initial_timestamp="2026-08-25T00:00:00Z",
+                reviewer_model="gemini-3.6-flash",
+                reviewer_prompt_fingerprint=sha("a"),
+                reviewer_complete=True,
+                reviewer_reasons=(),
+                reviewer_usage={"input_tokens": 1},
+                reviewer_cost_usd=0.01,
+                reviewer_timestamp="2026-08-25T00:00:01Z",
+                repaired_text=None,
+                repaired_text_hash=None,
+                repair_provider=None,
+                repair_model=None,
+                repair_prompt_fingerprint=None,
+                repair_usage=None,
+                repair_cost_usd=None,
+                repair_timestamp=None,
                 text=ARTICLE_TEXT,
+                final_text_hash=text_hash(ARTICLE_TEXT),
                 transcript_start=0,
                 transcript_end=len(ARTICLE_TEXT),
             ),
         ),
+        usage={"input_tokens": 2},
+        cost_usd=0.02,
     )
     article = ArticleRecord(
         article_id="a1",
@@ -66,12 +97,30 @@ def valid_issue_artifacts() -> IssueArtifacts:
         transcript_start=0,
         transcript_end=len(ARTICLE_TEXT),
         text=ARTICLE_TEXT,
+        text_hash=text_hash(ARTICLE_TEXT),
+        start_coherent=True,
+        end_coherent=True,
+        transitions_ok=True,
+        omissions=(),
+        duplications=(),
+        adjacent_bleed=(),
+        attribution_ok=True,
+        verdict=True,
     )
     articles = ArticleManifest(
         identity=identity,
         issue_hash=sha("a"),
+        ocr_artifact_hash=sha("b"),
         transcript=ARTICLE_TEXT,
         articles=(article,),
+        segmentation_model="openai/gpt-oss-120b",
+        segmentation_prompt_fingerprint=sha("c"),
+        segmentation_usage={"input_tokens": 1},
+        segmentation_cost_usd=0.01,
+        reviewer_model="openai/gpt-oss-120b",
+        reviewer_prompt_fingerprint=sha("d"),
+        reviewer_usage={"input_tokens": 1},
+        reviewer_cost_usd=0.01,
     )
     proposition = PropositionEvidence(
         proposition_index=1,
@@ -83,18 +132,33 @@ def valid_issue_artifacts() -> IssueArtifacts:
         missing_qualification=False,
         overstatement=False,
         attribution_ok=True,
+        reviewer_reasons=(),
     )
     review = PropositionReview(
         identity=identity,
         article_id="a1",
         article_hash=article.article_hash,
+        article_artifact_hash=sha("e"),
         model="openai/gpt-oss-120b",
         prompt_version="v3.1",
         prompt_fingerprint=sha("b"),
+        extraction_usage={"input_tokens": 1},
+        extraction_cost_usd=0.01,
+        reviewer_model="openai/gpt-oss-120b",
+        reviewer_prompt_fingerprint=sha("f"),
+        reviewer_usage={"input_tokens": 1},
+        reviewer_cost_usd=0.01,
         article_text=ARTICLE_TEXT,
         propositions=(proposition,),
     )
-    return IssueArtifacts(ocr=ocr, articles=articles, proposition_reviews=(review,))
+    return IssueArtifacts(
+        ocr=ocr,
+        articles=articles,
+        proposition_reviews=(review,),
+        ocr_artifact_hash=sha("b"),
+        article_artifact_hash=sha("e"),
+        proposition_artifact_hashes={"a1": sha("a")},
+    )
 
 
 def mutate(artifacts: IssueArtifacts, mutation: str) -> IssueArtifacts:
@@ -159,7 +223,7 @@ def test_write_reopens_and_detects_corrupted_artifact(tmp_path, valid_issue_arti
     write_artifact(path, IssueDecision.approve(valid_issue_artifacts))
     path.write_text('{"artifact_type":"IssueDecision"}', encoding="utf-8")
 
-    with pytest.raises(ArtifactValidationError, match="artifact_payload_sha256_mismatch"):
+    with pytest.raises(ArtifactValidationError, match="artifact_envelope_invalid"):
         load_valid_artifact(path, valid_identity())
 
 
@@ -205,6 +269,114 @@ def test_approved_proposition_set_preserves_order_and_requires_provenance(
     assert approved.propositions == ((1, "The author teaches grace."),)
     with pytest.raises(ArtifactValidationError, match="approved_model_required"):
         replace(approved, model="").validate()
+
+
+def test_predecessor_links_allow_distinct_stage_identities(valid_issue_artifacts):
+    """Each provider stage has its own identity; hashes, not equality, link it."""
+    article_identity = replace(valid_identity(), model="article-model", prompt_fingerprint=sha("d"))
+    proposition_identity = replace(
+        valid_identity(), model="proposition-model", prompt_fingerprint=sha("e")
+    )
+    articles = replace(valid_issue_artifacts.articles, identity=article_identity)
+    review = replace(valid_issue_artifacts.proposition_reviews[0], identity=proposition_identity)
+
+    decision = IssueDecision.approve(
+        replace(valid_issue_artifacts, articles=articles, proposition_reviews=(review,))
+    )
+
+    assert decision.state == "approved"
+
+
+def test_deserialization_rejects_missing_approval_field(valid_issue_artifacts):
+    """A missing page verdict must not silently default to passing."""
+    raw = valid_issue_artifacts.ocr.pages[0].to_dict()
+    del raw["complete"]
+
+    with pytest.raises(ArtifactValidationError, match="ocr_page_invalid"):
+        OCRPage.from_dict(raw)
+
+
+def test_durable_ocr_record_includes_initial_and_repair_audit_evidence(
+    valid_issue_artifacts,
+):
+    """An OCR page artifact must retain evidence sufficient for audit."""
+    raw = valid_issue_artifacts.ocr.pages[0].to_dict()
+
+    assert {
+        "initial_text",
+        "initial_text_hash",
+        "initial_provider",
+        "initial_model",
+        "reviewer_model",
+        "reviewer_complete",
+        "repaired_text",
+        "final_text_hash",
+        "initial_usage",
+        "initial_cost_usd",
+        "reviewer_usage",
+        "reviewer_cost_usd",
+    }.issubset(raw)
+
+
+def test_duplicate_proposition_reviews_cannot_approve(valid_issue_artifacts):
+    """Set reconciliation cannot conceal two reviews for one article."""
+    duplicated = replace(
+        valid_issue_artifacts,
+        proposition_reviews=(
+            valid_issue_artifacts.proposition_reviews[0],
+            valid_issue_artifacts.proposition_reviews[0],
+        ),
+    )
+
+    with pytest.raises(ArtifactValidationError, match="proposition_review_duplicate"):
+        IssueDecision.approve(duplicated)
+
+
+def test_quarantined_review_cannot_be_converted_to_approved_set(valid_issue_artifacts):
+    """Only a fully passing semantic review may enter the ingestion transport."""
+    evidence = replace(valid_issue_artifacts.proposition_reviews[0].propositions[0], supported=False)
+    review = replace(
+        valid_issue_artifacts.proposition_reviews[0],
+        propositions=(evidence,),
+        status="quarantined",
+    )
+
+    with pytest.raises(ArtifactValidationError, match="proposition_not_supported"):
+        ApprovedPropositionSet.from_review(review)
+
+
+def test_article_source_pages_must_exist_in_ocr_manifest(valid_issue_artifacts):
+    """An article cannot cite a page absent from the verified OCR manifest."""
+    article = replace(valid_issue_artifacts.articles.articles[0], source_pages=(2,))
+    artifacts = replace(
+        valid_issue_artifacts,
+        articles=replace(valid_issue_artifacts.articles, articles=(article,)),
+    )
+
+    with pytest.raises(ArtifactValidationError, match="article_source_page_missing"):
+        IssueDecision.approve(artifacts)
+
+
+def test_failed_article_verdict_cannot_hide_inside_a_passing_manifest(
+    valid_issue_artifacts,
+):
+    """Structured coherence findings must contribute to the issue gate."""
+    article = replace(valid_issue_artifacts.articles.articles[0], end_coherent=False, verdict=False)
+    artifacts = replace(
+        valid_issue_artifacts,
+        articles=replace(valid_issue_artifacts.articles, articles=(article,)),
+    )
+
+    with pytest.raises(ArtifactValidationError, match="article_verdict_failed"):
+        IssueDecision.approve(artifacts)
+
+
+def test_approved_issue_requires_every_recorded_gate_to_pass(valid_issue_artifacts):
+    """Issue-level accounting cannot label a failed gate as approved."""
+    decision = IssueDecision.approve(valid_issue_artifacts)
+
+    with pytest.raises(ArtifactValidationError, match="issue_gate_failed"):
+        replace(decision, gate_results={"ocr": True, "articles": False, "propositions": True}).validate()
 
 
 if __name__ == "__main__":
