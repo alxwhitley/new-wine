@@ -7,8 +7,8 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-24 (security + dependency session; 3 commits shipped
-and deployed, all verified live in production).
+Last verified: 2026-08-25 (quote containment + mobile chat UX; four code
+commits shipped and all production surfaces verified live).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,59 +17,43 @@ for this file.
 
 ## Current state
 
-`PLAN.md`'s private-beta blocker queue is still **0** active blockers. This
-session's work came from `docs/roadmap.md`'s Scheduled B5 track, pulled
-forward by Alex's explicit approval — not a blocker promotion.
+`PLAN.md`'s private-beta blocker queue is **0** active blockers. One credible
+teacher-misrepresentation risk was promoted and closed in-session by
+containment: Alex found the user-facing quote rail insufficiently accurate and
+relevant, then explicitly changed the launch posture from quotes-on to
+quotes-off-until-repaired.
 
-**Shipped and live in production, all three verified against the running
-services (not dashboard status alone):**
+**Shipped and live:**
 
-1. **Backend dependency bumps** (`3a30639`) — `python-dotenv` 1.2.1→1.2.3,
-   `python-multipart` 0.0.20→0.0.32, `PyJWT` 2.12.1→2.13.0. Verified under
-   `python3.12` (not the machine's default 3.9): clean venv install,
-   `pip check` clean, 7 regression scripts pass, `app.main` loads all 83
-   routes. `starlette` and `pdfminer-six` deliberately NOT bumped — both
-   blocked by an exact/narrow parent pin (see roadmap).
-2. **Frontend lockfile fix** (`09b102a`) — `npm audit fix`, no `--force`.
-   28 patch-level entries moved; the two that close advisories are `ws`
-   8.20.0→8.21.3 and `postcss` 8.5.8→8.5.26. Frontend advisories 5 → 3; the
-   3 remaining all sit inside `next`'s own tree and need the deferred major
-   bump. `npm run build` clean, 17 routes, static/dynamic split unchanged.
-3. **Baseline security headers** (`9b816a8`) — frontend gets
-   `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy:
-   strict-origin-when-cross-origin`, `Permissions-Policy` (camera/mic/
-   geolocation off); API gets `nosniff` + its own HSTS. **Confirmed live on
-   both origins**, including `X-Frame-Options: DENY` on `/admin`. Critically,
-   `rhemata.app` still serves `x-vercel-cache: PRERENDER` — static caching
-   survived, which is exactly what skipping a nonce-based CSP protected.
+1. **Quote rail contained.** `QUOTE_SELECTION_ENABLED=false` on Railway
+   `rhemata` and `answer-worker`; both final deployments SUCCESS. The 16-case
+   flag-off regression passed under Python 3.12. Production job
+   `0f503115-9725-4374-a85b-eecd5e7d61c6` completed `outcome=answered` with
+   `quote_ids=[]`. No quote rows were deleted; chat delivery is off while the
+   repair/re-enable gate is Scheduled in `docs/roadmap.md`.
+2. **Mobile app shell locked** (`732bb6d`). Safari/PWA root scrolling can no
+   longer move the chat surface offscreen; only the message list owns vertical
+   scrolling.
+3. **Reader-owned chat scrolling** (`7ff8860`). Send reveals the new turn once;
+   client-paced streaming never moves the reader afterward.
+4. **Multiline composer corrected** (`4db847e`). The send button stays bottom-
+   aligned and the textarea returns to one line after submission.
+5. **Mobile navigation direction corrected** (`08fc91d`). The top-left drawer
+   now enters and exits through the left.
 
-**Deploy verification:** Railway `rhemata` + `answer-worker` both SUCCESS on
-all three pushes (deps `3a30639`, headers `9b816a8`, and the docs commit
-`cbafeb7` — Railway rebuilds on any push to `main`, including docs-only);
-Vercel Ready each time. Builder/rootDirectory drift (the past-outage
-landmine) did not occur on any of them. The worker has no automatic health
-check, so it was proven by hand: a real question submitted to production
-returned a real answer — 7 citations across Derek Prince, Andrew Murray and
-Savchuk articles, 3 verified references, `outcome=answered`, and 1 quote ID
-served. `/study/teachers` and `/answer-quotes/resolve` both functional
-post-deploy; final post-`cbafeb7` check confirmed API + frontend 200 and the
-API's `nosniff` still present.
+**Verification:** final combined 390×844 browser pass: shell `top=0` /
+`bottom=844`; drawer `[-390,0] → [0,390] → [-390,0]`; composer button bottom
+delta `0px`, textarea `96px → 24px`; Send landed within `10px` of the new turn;
+streaming held the manually selected position at `802px`. Frontend tests
+16/16 and production build (17 routes) passed. Vercel production Ready and
+aliased to `rhemata.app`; live origin returned 200 with PRERENDER caching and
+security headers intact. Final Railway API and worker deployments SUCCESS;
+both quote flags rechecked false.
 
-**Four standing findings investigated and closed as needing no work** —
-`docs/audits/2026-08/findings_corrections_2026-08-24.md`. One matters beyond
-itself: a subagent claimed CLAUDE.md's "2,409 legacy propositions have NULL
-provenance permanently" was outdated and should be corrected. Direct live
-query shows that claim is **wrong** — only `prompt_version` was backfilled,
-to the sentinel `legacy_unknown`; `prompt_fingerprint` and `model` are still
-NULL on exactly those 2,409 rows. CLAUDE.md is correct and was left
-unchanged. Acting on the subagent's claim would have deleted a true,
-load-bearing caveat from a governing doc.
-
-Also closed: the "24 stuck documents" are not stuck (all 24 are `owned` +
-`shown`, already retrievable in answers; propositions aren't on the answer
-path) and 9 of them are position papers that must **never** be extracted per
-Settled #8. The three empty teacher rows (Bill Johnson, Craig Keener, Randy
-Clark) contradict nothing and have no user-facing effect.
+**Session measures:** original outcome completed; unplanned investigations 0;
+findings promoted to Blocker 1 and closed by containment; active critical-path
+item count 0. Alex-approved scope additions: Safari/PWA shell lock and mobile
+drawer direction.
 
 ---
 
@@ -80,6 +64,8 @@ Clark) contradict nothing and have no user-facing effect.
   triage of its 7 advisories first, the same pass that reduced 3 alarming
   Next.js CVEs to zero live attack surface; pdfplumber+pdfminer coupled bump;
   CSP on the frontend; the deferred Next.js major bump.
+- **Scheduled** (`docs/roadmap.md`): quote accuracy and relevance repair before
+  any attended re-enable; the live rail remains off.
 - **Triggered** (`docs/roadmap.md`): JWKS unknown-`kid` rate limit — PyJWT
   2.13.0 already fixed the amplifying half (cache-wipe on failed fetch); the
   residual is un-amplified and belongs at the edge, not in `auth.py`.
@@ -102,7 +88,6 @@ Clark) contradict nothing and have no user-facing effect.
 
 ## Next single item
 
-Alex's call. If continuing the security track, the highest-value next step is
-the read-only exploitability triage of starlette's 7 advisories — cheap, and
-it decides whether the risky coupled fastapi bump is worth doing at all.
-Active blocker count **0**.
+Alex's call. If continuing the quote track, the next single item is to define
+the representative accuracy/relevance acceptance set from reproduced bad
+cases before changing selection or extraction. Active blocker count **0**.

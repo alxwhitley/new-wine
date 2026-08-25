@@ -508,6 +508,21 @@ PLAN.md's Open Decisions note.
     enhancement. Full design:
     `docs/superpowers/specs/2026-08-19-quote-quality-and-topic-design.md`.
 
+## Settled product decisions (2026-08-25) — quote rail contained
+
+30. **The user-facing quote rail is OFF until its accuracy and relevance are
+    repaired** (Alex's decision, 2026-08-25). This supersedes PLAN.md's former
+    launch posture that beta ships with quoting on; it does not weaken any
+    authenticity, attribution, presentation, eligibility, or provenance rule
+    governing a future re-enable. Production `QUOTE_SELECTION_ENABLED` is
+    `false` on both `rhemata` and `answer-worker`, so the worker does not select
+    quote IDs and delivery suppresses IDs persisted by earlier jobs. Quote rows
+    remain intact; the admin quote tooling and library excerpts are not hidden
+    by this chat-rail decision. Repair is Scheduled in `docs/roadmap.md`.
+    Re-enablement remains an attended gate requiring reproduced failure cases,
+    acceptance evidence against the repaired behavior, and Alex's explicit
+    approval.
+
 ## Session Routing
 
 Determines which path a session's task runs on — not a judgment call. Read
@@ -981,6 +996,10 @@ different row, per the hard rule above.
   NULL` — legacy rows stay unserved. Visual/taste polish on Settled #28
   presentation remains deferred to Claude; flipping the flag off again is
   still the seconds-reversible kill switch (exact `"true"` only).
+  **Corrected again 2026-08-25 — the current production posture is off.** Alex
+  found the user-facing rail insufficiently accurate and relevant, so both
+  Railway services now have `QUOTE_SELECTION_ENABLED=false`; the repair and
+  attended re-enable gate are recorded in Settled #30 and `docs/roadmap.md`.
 - **Railway `rhemata` service builder can silently drift to Railpack without
   `rootDirectory=/backend`.** Observed 2026-08-19: GitHub-triggered deploys
   after `ad0dc0a` failed with connect-deadline / snapshot errors while the

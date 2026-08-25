@@ -137,6 +137,18 @@ on a real coupling rather than on effort:
    3 residual frontend advisories all sit inside `next`'s own dependency tree
    and only clear with this bump. Revisit at the next planned Next.js upgrade.
 
+### Quote accuracy and relevance repair — before any re-enable
+
+Alex disabled the user-facing chat quote rail on 2026-08-25 because served
+quotes were not consistently accurate or relevant enough. Production remains
+`QUOTE_SELECTION_ENABLED=false` on both services. This is a Scheduled product-
+quality phase, not an active private-beta Blocker: reproduce the concrete bad
+cases, define a representative acceptance set before changing selection or
+extraction, preserve every existing authenticity/attribution/provenance gate,
+and prove the repaired rail against that set while delivery remains off. Any
+production re-enable is a separate attended gate requiring Alex's explicit
+approval. Quote rows, admin quote tooling, and library excerpts remain intact.
+
 ## Triggered
 
 ### Tier 2 — public signup or more than roughly 20 beta users

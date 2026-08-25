@@ -3,17 +3,18 @@
 > This is the only active work queue. Later work lives in `docs/roadmap.md`;
 > completed and superseded reasoning lives in `docs/plan-archive.md`.
 
-**Goal:** private beta ships with **quoting ON**, so quality quotes (correctly
-tagged from the existing taxonomy, safe presentation under open teacher
-scope) are on the launch critical path — without compromising propositions,
-generated answers, or recoverability. Web-article ingestion remains an
-attended parallel track.
+**Goal:** private beta ships with an accurate, guarded answer journey. The
+quote rail is **OFF** by Alex's 2026-08-25 decision because its accuracy and
+relevance are below the desired bar; re-enablement requires the Scheduled
+repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
+ingestion remains an attended parallel track.
 
 **Current item:** *none on the private-beta blocker queue* — W5–W6 smoke + W9
 batch (write/shown/eligibility **12/24**) DONE 2026-08-19. Audits:
 `docs/audits/2026-08/w5_savchuk_article_answer_smoke_2026-08-19.md`,
-`docs/audits/2026-08/w9_web_article_batch_write_2026-08-19.md`. Optional non-blockers:
-staging display rename; async smoke on a new article.
+`docs/audits/2026-08/w9_web_article_batch_write_2026-08-19.md`. Quote repair is
+Scheduled, not an active Blocker. Optional non-blockers: staging display
+rename; async smoke on a new article.
 
 ## Governing boundary
 
@@ -45,9 +46,11 @@ quote-containment Landmines entry.
 
 ### Q0 — Quote quality design accepted (launch-critical)
 
-**Status:** DONE 2026-08-19 — revised spec committed (`95c7ae0` and follow-ups).
-Alex accepted the adversarial revision. Beta **ships with quoting ON**, so this
-track is launch-critical (not post-launch).
+**Status:** HISTORICAL DONE 2026-08-19 — revised spec committed (`95c7ae0` and
+follow-ups). The former decision that beta ships with quoting on was
+superseded by Alex on 2026-08-25: the rail is off until accuracy and relevance
+are repaired. Existing quote safety constraints still govern any future
+re-enable.
 
 Decisions locked in the spec + CLAUDE.md Settled #29:
 
@@ -101,7 +104,9 @@ visual/taste polish (`9b7fb45`).
 
 ### Q3 — Regressions + attended quote-rail re-enable
 
-**Status:** DONE 2026-08-19 — flag on + smoke gold-only + polish landed.
+**Status:** HISTORICAL DONE 2026-08-19 — flag on + smoke gold-only + polish
+landed. Superseded operationally 2026-08-25: `QUOTE_SELECTION_ENABLED=false`
+on both production services; the flag-off delivery contract was re-verified.
 (Absorbs prior W8 quote proofs.)
 
 - [x] Flag-off regressions: baptism FP class; honest no-support; exact
