@@ -7,8 +7,8 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-25 (quote containment + mobile chat UX; four code
-commits shipped and all production surfaces verified live).
+Last verified: 2026-08-25 (mobile answer continuity, source visibility, and
+accessibility; code commit `f76e526` shipped and production verified live).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -17,43 +17,48 @@ for this file.
 
 ## Current state
 
-`PLAN.md`'s private-beta blocker queue is **0** active blockers. One credible
-teacher-misrepresentation risk was promoted and closed in-session by
-containment: Alex found the user-facing quote rail insufficiently accurate and
-relevant, then explicitly changed the launch posture from quotes-on to
-quotes-off-until-repaired.
+`PLAN.md`'s private-beta blocker queue remains **0** active blockers. The quote
+rail remains off under Alex's 2026-08-25 containment decision. This session
+completed the recommended mobile hardening pass without changing retrieval,
+prompting, model selection, or answer-quality policy.
 
 **Shipped and live:**
 
-1. **Quote rail contained.** `QUOTE_SELECTION_ENABLED=false` on Railway
-   `rhemata` and `answer-worker`; both final deployments SUCCESS. The 16-case
-   flag-off regression passed under Python 3.12. Production job
-   `0f503115-9725-4374-a85b-eecd5e7d61c6` completed `outcome=answered` with
-   `quote_ids=[]`. No quote rows were deleted; chat delivery is off while the
-   repair/re-enable gate is Scheduled in `docs/roadmap.md`.
-2. **Mobile app shell locked** (`732bb6d`). Safari/PWA root scrolling can no
-   longer move the chat surface offscreen; only the message list owns vertical
-   scrolling.
-3. **Reader-owned chat scrolling** (`7ff8860`). Send reveals the new turn once;
-   client-paced streaming never moves the reader afterward.
-4. **Multiline composer corrected** (`4db847e`). The send button stays bottom-
-   aligned and the textarea returns to one line after submission.
-5. **Mobile navigation direction corrected** (`08fc91d`). The top-left drawer
-   now enters and exits through the left.
+1. **Mobile answer continuity** (`f76e526`). Guest conversations survive a
+   reload; an in-flight durable job reconnects by ID, clears partial replay
+   text, resumes its verified answer, and retains reconnect state across
+   transient delivery failures. Authenticated history remains server-owned.
+2. **Sources always visible when available.** Answers whose stored citations
+   lack usable inline `[N]` markers now show an accessible Sources fallback;
+   source metadata is preserved across guest reloads and validated before use.
+3. **Mobile accessibility hardened.** Drawer and feedback dialogs expose proper
+   semantics, closed navigation is inert, focus returns to the menu trigger,
+   interactive targets are at least 44px, and dismissing feedback no longer
+   submits a negative rating.
+4. **Honest latency presentation.** Long client-paced reveals are capped at six
+   seconds without removing streaming or taking scroll control from the reader;
+   the loading state says answers may take about a minute and can be left while
+   the tab remains open.
+5. **Earlier mobile containment remains live.** The PWA shell stays locked to
+   the viewport, streaming does not auto-scroll, send reveals a new turn once,
+   the multiline composer remains bottom-aligned, and the top-left drawer opens
+   from the left (`732bb6d`–`08fc91d`). The quote rail remains disabled.
 
-**Verification:** final combined 390×844 browser pass: shell `top=0` /
-`bottom=844`; drawer `[-390,0] → [0,390] → [-390,0]`; composer button bottom
-delta `0px`, textarea `96px → 24px`; Send landed within `10px` of the new turn;
-streaming held the manually selected position at `802px`. Frontend tests
-16/16 and production build (17 routes) passed. Vercel production Ready and
-aliased to `rhemata.app`; live origin returned 200 with PRERENDER caching and
-security headers intact. Final Railway API and worker deployments SUCCESS;
-both quote flags rechecked false.
+**Verification:** frontend tests 24/24, scoped changed-file lint, diff check,
+Impeccable detector, and the 17-route production build passed. The final
+390×844 browser regression verified viewport containment (`390×844`, root
+scroll `0,0`), left-opening navigation and focus return, 44px targets, reload
+restoration, two-source fallback, feedback Escape with zero submissions, and
+durable-job reconnect with pending state cleared. Two read-only production job
+diagnoses confirmed 4/6 stored citations despite zero inline markers, queue
+under one second, and 61–64s model generation; the remaining model latency is
+Scheduled under B6 rather than traded for answer quality. Vercel deployment
+`dpl_8pNESAdmJcoJJxv1BkRWBhtSYeoo` reached Ready, was aliased to `rhemata.app`,
+and the same 390×844 regression passed against that live alias.
 
 **Session measures:** original outcome completed; unplanned investigations 0;
-findings promoted to Blocker 1 and closed by containment; active critical-path
-item count 0. Alex-approved scope additions: Safari/PWA shell lock and mobile
-drawer direction.
+findings promoted to Blocker 0; active critical-path item count 0. Alex-approved
+scope: the full recommended mobile hardening pass and production deployment.
 
 ---
 
@@ -66,6 +71,8 @@ drawer direction.
   CSP on the frontend; the deferred Next.js major bump.
 - **Scheduled** (`docs/roadmap.md`): quote accuracy and relevance repair before
   any attended re-enable; the live rail remains off.
+- **Scheduled** (`docs/roadmap.md`, B6): model-generation latency benchmark;
+  current production evidence is 61–64s generation with sub-second queue time.
 - **Triggered** (`docs/roadmap.md`): JWKS unknown-`kid` rate limit — PyJWT
   2.13.0 already fixed the amplifying half (cache-wipe on failed fetch); the
   residual is un-amplified and belongs at the edge, not in `auth.py`.
@@ -88,6 +95,7 @@ drawer direction.
 
 ## Next single item
 
-Alex's call. If continuing the quote track, the next single item is to define
-the representative accuracy/relevance acceptance set from reproduced bad
-cases before changing selection or extraction. Active blocker count **0**.
+Alex's call. The next measured UX item is the B6 answer-generation latency
+benchmark; if continuing the quote track instead, define the representative
+accuracy/relevance acceptance set before changing selection or extraction.
+Active blocker count **0**.

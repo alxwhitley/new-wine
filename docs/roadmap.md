@@ -103,6 +103,19 @@ not interrupt the row-pinned hidden article proof without direct Beta Critical
 Path evidence. Migration 088 is already applied and its isolated processor proof
 is complete; it is not future work.
 
+### Answer-generation latency benchmark — B6
+
+Two attended production mobile queries on 2026-08-25 showed queue time was not
+the bottleneck: jobs `8677f62d-7ce9-4c3f-b9a5-dd256566a635` and
+`71ba8da6-0d81-406f-b01f-e9db0caafc2a` queued for 0.62s and 0.94s, while model
+generation took 61.47s and 64.34s. The client-only reveal tail is now capped at
+six seconds, and the UI sets an honest expectation while preserving reload
+continuity. Further latency work is Scheduled under B6: instrument a
+representative answer set, compare candidate changes blind for answer integrity
+and source faithfulness, and ship only a measured improvement that does not
+weaken the theological/teacher-representation gates. Do not shorten prompts,
+reduce evidence, or swap the generation model on latency evidence alone.
+
 ### Dependency and hardening follow-up (from the 2026-08-24 scan)
 
 Scan + exploitability triage: `docs/audits/2026-08/dependency_scan_2026-08-24.md`.
