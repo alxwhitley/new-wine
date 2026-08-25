@@ -26,6 +26,7 @@ from .schemas import (
     OCRPage,
     StageIdentity,
 )
+from .transcript import canonical_verified_transcript
 
 
 RENDERER_SETTINGS = {
@@ -188,30 +189,22 @@ class VerifiedIssueTranscript:
         manifest.validate()
         if manifest.status != "passed":
             raise ArtifactValidationError("verified_transcript_requires_passed_ocr")
-        parts: list[str] = []
-        pages: list[VerifiedTranscriptPage] = []
-        cursor = 0
-        for page in manifest.pages:
-            if parts:
-                separator = "\n\n"
-                parts.append(separator)
-                cursor += len(separator)
-            marker = f"=== PAGE {page.page_number} ===\n"
-            parts.append(marker)
-            cursor += len(marker)
-            start = cursor
-            parts.append(page.text)
-            cursor += len(page.text)
-            pages.append(
-                VerifiedTranscriptPage(
-                    page_number=page.page_number,
-                    image_hash=page.image_hash,
-                    transcript_start=start,
-                    transcript_end=cursor,
-                )
+        canonical = canonical_verified_transcript(
+            tuple((page.page_number, page.text) for page in manifest.pages)
+        )
+        pages = tuple(
+            VerifiedTranscriptPage(
+                page_number=span.page_number,
+                image_hash=page.image_hash,
+                transcript_start=span.transcript_start,
+                transcript_end=span.transcript_end,
             )
+            for page, span in zip(manifest.pages, canonical.pages)
+        )
         transcript = cls(
-            text="".join(parts), pages=tuple(pages), ocr_identity=manifest.identity.digest
+            text=canonical.text,
+            pages=pages,
+            ocr_identity=manifest.identity.digest,
         )
         transcript.validate(manifest)
         return transcript

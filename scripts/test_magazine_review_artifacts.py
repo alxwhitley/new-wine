@@ -49,6 +49,8 @@ def valid_identity() -> StageIdentity:
 @pytest.fixture
 def valid_issue_artifacts() -> IssueArtifacts:
     identity = valid_identity()
+    canonical_transcript = f"=== PAGE 1 ===\n{ARTICLE_TEXT}"
+    canonical_transcript_hash = text_hash(canonical_transcript)
     ocr = OCRManifest(
         identity=identity,
         pdf_hash=sha("a"),
@@ -95,8 +97,8 @@ def valid_issue_artifacts() -> IssueArtifacts:
         title="Grace",
         author="New Wine",
         source_pages=(1,),
-        transcript_start=0,
-        transcript_end=len(ARTICLE_TEXT),
+        transcript_start=len("=== PAGE 1 ===\n"),
+        transcript_end=len(canonical_transcript),
         text=ARTICLE_TEXT,
         text_hash=text_hash(ARTICLE_TEXT),
         start_coherent=True,
@@ -110,9 +112,9 @@ def valid_issue_artifacts() -> IssueArtifacts:
     )
     articles = ArticleManifest(
         identity=identity,
-        issue_hash=sha("a"),
-        ocr_artifact_hash=sha("b"),
-        transcript=ARTICLE_TEXT,
+        issue_hash=canonical_transcript_hash,
+        ocr_artifact_hash=ocr.identity.digest,
+        transcript=canonical_transcript,
         articles=(article,),
         segmentation_model="openai/gpt-oss-120b",
         segmentation_prompt_fingerprint=sha("c"),
@@ -173,6 +175,39 @@ def valid_issue_artifacts() -> IssueArtifacts:
         article_artifact_hash=sha("e"),
         proposition_artifact_hashes={"a1": sha("a")},
     )
+
+
+def test_issue_artifacts_distinguish_ocr_stage_identity_from_file_hash(
+    valid_issue_artifacts,
+):
+    """Article lineage uses the OCR stage digest, never its envelope file SHA."""
+    valid_issue_artifacts.validate()
+
+    swapped = replace(
+        valid_issue_artifacts,
+        articles=replace(
+            valid_issue_artifacts.articles,
+            ocr_artifact_hash=valid_issue_artifacts.ocr_artifact_hash,
+        ),
+    )
+    with pytest.raises(
+        ArtifactValidationError, match="ocr_predecessor_hash_mismatch"
+    ):
+        swapped.validate()
+
+
+@pytest.mark.parametrize("wrong_hash", [sha("a"), sha("9")])
+def test_issue_artifacts_reject_pdf_or_substituted_article_transcript_hash(
+    valid_issue_artifacts, wrong_hash
+):
+    """Article lineage is the delimited verified-transcript SHA, never PDF SHA."""
+    damaged = replace(
+        valid_issue_artifacts,
+        articles=replace(valid_issue_artifacts.articles, issue_hash=wrong_hash),
+    )
+
+    with pytest.raises(ArtifactValidationError, match="issue_hash_mismatch"):
+        damaged.validate()
 
 
 def mutate(artifacts: IssueArtifacts, mutation: str) -> IssueArtifacts:

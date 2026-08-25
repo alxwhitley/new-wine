@@ -171,6 +171,17 @@ def test_approved_propositions_bypass_generation_but_store_exact_text(monkeypatc
     monkeypatch.setattr(props_mod, "extract_propositions", forbidden_generation)
     conn = FakeConn(license_status="licensed")
 
+    capability = props_mod._ValidatedReviewedPropositions(
+        article_id=approved.article_id,
+        article_hash=approved.article_hash,
+        speaker="Ada North",
+        model=approved.model,
+        prompt_version=approved.prompt_version,
+        prompt_fingerprint=approved.prompt_fingerprint,
+        proposition_artifact_hash=approved.proposition_artifact_hash,
+        propositions=approved.propositions,
+    )
+
     result = props_mod.process_document(
         conn,
         "document-id",
@@ -179,7 +190,7 @@ def test_approved_propositions_bypass_generation_but_store_exact_text(monkeypatc
         fake_embed_fn,
         speaker="Ada North",
         prompt_version="v3.1",
-        approved_propositions=approved,
+        _reviewed_propositions=capability,
     )
 
     assert result == "stored:2"

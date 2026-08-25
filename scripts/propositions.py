@@ -129,6 +129,7 @@ import os
 import re
 import unicodedata
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
@@ -737,7 +738,7 @@ class ApprovedArtifactMismatch(ValueError):
     """The reviewed proposition transport no longer matches current inputs."""
 
 
-def validate_approved_propositions(
+def _validate_approved_propositions(
     approved: ApprovedPropositionSet,
     text: str,
     prompt_version: str,
@@ -765,6 +766,44 @@ def validate_approved_propositions(
     if approved.article_hash != article_hash:
         raise ApprovedArtifactMismatch("approved_article_hash_mismatch")
     return approved.as_storage_list()
+
+
+@dataclass(frozen=True)
+class _ValidatedReviewedPropositions:
+    """Private generation-bypass capability created after full issue review.
+
+    A bare ``ApprovedPropositionSet`` is deliberately not accepted by either
+    ingestion chokepoint. The magazine validator constructs this immutable
+    transport only after the decision, predecessor artifacts, current stage
+    identity, attribution, and source snapshot have all reconciled.
+    """
+
+    article_id: str
+    article_hash: str
+    speaker: str
+    model: str
+    prompt_version: str
+    prompt_fingerprint: str
+    proposition_artifact_hash: str
+    propositions: Tuple[Tuple[int, str], ...]
+
+    def as_storage_list(
+        self, *, text: str, speaker: Optional[str], prompt_version: str
+    ) -> List[dict]:
+        if hashlib.sha256(text.encode("utf-8")).hexdigest() != self.article_hash:
+            raise ApprovedArtifactMismatch("reviewed_capability_article_mismatch")
+        if speaker != self.speaker:
+            raise ApprovedArtifactMismatch("reviewed_capability_speaker_mismatch")
+        if prompt_version != self.prompt_version:
+            raise ApprovedArtifactMismatch("reviewed_capability_prompt_mismatch")
+        if self.model != EXTRACTION_MODEL:
+            raise ApprovedArtifactMismatch("reviewed_capability_model_mismatch")
+        if self.prompt_fingerprint != prompt_fingerprint(prompt_version):
+            raise ApprovedArtifactMismatch("reviewed_capability_fingerprint_mismatch")
+        return [
+            {"proposition_index": index, "content": content}
+            for index, content in self.propositions
+        ]
 
 
 def _select_prompt_template(prompt_version: str) -> str:
@@ -1837,7 +1876,7 @@ def process_document(
     chunk_ids: Optional[List[str]] = None,
     speaker: Optional[str] = None,
     prompt_version: Optional[str] = None,
-    approved_propositions: Optional[ApprovedPropositionSet] = None,
+    _reviewed_propositions: Optional[_ValidatedReviewedPropositions] = None,
 ) -> str:
     """Top-level entry point for ingest scripts.
 
@@ -1964,13 +2003,12 @@ def process_document(
 
         prompt_version = prompt_version or DEFAULT_PROMPT_VERSION
         props = (
-            validate_approved_propositions(
-                approved_propositions,
-                text,
-                prompt_version,
+            _reviewed_propositions.as_storage_list(
+                text=text,
                 speaker=speaker,
+                prompt_version=prompt_version,
             )
-            if approved_propositions is not None
+            if _reviewed_propositions is not None
             else extract_propositions(
                 text,
                 doc_id=document_id,

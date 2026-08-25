@@ -18,7 +18,6 @@ from typing import Any
 import fitz
 
 from magazine_review import articles as article_review_module
-from magazine_review import proposition_review as proposition_review_module
 from magazine_review.articles import (
     ARTICLE_MODEL,
     StructuredOutputClient,
@@ -37,6 +36,7 @@ from magazine_review.proposition_review import (
     REVIEW_MODEL as PROPOSITION_REVIEW_MODEL,
     REVIEW_PROMPT_FINGERPRINT as PROPOSITION_REVIEW_PROMPT_FINGERPRINT,
     StructuredReviewer,
+    expected_proposition_review_identity,
     review_issue_propositions,
 )
 from magazine_review.schemas import (
@@ -48,7 +48,10 @@ from magazine_review.schemas import (
     PropositionReview,
     StageIdentity,
 )
-from propositions import EXTRACTION_MODEL, prompt_fingerprint as proposition_prompt_fingerprint
+from propositions import (
+    EXTRACTION_MODEL,
+    prompt_fingerprint as proposition_prompt_fingerprint,
+)
 
 
 ARTICLE_MANIFEST_NAME = "article_manifest.json"
@@ -405,35 +408,9 @@ def _read_recorded_identity(path: Path) -> StageIdentity:
     return StageIdentity.from_dict(raw["identity"])
 
 
-def expected_proposition_identity(
-    review: PropositionReview,
-    *,
-    article_hash: str,
-    article_artifact_hash: str,
-    extractor_model: str,
-) -> StageIdentity:
-    """Rebuild Task 5's exact durable identity without invoking the extractor."""
-
-    identity = StageIdentity(
-        schema_version=1,
-        input_hashes={
-            "article_artifact": article_artifact_hash,
-            "article_text": article_hash,
-        },
-        model=PROPOSITION_REVIEW_MODEL,
-        prompt_fingerprint=PROPOSITION_REVIEW_PROMPT_FINGERPRINT,
-        renderer_settings={
-            "fresh_context": True,
-            "reasoning_effort": proposition_review_module.REVIEW_REASONING,
-            "extractor_model": extractor_model,
-            "extractor_prompt_version": "v3.1",
-            "extractor_prompt_fingerprint": proposition_prompt_fingerprint("v3.1"),
-            "extraction_cost_basis": dict(review.extraction_cost_basis),
-            "response_format": proposition_review_module._review_schema(),
-        },
-    )
-    identity.validate()
-    return identity
+# Backward-compatible Task 6 name; the implementation lives with Task 5's
+# canonical stage definition so resume and ingestion cannot drift apart.
+expected_proposition_identity = expected_proposition_review_identity
 
 
 def _load_matching_proposition(

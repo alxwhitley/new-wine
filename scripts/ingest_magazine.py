@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Mapping, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from urllib.parse import urlparse, unquote
 
 from dotenv import load_dotenv
@@ -31,7 +31,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from supabase import create_client
 from app.services.chunker import chunk_text
 from bible_refs import extract_bible_references
+from magazine_review import articles as article_review_module
 from magazine_review.artifacts import load_valid_artifact
+from magazine_review.ocr import VerifiedIssueTranscript
+from magazine_review.proposition_review import (
+    REVIEW_MODEL as PROPOSITION_REVIEW_MODEL,
+    REVIEW_PROMPT_FINGERPRINT as PROPOSITION_REVIEW_PROMPT_FINGERPRINT,
+    expected_proposition_review_identity,
+)
 from magazine_review.schemas import (
     ApprovedPropositionSet,
     ArticleManifest,
@@ -77,10 +84,31 @@ PROPOSITION_PREFIX = "proposition_review_"
 
 
 @dataclass(frozen=True)
-class ReviewedIssueApproval:
+class _MarkdownSnapshot:
+    path: Path
+    raw_bytes: bytes
+    title: str
+    author: str
+    issue: str
+    date: str
+    topic_tags: Tuple[str, ...]
+    bible_references: Tuple[str, ...]
+    body: str
+
+
+@dataclass(frozen=True)
+class _ValidatedReviewedArticle:
+    snapshot: _MarkdownSnapshot
+    article_id: str
+    stable_file_path: str
+    propositions: propositions._ValidatedReviewedPropositions
+
+
+@dataclass(frozen=True)
+class _ReviewedIssueApproval:
     decision_hash: str
     issue_hash: str
-    approved_by_filename: Mapping[str, ApprovedPropositionSet]
+    articles: Tuple[_ValidatedReviewedArticle, ...]
 
 # -- SUPABASE ----------------------------------------------------------------
 
@@ -117,12 +145,42 @@ def parse_frontmatter(text: str) -> tuple:
     return meta, body
 
 
-def _article_metadata_and_body(md_path: Path) -> tuple:
-    text = md_path.read_text(encoding="utf-8")
+def _normalize_author(author: str) -> str:
+    if "(" in author:
+        author = author[: author.index("(")]
+    return author.rstrip()
+
+
+def _read_markdown_snapshot(md_path: Path) -> _MarkdownSnapshot:
+    try:
+        raw_bytes = Path(md_path).read_bytes()
+        text = raw_bytes.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise propositions.ApprovedArtifactMismatch(
+            "reviewed_markdown_unreadable"
+        ) from exc
     text = re.sub(r"<!--.*?-->\s*", "", text, flags=re.DOTALL)
     meta, body = parse_frontmatter(text)
     body = re.sub(r"^#\s+.*?\n\*by .*?\*\s*\n*", "", body, count=1)
-    return meta, body.strip()
+    topic_tags_raw = meta.get("TOPIC_TAGS", "")
+    frontmatter_refs_raw = meta.get("BIBLE_REFS", "")
+    return _MarkdownSnapshot(
+        path=Path(md_path),
+        raw_bytes=raw_bytes,
+        title=meta.get("TITLE", Path(md_path).stem),
+        author=_normalize_author(meta.get("AUTHOR", "")),
+        issue=meta.get("ISSUE", ""),
+        date=meta.get("DATE", ""),
+        topic_tags=tuple(
+            tag.strip() for tag in topic_tags_raw.split(",") if tag.strip()
+        ),
+        bible_references=tuple(
+            ref.strip()
+            for ref in frontmatter_refs_raw.split(",")
+            if ref.strip()
+        ),
+        body=body.strip(),
+    )
 
 
 def _sha256_file(path: Path) -> str:
@@ -150,9 +208,20 @@ def _proposition_review_path(artifact_dir: Path, article_id: str) -> Path:
     return Path(artifact_dir) / f"{PROPOSITION_PREFIX}{stable_name}.json"
 
 
+def _reviewed_file_path(issue_hash: str, article_id: str) -> str:
+    stable_article = re.sub(r"[^A-Za-z0-9._-]+", "_", article_id).strip("._")
+    if not stable_article:
+        stable_article = "article"
+    identity_suffix = hashlib.sha256(article_id.encode("utf-8")).hexdigest()[:12]
+    return (
+        f"new-wine-reviewed/{issue_hash}/"
+        f"{stable_article}-{identity_suffix}.md"
+    )
+
+
 def validate_reviewed_issue(
     issue_dir: Path, artifact_dir: Path
-) -> ReviewedIssueApproval:
+) -> _ReviewedIssueApproval:
     """Reconcile every approval artifact and source byte before DB access."""
     issue_path = Path(issue_dir)
     evidence_path = Path(artifact_dir)
@@ -181,8 +250,18 @@ def validate_reviewed_issue(
         raise propositions.ApprovedArtifactMismatch("reviewed_stage_not_passed")
     if ocr.pdf_hash != decision.issue_hash:
         raise propositions.ApprovedArtifactMismatch("issue_pdf_hash_mismatch")
-    if articles.ocr_artifact_hash != decision.ocr_artifact_hash:
-        raise propositions.ApprovedArtifactMismatch("article_ocr_hash_mismatch")
+    try:
+        transcript = VerifiedIssueTranscript.from_manifest(ocr)
+        transcript_hash = hashlib.sha256(
+            transcript.text.encode("utf-8")
+        ).hexdigest()
+        article_review_module._validate_manifest_lineage(
+            transcript, transcript_hash, articles
+        )
+    except Exception as exc:
+        raise propositions.ApprovedArtifactMismatch(
+            "article_manifest_lineage_mismatch"
+        ) from exc
     if decision.totals["pages"] != ocr.page_count:
         raise propositions.ApprovedArtifactMismatch("issue_page_total_mismatch")
 
@@ -200,6 +279,7 @@ def validate_reviewed_issue(
         set(approved_by_id) != expected_ids
         or set(decision.article_hashes) != expected_ids
         or set(decision.proposition_artifact_hashes) != expected_ids
+        or decision.totals["articles"] != len(expected_ids)
     ):
         raise propositions.ApprovedArtifactMismatch("reviewed_article_ids_mismatch")
 
@@ -214,12 +294,22 @@ def validate_reviewed_issue(
     }:
         raise propositions.ApprovedArtifactMismatch("reviewed_article_files_mismatch")
 
-    approved_by_filename: Dict[str, ApprovedPropositionSet] = {}
+    validated_articles = []
     for article_id, article in article_by_id.items():
         md_path = md_by_review_filename[article.filename]
-        _meta, body = _article_metadata_and_body(md_path)
-        if body != article.text or hashlib.sha256(body.encode("utf-8")).hexdigest() != article.article_hash:
-            raise propositions.ApprovedArtifactMismatch("approved_article_hash_mismatch")
+        snapshot = _read_markdown_snapshot(md_path)
+        if (
+            decision.article_hashes[article_id] != article.article_hash
+            or snapshot.path.with_suffix(".txt").name != article.filename
+            or snapshot.title != article.title
+            or snapshot.author != _normalize_author(article.author)
+            or snapshot.body != article.text
+            or hashlib.sha256(snapshot.body.encode("utf-8")).hexdigest()
+            != article.article_hash
+        ):
+            raise propositions.ApprovedArtifactMismatch(
+                "approved_article_attribution_mismatch"
+            )
 
         review_path = _proposition_review_path(evidence_path, article_id)
         recorded_review_hash = _sha256_file(review_path)
@@ -235,8 +325,25 @@ def validate_reviewed_issue(
             or review.article_id != article_id
             or review.article_hash != article.article_hash
             or review.article_artifact_hash != decision.article_artifact_hash
+            or review.model != propositions.EXTRACTION_MODEL
+            or review.prompt_version != "v3.1"
+            or review.prompt_fingerprint
+            != propositions.prompt_fingerprint("v3.1")
+            or review.reviewer_model != PROPOSITION_REVIEW_MODEL
+            or review.reviewer_prompt_fingerprint
+            != PROPOSITION_REVIEW_PROMPT_FINGERPRINT
         ):
             raise propositions.ApprovedArtifactMismatch("proposition_review_lineage_mismatch")
+        expected_review_identity = expected_proposition_review_identity(
+            review,
+            article_hash=article.article_hash,
+            article_artifact_hash=decision.article_artifact_hash,
+            extractor_model=propositions.EXTRACTION_MODEL,
+        )
+        if review.identity != expected_review_identity:
+            raise propositions.ApprovedArtifactMismatch(
+                "proposition_review_identity_mismatch"
+            )
 
         expected_approved = ApprovedPropositionSet.from_review(
             review, recorded_review_hash
@@ -244,30 +351,62 @@ def validate_reviewed_issue(
         approved = approved_by_id[article_id]
         if approved != expected_approved:
             raise propositions.ApprovedArtifactMismatch("approved_proposition_set_mismatch")
-        propositions.validate_approved_propositions(
+        storage = propositions._validate_approved_propositions(
             approved,
             article.text,
             "v3.1",
-            speaker=article.author,
+            speaker=snapshot.author,
         )
-        approved_by_filename[md_path.name] = approved
+        capability = propositions._ValidatedReviewedPropositions(
+            article_id=approved.article_id,
+            article_hash=approved.article_hash,
+            speaker=snapshot.author,
+            model=approved.model,
+            prompt_version=approved.prompt_version,
+            prompt_fingerprint=approved.prompt_fingerprint,
+            proposition_artifact_hash=approved.proposition_artifact_hash,
+            propositions=tuple(
+                (item["proposition_index"], item["content"]) for item in storage
+            ),
+        )
+        validated_articles.append(
+            _ValidatedReviewedArticle(
+                snapshot=snapshot,
+                article_id=article_id,
+                stable_file_path=_reviewed_file_path(
+                    decision.issue_hash, article_id
+                ),
+                propositions=capability,
+            )
+        )
 
-    return ReviewedIssueApproval(
+    if decision.totals["propositions"] != sum(
+        len(article.propositions.propositions) for article in validated_articles
+    ):
+        raise propositions.ApprovedArtifactMismatch(
+            "issue_proposition_total_mismatch"
+        )
+
+    return _ReviewedIssueApproval(
         decision_hash=decision_hash,
         issue_hash=decision.issue_hash,
-        approved_by_filename=approved_by_filename,
+        articles=tuple(validated_articles),
     )
 
 
 # -- INGESTION ---------------------------------------------------------------
 
-def ingest_article(
-    md_path: Path,
+def _ingest_article_snapshot(
+    snapshot: _MarkdownSnapshot,
     issue_stem: str,
     dry_run: bool = False,
-    approved_artifact: Optional[ApprovedPropositionSet] = None,
+    *,
+    _reviewed_propositions: Optional[
+        propositions._ValidatedReviewedPropositions
+    ] = None,
+    stable_file_path: Optional[str] = None,
 ) -> Tuple[str, object]:
-    """Ingest a single .md article file into Supabase.
+    """Write one already-parsed immutable article snapshot.
 
     Returns (status, reason) using shared_ingest.ingest_document()'s status
     vocabulary ("processed" / "skipped" / "failed"), plus a magazine-specific
@@ -276,20 +415,14 @@ def ingest_article(
     dry_run=True previews chunk content and the embed/stored-content header
     asymmetry (see header comment below) without touching the database.
     """
-    meta, body = _article_metadata_and_body(md_path)
-
-    title = meta.get("TITLE", md_path.stem)
-    author = meta.get("AUTHOR", "")
-    issue = meta.get("ISSUE", "")
-    date = meta.get("DATE", "")
-    topic_tags_raw = meta.get("TOPIC_TAGS", "")
-    topic_tags = [t.strip() for t in topic_tags_raw.split(",") if t.strip()] if topic_tags_raw else []
-    frontmatter_refs_raw = meta.get("BIBLE_REFS", "")
-    frontmatter_refs = [r.strip() for r in frontmatter_refs_raw.split(",") if r.strip()] if frontmatter_refs_raw else []
-
-    # Clean author: truncate at parenthesis
-    if "(" in author:
-        author = author[:author.index("(")].rstrip()
+    md_path = snapshot.path
+    body = snapshot.body
+    title = snapshot.title
+    author = snapshot.author
+    issue = snapshot.issue
+    date = snapshot.date
+    topic_tags = list(snapshot.topic_tags)
+    frontmatter_refs = list(snapshot.bible_references)
 
     # Parse year from issue or date
     year = None
@@ -315,14 +448,6 @@ def ingest_article(
 
     header = f"[New Wine | {date} | {title} by {author}]"
 
-    if approved_artifact is not None:
-        propositions.validate_approved_propositions(
-            approved_artifact,
-            body,
-            "v3.1",
-            speaker=author,
-        )
-
     if dry_run:
         chunks = chunk_text(body)
         preview = chunks[:3]
@@ -334,8 +459,11 @@ def ingest_article(
             print(f"  Content: {chunk_content[:300]}{'...' if len(chunk_content) > 300 else ''}")
             print()
         print("  [DRY RUN] No data written to Supabase.")
-        if approved_artifact is not None:
-            print(f"  [DRY RUN] approved propositions: {len(approved_artifact.propositions)}")
+        if _reviewed_propositions is not None:
+            print(
+                "  [DRY RUN] approved propositions: "
+                f"{len(_reviewed_propositions.propositions)}"
+            )
         return ("processed", None)
 
     db = get_db()
@@ -355,7 +483,7 @@ def ingest_article(
         db_params=DB_PARAMS,
         title=title,
         body_text=body,
-        filename=md_path.name,
+        filename=stable_file_path or md_path.name,
         author=author or None,
         year=year,
         issue=issue or None,
@@ -366,19 +494,18 @@ def ingest_article(
         is_copyrighted=True,
         topic_tags=topic_tags if topic_tags else None,
         bible_references=bible_refs,
+        file_path=stable_file_path,
         # Resolved HERE (not pre-resolved and passed as source_id) so that
         # shared_ingest's strict-mode SilentSentinelRefused guard -- which only
         # guards the resolve_from path -- actually applies to this script.
         resolve_from=("New Wine Magazine", author or None),
-        # No DB-level dedup exists in this pipeline today -- the issue-folder
-        # move to 04_ingested/ is the real guard. The default dedup key
-        # (url/file_path) is never set on magazine documents, so it would
-        # never fire anyway; skip_dedup=True makes that explicit instead of
-        # relying on an accidental no-op.
-        skip_dedup=True,
+        # Reviewed files carry a stable issue/article identity and use the
+        # existing file_path dedup check. Legacy queue ingestion keeps its
+        # historical move-owned dedup behavior unchanged.
+        skip_dedup=stable_file_path is None,
         embed_text_fn=_embed_with_header_idx0_only,
         content_fn=_content_always_with_header,
-        approved_propositions=approved_artifact,
+        _reviewed_propositions=_reviewed_propositions,
     )
 
     if result["status"] == "processed":
@@ -386,11 +513,31 @@ def ingest_article(
     return (result["status"], result["reason"])
 
 
+def ingest_article(
+    md_path: Path, issue_stem: str, dry_run: bool = False
+) -> Tuple[str, object]:
+    """Legacy single-article path; behavior is unchanged when review is absent."""
+    return _ingest_article_snapshot(
+        _read_markdown_snapshot(md_path), issue_stem, dry_run=dry_run
+    )
+
+
+def _ingest_reviewed_article(
+    article: _ValidatedReviewedArticle, issue_stem: str, dry_run: bool
+) -> Tuple[str, object]:
+    return _ingest_article_snapshot(
+        article.snapshot,
+        issue_stem,
+        dry_run=dry_run,
+        _reviewed_propositions=article.propositions,
+        stable_file_path=article.stable_file_path,
+    )
+
+
 def ingest_issue(
     issue_dir: Path,
     dry_run: bool = False,
     move_when_done: bool = True,
-    approved_artifacts: Optional[Mapping[str, ApprovedPropositionSet]] = None,
 ) -> Dict:
     """Ingest all .md files in an issue directory. Returns stats.
 
@@ -405,13 +552,6 @@ def ingest_issue(
 
     # Skip flagged subfolder
     md_files = [f for f in md_files if "flagged" not in str(f)]
-
-    if approved_artifacts is not None:
-        move_when_done = False
-        if set(approved_artifacts) != {path.name for path in md_files}:
-            raise propositions.ApprovedArtifactMismatch(
-                "reviewed_article_files_mismatch"
-            )
 
     if not md_files:
         print(f"  No .md files found in {issue_dir}")
@@ -429,11 +569,6 @@ def ingest_issue(
                 md_path,
                 issue_stem,
                 dry_run=dry_run,
-                approved_artifact=(
-                    approved_artifacts[md_path.name]
-                    if approved_artifacts is not None
-                    else None
-                ),
             )
         except shared_ingest.SilentSentinelRefused as e:
             skipped += 1
@@ -480,18 +615,40 @@ def ingest_reviewed_issue(
     """Ingest one fully approved issue without promoting or moving sources."""
     approval = validate_reviewed_issue(issue_dir, artifact_dir)
     proposition_count = sum(
-        len(approved.propositions)
-        for approved in approval.approved_by_filename.values()
+        len(article.propositions.propositions) for article in approval.articles
     )
     print(f"  issue decision sha256: {approval.decision_hash}")
     print(f"  issue PDF sha256: {approval.issue_hash}")
-    print(f"  approved articles: {len(approval.approved_by_filename)}")
+    print(f"  approved articles: {len(approval.articles)}")
     print(f"  approved propositions: {proposition_count}")
-    stats = ingest_issue(
-        Path(issue_dir),
-        dry_run=dry_run,
-        move_when_done=False,
-        approved_artifacts=approval.approved_by_filename,
+    stats = {
+        "attempted": len(approval.articles),
+        "stored": 0,
+        "errored": 0,
+        "skipped": 0,
+    }
+    for article in approval.articles:
+        try:
+            status, _reason = _ingest_reviewed_article(
+                article, Path(issue_dir).name, dry_run
+            )
+        except Exception:
+            logger.exception(
+                "Failed to ingest reviewed article %s",
+                article.snapshot.path.name,
+            )
+            stats["errored"] += 1
+            continue
+        if dry_run:
+            stats["skipped"] += 1
+        elif status == "processed":
+            stats["stored"] += 1
+        elif status == "skipped":
+            stats["skipped"] += 1
+        else:
+            stats["errored"] += 1
+    assert stats["attempted"] == (
+        stats["stored"] + stats["errored"] + stats["skipped"]
     )
     print("  Source promotion remains a separate explicit operation; no files moved.")
     return stats
@@ -617,7 +774,10 @@ if __name__ == "__main__":
             print(f"ERROR: reviewed artifact mismatch: {exc}", file=sys.stderr)
             sys.exit(2)
         print(f"\n{'='*60}")
-        print(f"Done. {stats['ingested']} ingested, {stats['skipped']} skipped.")
+        print(
+            f"Done. {stats['attempted']} attempted, {stats['stored']} stored, "
+            f"{stats['errored']} errored, {stats['skipped']} skipped."
+        )
     elif args.source_dir:
         source_dir = Path(args.source_dir)
         if not source_dir.is_dir():

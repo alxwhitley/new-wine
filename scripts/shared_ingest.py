@@ -41,7 +41,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.services.chunker import chunk_text
 from app.services.embeddings import embed_text, EMBED_BATCH_SIZE
 
-from magazine_review.schemas import ApprovedPropositionSet
 from source_resolver import normalize_alias_key, resolve_source_id
 import propositions
 
@@ -487,7 +486,9 @@ def ingest_document(
     chunk_fn: Callable[[str], List[str]] = chunk_text,
     embed_text_fn: Optional[Callable[[int, str], str]] = None,
     content_fn: Optional[Callable[[int, str], str]] = None,
-    approved_propositions: Optional[ApprovedPropositionSet] = None,
+    _reviewed_propositions: Optional[
+        propositions._ValidatedReviewedPropositions
+    ] = None,
 ) -> dict:
     """Resolve -> compute (chunk + embed + paraphrase) -> write, in that
     order. The document record, all of its chunks, and its propositions
@@ -717,7 +718,7 @@ def ingest_document(
         prop_result = propositions.process_document(
             conn, doc_id, _resolved_id, body_text, embed_text, chunk_ids=chunk_ids,
             speaker=speaker, prompt_version="v3.1",
-            approved_propositions=approved_propositions,
+            _reviewed_propositions=_reviewed_propositions,
         )
         print(f"  propositions: {prop_result}")
 

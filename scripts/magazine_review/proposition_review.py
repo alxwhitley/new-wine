@@ -284,11 +284,27 @@ def _normalize_extraction(value: object) -> _ExtractionEvidence:
     )
 
 
-def _stage_identity(
+def _identity_renderer_settings(
+    *, extractor_model: str, extraction_cost_basis: Mapping[str, str]
+) -> dict[str, object]:
+    """Return the one canonical durable renderer identity for this stage."""
+    return {
+        "fresh_context": True,
+        "reasoning_effort": REVIEW_REASONING,
+        "extractor_model": extractor_model,
+        "extractor_prompt_version": "v3.1",
+        "extractor_prompt_fingerprint": prompt_fingerprint("v3.1"),
+        "extraction_cost_basis": dict(extraction_cost_basis),
+        "response_format": _review_schema(),
+    }
+
+
+def _identity(
     *,
     article_hash: str,
     article_artifact_hash: str,
-    extraction: _ExtractionEvidence,
+    extractor_model: str,
+    extraction_cost_basis: Mapping[str, str],
 ) -> StageIdentity:
     return StageIdentity(
         schema_version=1,
@@ -298,16 +314,43 @@ def _stage_identity(
         },
         model=REVIEW_MODEL,
         prompt_fingerprint=REVIEW_PROMPT_FINGERPRINT,
-        renderer_settings={
-            "fresh_context": True,
-            "reasoning_effort": REVIEW_REASONING,
-            "extractor_model": extraction.model,
-            "extractor_prompt_version": "v3.1",
-            "extractor_prompt_fingerprint": prompt_fingerprint("v3.1"),
-            "extraction_cost_basis": dict(extraction.cost_basis),
-            "response_format": _review_schema(),
-        },
+        renderer_settings=_identity_renderer_settings(
+            extractor_model=extractor_model,
+            extraction_cost_basis=extraction_cost_basis,
+        ),
     )
+
+
+def _stage_identity(
+    *,
+    article_hash: str,
+    article_artifact_hash: str,
+    extraction: _ExtractionEvidence,
+) -> StageIdentity:
+    return _identity(
+        article_hash=article_hash,
+        article_artifact_hash=article_artifact_hash,
+        extractor_model=extraction.model,
+        extraction_cost_basis=extraction.cost_basis,
+    )
+
+
+def expected_proposition_review_identity(
+    review: PropositionReview,
+    *,
+    article_hash: str,
+    article_artifact_hash: str,
+    extractor_model: str,
+) -> StageIdentity:
+    """Recompute current Task 5 identity from durable, validated inputs."""
+    identity = _identity(
+        article_hash=article_hash,
+        article_artifact_hash=article_artifact_hash,
+        extractor_model=extractor_model,
+        extraction_cost_basis=review.extraction_cost_basis,
+    )
+    identity.validate()
+    return identity
 
 
 def _base_review(

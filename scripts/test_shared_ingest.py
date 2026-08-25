@@ -206,6 +206,16 @@ class SharedWriterHappyPathTests(unittest.TestCase):
                 (2, "Exact reviewed text with a\nline break."),
             ),
         )
+        capability = props_mod._ValidatedReviewedPropositions(
+            article_id=approved.article_id,
+            article_hash=approved.article_hash,
+            speaker="Ada North",
+            model=approved.model,
+            prompt_version=approved.prompt_version,
+            prompt_fingerprint=approved.prompt_fingerprint,
+            proposition_artifact_hash=approved.proposition_artifact_hash,
+            propositions=approved.propositions,
+        )
         conn = FakeConn(license_status="unlicensed", chunk_id_rows=["chunk-a"])
 
         def forbidden_generation(*args, **kwargs):
@@ -230,7 +240,7 @@ class SharedWriterHappyPathTests(unittest.TestCase):
                 source_name="New Wine Magazine",
                 source_id="22222222-2222-2222-2222-222222222222",
                 skip_dedup=True,
-                approved_propositions=approved,
+                _reviewed_propositions=capability,
             )
 
         self.assertEqual(result["status"], "processed")

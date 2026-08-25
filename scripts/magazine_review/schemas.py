@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping, Sequence, Tuple
 
+from .transcript import canonical_verified_transcript
+
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _ARTICLE_FILENAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.txt$")
@@ -1110,11 +1112,14 @@ class IssueArtifacts:
         for article_id, artifact_hash in self.proposition_artifact_hashes.items():
             _require_nonempty(article_id, "proposition_artifact_hashes_invalid")
             _require_sha256(artifact_hash, "proposition_artifact_hashes_invalid")
-        if self.articles.ocr_artifact_hash != self.ocr_artifact_hash:
+        if self.articles.ocr_artifact_hash != self.ocr.identity.digest:
             raise ArtifactValidationError("ocr_predecessor_hash_mismatch")
-        if self.ocr.pdf_hash != self.articles.issue_hash:
+        canonical_transcript = canonical_verified_transcript(
+            tuple((page.page_number, page.text) for page in self.ocr.pages)
+        )
+        if canonical_transcript.sha256 != self.articles.issue_hash:
             raise ArtifactValidationError("issue_hash_mismatch")
-        if self.ocr.transcript != self.articles.transcript:
+        if canonical_transcript.text != self.articles.transcript:
             raise ArtifactValidationError("issue_transcript_mismatch")
         if not isinstance(self.proposition_reviews, tuple):
             raise ArtifactValidationError("proposition_reviews_invalid")
