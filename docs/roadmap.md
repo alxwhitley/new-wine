@@ -57,10 +57,14 @@ quarantine. No stage transfers automatically from one source to another.
 1. **A1 — Beta corpus manifest.** Define minimum teacher/source/content-shape
    coverage; re-query live state; classify candidates; fix order, sampling,
    expected counts, cost/storage estimates, and quarantine path.
-2. **A2 — New Wine.** Triggered, not active: resume only when a candidate OCR
-   model wins a blind side-by-side benchmark on named severe-failure pages
-   without degrading good controls, and Alex accepts the result. Then recount,
-   manifest, dry-run, prove one write, and run bounded reconciled batches.
+2. **A2 — New Wine.** Triggered, not active. The credential-free review harness
+   and complete fake-provider no-write proof are built, but this does not open
+   the gate or select an OCR model. Resume only after the paid blind
+   side-by-side benchmark is run on named severe-failure pages and good
+   controls, a candidate wins without degrading those controls, and Alex
+   accepts the winner. Then recount, manifest, dry-run one complete real issue,
+   obtain separate approval for one attended write, reconcile it, and only
+   afterward run bounded reconciled batches.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing

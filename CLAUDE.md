@@ -931,6 +931,29 @@ different row, per the hard rule above.
     gated by an added deterministic byline-verification step
     (`source_ingest_queue/byline_verify.py`).** Never reapply migration 088.
 
+17. **New Wine review is issue-level, fail-closed, and never authorizes its
+    own write or file promotion.** Every page image, including advertisements
+    and other non-article material, must pass OCR-completeness review; one
+    failed page gets exactly one targeted repair, and a second failure
+    quarantines the entire issue. Article review uses the complete verified
+    issue transcript, and every substantive article must have at least one
+    reviewed proposition whose exact evidence offsets round-trip and whose
+    support, qualification, overstatement, and attribution verdicts all pass.
+    One failed page, article, or proposition makes every article in that issue
+    ineligible—partial-issue ingestion is forbidden. An approved reviewed
+    ingest must revalidate the issue, article, proposition-artifact, model,
+    prompt, and evidence lineage before database access; it passes the exact
+    approved proposition text through `shared_ingest.ingest_document()` and
+    the existing storage path byte-for-byte, with no regeneration. Review and
+    dry-ingest preview make no database or embedding calls. Any real database
+    ingest remains a separately named, attended, explicitly approved operation
+    with hard reconciliation. Neither review nor reviewed ingest automatically
+    moves, renames, archives, deletes, or promotes an issue or source file;
+    source promotion is a separate explicit operation. The credential-free
+    fake-provider proof in `scripts/test_magazine_review_end_to_end.py` builds
+    confidence in this mechanism but does not open roadmap trigger A2 or select
+    an OCR model.
+
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
