@@ -20,9 +20,14 @@ if the tool is restarted mid-review and a Yes/No can never apply to a stale
 row.
 
 A candidate qualifies if: verification_status == "unverified", it is not
-already_in_corpus, claimed_written_content_exists is not False, and it has
-at least one claimed URL to show (claimed_blog_or_articles_url, else
-claimed_main_url, else the first of other_urls).
+already_in_corpus, claimed_written_content_exists is not False,
+auto_link_check is not "no_blog_detected" (see
+check_discovery_blog_links.py -- a separate one-shot script that actually
+fetches each candidate's link and checks for real post-shaped content
+before you ever see it here; run it first so this tool only shows
+candidates that already look like real blogs), and it has at least one
+claimed URL to show (claimed_blog_or_articles_url, else claimed_main_url,
+else the first of other_urls).
 
 Local-only (127.0.0.1), single-user, no auth -- same trust posture as every
 other script in scripts/. Reads and writes
@@ -102,6 +107,8 @@ def build_queue(rows: List[dict]) -> List[Tuple[dict, str]]:
         if row.get("already_in_corpus") is True:
             continue
         if row.get("claimed_written_content_exists") is False:
+            continue
+        if str(row.get("auto_link_check") or "").strip().lower() == "no_blog_detected":
             continue
         link = _candidate_link(row)
         if not link:
