@@ -7,6 +7,7 @@ import json
 import math
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping, Sequence, Tuple
 
 
@@ -30,6 +31,27 @@ _GROUNDING_TOTAL_FIELDS = frozenset(
         "kept_arbitration",
     }
 )
+_PROVIDER_COST_BASIS_FIELDS = frozenset({"type", "model", "currency"})
+_SNAPSHOT_COST_BASIS_FIELDS = frozenset(
+    {
+        "type",
+        "model",
+        "currency",
+        "input_usd_per_million_tokens",
+        "output_usd_per_million_tokens",
+        "source_url",
+        "observed_date",
+    }
+)
+_GROQ_GPT_OSS_120B_PRICING = {
+    "type": "pricing_snapshot",
+    "model": "openai/gpt-oss-120b",
+    "currency": "USD",
+    "input_usd_per_million_tokens": "0.15",
+    "output_usd_per_million_tokens": "0.60",
+    "source_url": "https://console.groq.com/docs/model/openai/gpt-oss-120b",
+    "observed_date": "2026-08-25",
+}
 _STAGE_STATUSES = frozenset({"passed", "quarantined"})
 
 
@@ -103,6 +125,43 @@ def _require_cost(value: object, reason: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
         raise ArtifactValidationError(reason)
     return float(value)
+
+
+def _require_proposition_cost_basis(
+    *,
+    model: str,
+    usage: Mapping[str, float | int],
+    cost_usd: float,
+    basis: object,
+) -> None:
+    if not isinstance(basis, Mapping):
+        raise ArtifactValidationError("proposition_cost_basis_invalid")
+    basis_type = basis.get("type")
+    if basis_type == "provider_reported":
+        if set(basis) != _PROVIDER_COST_BASIS_FIELDS:
+            raise ArtifactValidationError("proposition_cost_basis_invalid")
+        if basis.get("model") != model or basis.get("currency") != "USD":
+            raise ArtifactValidationError("proposition_cost_basis_invalid")
+        return
+    if basis_type != "pricing_snapshot" or set(basis) != _SNAPSHOT_COST_BASIS_FIELDS:
+        raise ArtifactValidationError("proposition_cost_basis_invalid")
+    if dict(basis) != _GROQ_GPT_OSS_120B_PRICING or model != basis.get("model"):
+        raise ArtifactValidationError("proposition_cost_basis_invalid")
+    input_tokens = usage.get("input_tokens")
+    output_tokens = usage.get("output_tokens")
+    for amount in (input_tokens, output_tokens):
+        if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
+            raise ArtifactValidationError("proposition_cost_basis_invalid")
+    try:
+        expected = (
+            Decimal(input_tokens) * Decimal(basis["input_usd_per_million_tokens"])
+            + Decimal(output_tokens) * Decimal(basis["output_usd_per_million_tokens"])
+        ) / Decimal(1_000_000)
+        actual = Decimal(str(cost_usd))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ArtifactValidationError("proposition_cost_basis_invalid") from exc
+    if actual != expected:
+        raise ArtifactValidationError("proposition_cost_basis_invalid")
 
 
 def _require_timestamp(value: object, reason: str) -> str:
@@ -701,6 +760,7 @@ class PropositionEvidence:
     evidence_text: str
     evidence_start: int
     evidence_end: int
+    evidence_offset_exact: bool
     supported: bool
     missing_qualification: bool
     overstatement: bool
@@ -717,6 +777,8 @@ class PropositionEvidence:
             raise ArtifactValidationError("evidence_offset_mismatch")
         if article_text[start:end] != self.evidence_text:
             raise ArtifactValidationError("evidence_offset_mismatch")
+        if not isinstance(self.evidence_offset_exact, bool):
+            raise ArtifactValidationError("evidence_offset_exact_invalid")
         flags = (
             self.supported,
             self.missing_qualification,
@@ -729,6 +791,8 @@ class PropositionEvidence:
 
     def validate(self, article_text: str) -> None:
         self.validate_shape(article_text)
+        if not self.evidence_offset_exact:
+            raise ArtifactValidationError("evidence_offset_mismatch")
         if (
             not self.supported
             or self.missing_qualification
@@ -744,6 +808,7 @@ class PropositionEvidence:
             "evidence_text": self.evidence_text,
             "evidence_start": self.evidence_start,
             "evidence_end": self.evidence_end,
+            "evidence_offset_exact": self.evidence_offset_exact,
             "supported": self.supported,
             "missing_qualification": self.missing_qualification,
             "overstatement": self.overstatement,
@@ -756,8 +821,10 @@ class PropositionEvidence:
         raw = _require_exact_keys(
             raw,
             {
-                "proposition_index", "content", "evidence_text", "evidence_start", "evidence_end",
-                "supported", "missing_qualification", "overstatement", "attribution_ok", "reviewer_reasons",
+                "proposition_index", "content", "evidence_text", "evidence_start",
+                "evidence_end", "evidence_offset_exact", "supported",
+                "missing_qualification", "overstatement", "attribution_ok",
+                "reviewer_reasons",
             },
             "proposition_evidence_invalid",
         )
@@ -768,6 +835,7 @@ class PropositionEvidence:
                 evidence_text=raw["evidence_text"],
                 evidence_start=raw["evidence_start"],
                 evidence_end=raw["evidence_end"],
+                evidence_offset_exact=raw["evidence_offset_exact"],
                 supported=raw["supported"],
                 missing_qualification=raw["missing_qualification"],
                 overstatement=raw["overstatement"],
@@ -789,6 +857,7 @@ class PropositionReview:
     prompt_fingerprint: str
     extraction_usage: Mapping[str, float | int]
     extraction_cost_usd: float
+    extraction_cost_basis: Mapping[str, str]
     grounding_totals: Mapping[str, int]
     reviewer_model: str
     reviewer_prompt_fingerprint: str
@@ -809,6 +878,12 @@ class PropositionReview:
         _require_sha256(self.prompt_fingerprint, "proposition_prompt_fingerprint_invalid")
         _require_usage(self.extraction_usage, "proposition_extraction_usage_invalid")
         _require_cost(self.extraction_cost_usd, "proposition_extraction_cost_invalid")
+        _require_proposition_cost_basis(
+            model=self.model,
+            usage=self.extraction_usage,
+            cost_usd=self.extraction_cost_usd,
+            basis=self.extraction_cost_basis,
+        )
         if (
             not isinstance(self.grounding_totals, Mapping)
             or set(self.grounding_totals) != _GROUNDING_TOTAL_FIELDS
@@ -830,6 +905,8 @@ class PropositionReview:
         if self.status not in _STAGE_STATUSES:
             raise ArtifactValidationError("proposition_status_invalid")
         _string_tuple(self.reasons, "proposition_reasons_invalid")
+        if (self.status == "passed") != (not self.reasons):
+            raise ArtifactValidationError("proposition_review_state_invalid")
         source_text = self.article_text if article_text is None else article_text
         if not isinstance(self.article_text, str) or not isinstance(source_text, str):
             raise ArtifactValidationError("proposition_article_text_invalid")
@@ -865,6 +942,7 @@ class PropositionReview:
             "prompt_fingerprint": self.prompt_fingerprint,
             "extraction_usage": dict(self.extraction_usage),
             "extraction_cost_usd": self.extraction_cost_usd,
+            "extraction_cost_basis": dict(self.extraction_cost_basis),
             "grounding_totals": dict(self.grounding_totals),
             "reviewer_model": self.reviewer_model,
             "reviewer_prompt_fingerprint": self.reviewer_prompt_fingerprint,
@@ -882,7 +960,8 @@ class PropositionReview:
             raw,
             {
                 "identity", "article_id", "article_hash", "article_artifact_hash", "model", "prompt_version",
-                "prompt_fingerprint", "extraction_usage", "extraction_cost_usd", "grounding_totals", "reviewer_model",
+                "prompt_fingerprint", "extraction_usage", "extraction_cost_usd", "extraction_cost_basis",
+                "grounding_totals", "reviewer_model",
                 "reviewer_prompt_fingerprint", "reviewer_usage", "reviewer_cost_usd", "article_text",
                 "propositions", "status", "reasons",
             },
@@ -899,6 +978,7 @@ class PropositionReview:
                 prompt_fingerprint=raw["prompt_fingerprint"],
                 extraction_usage=raw["extraction_usage"],
                 extraction_cost_usd=raw["extraction_cost_usd"],
+                extraction_cost_basis=raw["extraction_cost_basis"],
                 grounding_totals=raw["grounding_totals"],
                 reviewer_model=raw["reviewer_model"],
                 reviewer_prompt_fingerprint=raw["reviewer_prompt_fingerprint"],
@@ -948,9 +1028,9 @@ class ApprovedPropositionSet:
     def from_review(
         cls, review: PropositionReview, proposition_artifact_hash: str
     ) -> "ApprovedPropositionSet":
-        review.validate()
         if review.status != "passed":
             raise ArtifactValidationError("proposition_not_supported")
+        review.validate()
         for proposition in review.propositions:
             proposition.validate(review.article_text)
         value = cls(

@@ -129,6 +129,7 @@ def valid_issue_artifacts() -> IssueArtifacts:
         evidence_text="The author teaches grace.",
         evidence_start=0,
         evidence_end=len("The author teaches grace."),
+        evidence_offset_exact=True,
         supported=True,
         missing_qualification=False,
         overstatement=False,
@@ -145,6 +146,11 @@ def valid_issue_artifacts() -> IssueArtifacts:
         prompt_fingerprint=sha("b"),
         extraction_usage={"input_tokens": 1},
         extraction_cost_usd=0.01,
+        extraction_cost_basis={
+            "type": "provider_reported",
+            "model": "openai/gpt-oss-120b",
+            "currency": "USD",
+        },
         grounding_totals={
             "found": 0,
             "grounded": 0,
@@ -321,6 +327,62 @@ def test_proposition_grounding_totals_are_exact_and_reconciled(valid_issue_artif
     assert review.extraction_usage == {"input_tokens": 1}
     with pytest.raises(ArtifactValidationError, match="proposition_grounding_totals_invalid"):
         replace(review, grounding_totals={**review.grounding_totals, "found": 4}).validate()
+
+
+def test_proposition_review_status_and_reasons_are_equivalent(valid_issue_artifacts):
+    """A review cannot be relabeled without changing its durable failure state."""
+    review = valid_issue_artifacts.proposition_reviews[0]
+
+    with pytest.raises(ArtifactValidationError, match="proposition_review_state_invalid"):
+        replace(review, reasons=("failed",)).validate()
+    with pytest.raises(ArtifactValidationError, match="proposition_review_state_invalid"):
+        replace(review, status="quarantined", reasons=()).validate()
+
+
+def test_offset_mismatch_quarantine_cannot_be_relabelled_as_passing(
+    valid_issue_artifacts,
+):
+    """Clearing status/reasons cannot erase a prior deterministic offset failure."""
+    review = valid_issue_artifacts.proposition_reviews[0]
+    evidence = replace(review.propositions[0], evidence_offset_exact=False)
+    quarantined = replace(
+        review,
+        propositions=(evidence,),
+        status="quarantined",
+        reasons=("evidence_offset_mismatch",),
+    )
+    quarantined.validate()
+
+    relabeled = replace(quarantined, status="passed", reasons=())
+    with pytest.raises(ArtifactValidationError, match="evidence_offset_mismatch"):
+        ApprovedPropositionSet.from_review(relabeled, sha("a"))
+
+
+def test_pricing_snapshot_cost_basis_is_strict_and_reconciled(valid_issue_artifacts):
+    """Calculated cost retains immutable rates, source, date, and exact arithmetic."""
+    review = replace(
+        valid_issue_artifacts.proposition_reviews[0],
+        extraction_usage={"input_tokens": 100, "output_tokens": 20},
+        extraction_cost_usd=0.000027,
+        extraction_cost_basis={
+            "type": "pricing_snapshot",
+            "model": "openai/gpt-oss-120b",
+            "currency": "USD",
+            "input_usd_per_million_tokens": "0.15",
+            "output_usd_per_million_tokens": "0.60",
+            "source_url": "https://console.groq.com/docs/model/openai/gpt-oss-120b",
+            "observed_date": "2026-08-25",
+        },
+    )
+
+    PropositionReview.from_dict(review.to_dict()).validate()
+    with pytest.raises(ArtifactValidationError, match="proposition_cost_basis_invalid"):
+        replace(review, extraction_cost_usd=0.0).validate()
+    with pytest.raises(ArtifactValidationError, match="proposition_cost_basis_invalid"):
+        replace(
+            review,
+            extraction_cost_basis={**review.extraction_cost_basis, "extra": "drift"},
+        ).validate()
 
 
 def test_approved_proposition_set_preserves_order_and_requires_provenance(

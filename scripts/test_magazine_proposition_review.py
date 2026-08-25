@@ -17,11 +17,18 @@ from magazine_review.proposition_review import (
     approved_propositions_for,
     review_issue_propositions,
 )
-from magazine_review.schemas import ArticleManifest, ArticleRecord, ArtifactValidationError, StageIdentity
+from magazine_review.schemas import (
+    ApprovedPropositionSet,
+    ArticleManifest,
+    ArticleRecord,
+    ArtifactValidationError,
+    StageIdentity,
+)
 from propositions import PropositionExtractionComputation, ReferenceGroundingComputation
 
 
 MODEL = "openai/gpt-oss-120b"
+PRICING_SOURCE = "https://console.groq.com/docs/model/openai/gpt-oss-120b"
 ARTICLE_TEXT = (
     "Grace is received by faith, not earned by effort. "
     "The author says this gift forms a generous life."
@@ -87,7 +94,12 @@ class RecordingReviewer:
         return copy.deepcopy(self.response)
 
 
-def extraction(*items: dict[str, object]) -> PropositionExtractionComputation:
+def extraction(
+    *items: dict[str, object],
+    model: str = MODEL,
+    usage: dict[str, int] | None = None,
+    cost_usd: float | None = 0.031,
+) -> PropositionExtractionComputation:
     grounding = ReferenceGroundingComputation(
         propositions=[dict(item) for item in items],
         review_records=[],
@@ -99,9 +111,13 @@ def extraction(*items: dict[str, object]) -> PropositionExtractionComputation:
     )
     return PropositionExtractionComputation(
         output=[dict(item) for item in items],
-        model=MODEL,
-        usage={"input_tokens": 101, "output_tokens": 17, "total_tokens": 118},
-        cost_usd=0.031,
+        model=model,
+        usage=usage if usage is not None else {
+            "input_tokens": 101,
+            "output_tokens": 17,
+            "total_tokens": 118,
+        },
+        cost_usd=cost_usd,
         grounding=grounding,
     )
 
@@ -154,7 +170,7 @@ def test_substantive_article_with_zero_propositions_quarantines(article_manifest
 
     result = review_issue_propositions(
         article_manifest,
-        extractor=lambda **_: [],
+        extractor=lambda **_: extraction(),
         reviewer=reviewer,
     )
 
@@ -165,6 +181,21 @@ def test_substantive_article_with_zero_propositions_quarantines(article_manifest
     result.validate()
     with pytest.raises(ArtifactValidationError, match="proposition_not_supported"):
         approved_propositions_for("a1")
+
+
+@pytest.mark.parametrize("raw", [[], [proposition()]])
+def test_raw_list_extraction_is_a_technical_error(article_manifest, raw):
+    """No raw list may fabricate model, usage, cost, or grounding provenance."""
+    reviewer = RecordingReviewer({})
+
+    with pytest.raises(PropositionReviewError, match="proposition_extraction_result_invalid"):
+        review_issue_propositions(
+            article_manifest,
+            extractor=lambda **_: raw,
+            reviewer=reviewer,
+        )
+
+    assert reviewer.requests == []
 
 
 def test_evidence_must_round_trip(article_manifest):
@@ -180,6 +211,10 @@ def test_evidence_must_round_trip(article_manifest):
 
     assert result.status == "quarantined"
     assert "evidence_offset_mismatch" in result.reasons
+    assert result.propositions[0].evidence_offset_exact is False
+    relabeled = replace(result, status="passed", reasons=())
+    with pytest.raises(ArtifactValidationError, match="evidence_offset_mismatch"):
+        ApprovedPropositionSet.from_review(relabeled, digest("review-artifact"))
 
 
 def test_empty_article_is_rejected_before_extraction(article_manifest):
@@ -322,6 +357,11 @@ def test_review_persists_exact_extraction_and_grounding_provenance(article_manif
         "total_tokens": 118,
     }
     assert result.extraction_cost_usd == 0.031
+    assert result.extraction_cost_basis == {
+        "type": "provider_reported",
+        "model": MODEL,
+        "currency": "USD",
+    }
     assert result.grounding_totals == {
         "found": 3,
         "grounded": 2,
@@ -331,6 +371,59 @@ def test_review_persists_exact_extraction_and_grounding_provenance(article_manif
     }
     assert result.propositions[0].content == extracted["content"]
     assert approved_propositions_for("a1") == [extracted]
+
+
+def test_missing_provider_cost_uses_auditable_decimal_pricing_snapshot(article_manifest):
+    """A missing provider cost is calculated only from pinned rates and usage."""
+    result = review_issue_propositions(
+        article_manifest,
+        extractor=lambda **_: extraction(proposition(), cost_usd=None),
+        reviewer=RecordingReviewer(review_response(article_manifest)),
+    )
+
+    assert result.extraction_cost_usd == 0.00002535
+    assert result.extraction_cost_basis == {
+        "type": "pricing_snapshot",
+        "model": MODEL,
+        "currency": "USD",
+        "input_usd_per_million_tokens": "0.15",
+        "output_usd_per_million_tokens": "0.60",
+        "source_url": PRICING_SOURCE,
+        "observed_date": "2026-08-25",
+    }
+
+
+@pytest.mark.parametrize(
+    ("computation", "reason"),
+    [
+        (
+            extraction(
+                proposition(),
+                cost_usd=None,
+                usage={"input_tokens": 101, "total_tokens": 118},
+            ),
+            "proposition_pricing_usage_invalid",
+        ),
+        (
+            extraction(proposition(), cost_usd=None, model="different-model"),
+            "proposition_pricing_model_mismatch",
+        ),
+    ],
+)
+def test_pricing_fallback_rejects_missing_usage_or_model_mismatch(
+    article_manifest, computation, reason
+):
+    """A snapshot cannot price unknown usage or a model with different rates."""
+    reviewer = RecordingReviewer({})
+
+    with pytest.raises(PropositionReviewError, match=reason):
+        review_issue_propositions(
+            article_manifest,
+            extractor=lambda **_: computation,
+            reviewer=reviewer,
+        )
+
+    assert reviewer.requests == []
 
 
 def test_reviewer_gets_only_verified_article_and_complete_proposition_set(article_manifest):

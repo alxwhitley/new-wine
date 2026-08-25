@@ -6,10 +6,10 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from propositions import (
-    EXTRACTION_MODEL,
     PropositionExtractionComputation,
     extract_propositions_with_evidence,
     prompt_fingerprint,
@@ -43,6 +43,11 @@ GROUNDING_FIELDS = (
     "stripped_uncertain",
     "kept_arbitration",
 )
+PRICING_MODEL = "openai/gpt-oss-120b"
+PRICING_INPUT_USD_PER_MILLION = Decimal("0.15")
+PRICING_OUTPUT_USD_PER_MILLION = Decimal("0.60")
+PRICING_SOURCE_URL = "https://console.groq.com/docs/model/openai/gpt-oss-120b"
+PRICING_OBSERVED_DATE = "2026-08-25"
 
 
 class PropositionReviewError(RuntimeError):
@@ -59,6 +64,7 @@ class _ExtractionEvidence:
     model: str
     usage: Mapping[str, float | int]
     cost_usd: float
+    cost_basis: Mapping[str, str]
     grounding_totals: Mapping[str, int]
 
 
@@ -205,23 +211,15 @@ def _grounding_totals(computation: PropositionExtractionComputation) -> dict[str
 
 
 def _normalize_extraction(value: object) -> _ExtractionEvidence:
-    if isinstance(value, list):
-        output = value
-        model = EXTRACTION_MODEL
-        usage: object = {}
-        cost_usd: object = 0.0
-        grounding_totals = {name: 0 for name in GROUNDING_FIELDS}
-    elif isinstance(value, PropositionExtractionComputation):
-        computation = value
-        output = computation.output
-        if computation.grounding.propositions != output:
-            raise PropositionReviewError("proposition_grounding_output_mismatch")
-        model = computation.model
-        usage = computation.usage
-        cost_usd = computation.cost_usd
-        grounding_totals = _grounding_totals(computation)
-    else:
+    if not isinstance(value, PropositionExtractionComputation):
         raise PropositionReviewError("proposition_extraction_result_invalid")
+    computation = value
+    output = computation.output
+    if computation.grounding.propositions != output:
+        raise PropositionReviewError("proposition_grounding_output_mismatch")
+    model = computation.model
+    usage = _usage(computation.usage, "proposition_extraction_usage_invalid")
+    grounding_totals = _grounding_totals(computation)
 
     if not isinstance(output, list):
         raise PropositionReviewError("proposition_extraction_schema_invalid")
@@ -245,11 +243,43 @@ def _normalize_extraction(value: object) -> _ExtractionEvidence:
         raise PropositionReviewError("proposition_indices_not_contiguous")
     if not isinstance(model, str) or not model.strip():
         raise PropositionReviewError("proposition_model_required")
+    if computation.cost_usd is None:
+        if model != PRICING_MODEL:
+            raise PropositionReviewError("proposition_pricing_model_mismatch")
+        input_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
+        for amount in (input_tokens, output_tokens):
+            if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
+                raise PropositionReviewError("proposition_pricing_usage_invalid")
+        calculated_cost = (
+            Decimal(input_tokens) * PRICING_INPUT_USD_PER_MILLION
+            + Decimal(output_tokens) * PRICING_OUTPUT_USD_PER_MILLION
+        ) / Decimal(1_000_000)
+        cost_usd = float(calculated_cost)
+        cost_basis = {
+            "type": "pricing_snapshot",
+            "model": PRICING_MODEL,
+            "currency": "USD",
+            "input_usd_per_million_tokens": str(PRICING_INPUT_USD_PER_MILLION),
+            "output_usd_per_million_tokens": str(PRICING_OUTPUT_USD_PER_MILLION),
+            "source_url": PRICING_SOURCE_URL,
+            "observed_date": PRICING_OBSERVED_DATE,
+        }
+    else:
+        cost_usd = _cost(
+            computation.cost_usd, "proposition_extraction_cost_invalid"
+        )
+        cost_basis = {
+            "type": "provider_reported",
+            "model": model,
+            "currency": "USD",
+        }
     return _ExtractionEvidence(
         output=tuple(normalized),
         model=model,
-        usage=_usage(usage, "proposition_extraction_usage_invalid"),
-        cost_usd=_cost(cost_usd, "proposition_extraction_cost_invalid"),
+        usage=usage,
+        cost_usd=cost_usd,
+        cost_basis=cost_basis,
         grounding_totals=grounding_totals,
     )
 
@@ -274,6 +304,7 @@ def _stage_identity(
             "extractor_model": extraction.model,
             "extractor_prompt_version": "v3.1",
             "extractor_prompt_fingerprint": prompt_fingerprint("v3.1"),
+            "extraction_cost_basis": dict(extraction.cost_basis),
             "response_format": _review_schema(),
         },
     )
@@ -304,6 +335,7 @@ def _base_review(
         prompt_fingerprint=prompt_fingerprint("v3.1"),
         extraction_usage=dict(extraction.usage),
         extraction_cost_usd=extraction.cost_usd,
+        extraction_cost_basis=dict(extraction.cost_basis),
         reviewer_model=REVIEW_MODEL,
         reviewer_prompt_fingerprint=REVIEW_PROMPT_FINGERPRINT,
         reviewer_usage=dict(reviewer_usage or {}),
@@ -393,6 +425,7 @@ def _exact_or_quarantined_evidence(
         evidence_text=evidence_text,
         evidence_start=start,
         evidence_end=end,
+        evidence_offset_exact=not offset_mismatch,
         supported=raw["supported"],
         missing_qualification=raw["missing_qualification"],
         overstatement=raw["overstatement"],
