@@ -14,7 +14,14 @@ docs/ingestion/master_ingestion_queue.xlsx, and only a row whose `approved`
 column is literally TRUE. Alex requires this and controls it directly --
 this script does not open the Discovery or Queue tabs at all.
 
-Pipeline per run, one approved site at a time:
+`--site NAME` runs exactly that row. Omitting `--site` runs every row with
+approved=TRUE in one invocation, one after another -- each site still goes
+through the exact same per-site gates below independently (its own crawl,
+its own --max-candidates cap, its own byline check per URL). This is what
+lets Alex just check boxes in the Approved Sites tab and rerun the script,
+with no separate per-site command and no promotion/sync step in between.
+
+Pipeline, per approved site (looped automatically when --site is omitted):
   1. Crawl the site's blog_url (with pagination, bounded by --max-pages)
      for candidate post URLs -- source_ingest_queue.link_discovery.
   2. Drop any URL that already exists in source_ingest_queue for this
@@ -100,21 +107,37 @@ def db_connect():
     return psycopg2.connect(os.environ["SUPABASE_DB_URL"])
 
 
-def load_approved_site(site_name: str) -> dict:
-    """The crawler's entire input surface. Refuses anything not explicitly
-    approved=TRUE by Alex in the Approved Sites tab -- never the Discovery
-    or Queue tabs, which this function does not even open."""
+def _is_approved(match: dict) -> bool:
+    return str(match.get("approved") or "").strip().lower() in _TRUTHY
+
+
+def _has_required_fields(match: dict) -> bool:
+    return bool(match.get("blog_url")) and bool(match.get("attribute_to"))
+
+
+def _read_approved_tab() -> List[dict]:
+    """Shared by load_approved_site and load_all_approved_sites -- one place
+    that opens the Approved Sites tab, so the two loaders can't drift on how
+    they read it."""
     wb = openpyxl.load_workbook(SHEET_PATH, data_only=True)
     if APPROVED_TAB not in wb.sheetnames:
         raise SystemExit(f"'{APPROVED_TAB}' tab not found in {SHEET_PATH}")
     ws = wb[APPROVED_TAB]
     header = [c.value for c in ws[1]]
     idx = {h: i for i, h in enumerate(header)}
+    rows = [{h: row[idx[h]] for h in header} for row in ws.iter_rows(min_row=2, values_only=True) if row[idx["name"]]]
+    return rows
 
+
+def load_approved_site(site_name: str) -> dict:
+    """A single named row. Refuses anything not explicitly approved=TRUE by
+    Alex in the Approved Sites tab -- never the Discovery or Queue tabs,
+    which this function does not even open. Explicit-name lookup fails hard
+    on a bad row, since Alex named it deliberately."""
     match = None
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[idx["name"]] and str(row[idx["name"]]).strip().lower() == site_name.strip().lower():
-            match = {h: row[idx[h]] for h in header}
+    for row in _read_approved_tab():
+        if str(row["name"]).strip().lower() == site_name.strip().lower():
+            match = row
             break
 
     if match is None:
@@ -122,16 +145,33 @@ def load_approved_site(site_name: str) -> dict:
             f"No row named '{site_name}' in the '{APPROVED_TAB}' tab. "
             "This script only reads that tab -- add the site there first."
         )
-    approved_value = str(match.get("approved") or "").strip().lower()
-    if approved_value not in _TRUTHY:
+    if not _is_approved(match):
         raise SystemExit(
             f"'{site_name}' is not approved (approved={match.get('approved')!r}). "
             "Flip the 'approved' column to TRUE in the Approved Sites tab first -- "
             "this script will not crawl an unapproved site."
         )
-    if not match.get("blog_url") or not match.get("attribute_to"):
+    if not _has_required_fields(match):
         raise SystemExit(f"'{site_name}' row is missing blog_url or attribute_to.")
     return match
+
+
+def load_all_approved_sites() -> List[dict]:
+    """Every Approved Sites row with approved literally TRUE, in sheet
+    order -- the crawler's entire input surface when --site is omitted,
+    never the Discovery or Queue tabs. A checked-but-incomplete row is
+    skipped with a printed warning rather than aborting the whole run --
+    unlike the single-name lookup above, one bad row here shouldn't block
+    every other approved site."""
+    sites = []
+    for row in _read_approved_tab():
+        if not _is_approved(row):
+            continue
+        if not _has_required_fields(row):
+            print(f"  [skip] '{row['name']}' is approved but missing blog_url or attribute_to -- fix the row and rerun.")
+            continue
+        sites.append(row)
+    return sites
 
 
 def crawl_candidate_urls(blog_url: str, *, max_pages: int) -> List[str]:
@@ -248,18 +288,7 @@ def write_run_log(report: dict) -> Path:
     return path
 
 
-def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--site", required=True, help="exact 'name' value in the Approved Sites tab")
-    parser.add_argument("--apply", action="store_true", help="required acknowledgement for the real database write")
-    parser.add_argument("--max-candidates", type=int, default=1, help="cap on new documents this run may write (default 1)")
-    parser.add_argument("--max-pages", type=int, default=3, help="cap on index-page pagination depth (default 3)")
-    args = parser.parse_args(argv)
-
-    if args.max_candidates < 1 or args.max_pages < 1:
-        parser.error("--max-candidates and --max-pages must be at least 1")
-
-    site = load_approved_site(args.site)
+def run_for_site(site: dict, args: argparse.Namespace) -> int:
     declared_author = str(site["attribute_to"]).strip()
     blog_url = str(site["blog_url"]).strip()
     print(f"Site: {site['name']}  |  attribute_to: {declared_author}  |  blog_url: {blog_url}")
@@ -367,6 +396,32 @@ def main(argv=None) -> int:
     log_path = write_run_log(report)
     print(f"\nLog: {log_path}")
     return 0
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--site", help="exact 'name' value in the Approved Sites tab; omit to run every row with approved=TRUE")
+    parser.add_argument("--apply", action="store_true", help="required acknowledgement for the real database write")
+    parser.add_argument("--max-candidates", type=int, default=1, help="cap on new documents PER SITE this run may write (default 1)")
+    parser.add_argument("--max-pages", type=int, default=3, help="cap on index-page pagination depth, per site (default 3)")
+    args = parser.parse_args(argv)
+
+    if args.max_candidates < 1 or args.max_pages < 1:
+        parser.error("--max-candidates and --max-pages must be at least 1")
+
+    if args.site:
+        sites = [load_approved_site(args.site)]
+    else:
+        sites = load_all_approved_sites()
+        if not sites:
+            print(f"No rows in '{APPROVED_TAB}' have approved=TRUE -- nothing to do.")
+            return 0
+        print(f"No --site given -- running every approved site ({len(sites)}): {', '.join(str(s['name']) for s in sites)}")
+
+    exit_code = 0
+    for site in sites:
+        exit_code = max(exit_code, run_for_site(site, args))
+    return exit_code
 
 
 if __name__ == "__main__":

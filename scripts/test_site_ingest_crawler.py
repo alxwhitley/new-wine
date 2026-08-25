@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""Regression tests for the autonomous site crawler's two pure, deterministic
-safety components: byline_verify.py and link_discovery.py. No network, no
-database -- these are the components that have to be right for unattended
-writes to be safe at all, so they get direct, mutation-checked coverage.
+"""Regression tests for the autonomous site crawler's pure, deterministic
+components: byline_verify.py, link_discovery.py, and the Approved Sites
+tab-reading logic in site_ingest_crawler.py itself (load_approved_site /
+load_all_approved_sites). No network, no database -- these are the
+components that have to be right for unattended writes to be safe at all,
+so they get direct, mutation-checked coverage.
 
 Run: python3.12 scripts/test_site_ingest_crawler.py
 """
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
+
+import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import site_ingest_crawler
 from source_ingest_queue.byline_verify import (
     extract_byline_candidates,
     names_match,
@@ -198,6 +204,82 @@ dedup_html = b"""<html><body>
 result4 = discover_links(dedup_html, "https://example.com/blog")
 check("duplicate/query-variant links collapse to one candidate", result4.post_urls.count("https://example.com/post-a") == 1)
 check("only one candidate total after dedup", len(result4.post_urls) == 1)
+
+
+# ---------------------------------------------------------------------------
+# site_ingest_crawler: load_approved_site / load_all_approved_sites -- the
+# crawler's entire input surface. A temp workbook shaped like the real
+# "Approved Sites" tab; SHEET_PATH is monkeypatched to point at it for the
+# duration of this block, then restored.
+# ---------------------------------------------------------------------------
+_APPROVED_HEADER = [
+    "approved", "name", "attribute_to", "blog_url",
+    "authorship_confidence", "scale_note", "proposal_notes", "approved_at",
+]
+
+
+def _build_approved_sites_workbook(rows):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = site_ingest_crawler.APPROVED_TAB
+    ws.append(_APPROVED_HEADER)
+    for row in rows:
+        ws.append([row.get(h) for h in _APPROVED_HEADER])
+    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+    tmp.close()
+    wb.save(tmp.name)
+    return Path(tmp.name)
+
+
+_original_sheet_path = site_ingest_crawler.SHEET_PATH
+_test_wb_path = _build_approved_sites_workbook(
+    [
+        {"approved": "TRUE", "name": "Good Site", "attribute_to": "Good Site", "blog_url": "https://good.example.com/blog"},
+        {"approved": "yes", "name": "Lowercase Truthy", "attribute_to": "Lowercase Truthy", "blog_url": "https://truthy.example.com/blog"},
+        {"approved": "TRUE", "name": "Missing Blog Url", "attribute_to": "Missing Blog Url"},
+        {"approved": "FALSE", "name": "Not Approved", "attribute_to": "Not Approved", "blog_url": "https://no.example.com/blog"},
+        {"approved": None, "name": "Blank Approved", "attribute_to": "Blank Approved", "blog_url": "https://blank.example.com/blog"},
+    ]
+)
+
+try:
+    site_ingest_crawler.SHEET_PATH = _test_wb_path
+
+    all_sites = site_ingest_crawler.load_all_approved_sites()
+    all_names = {s["name"] for s in all_sites}
+    check("load_all_approved_sites: TRUE row included", "Good Site" in all_names)
+    check("load_all_approved_sites: lowercase truthy value ('yes') included", "Lowercase Truthy" in all_names)
+    check("load_all_approved_sites: approved but missing blog_url is skipped, not crashed", "Missing Blog Url" not in all_names)
+    check("load_all_approved_sites: FALSE row excluded", "Not Approved" not in all_names)
+    check("load_all_approved_sites: blank approved cell excluded", "Blank Approved" not in all_names)
+    check("load_all_approved_sites: exactly the two valid rows returned", len(all_sites) == 2)
+
+    named = site_ingest_crawler.load_approved_site("Good Site")
+    check("load_approved_site: exact name match returns the row", named["blog_url"] == "https://good.example.com/blog")
+
+    named_ci = site_ingest_crawler.load_approved_site("good site")
+    check("load_approved_site: case-insensitive name match", named_ci["name"] == "Good Site")
+
+    try:
+        site_ingest_crawler.load_approved_site("Not Approved")
+        check("load_approved_site: unapproved named row raises SystemExit", False)
+    except SystemExit:
+        check("load_approved_site: unapproved named row raises SystemExit", True)
+
+    try:
+        site_ingest_crawler.load_approved_site("Missing Blog Url")
+        check("load_approved_site: approved-but-incomplete named row raises SystemExit", False)
+    except SystemExit:
+        check("load_approved_site: approved-but-incomplete named row raises SystemExit", True)
+
+    try:
+        site_ingest_crawler.load_approved_site("Nonexistent Site")
+        check("load_approved_site: unknown name raises SystemExit", False)
+    except SystemExit:
+        check("load_approved_site: unknown name raises SystemExit", True)
+finally:
+    site_ingest_crawler.SHEET_PATH = _original_sheet_path
+    _test_wb_path.unlink(missing_ok=True)
 
 
 print(f"\n{len(_checks) - len(_failures)}/{len(_checks)} checks passed")
