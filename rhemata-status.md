@@ -7,8 +7,9 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-25 (mobile answer continuity, source visibility, and
-accessibility; code commit `f76e526` shipped and production verified live).
+Last verified: 2026-08-25 (mobile answer continuity, source visibility,
+accessibility, and prompt alignment; commits `f76e526` and `c386e52` shipped
+and production verified live).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -35,16 +36,20 @@ prompting, model selection, or answer-quality policy.
    semantics, closed navigation is inert, focus returns to the menu trigger,
    interactive targets are at least 44px, and dismissing feedback no longer
    submits a negative rating.
-4. **Honest latency presentation.** Long client-paced reveals are capped at six
+4. **Empty-state prompt alignment corrected** (`c386e52`). The composer and
+   suggestion bars share the same mobile container width; single-line prompt
+   text is vertically centered with the send control, while multiline input
+   remains bottom-aligned.
+5. **Honest latency presentation.** Long client-paced reveals are capped at six
    seconds without removing streaming or taking scroll control from the reader;
    the loading state says answers may take about a minute and can be left while
    the tab remains open.
-5. **Earlier mobile containment remains live.** The PWA shell stays locked to
+6. **Earlier mobile containment remains live.** The PWA shell stays locked to
    the viewport, streaming does not auto-scroll, send reveals a new turn once,
    the multiline composer remains bottom-aligned, and the top-left drawer opens
    from the left (`732bb6d`–`08fc91d`). The quote rail remains disabled.
 
-**Verification:** frontend tests 24/24, scoped changed-file lint, diff check,
+**Verification:** frontend tests 26/26, scoped changed-file lint, diff check,
 Impeccable detector, and the 17-route production build passed. The final
 390×844 browser regression verified viewport containment (`390×844`, root
 scroll `0,0`), left-opening navigation and focus return, 44px targets, reload
@@ -52,13 +57,16 @@ restoration, two-source fallback, feedback Escape with zero submissions, and
 durable-job reconnect with pending state cleared. Two read-only production job
 diagnoses confirmed 4/6 stored citations despite zero inline markers, queue
 under one second, and 61–64s model generation; the remaining model latency is
-Scheduled under B6 rather than traded for answer quality. Vercel deployment
-`dpl_8pNESAdmJcoJJxv1BkRWBhtSYeoo` reached Ready, was aliased to `rhemata.app`,
-and the same 390×844 regression passed against that live alias.
+Scheduled under B6 rather than traded for answer quality. Final Vercel
+deployment `dpl_FqLqu22mVZYhKdSUzYbsQsvinyiX` reached Ready and was aliased to
+`rhemata.app`. Live prompt geometry passed with matching `x=16`, `width=358`
+composer/suggestion edges, centered 44px textarea/send controls, and `0px`
+multiline bottom delta.
 
 **Session measures:** original outcome completed; unplanned investigations 0;
 findings promoted to Blocker 0; active critical-path item count 0. Alex-approved
-scope: the full recommended mobile hardening pass and production deployment.
+scope: the full recommended mobile hardening pass, prompt-cluster alignment,
+and production deployment.
 
 ---
 
