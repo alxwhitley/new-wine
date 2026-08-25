@@ -1,4 +1,5 @@
 import type { VerifiedReference } from "@/lib/study-reference";
+import { revealCharsPerSecond } from "@/lib/chat-reveal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -8,7 +9,7 @@ export interface Citation {
   document_title: string;
   author: string;
   content: string;
-  url?: string;
+  url?: string | null;
 }
 
 export interface ResolvedQuote {
@@ -89,10 +90,21 @@ export interface WeeklyUsage {
   resets: string;
 }
 
+export interface StreamMeta {
+  citations: Citation[];
+  conversation_id: string | null;
+  message_id?: string | null;
+  topics_established?: Record<string, number>;
+  usage?: { used: number; limit: number; week_start: string };
+  verified_references?: VerifiedReference[];
+  quote_ids?: string[];
+}
+
 export interface StreamCallbacks {
   onToken: (token: string) => void;
-  onMeta: (meta: { citations: Citation[]; conversation_id: string | null; message_id?: string | null; topics_established?: Record<string, number>; usage?: { used: number; limit: number; week_start: string }; verified_references?: VerifiedReference[]; quote_ids?: string[] }) => void;
+  onMeta: (meta: StreamMeta) => void;
   onError: (error: string) => void;
+  onJobSubmitted?: (jobId: string) => void;
 }
 
 // DEAD CODE as of 2026-08-07 (mirror-unification job complete): the backend
@@ -215,12 +227,89 @@ const _SERVICE_UNAVAILABLE_MESSAGE =
  *  PLAYBACK_CHARS_PER_SEC. Fires only after the fully-checked answer has arrived. */
 async function clientPaceReveal(answer: string, onToken: (t: string) => void): Promise<void> {
   if (!answer) return;
-  const CHARS_PER_SEC = 250;
+  const charsPerSecond = revealCharsPerSecond(answer.length);
   const parts = answer.match(/\S+\s*/g) ?? [answer];
   for (const part of parts) {
     onToken(part);
-    await new Promise((r) => setTimeout(r, (part.length / CHARS_PER_SEC) * 1000));
+    await new Promise((r) => setTimeout(r, (part.length / charsPerSecond) * 1000));
   }
+}
+
+interface AsyncResultOptions {
+  token?: string | null;
+  conversationId?: string | null;
+  usage?: { used: number; limit: number; week_start: string };
+}
+
+export async function streamAsyncChatResult(
+  jobId: string,
+  callbacks: StreamCallbacks,
+  options?: AsyncResultOptions,
+): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (options?.token) headers["Authorization"] = `Bearer ${options.token}`;
+
+  const cidQuery = options?.conversationId
+    ? `?conversation_id=${encodeURIComponent(options.conversationId)}`
+    : "";
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/async-chat/result/${jobId}${cidQuery}`, { headers });
+  } catch {
+    callbacks.onError(_SERVICE_UNAVAILABLE_MESSAGE);
+    return;
+  }
+  if (!res.ok) {
+    callbacks.onError(`result_${res.status}`);
+    return;
+  }
+  if (!res.body) throw new Error("No response body");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let revealPromise: Promise<void> | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+      const payload = trimmed.slice(6);
+      if (payload === "[DONE]") {
+        await revealPromise;
+        return;
+      }
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed.error) {
+          callbacks.onError(parsed.error);
+          return;
+        }
+        if (parsed.answer !== undefined && !revealPromise) {
+          revealPromise = clientPaceReveal(parsed.answer, callbacks.onToken);
+        }
+        if (parsed.citations !== undefined) {
+          callbacks.onMeta({
+            citations: parsed.citations ?? [],
+            conversation_id: parsed.conversation_id ?? null,
+            message_id: parsed.message_id ?? null,
+            verified_references: parsed.verified_references ?? undefined,
+            topics_established: parsed.topics_established ?? undefined,
+            usage: options?.usage,
+            quote_ids: parsed.quote_ids ?? [],
+          });
+        }
+      } catch {
+        // Not JSON — skip
+      }
+    }
+  }
+  await revealPromise;
 }
 
 /** Same signature as streamChatMessage. Submits to the durable queue, then streams
@@ -289,64 +378,16 @@ export async function streamAsyncChatMessage(
   const jobId: string | undefined = submitData?.job_id;
   if (!jobId) throw new Error("Chat request failed");
   const submitUsage = submitData?.usage as { used: number; limit: number; week_start: string } | undefined;
+  callbacks.onJobSubmitted?.(jobId);
 
   // 2. Stream the result. Reconnect = re-issue this GET for the same job_id.
   //    The conversation_id (if we have one) tells the server which conversation
   //    to persist the answer under.
-  const cidQuery = options?.conversationId
-    ? `?conversation_id=${encodeURIComponent(options.conversationId)}`
-    : "";
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}/async-chat/result/${jobId}${cidQuery}`, { headers });
-  } catch {
-    callbacks.onError(_SERVICE_UNAVAILABLE_MESSAGE);
-    return;
-  }
-  if (!res.body) throw new Error("No response body");
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let revealed = false;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data: ")) continue; // ignore ": keepalive" comments
-      const payload = trimmed.slice(6);
-      if (payload === "[DONE]") return;
-      try {
-        const parsed = JSON.parse(payload);
-        if (parsed.error) {
-          callbacks.onError(parsed.error);
-          return;
-        }
-        if (parsed.answer !== undefined && !revealed) {
-          revealed = true;
-          await clientPaceReveal(parsed.answer, callbacks.onToken);
-        }
-        if (parsed.citations !== undefined) {
-          callbacks.onMeta({
-            citations: parsed.citations ?? [],
-            conversation_id: parsed.conversation_id ?? null,
-            message_id: parsed.message_id ?? null,
-            verified_references: parsed.verified_references ?? undefined,
-            topics_established: parsed.topics_established ?? undefined,
-            usage: submitUsage,
-            quote_ids: parsed.quote_ids ?? [],
-          });
-        }
-      } catch {
-        // Not JSON — skip
-      }
-    }
-  }
+  return streamAsyncChatResult(jobId, callbacks, {
+    token: options?.token,
+    conversationId: options?.conversationId,
+    usage: submitUsage,
+  });
 }
 
 export async function resolveQuotes(quoteIds: string[]): Promise<ResolvedQuote[]> {

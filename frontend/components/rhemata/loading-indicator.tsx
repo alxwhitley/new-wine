@@ -25,12 +25,22 @@ export function LoadingIndicator() {
   }, []);
 
   return (
-    <p
-      className={`text-sm text-muted-foreground italic text-left transition-opacity duration-500 ${
-        visible ? "opacity-100" : "opacity-0"
-      }`}
+    <div
+      role="status"
+      aria-live="polite"
+      className="space-y-1 text-left"
     >
-      {PHRASES[index]}
-    </p>
+      <p
+        aria-hidden="true"
+        className={`text-sm text-muted-foreground italic transition-opacity duration-500 motion-reduce:transition-none ${
+          visible ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        {PHRASES[index]}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Thoughtful answers can take about a minute. You can leave and return to this tab.
+      </p>
+    </div>
   );
 }

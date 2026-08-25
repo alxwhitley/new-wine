@@ -56,6 +56,11 @@ export default function Home() {
   }
   const [weeklyLimitDetail, setWeeklyLimitDetail] = useState<WeeklyLimitDetail | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+    requestAnimationFrame(() => menuButtonRef.current?.focus());
+  }, []);
   // Geometry v3: StudyPanel's desktop Portal renders into this node instead
   // of document.body — real DOM nesting inside the chat card. useState (not
   // useRef) so the ref callback's assignment triggers a re-render, since
@@ -381,7 +386,7 @@ export default function Home() {
         accessToken={accessToken}
         weeklyUsage={weeklyUsage}
         isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={closeSidebar}
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
@@ -419,6 +424,7 @@ export default function Home() {
               the real inset so it lands at the same visual position as
               today instead of under the notch/status bar. */}
           <button
+            ref={menuButtonRef}
             aria-label="Open sidebar"
             onClick={() => setSidebarOpen(true)}
             className="md:hidden absolute top-[calc(0.75rem+env(safe-area-inset-top))] left-3 z-30 h-11 w-11 flex items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"

@@ -1,7 +1,20 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { streamAsyncChatMessage, fetchWeeklyUsage, Citation } from "@/lib/api";
+import {
+  streamAsyncChatMessage,
+  streamAsyncChatResult,
+  fetchWeeklyUsage,
+  Citation,
+  type StreamMeta,
+} from "@/lib/api";
 import type { VerifiedReference } from "@/lib/study-reference";
 import { withoutFailedTurn } from "@/lib/chat-recovery";
+import {
+  GUEST_CHAT_SESSION_KEY,
+  parseGuestChatSession,
+  serializeGuestChatSession,
+  shouldRetainPendingGuestJob,
+  type PendingGuestJob,
+} from "@/lib/guest-chat-session";
 
 export interface Message {
   role: "user" | "assistant";
@@ -39,6 +52,9 @@ export function useChat(
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [weeklyUsage, setWeeklyUsage] = useState<{ used: number; limit: number } | null>(null);
+  const [pendingGuestJob, setPendingGuestJob] = useState<PendingGuestJob | null>(null);
+  const [guestJobToResume, setGuestJobToResume] = useState<PendingGuestJob | null>(null);
+  const [guestSessionHydrated, setGuestSessionHydrated] = useState(false);
   const conversationIdRef = useRef<string | null>(null);
   const topicsEstablishedRef = useRef<Record<string, number>>({});
 
@@ -51,6 +67,84 @@ export function useChat(
         // Silently ignore — ring stays hidden if fetch fails
       });
   }, [accessToken]);
+
+  // Guest chats are session-scoped but reload-durable. Authenticated history
+  // remains server-owned; never mirror it into browser storage.
+  useEffect(() => {
+    if (accessToken) {
+      sessionStorage.removeItem(GUEST_CHAT_SESSION_KEY);
+      setGuestSessionHydrated(true);
+      return;
+    }
+
+    const restored = parseGuestChatSession(sessionStorage.getItem(GUEST_CHAT_SESSION_KEY));
+    if (restored) {
+      const restoredMessages = [...restored.messages];
+      if (restored.pendingJob) {
+        const last = restoredMessages[restoredMessages.length - 1];
+        if (last?.role === "assistant") {
+          restoredMessages[restoredMessages.length - 1] = { ...last, content: "" };
+        }
+      }
+      topicsEstablishedRef.current = restored.topicsEstablished;
+      setMessages(restoredMessages);
+      setPendingGuestJob(restored.pendingJob);
+      setGuestJobToResume(restored.pendingJob);
+    }
+    setGuestSessionHydrated(true);
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (accessToken || !guestSessionHydrated || pendingGuestJob) return;
+    if (messages.length === 0 && !pendingGuestJob) {
+      sessionStorage.removeItem(GUEST_CHAT_SESSION_KEY);
+      return;
+    }
+    sessionStorage.setItem(GUEST_CHAT_SESSION_KEY, serializeGuestChatSession({
+      version: 1,
+      messages,
+      topicsEstablished: topicsEstablishedRef.current,
+      pendingJob: pendingGuestJob,
+    }));
+  }, [accessToken, guestSessionHydrated, messages, pendingGuestJob]);
+
+  const appendAnswerToken = useCallback((token: string) => {
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last?.role === "assistant") {
+        updated[updated.length - 1] = { ...last, content: last.content + token };
+      }
+      return updated;
+    });
+  }, []);
+
+  const applyAnswerMeta = useCallback((meta: StreamMeta) => {
+    if (meta.conversation_id) {
+      conversationIdRef.current = meta.conversation_id;
+      setConversationId(meta.conversation_id);
+    }
+    if (meta.topics_established) {
+      topicsEstablishedRef.current = meta.topics_established;
+    }
+    if (meta.usage) {
+      setWeeklyUsage({ used: meta.usage.used, limit: meta.usage.limit });
+    }
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last?.role === "assistant") {
+        updated[updated.length - 1] = {
+          ...last,
+          ...(meta.citations?.length ? { citations: meta.citations } : {}),
+          ...(meta.message_id ? { messageId: meta.message_id } : {}),
+          ...(meta.verified_references?.length ? { verifiedReferences: meta.verified_references } : {}),
+          ...(meta.quote_ids?.length ? { quoteIds: meta.quote_ids } : {}),
+        };
+      }
+      return updated;
+    });
+  }, []);
 
   const sendMessage = useCallback(
     async (question: string) => {
@@ -67,6 +161,8 @@ export function useChat(
       });
 
       let newConversationId: string | null = null;
+      let guestJobSubmitted = false;
+      let streamFailure: string | null = null;
 
       try {
         // The async answer path is the only path -- no mode check, no fallback
@@ -78,49 +174,27 @@ export function useChat(
         await streamAsyncChatMessage(
           question,
           {
-            onToken: (token) => {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === "assistant") {
-                  updated[updated.length - 1] = {
-                    ...last,
-                    content: last.content + token,
-                  };
-                }
-                return updated;
-              });
-            },
+            onToken: appendAnswerToken,
             onMeta: (meta) => {
               newConversationId = meta.conversation_id;
-              if (meta.conversation_id) {
-                conversationIdRef.current = meta.conversation_id;
-                setConversationId(meta.conversation_id);
-              }
-              if (meta.topics_established) {
-                topicsEstablishedRef.current = meta.topics_established;
-              }
-              // Update usage count from SSE meta — no extra /usage fetch needed
-              if (meta.usage) {
-                setWeeklyUsage({ used: meta.usage.used, limit: meta.usage.limit });
-              }
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === "assistant") {
-                  updated[updated.length - 1] = {
-                    ...last,
-                    ...(meta.citations?.length ? { citations: meta.citations } : {}),
-                    ...(meta.message_id ? { messageId: meta.message_id } : {}),
-                    ...(meta.verified_references?.length ? { verifiedReferences: meta.verified_references } : {}),
-                    ...(meta.quote_ids?.length ? { quoteIds: meta.quote_ids } : {}),
-                  };
-                }
-                return updated;
-              });
+              applyAnswerMeta(meta);
             },
             onError: (errMsg) => {
+              streamFailure = errMsg;
               setError(errMsg);
+            },
+            onJobSubmitted: (jobId) => {
+              if (!accessToken) {
+                guestJobSubmitted = true;
+                const pendingJob = { jobId, question };
+                setPendingGuestJob(pendingJob);
+                sessionStorage.setItem(GUEST_CHAT_SESSION_KEY, serializeGuestChatSession({
+                  version: 1,
+                  messages: [...history, userMessage, { role: "assistant", content: "" }],
+                  topicsEstablished: topicsEstablishedRef.current,
+                  pendingJob,
+                }));
+              }
             },
           },
           {
@@ -132,6 +206,16 @@ export function useChat(
           },
         );
 
+        if (streamFailure) {
+          if (!guestJobSubmitted || !shouldRetainPendingGuestJob(streamFailure)) {
+            setMessages((prev) => withoutFailedTurn(prev));
+            setPendingGuestJob(null);
+          } else {
+            setError("Something went wrong. Reload to reconnect to your answer.");
+          }
+          return null;
+        }
+        setPendingGuestJob(null);
         return newConversationId;
       } catch (err) {
         if (err instanceof Error && err.message === "guest_limit_reached") {
@@ -153,21 +237,76 @@ export function useChat(
         // permanently in `messages` -- a dead bubble that only disappeared
         // if the caller wiped the whole conversation. Stripping it here
         // lets a retry resubmit cleanly in place instead.
-        setMessages((prev) => withoutFailedTurn(prev));
-        setError("Something went wrong. Please try again.");
+        if (!accessToken && guestJobSubmitted) {
+          setError("Something went wrong. Reload to reconnect to your answer.");
+        } else {
+          setMessages((prev) => withoutFailedTurn(prev));
+          setError("Something went wrong. Please try again.");
+        }
         return null;
       } finally {
         setLoading(false);
       }
     },
-    [accessToken, onGuestLimitReached, onWeeklyLimitReached],
+    [accessToken, appendAnswerToken, applyAnswerMeta, onGuestLimitReached, onWeeklyLimitReached],
   );
+
+  useEffect(() => {
+    if (accessToken || !guestJobToResume) return;
+    let cancelled = false;
+    let failed = false;
+    let terminalFailure = false;
+
+    setLoading(true);
+    setError(null);
+    streamAsyncChatResult(
+      guestJobToResume.jobId,
+      {
+        onToken: (token) => {
+          if (!cancelled) appendAnswerToken(token);
+        },
+        onMeta: (meta) => {
+          if (!cancelled) applyAnswerMeta(meta);
+        },
+        onError: (message) => {
+          if (cancelled) return;
+          failed = true;
+          terminalFailure = !shouldRetainPendingGuestJob(message);
+          setError(terminalFailure
+            ? "That answer could not be recovered. Please send your question again."
+            : message);
+        },
+      },
+    ).catch(() => {
+      if (!cancelled) {
+        failed = true;
+        setError("Something went wrong. Reload to reconnect to your answer.");
+      }
+    }).finally(() => {
+      if (cancelled) return;
+      setLoading(false);
+      setGuestJobToResume(null);
+      if (terminalFailure) {
+        setMessages((prev) => withoutFailedTurn(prev));
+        setPendingGuestJob(null);
+      } else if (!failed) {
+        setPendingGuestJob(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, appendAnswerToken, applyAnswerMeta, guestJobToResume]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    setPendingGuestJob(null);
+    setGuestJobToResume(null);
     conversationIdRef.current = null;
     setConversationId(null);
     topicsEstablishedRef.current = {};
+    sessionStorage.removeItem(GUEST_CHAT_SESSION_KEY);
   }, []);
 
   const loadConversation = useCallback((id: string, msgs: Message[]) => {

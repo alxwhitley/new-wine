@@ -1,13 +1,22 @@
 "use client";
 
-import { useState, useRef, memo } from "react";
+import { useState, memo } from "react";
 import { ThumbsUp, ThumbsDown, Quote } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useResolvedQuotes } from "@/hooks/useResolvedQuotes";
 import type { Citation, ResolvedQuote } from "@/lib/api";
+import { shouldRenderCitationFallback } from "@/lib/citation-display";
 import {
   detectVerseReferences,
   isVerified,
@@ -58,7 +67,8 @@ function CitationPill({
   return (
     <button
       onClick={() => onClick?.(citation, index)}
-      className="mx-0.5 text-xs font-medium text-primary underline-offset-4 hover:underline transition-colors cursor-pointer"
+      aria-label={`Open source ${index}: ${citation.document_title || citation.author || "source"}`}
+      className="mx-0.5 text-xs font-medium text-primary underline-offset-4 hover:underline transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       [{index}]
     </button>
@@ -80,7 +90,7 @@ function VerseReferenceSpan({
     <button
       onClick={() => onClick?.(reference)}
       data-study-trigger
-      className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer"
+      className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       {reference.raw}
     </button>
@@ -102,7 +112,7 @@ function TeacherReferenceSpan({
     <button
       onClick={() => onClick?.(reference, question)}
       data-study-trigger
-      className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer"
+      className="animate-in fade-in-0 duration-300 motion-reduce:animate-none text-foreground underline decoration-primary/50 decoration-[1px] underline-offset-4 hover:decoration-primary transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       {reference.name}
     </button>
@@ -214,41 +224,34 @@ function FeedbackModal({
   onClose: () => void;
 }) {
   const [comment, setComment] = useState("");
-  const overlayRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
-    >
-      <div
-        className="w-full max-w-md mx-4 rounded-lg border bg-popover border-border p-6"
-      >
-        <h3 className="font-sans text-lg text-foreground">What went wrong?</h3>
-        <p className="text-xs text-muted-foreground mt-1 mb-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="w-[calc(100%-2rem)] max-w-md bg-popover" showCloseButton>
+        <DialogHeader>
+          <DialogTitle>What went wrong?</DialogTitle>
+          <DialogDescription>
           Your feedback helps improve Rhemata
-        </p>
-        <textarea
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-6 pb-4">
+          <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Describe the issue..."
+          aria-label="Describe what went wrong"
           rows={4}
-          className="w-full rounded-lg border bg-background border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
-        />
-        <div className="flex justify-end gap-3 mt-4">
-          <button
-            onClick={() => onSubmit("")}
-            className="px-4 py-2 text-sm rounded-lg cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Skip
-          </button>
+          className="w-full rounded-lg border bg-background border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={() => onSubmit(comment)}>
             Submit
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -311,7 +314,8 @@ function FeedbackButtons({
       <div className="flex items-center gap-1 mt-2">
         <button
           onClick={() => { if (!rating) submitFeedback("thumbs_up"); }}
-          className="group p-1 rounded-md transition-colors cursor-pointer"
+          aria-label="Good answer"
+          className="group flex min-h-11 min-w-11 items-center justify-center rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           title="Good answer"
         >
           <ThumbsUp
@@ -324,7 +328,8 @@ function FeedbackButtons({
         </button>
         <button
           onClick={() => { if (!rating) setShowModal(true); }}
-          className="group p-1 rounded-md transition-colors cursor-pointer"
+          aria-label="Bad answer"
+          className="group flex min-h-11 min-w-11 items-center justify-center rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           title="Bad answer"
         >
           <ThumbsDown
@@ -344,7 +349,6 @@ function FeedbackButtons({
           }}
           onClose={() => {
             setShowModal(false);
-            submitFeedback("thumbs_down");
           }}
         />
       )}
@@ -418,6 +422,38 @@ export function QuoteRailView({ quotes }: { quotes: ResolvedQuote[] }) {
 function QuoteRail({ quoteIds }: { quoteIds?: string[] }) {
   const quotes = useResolvedQuotes(quoteIds);
   return <QuoteRailView quotes={quotes} />;
+}
+
+function CitationFallback({
+  citations,
+  onCitationClick,
+}: {
+  citations: Citation[];
+  onCitationClick?: (citation: Citation, index: number) => void;
+}) {
+  return (
+    <section className="mt-4 border-t border-border pt-3" aria-label="Sources">
+      <h3 className="mb-2 text-sm font-semibold text-foreground">Sources</h3>
+      <div className="space-y-1">
+        {citations.map((citation, index) => (
+          <button
+            key={`${citation.chunk_id}-${index}`}
+            type="button"
+            onClick={() => onCitationClick?.(citation, index + 1)}
+            className="flex min-h-11 w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <span className="shrink-0 font-medium text-primary">[{index + 1}]</span>
+            <span className="min-w-0">
+              <span className="block truncate text-foreground">
+                {citation.document_title || "Source"}
+              </span>
+              {citation.author ? <span className="block truncate text-xs">{citation.author}</span> : null}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 // Memoized: react-markdown's own <Markdown> component re-creates its whole
@@ -517,6 +553,9 @@ export const ChatMessage = memo(function ChatMessage({
           {cleanedContent}
         </ReactMarkdown>
       </div>
+      {!isStreaming && shouldRenderCitationFallback(cleanedContent, citations.length) ? (
+        <CitationFallback citations={citations} onCitationClick={onCitationClick} />
+      ) : null}
       <QuoteRail quoteIds={quoteIds} />
       <FeedbackButtons
         messageId={messageId}

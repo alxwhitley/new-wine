@@ -165,7 +165,8 @@ export function Sidebar({
         </h1>
         <button
           onClick={onClose}
-          className="rounded-md p-1 text-muted-foreground hover:text-foreground md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
+          aria-label="Close sidebar"
+          className="rounded-md p-1 text-muted-foreground hover:text-foreground md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
         >
           <X className="h-5 w-5" />
         </button>
@@ -363,7 +364,7 @@ export function Sidebar({
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
         ) : (
-          <Button size="sm" className="w-full" onClick={onSignInClick}>
+          <Button size="sm" className="min-h-11 w-full text-background" onClick={onSignInClick}>
             Become a test user
           </Button>
         )}
@@ -460,6 +461,9 @@ export function Sidebar({
           24px on devices where the inset is smaller or zero, grows only
           on notched/Dynamic-Island devices where 24px wasn't enough. */}
       <aside
+        aria-label="Mobile navigation"
+        aria-hidden={!isOpen}
+        inert={!isOpen}
         className={cn(
           "fixed left-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar px-4 pt-[max(1.5rem,env(safe-area-inset-top))] transition-transform duration-300 md:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
