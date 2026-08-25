@@ -263,17 +263,16 @@ export default function Home() {
     [signUp],
   );
 
-  // Auto-scroll — only when user is already near the bottom
+  // Sending a new question deliberately reveals the new turn once. Streaming
+  // tokens never own scroll position after that; the reader does.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollOnNextTurnRef = useRef(false);
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distanceFromBottom < 150) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, chatLoading]);
+    if (!scrollOnNextTurnRef.current || messages.length === 0) return;
+    scrollOnNextTurnRef.current = false;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
 
   // / shortcut focuses the chat textarea
   useEffect(() => {
@@ -295,6 +294,7 @@ export default function Home() {
   const handleSend = useCallback(
     async (question: string) => {
       setLastQuery(question);
+      scrollOnNextTurnRef.current = true;
       const newConvId = await sendMessage(question);
       if (newConvId && user) {
         const title = question.split(/\s+/).slice(0, 6).join(" ");
