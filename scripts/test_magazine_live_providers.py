@@ -127,7 +127,8 @@ def test_gemini_page_reviewer_uses_strict_schema_and_parses_verdict() -> None:
                                 "text": "Compare the image region by region.",
                             },
                             {
-                                "text": json.dumps(
+                                "text": "```json\n"
+                                + json.dumps(
                                     {
                                         "complete": False,
                                         "missing_regions": ["bottom paragraph"],
@@ -136,6 +137,7 @@ def test_gemini_page_reviewer_uses_strict_schema_and_parses_verdict() -> None:
                                         "reason": "The last paragraph is absent.",
                                     }
                                 )
+                                + "\n```"
                             }
                         ]
                     }

@@ -6,6 +6,7 @@ import base64
 import json
 import math
 import os
+import re
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ GEMINI_PRICES_USD_PER_MILLION = {
 GROQ_PRICES_USD_PER_MILLION = {GROQ_MODEL: (0.15, 0.60)}
 _GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_JSON_FENCE = re.compile(r"\A```(?:json)?[ \t]*\n(?P<body>.*)\n```[ \t]*\Z", re.DOTALL)
 
 PostJSON = Callable[[str, Mapping[str, str], Mapping[str, object]], Mapping[str, Any]]
 
@@ -206,6 +208,19 @@ def _gemini_text(response: Mapping[str, Any], *, allow_empty: bool) -> str:
     return text
 
 
+def _structured_json(text: str) -> object:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as bare_error:
+        match = _JSON_FENCE.fullmatch(text)
+        if match is None:
+            raise LiveProviderError("gemini_review_json_invalid") from bare_error
+        try:
+            return json.loads(match.group("body"))
+        except json.JSONDecodeError as fenced_error:
+            raise LiveProviderError("gemini_review_json_invalid") from fenced_error
+
+
 def _image_part(image_bytes: bytes) -> dict[str, object]:
     return {
         "inlineData": {
@@ -363,10 +378,7 @@ class GeminiLivePageReviewer(_GeminiBoundary):
             },
             maximum_call_cost_usd=self._maximum_cost(prompt, 2048),
         )
-        try:
-            review = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise LiveProviderError("gemini_review_json_invalid") from exc
+        review = _structured_json(text)
         if not isinstance(review, dict):
             raise LiveProviderError("gemini_review_shape_invalid")
         return PageReviewResponse(review=review, usage=usage, cost_usd=cost)
