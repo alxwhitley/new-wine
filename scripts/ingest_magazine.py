@@ -515,6 +515,20 @@ def _ingest_article_snapshot(
             )
         return ("processed", None)
 
+    if stable_file_path is not None:
+        identity_status, _existing_doc_id = (
+            shared_ingest.reviewed_document_identity_status(
+                DB_PARAMS, stable_file_path
+            )
+        )
+        if identity_status == "conflict":
+            raise propositions.ApprovedArtifactMismatch(
+                "reviewed_approval_conflict"
+            )
+        if identity_status == "exact":
+            print("  ⏭️  Exact reviewed approval already ingested — skipping")
+            return ("skipped", "already_ingested")
+
     db = get_db()
 
     # Chunk-header asymmetry, reproduced exactly from the pre-conversion script:

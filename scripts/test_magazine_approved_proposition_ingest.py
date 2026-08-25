@@ -76,6 +76,18 @@ SECOND_ARTICLE_BODY = (
 SECOND_APPROVED_CONTENT = "Ben Vale teaches that humble service forms patience."
 
 
+@pytest.fixture(autouse=True)
+def no_existing_reviewed_document(monkeypatch, request):
+    """Keep reviewed-ingest tests DB-free unless identity state is the subject."""
+    if request.node.name == "test_reviewed_identity_status_detects_different_approval":
+        return
+    monkeypatch.setattr(
+        ingest_magazine.shared_ingest,
+        "reviewed_document_identity_status",
+        lambda *_args, **_kwargs: ("absent", None),
+    )
+
+
 def digest(value: str | bytes) -> str:
     data = value if isinstance(value, bytes) else value.encode("utf-8")
     return hashlib.sha256(data).hexdigest()
@@ -467,6 +479,86 @@ def test_reviewed_storage_identity_changes_with_approval_digest() -> None:
     assert first != changed
     assert first.startswith("new-wine-reviewed/v2/")
     assert "b" * 64 in first
+
+
+def test_changed_approval_conflict_refuses_before_writer(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A prior approval for the stable issue/article identity blocks a rewrite."""
+    issue_dir, artifact_dir, _decision = write_reviewed_fixture(tmp_path)
+    writer_calls = []
+
+    monkeypatch.setattr(ingest_magazine, "get_db", lambda: object())
+    monkeypatch.setattr(
+        ingest_magazine.shared_ingest,
+        "reviewed_document_identity_status",
+        lambda *_args, **_kwargs: ("conflict", "old-document-id"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        ingest_magazine.shared_ingest,
+        "ingest_document",
+        lambda **kwargs: writer_calls.append(kwargs)
+        or {
+            "status": "processed",
+            "reason": None,
+            "chunks": ["chunk"],
+            "propositions": "stored:2",
+        },
+    )
+
+    stats = ingest_magazine.ingest_reviewed_issue(issue_dir, artifact_dir)
+
+    assert stats == {"attempted": 1, "stored": 0, "errored": 1, "skipped": 0}
+    assert writer_calls == []
+
+
+def test_reviewed_identity_status_detects_different_approval(
+    monkeypatch,
+) -> None:
+    """The stable issue/article lookup distinguishes exact retry from conflict."""
+    current = ingest_magazine._reviewed_file_path("a" * 64, "b" * 64, ARTICLE_ID)
+    stale = ingest_magazine._reviewed_file_path("a" * 64, "c" * 64, ARTICLE_ID)
+
+    class Cursor:
+        def execute(self, sql, params):
+            self.sql = sql
+            self.params = params
+
+        def fetchall(self):
+            return [("old-document-id", stale)]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Connection:
+        def __init__(self):
+            self.cursor_value = Cursor()
+            self.closed = False
+
+        def cursor(self):
+            return self.cursor_value
+
+        def close(self):
+            self.closed = True
+
+    connection = Connection()
+    monkeypatch.setattr(
+        ingest_magazine.shared_ingest.psycopg2,
+        "connect",
+        lambda **_kwargs: connection,
+    )
+    lookup = getattr(
+        ingest_magazine.shared_ingest,
+        "reviewed_document_identity_status",
+        lambda *_args, **_kwargs: ("absent", None),
+    )
+
+    assert lookup({}, current) == ("conflict", "old-document-id")
+    assert connection.closed is True
 
 
 def test_reviewed_issue_counts_processed_count_mismatch_as_errored(
