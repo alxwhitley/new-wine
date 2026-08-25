@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,6 +16,7 @@ import pytest
 
 import review_magazine_issue as runner
 from magazine_review.articles import _stage_identity as article_stage_identity
+from magazine_review.artifacts import write_artifact
 from magazine_review.benchmark import BenchmarkCandidate
 from magazine_review.ocr import OCRReviewConfig, VerifiedIssueTranscript
 from magazine_review.schemas import (
@@ -570,6 +574,276 @@ def test_cli_factory_cannot_substitute_a_different_accepted_decision(
         "state": "pipeline_error",
         "reason": "provider_factory_decision_mismatch",
     }
+
+
+def decision_document(pdf_path: Path) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "decision_name": "accepted-one-issue",
+        "state": "accepted",
+        "issue": {
+            "filename": pdf_path.name,
+            "pdf_sha256": hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
+        },
+        "accepted_candidate": {
+            "provider": "accepted-provider",
+            "model": "accepted-model",
+        },
+        "benchmark_report_sha256": digest("report"),
+    }
+
+
+def test_direct_script_accepts_imported_structural_provider_adapters(
+    one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """`__main__` and imported class identities must not block a valid factory."""
+    decision_path = tmp_path / "accepted-decision.json"
+    decision_path.write_text(json.dumps(decision_document(one_page_pdf)), encoding="utf-8")
+    factory_path = tmp_path / "offline_factory.py"
+    factory_path.write_text(
+        """
+from review_magazine_issue import ProviderAdapters
+from magazine_review.benchmark import BenchmarkCandidate
+
+class Initial:
+    def __init__(self, candidate):
+        self.candidate = candidate
+    def transcribe(self, fixture):
+        raise RuntimeError("offline_pipeline_reached")
+
+class Repair:
+    candidate = BenchmarkCandidate("Gemini", "gemini-3.6-flash")
+    def transcribe(self, fixture):
+        raise AssertionError("repair must not run")
+
+class PageReviewer:
+    model = "gemini-3.6-flash"
+    def review(self, page, text, instructions):
+        raise AssertionError("review must not run")
+
+class Structured:
+    def complete(self, request):
+        raise AssertionError("structured review must not run")
+
+def build(decision):
+    return ProviderAdapters(
+        initial_ocr_provider=Initial(decision.accepted_candidate),
+        page_reviewer=PageReviewer(),
+        repair_ocr_provider=Repair(),
+        article_client=Structured(),
+        proposition_reviewer=Structured(),
+    )
+""".lstrip(),
+        encoding="utf-8",
+    )
+    scripts_dir = Path(__file__).parent
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = os.pathsep.join((str(tmp_path), str(scripts_dir)))
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(scripts_dir / "review_magazine_issue.py"),
+            "--pdf",
+            str(one_page_pdf),
+            "--artifact-dir",
+            str(tmp_path / "artifacts"),
+            "--benchmark-decision",
+            str(decision_path),
+            "--provider-adapter-factory",
+            "offline_factory:build",
+        ],
+        check=False,
+        capture_output=True,
+        env=environment,
+        text=True,
+        timeout=20,
+    )
+
+    assert completed.returncode == 2
+    output = json.loads(completed.stdout)
+    assert output["state"] == "pipeline_error"
+    assert output["reasons"] == ["ocr:RuntimeError:offline_pipeline_reached"]
+    assert "provider_adapter_factory_result_invalid" not in completed.stdout
+
+
+@pytest.mark.parametrize("duplicate", ["--pdf", "--artifact-dir", "--benchmark-decision"])
+def test_cli_rejects_duplicate_required_option(duplicate: str) -> None:
+    """A repeated identity-bearing option must not silently replace its first value."""
+    arguments = [
+        "--pdf",
+        "issue.pdf",
+        "--artifact-dir",
+        "artifacts",
+        "--benchmark-decision",
+        "decision.json",
+        duplicate,
+        "substitute",
+    ]
+
+    with pytest.raises(SystemExit) as exc_info:
+        runner.build_parser().parse_args(arguments)
+
+    assert exc_info.value.code == 2
+
+
+def test_stale_ocr_invalidates_article_and_proposition_dependents(
+    monkeypatch, one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A refreshed OCR identity must rerun article and proposition stages in order."""
+    ocr, _, _, calls = install_passing_stages(monkeypatch, one_page_pdf)
+    artifact_dir = tmp_path / "artifacts"
+    first = runner.review_issue(one_page_pdf, artifact_dir, review_config(one_page_pdf))
+    assert first.state == "approved"
+    stale_ocr = replace(ocr, identity=replace(ocr.identity, model="stale-ocr-model"))
+    write_artifact(artifact_dir / "ocr_manifest.json", stale_ocr)
+
+    refreshed_ocr = replace(ocr, identity=replace(ocr.identity, model="refreshed-ocr-model"))
+    refreshed_articles = replace(
+        passing_articles(refreshed_ocr),
+        reviewer_usage={"input_tokens": 16, "output_tokens": 5},
+    )
+
+    def refresh_ocr(*args, **kwargs):
+        calls["ocr"] += 1
+        return refreshed_ocr
+
+    def refresh_segments(*args, **kwargs):
+        calls["segment"] += 1
+        return refreshed_articles
+
+    def refresh_articles(*args, **kwargs):
+        calls["article_review"] += 1
+        return refreshed_articles
+
+    monkeypatch.setattr(runner, "review_issue_ocr", refresh_ocr)
+    monkeypatch.setattr(runner, "segment_articles", refresh_segments)
+    monkeypatch.setattr(runner, "review_articles_against_issue", refresh_articles)
+
+    second = runner.review_issue(one_page_pdf, artifact_dir, review_config(one_page_pdf))
+
+    assert second.state == "approved"
+    assert calls == {"ocr": 2, "segment": 2, "article_review": 2, "proposition": 2}
+
+
+def test_stale_article_resumes_ocr_and_reruns_proposition_dependent(
+    monkeypatch, one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A stale article artifact must preserve OCR and invalidate propositions."""
+    _, articles, _, calls = install_passing_stages(monkeypatch, one_page_pdf)
+    artifact_dir = tmp_path / "artifacts"
+    first = runner.review_issue(one_page_pdf, artifact_dir, review_config(one_page_pdf))
+    assert first.state == "approved"
+    stale = replace(articles, identity=replace(articles.identity, model="stale-article-model"))
+    write_artifact(artifact_dir / runner.ARTICLE_MANIFEST_NAME, stale)
+    refreshed = replace(
+        articles, reviewer_usage={"input_tokens": 16, "output_tokens": 5}
+    )
+
+    def refresh_articles(*args, **kwargs):
+        calls["article_review"] += 1
+        return refreshed
+
+    monkeypatch.setattr(runner, "review_articles_against_issue", refresh_articles)
+
+    second = runner.review_issue(one_page_pdf, artifact_dir, review_config(one_page_pdf))
+
+    assert second.state == "approved"
+    assert calls["segment"] == 2
+    assert calls["article_review"] == 2
+    assert calls["proposition"] == 2
+    assert second.usage["ocr"] == first.usage["ocr"]
+
+
+def test_stale_proposition_resumes_valid_predecessors(
+    monkeypatch, one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """Only proposition review reruns when both predecessor artifacts still match."""
+    _, articles, proposition, calls = install_passing_stages(monkeypatch, one_page_pdf)
+    artifact_dir = tmp_path / "artifacts"
+    first = runner.review_issue(one_page_pdf, artifact_dir, review_config(one_page_pdf))
+    assert first.state == "approved"
+    article_hash = first.article_artifact_hash
+    current = replace(proposition, article_artifact_hash=article_hash)
+    current = replace(
+        current,
+        identity=runner.expected_proposition_identity(
+            current,
+            article_hash=articles.articles[0].article_hash,
+            article_artifact_hash=article_hash,
+            extractor_model="openai/gpt-oss-120b",
+        ),
+    )
+    stale = replace(current, identity=replace(current.identity, model="stale-proposition-model"))
+    write_artifact(runner._proposition_path(artifact_dir, "a1"), stale)
+
+    second = runner.review_issue(one_page_pdf, artifact_dir, review_config(one_page_pdf))
+
+    assert second.state == "approved"
+    assert calls["segment"] == 1
+    assert calls["article_review"] == 1
+    assert calls["proposition"] == 2
+
+
+def test_article_technical_exception_is_pipeline_error_and_stops_propositions(
+    monkeypatch, one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """An article provider failure is technical and cannot reach propositions."""
+    _, _, _, calls = install_passing_stages(monkeypatch, one_page_pdf)
+
+    def article_timeout(*args, **kwargs):
+        raise TimeoutError("article provider timeout")
+
+    monkeypatch.setattr(runner, "review_articles_against_issue", article_timeout)
+
+    decision = runner.review_issue(
+        one_page_pdf, tmp_path / "artifacts", review_config(one_page_pdf)
+    )
+
+    assert decision.state == "pipeline_error"
+    assert decision.reasons == ("articles:TimeoutError:article provider timeout",)
+    assert calls["proposition"] == 0
+
+
+def test_proposition_technical_exception_is_pipeline_error(
+    monkeypatch, one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A proposition provider failure remains distinct from unsupported content."""
+    install_passing_stages(monkeypatch, one_page_pdf)
+
+    def proposition_timeout(*args, **kwargs):
+        raise TimeoutError("proposition provider timeout")
+
+    monkeypatch.setattr(runner, "review_issue_propositions", proposition_timeout)
+
+    decision = runner.review_issue(
+        one_page_pdf, tmp_path / "artifacts", review_config(one_page_pdf)
+    )
+
+    assert decision.state == "pipeline_error"
+    assert decision.reasons == (
+        "propositions:TimeoutError:proposition provider timeout",
+    )
+
+
+def test_programmatic_identity_precondition_raises_before_provider_calls(
+    one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """Without a usable named issue identity, no pipeline decision can be created."""
+    config = review_config(one_page_pdf)
+    wrong_issue = replace(
+        config,
+        benchmark_decision=replace(
+            config.benchmark_decision, issue_filename="different-issue.pdf"
+        ),
+    )
+
+    with pytest.raises(runner.ReviewConfigurationError, match="issue_filename_mismatch"):
+        runner.review_issue(one_page_pdf, tmp_path / "artifacts", wrong_issue)
+
+    assert config.ocr.initial_provider.calls == 0
+    assert config.ocr.reviewer.calls == 0
+    assert config.article_client.calls == 0
 
 
 if __name__ == "__main__":

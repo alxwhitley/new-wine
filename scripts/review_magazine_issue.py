@@ -59,8 +59,12 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _ZERO_HASH = "0" * 64
 
 
-class IssueReviewConfigurationError(ValueError):
+class ReviewConfigurationError(ValueError):
     """The named issue, accepted decision, or adapter setup is unsafe."""
+
+
+# Backward-compatible name retained for callers of the initial Task 6 commit.
+IssueReviewConfigurationError = ReviewConfigurationError
 
 
 @dataclass(frozen=True)
@@ -537,7 +541,14 @@ def _technical_reason(stage: str, exc: BaseException) -> str:
 def review_issue(
     pdf_path: Path, artifact_dir: Path, config: ReviewIssueConfig
 ) -> IssueDecision:
-    """Execute OCR, article, and proposition stages in order for one issue."""
+    """Execute OCR, article, and proposition stages in order for one issue.
+
+    Raises:
+        ReviewConfigurationError: the named decision/PDF preconditions do not
+            establish a usable issue identity. No stage or provider call has
+            begun in this case. Once stage execution begins, technical failures
+            are returned as ``pipeline_error`` decisions instead.
+    """
 
     issue_path = Path(pdf_path)
     output_dir = Path(artifact_dir)
@@ -673,11 +684,40 @@ def review_issue(
     return finish("approved", ())
 
 
+class _SingleUseRequiredOption(argparse.Action):
+    """Reject ambiguous repetition of an identity-bearing required option."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        marker = f"_seen_{self.dest}"
+        if getattr(namespace, marker, False):
+            parser.error(f"{option_string} may be specified only once")
+        setattr(namespace, marker, True)
+        setattr(namespace, self.dest, values)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pdf", required=True, type=Path)
-    parser.add_argument("--artifact-dir", required=True, type=Path)
-    parser.add_argument("--benchmark-decision", required=True, type=Path)
+    parser.add_argument(
+        "--pdf", required=True, type=Path, action=_SingleUseRequiredOption
+    )
+    parser.add_argument(
+        "--artifact-dir",
+        required=True,
+        type=Path,
+        action=_SingleUseRequiredOption,
+    )
+    parser.add_argument(
+        "--benchmark-decision",
+        required=True,
+        type=Path,
+        action=_SingleUseRequiredOption,
+    )
     parser.add_argument(
         "--provider-adapter-factory",
         help=(
@@ -700,6 +740,84 @@ def _import_factory(spec: str) -> Callable[[AcceptedBenchmarkDecision], object]:
     if not callable(factory):
         raise IssueReviewConfigurationError("provider_adapter_factory_invalid")
     return factory
+
+
+def _factory_attribute(value: object, name: str) -> object:
+    try:
+        return getattr(value, name)
+    except AttributeError as exc:
+        raise IssueReviewConfigurationError(
+            "provider_adapter_factory_result_invalid"
+        ) from exc
+
+
+def _decision_values_equal(
+    left: AcceptedBenchmarkDecision, right: object
+) -> bool:
+    try:
+        return (
+            _factory_attribute(right, "name") == left.name
+            and _factory_attribute(right, "issue_filename") == left.issue_filename
+            and _factory_attribute(right, "issue_pdf_sha256")
+            == left.issue_pdf_sha256
+            and _factory_attribute(right, "accepted_candidate")
+            == left.accepted_candidate
+            and _factory_attribute(right, "benchmark_report_sha256")
+            == left.benchmark_report_sha256
+            and _factory_attribute(right, "decision_sha256")
+            == left.decision_sha256
+        )
+    except IssueReviewConfigurationError:
+        return False
+
+
+def _config_from_factory_result(
+    decision: AcceptedBenchmarkDecision, configured: object
+) -> ReviewIssueConfig:
+    """Convert either supported factory shape without module-identity coupling."""
+
+    if hasattr(configured, "initial_ocr_provider"):
+        adapters = ProviderAdapters(
+            initial_ocr_provider=_factory_attribute(
+                configured, "initial_ocr_provider"
+            ),
+            page_reviewer=_factory_attribute(configured, "page_reviewer"),
+            repair_ocr_provider=_factory_attribute(
+                configured, "repair_ocr_provider"
+            ),
+            article_client=_factory_attribute(configured, "article_client"),
+            proposition_reviewer=_factory_attribute(
+                configured, "proposition_reviewer"
+            ),
+            proposition_extractor=getattr(
+                configured, "proposition_extractor", None
+            ),
+            proposition_extractor_model=getattr(
+                configured, "proposition_extractor_model", EXTRACTION_MODEL
+            ),
+        )
+        return _config_from_adapters(decision, adapters)
+    if hasattr(configured, "benchmark_decision"):
+        configured_decision = _factory_attribute(configured, "benchmark_decision")
+        if not _decision_values_equal(decision, configured_decision):
+            raise IssueReviewConfigurationError(
+                "provider_factory_decision_mismatch"
+            )
+        return ReviewIssueConfig(
+            benchmark_decision=decision,
+            ocr=_factory_attribute(configured, "ocr"),
+            article_client=_factory_attribute(configured, "article_client"),
+            proposition_reviewer=_factory_attribute(
+                configured, "proposition_reviewer"
+            ),
+            proposition_extractor=getattr(
+                configured, "proposition_extractor", None
+            ),
+            proposition_extractor_model=getattr(
+                configured, "proposition_extractor_model", EXTRACTION_MODEL
+            ),
+        )
+    raise IssueReviewConfigurationError("provider_adapter_factory_result_invalid")
 
 
 def _summary(decision: IssueDecision) -> dict[str, object]:
@@ -750,16 +868,7 @@ def main(
                 )
             factory = _import_factory(factory_spec)
         configured = factory(decision)
-        if isinstance(configured, ProviderAdapters):
-            config = _config_from_adapters(decision, configured)
-        elif isinstance(configured, ReviewIssueConfig):
-            if configured.benchmark_decision != decision:
-                raise IssueReviewConfigurationError(
-                    "provider_factory_decision_mismatch"
-                )
-            config = configured
-        else:
-            raise IssueReviewConfigurationError("provider_adapter_factory_result_invalid")
+        config = _config_from_factory_result(decision, configured)
         result = review_issue(args.pdf, args.artifact_dir, config)
     except Exception as exc:
         reason = str(exc).strip() or type(exc).__name__
