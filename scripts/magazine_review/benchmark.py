@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -235,6 +236,8 @@ def load_and_verify_fixtures(manifest_path: Path) -> tuple[BenchmarkFixture, ...
     fixtures = tuple(_parse_fixture(item, path.parent) for item in raw["fixtures"])
     if len({(fixture.pdf_path, fixture.page_number) for fixture in fixtures}) != len(fixtures):
         raise BenchmarkInputError("duplicate_fixture_page")
+    if {fixture.fixture_class for fixture in fixtures} != FIXTURE_CLASSES:
+        raise BenchmarkInputError("fixture_class_coverage_required")
 
     for fixture in fixtures:
         actual_hash = _sha256_file(fixture.pdf_path)
@@ -310,13 +313,17 @@ def _result_from_response(
     if not isinstance(response.usage, Mapping) or not response.usage:
         raise BenchmarkInputError("provider_usage_required")
     if any(
-        isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
         for value in response.usage.values()
     ):
         raise BenchmarkInputError("provider_usage_invalid")
     if (
         isinstance(response.cost_usd, bool)
         or not isinstance(response.cost_usd, (int, float))
+        or not math.isfinite(response.cost_usd)
         or response.cost_usd < 0
     ):
         raise BenchmarkInputError("provider_cost_invalid")

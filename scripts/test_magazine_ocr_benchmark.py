@@ -27,21 +27,34 @@ REQUIRED_SCORING_FIELDS = {
 
 
 class FakeProvider:
-    def __init__(self, provider: str, model: str, *, cost_usd: float = 0.01):
+    def __init__(
+        self,
+        provider: str,
+        model: str,
+        *,
+        cost_usd: float = 0.01,
+        usage_value: float = 12,
+    ):
         self.candidate = BenchmarkCandidate(provider=provider, model=model)
         self.calls: list[object] = []
         self.cost_usd = cost_usd
+        self.usage_value = usage_value
 
     def transcribe(self, fixture):
         self.calls.append(fixture)
         return OCRResponse(
             text=f"transcript for page {fixture.page_number}",
-            usage={"input_tokens": 12, "output_tokens": 34},
+            usage={"input_tokens": self.usage_value, "output_tokens": 34},
             cost_usd=self.cost_usd,
         )
 
 
-def write_manifest(tmp_path: Path, *, expected_hash: str | None = None) -> Path:
+def write_manifest(
+    tmp_path: Path,
+    *,
+    expected_hash: str | None = None,
+    fixture_classes: tuple[str, str] = ("severe_failure", "good_control"),
+) -> Path:
     pdf_path = tmp_path / "issue.pdf"
     pdf_path.write_bytes(b"fixed benchmark page")
     manifest_path = tmp_path / "fixtures.json"
@@ -54,7 +67,7 @@ def write_manifest(tmp_path: Path, *, expected_hash: str | None = None) -> Path:
                         "pdf_sha256": expected_hash
                         or hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
                         "page_number": 2,
-                        "fixture_class": "severe_failure",
+                        "fixture_class": fixture_classes[0],
                         "human_scoring": REQUIRED_SCORING_FIELDS,
                     },
                     {
@@ -62,7 +75,7 @@ def write_manifest(tmp_path: Path, *, expected_hash: str | None = None) -> Path:
                         "pdf_sha256": expected_hash
                         or hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
                         "page_number": 7,
-                        "fixture_class": "good_control",
+                        "fixture_class": fixture_classes[1],
                         "human_scoring": REQUIRED_SCORING_FIELDS,
                     },
                 ]
@@ -82,6 +95,50 @@ def test_fixture_hash_mismatch_stops_before_provider_call(tmp_path):
         run_benchmark(manifest_path, [provider] * 3, tmp_path / "report.json")
 
     assert provider.calls == []
+
+
+@pytest.mark.parametrize("fixture_class", ["severe_failure", "good_control"])
+def test_manifest_requires_both_fixture_classes_before_provider_call(
+    tmp_path, fixture_class
+):
+    """A benchmark without severe and control evidence cannot make an OCR call."""
+    manifest_path = write_manifest(
+        tmp_path, fixture_classes=(fixture_class, fixture_class)
+    )
+    provider = FakeProvider("Gemini", "gemini-2.5-flash")
+
+    with pytest.raises(BenchmarkInputError, match="fixture_class_coverage"):
+        run_benchmark(manifest_path, [provider] * 3, tmp_path / "report.json")
+
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_rejects_nonfinite_provider_usage(tmp_path, value):
+    """Non-finite usage cannot become invalid JSON or a false cost record."""
+    manifest_path = write_manifest(tmp_path)
+    providers = [
+        FakeProvider("one", "model-1", usage_value=value),
+        FakeProvider("two", "model-2"),
+        FakeProvider("three", "model-3"),
+    ]
+
+    with pytest.raises(BenchmarkInputError, match="provider_usage_invalid"):
+        run_benchmark(manifest_path, providers, tmp_path / "report.json")
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_rejects_nonfinite_provider_cost(tmp_path, value):
+    """Non-finite provider cost cannot be emitted in a benchmark report."""
+    manifest_path = write_manifest(tmp_path)
+    providers = [
+        FakeProvider("one", "model-1", cost_usd=value),
+        FakeProvider("two", "model-2"),
+        FakeProvider("three", "model-3"),
+    ]
+
+    with pytest.raises(BenchmarkInputError, match="provider_cost_invalid"):
+        run_benchmark(manifest_path, providers, tmp_path / "report.json")
 
 
 def test_blind_report_hides_provider_names(tmp_path):
