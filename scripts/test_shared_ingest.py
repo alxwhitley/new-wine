@@ -25,6 +25,7 @@ Run: python3 scripts/test_shared_ingest.py
 """
 from __future__ import annotations
 
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -38,6 +39,7 @@ if str(_BACKEND) not in sys.path:
 
 import shared_ingest  # noqa: E402
 import propositions as props_mod  # noqa: E402
+from magazine_review.schemas import ApprovedPropositionSet  # noqa: E402
 from source_resolver import SENTINEL_SOURCE_ID  # noqa: E402
 from source_ingest_queue.processor import execute_ingest, PreparedIngest  # noqa: E402
 
@@ -143,6 +145,10 @@ def fake_execute_values(cur, sql, argslist, template=None, page_size=100, fetch=
     cur.executed.append((sql, list(argslist)))
 
 
+def fake_proposition_embedding(text):
+    return [0.01, 0.02, 0.03]
+
+
 class _Patched:
     """Context manager: save/restore a list of (obj, attr, value) triples."""
 
@@ -186,6 +192,56 @@ def substantive_body_text():
 
 
 class SharedWriterHappyPathTests(unittest.TestCase):
+    def test_approved_set_crosses_atomic_writer_without_regeneration(self):
+        article_text = substantive_body_text()
+        approved = ApprovedPropositionSet(
+            article_id="reviewed-article",
+            article_hash=hashlib.sha256(article_text.encode("utf-8")).hexdigest(),
+            model=props_mod.EXTRACTION_MODEL,
+            prompt_version="v3.1",
+            prompt_fingerprint=props_mod.prompt_fingerprint("v3.1"),
+            proposition_artifact_hash="b" * 64,
+            propositions=(
+                (1, "Exact reviewed text with  intentional spacing."),
+                (2, "Exact reviewed text with a\nline break."),
+            ),
+        )
+        conn = FakeConn(license_status="unlicensed", chunk_id_rows=["chunk-a"])
+
+        def forbidden_generation(*args, **kwargs):
+            raise AssertionError("reviewed ingestion must not regenerate")
+
+        with _Patched(
+            (shared_ingest, "psycopg2", FakePsycopg2Module(conn)),
+            (shared_ingest, "execute_values", fake_execute_values),
+            (shared_ingest, "already_ingested", lambda *a, **k: False),
+            (shared_ingest, "_get_openai_client", lambda: FakeOpenAIClient([])),
+            (shared_ingest, "embed_text", fake_proposition_embedding),
+            (props_mod, "execute_values", fake_execute_values),
+            (props_mod, "extract_propositions", forbidden_generation),
+        ):
+            result = shared_ingest.ingest_document(
+                db=object(),
+                db_params={},
+                title="Reviewed article",
+                body_text=article_text,
+                filename="reviewed.md",
+                author="Ada North",
+                source_name="New Wine Magazine",
+                source_id="22222222-2222-2222-2222-222222222222",
+                skip_dedup=True,
+                approved_propositions=approved,
+            )
+
+        self.assertEqual(result["status"], "processed")
+        self.assertEqual(result["propositions"], "stored:2")
+        inserts = conn.inserted_sql("INSERT INTO propositions")
+        self.assertEqual([params[2] for _sql, params in inserts], [
+            content for _index, content in approved.propositions
+        ])
+        self.assertTrue(conn.committed)
+        self.assertFalse(conn.rolled_back)
+
     def test_web_article_flows_through_document_chunks_and_v31_propositions_atomically(self):
         conn = FakeConn(
             license_status="unlicensed",
@@ -205,6 +261,7 @@ class SharedWriterHappyPathTests(unittest.TestCase):
             (shared_ingest, "execute_values", fake_execute_values),
             (shared_ingest, "already_ingested", lambda *a, **k: False),
             (shared_ingest, "_get_openai_client", lambda: FakeOpenAIClient(openai_calls)),
+            (shared_ingest, "embed_text", fake_proposition_embedding),
             (props_mod, "execute_values", fake_execute_values),
             (props_mod, "extract_propositions", fake_extract_propositions),
         ):
@@ -297,6 +354,7 @@ class SharedWriterHappyPathTests(unittest.TestCase):
             (shared_ingest, "execute_values", fake_execute_values),
             (shared_ingest, "already_ingested", lambda *a, **k: False),
             (shared_ingest, "_get_openai_client", lambda: FakeOpenAIClient([])),
+            (shared_ingest, "embed_text", fake_proposition_embedding),
             (props_mod, "execute_values", fake_execute_values),
             (props_mod, "extract_propositions", lambda *a, **k: canned_propositions()),
         ):
@@ -319,6 +377,7 @@ class SharedWriterFailureAndBoundaryTests(unittest.TestCase):
             (shared_ingest, "execute_values", fake_execute_values),
             (shared_ingest, "already_ingested", lambda *a, **k: False),
             (shared_ingest, "_get_openai_client", lambda: FakeOpenAIClient([])),
+            (shared_ingest, "embed_text", fake_proposition_embedding),
             (props_mod, "execute_values", fake_execute_values),
             (props_mod, "extract_propositions", failing_extract),
         ):
@@ -405,6 +464,7 @@ class SharedWriterFailureAndBoundaryTests(unittest.TestCase):
             (shared_ingest, "execute_values", fake_execute_values),
             (shared_ingest, "already_ingested", lambda *a, **k: False),
             (shared_ingest, "_get_openai_client", lambda: FakeOpenAIClient([])),
+            (shared_ingest, "embed_text", fake_proposition_embedding),
             (props_mod, "execute_values", fake_execute_values),
             (props_mod, "extract_propositions", extract_should_not_be_called),
         ):

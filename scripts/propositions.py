@@ -137,6 +137,7 @@ from groq import Groq
 from psycopg2.extras import execute_values
 
 import reference_grounding as rg
+from magazine_review.schemas import ApprovedPropositionSet, ArtifactValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -730,6 +731,40 @@ class PropositionExtractionFailed(Exception):
     already used for a storage-side failure, since both mean "nothing was
     written, safe to retry," just at different steps.
     """
+
+
+class ApprovedArtifactMismatch(ValueError):
+    """The reviewed proposition transport no longer matches current inputs."""
+
+
+def validate_approved_propositions(
+    approved: ApprovedPropositionSet,
+    text: str,
+    prompt_version: str,
+    *,
+    speaker: Optional[str] = None,
+) -> List[dict]:
+    """Validate one frozen review result and return its exact storage shape."""
+    if not isinstance(approved, ApprovedPropositionSet):
+        raise ApprovedArtifactMismatch("approved_proposition_set_required")
+    try:
+        approved.validate()
+    except ArtifactValidationError as exc:
+        raise ApprovedArtifactMismatch(str(exc)) from exc
+    if prompt_version in ("v3.1", "v4") and (
+        not isinstance(speaker, str) or not speaker.strip()
+    ):
+        raise ApprovedArtifactMismatch("approved_speaker_required")
+    if approved.prompt_version != prompt_version:
+        raise ApprovedArtifactMismatch("approved_prompt_version_mismatch")
+    if approved.prompt_fingerprint != prompt_fingerprint(prompt_version):
+        raise ApprovedArtifactMismatch("approved_prompt_fingerprint_mismatch")
+    if approved.model != EXTRACTION_MODEL:
+        raise ApprovedArtifactMismatch("approved_model_mismatch")
+    article_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if approved.article_hash != article_hash:
+        raise ApprovedArtifactMismatch("approved_article_hash_mismatch")
+    return approved.as_storage_list()
 
 
 def _select_prompt_template(prompt_version: str) -> str:
@@ -1802,6 +1837,7 @@ def process_document(
     chunk_ids: Optional[List[str]] = None,
     speaker: Optional[str] = None,
     prompt_version: Optional[str] = None,
+    approved_propositions: Optional[ApprovedPropositionSet] = None,
 ) -> str:
     """Top-level entry point for ingest scripts.
 
@@ -1927,8 +1963,20 @@ def process_document(
             return "too_thin_to_extract"
 
         prompt_version = prompt_version or DEFAULT_PROMPT_VERSION
-        props = extract_propositions(
-            text, doc_id=document_id, speaker=speaker, prompt_version=prompt_version,
+        props = (
+            validate_approved_propositions(
+                approved_propositions,
+                text,
+                prompt_version,
+                speaker=speaker,
+            )
+            if approved_propositions is not None
+            else extract_propositions(
+                text,
+                doc_id=document_id,
+                speaker=speaker,
+                prompt_version=prompt_version,
+            )
         )
         if not props:
             return "no_propositions"
