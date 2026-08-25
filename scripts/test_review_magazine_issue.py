@@ -862,6 +862,58 @@ def test_proposition_technical_exception_is_pipeline_error(
     )
 
 
+def test_ocr_pipeline_error_preserves_completed_provider_spend(
+    monkeypatch, one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """Validated OCR calls remain costed when a later OCR call raises."""
+    install_passing_stages(monkeypatch, one_page_pdf)
+
+    def failing_ocr(*_args, accounting_sink, **_kwargs):
+        accounting_sink("ocr", {"input_tokens": 11, "output_tokens": 4}, 0.17)
+        raise TimeoutError("later OCR review failed")
+
+    monkeypatch.setattr(runner, "review_issue_ocr", failing_ocr)
+
+    decision = runner.review_issue(
+        one_page_pdf, tmp_path / "artifacts", review_config(one_page_pdf)
+    )
+
+    assert decision.state == "pipeline_error"
+    assert decision.usage["ocr"] == 15
+    assert decision.cost_usd == pytest.approx(0.17)
+
+
+def test_proposition_pipeline_error_preserves_current_stage_spend(
+    monkeypatch, one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A failed proposition review retains its completed extraction/review spend."""
+    install_passing_stages(monkeypatch, one_page_pdf)
+
+    def failing_propositions(*_args, accounting_sink, **_kwargs):
+        accounting_sink(
+            "proposition_extraction",
+            {"input_tokens": 7, "output_tokens": 3},
+            0.03,
+        )
+        accounting_sink(
+            "proposition_review", {"input_tokens": 6, "output_tokens": 2}, 0.04
+        )
+        raise TimeoutError("review response invalid")
+
+    monkeypatch.setattr(
+        runner, "review_issue_propositions", failing_propositions
+    )
+
+    decision = runner.review_issue(
+        one_page_pdf, tmp_path / "artifacts", review_config(one_page_pdf)
+    )
+
+    assert decision.state == "pipeline_error"
+    assert decision.usage["proposition_extraction"] == 10
+    assert decision.usage["proposition_review"] == 8
+    assert decision.cost_usd == pytest.approx(0.54)
+
+
 def test_programmatic_identity_precondition_raises_before_provider_calls(
     one_page_pdf: Path, tmp_path: Path
 ) -> None:

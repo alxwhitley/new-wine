@@ -450,8 +450,9 @@ def _base_usage(
     articles: ArticleManifest | None,
     reviews: Sequence[PropositionReview],
     accounting: Mapping[str, int],
+    partial_usage: Mapping[str, float | int],
 ) -> dict[str, float | int]:
-    return {
+    usage = {
         "ocr": _sum_numeric(list(ocr.usage.values()), "ocr_usage_total_invalid")
         if ocr is not None
         else 0,
@@ -476,6 +477,13 @@ def _base_usage(
         ),
         **dict(accounting),
     }
+    for stage, amount in partial_usage.items():
+        if stage not in usage:
+            raise ArtifactValidationError("partial_usage_stage_invalid")
+        usage[stage] = _sum_numeric(
+            [usage[stage], amount], f"{stage}_partial_usage_invalid"
+        )
+    return usage
 
 
 def _decision(
@@ -491,6 +499,8 @@ def _decision(
     proposition_hashes: Mapping[str, str],
     gate_results: Mapping[str, bool],
     accounting: Mapping[str, int],
+    partial_usage: Mapping[str, float | int],
+    partial_costs: Mapping[str, float | int],
     reasons: Sequence[str],
 ) -> IssueDecision:
     reviews_tuple = tuple(reviews)
@@ -513,6 +523,7 @@ def _decision(
         for review in reviews_tuple
         for cost in (review.extraction_cost_usd, review.reviewer_cost_usd)
     )
+    costs.extend(partial_costs.values())
     approved = ()
     if state == "approved":
         approved = tuple(
@@ -531,7 +542,9 @@ def _decision(
         proposition_artifact_hashes=durable_proposition_hashes,
         article_hashes=article_hashes,
         totals=totals,
-        usage=_base_usage(ocr, articles, reviews_tuple, accounting),
+        usage=_base_usage(
+            ocr, articles, reviews_tuple, accounting, partial_usage
+        ),
         cost_usd=float(_sum_numeric(costs, "issue_cost_total_invalid")),
         gate_results=dict(gate_results),
         approved_propositions=approved,
@@ -581,6 +594,33 @@ def review_issue(
     ocr_hash: str | None = None
     article_hash: str | None = None
     proposition_hashes: dict[str, str] = {}
+    partial_usage: dict[str, float | int] = {
+        "ocr": 0,
+        "proposition_extraction": 0,
+        "proposition_review": 0,
+    }
+    partial_costs: dict[str, float | int] = {
+        "ocr": 0,
+        "proposition_extraction": 0,
+        "proposition_review": 0,
+    }
+
+    def record_partial_accounting(
+        stage: str, usage: Mapping[str, float | int], cost: float
+    ) -> None:
+        if stage not in partial_usage:
+            raise ArtifactValidationError("partial_usage_stage_invalid")
+        usage_total = _sum_numeric(
+            list(validated_usage(usage, "partial_usage_invalid").values()),
+            "partial_usage_invalid",
+        )
+        cost_total = _sum_numeric([cost], "partial_cost_invalid")
+        partial_usage[stage] = _sum_numeric(
+            [partial_usage[stage], usage_total], "partial_usage_invalid"
+        )
+        partial_costs[stage] = _sum_numeric(
+            [partial_costs[stage], cost_total], "partial_cost_invalid"
+        )
 
     def finish(state: str, reasons: Sequence[str]) -> IssueDecision:
         decision = _decision(
@@ -595,6 +635,8 @@ def review_issue(
             proposition_hashes=proposition_hashes,
             gate_results=gates,
             accounting=accounting,
+            partial_usage=partial_usage,
+            partial_costs=partial_costs,
             reasons=reasons,
         )
         write_artifact(output_dir / ISSUE_DECISION_NAME, decision)
@@ -602,7 +644,14 @@ def review_issue(
 
     accounting["attempted"] += 1
     try:
-        ocr = review_issue_ocr(issue_path, config.ocr, output_dir)
+        ocr = review_issue_ocr(
+            issue_path,
+            config.ocr,
+            output_dir,
+            accounting_sink=record_partial_accounting,
+        )
+        partial_usage["ocr"] = 0
+        partial_costs["ocr"] = 0
         ocr.validate()
         if ocr.pdf_hash != pdf_hash or ocr.page_count != _pdf_page_count(issue_path):
             raise ArtifactValidationError("pdf_ocr_page_reconciliation_failed")
@@ -659,6 +708,7 @@ def review_issue(
                     config.proposition_reviewer,
                     extractor=config.proposition_extractor,
                     article_artifact_hash=article_hash,
+                    accounting_sink=record_partial_accounting,
                 )
                 expected_identity = expected_proposition_identity(
                     review,
@@ -673,6 +723,10 @@ def review_issue(
                 proposition_hashes[article.article_id] = _artifact_hash(path)
             review.validate(article.text)
             reviews.append(review)
+            partial_usage["proposition_extraction"] = 0
+            partial_usage["proposition_review"] = 0
+            partial_costs["proposition_extraction"] = 0
+            partial_costs["proposition_review"] = 0
             if review.status != "passed":
                 accounting["quarantined"] += 1
                 return finish("quarantined", review.reasons)

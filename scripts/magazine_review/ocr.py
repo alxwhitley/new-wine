@@ -531,7 +531,14 @@ def _matching_resume(
 
 
 def review_issue_ocr(
-    pdf_path: Path, config: OCRReviewConfig, artifact_dir: Path
+    pdf_path: Path,
+    config: OCRReviewConfig,
+    artifact_dir: Path,
+    *,
+    accounting_sink: Callable[
+        [str, Mapping[str, float | int], float], None
+    ]
+    | None = None,
 ) -> OCRManifest:
     """Review every rendered page and persist one complete OCR stage artifact."""
     config.validate()
@@ -556,6 +563,8 @@ def review_issue_ocr(
         initial = _validate_ocr_response(
             config.initial_provider.transcribe(fixture), "initial_ocr"
         )
+        if accounting_sink is not None:
+            accounting_sink("ocr", initial.usage, initial.cost_usd)
         initial_timestamp = config.timestamp()
         _add_usage(manifest_usage, initial.usage)
         manifest_cost = _add_cost(manifest_cost, initial.cost_usd)
@@ -565,6 +574,8 @@ def review_issue_ocr(
                 rendered_page, initial.text, PAGE_REVIEW_INSTRUCTIONS
             )
         )
+        if accounting_sink is not None:
+            accounting_sink("ocr", first_review.usage, first_review.cost_usd)
         reviewer_timestamp = config.timestamp()
         reviewer_usage = dict(first_review.usage)
         reviewer_cost = first_review.cost_usd
@@ -593,6 +604,8 @@ def review_issue_ocr(
             repair = _validate_ocr_response(
                 config.repair_provider.transcribe(repair_fixture), "repair_ocr"
             )
+            if accounting_sink is not None:
+                accounting_sink("ocr", repair.usage, repair.cost_usd)
             repair_timestamp = config.timestamp()
             repaired_text = repair.text
             repaired_text_hash = _sha256_text(repair.text)
@@ -610,6 +623,8 @@ def review_issue_ocr(
                     rendered_page, final_text, PAGE_REVIEW_INSTRUCTIONS
                 )
             )
+            if accounting_sink is not None:
+                accounting_sink("ocr", final_review.usage, final_review.cost_usd)
             reviewer_timestamp = config.timestamp()
             _add_usage(reviewer_usage, final_review.usage)
             reviewer_cost = _add_cost(reviewer_cost, final_review.cost_usd)

@@ -477,6 +477,10 @@ def review_issue_propositions(
     *,
     extractor: Callable[..., object] | None = None,
     article_artifact_hash: str | None = None,
+    accounting_sink: Callable[
+        [str, Mapping[str, float | int], float], None
+    ]
+    | None = None,
 ) -> PropositionReview:
     """Extract and review one verified article without regenerating its text.
 
@@ -505,6 +509,10 @@ def review_issue_propositions(
             grounding_review_sink=None,
         )
     )
+    if accounting_sink is not None:
+        accounting_sink(
+            "proposition_extraction", extraction.usage, extraction.cost_usd
+        )
     if not extraction.output:
         result = _base_review(
             article=article,
@@ -518,6 +526,14 @@ def review_issue_propositions(
         return result
 
     response = _invoke_reviewer(reviewer, _semantic_request(article, extraction))
+    reviewer_usage = _usage(
+        response["usage"], "proposition_reviewer_usage_invalid"
+    )
+    reviewer_cost = _cost(
+        response["cost_usd"], "proposition_reviewer_cost_invalid"
+    )
+    if accounting_sink is not None:
+        accounting_sink("proposition_review", reviewer_usage, reviewer_cost)
     output = _require_exact_keys(
         response["output"],
         {"article_id", "article_hash", "propositions"},
@@ -577,12 +593,8 @@ def review_issue_propositions(
         propositions=evidence_items,
         status=status,
         reasons=quarantine_reasons,
-        reviewer_usage=_usage(
-            response["usage"], "proposition_reviewer_usage_invalid"
-        ),
-        reviewer_cost_usd=_cost(
-            response["cost_usd"], "proposition_reviewer_cost_invalid"
-        ),
+        reviewer_usage=reviewer_usage,
+        reviewer_cost_usd=reviewer_cost,
     )
     result.validate()
     if result.status == "passed":

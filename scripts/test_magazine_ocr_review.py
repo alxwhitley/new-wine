@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 from dataclasses import replace
 from pathlib import Path
 
@@ -371,6 +372,44 @@ def test_image_only_page_accepts_exact_empty_text_only_after_passing_review(
     assert manifest.pages[0].text == ""
     assert manifest.pages[0].final_text_hash == hashlib.sha256(b"").hexdigest()
     assert repair.page_numbers == []
+
+
+def test_ocr_accounting_sink_records_completed_call_before_later_failure(
+    one_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A later reviewer exception cannot erase the completed initial OCR spend."""
+    initial = FakeOCRProvider(
+        BenchmarkCandidate("accepted-provider", "accepted-model"),
+        {1: "verified initial text"},
+    )
+
+    class FailingReviewer:
+        model = "gemini-3.6-flash"
+
+        def review(self, *_args, **_kwargs):
+            raise TimeoutError("review failed after initial OCR")
+
+    repair = FakeOCRProvider(
+        BenchmarkCandidate("Gemini", "gemini-3.6-flash"), {1: "unused"}
+    )
+    recorded = []
+    kwargs = {}
+    if "accounting_sink" in inspect.signature(review_issue_ocr).parameters:
+        kwargs["accounting_sink"] = (
+            lambda stage, usage, cost: recorded.append((stage, dict(usage), cost))
+        )
+
+    with pytest.raises(TimeoutError, match="review failed after initial OCR"):
+        review_issue_ocr(
+            one_page_pdf,
+            config(initial=initial, reviewer=FailingReviewer(), repair=repair),
+            tmp_path / "artifacts",
+            **kwargs,
+        )
+
+    assert recorded == [
+        ("ocr", {"input_tokens": 10, "output_tokens": 2}, 0.10)
+    ]
 
 
 def test_current_ocr_validator_rejects_stale_identity_and_render(

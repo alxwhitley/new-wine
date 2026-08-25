@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import inspect
 import json
 from dataclasses import replace
 from types import SimpleNamespace
@@ -181,6 +182,41 @@ def test_substantive_article_with_zero_propositions_quarantines(article_manifest
     result.validate()
     with pytest.raises(ArtifactValidationError, match="proposition_not_supported"):
         approved_propositions_for("a1")
+
+
+def test_accounting_sink_records_extraction_and_review_before_lineage_failure(
+    article_manifest,
+) -> None:
+    """Validated provider accounting survives semantic response rejection."""
+    response = review_response(article_manifest)
+    response["output"]["article_id"] = "wrong-article"
+    recorded = []
+    kwargs = {}
+    if "accounting_sink" in inspect.signature(review_issue_propositions).parameters:
+        kwargs["accounting_sink"] = (
+            lambda stage, usage, cost: recorded.append((stage, dict(usage), cost))
+        )
+
+    with pytest.raises(PropositionReviewError, match="proposition_review_lineage_mismatch"):
+        review_issue_propositions(
+            article_manifest,
+            reviewer=RecordingReviewer(response),
+            extractor=lambda **_: extraction(proposition()),
+            **kwargs,
+        )
+
+    assert recorded == [
+        (
+            "proposition_extraction",
+            {"input_tokens": 101, "output_tokens": 17, "total_tokens": 118},
+            0.031,
+        ),
+        (
+            "proposition_review",
+            {"input_tokens": 80, "output_tokens": 20},
+            0.015,
+        ),
+    ]
 
 
 @pytest.mark.parametrize("raw", [[], [proposition()]])
