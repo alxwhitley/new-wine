@@ -123,6 +123,10 @@ def test_gemini_page_reviewer_uses_strict_schema_and_parses_verdict() -> None:
                     "content": {
                         "parts": [
                             {
+                                "thought": True,
+                                "text": "Compare the image region by region.",
+                            },
+                            {
                                 "text": json.dumps(
                                     {
                                         "complete": False,
@@ -137,11 +141,12 @@ def test_gemini_page_reviewer_uses_strict_schema_and_parses_verdict() -> None:
                     }
                 }
             ],
-            "usageMetadata": {
-                "promptTokenCount": 1500,
-                "candidatesTokenCount": 100,
-                "totalTokenCount": 1600,
-            },
+                "usageMetadata": {
+                    "promptTokenCount": 1500,
+                    "candidatesTokenCount": 100,
+                    "thoughtsTokenCount": 10,
+                    "totalTokenCount": 1610,
+                },
         }
 
     reviewer = GeminiLivePageReviewer(

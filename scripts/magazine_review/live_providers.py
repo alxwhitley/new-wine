@@ -194,7 +194,11 @@ def _gemini_text(response: Mapping[str, Any], *, allow_empty: bool) -> str:
             not isinstance(part, Mapping) for part in parts
         ):
             raise TypeError("parts_invalid")
-        text = "".join(part.get("text", "") for part in parts).strip()
+        text = "".join(
+            part.get("text", "")
+            for part in parts
+            if part.get("thought") is not True
+        ).strip()
     except (AttributeError, KeyError, IndexError, TypeError) as exc:
         raise LiveProviderError("gemini_response_invalid") from exc
     if not text and not allow_empty:
