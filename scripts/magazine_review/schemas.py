@@ -21,6 +21,15 @@ _ARTICLE_REVIEW_FIELDS = (
     "adjacent_bleed",
     "attribution_ok",
 )
+_GROUNDING_TOTAL_FIELDS = frozenset(
+    {
+        "found",
+        "grounded",
+        "stripped_fabricated",
+        "stripped_uncertain",
+        "kept_arbitration",
+    }
+)
 _STAGE_STATUSES = frozenset({"passed", "quarantined"})
 
 
@@ -780,6 +789,7 @@ class PropositionReview:
     prompt_fingerprint: str
     extraction_usage: Mapping[str, float | int]
     extraction_cost_usd: float
+    grounding_totals: Mapping[str, int]
     reviewer_model: str
     reviewer_prompt_fingerprint: str
     reviewer_usage: Mapping[str, float | int]
@@ -799,6 +809,20 @@ class PropositionReview:
         _require_sha256(self.prompt_fingerprint, "proposition_prompt_fingerprint_invalid")
         _require_usage(self.extraction_usage, "proposition_extraction_usage_invalid")
         _require_cost(self.extraction_cost_usd, "proposition_extraction_cost_invalid")
+        if (
+            not isinstance(self.grounding_totals, Mapping)
+            or set(self.grounding_totals) != _GROUNDING_TOTAL_FIELDS
+        ):
+            raise ArtifactValidationError("proposition_grounding_totals_invalid")
+        for amount in self.grounding_totals.values():
+            _require_nonnegative_int(amount, "proposition_grounding_totals_invalid")
+        if self.grounding_totals["found"] != (
+            self.grounding_totals["grounded"]
+            + self.grounding_totals["stripped_fabricated"]
+            + self.grounding_totals["stripped_uncertain"]
+            + self.grounding_totals["kept_arbitration"]
+        ):
+            raise ArtifactValidationError("proposition_grounding_totals_invalid")
         _require_nonempty(self.reviewer_model, "proposition_reviewer_model_required")
         _require_sha256(self.reviewer_prompt_fingerprint, "proposition_reviewer_prompt_fingerprint_invalid")
         _require_usage(self.reviewer_usage, "proposition_reviewer_usage_invalid")
@@ -813,8 +837,13 @@ class PropositionReview:
             raise ArtifactValidationError("proposition_article_text_mismatch")
         if hashlib.sha256(source_text.encode("utf-8")).hexdigest() != self.article_hash:
             raise ArtifactValidationError("article_hash_mismatch")
-        if not isinstance(self.propositions, tuple) or not self.propositions:
+        if not isinstance(self.propositions, tuple):
             raise ArtifactValidationError("propositions_required")
+        if not self.propositions:
+            zero_reason = f"article:{self.article_id}:zero_propositions"
+            if self.status != "quarantined" or self.reasons != (zero_reason,):
+                raise ArtifactValidationError("propositions_required")
+            return
         if tuple(item.proposition_index for item in self.propositions) != tuple(
             range(1, len(self.propositions) + 1)
         ):
@@ -836,6 +865,7 @@ class PropositionReview:
             "prompt_fingerprint": self.prompt_fingerprint,
             "extraction_usage": dict(self.extraction_usage),
             "extraction_cost_usd": self.extraction_cost_usd,
+            "grounding_totals": dict(self.grounding_totals),
             "reviewer_model": self.reviewer_model,
             "reviewer_prompt_fingerprint": self.reviewer_prompt_fingerprint,
             "reviewer_usage": dict(self.reviewer_usage),
@@ -852,7 +882,7 @@ class PropositionReview:
             raw,
             {
                 "identity", "article_id", "article_hash", "article_artifact_hash", "model", "prompt_version",
-                "prompt_fingerprint", "extraction_usage", "extraction_cost_usd", "reviewer_model",
+                "prompt_fingerprint", "extraction_usage", "extraction_cost_usd", "grounding_totals", "reviewer_model",
                 "reviewer_prompt_fingerprint", "reviewer_usage", "reviewer_cost_usd", "article_text",
                 "propositions", "status", "reasons",
             },
@@ -869,6 +899,7 @@ class PropositionReview:
                 prompt_fingerprint=raw["prompt_fingerprint"],
                 extraction_usage=raw["extraction_usage"],
                 extraction_cost_usd=raw["extraction_cost_usd"],
+                grounding_totals=raw["grounding_totals"],
                 reviewer_model=raw["reviewer_model"],
                 reviewer_prompt_fingerprint=raw["reviewer_prompt_fingerprint"],
                 reviewer_usage=raw["reviewer_usage"],

@@ -145,6 +145,13 @@ def valid_issue_artifacts() -> IssueArtifacts:
         prompt_fingerprint=sha("b"),
         extraction_usage={"input_tokens": 1},
         extraction_cost_usd=0.01,
+        grounding_totals={
+            "found": 0,
+            "grounded": 0,
+            "stripped_fabricated": 0,
+            "stripped_uncertain": 0,
+            "kept_arbitration": 0,
+        },
         reviewer_model="openai/gpt-oss-120b",
         reviewer_prompt_fingerprint=sha("f"),
         reviewer_usage={"input_tokens": 1},
@@ -272,6 +279,48 @@ def test_quarantined_proposition_review_resumes_but_cannot_be_approved(
     assert load_valid_artifact(path, valid_identity()) == review
     with pytest.raises(ArtifactValidationError, match="issue_stage_not_passed"):
         IssueDecision.approve(replace(valid_issue_artifacts, proposition_reviews=(review,)))
+
+
+def test_zero_proposition_quarantine_is_durable_but_never_approvable(
+    tmp_path, valid_issue_artifacts
+):
+    """A genuine empty extraction is resumable failure evidence, not approval."""
+    review = replace(
+        valid_issue_artifacts.proposition_reviews[0],
+        propositions=(),
+        status="quarantined",
+        reasons=("article:a1:zero_propositions",),
+    )
+    path = tmp_path / "zero-proposition-review.json"
+
+    write_artifact(path, review)
+
+    assert load_valid_artifact(path, review.identity) == review
+    with pytest.raises(ArtifactValidationError, match="proposition_not_supported"):
+        ApprovedPropositionSet.from_review(review, sha("a"))
+    with pytest.raises(ArtifactValidationError, match="propositions_required"):
+        replace(review, status="passed", reasons=()).validate()
+    with pytest.raises(ArtifactValidationError, match="propositions_required"):
+        replace(review, reasons=("article:a1:different_reason",)).validate()
+
+
+def test_proposition_grounding_totals_are_exact_and_reconciled(valid_issue_artifacts):
+    """Grounding audit counts cannot be hidden in token usage or fail to add up."""
+    review = replace(
+        valid_issue_artifacts.proposition_reviews[0],
+        grounding_totals={
+            "found": 3,
+            "grounded": 1,
+            "stripped_fabricated": 1,
+            "stripped_uncertain": 0,
+            "kept_arbitration": 1,
+        },
+    )
+
+    PropositionReview.from_dict(review.to_dict()).validate()
+    assert review.extraction_usage == {"input_tokens": 1}
+    with pytest.raises(ArtifactValidationError, match="proposition_grounding_totals_invalid"):
+        replace(review, grounding_totals={**review.grounding_totals, "found": 4}).validate()
 
 
 def test_approved_proposition_set_preserves_order_and_requires_provenance(
