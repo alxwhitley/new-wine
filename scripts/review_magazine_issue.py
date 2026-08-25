@@ -130,28 +130,62 @@ class ReviewIssueConfig:
     proposition_extractor_model: str = EXTRACTION_MODEL
 
     def validate(self) -> None:
-        self.benchmark_decision.validate()
-        self.ocr.validate()
+        if not isinstance(self.benchmark_decision, AcceptedBenchmarkDecision):
+            raise ReviewConfigurationError("benchmark_decision_invalid")
+        try:
+            self.benchmark_decision.validate()
+        except ReviewConfigurationError:
+            raise
+        except Exception as exc:
+            raise ReviewConfigurationError("benchmark_decision_invalid") from exc
+        if not isinstance(self.ocr, OCRReviewConfig):
+            raise ReviewConfigurationError("ocr_review_config_invalid")
+        try:
+            self.ocr.validate()
+        except ReviewConfigurationError:
+            raise
+        except Exception as exc:
+            reason = str(exc).strip() or "ocr_review_config_invalid"
+            raise ReviewConfigurationError(reason) from exc
         if self.ocr.accepted_candidate != self.benchmark_decision.accepted_candidate:
-            raise IssueReviewConfigurationError("accepted_candidate_mismatch")
+            raise ReviewConfigurationError("accepted_candidate_mismatch")
         if self.ocr.benchmark_decision_hash != self.benchmark_decision.decision_sha256:
-            raise IssueReviewConfigurationError("benchmark_decision_hash_mismatch")
+            raise ReviewConfigurationError("benchmark_decision_hash_mismatch")
         if not callable(getattr(self.article_client, "complete", None)):
-            raise IssueReviewConfigurationError("article_client_invalid")
+            raise ReviewConfigurationError("article_client_invalid")
         if not (
             callable(self.proposition_reviewer)
             or callable(getattr(self.proposition_reviewer, "complete", None))
         ):
-            raise IssueReviewConfigurationError("proposition_reviewer_invalid")
+            raise ReviewConfigurationError("proposition_reviewer_invalid")
         if self.proposition_extractor is not None and not callable(
             self.proposition_extractor
         ):
-            raise IssueReviewConfigurationError("proposition_extractor_invalid")
+            raise ReviewConfigurationError("proposition_extractor_invalid")
         if (
             not isinstance(self.proposition_extractor_model, str)
             or not self.proposition_extractor_model.strip()
         ):
-            raise IssueReviewConfigurationError("proposition_extractor_model_invalid")
+            raise ReviewConfigurationError("proposition_extractor_model_invalid")
+
+
+def _validate_programmatic_config(config: object) -> ReviewIssueConfig:
+    if not isinstance(config, ReviewIssueConfig):
+        raise ReviewConfigurationError("review_issue_config_invalid")
+    try:
+        config.validate()
+    except ReviewConfigurationError:
+        raise
+    except Exception as exc:
+        raise ReviewConfigurationError("review_issue_config_invalid") from exc
+    return config
+
+
+def _path_precondition(value: object, reason: str) -> Path:
+    try:
+        return Path(value)
+    except (TypeError, ValueError) as exc:
+        raise ReviewConfigurationError(reason) from exc
 
 
 def article_config_fingerprint(stage: str) -> str:
@@ -550,10 +584,15 @@ def review_issue(
             are returned as ``pipeline_error`` decisions instead.
     """
 
-    issue_path = Path(pdf_path)
-    output_dir = Path(artifact_dir)
+    config = _validate_programmatic_config(config)
+    issue_path = _path_precondition(pdf_path, "issue_pdf_path_invalid")
+    output_dir = _path_precondition(artifact_dir, "artifact_dir_invalid")
     pdf_hash = validate_named_issue(issue_path, config.benchmark_decision)
     identity = _decision_identity(pdf_hash, config)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ReviewConfigurationError("artifact_dir_unusable") from exc
     accounting = {
         "attempted": 0,
         "passed": 0,
@@ -586,14 +625,6 @@ def review_issue(
         )
         write_artifact(output_dir / ISSUE_DECISION_NAME, decision)
         return decision
-
-    try:
-        config.validate()
-        output_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as exc:
-        accounting["attempted"] += 1
-        accounting["errored"] += 1
-        return finish("pipeline_error", (_technical_reason("configuration", exc),))
 
     accounting["attempted"] += 1
     try:

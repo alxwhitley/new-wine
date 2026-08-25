@@ -846,5 +846,97 @@ def test_programmatic_identity_precondition_raises_before_provider_calls(
     assert config.article_client.calls == 0
 
 
+@pytest.mark.parametrize(
+    ("mutation", "reason"),
+    [
+        (lambda config: None, "review_issue_config_invalid"),
+        (lambda config: replace(config, benchmark_decision=None), "benchmark_decision_invalid"),
+        (lambda config: replace(config, ocr=None), "ocr_review_config_invalid"),
+        (lambda config: replace(config, article_client=object()), "article_client_invalid"),
+        (
+            lambda config: replace(config, proposition_reviewer=object()),
+            "proposition_reviewer_invalid",
+        ),
+        (
+            lambda config: replace(config, proposition_extractor=object()),
+            "proposition_extractor_invalid",
+        ),
+    ],
+)
+def test_programmatic_config_shape_is_a_precondition_before_identity_or_calls(
+    monkeypatch,
+    one_page_pdf: Path,
+    tmp_path: Path,
+    mutation,
+    reason: str,
+) -> None:
+    """Malformed local config cannot become a decision or reach identity/stages."""
+    valid = review_config(one_page_pdf)
+    identity_calls = 0
+
+    def forbidden_identity(*args, **kwargs):
+        nonlocal identity_calls
+        identity_calls += 1
+        raise AssertionError("identity construction must not run")
+
+    monkeypatch.setattr(runner, "_decision_identity", forbidden_identity)
+
+    with pytest.raises(runner.ReviewConfigurationError, match=reason):
+        runner.review_issue(
+            one_page_pdf,
+            tmp_path / "artifacts",
+            mutation(valid),
+        )
+
+    assert identity_calls == 0
+    assert valid.ocr.initial_provider.calls == 0
+    assert valid.ocr.reviewer.calls == 0
+    assert valid.ocr.repair_provider.calls == 0
+    assert valid.article_client.calls == 0
+    assert not (tmp_path / "artifacts").exists()
+
+
+def test_cli_reports_invalid_adapter_precondition_before_provider_calls(
+    one_page_pdf: Path, tmp_path: Path, capsys
+) -> None:
+    """CLI catches programmatic config preconditions without creating run evidence."""
+    decision_path = tmp_path / "accepted-decision.json"
+    decision_path.write_text(json.dumps(decision_document(one_page_pdf)), encoding="utf-8")
+    valid = review_config(one_page_pdf)
+    invalid_adapters = runner.ProviderAdapters(
+        initial_ocr_provider=valid.ocr.initial_provider,
+        page_reviewer=valid.ocr.reviewer,
+        repair_ocr_provider=valid.ocr.repair_provider,
+        article_client=object(),
+        proposition_reviewer=valid.proposition_reviewer,
+        proposition_extractor=valid.proposition_extractor,
+        proposition_extractor_model=valid.proposition_extractor_model,
+    )
+    artifact_dir = tmp_path / "artifacts"
+
+    exit_code = runner.main(
+        [
+            "--pdf",
+            str(one_page_pdf),
+            "--artifact-dir",
+            str(artifact_dir),
+            "--benchmark-decision",
+            str(decision_path),
+        ],
+        adapter_factory=lambda decision: invalid_adapters,
+        environ={},
+    )
+
+    assert exit_code == 2
+    assert json.loads(capsys.readouterr().out) == {
+        "state": "pipeline_error",
+        "reason": "article_client_invalid",
+    }
+    assert valid.ocr.initial_provider.calls == 0
+    assert valid.ocr.reviewer.calls == 0
+    assert valid.ocr.repair_provider.calls == 0
+    assert not artifact_dir.exists()
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
