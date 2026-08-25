@@ -141,6 +141,19 @@ def test_rejects_nonfinite_provider_cost(tmp_path, value):
         run_benchmark(manifest_path, providers, tmp_path / "report.json")
 
 
+def test_rejects_finite_costs_that_overflow_report_aggregation(tmp_path):
+    """Finite provider costs must not become an infinite aggregate in JSON output."""
+    manifest_path = write_manifest(tmp_path)
+    providers = [
+        FakeProvider("one", "model-1", cost_usd=1e308),
+        FakeProvider("two", "model-2", cost_usd=1e308),
+        FakeProvider("three", "model-3", cost_usd=1e308),
+    ]
+
+    with pytest.raises(BenchmarkInputError, match="aggregate_cost_invalid"):
+        run_benchmark(manifest_path, providers, tmp_path / "report.json")
+
+
 def test_blind_report_hides_provider_names(tmp_path):
     """A scorer sees anonymous candidates, not models or provider brands."""
     manifest_path = write_manifest(tmp_path)

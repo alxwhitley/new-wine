@@ -6,7 +6,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -183,6 +183,13 @@ class BenchmarkReport:
         }
         if actual_pairs != expected_pairs:
             raise BenchmarkInputError("candidate_fixture_reconciliation_failed")
+        _aggregate_cost(result.cost_usd for result in self.results)
+        for candidate in self.candidates:
+            _aggregate_cost(
+                result.cost_usd
+                for result in self.results
+                if result.candidate == candidate
+            )
 
     def blind_view(self) -> dict[str, Any]:
         labels = {candidate: chr(ord("A") + index) for index, candidate in enumerate(self.candidates)}
@@ -192,7 +199,7 @@ class BenchmarkReport:
                     result.candidate == candidate for result in self.results
                 ),
                 "total_cost_usd": round(
-                    sum(
+                    _aggregate_cost(
                         result.cost_usd
                         for result in self.results
                         if result.candidate == candidate
@@ -208,14 +215,18 @@ class BenchmarkReport:
             "fixture_count": self.fixture_count,
             "candidate_count": self.candidate_count,
             "result_count": self.result_count,
-            "total_cost_usd": round(sum(result.cost_usd for result in self.results), 8),
+            "total_cost_usd": round(
+                _aggregate_cost(result.cost_usd for result in self.results), 8
+            ),
             "candidates": candidate_summaries,
             "results": [result.blind_view(labels[result.candidate]) for result in self.results],
         }
 
     def to_json(self) -> str:
         """Serialize only the anonymous report that a human scorer may review."""
-        return json.dumps(self.blind_view(), indent=2, sort_keys=True) + "\n"
+        return json.dumps(
+            self.blind_view(), indent=2, sort_keys=True, allow_nan=False
+        ) + "\n"
 
 
 def load_and_verify_fixtures(manifest_path: Path) -> tuple[BenchmarkFixture, ...]:
@@ -288,6 +299,15 @@ def _sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _aggregate_cost(costs: Iterable[float]) -> float:
+    total = 0.0
+    for cost in costs:
+        total += cost
+        if not math.isfinite(total):
+            raise BenchmarkInputError("aggregate_cost_invalid")
+    return total
 
 
 def _validate_candidates(providers: Sequence[OCRProvider]) -> tuple[BenchmarkCandidate, ...]:
