@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from magazine_review import artifacts as artifact_store
 from magazine_review.artifacts import load_valid_artifact, write_artifact
 from magazine_review.schemas import (
     ApprovedPropositionSet,
@@ -264,6 +265,23 @@ def test_artifact_round_trip_requires_matching_stage_identity(tmp_path, valid_is
     stale_identity = replace(valid_identity(), model="different-model")
     with pytest.raises(ArtifactValidationError, match="artifact_identity_mismatch"):
         load_valid_artifact(path, stale_identity)
+
+
+def test_artifact_bytes_loader_validates_the_exact_supplied_snapshot(
+    tmp_path, valid_issue_artifacts
+):
+    """Hashing callers may validate one immutable read without reopening a path."""
+    approved = IssueDecision.approve(valid_issue_artifacts)
+    path = tmp_path / "decision.json"
+    write_artifact(path, approved)
+    snapshot = path.read_bytes()
+
+    assert artifact_store.load_valid_artifact_bytes(
+        snapshot, approved.identity
+    ) == approved
+    damaged = snapshot.replace(b'"state":"approved"', b'"state":"rejected"')
+    with pytest.raises(ArtifactValidationError):
+        artifact_store.load_valid_artifact_bytes(damaged, approved.identity)
 
 
 def test_article_filename_round_trips_and_remains_unique(valid_issue_artifacts):

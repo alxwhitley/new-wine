@@ -32,7 +32,7 @@ from supabase import create_client
 from app.services.chunker import chunk_text
 from bible_refs import extract_bible_references
 from magazine_review import articles as article_review_module
-from magazine_review.artifacts import load_valid_artifact
+from magazine_review.artifacts import load_valid_artifact_bytes
 from magazine_review.ocr import VerifiedIssueTranscript
 from magazine_review.proposition_review import (
     REVIEW_MODEL as PROPOSITION_REVIEW_MODEL,
@@ -190,17 +190,30 @@ def _sha256_file(path: Path) -> str:
         raise propositions.ApprovedArtifactMismatch("approved_artifact_unreadable") from exc
 
 
-def _load_artifact(path: Path, expected_type):
+def _load_artifact_snapshot(path: Path, expected_type):
     try:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        raw_bytes = Path(path).read_bytes()
+        raw = json.loads(raw_bytes.decode("utf-8"))
         identity = StageIdentity.from_dict(raw["identity"])
-        value = load_valid_artifact(Path(path), identity)
-    except (OSError, KeyError, TypeError, json.JSONDecodeError, ArtifactValidationError) as exc:
+        value = load_valid_artifact_bytes(raw_bytes, identity)
+    except (
+        OSError,
+        UnicodeDecodeError,
+        KeyError,
+        TypeError,
+        json.JSONDecodeError,
+        ArtifactValidationError,
+    ) as exc:
         reason = str(exc).strip() or "approved_artifact_invalid"
         raise propositions.ApprovedArtifactMismatch(reason) from exc
     if not isinstance(value, expected_type):
         raise propositions.ApprovedArtifactMismatch("approved_artifact_type_mismatch")
-    return value
+    return value, hashlib.sha256(raw_bytes).hexdigest()
+
+
+def _load_artifact(path: Path, expected_type):
+    """Private compatibility helper for focused tests and diagnostics."""
+    return _load_artifact_snapshot(path, expected_type)[0]
 
 
 def _proposition_review_path(artifact_dir: Path, article_id: str) -> Path:
@@ -229,22 +242,24 @@ def validate_reviewed_issue(
         raise propositions.ApprovedArtifactMismatch("reviewed_issue_path_invalid")
 
     decision_path = evidence_path / ISSUE_DECISION_NAME
-    decision = _load_artifact(decision_path, IssueDecision)
+    decision, decision_hash = _load_artifact_snapshot(
+        decision_path, IssueDecision
+    )
     if decision.state != "approved":
         raise propositions.ApprovedArtifactMismatch("issue_decision_not_approved")
     if decision.identity.input_hashes.get("issue.pdf") != decision.issue_hash:
         raise propositions.ApprovedArtifactMismatch(
             "issue_decision_pdf_identity_mismatch"
         )
-    decision_hash = _sha256_file(decision_path)
-
     ocr_path = evidence_path / OCR_MANIFEST_NAME
     article_path = evidence_path / ARTICLE_MANIFEST_NAME
-    ocr = _load_artifact(ocr_path, OCRManifest)
-    articles = _load_artifact(article_path, ArticleManifest)
-    if _sha256_file(ocr_path) != decision.ocr_artifact_hash:
+    ocr, ocr_hash = _load_artifact_snapshot(ocr_path, OCRManifest)
+    articles, article_hash = _load_artifact_snapshot(
+        article_path, ArticleManifest
+    )
+    if ocr_hash != decision.ocr_artifact_hash:
         raise propositions.ApprovedArtifactMismatch("ocr_artifact_hash_mismatch")
-    if _sha256_file(article_path) != decision.article_artifact_hash:
+    if article_hash != decision.article_artifact_hash:
         raise propositions.ApprovedArtifactMismatch("article_artifact_hash_mismatch")
     if ocr.status != "passed" or articles.status != "passed":
         raise propositions.ApprovedArtifactMismatch("reviewed_stage_not_passed")
@@ -312,10 +327,11 @@ def validate_reviewed_issue(
             )
 
         review_path = _proposition_review_path(evidence_path, article_id)
-        recorded_review_hash = _sha256_file(review_path)
+        review, recorded_review_hash = _load_artifact_snapshot(
+            review_path, PropositionReview
+        )
         if recorded_review_hash != decision.proposition_artifact_hashes[article_id]:
             raise propositions.ApprovedArtifactMismatch("proposition_artifact_hash_mismatch")
-        review = _load_artifact(review_path, PropositionReview)
         try:
             review.validate(article.text)
         except ArtifactValidationError as exc:

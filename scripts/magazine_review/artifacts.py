@@ -91,14 +91,13 @@ def write_artifact(path: Path, value: Any) -> str:
     return hashlib.sha256(persisted).hexdigest()
 
 
-def load_valid_artifact(path: Path, expected_identity: StageIdentity) -> Any:
-    """Load only a complete, integrity-checked artifact for these exact inputs."""
+def load_valid_artifact_bytes(
+    raw_bytes: bytes, expected_identity: StageIdentity
+) -> Any:
+    """Validate one immutable artifact byte snapshot for these exact inputs."""
     expected_identity.validate()
-    artifact_path = Path(path)
-    try:
-        raw_bytes = artifact_path.read_bytes()
-    except FileNotFoundError as exc:
-        raise ArtifactValidationError("artifact_not_found") from exc
+    if not isinstance(raw_bytes, bytes):
+        raise ArtifactValidationError("artifact_bytes_required")
     try:
         raw = json.loads(raw_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -142,3 +141,13 @@ def load_valid_artifact(path: Path, expected_identity: StageIdentity) -> Any:
         raise ArtifactValidationError("artifact_identity_mismatch")
     value.validate()
     return value
+
+
+def load_valid_artifact(path: Path, expected_identity: StageIdentity) -> Any:
+    """Compatibility path wrapper around immutable snapshot validation."""
+    artifact_path = Path(path)
+    try:
+        raw_bytes = artifact_path.read_bytes()
+    except FileNotFoundError as exc:
+        raise ArtifactValidationError("artifact_not_found") from exc
+    return load_valid_artifact_bytes(raw_bytes, expected_identity)

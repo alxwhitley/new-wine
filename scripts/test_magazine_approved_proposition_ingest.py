@@ -555,6 +555,37 @@ def test_reviewed_markdown_is_read_once_and_snapshot_is_carried_to_writer(
     assert markdown_reads == ["rb"]
 
 
+def test_review_artifacts_are_hashed_and_parsed_from_one_byte_read(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Every accepted artifact hash and value must describe one byte snapshot."""
+    issue_dir, artifact_dir, _decision = write_reviewed_fixture(tmp_path)
+    review_path = ingest_magazine._proposition_review_path(artifact_dir, ARTICLE_ID)
+    artifact_paths = {
+        artifact_dir / "issue_decision.json",
+        artifact_dir / "ocr_manifest.json",
+        artifact_dir / "article_manifest.json",
+        review_path,
+    }
+    expected_decision_hash = digest(
+        (artifact_dir / "issue_decision.json").read_bytes()
+    )
+    original_open = Path.open
+    reads = {path: [] for path in artifact_paths}
+
+    def tracking_open(self, *args, **kwargs):
+        if self in reads:
+            reads[self].append(args[0] if args else kwargs.get("mode", "r"))
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", tracking_open)
+
+    approval = ingest_magazine.validate_reviewed_issue(issue_dir, artifact_dir)
+
+    assert approval.decision_hash == expected_decision_hash
+    assert reads == {path: ["rb"] for path in artifact_paths}
+
+
 def test_reviewed_retry_after_partial_failure_is_idempotent_and_reconciled(
     tmp_path: Path, monkeypatch
 ) -> None:
