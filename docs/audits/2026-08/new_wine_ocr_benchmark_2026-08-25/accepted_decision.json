@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "decision_name": "new-wine-ocr-benchmark-2026-08-25",
+  "state": "accepted",
+  "issue": {
+    "filename": "NewWineMagazine_Issue_02-1973 8.30.09 PM.pdf",
+    "pdf_sha256": "98856c9cd9b9855e2a71ea3152f65472a8d06a9f54c3eac678b6f45f1b7df183"
+  },
+  "accepted_candidate": {
+    "provider": "Gemini",
+    "model": "gemini-3.7-flash"
+  },
+  "benchmark_report_sha256": "9e45550337f986f2a269ae73bc3cf5722ff1e17b674b770d2529b9fcccf13c14"
+}

@@ -1,0 +1,52 @@
+{
+  "fixtures": [
+    {
+      "pdf_path": "/Users/alexwhitley/rhemata/sources/magazine/06_failed/NewWineMagazine_Issue_02-1973 8.30.09 PM.pdf",
+      "pdf_sha256": "98856c9cd9b9855e2a71ea3152f65472a8d06a9f54c3eac678b6f45f1b7df183",
+      "page_number": 4,
+      "fixture_class": "severe_failure",
+      "human_scoring": {
+        "omissions": [],
+        "substitutions": [],
+        "reading_order_errors": [],
+        "tables_columns": []
+      }
+    },
+    {
+      "pdf_path": "/Users/alexwhitley/rhemata/sources/magazine/06_failed/NewWineMagazine_Issue_02-1973 8.30.09 PM.pdf",
+      "pdf_sha256": "98856c9cd9b9855e2a71ea3152f65472a8d06a9f54c3eac678b6f45f1b7df183",
+      "page_number": 31,
+      "fixture_class": "severe_failure",
+      "human_scoring": {
+        "omissions": [],
+        "substitutions": [],
+        "reading_order_errors": [],
+        "tables_columns": []
+      }
+    },
+    {
+      "pdf_path": "/Users/alexwhitley/rhemata/sources/magazine/06_failed/NewWineMagazine_Issue_02-1973 8.30.09 PM.pdf",
+      "pdf_sha256": "98856c9cd9b9855e2a71ea3152f65472a8d06a9f54c3eac678b6f45f1b7df183",
+      "page_number": 3,
+      "fixture_class": "good_control",
+      "human_scoring": {
+        "omissions": [],
+        "substitutions": [],
+        "reading_order_errors": [],
+        "tables_columns": []
+      }
+    },
+    {
+      "pdf_path": "/Users/alexwhitley/rhemata/sources/magazine/06_failed/NewWineMagazine_Issue_02-1973 8.30.09 PM.pdf",
+      "pdf_sha256": "98856c9cd9b9855e2a71ea3152f65472a8d06a9f54c3eac678b6f45f1b7df183",
+      "page_number": 10,
+      "fixture_class": "good_control",
+      "human_scoring": {
+        "omissions": [],
+        "substitutions": [],
+        "reading_order_errors": [],
+        "tables_columns": []
+      }
+    }
+  ]
+}
