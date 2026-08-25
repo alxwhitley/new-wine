@@ -9,12 +9,16 @@ relevance are below the desired bar; re-enablement requires the Scheduled
 repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
-**Current item:** *none on the private-beta blocker queue* — W5–W6 smoke + W9
-batch (write/shown/eligibility **12/24**) DONE 2026-08-19. Audits:
-`docs/audits/2026-08/w5_savchuk_article_answer_smoke_2026-08-19.md`,
-`docs/audits/2026-08/w9_web_article_batch_write_2026-08-19.md`. Quote repair is
-Scheduled, not an active Blocker. Optional non-blockers: staging display
-rename; async smoke on a new article.
+**Current item:** **B6-F1 — named-teacher/stored-position route collision**, a
+new Blocker found by the 2026-08-25 B6 single-case gate. The exact question
+asked what Derek Prince teaches about deliverance; topic-only stored-position
+routing supplied 15 citable propositions from Vlad Savchuk alone, and both
+generation attempts correctly failed the attribution guard. The user received
+a clean refusal instead of a named-teacher answer. The source-faithful
+correction remains opt-in and dormant after the representative latency gate
+rejected it as a suite-wide speed improvement. B6-F1 now awaits the targeted
+blind human quality review and one explicit implementation decision.
+Quote repair remains Scheduled, not an active Blocker.
 
 ## Governing boundary
 
@@ -34,6 +38,36 @@ rename; async smoke on a new article.
   execution and a **$50 ceiling** unless Alex explicitly approves more.
 
 ## Active blocker sequence
+
+### B6-F1 — Named-teacher/stored-position route collision
+
+**Status:** BLOCKER — the source-boundary correction passed live, but the
+representative latency candidate was rejected on 2026-08-25. The production
+default remains unchanged. Full evidence and timing:
+`docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
+
+- **Failure:** a Derek Prince deliverance question was intercepted by topic-only
+  stored evidence from Vlad Savchuk and cleanly refused after two attribution
+  failures, breaking the named-teacher core journey.
+- **Integrity evidence:** the opt-in candidate resolved explicit teacher identity
+  through canonical `source_id`, enforced it before and after neighbor expansion,
+  hard-capped evidence at 12 chunks, and answered three paid exact-case runs with
+  Derek Prince-only citations, no attribution retry, and no quotes. Generic and
+  multi-teacher behavior remains unchanged under deterministic tests.
+- **Representative result:** baseline and candidate each completed 24 paid,
+  read-only generations (48/48/0/0 total, $2.744223, no database writes). Median
+  improved only 2.81% versus the required 20%, 8 of 12 cases were faster versus
+  the required 10, and p90 did not regress. The candidate is therefore rejected
+  as the B6 latency direction.
+- **Production boundary:** the teacher-specific route and source lock remain
+  opt-in benchmark code with no production caller. The separately approved Groq
+  query-expansion correction may ship. Quotes remain off; no prompt safeguard,
+  generation model, attribution rule, reference verifier, or evidence requirement
+  changed.
+- **Smallest closure:** conduct a targeted blind human quality review of the
+  named-teacher integrity correction and make one explicit implementation
+  decision. Any suite-wide latency direction is separate Scheduled B6 work and
+  requires a mechanism that affects the generation bottleneck across the suite.
 
 ### W1–W4 — Safe web-article runway
 

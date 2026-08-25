@@ -7,9 +7,8 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-25 (mobile answer continuity, source visibility,
-accessibility, and prompt alignment; commits `f76e526` and `c386e52` shipped
-and production verified live).
+Last verified: 2026-08-25 (B6 answer-latency benchmark and guarded deployment;
+commit `fc87041` shipped to Railway API/worker and Vercel).
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -18,66 +17,57 @@ for this file.
 
 ## Current state
 
-`PLAN.md`'s private-beta blocker queue remains **0** active blockers. This
-session was ad hoc web-ingestion tooling work, not a blocker-queue item — no
-production deploy; changes are repo/script + one DB record (a source
-visibility flip).
+`PLAN.md` now has **1 active blocker**: B6-F1, the named-teacher/stored-position
+route collision. This session measured the full answer path, built a read-only
+benchmark and observational trace, corrected broken Groq query expansion, and
+rejected the tested teacher-specific candidate as a suite-wide latency solution.
+The quote rail remains off.
 
-**Master ingestion spreadsheet** (`docs/ingestion/master_ingestion_queue.xlsx`):
-a real live-verification pass ran over all 118 Discovery candidates (13
-mechanically excluded first — no written content, archival/reference, no
-URL on file; 105 checked live). Two new Discovery columns
-(`agent_verified_has_blog`, `agent_verification_notes`) record findings
-without touching `verification_status`, which stays reserved for Alex.
-Result: 18 cleared into a new `Approved Sites` tab (proposed, `approved`
-blank except Craig S. Keener — Alex's explicit call, this session), 8 more
-have real content but need per-post byline filtering before they're safe,
-79 not cleared. Recurring finding across ~5 independent candidates (Lisa
-Chan/Francis Chan, Todd Korpi/Tara Korpi, Peter Youngren/Taina Youngren,
-Lydia Stanley Morris/Nathan Morris, Heidi Baker/Rolland Baker): a
-"single-teacher" domain silently carrying a family member's byline is
-structural and recurring in this candidate pool, not the one-off it looked
-like — this is why the crawler's byline gate (below) is unconditional, not
-a one-time fix. Also found: several Discovery research-pass claims that
-don't check out at all — Taehyun Lee's claimed affiliation matches no real
-faculty record, Will Ford's domain is compromised (serving gambling spam).
+**Shipped and live (`fc87041`):**
 
-**Autonomous site-ingest crawler — built, and Alex's explicit, narrowly
-scoped exception to the DB-write-attended hard rule (CLAUDE.md Session
-Routing + Invariant 16).** `source_ingest_queue` web-article writes via
-`scripts/site_ingest_crawler.py` may now run unattended, gated by a new
-deterministic byline-verification step (`source_ingest_queue/
-byline_verify.py` — meta/JSON-LD/"By Name" signal extraction + token-
-overlap comparison, mutation-proven against the shared-surname failure
-mode above) replacing per-item human review. `link_discovery.py` does
-same-domain post/pagination discovery. `scripts/
-test_site_ingest_crawler.py`: 49/49. Two real bugs were caught by running
-it live (not by review) and fixed before being called done: a false
-"already known" dedup count that was actually a check-budget truncation,
-and header/footer/aside nav links being treated as post candidates.
+1. Query expansion now uses the already-established
+   `openai/gpt-oss-120b`; the former hardcoded Groq model returned 404 and
+   silently reduced retrieval depth. Paid preflights repeatedly returned three
+   variants plus keyword routing after the correction.
+2. The answer producer accepts an optional in-memory latency trace that records
+   routing, retrieval, generation, first text, validation, references, quotes,
+   tokens, and total time without recording source text or changing untraced
+   results.
+3. The teacher-specific source boundary and 12-chunk cap are present only behind
+   `experimental_teacher_routing=False`. The production worker has no caller
+   enabling it; the rejected candidate is dormant. Prompt safeguards, generation
+   model, attribution/reference checks, and quote-off policy are unchanged.
+4. The safe-default benchmark requires an explicit paid flag, quote-off runtime,
+   pinned model/prompt/policy, local-only output, expansion preflight, and cost
+   ceiling. It creates no answer jobs, messages, conversations, metering rows, or
+   other database writes.
 
-**Live proof, Craig Keener, independently re-verified against the DB
-afterward:** visibility flipped `shown`→`hidden`
-(`63119173-a295-4ec0-90e5-f3a55dcc8970`). Crawler correctly byline-
-confirmed his real "My testimony" post via its own `<meta name="author">`
-tag and queued it automatically (`9a32fc5d-680b-4c9f-a1f4-80cdaaae1b0b`);
-the existing content-quality gate then correctly refused it
-(`article_too_thin` — checked live, a genuine ~15-word video-embed
-wrapper, not an extraction bug). Zero documents written; zero corpus
-pollution. **This proves the refusal path only — no document has actually
-been stored by this crawler yet.** 11 of 15 discovered candidate URLs on
-his site (real essays: "Animal rights ethics," "Barak to the barracks,"
-"Bar exam," "Shooting star") were never checked this run (budget-capped
-at 4 checked, 1 confirmed-write cap).
+**Measured result:** 48/48 paid read-only generations completed with no errors
+or skips, no database writes, no quotes, and $2.744223 combined spend. Baseline
+answered 22/24 and reproduced the two known named-teacher refusals; the candidate
+answered 24/24 and both named-teacher repetitions delivered exactly 12 Derek
+Prince citations with no attribution retry. The candidate improved suite median
+latency only 2.81% (20% required), won 8/12 cases (10 required), and did not
+regress p90. It is rejected as the B6 latency direction because it structurally
+changes only the named-teacher case; movements elsewhere are provider variance.
 
-**Claude Code Auto Mode blocks direct production DB writes — reconfirmed,
-not a fluke.** Both real writes this session (the visibility flip, the
-crawler `--apply`) were blocked consistently across genuinely reformulated
-retries. Routed through the 2026-08-13 Grok-execution pattern a second
-time (Claude writes/reviews, Grok executes verbatim, Claude independently
-re-verifies after) — both writes above are that verified result. **Alex's
-stated preference: route ingestion execution to Grok directly going
-forward rather than alternating mid-task.**
+**Production deployment:** Railway API `bec3c06c-7dbb-4979-9983-8c8eccab8560`
+and answer worker `1894b766-9c84-4540-86e7-3f33ec2a650a` reached SUCCESS from
+`fc87041`; Vercel `dpl_BAUDGAbPghiyC2JUi9LUb2of17bE` reached Ready and is
+aliased to `rhemata.app`. No migration or production database write ran.
+
+**Verification:** independent answer-integrity review returned ACCEPT; targeted
+answer-latency, shared-intent, stored-position, and single-teacher-lock suites
+passed; changed Python compiled under Python 3.12; frontend tests passed 26/26;
+the 17-route production build passed with the existing environment; staged
+secret scan and diff checks passed. The three existing transitive frontend high
+advisories remain the already-classified Next.js-tree follow-up; no dependency
+changed.
+
+**Session measures:** original outcome completed (measured and bounded; tested
+candidate rejected honestly); unplanned investigations 0; findings promoted to
+Blocker 1 (B6-F1); active critical-path item count 1. Alex-approved scope:
+read-only provider spend up to $5, commit, push, and production deployment.
 
 ---
 
@@ -90,8 +80,12 @@ forward rather than alternating mid-task.**
   CSP on the frontend; the deferred Next.js major bump.
 - **Scheduled** (`docs/roadmap.md`): quote accuracy and relevance repair before
   any attended re-enable; the live rail remains off.
-- **Scheduled** (`docs/roadmap.md`, B6): model-generation latency benchmark;
-  current production evidence is 61–64s generation with sub-second queue time.
+- **Blocker** (`PLAN.md`, B6-F1): named-teacher requests can collide with
+  stored-topic evidence and cleanly refuse. The source-faithful correction is
+  live-proven but remains dormant pending targeted blind human quality review.
+- **Scheduled** (`docs/roadmap.md`, B6): a future suite-wide latency candidate
+  must address the generation bottleneck; the teacher-specific route was
+  rejected after only 2.81% median improvement.
 - **Triggered** (`docs/roadmap.md`): JWKS unknown-`kid` rate limit — PyJWT
   2.13.0 already fixed the amplifying half (cache-wipe on failed fetch); the
   residual is un-amplified and belongs at the edge, not in `auth.py`.
@@ -110,12 +104,8 @@ forward rather than alternating mid-task.**
 
 ## Next single item
 
-Alex's call, and he's routing ingestion work to Grok directly now rather
-than alternating with this session mid-task: the next crawler run should
-check Craig Keener's remaining 11 discovered candidates (or a fresh
-`--max-pages`/`--max-candidates` pass) to get this system's first actual
-document write, then re-verify independently. Unrelated: the next measured
-UX item is still the B6 answer-generation latency benchmark, or the quote
-track if picked up instead (define the representative accuracy/relevance
-acceptance set before changing selection or extraction). Active blocker
-count **0**.
+Run a targeted blind human quality review of the saved named-teacher integrity
+correction, then make one explicit accept/reject implementation decision for
+B6-F1. Do not conflate that correctness fix with a future suite-wide latency
+candidate. The separately authorized crawler track remains available through
+its own workflow. Active blocker count **1**.
