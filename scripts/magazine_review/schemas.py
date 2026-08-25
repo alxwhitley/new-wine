@@ -225,6 +225,10 @@ class OCRPage:
         )
         if self.repair_attempts == 0 and any(value is not None for value in repair_values):
             raise ArtifactValidationError("unexpected_repair_evidence")
+        if self.repair_attempts == 0 and (
+            self.text != self.initial_text or self.final_text_hash != self.initial_text_hash
+        ):
+            raise ArtifactValidationError("final_ocr_provenance_mismatch")
         if self.repair_attempts == 1:
             if not all(value is not None for value in repair_values):
                 raise ArtifactValidationError("repair_evidence_required")
@@ -237,6 +241,8 @@ class OCRPage:
             _require_usage(self.repair_usage, "repair_usage_invalid")
             _require_cost(self.repair_cost_usd, "repair_cost_invalid")
             _require_timestamp(self.repair_timestamp, "repair_timestamp_required")
+            if self.text != self.repaired_text or self.final_text_hash != self.repaired_text_hash:
+                raise ArtifactValidationError("final_ocr_provenance_mismatch")
         if not isinstance(self.complete, bool):
             raise ArtifactValidationError("page_complete_invalid")
         _string_tuple(self.reasons, "page_reasons_invalid")
@@ -978,6 +984,7 @@ class IssueDecision:
     ocr_artifact_hash: str
     article_artifact_hash: str
     proposition_artifact_hashes: Mapping[str, str]
+    article_hashes: Mapping[str, str]
     totals: Mapping[str, int]
     usage: Mapping[str, float | int]
     cost_usd: float
@@ -999,6 +1006,10 @@ class IssueDecision:
             ocr_artifact_hash=artifacts.ocr_artifact_hash,
             article_artifact_hash=artifacts.article_artifact_hash,
             proposition_artifact_hashes=dict(artifacts.proposition_artifact_hashes),
+            article_hashes={
+                review.article_id: review.article_hash
+                for review in artifacts.proposition_reviews
+            },
             totals={
                 "pages": artifacts.ocr.page_count,
                 "articles": len(artifacts.articles.articles),
@@ -1034,6 +1045,11 @@ class IssueDecision:
         for article_id, artifact_hash in self.proposition_artifact_hashes.items():
             _require_nonempty(article_id, "proposition_artifact_hashes_invalid")
             _require_sha256(artifact_hash, "proposition_artifact_hashes_invalid")
+        if not isinstance(self.article_hashes, Mapping):
+            raise ArtifactValidationError("article_hashes_invalid")
+        for article_id, article_hash in self.article_hashes.items():
+            _require_nonempty(article_id, "article_hashes_invalid")
+            _require_sha256(article_hash, "article_hashes_invalid")
         if not isinstance(self.totals, Mapping) or set(self.totals) != {"pages", "articles", "propositions"}:
             raise ArtifactValidationError("issue_totals_invalid")
         for total in self.totals.values():
@@ -1054,11 +1070,25 @@ class IssueDecision:
         if self.state == "approved" and not self.approved_propositions:
             raise ArtifactValidationError("approved_proposition_sets_required")
         seen_ids = set()
+        proposition_count = 0
         for approved in self.approved_propositions:
             approved.validate()
             if approved.article_id in seen_ids:
                 raise ArtifactValidationError("approved_article_id_duplicate")
             seen_ids.add(approved.article_id)
+            proposition_count += len(approved.propositions)
+            if self.article_hashes.get(approved.article_id) != approved.article_hash:
+                raise ArtifactValidationError("approved_article_hash_mismatch")
+        if self.state == "approved":
+            if set(self.proposition_artifact_hashes) != seen_ids:
+                raise ArtifactValidationError("proposition_artifact_reconciliation_failed")
+            if set(self.article_hashes) != seen_ids:
+                raise ArtifactValidationError("approved_article_hash_mismatch")
+            if (
+                self.totals["articles"] != len(seen_ids)
+                or self.totals["propositions"] != proposition_count
+            ):
+                raise ArtifactValidationError("issue_totals_mismatch")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1068,6 +1098,7 @@ class IssueDecision:
             "ocr_artifact_hash": self.ocr_artifact_hash,
             "article_artifact_hash": self.article_artifact_hash,
             "proposition_artifact_hashes": dict(self.proposition_artifact_hashes),
+            "article_hashes": dict(self.article_hashes),
             "totals": dict(self.totals),
             "usage": dict(self.usage),
             "cost_usd": self.cost_usd,
@@ -1082,7 +1113,7 @@ class IssueDecision:
             raw,
             {
                 "identity", "issue_hash", "state", "ocr_artifact_hash", "article_artifact_hash",
-                "proposition_artifact_hashes", "totals", "usage", "cost_usd", "gate_results",
+                "proposition_artifact_hashes", "article_hashes", "totals", "usage", "cost_usd", "gate_results",
                 "approved_propositions", "reasons",
             },
             "issue_decision_invalid",
@@ -1095,6 +1126,7 @@ class IssueDecision:
                 ocr_artifact_hash=raw["ocr_artifact_hash"],
                 article_artifact_hash=raw["article_artifact_hash"],
                 proposition_artifact_hashes=raw["proposition_artifact_hashes"],
+                article_hashes=raw["article_hashes"],
                 totals=raw["totals"],
                 usage=raw["usage"],
                 cost_usd=raw["cost_usd"],

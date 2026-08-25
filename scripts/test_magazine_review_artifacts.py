@@ -379,5 +379,54 @@ def test_approved_issue_requires_every_recorded_gate_to_pass(valid_issue_artifac
         replace(decision, gate_results={"ocr": True, "articles": False, "propositions": True}).validate()
 
 
+def test_unrepaired_final_ocr_text_must_equal_initial_evidence(valid_issue_artifacts):
+    """A page without a repair cannot silently substitute a different final text."""
+    page = valid_issue_artifacts.ocr.pages[0]
+    altered_text = "The author teaches mercy. Faith receives the gift."
+    tampered = replace(page, text=altered_text, final_text_hash=text_hash(altered_text))
+
+    with pytest.raises(ArtifactValidationError, match="final_ocr_provenance_mismatch"):
+        tampered.validate()
+
+
+def test_repaired_final_ocr_text_must_equal_repair_evidence(valid_issue_artifacts):
+    """A repaired page must carry its repair output—not an unrelated final text."""
+    page = valid_issue_artifacts.ocr.pages[0]
+    repaired_text = "The author teaches mercy. Faith receives the gift."
+    repaired = replace(
+        page,
+        repair_attempts=1,
+        repaired_text=repaired_text,
+        repaired_text_hash=text_hash(repaired_text),
+        repair_provider="Gemini",
+        repair_model="gemini-3.6-flash",
+        repair_prompt_fingerprint=sha("a"),
+        repair_usage={"input_tokens": 1},
+        repair_cost_usd=0.01,
+        repair_timestamp="2026-08-25T00:00:02Z",
+    )
+
+    with pytest.raises(ArtifactValidationError, match="final_ocr_provenance_mismatch"):
+        repaired.validate()
+
+
+def test_approved_decision_reconciles_totals_and_artifact_keys(valid_issue_artifacts):
+    """Approval accounting must correspond exactly to the transport sets."""
+    decision = IssueDecision.approve(valid_issue_artifacts)
+
+    with pytest.raises(ArtifactValidationError, match="issue_totals_mismatch"):
+        replace(decision, totals={"pages": 1, "articles": 2, "propositions": 1}).validate()
+    with pytest.raises(ArtifactValidationError, match="proposition_artifact_reconciliation_failed"):
+        replace(decision, proposition_artifact_hashes={"a1": sha("a"), "extra": sha("b")}).validate()
+
+
+def test_approved_decision_reconciles_article_hashes(valid_issue_artifacts):
+    """The persisted decision cannot claim a different approved article hash."""
+    decision = IssueDecision.approve(valid_issue_artifacts)
+
+    with pytest.raises(ArtifactValidationError, match="approved_article_hash_mismatch"):
+        replace(decision, article_hashes={"a1": sha("c")}).validate()
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
