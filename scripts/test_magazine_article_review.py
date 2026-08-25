@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from dataclasses import replace
 
 import pytest
@@ -122,8 +123,25 @@ def segmentation_response(
 
 def passing_review_response(transcript, articles):
     article_set_hash = digest(
-        "\n".join(
-            f"{article['article_id']}:{digest(str(article['text']))}" for article in articles
+        json.dumps(
+            [
+                {
+                    "article_id": article["article_id"],
+                    "filename": article["filename"],
+                    "title": article["title"],
+                    "author": article["author"],
+                    "source_pages": article["source_pages"],
+                    "transcript_start": article["transcript_start"],
+                    "transcript_end": article["transcript_end"],
+                    "text": article["text"],
+                    "text_hash": digest(str(article["text"])),
+                }
+                for article in articles
+            ],
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
         )
     )
     return {
@@ -141,7 +159,7 @@ def passing_review_response(transcript, articles):
                     "duplications": [],
                     "adjacent_bleed": [],
                     "attribution_ok": True,
-                    "reasons": [],
+                    "failure_reasons": {},
                 }
                 for article in articles
             ],
@@ -223,6 +241,7 @@ def test_reviewer_receives_complete_issue_and_all_articles(verified_issue):
     ]
     assert "verdict" not in request["articles"][0]
     assert "reasons" not in request["articles"][0]
+    assert request["articles"][0]["filename"] == "first-light.txt"
     assert request["fresh_context"] is True
     assert reviewed.status == "passed"
     assert all(article.verdict for article in reviewed.articles)
@@ -234,7 +253,7 @@ def test_mid_thought_ending_quarantines_issue(verified_issue):
     response = passing_review_response(verified_issue, proposal)
     response["output"]["articles"][0].update(
         end_coherent=False,
-        reasons=["ending_mid_thought"],
+        failure_reasons={"end_coherent": "ending_mid_thought"},
     )
     client = FakeStructuredClient(
         segmentation_response(verified_issue, proposal),
@@ -247,6 +266,9 @@ def test_mid_thought_ending_quarantines_issue(verified_issue):
 
     assert manifest.status == "quarantined"
     assert "ending_mid_thought" in manifest.articles[0].reasons
+    assert manifest.articles[0].failure_reasons == {
+        "end_coherent": "ending_mid_thought"
+    }
     assert manifest.articles[0].verdict is False
 
 
@@ -296,24 +318,25 @@ def test_deterministic_segmentation_rejects_unsafe_proposals(
 
 
 @pytest.mark.parametrize(
-    ("review_mutation", "reason"),
+    ("review_mutation", "failed_field", "reason"),
     [
-        ({"start_coherent": False, "reasons": ["opening_missing"]}, "opening_missing"),
-        ({"end_coherent": False, "reasons": ["ending_mid_thought"]}, "ending_mid_thought"),
-        ({"transitions_ok": False, "reasons": ["continuation_broken"]}, "continuation_broken"),
-        ({"omissions": ["final paragraph"] , "reasons": ["content_omitted"]}, "content_omitted"),
-        ({"duplications": ["page 2 repeated"], "reasons": ["page_duplicated"]}, "page_duplicated"),
-        ({"adjacent_bleed": ["advertisement"] , "reasons": ["adjacent_bleed"]}, "adjacent_bleed"),
-        ({"attribution_ok": False, "reasons": ["adjacent_byline"]}, "adjacent_byline"),
+        ({"start_coherent": False}, "start_coherent", "opening_missing"),
+        ({"end_coherent": False}, "end_coherent", "ending_mid_thought"),
+        ({"transitions_ok": False}, "transitions_ok", "continuation_broken"),
+        ({"omissions": ["final paragraph"]}, "omissions", "content_omitted"),
+        ({"duplications": ["page 2 repeated"]}, "duplications", "page_duplicated"),
+        ({"adjacent_bleed": ["advertisement"]}, "adjacent_bleed", "adjacent_bleed"),
+        ({"attribution_ok": False}, "attribution_ok", "adjacent_byline"),
     ],
 )
 def test_any_failed_semantic_verdict_quarantines_the_issue(
-    verified_issue, review_mutation, reason
+    verified_issue, review_mutation, failed_field, reason
 ):
     """Every completeness axis is binding, rather than advisory metadata."""
     proposals = two_proposals(verified_issue)
     response = passing_review_response(verified_issue, proposals)
     response["output"]["articles"][0].update(review_mutation)
+    response["output"]["articles"][0]["failure_reasons"] = {failed_field: reason}
     client = FakeStructuredClient(
         segmentation_response(verified_issue, proposals),
         response,
@@ -326,6 +349,35 @@ def test_any_failed_semantic_verdict_quarantines_the_issue(
     assert reviewed.status == "quarantined"
     assert reason in reviewed.articles[0].reasons
     assert reason in reviewed.quarantine_reasons
+
+
+@pytest.mark.parametrize(
+    "failure_reasons",
+    [
+        {},
+        {"end_coherent": "ending_mid_thought", "transitions_ok": "not_failed"},
+        {"unknown_field": "ending_mid_thought"},
+    ],
+)
+def test_review_rejects_missing_or_extra_field_specific_reasons(
+    verified_issue, failure_reasons
+):
+    """A generic reason must not conceal which binding semantic check failed."""
+    proposals = two_proposals(verified_issue)
+    response = passing_review_response(verified_issue, proposals)
+    response["output"]["articles"][0].update(
+        end_coherent=False,
+        failure_reasons=failure_reasons,
+    )
+    client = FakeStructuredClient(
+        segmentation_response(verified_issue, proposals),
+        response,
+    )
+
+    with pytest.raises(ArticleReviewError, match="article_failure_reasons_invalid"):
+        review_articles_against_issue(
+            verified_issue, segment_articles(verified_issue, client), client
+        )
 
 
 def test_review_rejects_missing_article_and_mismatched_lineage(verified_issue):
@@ -350,3 +402,178 @@ def test_review_rejects_missing_article_and_mismatched_lineage(verified_issue):
     with pytest.raises(ArticleReviewError, match="manifest_ocr_lineage_mismatch"):
         review_articles_against_issue(verified_issue, invalid_lineage, no_call_client)
     assert no_call_client.requests == []
+
+
+def test_resume_identity_binds_segmentation_and_review_configuration(verified_issue):
+    """Changing review instructions or reasoning must invalidate a resumable stage."""
+    proposals = two_proposals(verified_issue)
+    segmented = segment_articles(
+        verified_issue,
+        FakeStructuredClient(segmentation_response(verified_issue, proposals)),
+    )
+    segmentation_only_identity = replace(
+        segmented.identity,
+        prompt_fingerprint=segmented.segmentation_prompt_fingerprint,
+    )
+    stale_manifest = replace(segmented, identity=segmentation_only_identity)
+    client = FakeStructuredClient()
+
+    with pytest.raises(ArticleReviewError, match="manifest_identity_mismatch"):
+        review_articles_against_issue(verified_issue, stale_manifest, client)
+    assert client.requests == []
+
+
+def test_article_set_lineage_binds_boundary_and_attribution_metadata(verified_issue):
+    """A stale review cannot approve a changed title, author, page, span, or filename."""
+    proposals = two_proposals(verified_issue)
+    segmented = segment_articles(
+        verified_issue,
+        FakeStructuredClient(segmentation_response(verified_issue, proposals)),
+    )
+    changed_article = replace(segmented.articles[0], title="Changed Attribution Boundary")
+    changed_manifest = replace(
+        segmented,
+        articles=(changed_article, *segmented.articles[1:]),
+    )
+    stale_response = passing_review_response(verified_issue, proposals)
+
+    with pytest.raises(ArticleReviewError, match="review_article_set_lineage_mismatch"):
+        review_articles_against_issue(
+            verified_issue, changed_manifest, FakeStructuredClient(stale_response)
+        )
+
+
+def test_many_page_article_and_complete_proposed_set_reach_fresh_review():
+    """A four-page continuation and its neighbor must be reviewed against all pages."""
+    issue = verified_transcript(
+        "DEEP ROOTS\nBy Miriam Vale\nThe argument begins with patient attention.",
+        "The second movement develops the central claim without restarting.",
+        "A third movement qualifies the claim and preserves its context.",
+        "The final movement reaches a complete conclusion.\n"
+        "NEIGHBORING VOICE\nBy Elias Stone\nA separate article begins and ends here.",
+    )
+    proposals = [
+        proposed_article(
+            issue,
+            article_id="deep-roots",
+            filename="deep-roots.txt",
+            title="Deep Roots",
+            author="Miriam Vale",
+            source_pages=[1, 2, 3, 4],
+            start_text="DEEP ROOTS",
+            end_text="complete conclusion.",
+        ),
+        proposed_article(
+            issue,
+            article_id="neighboring-voice",
+            filename="neighboring-voice.txt",
+            title="Neighboring Voice",
+            author="Elias Stone",
+            source_pages=[4],
+            start_text="NEIGHBORING VOICE",
+            end_text="ends here.",
+        ),
+    ]
+    client = FakeStructuredClient(
+        segmentation_response(issue, proposals), passing_review_response(issue, proposals)
+    )
+
+    reviewed = review_articles_against_issue(issue, segment_articles(issue, client), client)
+
+    request = client.last_request
+    assert request["issue_transcript"] == issue.text
+    assert request["articles"] == [
+        {
+            **proposal,
+            "text_hash": digest(str(proposal["text"])),
+        }
+        for proposal in proposals
+    ]
+    assert reviewed.status == "passed"
+    assert reviewed.articles[0].source_pages == (1, 2, 3, 4)
+
+
+@pytest.mark.parametrize(
+    ("case", "page_texts", "end_text", "review_mutation", "failure_reasons"),
+    [
+        (
+            "advertisement_interruption",
+            (
+                "STEADFAST\nBy Mara Field\nThe article begins its argument.",
+                "ADVERTISEMENT\nRetreat registration and subscription details.",
+                "The article resumes and reaches its conclusion.",
+            ),
+            "reaches its conclusion.",
+            {"adjacent_bleed": ["page 2 advertisement"]},
+            {"adjacent_bleed": "advertisement_interruption"},
+        ),
+        (
+            "missing_final_paragraph",
+            (
+                "UNFINISHED\nBy Mara Field\nThe article begins its argument.",
+                "The final visible sentence stops mid-thought because",
+            ),
+            "because",
+            {"end_coherent": False, "omissions": ["final paragraph"]},
+            {
+                "end_coherent": "ending_mid_thought",
+                "omissions": "missing_final_paragraph",
+            },
+        ),
+        (
+            "duplicated_page_content",
+            (
+                "ECHO\nBy Mara Field\nThis paragraph appears once.",
+                "This paragraph appears once.\nThe article then concludes.",
+            ),
+            "then concludes.",
+            {"duplications": ["This paragraph appears once."]},
+            {"duplications": "duplicated_page_content"},
+        ),
+        (
+            "adjacent_byline_bleed",
+            (
+                "BOUNDARIES\nBy Mara Field\nThe article reaches its own conclusion.\n"
+                "NEXT VOICE\nBy Other Author",
+            ),
+            "Other Author",
+            {"adjacent_bleed": ["NEXT VOICE"], "attribution_ok": False},
+            {
+                "adjacent_bleed": "adjacent_byline_bleed",
+                "attribution_ok": "adjacent_byline_attribution",
+            },
+        ),
+    ],
+)
+def test_realistic_issue_failure_quarantines(
+    case, page_texts, end_text, review_mutation, failure_reasons
+):
+    """Named whole-issue boundary failures must remain binding quarantine gates."""
+    issue = verified_transcript(*page_texts)
+    proposal = proposed_article(
+        issue,
+        article_id=case,
+        filename=f"{case.replace('_', '-')}.txt",
+        title=case.replace("_", " ").title(),
+        author="Mara Field",
+        source_pages=list(range(1, len(page_texts) + 1)),
+        start_text=page_texts[0].split("\n", 1)[0],
+        end_text=end_text,
+    )
+    response = passing_review_response(issue, [proposal])
+    response["output"]["articles"][0].update(
+        review_mutation,
+        failure_reasons=failure_reasons,
+    )
+    client = FakeStructuredClient(
+        segmentation_response(issue, [proposal]), response
+    )
+
+    reviewed = review_articles_against_issue(
+        issue, segment_articles(issue, client), client
+    )
+
+    assert client.last_request["issue_transcript"] == issue.text
+    assert client.last_request["articles"][0]["text"] == proposal["text"]
+    assert reviewed.status == "quarantined"
+    assert set(reviewed.articles[0].reasons) == set(failure_reasons.values())

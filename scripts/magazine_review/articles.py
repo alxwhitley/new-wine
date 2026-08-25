@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from dataclasses import replace
@@ -18,6 +19,8 @@ from .schemas import (
 
 
 ARTICLE_MODEL = "openai/gpt-oss-120b"
+SEGMENTATION_REASONING = "low"
+REVIEW_REASONING = "medium"
 SEGMENTATION_INSTRUCTIONS = (
     "Segment every authored article in the complete verified magazine transcript. "
     "Return each article exactly once, in transcript order, with its stable identity, "
@@ -32,6 +35,15 @@ REVIEW_INSTRUCTIONS = (
     "specific reason for every failed field."
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SEMANTIC_FIELDS = (
+    "start_coherent",
+    "end_coherent",
+    "transitions_ok",
+    "omissions",
+    "duplications",
+    "adjacent_bleed",
+    "attribution_ok",
+)
 
 
 class ArticleReviewError(ArtifactValidationError):
@@ -47,6 +59,19 @@ class StructuredOutputClient(Protocol):
 
 def _fingerprint(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _canonical_json(value: object) -> str:
+    try:
+        return json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ArticleReviewError("article_evidence_not_canonical_json") from exc
 
 
 def _require_mapping(value: object, reason: str) -> Mapping[str, Any]:
@@ -160,7 +185,34 @@ def _response_envelope(response: object, reason: str) -> tuple[Mapping[str, Any]
     return output, usage, float(cost)
 
 
+def _segmentation_config() -> dict[str, object]:
+    return {
+        "model": ARTICLE_MODEL,
+        "reasoning_effort": SEGMENTATION_REASONING,
+        "instructions": SEGMENTATION_INSTRUCTIONS,
+        "response_format": _segmentation_schema(),
+    }
+
+
+def _review_config() -> dict[str, object]:
+    return {
+        "model": ARTICLE_MODEL,
+        "reasoning_effort": REVIEW_REASONING,
+        "fresh_context": True,
+        "instructions": REVIEW_INSTRUCTIONS,
+        "response_format": _review_schema(),
+    }
+
+
+def _config_fingerprint(config: Mapping[str, object]) -> str:
+    return _fingerprint(_canonical_json(config))
+
+
 def _stage_identity(transcript: VerifiedIssueTranscript, transcript_hash: str) -> StageIdentity:
+    durable_config = {
+        "segmentation": _segmentation_config(),
+        "review": _review_config(),
+    }
     identity = StageIdentity(
         schema_version=1,
         input_hashes={
@@ -168,7 +220,7 @@ def _stage_identity(transcript: VerifiedIssueTranscript, transcript_hash: str) -
             "verified_issue_transcript": transcript_hash,
         },
         model=ARTICLE_MODEL,
-        prompt_fingerprint=_fingerprint(SEGMENTATION_INSTRUCTIONS),
+        prompt_fingerprint=_fingerprint(_canonical_json(durable_config)),
         renderer_settings={
             "page_image_hashes": {
                 str(page.page_number): page.image_hash for page in transcript.pages
@@ -241,7 +293,7 @@ def _review_schema() -> dict[str, object]:
             "duplications",
             "adjacent_bleed",
             "attribution_ok",
-            "reasons",
+            "failure_reasons",
         ],
         "properties": {
             "article_id": {"type": "string", "minLength": 1},
@@ -252,7 +304,14 @@ def _review_schema() -> dict[str, object]:
             "duplications": string_list,
             "adjacent_bleed": string_list,
             "attribution_ok": {"type": "boolean"},
-            "reasons": string_list,
+            "failure_reasons": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    field: {"type": "string", "minLength": 1}
+                    for field in _SEMANTIC_FIELDS
+                },
+            },
         },
     }
     return {
@@ -299,7 +358,7 @@ def segment_articles(
     request: dict[str, object] = {
         "stage": "article_segmentation",
         "model": ARTICLE_MODEL,
-        "reasoning_effort": "low",
+        "reasoning_effort": SEGMENTATION_REASONING,
         "instructions": SEGMENTATION_INSTRUCTIONS,
         "ocr_identity": transcript.ocr_identity,
         "transcript_hash": transcript_hash,
@@ -374,6 +433,7 @@ def segment_articles(
 
         record = ArticleRecord(
             article_id=article_id,
+            filename=filename,
             title=_require_nonempty(proposed["title"], "article_title_required"),
             author=_require_nonempty(proposed["author"], "article_author_required"),
             source_pages=source_pages,
@@ -389,7 +449,18 @@ def segment_articles(
             adjacent_bleed=(),
             attribution_ok=False,
             verdict=False,
-            reasons=("semantic_review_required",),
+            failure_reasons={
+                "start_coherent": "semantic_review_required",
+                "end_coherent": "semantic_review_required",
+                "transitions_ok": "semantic_review_required",
+                "attribution_ok": "semantic_review_required",
+            },
+            reasons=(
+                "semantic_review_required",
+                "semantic_review_required",
+                "semantic_review_required",
+                "semantic_review_required",
+            ),
         )
         record.validate(transcript.text)
         articles.append(record)
@@ -404,11 +475,11 @@ def segment_articles(
         transcript=transcript.text,
         articles=tuple(articles),
         segmentation_model=ARTICLE_MODEL,
-        segmentation_prompt_fingerprint=_fingerprint(SEGMENTATION_INSTRUCTIONS),
+        segmentation_prompt_fingerprint=_config_fingerprint(_segmentation_config()),
         segmentation_usage=usage,
         segmentation_cost_usd=cost,
         reviewer_model=ARTICLE_MODEL,
-        reviewer_prompt_fingerprint=_fingerprint(REVIEW_INSTRUCTIONS),
+        reviewer_prompt_fingerprint=_config_fingerprint(_review_config()),
         reviewer_usage={},
         reviewer_cost_usd=0.0,
         status="quarantined",
@@ -420,7 +491,7 @@ def segment_articles(
 
 def _article_set_hash(articles: tuple[ArticleRecord, ...]) -> str:
     return _fingerprint(
-        "\n".join(f"{article.article_id}:{article.text_hash}" for article in articles)
+        _canonical_json([_article_review_payload(article) for article in articles])
     )
 
 
@@ -429,6 +500,7 @@ def _article_review_payload(article: ArticleRecord) -> dict[str, object]:
 
     return {
         "article_id": article.article_id,
+        "filename": article.filename,
         "title": article.title,
         "author": article.author,
         "source_pages": list(article.source_pages),
@@ -454,8 +526,12 @@ def _validate_manifest_lineage(
         raise ArticleReviewError("manifest_transcript_lineage_mismatch")
     if manifest.segmentation_model != ARTICLE_MODEL:
         raise ArticleReviewError("manifest_segmentation_model_mismatch")
-    if manifest.segmentation_prompt_fingerprint != _fingerprint(SEGMENTATION_INSTRUCTIONS):
+    if manifest.segmentation_prompt_fingerprint != _config_fingerprint(_segmentation_config()):
         raise ArticleReviewError("manifest_segmentation_prompt_mismatch")
+    if manifest.reviewer_model != ARTICLE_MODEL:
+        raise ArticleReviewError("manifest_review_model_mismatch")
+    if manifest.reviewer_prompt_fingerprint != _config_fingerprint(_review_config()):
+        raise ArticleReviewError("manifest_review_prompt_mismatch")
     expected_identity = _stage_identity(transcript, transcript_hash)
     if manifest.identity != expected_identity:
         raise ArticleReviewError("manifest_identity_mismatch")
@@ -475,7 +551,7 @@ def review_articles_against_issue(
     request: dict[str, object] = {
         "stage": "article_completeness_review",
         "model": ARTICLE_MODEL,
-        "reasoning_effort": "medium",
+        "reasoning_effort": REVIEW_REASONING,
         "fresh_context": True,
         "instructions": REVIEW_INSTRUCTIONS,
         "ocr_identity": transcript.ocr_identity,
@@ -519,7 +595,7 @@ def review_articles_against_issue(
         "duplications",
         "adjacent_bleed",
         "attribution_ok",
-        "reasons",
+        "failure_reasons",
     }
     reviewed_articles: list[ArticleRecord] = []
     quarantine_reasons: list[str] = []
@@ -532,7 +608,9 @@ def review_articles_against_issue(
         duplications = _require_string_list(review["duplications"], "article_review_invalid")
         adjacent_bleed = _require_string_list(review["adjacent_bleed"], "article_review_invalid")
         attribution_ok = _require_bool(review["attribution_ok"], "article_review_invalid")
-        reasons = _require_string_list(review["reasons"], "article_review_invalid")
+        raw_failure_reasons = _require_mapping(
+            review["failure_reasons"], "article_failure_reasons_invalid"
+        )
         verdict = (
             start_coherent
             and end_coherent
@@ -542,8 +620,29 @@ def review_articles_against_issue(
             and not adjacent_bleed
             and attribution_ok
         )
-        if not verdict and not reasons:
-            raise ArticleReviewError("failed_article_review_reason_required")
+        failed_fields = {
+            field
+            for field, failed in (
+                ("start_coherent", not start_coherent),
+                ("end_coherent", not end_coherent),
+                ("transitions_ok", not transitions_ok),
+                ("omissions", bool(omissions)),
+                ("duplications", bool(duplications)),
+                ("adjacent_bleed", bool(adjacent_bleed)),
+                ("attribution_ok", not attribution_ok),
+            )
+            if failed
+        }
+        if set(raw_failure_reasons) != failed_fields:
+            raise ArticleReviewError("article_failure_reasons_invalid")
+        failure_reasons = {
+            field: _require_nonempty(
+                raw_failure_reasons[field], "article_failure_reasons_invalid"
+            )
+            for field in _SEMANTIC_FIELDS
+            if field in raw_failure_reasons
+        }
+        reasons = tuple(failure_reasons.values())
         reviewed = replace(
             article,
             start_coherent=start_coherent,
@@ -554,6 +653,7 @@ def review_articles_against_issue(
             adjacent_bleed=adjacent_bleed,
             attribution_ok=attribution_ok,
             verdict=verdict,
+            failure_reasons=failure_reasons,
             reasons=reasons,
         )
         reviewed.validate(transcript.text)
@@ -568,7 +668,7 @@ def review_articles_against_issue(
         manifest,
         articles=tuple(reviewed_articles),
         reviewer_model=ARTICLE_MODEL,
-        reviewer_prompt_fingerprint=_fingerprint(REVIEW_INSTRUCTIONS),
+        reviewer_prompt_fingerprint=_config_fingerprint(_review_config()),
         reviewer_usage=usage,
         reviewer_cost_usd=cost,
         status=status,

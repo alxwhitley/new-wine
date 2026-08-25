@@ -91,6 +91,7 @@ def valid_issue_artifacts() -> IssueArtifacts:
     )
     article = ArticleRecord(
         article_id="a1",
+        filename="grace.txt",
         title="Grace",
         author="New Wine",
         source_pages=(1,),
@@ -215,6 +216,20 @@ def test_artifact_round_trip_requires_matching_stage_identity(tmp_path, valid_is
     stale_identity = replace(valid_identity(), model="different-model")
     with pytest.raises(ArtifactValidationError, match="artifact_identity_mismatch"):
         load_valid_artifact(path, stale_identity)
+
+
+def test_article_filename_round_trips_and_remains_unique(valid_issue_artifacts):
+    """A reloaded manifest must retain and revalidate canonical output filenames."""
+    manifest = valid_issue_artifacts.articles
+    reloaded = ArticleManifest.from_dict(manifest.to_dict())
+
+    assert reloaded.articles[0].filename == "grace.txt"
+    assert reloaded.articles[0].failure_reasons == {}
+    duplicate = replace(reloaded.articles[0], article_id="a2")
+    with pytest.raises(ArtifactValidationError, match="article_filename_duplicate"):
+        replace(reloaded, articles=(reloaded.articles[0], duplicate)).validate()
+    with pytest.raises(ArtifactValidationError, match="article_filename_invalid"):
+        replace(reloaded.articles[0], filename="../Grace.txt").validate(manifest.transcript)
 
 
 def test_write_reopens_and_detects_corrupted_artifact(tmp_path, valid_issue_artifacts):
@@ -361,7 +376,13 @@ def test_failed_article_verdict_cannot_hide_inside_a_passing_manifest(
     valid_issue_artifacts,
 ):
     """Structured coherence findings must contribute to the issue gate."""
-    article = replace(valid_issue_artifacts.articles.articles[0], end_coherent=False, verdict=False)
+    article = replace(
+        valid_issue_artifacts.articles.articles[0],
+        end_coherent=False,
+        verdict=False,
+        failure_reasons={"end_coherent": "ending_mid_thought"},
+        reasons=("ending_mid_thought",),
+    )
     artifacts = replace(
         valid_issue_artifacts,
         articles=replace(valid_issue_artifacts.articles, articles=(article,)),

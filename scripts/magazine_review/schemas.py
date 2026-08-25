@@ -11,6 +11,16 @@ from typing import Any, Mapping, Sequence, Tuple
 
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_ARTICLE_FILENAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.txt$")
+_ARTICLE_REVIEW_FIELDS = (
+    "start_coherent",
+    "end_coherent",
+    "transitions_ok",
+    "omissions",
+    "duplications",
+    "adjacent_bleed",
+    "attribution_ok",
+)
 _STAGE_STATUSES = frozenset({"passed", "quarantined"})
 
 
@@ -415,6 +425,7 @@ class OCRManifest:
 @dataclass(frozen=True)
 class ArticleRecord:
     article_id: str
+    filename: str
     title: str
     author: str
     source_pages: Tuple[int, ...]
@@ -430,10 +441,13 @@ class ArticleRecord:
     adjacent_bleed: Tuple[str, ...]
     attribution_ok: bool
     verdict: bool
+    failure_reasons: Mapping[str, str] = field(default_factory=dict)
     reasons: Tuple[str, ...] = ()
 
     def validate(self, transcript: str) -> None:
         _require_nonempty(self.article_id, "article_id_required")
+        if not isinstance(self.filename, str) or _ARTICLE_FILENAME_RE.fullmatch(self.filename) is None:
+            raise ArtifactValidationError("article_filename_invalid")
         _require_nonempty(self.title, "article_title_required")
         _require_nonempty(self.author, "article_author_required")
         if not isinstance(self.source_pages, tuple) or not self.source_pages:
@@ -457,6 +471,30 @@ class ArticleRecord:
         _string_tuple(self.duplications, "article_duplications_invalid")
         _string_tuple(self.adjacent_bleed, "article_adjacent_bleed_invalid")
         _string_tuple(self.reasons, "article_reasons_invalid")
+        failed_fields = {
+            field_name
+            for field_name, failed in (
+                ("start_coherent", not self.start_coherent),
+                ("end_coherent", not self.end_coherent),
+                ("transitions_ok", not self.transitions_ok),
+                ("omissions", bool(self.omissions)),
+                ("duplications", bool(self.duplications)),
+                ("adjacent_bleed", bool(self.adjacent_bleed)),
+                ("attribution_ok", not self.attribution_ok),
+            )
+            if failed
+        }
+        if not isinstance(self.failure_reasons, Mapping) or set(self.failure_reasons) != failed_fields:
+            raise ArtifactValidationError("article_failure_reasons_invalid")
+        ordered_reasons = tuple(
+            _require_nonempty(
+                self.failure_reasons[field_name], "article_failure_reasons_invalid"
+            )
+            for field_name in _ARTICLE_REVIEW_FIELDS
+            if field_name in self.failure_reasons
+        )
+        if self.reasons != ordered_reasons:
+            raise ArtifactValidationError("article_reasons_mismatch")
         if self.verdict and (
             not self.start_coherent
             or not self.end_coherent
@@ -475,6 +513,7 @@ class ArticleRecord:
     def to_dict(self) -> dict[str, Any]:
         return {
             "article_id": self.article_id,
+            "filename": self.filename,
             "title": self.title,
             "author": self.author,
             "source_pages": list(self.source_pages),
@@ -490,6 +529,7 @@ class ArticleRecord:
             "adjacent_bleed": list(self.adjacent_bleed),
             "attribution_ok": self.attribution_ok,
             "verdict": self.verdict,
+            "failure_reasons": dict(self.failure_reasons),
             "reasons": list(self.reasons),
         }
 
@@ -498,15 +538,16 @@ class ArticleRecord:
         raw = _require_exact_keys(
             raw,
             {
-                "article_id", "title", "author", "source_pages", "transcript_start", "transcript_end",
+                "article_id", "filename", "title", "author", "source_pages", "transcript_start", "transcript_end",
                 "text", "text_hash", "start_coherent", "end_coherent", "transitions_ok", "omissions",
-                "duplications", "adjacent_bleed", "attribution_ok", "verdict", "reasons",
+                "duplications", "adjacent_bleed", "attribution_ok", "verdict", "failure_reasons", "reasons",
             },
             "article_record_invalid",
         )
         try:
             return cls(
                 article_id=raw["article_id"],
+                filename=raw["filename"],
                 title=raw["title"],
                 author=raw["author"],
                 source_pages=tuple(raw["source_pages"]),
@@ -522,6 +563,7 @@ class ArticleRecord:
                 adjacent_bleed=tuple(raw["adjacent_bleed"]),
                 attribution_ok=raw["attribution_ok"],
                 verdict=raw["verdict"],
+                failure_reasons=raw["failure_reasons"],
                 reasons=tuple(raw["reasons"]),
             )
         except (AttributeError, KeyError, TypeError) as exc:
@@ -566,14 +608,18 @@ class ArticleManifest:
         if not isinstance(self.articles, tuple) or not self.articles:
             raise ArtifactValidationError("articles_required")
         seen_ids = set()
+        seen_filenames = set()
         previous_end = 0
         for article in self.articles:
             article.validate(self.transcript)
             if article.article_id in seen_ids:
                 raise ArtifactValidationError("article_id_duplicate")
+            if article.filename in seen_filenames:
+                raise ArtifactValidationError("article_filename_duplicate")
             if article.transcript_start < previous_end:
                 raise ArtifactValidationError("article_spans_overlap")
             seen_ids.add(article.article_id)
+            seen_filenames.add(article.filename)
             previous_end = article.transcript_end
         if self.status == "passed" and not all(article.verdict for article in self.articles):
             raise ArtifactValidationError("article_verdict_failed")
