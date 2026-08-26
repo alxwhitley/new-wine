@@ -261,6 +261,16 @@ def test_blank_image_page_reaches_article_segmentation() -> None:
     ][0]["transcript_end"]
 
 
+def test_model_filename_is_canonicalized_before_storage(verified_issue) -> None:
+    proposals = two_proposals(verified_issue)
+    response = segmentation_response(verified_issue, proposals)
+    response["output"]["articles"][0]["filename"] = "First Light Article.MD"
+
+    manifest = segment_articles(verified_issue, FakeStructuredClient(response))
+
+    assert manifest.articles[0].filename == "first-light-article.txt"
+
+
 def test_reviewer_receives_complete_issue_and_all_articles(verified_issue):
     """Reviewing isolated excerpts cannot detect omissions, duplication, or bleed."""
     proposals = two_proposals(verified_issue)

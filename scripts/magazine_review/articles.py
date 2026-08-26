@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import re
+import unicodedata
 from dataclasses import replace
 from typing import Any, Mapping, Protocol
 
@@ -112,6 +113,21 @@ def _require_bool(value: object, reason: str) -> bool:
     if not isinstance(value, bool):
         raise ArticleReviewError(reason)
     return value
+
+
+def _canonical_filename(value: object) -> str:
+    suggested = _require_nonempty(value, "article_filename_required")
+    stem = suggested.rsplit(".", 1)[0]
+    ascii_stem = (
+        unicodedata.normalize("NFKD", stem)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .lower()
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_stem).strip("-")
+    if not slug:
+        raise ArticleReviewError("article_filename_invalid")
+    return f"{slug}.txt"
 
 
 def _require_string_list(value: object, reason: str) -> tuple[str, ...]:
@@ -418,7 +434,7 @@ def segment_articles(
     for raw in raw_articles:
         proposed = _require_exact_keys(raw, article_keys, "segmentation_article_invalid")
         article_id = _require_nonempty(proposed["article_id"], "article_id_required")
-        filename = _require_nonempty(proposed["filename"], "article_filename_required")
+        filename = _canonical_filename(proposed["filename"])
         normalized_id = article_id.casefold()
         normalized_filename = filename.casefold()
         if normalized_id in seen_ids:
