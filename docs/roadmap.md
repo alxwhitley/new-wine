@@ -243,7 +243,7 @@ extraction-attempt history instrumentation.
 3. Feedback-to-reviewable-content flags, never direct eligibility mutation.
 4. Consent-based search analytics and corpus-gap alerts.
 5. Specific follow-up questions that move users outward.
-6. Long-conversation handoff with a token trigger, provenance, privacy, and user control.
+6. ~~Long-conversation handoff with a token trigger, provenance, privacy, and user control.~~ Specified and built 2026-08-26: `docs/superpowers/specs/2026-08-26-long-conversation-handoff.md`, migration 092 (applied live), deployed `70f6a3b`. Residual, not yet done: nudge copy unreviewed; no live/E2E verification. See `rhemata-status.md`'s 2026-08-26 entry.
 7. An isolated Precept Austin retrieval experiment without weakening exclusions.
 8. Reliable per-book structure and attribution boundaries.
 9. Shared admin notifications for position drift and content-review events.

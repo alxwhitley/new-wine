@@ -7,9 +7,10 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-26 (B6-F1 blind human quality review completed and
-ACCEPT recorded; production-activation migration drafted and applied, flag
-still off; master ingestion queue converted .xlsx -> TSV, committed).
+Last verified: 2026-08-26. Two independent sessions closed today: (1) this
+session built and deployed the long-conversation-handoff feature; (2) a
+separate repo-infra session converted the master ingestion queue spreadsheet
+format (commit `993a3aa`). B6-F1 is unchanged by either.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -18,104 +19,96 @@ for this file.
 
 ## Current state
 
-`PLAN.md` has **1 active blocker**: B6-F1, named-teacher/stored-position route
-collision. This session closed the review step and began, but did not finish,
-production activation. A separate, unrelated repo-infra session this same
-date converted the master ingestion queue spreadsheet format (own subsection
-below) — no interaction with B6-F1.
+`PLAN.md` has **1 active blocker**: B6-F1, named-teacher/stored-position
+route collision — **unchanged today**. Review is DONE, ACCEPT recorded
+2026-08-26 (prior session). Migration 091 is applied live, flag still
+`false`. Flipping it to `true` remains the one attended step, still held on
+Alex's explicit "hold here." Full detail: PLAN.md's own B6-F1 entry and
+`docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
-**B6-F1 blind review — DONE, decision ACCEPT (2026-08-26):** Located the blind
-packet, unblinding key, and mechanical report — they live in the
-`codex/b6-answer-latency` worktree's own gitignored `local/2026-08/`, not the
-main tree's. Mechanically confirmed the packet was genuinely blind (no model,
-cost, timing, token, or variant field on either side). Presented both
-`named_teacher_deliverance` blind pairs — the only relevant category, since
-this correction changes the named-teacher route only — to Alex one at a time;
-his scores were locked before the key was opened. He found no hard failure
-across the five protected axes in the answering variant, either repetition;
-the refusing variant was the known pre-existing problem, not a new failure.
-Unblinding and the mechanical report reconciled cleanly: baseline's only 2
-refusals in the 24-pair batch both landed on this case; the candidate answered
-24/24. Alex recorded **ACCEPT**. Full detail:
-`docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`'s "Blind human
-quality review and decision (2026-08-26)" section.
+**Long-conversation-handoff feature — specified, built, deployed
+(2026-08-26):** Answers `docs/roadmap.md` Horizon item 6. Full design:
+`docs/superpowers/specs/2026-08-26-long-conversation-handoff.md`. A
+dismissible chat nudge fires once a conversation's estimated cumulative
+generation cost crosses $0.50 (~13 turns), suggesting a fresh conversation —
+soft nudge, never a hard cap (product-philosophy reason, not cost, per
+CLAUDE.md's design filter). Migration 092
+(`conversations.cumulative_input_tokens` / `cumulative_output_tokens` /
+`turn_count`, `NOT NULL DEFAULT 0`) is **applied live** (attended,
+Alex-approved, 10/10 verify checks). `save_exchange()` increments the
+running totals with a reconnect-safe idempotency gate (`cur.rowcount == 1`
+on the assistant-message insert, not assumed) — proven by
+`scripts/test_conversation_length_signal.py` (12/12, including a mutation
+check that a broken gate would double-count). `async_chat.py` surfaces the
+computed cost/turn estimate in the result payload (`null` for guests — no
+server-side conversation row to accumulate against, v1 scope). Frontend:
+`ConversationLengthNudge` component + `useChat.ts`/`page.tsx` wiring.
+Committed `70f6a3b`, pushed to `origin/main`; Railway `rhemata` +
+`answer-worker` both confirmed **Online** post-deploy (backend confirmed
+live, 200 at `/`), Vercel production deployment confirmed **Ready**.
+**Not yet done, both need Alex:** nudge copy is drafted but unreviewed
+(deliberately says nothing about cost/tokens — see the component's own
+comment); no live/E2E verification through a real conversation yet.
 
-**Production activation — scoped, drafted, migration 091 APPLIED live,
-flag still OFF:** `migrations/091_teacher_specific_routing_flag.sql` adds
-`async_answer_config.experimental_teacher_routing_enabled`
-(`NOT NULL DEFAULT false`), mirroring migration 079's `serving_enabled`
-seconds-reversible-switch pattern. `scripts/answer_worker.py`'s sole
-`produce()` call site now threads it through as `experimental_teacher_routing=`.
-Applied live via `scripts/apply_migration_091.py --apply` (attended,
-Alex-approved) — its own 5-check verify pass confirmed the column exists,
-`NOT NULL`, default `false`, the config row exists, and the live value reads
-`false`. New offline regression: `scripts/test_teacher_specific_routing_flag.py`
-(7/7 passing); existing `test_async_serving_gate.py` and the full B6 benchmark
-suite (14/14) still pass. **Production behavior is unchanged** — the flag is
-still `false`. Flipping it to `true` is a separate, attended Database-write
-operation; held this session on Alex's explicit "hold here."
+**Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
 
-**Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged this
-session.
-
-**New Wine A2:** unchanged this session. Issue 02-1973 remains `quarantined`
-(2 missing article continuations found by fresh whole-issue review), 0
-propositions, 0 database writes. Scheduled behind B6-F1. Artifacts remain
-local-only, untracked, under
+**New Wine A2:** unchanged. Issue 02-1973 remains `quarantined` (2 missing
+article continuations found by fresh whole-issue review), 0 propositions, 0
+database writes. Scheduled behind B6-F1. Artifacts remain local-only,
+untracked, under
 `docs/audits/2026-08/new_wine_issue_02_1973_review_2026-08-25_retry_13/`.
 
 **Master ingestion queue format conversion — DONE (2026-08-26, commit
-`993a3aa`):** `docs/ingestion/master_ingestion_queue.xlsx` (one binary
-workbook) replaced with four plain-text TSV files, one per former tab
-(Read Me/Discovery/Queue/Approved Sites), via a new shared
+`993a3aa`):** `docs/ingestion/master_ingestion_queue.xlsx` replaced with four
+plain-text TSV files (one per former tab) via new shared
 `scripts/ingestion_sheet_io.py` — lossless round trip proven cell-by-cell
-against the live workbook (87/87 checks) before the xlsx was deleted.
-Scope expanded mid-session, Alex-approved: all four scripts found to open
-the old file directly (`sync_master_ingestion_queue.py`,
-`review_discovery_candidates.py`, `check_discovery_blog_links.py`,
-`site_ingest_crawler.py`), not just the one the original task named, were
-updated along with their tests. Discovery gained 7 new blank/unclassified
-columns (clearance checklist x4 booleans + date, clearance-cost lane,
-blog_index_url). Fixed a live bug the conversion would otherwise have
-introduced silently: `review_discovery_candidates.py`'s `is True`/`is False`
-boolean identity checks would have stopped filtering anything once Excel
-booleans became TSV strings — now routed through
-`ingestion_sheet_io.parse_bool_cell()`. CLAUDE.md's Landmines entry on this
-spreadsheet is updated to match the new file layout. Repo-only session,
-zero database writes.
+(87/87 checks) before the xlsx was deleted. All four scripts that opened the
+old file (`sync_master_ingestion_queue.py`, `review_discovery_candidates.py`,
+`check_discovery_blog_links.py`, `site_ingest_crawler.py`) updated with
+their tests; fixed a live boolean-identity bug the conversion would
+otherwise have introduced silently. CLAUDE.md's Landmines entry on this
+spreadsheet updated to match. Repo-only, zero database writes.
 
 ---
 
 ## Findings surfaced, not yet acted on
 
-- **Blocker** (`PLAN.md`, B6-F1): review DONE, ACCEPT recorded, migration 091
-  applied live at `false`. The one remaining step — flipping the flag to
-  `true` — is an attended DB write not yet authorized.
-- **Scheduled** (`docs/roadmap.md`, B6): a future suite-wide latency candidate
-  must address the generation bottleneck; the teacher-specific route was
-  rejected as a latency direction (2.81% median improvement) but accepted on
-  integrity — these are separate questions, don't conflate them again.
-- **Scheduled** (`docs/roadmap.md`): quote accuracy/relevance repair before
-  any attended re-enable.
-- **Scheduled A2:** correct the omitted New Wine article and two
-  continuations, then rerun the local no-write gates. Quarantine is the
-  desired safety result, not authorization for ingestion.
-- **Triggered** (`docs/roadmap.md`): JWKS unknown-`kid` rate limit — PyJWT
-  2.13.0 already fixed the amplifying half; the residual belongs at the edge.
+- **Blocker** (`PLAN.md`, B6-F1): unchanged — flipping the flag to `true` is
+  the one remaining attended step.
+- **Scheduled** (`docs/roadmap.md`, B6): suite-wide latency candidate still
+  needed; teacher-specific route rejected on latency, accepted on integrity.
+- **Scheduled**: quote accuracy/relevance repair before any attended
+  re-enable.
+- **Scheduled A2:** correct the omitted New Wine article + two
+  continuations, rerun local no-write gates.
+- **Triggered**: JWKS unknown-`kid` rate limit — residual belongs at the
+  edge.
+- **Process note (this session):** `scripts/test_metering.py` is a
+  live-integration script (writes to the real production `user_usage` row
+  for `creative@clf-church.com`, hits the real Railway URL), not an offline
+  unit test, despite the same `test_*.py` naming as the offline ones. It
+  self-cleans (deletes its row at both start and end — verified before/after
+  this session, zero residual), but running it unread is an unannounced
+  production write. Read any `scripts/test_*.py` before batch-running it as
+  a "regression check" — the filename alone doesn't distinguish the two
+  kinds.
 - Carried, not re-checked this session: dependency/hardening follow-up
-  (starlette+fastapi, pdfplumber+pdfminer, CSP, deferred Next.js major bump);
-  staging source name still reads `"Vlad Savchuk (web staging)"`; Bonnke URL
-  suspect; no retention/TTL logic for user data; `rhemata_readonly_analysis`
-  has no grant on PII tables; full cascading account deletion still unbuilt
-  (migration 090 removed only the DB-level blocker).
+  (starlette+fastapi, pdfplumber+pdfminer, CSP, deferred Next.js major
+  bump); staging source name still reads `"Vlad Savchuk (web staging)"`;
+  Bonnke URL suspect; no retention/TTL logic for user data;
+  `rhemata_readonly_analysis` has no grant on PII/user tables (reconfirmed
+  this session against `user_usage` specifically — permission denied); full
+  cascading account deletion still unbuilt (migration 090 removed only the
+  DB-level blocker).
 
 ---
 
 ## Next single item
 
-Alex's explicit call: flip `async_answer_config.experimental_teacher_routing_enabled`
-to `true` (attended Database-write session) to actually fix the named-teacher
-core-journey failure in production, then run one live smoke check. Held this
-session on Alex's "hold here, wrap up session" instruction — not done, not
-scheduled elsewhere. New Wine A2 remains scheduled behind the active
-critical-path blocker. Active blocker count **1**.
+Two independent items, both Alex's call: (1) flip
+`async_answer_config.experimental_teacher_routing_enabled` to `true`
+(attended Database-write) to fix the B6-F1 named-teacher core-journey
+failure in production — unchanged from the prior session, still held; (2)
+review the long-conversation-handoff nudge copy and do a live check once
+real usage crosses the $0.50 threshold. Active blocker count **1** (B6-F1,
+unchanged).
