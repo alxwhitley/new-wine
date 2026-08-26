@@ -436,7 +436,11 @@ def _validate_review_response(response: object) -> PageReviewResponse:
     if not isinstance(reason, str) or not reason.strip():
         raise OCRReviewError("reviewer_reason_required")
     if complete and any(findings.values()):
-        raise OCRReviewError("reviewer_complete_with_findings")
+        complete = False
+        reason = (
+            "Reviewer reported findings despite complete=true; "
+            f"treated as incomplete. {reason}"
+        )
     usage, cost = _validate_accounting(response.usage, response.cost_usd, "reviewer")
     return PageReviewResponse(
         review={

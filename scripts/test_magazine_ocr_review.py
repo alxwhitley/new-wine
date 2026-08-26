@@ -182,6 +182,40 @@ def test_reviews_ad_page_and_repairs_only_failed_page(
     assert repair.fixtures[0].image_hash == manifest.pages[1].image_hash
 
 
+def test_contradictory_complete_verdict_conservatively_triggers_repair(
+    one_page_pdf: Path, tmp_path: Path
+) -> None:
+    initial = FakeOCRProvider(
+        BenchmarkCandidate("accepted-provider", "accepted-model"),
+        {1: "page missing footer"},
+    )
+    reviewer = FakeReviewer(
+        [
+            review(
+                True,
+                missing_regions=("footer",),
+                reason="Footer was not captured.",
+            ),
+            review(True),
+        ]
+    )
+    repair = FakeOCRProvider(
+        BenchmarkCandidate("Gemini", "gemini-3.6-flash"),
+        {1: "page including footer"},
+    )
+
+    manifest = review_issue_ocr(
+        one_page_pdf,
+        config(initial=initial, reviewer=reviewer, repair=repair),
+        tmp_path / "artifacts",
+    )
+
+    assert repair.page_numbers == [1]
+    assert manifest.status == "passed"
+    assert manifest.pages[0].repair_attempts == 1
+    assert "complete=true" in manifest.pages[0].reviewer_reasons[0]
+
+
 def test_second_failure_quarantines_entire_issue(
     one_page_pdf: Path, tmp_path: Path
 ) -> None:
