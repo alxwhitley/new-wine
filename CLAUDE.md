@@ -563,9 +563,11 @@ correctly refused it downstream (`article_too_thin` — checked against the
 live page, a real ~15-word video wrapper, not an extraction bug); zero
 documents written. **This proves the refusal path, not the success path —
 the crawler has not yet actually stored a document.** Its input is
-restricted to `docs/ingestion/master_ingestion_queue.xlsx`'s `Approved
-Sites` tab, and only a row with `approved` literally `TRUE` — Alex
-controls that list directly. **`--site NAME` is optional as of
+restricted to `docs/ingestion/master_ingestion_queue_approved_sites.tsv`
+(the former `Approved Sites` tab of a shared `.xlsx` workbook, converted
+2026-08-26 to one plain-text file per former tab — see the Landmines entry
+below), and only a row with `approved` literally `TRUE` — Alex controls
+that list directly. **`--site NAME` is optional as of
 2026-08-25** — omitting it loops the crawler over every `approved=TRUE`
 row in one invocation, each still gated independently (own crawl, own
 byline check, own `--max-candidates`/`--max-pages` caps); scope is
@@ -986,17 +988,28 @@ different row, per the hard rule above.
 
 - **A tracked master spreadsheet for ingestion candidates now exists —
   separate from, and layered on top of, `source_ingest_queue` (Invariant
-  16), not a replacement for it.** Built 2026-08-19:
-  `docs/ingestion/master_ingestion_queue.xlsx`, deliberately tracked in git
-  (unlike the gitignored YouTube/magazine trackers — git history is this
-  file's backup/recovery mechanism). Two tabs: **Discovery** (raw, unvetted
-  candidates — a real reusable sync script, `scripts/
-  sync_master_ingestion_queue.py`, structurally never opens this tab, so a
-  Discovery row cannot reach the database through that path) and **Queue**
-  (vetted rows shaped to match `source_ingest_queue` exactly). **Alex's
-  explicit, standing decision: the spreadsheet is the single master source
-  of truth for ingestion candidates; on any disagreement with the database
-  it silently overwrites.** The sync script is dry-run-by-default,
+  16), not a replacement for it.** Built 2026-08-19 as a single `.xlsx`
+  workbook; **converted 2026-08-26 to one plain-text TSV file per former
+  tab** (git can't show line-level diffs on a binary workbook) — the
+  `.xlsx` no longer exists. Current files, all under `docs/ingestion/`,
+  deliberately tracked in git (unlike the gitignored YouTube/magazine
+  trackers — git history is this data's backup/recovery mechanism):
+  `master_ingestion_queue_read_me.tsv` (human-readable instructions),
+  `master_ingestion_queue_discovery.tsv` (raw, unvetted candidates — a real
+  reusable sync script, `scripts/sync_master_ingestion_queue.py`,
+  structurally never opens this file, so a Discovery row cannot reach the
+  database through that path — proved by mechanism 2026-08-26: `read_sheet()`
+  still succeeds with the Discovery file physically removed from disk),
+  `master_ingestion_queue_queue.tsv` (vetted rows shaped to match
+  `source_ingest_queue` exactly), and `master_ingestion_queue_approved_sites.tsv`
+  (site_ingest_crawler.py's sole input, Invariant 16). One shared module,
+  `scripts/ingestion_sheet_io.py`, is the only place that knows the TSV
+  encoding (escaped tab-delimited, one row per line, lossless — every
+  script that reads or writes one of these four files must go through it,
+  same "one shared implementation" discipline as `normalize_alias_key`).
+  **Alex's explicit, standing decision: this data is the single master
+  source of truth for ingestion candidates; on any disagreement with the
+  database it silently overwrites.** The sync script is dry-run-by-default,
   `--apply` required to write (same convention as
   `scripts/apply_migration_088.py`) — creates missing Queue rows, overwrites
   differing fields, never deletes (a database row with no Queue counterpart
@@ -1008,8 +1021,8 @@ different row, per the hard rule above.
   deliberately accepted trap, not a bug**: it still writes straight to
   `source_ingest_queue`, is NOT part of the sync, and anything submitted
   through it will be silently overwritten by the next `--apply` run unless
-  someone also adds it to the Queue tab by hand — raised to Alex directly
-  and left as-is on purpose. Discovery-tab fields named with a `claimed_`
+  someone also adds it to the Queue file by hand — raised to Alex directly
+  and left as-is on purpose. Discovery fields named with a `claimed_`
   prefix (`claimed_main_url`, `claimed_blog_or_articles_url`,
   `claimed_licensing_status`, `claimed_platform_size`,
   `claimed_written_content_exists`) are guesses from automated research
@@ -1020,6 +1033,22 @@ different row, per the hard rule above.
   specific red-flag pattern in this data, not yet manually verified either
   way.
 
+  **2026-08-26: Discovery gained a real human-clearance layer, distinct
+  from the `claimed_*` automated-guess fields.** Four independent booleans
+  (`site_visited_by_human`, `author_identity_confirmed`,
+  `licensing_posture_confirmed`, `content_type_confirmed`) plus
+  `clearance_checked_at`, all blank/FALSE on every pre-existing row —
+  nothing retroactively marked as checked. `clearance_cost_lane`
+  (`free_and_clear` / `likely_permissive` / `needs_conversation`, one of
+  three values, unclassified on every existing row) and `blog_index_url`
+  (the candidate's blog/article index page, distinct from
+  `claimed_main_url`; the existing empty, dead `archive_url` column was
+  deliberately left alone rather than repurposed — its original intent
+  looks different). No new "declined" column was added:
+  `verification_status='rejected'` + `reviewed_at` + `review_notes` already satisfied every
+  requirement (retained, filterable, structurally unreachable by the sync
+  script) for a Discovery candidate that's been reviewed and passed on.
+
   **Two local review tools now exist for this Discovery backlog (built
   2026-08-25) — check for these before rebuilding either.**
   `scripts/review_discovery_candidates.py`: a local FastAPI page
@@ -1027,8 +1056,16 @@ different row, per the hard rule above.
   candidate at a time (name + link only, nothing else), Yes writes an
   Approved Sites row automatically and marks the row `verified`, No marks
   it `rejected` permanently — no forms, no session state, every page load
-  re-reads the sheet fresh. Refuses to run or write while Excel has the
-  file open (checks for the `~$` lock file).
+  re-reads the file fresh. **2026-08-26: the Excel `~$` lock-file refusal
+  is gone** (plain TSV carries no such marker) — replaced by a real
+  mtime-based staleness guard (`StaleFileError`, shared with
+  `check_discovery_blog_links.py`) that refuses a write if either target
+  file changed on disk since it was read. The same conversion fixed a live
+  bug the format change would otherwise have introduced silently: the
+  queue filter's `already_in_corpus is True` / `claimed_written_content_exists
+  is False` identity checks would have stopped filtering anything the
+  moment those became TSV strings instead of real Excel booleans — now
+  routed through `ingestion_sheet_io.parse_bool_cell()`.
   `scripts/check_discovery_blog_links.py`: a one-shot live fetch+link-check
   per unverified candidate (reuses the crawler's own SSRF-safe fetch and
   post-link detection), labels a new `auto_link_check` column
