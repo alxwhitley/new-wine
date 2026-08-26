@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from psycopg2.extras import Json
 
@@ -79,13 +79,26 @@ def save_exchange(
     citations: Optional[List[Any]],
     verified_references: Optional[List[Any]],
     job_id: str,
-) -> Optional[str]:
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+) -> Optional[Dict[str, Any]]:
     """Idempotently persist one exchange (conversation + user msg + assistant msg).
 
-    Returns the assistant message id on success, None on any failure. Best-effort:
-    NEVER raises (a persistence failure must not break answer delivery, exactly as
-    chat.py wraps _save_conversation in try/except). Safe to call repeatedly for the
-    same (conversation, job) -- ON CONFLICT DO NOTHING makes reconnect a no-op.
+    Returns {"assistant_message_id", "cumulative_input_tokens",
+    "cumulative_output_tokens", "turn_count"} on success, None on any failure.
+    Best-effort: NEVER raises (a persistence failure must not break answer
+    delivery, exactly as chat.py wraps _save_conversation in try/except). Safe
+    to call repeatedly for the same (conversation, job) -- ON CONFLICT DO
+    NOTHING makes reconnect a no-op for the message/conversation rows.
+
+    input_tokens/output_tokens feed the long-conversation-handoff nudge
+    (docs/superpowers/specs/2026-08-26-long-conversation-handoff.md): a
+    running per-conversation total, read back by async_chat.py to compute an
+    estimated cost via config.estimate_cost_usd(). The increment below is
+    gated on the ASSISTANT message insert actually landing a new row (checked
+    via cur.rowcount, not assumed) -- a reconnect re-GET calls this function
+    again for the same job_id, and without that gate the cumulative totals
+    would double-count every replayed delivery.
     """
     try:
         user_mid = _message_id(conversation_id, job_id, "user")
@@ -115,10 +128,35 @@ def save_exchange(
                         Json(citations or []), Json(verified_references or []),
                     ),
                 )
+                # Only a genuinely NEW assistant message (rowcount 1, not a
+                # reconnect replay hitting ON CONFLICT DO NOTHING) advances the
+                # conversation's cumulative usage -- see docstring.
+                if cur.rowcount == 1:
+                    cur.execute(
+                        "UPDATE conversations SET "
+                        "cumulative_input_tokens = cumulative_input_tokens + %s, "
+                        "cumulative_output_tokens = cumulative_output_tokens + %s, "
+                        "turn_count = turn_count + 1 "
+                        "WHERE id = %s "
+                        "RETURNING cumulative_input_tokens, cumulative_output_tokens, turn_count",
+                        (int(input_tokens or 0), int(output_tokens or 0), conversation_id),
+                    )
+                else:
+                    cur.execute(
+                        "SELECT cumulative_input_tokens, cumulative_output_tokens, turn_count "
+                        "FROM conversations WHERE id = %s",
+                        (conversation_id,),
+                    )
+                totals = cur.fetchone()
+                return {
+                    "cumulative_input_tokens": totals["cumulative_input_tokens"] if totals else 0,
+                    "cumulative_output_tokens": totals["cumulative_output_tokens"] if totals else 0,
+                    "turn_count": totals["turn_count"] if totals else 0,
+                }
 
-        db.run(_write)
+        usage_totals = db.run(_write)
         logger.info("[async] persisted exchange for user %s conversation %s (job %s)", user_id, conversation_id, job_id)
-        return assistant_mid
+        return {"assistant_message_id": assistant_mid, **usage_totals}
     except Exception:
         logger.exception("[async] save_exchange failed for conversation %s (best-effort, ignored)", conversation_id)
         return None

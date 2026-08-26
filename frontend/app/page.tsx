@@ -17,6 +17,10 @@ import { PinDropdown } from "@/components/rhemata/pin-dropdown";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
 import { UsageRing } from "@/components/rhemata/usage-ring";
 import { WeeklyLimitCard } from "@/components/rhemata/weekly-limit-card";
+import {
+  ConversationLengthNudge,
+  CONVERSATION_LENGTH_NUDGE_THRESHOLD_USD,
+} from "@/components/rhemata/conversation-length-nudge";
 import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
 import type { Citation } from "@/lib/api";
@@ -55,6 +59,11 @@ export default function Home() {
     }
   }
   const [weeklyLimitDetail, setWeeklyLimitDetail] = useState<WeeklyLimitDetail | null>(null);
+  // Long-conversation-handoff nudge (docs/superpowers/specs/2026-08-26-long-
+  // conversation-handoff.md): dismissed for the rest of THIS conversation
+  // once "Not now" is clicked; reset whenever a new/different conversation
+  // starts (handleNewChat / handleSelectConversation below).
+  const [lengthNudgeDismissed, setLengthNudgeDismissed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeSidebar = useCallback(() => {
@@ -73,6 +82,7 @@ export default function Home() {
     error: chatError,
     conversationId,
     weeklyUsage,
+    conversationCostUsd,
     sendMessage,
     clearMessages,
     loadConversation,
@@ -313,6 +323,7 @@ export default function Home() {
     clearMessages();
     setIsSourcePanelOpen(false);
     setSelectedCitation(null);
+    setLengthNudgeDismissed(false);
   }
 
   function handleRetry() {
@@ -330,6 +341,7 @@ export default function Home() {
   async function handleSelectConversation(id: string) {
     setIsSourcePanelOpen(false);
     setSelectedCitation(null);
+    setLengthNudgeDismissed(false);
     const msgs = await loadMessages(id);
     loadConversation(id, msgs);
   }
@@ -525,6 +537,23 @@ export default function Home() {
                       />
                     </div>
                   )}
+
+                  {/* Long-conversation-handoff nudge — soft, dismissible, never
+                      blocks sending. Suppressed under the hard weekly-limit stop
+                      above (nothing to nudge toward once already hard-blocked)
+                      and while a turn is still streaming in. */}
+                  {!weeklyLimitDetail &&
+                    !chatLoading &&
+                    !lengthNudgeDismissed &&
+                    conversationCostUsd !== null &&
+                    conversationCostUsd >= CONVERSATION_LENGTH_NUDGE_THRESHOLD_USD && (
+                      <div className="mt-4">
+                        <ConversationLengthNudge
+                          onNewChat={handleNewChat}
+                          onDismiss={() => setLengthNudgeDismissed(true)}
+                        />
+                      </div>
+                    )}
 
                   {chatError && (
                     <div className="flex items-center gap-3 mt-2">

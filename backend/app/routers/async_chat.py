@@ -64,7 +64,7 @@ from app.auth import get_optional_user
 from app.db.supabase import get_supabase
 from app.services import quotes as quotes_service
 from app.services.async_answers import conversation_store, jobs
-from app.services.async_answers.config import load_config
+from app.services.async_answers.config import estimate_cost_usd, load_config
 from app.services.async_answers.db import Db
 from app.services.async_answers.metering import enforce_query_limit
 from app.services.async_answers.producer import current_policy
@@ -225,7 +225,7 @@ async def result(
     def _persist(job, uid, conv_id):
         db = Db()
         try:
-            conversation_store.save_exchange(
+            return conversation_store.save_exchange(
                 db,
                 user_id=uid,
                 conversation_id=conv_id,
@@ -234,6 +234,8 @@ async def result(
                 citations=job.get("citations") or [],
                 verified_references=job.get("verified_references") or [],
                 job_id=str(job_id),
+                input_tokens=job.get("input_tokens") or 0,
+                output_tokens=job.get("output_tokens") or 0,
             )
         finally:
             db.close()
@@ -268,10 +270,22 @@ async def result(
             # off the event loop). Guests are not persisted, matching chat.py.
             conv_id = None
             message_id = None
+            conversation_cost_usd = None
+            conversation_turn_count = None
             if user_id:
                 conv_id = conversation_store.resolve_conversation_id(conversation_id, str(job_id), user_id)
                 message_id = conversation_store.assistant_message_id(conv_id, str(job_id))
-                await run_in_threadpool(_persist, job, user_id, conv_id)
+                usage_totals = await run_in_threadpool(_persist, job, user_id, conv_id)
+                # Long-conversation-handoff nudge (docs/superpowers/specs/2026-08-26-
+                # long-conversation-handoff.md) -- guests are out of v1 scope (no
+                # server-side conversation row to accumulate against), so this stays
+                # None for them, same as conv_id/message_id above.
+                if usage_totals:
+                    conversation_cost_usd = round(estimate_cost_usd(
+                        usage_totals["cumulative_input_tokens"],
+                        usage_totals["cumulative_output_tokens"],
+                    ), 4)
+                    conversation_turn_count = usage_totals["turn_count"]
 
             # Re-check at delivery so an idempotent or already-completed job
             # cannot expose persisted quote IDs after the rail is disabled.
@@ -294,6 +308,8 @@ async def result(
                 "conversation_id": conv_id,
                 "message_id": message_id,
                 "job_id": job_id,
+                "conversation_cost_usd": conversation_cost_usd,
+                "conversation_turn_count": conversation_turn_count,
             }))
             yield _sse("[DONE]")
         else:  # failed | canceled

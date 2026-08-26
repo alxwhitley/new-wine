@@ -98,6 +98,11 @@ export interface StreamMeta {
   usage?: { used: number; limit: number; week_start: string };
   verified_references?: VerifiedReference[];
   quote_ids?: string[];
+  // Long-conversation-handoff nudge signal (docs/superpowers/specs/2026-08-26-
+  // long-conversation-handoff.md). null for guests -- server-side accumulation
+  // needs a persisted conversation row, which guests don't have (v1 scope).
+  conversation_cost_usd?: number | null;
+  conversation_turn_count?: number | null;
 }
 
 export interface StreamCallbacks {
@@ -302,6 +307,8 @@ export async function streamAsyncChatResult(
             topics_established: parsed.topics_established ?? undefined,
             usage: options?.usage,
             quote_ids: parsed.quote_ids ?? [],
+            conversation_cost_usd: parsed.conversation_cost_usd ?? null,
+            conversation_turn_count: parsed.conversation_turn_count ?? null,
           });
         }
       } catch {

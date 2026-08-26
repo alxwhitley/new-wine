@@ -52,6 +52,10 @@ export function useChat(
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [weeklyUsage, setWeeklyUsage] = useState<{ used: number; limit: number } | null>(null);
+  // Long-conversation-handoff nudge signal (docs/superpowers/specs/2026-08-26-
+  // long-conversation-handoff.md). null until the first authenticated turn
+  // completes; stays null for guests (server doesn't accumulate for them).
+  const [conversationCostUsd, setConversationCostUsd] = useState<number | null>(null);
   const [pendingGuestJob, setPendingGuestJob] = useState<PendingGuestJob | null>(null);
   const [guestJobToResume, setGuestJobToResume] = useState<PendingGuestJob | null>(null);
   const [guestSessionHydrated, setGuestSessionHydrated] = useState(false);
@@ -129,6 +133,9 @@ export function useChat(
     }
     if (meta.usage) {
       setWeeklyUsage({ used: meta.usage.used, limit: meta.usage.limit });
+    }
+    if (meta.conversation_cost_usd !== undefined) {
+      setConversationCostUsd(meta.conversation_cost_usd);
     }
     setMessages((prev) => {
       const updated = [...prev];
@@ -305,6 +312,7 @@ export function useChat(
     setGuestJobToResume(null);
     conversationIdRef.current = null;
     setConversationId(null);
+    setConversationCostUsd(null);
     topicsEstablishedRef.current = {};
     sessionStorage.removeItem(GUEST_CHAT_SESSION_KEY);
   }, []);
@@ -313,6 +321,10 @@ export function useChat(
     conversationIdRef.current = id;
     setConversationId(id);
     setMessages(msgs);
+    // A loaded past conversation's accumulated cost isn't known client-side
+    // until its next turn completes -- reset rather than show a stale/zero
+    // figure carried over from whatever conversation was open before.
+    setConversationCostUsd(null);
   }, []);
 
   return {
@@ -321,6 +333,7 @@ export function useChat(
     error,
     conversationId,
     weeklyUsage,
+    conversationCostUsd,
     sendMessage,
     clearMessages,
     loadConversation,
