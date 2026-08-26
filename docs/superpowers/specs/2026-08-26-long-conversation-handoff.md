@@ -217,7 +217,7 @@ step.
 | **B** | Schema: `migrations/092_conversation_length_signal.sql` (`conversations.cumulative_input_tokens` / `cumulative_output_tokens` / `turn_count`, all `NOT NULL DEFAULT 0`); `save_exchange()` threads token usage through with a reconnect-safe idempotent increment (gated on `cur.rowcount == 1` on the assistant-message insert, not assumed) | **DONE — applied to production 2026-08-26** (attended, Alex-approved). `scripts/apply_migration_092.py --apply` ran live; its own 10-check verify pass confirmed all three columns exist, `NOT NULL`, default `0`, and zero existing rows backfilled to NULL. `scripts/test_conversation_length_signal.py` proves the idempotency gate against a fake cursor, including a sensitivity check that a broken gate would double-count (12/12 passing). |
 | **C** | API: `async_chat.py`'s `/result` endpoint computes `conversation_cost_usd` (via `config.estimate_cost_usd`) and `conversation_turn_count` from the returned totals, includes both in the SSE payload; `null` for guests (no server-side conversation row, matching v1 scope) | **DONE.** Compiles clean (`py_compile`). |
 | **D** | Frontend: `ConversationLengthNudge` (`frontend/components/rhemata/conversation-length-nudge.tsx`, `WeeklyLimitCard` pattern); `StreamMeta`/`useChat.ts` plumbing; wired into `page.tsx` (suppressed under the hard weekly-limit stop and while a turn is streaming; dismiss resets on new/switched conversation) | **DONE.** `tsc --noEmit` clean; `npm run lint` introduces zero new errors/warnings (verified by diffing lint output against the unchanged line ranges). |
-| **E** | Copy: nudge text reviewed against PRODUCT.md brand register; must not claim "getting expensive" | **Draft only, not reviewed.** Current copy deliberately says nothing about cost/tokens — see the component file's own comment. Needs Alex sign-off. |
+| **E** | Copy: nudge text reviewed against PRODUCT.md brand register; must not claim "getting expensive" | **DONE 2026-08-26.** Reviewed against PRODUCT.md Section 8 and POSITIONING.md's anti-references — the first draft was generic productivity-app phrasing with no verifiable claim behind it; revised to state a real fact (past conversations stay in history) instead. Alex approved. |
 | **F** | Regression test + manual verification in a real conversation | Backend logic test done (12/12). **Live browser/E2E verification NOT done** — blocked on Phase B's migration actually being applied (the `conversations` table doesn't have the new columns in production yet), and a real run costs real generations. Needs Alex's call on when/how to do this. |
 
 ## Risks and constraints
@@ -283,5 +283,8 @@ copy ownership) were defaulted per this spec's own recommendations rather
 than asked individually, given the fast pace of the session — flagged here
 for Alex to override anything he'd have answered differently.
 
-**Still pending Alex:** migration 092 apply (attended DB write); copy
-review (Phase E); live/E2E verification approach (Phase F).
+**2026-08-26 (later same day):** Alex reviewed and approved the revised
+nudge copy — Phase E closed.
+
+**Still pending Alex:** live/E2E verification approach (Phase F) — migration
+092 apply and copy review are both now done.

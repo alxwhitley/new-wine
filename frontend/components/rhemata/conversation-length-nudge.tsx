@@ -9,8 +9,20 @@
 // this is a nudge and not a hard cap is product philosophy, not cost
 // (CLAUDE.md: "the goal is sending users back to real teachers... a feature
 // that makes a user say 'I don't need my pastor, I have Rhemata' gets
-// killed") -- so the copy stays about conversation focus, never spend. Draft
-// copy, not yet reviewed by Alex (spec Open question 5).
+// killed") -- so the copy stays about conversation focus, never spend.
+//
+// Copy reviewed 2026-08-26 against PRODUCT.md Section 8 (voice: Grounded,
+// Convinced, Warm, Unhurried -- plain and direct, never SaaS-speak) and
+// POSITIONING.md's anti-reference to generic AI chat ("could be talking to
+// anyone about anything"). The first draft ("keeps each one focused and
+// easy to come back to") was exactly that -- boilerplate productivity-app
+// copy with no Rhemata identity, and no honest claim behind it. This
+// version instead states a real, verifiable fact about the product (past
+// conversations stay in the sidebar history) rather than a vague
+// convenience claim. "Start a new conversation ->" is copied verbatim from
+// WeeklyLimitCard's existing button -- Design Principle #4, earned
+// familiarity: same action, same words, every time it appears. Approved by
+// Alex 2026-08-26 (spec Open question 5, closed).
 export const CONVERSATION_LENGTH_NUDGE_THRESHOLD_USD = 0.5;
 
 interface ConversationLengthNudgeProps {
@@ -25,8 +37,8 @@ export function ConversationLengthNudge({ onNewChat, onDismiss }: ConversationLe
         This has been a long conversation
       </p>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-        Starting a new conversation for your next question keeps each one
-        focused and easy to come back to.
+        Starting fresh for your next question keeps things clear — this one
+        stays in your history if you want it again.
       </p>
       <div className="flex items-center gap-3">
         <button
