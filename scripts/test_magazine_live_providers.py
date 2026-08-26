@@ -173,6 +173,7 @@ def test_gemini_page_reviewer_uses_strict_schema_and_parses_verdict() -> None:
     assert response.review["missing_regions"] == ["bottom paragraph"]
     config = calls[0]["generationConfig"]
     assert "temperature" not in config
+    assert config["maxOutputTokens"] == 8192
     assert config["mediaResolution"] == "MEDIA_RESOLUTION_HIGH"
     assert config["thinkingConfig"] == {"thinkingLevel": "LOW"}
     assert config["responseMimeType"] == "application/json"

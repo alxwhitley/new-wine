@@ -392,14 +392,14 @@ class GeminiLivePageReviewer(_GeminiBoundary):
                     {"parts": [{"text": prompt}, _image_part(page.image_bytes)]}
                 ],
                 "generationConfig": {
-                    "maxOutputTokens": 2048,
+                    "maxOutputTokens": 8192,
                     "thinkingConfig": {"thinkingLevel": "LOW"},
                     "mediaResolution": "MEDIA_RESOLUTION_HIGH",
                     "responseMimeType": "application/json",
                     "responseJsonSchema": _PAGE_REVIEW_SCHEMA,
                 },
             },
-            maximum_call_cost_usd=self._maximum_cost(prompt, 2048),
+            maximum_call_cost_usd=self._maximum_cost(prompt, 8192),
         )
         review = _page_review_json(text, page_number=page.page_number)
         if not isinstance(review, dict):
