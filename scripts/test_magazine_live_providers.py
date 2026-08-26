@@ -469,7 +469,11 @@ def test_groq_client_disables_hidden_sdk_retries(monkeypatch) -> None:
     first = _groq_factory(lambda: "groq-key")()
 
     assert first is not None
-    assert captured == {"api_key": "groq-key", "max_retries": 0}
+    assert captured == {
+        "api_key": "groq-key",
+        "max_retries": 0,
+        "timeout": 300.0,
+    }
 
 
 def test_invalid_gemini_review_records_bounded_page_diagnostic() -> None:

@@ -487,7 +487,7 @@ def _groq_factory(api_key: Callable[[], str]) -> Callable[[], object]:
         if client is None:
             from groq import Groq
 
-            client = Groq(api_key=api_key(), max_retries=0)
+            client = Groq(api_key=api_key(), max_retries=0, timeout=300.0)
         return client
 
     return get
