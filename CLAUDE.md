@@ -1822,7 +1822,7 @@ within days and has already caused one round of false blockers.
 | Database | Supabase (PostgreSQL + pgvector) |
 | Embeddings | OpenAI `text-embedding-3-small` (1536 dims, set explicitly) |
 | Answer generation | Anthropic `claude-sonnet-4-5` via `anthropic` SDK |
-| Query expansion / metadata / tagging / transcript cleaning | Groq — **metadata + proposition extraction now `openai/gpt-oss-120b`** (2026-08-19; `llama-3.3-70b-versatile` 404 on current key). `answer_toolbox.py` query-expansion still hardcodes `llama-3.3-70b-versatile` — unverified whether that path still works on this key. |
+| Query expansion / metadata / tagging / transcript cleaning | Groq — **query expansion, metadata, and proposition extraction use `openai/gpt-oss-120b`**. Query expansion moved on 2026-08-25 after a paid B6 run confirmed the former `llama-3.3-70b-versatile` returned 404 on the current key; paid B6 runs now preflight expansion and fail before retrieval/generation on silent fallback. |
 | Reranking | Cohere rerank-v3.5 — top 30 RRF → top 8 |
 | Vision / OCR | Gemini 2.5 Flash |
 

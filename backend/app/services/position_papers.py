@@ -6,9 +6,13 @@ import re
 from typing import Dict, Iterator, List, Optional, Tuple
 
 from app.db.supabase import get_supabase
+from app.services.answer_intent import (
+    is_teacher_retrieval_intent,
+    mentions_named_teacher,
+)
 from app.services.embeddings import cosine_similarity as _cosine, embed_text
 from app.services.llm_client import get_anthropic_client, get_generation_model
-from app.services.source_resolver import is_source_servable, normalize_alias_key
+from app.services.source_resolver import is_source_servable
 
 logger = logging.getLogger(__name__)
 
@@ -767,50 +771,6 @@ def _pillar_scores(pillar: dict, q_vec: List[float]) -> Optional[Tuple[float, fl
 # calls the SAME match_position_paper() entry point, so both gates apply
 # automatically without the next pillar's author needing to remember them.
 
-_teacher_aliases_cache = None  # type: Optional[set]
-_teacher_aliases_load_failed = False
-
-
-def _ensure_teacher_aliases() -> None:
-    """Lazy-load + cache every known source_aliases.alias_key once per
-    process (read-only SELECT, same caching discipline as _ensure_body /
-    _ensure_anchors above). 98 rows as of 2026-08-01 — small enough to hold
-    in memory whole, same pattern chat.py's own match_background_topics()
-    already uses for background-topic aliases.
-
-    On load failure, does NOT cache an empty set — that would make
-    _mentions_named_teacher return False for every question, silently
-    disabling the veto (fail OPEN onto a misattribution risk, CLAUDE.md
-    ranked failure mode 2). Instead sets _teacher_aliases_load_failed, so
-    _mentions_named_teacher fails CLOSED: every question is treated as if
-    it might name a teacher until this is fixed, deferring to the normal
-    teacher-citation path rather than risking an uncited house-voice
-    answer with a real teacher erased.
-    """
-    global _teacher_aliases_cache, _teacher_aliases_load_failed
-    if _teacher_aliases_cache is not None or _teacher_aliases_load_failed:
-        return
-    try:
-        db = get_supabase()
-        result = db.table("source_aliases").select("alias_key").execute()
-        _teacher_aliases_cache = {
-            r["alias_key"] for r in (result.data or []) if r.get("alias_key")
-        }
-        logger.info(
-            "Loaded %d source aliases for position-paper teacher-name gate",
-            len(_teacher_aliases_cache),
-        )
-    except Exception:
-        logger.exception(
-            "Failed to load source_aliases — position-paper teacher-name "
-            "gate fails CLOSED for this process (every question is treated "
-            "as if it might name a teacher, so nothing is intercepted by a "
-            "position paper until this is fixed, rather than failing open "
-            "onto a misattribution risk)"
-        )
-        _teacher_aliases_load_failed = True
-
-
 def _mentions_named_teacher(question: str) -> bool:
     """Return True if `question` names any known corpus teacher/source
     alias. Highest-priority gate (Phase 1 item 1.6): a question naming a
@@ -838,20 +798,7 @@ def _mentions_named_teacher(question: str) -> bool:
     worse than the minor cost of one request not getting the faster
     house-voice answer).
     """
-    _ensure_teacher_aliases()
-    if _teacher_aliases_load_failed:
-        return True
-    q = normalize_alias_key(question)
-    return any(alias in q for alias in _teacher_aliases_cache)
-
-
-_RETRIEVAL_INTENT_RE = re.compile(
-    r"\bwhich\s+teachers?\b"
-    r"|\bwhat\s+(?:do|does)\s+.{0,40}?\bteachers?\b"
-    r"|\bwho\s+teaches?\b"
-    r"|\bteachers?\s+(?:say|teach|believe|think)\b",
-    re.IGNORECASE,
-)
+    return mentions_named_teacher(question)
 
 
 def _is_retrieval_intent(question: str) -> bool:
@@ -868,7 +815,7 @@ def _is_retrieval_intent(question: str) -> bool:
     "tongues" or "healing" specifically — a structural fix, not a
     per-topic exclusion.
     """
-    return bool(_RETRIEVAL_INTENT_RE.search(question))
+    return is_teacher_retrieval_intent(question)
 
 
 def match_position_paper(question: str) -> Optional[str]:
