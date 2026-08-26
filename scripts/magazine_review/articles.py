@@ -25,10 +25,10 @@ REVIEW_REASONING = "medium"
 SEGMENTATION_INSTRUCTIONS = (
     "Segment every authored article in the complete verified magazine transcript. "
     "Return each article exactly once, in transcript order, with its stable identity, "
-    "unique output filename, title, author, ordered source pages, exact transcript "
-    "span. Do not return article text: the pipeline derives it byte-for-byte from the "
-    "verified transcript after validating each span. Return spans in ascending "
-    "transcript order; article spans must never overlap."
+    "unique output filename, title, author, and exact transcript span. Do not return "
+    "article text or source pages: the pipeline derives them from the verified "
+    "transcript after validating each span. Return spans in ascending transcript "
+    "order; article spans must never overlap."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
@@ -260,7 +260,6 @@ def _segmentation_schema() -> dict[str, object]:
             "filename",
             "title",
             "author",
-            "source_pages",
             "transcript_start",
             "transcript_end",
         ],
@@ -269,11 +268,6 @@ def _segmentation_schema() -> dict[str, object]:
             "filename": {"type": "string", "minLength": 1},
             "title": {"type": "string", "minLength": 1},
             "author": {"type": "string", "minLength": 1},
-            "source_pages": {
-                "type": "array",
-                "minItems": 1,
-                "items": {"type": "integer", "minimum": 1},
-            },
             "transcript_start": {
                 "type": "integer",
                 "minimum": 0,
@@ -432,7 +426,6 @@ def segment_articles(
     if not isinstance(raw_articles, list) or not raw_articles:
         raise ArticleReviewError("articles_required")
 
-    known_pages = {page.page_number for page in transcript.pages}
     seen_ids: set[str] = set()
     seen_filenames: set[str] = set()
     articles: list[ArticleRecord] = []
@@ -442,7 +435,6 @@ def segment_articles(
         "filename",
         "title",
         "author",
-        "source_pages",
         "transcript_start",
         "transcript_end",
     }
@@ -457,25 +449,15 @@ def segment_articles(
         if normalized_filename in seen_filenames:
             raise ArticleReviewError("article_filename_duplicate")
 
-        raw_pages = proposed["source_pages"]
-        if not isinstance(raw_pages, list) or not raw_pages:
-            raise ArticleReviewError("article_source_pages_required")
-        source_pages = tuple(
-            _require_int(page, "article_source_page_invalid") for page in raw_pages
-        )
-        if source_pages != tuple(sorted(set(source_pages))):
-            raise ArticleReviewError("article_source_pages_invalid")
-        if any(page not in known_pages for page in source_pages):
-            raise ArticleReviewError("article_source_page_unknown")
-
         start = _require_int(proposed["transcript_start"], "article_span_invalid")
         end = _require_int(proposed["transcript_end"], "article_span_invalid")
         if start < 0 or start >= end or end > len(transcript.text):
             raise ArticleReviewError("article_span_invalid")
         if start < previous_end:
             raise ArticleReviewError("article_spans_overlap")
-        if source_pages != _source_pages_for_span(transcript, start, end):
-            raise ArticleReviewError("article_source_pages_mismatch")
+        source_pages = _source_pages_for_span(transcript, start, end)
+        if not source_pages:
+            raise ArticleReviewError("article_source_pages_required")
         text = transcript.text[start:end]
 
         record = ArticleRecord(

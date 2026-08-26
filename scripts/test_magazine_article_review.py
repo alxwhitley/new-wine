@@ -115,7 +115,11 @@ def segmentation_response(
             "ocr_identity": transcript.ocr_identity,
             "transcript_hash": digest(transcript.text),
             "articles": [
-                {key: value for key, value in article.items() if key != "text"}
+                {
+                    key: value
+                    for key, value in article.items()
+                    if key not in {"text", "source_pages"}
+                }
                 for article in articles
             ],
         },
@@ -227,6 +231,7 @@ def test_segmentation_uses_complete_issue_low_reasoning_and_strict_json(verified
         "properties"
     ]["articles"]["items"]
     assert "text" not in article_schema["properties"]
+    assert "source_pages" not in article_schema["properties"]
     assert "non-overlapping" in article_schema["properties"]["transcript_start"][
         "description"
     ]
@@ -360,8 +365,14 @@ def test_issue_coverage_verdict_quarantines_whole_omitted_article(verified_issue
 @pytest.mark.parametrize(
     ("mutation", "reason"),
     [
-        (lambda output: output["articles"][0].update(source_pages=[99]), "article_source_page_unknown"),
-        (lambda output: output["articles"][0].update(source_pages=[2, 1]), "article_source_pages_invalid"),
+        (
+            lambda output: output["articles"][0].update(source_pages=[99]),
+            "segmentation_article_invalid",
+        ),
+        (
+            lambda output: output["articles"][0].update(source_pages=[2, 1]),
+            "segmentation_article_invalid",
+        ),
         (lambda output: output["articles"][0].update(transcript_end=10_000), "article_span_invalid"),
         (
             lambda output: output["articles"][0].update(text="fabricated"),

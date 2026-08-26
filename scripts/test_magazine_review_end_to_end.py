@@ -179,7 +179,7 @@ class _FixtureArticleClient:
                     {
                         key: copy.deepcopy(value)
                         for key, value in article.items()
-                        if key != "text"
+                        if key not in {"text", "source_pages"}
                     }
                     for article in response["articles"]
                 ],
