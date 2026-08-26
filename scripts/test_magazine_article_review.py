@@ -283,9 +283,23 @@ def test_model_filename_is_canonicalized_before_storage(verified_issue) -> None:
 def test_reviewer_receives_complete_issue_and_all_articles(verified_issue):
     """Reviewing isolated excerpts cannot detect omissions, duplication, or bleed."""
     proposals = two_proposals(verified_issue)
+    review_response = passing_review_response(verified_issue, proposals)
+    for article_review in review_response["output"]["articles"]:
+        article_review["failure_reasons"] = {
+            field: None
+            for field in (
+                "start_coherent",
+                "end_coherent",
+                "transitions_ok",
+                "omissions",
+                "duplications",
+                "adjacent_bleed",
+                "attribution_ok",
+            )
+        }
     client = FakeStructuredClient(
         segmentation_response(verified_issue, proposals),
-        passing_review_response(verified_issue, proposals),
+        review_response,
     )
     segmented = segment_articles(verified_issue, client)
 
@@ -302,6 +316,26 @@ def test_reviewer_receives_complete_issue_and_all_articles(verified_issue):
     assert "reasons" not in request["articles"][0]
     assert request["articles"][0]["filename"] == "first-light.txt"
     assert request["fresh_context"] is True
+    failure_schema = request["response_format"]["json_schema"]["schema"][
+        "properties"
+    ]["articles"]["items"]["properties"]["failure_reasons"]
+    assert set(failure_schema["required"]) == {
+        "start_coherent",
+        "end_coherent",
+        "transitions_ok",
+        "omissions",
+        "duplications",
+        "adjacent_bleed",
+        "attribution_ok",
+    }
+    omission_types = {
+        choice["type"]
+        for choice in failure_schema["properties"]["omissions"]["anyOf"]
+    }
+    assert omission_types == {
+        "string",
+        "null",
+    }
     assert reviewed.status == "passed"
     assert all(article.verdict for article in reviewed.articles)
 

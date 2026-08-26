@@ -333,8 +333,14 @@ def _review_schema() -> dict[str, object]:
             "failure_reasons": {
                 "type": "object",
                 "additionalProperties": False,
+                "required": list(_SEMANTIC_FIELDS),
                 "properties": {
-                    field: {"type": "string", "minLength": 1}
+                    field: {
+                        "anyOf": [
+                            {"type": "string", "minLength": 1},
+                            {"type": "null"},
+                        ]
+                    }
                     for field in _SEMANTIC_FIELDS
                 },
             },
@@ -701,15 +707,17 @@ def review_articles_against_issue(
             )
             if failed
         }
-        if set(raw_failure_reasons) != failed_fields:
+        if any(field not in _SEMANTIC_FIELDS for field in raw_failure_reasons):
             raise ArticleReviewError("article_failure_reasons_invalid")
         failure_reasons = {
             field: _require_nonempty(
                 raw_failure_reasons[field], "article_failure_reasons_invalid"
             )
             for field in _SEMANTIC_FIELDS
-            if field in raw_failure_reasons
+            if field in raw_failure_reasons and raw_failure_reasons[field] is not None
         }
+        if set(failure_reasons) != failed_fields:
+            raise ArticleReviewError("article_failure_reasons_invalid")
         reasons = tuple(failure_reasons.values())
         reviewed = replace(
             article,
