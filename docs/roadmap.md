@@ -64,14 +64,22 @@ quarantine. No stage transfers automatically from one source to another.
    accepted Candidate C. Candidate C was then revealed as Gemini
    `gemini-3.7-flash`. The immutable report, manifest, review, and accepted
    decision are in
-   `docs/audits/2026-08/new_wine_ocr_benchmark_2026-08-25/`. Next: recount and
-   no-write dry-run that complete 32-page issue with every-page OCR review,
-   at most one targeted repair per failed page, issue-wide article review, and
-   evidence-grounded proposition review. Obtain separate named cost approval
-   before that paid run. After Alex reviews its artifacts, obtain separate
-   approval for one attended database write, reconcile it, and only afterward
-   run bounded reconciled batches. No benchmark decision authorizes a database
-   write or file move.
+   `docs/audits/2026-08/new_wine_ocr_benchmark_2026-08-25/`. The approved
+   no-write Issue 02-1973 run completed on 2026-08-25 under the $1.25 ceiling:
+   all 32 pages passed OCR review, page 15 used the single allowed repair, and
+   17 exact-text article candidates reached fresh whole-issue review. That
+   review correctly quarantined the issue before proposition extraction: it
+   found the omitted `THE APOSTLE—GOD'S MASTER BUILDER` article and missing
+   page continuations in two Health and Healing candidates. Reconciliation was
+   32 pages / 17 articles / 0 propositions, with zero database writes; the
+   conservative cumulative provider-spend bound was $1.08638205. Validated
+   terminal artifacts remain local-only and intentionally untracked under
+   `docs/audits/2026-08/new_wine_issue_02_1973_review_2026-08-25_retry_13/`
+   because the Git remote is public.
+   Next: inspect and correct the quarantined article boundaries, rerun the
+   no-write article/proposition gates, and obtain Alex's separate approval
+   before any attended database write. No benchmark decision authorizes a
+   database write or file move.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing
