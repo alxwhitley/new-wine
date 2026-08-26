@@ -250,6 +250,7 @@ def test_groq_client_forwards_strict_schema_reasoning_and_returns_envelope() -> 
     }
     assert captured["model"] == GROQ_MODEL
     assert captured["reasoning_effort"] == "medium"
+    assert captured["max_completion_tokens"] == 65_536
     assert captured["response_format"] == schema
     assert captured["messages"][0] == {
         "role": "system",

@@ -459,6 +459,7 @@ class GroqStructuredOutputClient:
                 },
             ],
             reasoning_effort=reasoning_effort,
+            max_completion_tokens=65_536,
             response_format=response_format,
             temperature=0,
         )
