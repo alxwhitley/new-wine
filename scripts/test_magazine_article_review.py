@@ -210,6 +210,7 @@ def test_segmentation_uses_complete_issue_low_reasoning_and_strict_json(verified
     request = client.last_request
     assert request["model"] == MODEL
     assert request["reasoning_effort"] == "low"
+    assert "must never overlap" in request["instructions"]
     assert request["issue_transcript"] == verified_issue.text
     assert request["pages"] == [
         {
@@ -226,6 +227,9 @@ def test_segmentation_uses_complete_issue_low_reasoning_and_strict_json(verified
         "properties"
     ]["articles"]["items"]
     assert "text" not in article_schema["properties"]
+    assert "non-overlapping" in article_schema["properties"]["transcript_start"][
+        "description"
+    ]
     assert manifest.status == "quarantined"
     assert manifest.quarantine_reasons == ("semantic_review_required",)
     assert [article.source_pages for article in manifest.articles] == [(1, 2), (2,)]

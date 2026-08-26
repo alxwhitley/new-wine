@@ -27,7 +27,8 @@ SEGMENTATION_INSTRUCTIONS = (
     "Return each article exactly once, in transcript order, with its stable identity, "
     "unique output filename, title, author, ordered source pages, exact transcript "
     "span. Do not return article text: the pipeline derives it byte-for-byte from the "
-    "verified transcript after validating each span."
+    "verified transcript after validating each span. Return spans in ascending "
+    "transcript order; article spans must never overlap."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
@@ -273,8 +274,22 @@ def _segmentation_schema() -> dict[str, object]:
                 "minItems": 1,
                 "items": {"type": "integer", "minimum": 1},
             },
-            "transcript_start": {"type": "integer", "minimum": 0},
-            "transcript_end": {"type": "integer", "minimum": 1},
+            "transcript_start": {
+                "type": "integer",
+                "minimum": 0,
+                "description": (
+                    "Exact inclusive start offset; starts must be ascending and "
+                    "article spans non-overlapping."
+                ),
+            },
+            "transcript_end": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Exact exclusive end offset; must not exceed the next article's "
+                    "start."
+                ),
+            },
         },
     }
     return {
