@@ -175,7 +175,14 @@ class _FixtureArticleClient:
             output = {
                 "ocr_identity": request["ocr_identity"],
                 "transcript_hash": request["transcript_hash"],
-                "articles": copy.deepcopy(response["articles"]),
+                "articles": [
+                    {
+                        key: copy.deepcopy(value)
+                        for key, value in article.items()
+                        if key != "text"
+                    }
+                    for article in response["articles"]
+                ],
             }
         elif request["stage"] == "article_completeness_review":
             response = self._fixture["review"]

@@ -25,7 +25,8 @@ SEGMENTATION_INSTRUCTIONS = (
     "Segment every authored article in the complete verified magazine transcript. "
     "Return each article exactly once, in transcript order, with its stable identity, "
     "unique output filename, title, author, ordered source pages, exact transcript "
-    "span, and byte-for-byte transcript text. Do not repair, paraphrase, or omit text."
+    "span. Do not return article text: the pipeline derives it byte-for-byte from the "
+    "verified transcript after validating each span."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
@@ -245,7 +246,6 @@ def _segmentation_schema() -> dict[str, object]:
             "source_pages",
             "transcript_start",
             "transcript_end",
-            "text",
         ],
         "properties": {
             "article_id": {"type": "string", "minLength": 1},
@@ -259,7 +259,6 @@ def _segmentation_schema() -> dict[str, object]:
             },
             "transcript_start": {"type": "integer", "minimum": 0},
             "transcript_end": {"type": "integer", "minimum": 1},
-            "text": {"type": "string", "minLength": 1},
         },
     }
     return {
@@ -415,7 +414,6 @@ def segment_articles(
         "source_pages",
         "transcript_start",
         "transcript_end",
-        "text",
     }
     for raw in raw_articles:
         proposed = _require_exact_keys(raw, article_keys, "segmentation_article_invalid")
@@ -447,9 +445,7 @@ def segment_articles(
             raise ArticleReviewError("article_spans_overlap")
         if source_pages != _source_pages_for_span(transcript, start, end):
             raise ArticleReviewError("article_source_pages_mismatch")
-        text = proposed["text"]
-        if not isinstance(text, str) or transcript.text[start:end] != text:
-            raise ArticleReviewError("article_text_mismatch")
+        text = transcript.text[start:end]
 
         record = ArticleRecord(
             article_id=article_id,

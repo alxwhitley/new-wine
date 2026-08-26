@@ -114,7 +114,10 @@ def segmentation_response(
         "output": {
             "ocr_identity": transcript.ocr_identity,
             "transcript_hash": digest(transcript.text),
-            "articles": articles,
+            "articles": [
+                {key: value for key, value in article.items() if key != "text"}
+                for article in articles
+            ],
         },
         "usage": {"input_tokens": 120, "output_tokens": 35},
         "cost_usd": 0.012,
@@ -219,9 +222,16 @@ def test_segmentation_uses_complete_issue_low_reasoning_and_strict_json(verified
     ]
     assert request["response_format"]["type"] == "json_schema"
     assert request["response_format"]["json_schema"]["strict"] is True
+    article_schema = request["response_format"]["json_schema"]["schema"][
+        "properties"
+    ]["articles"]["items"]
+    assert "text" not in article_schema["properties"]
     assert manifest.status == "quarantined"
     assert manifest.quarantine_reasons == ("semantic_review_required",)
     assert [article.source_pages for article in manifest.articles] == [(1, 2), (2,)]
+    assert [article.text for article in manifest.articles] == [
+        proposal["text"] for proposal in proposals
+    ]
 
 
 def test_blank_image_page_reaches_article_segmentation() -> None:
@@ -339,7 +349,10 @@ def test_issue_coverage_verdict_quarantines_whole_omitted_article(verified_issue
         (lambda output: output["articles"][0].update(source_pages=[99]), "article_source_page_unknown"),
         (lambda output: output["articles"][0].update(source_pages=[2, 1]), "article_source_pages_invalid"),
         (lambda output: output["articles"][0].update(transcript_end=10_000), "article_span_invalid"),
-        (lambda output: output["articles"][0].update(text="fabricated"), "article_text_mismatch"),
+        (
+            lambda output: output["articles"][0].update(text="fabricated"),
+            "segmentation_article_invalid",
+        ),
         (
             lambda output: output["articles"][1].update(
                 article_id=output["articles"][0]["article_id"]
