@@ -29,8 +29,7 @@ review_discovery_candidates.py's queue skips auto_link_check ==
 "no_blog_detected" -- so after this runs (with --apply), dead candidates
 never surface in the interactive review tool.
 
-Two modes, same convention as every other script that touches this
-workbook:
+Two modes, same convention as every other script that touches this data:
   no flags   -- DRY RUN. Fetches and classifies every unchecked candidate,
                 prints the plan, writes nothing.
   --apply    -- Recomputes the identical checks fresh, writes
@@ -38,9 +37,12 @@ workbook:
                 saving every 10 candidates so an interrupted run keeps
                 whatever it already found.
 
-Refuses to run (or write) while
-docs/ingestion/~$master_ingestion_queue.xlsx (Excel's own lock file)
-exists.
+2026-08-26: converted from the .xlsx workbook to
+docs/ingestion/master_ingestion_queue_discovery.tsv (see
+ingestion_sheet_io.py). The old Excel `~$` lock-file refusal is gone --
+plain .tsv carries no such marker -- replaced by review_discovery_candidates.py's
+mtime-based write guard (StaleFileError), which this script now goes
+through the same as the interactive tool.
 
 Run: python3.12 scripts/check_discovery_blog_links.py [--apply] [--limit N]
 
@@ -54,24 +56,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
-import openpyxl
-
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import ingestion_sheet_io as sheet_io
 import review_discovery_candidates as review
 from source_ingest_queue.fetcher import FetchRejected, FetchTransient, fetch_html
 from source_ingest_queue.link_discovery import discover_links
 
 MIN_POST_LINKS = 1
 SAVE_EVERY = 10
-
-
-def _ensure_column(ws, header_idx: dict, name: str) -> dict:
-    if name not in header_idx:
-        col = ws.max_column + 1
-        ws.cell(row=1, column=col, value=name)
-        header_idx[name] = col
-    return header_idx
 
 
 def classify(link: str, *, fetch: Callable = fetch_html) -> Tuple[str, str]:
@@ -88,27 +81,26 @@ def classify(link: str, *, fetch: Callable = fetch_html) -> Tuple[str, str]:
     return "no_blog_detected", "fetched fine, no post-shaped links found"
 
 
-def rows_needing_check(ws, header_idx: dict) -> List[Tuple[int, str, str]]:
-    """(row_number, name, link) for every still-unverified Discovery row
-    with a usable link and no auto_link_check value yet, in sheet order.
+def rows_needing_check(rows: List[dict]) -> List[Tuple[dict, str, str]]:
+    """(row, name, link) for every still-unverified Discovery row with a
+    usable link and no auto_link_check value yet, in file order.
     Already-decided rows (Alex already said Yes/No) are skipped -- checking
     them would never change whether review_discovery_candidates.py shows
     them, so it's a pure waste of a network fetch."""
     pending = []
-    for r in range(2, ws.max_row + 1):
-        name = ws.cell(row=r, column=header_idx["name"]).value
+    for row in rows:
+        name = row.get("name")
         if not name:
             continue
-        status = ws.cell(row=r, column=header_idx["verification_status"]).value
+        status = row.get("verification_status")
         if str(status or "").strip().lower() != "unverified":
             continue
-        if ws.cell(row=r, column=header_idx["auto_link_check"]).value:
+        if row.get("auto_link_check"):
             continue
-        row_dict = {h: ws.cell(row=r, column=c).value for h, c in header_idx.items()}
-        link = review._candidate_link(row_dict)
+        link = review._candidate_link(row)
         if not link:
             continue
-        pending.append((r, str(name), link))
+        pending.append((row, str(name), link))
     return pending
 
 
@@ -118,17 +110,11 @@ def main(argv=None) -> int:
     parser.add_argument("--limit", type=int, default=None, help="cap how many new candidates to check this run")
     args = parser.parse_args(argv)
 
-    if review.LOCK_PATH.exists():
-        print(f"'{review.LOCK_PATH.name}' exists -- the workbook looks open in Excel. Close it, then rerun.")
-        return 1
+    discovery_mtime = review.DISCOVERY_PATH.stat().st_mtime
+    headers, rows = sheet_io.read_tab(review.DISCOVERY_PATH)
+    headers = review._ensure_columns(headers, rows, "auto_link_check", "auto_link_check_at")
 
-    wb = openpyxl.load_workbook(review.SHEET_PATH, data_only=False)
-    ws = wb[review.DISCOVERY_TAB]
-    idx = review._header_index(ws)
-    _ensure_column(ws, idx, "auto_link_check")
-    _ensure_column(ws, idx, "auto_link_check_at")
-
-    to_check = rows_needing_check(ws, idx)
+    to_check = rows_needing_check(rows)
     if args.limit:
         to_check = to_check[: args.limit]
 
@@ -136,32 +122,42 @@ def main(argv=None) -> int:
     if not to_check:
         return 0
 
-    counts = {"looks_like_blog": 0, "no_blog_detected": 0, "check_failed": 0}
-    for i, (r, name, link) in enumerate(to_check, 1):
-        status, detail = classify(link)
-        counts[status] += 1
-        print(f"[{i}/{len(to_check)}] {name} -> {status} ({detail})")
-        if args.apply:
-            ws.cell(row=r, column=idx["auto_link_check"], value=status)
-            ws.cell(row=r, column=idx["auto_link_check_at"], value=datetime.now(timezone.utc).isoformat())
-            if i % SAVE_EVERY == 0:
-                wb.save(review.SHEET_PATH)
-                print(f"  (progress saved: {i}/{len(to_check)})")
+    def _save():
+        nonlocal discovery_mtime
+        review._refuse_if_changed(review.DISCOVERY_PATH, discovery_mtime)
+        sheet_io.write_tab(review.DISCOVERY_PATH, headers, rows)
+        discovery_mtime = review.DISCOVERY_PATH.stat().st_mtime
 
-    if args.apply:
-        wb.save(review.SHEET_PATH)
-        print(
-            f"\nSaved. {counts['looks_like_blog']} look like real blogs, "
-            f"{counts['no_blog_detected']} auto-skipped (no blog structure found), "
-            f"{counts['check_failed']} couldn't be checked (still shown for manual review)."
-        )
-    else:
-        print(
-            f"\nDRY RUN complete -- nothing written. Would label: "
-            f"{counts['looks_like_blog']} looks_like_blog, "
-            f"{counts['no_blog_detected']} no_blog_detected, "
-            f"{counts['check_failed']} check_failed. Rerun with --apply to save."
-        )
+    counts = {"looks_like_blog": 0, "no_blog_detected": 0, "check_failed": 0}
+    try:
+        for i, (row, name, link) in enumerate(to_check, 1):
+            status, detail = classify(link)
+            counts[status] += 1
+            print(f"[{i}/{len(to_check)}] {name} -> {status} ({detail})")
+            if args.apply:
+                row["auto_link_check"] = status
+                row["auto_link_check_at"] = datetime.now(timezone.utc).isoformat()
+                if i % SAVE_EVERY == 0:
+                    _save()
+                    print(f"  (progress saved: {i}/{len(to_check)})")
+
+        if args.apply:
+            _save()
+            print(
+                f"\nSaved. {counts['looks_like_blog']} look like real blogs, "
+                f"{counts['no_blog_detected']} auto-skipped (no blog structure found), "
+                f"{counts['check_failed']} couldn't be checked (still shown for manual review)."
+            )
+        else:
+            print(
+                f"\nDRY RUN complete -- nothing written. Would label: "
+                f"{counts['looks_like_blog']} looks_like_blog, "
+                f"{counts['no_blog_detected']} no_blog_detected, "
+                f"{counts['check_failed']} check_failed. Rerun with --apply to save."
+            )
+    except review.StaleFileError as exc:
+        print(f"\nRefusing to continue: {exc}")
+        return 1
     return 0
 
 

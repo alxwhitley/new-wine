@@ -9,10 +9,12 @@ guess. Scope of the exception is narrow and does not extend anywhere else:
 migrations, admin actions, and every other write path in this repo remain
 attended.
 
-Only input surface: the "Approved Sites" tab of
-docs/ingestion/master_ingestion_queue.xlsx, and only a row whose `approved`
-column is literally TRUE. Alex requires this and controls it directly --
-this script does not open the Discovery or Queue tabs at all.
+Only input surface: docs/ingestion/master_ingestion_queue_approved_sites.tsv
+(the former "Approved Sites" tab, converted from the shared .xlsx workbook
+to one plain-text file per tab 2026-08-26 -- see ingestion_sheet_io.py),
+and only a row whose `approved` column is literally TRUE. Alex requires
+this and controls it directly -- this script does not open the Discovery
+or Queue files at all.
 
 `--site NAME` runs exactly that row. Omitting `--site` runs every row with
 approved=TRUE in one invocation, one after another -- each site still goes
@@ -76,18 +78,17 @@ from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlsplit
 
-import openpyxl
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-SHEET_PATH = ROOT / "docs" / "ingestion" / "master_ingestion_queue.xlsx"
 APPROVED_TAB = "Approved Sites"
 WORKER_SCRIPT = ROOT / "scripts" / "source_ingest_worker.py"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import ingestion_sheet_io as sheet_io  # noqa: E402
 from source_ingest_queue.byline_verify import verify_byline  # noqa: E402
 from source_ingest_queue.fetcher import (  # noqa: E402
     FetchRejected,
@@ -97,6 +98,8 @@ from source_ingest_queue.fetcher import (  # noqa: E402
 from source_ingest_queue.html_extract import HtmlRejected, extract_article_bounded  # noqa: E402
 from source_ingest_queue.link_discovery import discover_links, same_registrable_host  # noqa: E402
 from sync_master_ingestion_queue import determine_default_submitted_by  # noqa: E402
+
+SHEET_PATH = sheet_io.TAB_FILES[APPROVED_TAB]
 
 load_dotenv(ROOT / "backend" / "app" / ".env")
 
@@ -117,16 +120,10 @@ def _has_required_fields(match: dict) -> bool:
 
 def _read_approved_tab() -> List[dict]:
     """Shared by load_approved_site and load_all_approved_sites -- one place
-    that opens the Approved Sites tab, so the two loaders can't drift on how
-    they read it."""
-    wb = openpyxl.load_workbook(SHEET_PATH, data_only=True)
-    if APPROVED_TAB not in wb.sheetnames:
-        raise SystemExit(f"'{APPROVED_TAB}' tab not found in {SHEET_PATH}")
-    ws = wb[APPROVED_TAB]
-    header = [c.value for c in ws[1]]
-    idx = {h: i for i, h in enumerate(header)}
-    rows = [{h: row[idx[h]] for h in header} for row in ws.iter_rows(min_row=2, values_only=True) if row[idx["name"]]]
-    return rows
+    that opens the Approved Sites file, so the two loaders can't drift on
+    how they read it."""
+    _headers, rows = sheet_io.read_tab(SHEET_PATH)
+    return [row for row in rows if row.get("name")]
 
 
 def load_approved_site(site_name: str) -> dict:

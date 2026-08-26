@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """sync_master_ingestion_queue.py — one-way sync, spreadsheet -> database.
 
-docs/ingestion/master_ingestion_queue.xlsx is the single master source of
-truth for ingestion candidates (Alex, 2026-08-19). The workbook has two
-tabs: Discovery (raw, unvetted candidates) and Queue (vetted, ready to
-actually ingest). This script reads ONLY the Queue tab -- it does not even
-open the Discovery tab, let alone read rows from it, so a Discovery-stage
-candidate can never reach the database through this path (restructured
-2026-08-19; the two-tab split replaced an earlier single-tab design that
-told the two kinds of row apart by a "research_candidate" stage value
-instead of by tab). It reconciles the live source_ingest_queue table to
-match the Queue tab. On any disagreement the spreadsheet wins and
-overwrites the database -- deliberate, standing policy, not a per-run
-choice this script makes.
+docs/ingestion/master_ingestion_queue_*.tsv are the single master source of
+truth for ingestion candidates (Alex, 2026-08-19; converted from a single
+.xlsx workbook to one plain-text file per former tab, 2026-08-26, so git
+shows line-level diffs -- see ingestion_sheet_io.py). There is one file per
+former tab: Discovery (raw, unvetted candidates), Queue (vetted, ready to
+actually ingest), Read Me, and Approved Sites. This script reads ONLY the
+Queue file -- it does not even reference Discovery's path, let alone read
+rows from it, so a Discovery-stage candidate can never reach the database
+through this path (restructured 2026-08-19; the two-tab split replaced an
+earlier single-tab design that told the two kinds of row apart by a
+"research_candidate" stage value instead of by tab). It reconciles the
+live source_ingest_queue table to match the Queue file. On any disagreement
+the spreadsheet wins and overwrites the database -- deliberate, standing
+policy, not a per-run choice this script makes.
 
 Only rows staged "ready_to_queue" or "already_queued" ever touch the
 database. "done" rows are already fully processed and are deliberately out
@@ -45,18 +47,20 @@ import os
 import sys
 from pathlib import Path
 
-import openpyxl
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-SHEET_PATH = ROOT / "docs" / "ingestion" / "master_ingestion_queue.xlsx"
-# Only the Queue tab is ever read. The workbook also has a Discovery tab
-# holding raw, unvetted candidates -- those must never reach the database
-# under any circumstances (Alex, 2026-08-19), so this script does not even
-# open that tab, let alone read rows from it.
-SHEET_TAB = "Queue"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import ingestion_sheet_io as sheet_io  # noqa: E402
+
+# Only the Queue tab's file is ever opened. Discovery's own file holds raw,
+# unvetted candidates -- those must never reach the database under any
+# circumstances (Alex, 2026-08-19), so this script does not even reference
+# that file's path, let alone read rows from it.
+SHEET_PATH = sheet_io.TAB_FILES["Queue"]
 
 load_dotenv(ROOT / "backend" / "app" / ".env")
 
@@ -153,20 +157,12 @@ def _coerce_int(v, field, row_label, problems):
 
 
 def read_sheet(problems: list) -> list[dict]:
-    if not SHEET_PATH.exists():
-        raise SystemExit(f"Master spreadsheet not found: {SHEET_PATH}")
-    wb = openpyxl.load_workbook(SHEET_PATH, data_only=True)
-    if SHEET_TAB not in wb.sheetnames:
-        raise SystemExit(f"Expected tab {SHEET_TAB!r} not found in {SHEET_PATH}")
-    ws = wb[SHEET_TAB]
-    headers = [c.value for c in ws[1]]
+    _headers, raw_rows = sheet_io.read_tab(SHEET_PATH)
     rows = []
-    for excel_row_num, raw in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        if all(v is None for v in raw):
-            continue
-        row = dict(zip(headers, raw))
-        row["_excel_row"] = excel_row_num
-        label = f"sheet row {excel_row_num} ({row.get('name') or row.get('url') or 'unnamed'})"
+    for sheet_row_num, raw_row in enumerate(raw_rows, start=2):  # +2: header is line 1
+        row = dict(raw_row)
+        row["_excel_row"] = sheet_row_num
+        label = f"sheet row {sheet_row_num} ({row.get('name') or row.get('url') or 'unnamed'})"
         for field in BOOL_SHEET_FIELDS:
             row[field] = _coerce_bool(row.get(field), field, label, problems)
         for field in INT_SHEET_FIELDS:

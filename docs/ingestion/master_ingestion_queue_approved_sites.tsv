@@ -1,0 +1,19 @@
+approved	name	attribute_to	blog_url	authorship_confidence	scale_note	proposal_notes	approved_at
+TRUE	Craig S. Keener	Craig S. Keener	https://craigkeener.com/blog	single, no red flags	Hundreds of posts, very large, active	Strongest candidate found -- clean single-author archive.	2026-08-25 -- chat approval ("let's start ingesting Craig Keener")
+	Rick Wadholm Jr.	Rick Wadholm Jr.	https://www.rick.wadholm.com/	single, no red flags	~2005-2026, hundreds of posts, active May 2026	Long-running personal blog, no issues found.	
+	Eric Metaxas	Eric Metaxas	https://ericmetaxas.com/watch-read/articles/	single	Substantial, active through Oct 2025	Site mixes essays with humor/poetry -- may want to scope to essay category only.	
+	Craig Groeschel	Craig Groeschel	https://www.craiggroeschel.com/blog	single, explicit bylines	9+ posts, active	Leadership/business-culture focus -- confirm corpus fit before approving.	
+	Ray Hughes	Ray Hughes	https://www.rayhughes.org/articles	single	20 articles, Sept 2024-Oct 2025	Real domain differs from Discovery's claimed URL -- corrected here.	
+	Kris Vallotton	Kris Vallotton	https://www.krisvallotton.com/blog	single, no red flags	Active, multi-category, substantial	No issues found.	
+	Jean-Luc Trachsel	Jean-Luc Trachsel	https://jeanluctrachsel.org/blog/	single	Large archive (12+ pages), active	Bilingual EN/FR site -- confirm English posts are original, not translated, before approving.	
+	Carey Nieuwhof	Carey Nieuwhof	https://careynieuwhof.com/blog/	mostly single, occasional guests	Very large, 140+ archive pages	Direct fetch was bot-blocked -- confirmed only via search cache, worth a manual look before approving.	
+	Pete Greig	Pete Greig	http://www.dirtyglory.org/blog	single	800-3000+ word essays, active through Nov 2025	Real domain differs from Discovery's claimed URL -- corrected here.	
+	Francis Chan	Francis Chan	https://crazylove.org/articles/	single	12 articles, modest	Site also has a 'Lisa Chan' entry that is actually his writing -- do not add Lisa Chan separately from this domain.	
+	Jon Tyson	Jon Tyson	https://mycupoverflows.substack.com/	single	8 posts Jan-Jun 2026, ~2,000 subscribers	Real URL is a Substack not present anywhere in the original Discovery research.	
+	Todd White	Todd White	https://lifestylechristianityu.com/author/toddwhite/	single	5 posts, Nov 2025-Feb 2026	Verify these are full essays and not short devotional snippets before approving.	
+	Sean Feucht	Sean Feucht	https://www.seanfeucht.com/op-ed	single	~20 pieces, active through 2026	Content skews political/op-ed rather than devotional -- confirm corpus fit before approving.	
+	Mario Murillo	Mario Murillo	https://www.mariomurillo.org/blogs	single	Small visible sample, true size unconfirmed	Explicitly political/faith commentary per the site's own framing -- editorial call needed.	
+	Amy Ward	Amy Ward	http://www.amyward.org/blog	single	Unconfirmed volume	Persistent SSL failure blocked direct verification -- needs a manual check before approving.	
+	Bob Hasson	Bob Hasson	http://bobhasson.com/blog/	single (inferred)	Unconfirmed volume	Expired SSL cert blocked direct verification -- needs a manual check before approving.	
+	Dean Briggs	Dean Briggs	https://deanbriggs.com/blog/	single (presumed)	~10 posts, Sept 2020-Jan 2024	Appears to have stopped posting in early 2024 -- confirm still worth ingesting.	
+	Nathan Morris	Nathan Morris	https://www.shakethenations.com/what-we-do/devotionals	unclear -- possibly ghostwritten	Small, 4-6 recent devotionals	Low volume and authorship uncertain -- lowest-confidence row on this list.	

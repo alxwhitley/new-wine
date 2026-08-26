@@ -1,0 +1,101 @@
+text
+Master Ingestion Queue -- Read Me
+
+This workbook is the single master source of truth for ingestion
+candidates (Alex's decision, 2026-08-19). The admin panel's ingest
+queue table is a read-only mirror, kept in sync by a sync script that
+only ever reads the QUEUE tab. Edit here, not there.
+
+On any disagreement between the QUEUE tab and the database, the sheet
+wins and overwrites, once the sync script is run with real writes on.
+
+The existing admin submission form is untouched and still works; rows
+submitted through it live only in the database until they're added to
+the Queue tab too.
+
+TWO-TAB FLOW (added 2026-08-19):
+  DISCOVERY  -- raw, unvetted candidates. Anyone/anything that's come
+               up in research but that Alex has not personally looked
+               at yet. Never reaches the database, ever, under any
+               circumstances -- the sync script physically cannot see
+               this tab.
+  QUEUE      -- vetted candidates, on their way into or already in the
+               live database queue. Alex manually promotes a row from
+               Discovery to Queue after investigating it himself --
+               there is no automated promotion.
+
+QUEUE tab -- STAGE column (column A):
+  ready_to_queue  -- fully specified (one URL, format, scope,
+                     attribution decided) but not yet in the database
+                     queue.
+  already_queued  -- already exists as a row in the database queue and
+                     is not yet marked done there.
+  done            -- already exists in the database queue with a
+                     'done' status.
+  (research_candidate is not a valid value here -- those rows belong
+   on the Discovery tab instead.)
+
+Blank vs FALSE (QUEUE tab): for the TRUE/FALSE columns, a blank cell
+means 'not yet decided' -- it is NOT the same as FALSE.
+
+db_status / db_execution_stage vs this sheet's own stage column: these
+two are copied verbatim from the database row's own internal
+bookkeeping (its execution status and the runner's own internal
+stage) for already_queued and done rows -- a different thing from this
+sheet's own STAGE column, which is our triage/workflow category.
+
+DISCOVERY tab -- how to read it:
+  verification_status defaults to 'unverified' for every row until
+  Alex has personally looked at the candidate.
+
+  Every column named claimed_* was filled in by an automated research
+  pass inferring from search results -- NOT by visiting the site.
+  Treat these as asserted, not established, until verification_status
+  says otherwise. The claims_source column records which research pass
+  produced the claim.
+
+  already_in_corpus is set from a direct, read-only check against the
+  live database's source list at the time a row was added -- it can go
+  stale if the corpus changes later. corpus_match_notes records what it
+  matched against.
+
+  discovery_paths records every research round and seed/source that
+  surfaced this candidate, semicolon-separated -- several rounds often
+  turn up the same name independently; this is one row per person or
+  entity, not one row per mention.
+
+source_db_id / promoted_from_discovery: source_db_id (QUEUE tab) records
+exactly which database queue row a Queue-tab row corresponds to, once
+one exists -- the sync script's match key. promoted_from_discovery is a
+free-text note for when Alex manually promotes a Discovery candidate --
+write the candidate's name there so the two tabs stay traceable to each
+other by hand.
+
+Layout: one flat table per tab, not the YouTube/magazine trackers'
+one-tab-per-source pattern -- see git history for the original reasoning
+(every row here is already one candidate; there's no natural per-source
+grouping to split on).
+
+Restructured into two tabs: 2026-08-19. Original single-tab build:
+2026-08-19 (see git history). All 12 rows from the original tab were
+carried over intact -- 6 to Queue, 6 to Discovery.
+
+Discovery-tab schema addendum, 2026-08-19 (Round 1-3 candidate load):
+  living_or_deceased gained a fourth option, 'unknown' -- most
+  candidates in this load have no stated vital status either way;
+  guessing 'living' would itself be an unverified claim.
+  category gained a fourth option, 'worship_leader_musician', for
+  the handful of candidates whose public role is worship/music with
+  explicitly no written content -- neither teacher, scholar, nor
+  archive describes them honestly.
+
+URL columns renamed, 2026-08-19:
+  main_url -> claimed_main_url, blog_or_articles_url ->
+  claimed_blog_or_articles_url -- these came from an automated
+  research pass guessing at URLs from search results, not a
+  confirmed site visit, so they now carry the same 'claimed_'
+  naming convention as the other guessed fields on this tab.
+  Some are known-suspect: a deceased person listed with a clean,
+  live-looking personal domain is a specific red flag pattern in
+  this data -- check notes on any row like that before trusting
+  the URL at all.

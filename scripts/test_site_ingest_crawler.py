@@ -14,7 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import openpyxl
+import ingestion_sheet_io
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -208,8 +208,8 @@ check("only one candidate total after dedup", len(result4.post_urls) == 1)
 
 # ---------------------------------------------------------------------------
 # site_ingest_crawler: load_approved_site / load_all_approved_sites -- the
-# crawler's entire input surface. A temp workbook shaped like the real
-# "Approved Sites" tab; SHEET_PATH is monkeypatched to point at it for the
+# crawler's entire input surface. A temp TSV file shaped like the real
+# Approved Sites data; SHEET_PATH is monkeypatched to point at it for the
 # duration of this block, then restored.
 # ---------------------------------------------------------------------------
 _APPROVED_HEADER = [
@@ -218,21 +218,16 @@ _APPROVED_HEADER = [
 ]
 
 
-def _build_approved_sites_workbook(rows):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = site_ingest_crawler.APPROVED_TAB
-    ws.append(_APPROVED_HEADER)
-    for row in rows:
-        ws.append([row.get(h) for h in _APPROVED_HEADER])
-    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+def _build_approved_sites_file(rows):
+    tmp = tempfile.NamedTemporaryFile(suffix=".tsv", delete=False)
     tmp.close()
-    wb.save(tmp.name)
-    return Path(tmp.name)
+    path = Path(tmp.name)
+    ingestion_sheet_io.write_tab(path, _APPROVED_HEADER, rows)
+    return path
 
 
 _original_sheet_path = site_ingest_crawler.SHEET_PATH
-_test_wb_path = _build_approved_sites_workbook(
+_test_wb_path = _build_approved_sites_file(
     [
         {"approved": "TRUE", "name": "Good Site", "attribute_to": "Good Site", "blog_url": "https://good.example.com/blog"},
         {"approved": "yes", "name": "Lowercase Truthy", "attribute_to": "Lowercase Truthy", "blog_url": "https://truthy.example.com/blog"},
