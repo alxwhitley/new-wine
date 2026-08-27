@@ -21,3 +21,12 @@ test("manifest contains no sensitive extension capabilities", () => {
     [],
   );
 });
+
+test("content script is limited to top-level HTTP and HTTPS documents", () => {
+  assert.deepEqual(manifest.content_scripts, [{
+    matches: ["http://*/*", "https://*/*"],
+    js: ["content.js"],
+    run_at: "document_idle",
+    all_frames: false,
+  }]);
+});
