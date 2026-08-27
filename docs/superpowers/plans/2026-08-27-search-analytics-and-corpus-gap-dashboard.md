@@ -1540,8 +1540,13 @@ def main() -> int:
     from app.services.search_analytics.finalizer import finalize_ready_jobs
 
     # Scenario 1: two occurrences share one job, outcome=no_material,
-    # origin=user for both -> one classification call, two finalized rows,
-    # exactly one gap created (not two).
+    # origin=user for both -> one classification call (shared generation),
+    # but TWO gap rows -- each occurrence is a separately countable search
+    # event (spec: "search_gap_details -- one row per no_material
+    # occurrence"; acceptance criterion 8, "repeated no_material
+    # occurrences remain separately countable"). [Corrected during
+    # implementation -- the original draft here asserted job-level gap
+    # dedup, which contradicted this plan's own spec.]
     tables = _FakeTables()
     tables.answer_jobs["job-A"] = {"status": "done", "outcome": "no_material", "question": "What is deliverance for me@example.com?"}
     tables.occurrences["occ-1"] = {
@@ -1562,7 +1567,8 @@ def main() -> int:
     result = finalize_ready_jobs(db, classify_fn=counting_classify, redact_fn=_fake_redact)
     check("classification runs exactly once per job, not once per occurrence", calls["classify"] == 1)
     check("both occurrences sharing the job are finalized", result["occurrences_finalized"] == 2)
-    check("exactly one gap is created for the shared no_material job", result["gaps_created"] == 1)
+    check("each occurrence sharing the job gets its OWN gap row (separately countable)",
+          result["gaps_created"] == 2)
     check("both occurrence rows carry the same classified topic",
           tables.occurrences["occ-1"]["primary_topic"] == "Deliverance Ministry"
           and tables.occurrences["occ-2"]["primary_topic"] == "Deliverance Ministry")
