@@ -71,6 +71,19 @@ _NON_ARTICLE_CATEGORIES = frozenset(
         "other_non_article",
     }
 )
+# Requiring full coverage (above) closed the silent-omission failure mode but
+# opened an adjacent one, caught live 2026-08-27 (New Wine A2, Issue 02-1973,
+# same-day validation of the coverage fix): rather than correctly identifying
+# two real articles ("The Call of Love", "New Wine Forum"), the model dumped
+# them into vague "other_non_article" spans of 3,770 and 31,718 chars -- the
+# semantic reviewer caught both, but that's a paid call this check can
+# preempt. Only the "other_non_article" catch-all is capped: named categories
+# (masthead, table_of_contents, etc.) can legitimately run large -- a real
+# masthead was observed live at 4,152 chars -- because naming a category is
+# an affirmative claim about the content, not a shrug. 2,000 sits below both
+# observed violations and the largest confirmed-legitimate "other_non_article"
+# case seen so far (874 chars, "Tapes by Don Basham" in an earlier run).
+_OTHER_NON_ARTICLE_MAX_CHARS = 2000
 _SEMANTIC_FIELDS = (
     "start_coherent",
     "end_coherent",
@@ -574,6 +587,11 @@ def segment_articles(
         end = _require_int(proposed["transcript_end"], "non_article_span_invalid")
         if start < 0 or start >= end or end > len(transcript.text):
             raise ArticleReviewError("non_article_span_invalid")
+        if (
+            category == "other_non_article"
+            and end - start > _OTHER_NON_ARTICLE_MAX_CHARS
+        ):
+            raise ArticleReviewError("non_article_span_implausibly_large")
         non_article_spans.append((start, end, category, reason))
 
     # Unified coverage check across BOTH articles and non_article_spans --
