@@ -709,5 +709,34 @@ review document
 (`local/2026-08/b6-blind-review-targeted-six-2026-08-27.md`) was built from
 the existing packet (both sides' answer, citations, outcome, retrieved/
 verified counts; still no variant/model/cost/token field, independently
-re-scanned for leaks) and delivered to Alex. Review itself has not happened
-yet as of this entry.
+re-scanned for leaks) and delivered to Alex.
+
+**Targeted review result and unblinding (2026-08-27).** Alex reviewed all six
+pairs blind and reported exactly one issue: Pair 3
+(`debate_apostolic_authority`), Side A, a **minor concern** — noticeably
+weaker but nothing actually wrong or misleading in it, explicitly not a hard
+failure. Every other pair (`debate_healing`, `debate_prophetic_accountability`,
+`debate_eschatology`, `paper_fence_baptism`, `paper_fence_tongues`) passed
+clean on both sides. Alex confirmed no further findings before requesting the
+unblind.
+
+Unblinding key: for all six repetition-1 pairs, `{A: baseline, B:
+effort_medium_v1}` — the same single per-repetition assignment applies
+uniformly across all twelve cases in repetition 1 (by design; see the packet
+construction above). **The one flagged pair's weaker side was the current
+baseline, not the candidate** — the candidate's answer to that exact question
+was not flagged. Net result across the six doctrinally sensitive pairs: zero
+hard failures on either variant, and the only relative weakness found belongs
+to what is already live in production today.
+
+**All four original acceptance criteria are now satisfied:** (1) the fixed
+12-case latency gate passed at 25.46% median improvement, 11/12 case wins, no
+p90 regression; (2) every other variable stayed pinned — `output_config.effort`
+is the sole change under review; (3) the targeted blind human quality review
+found no hard failure in theological accuracy, teacher representation,
+retrieval depth, or citation/source faithfulness (durable-job recoverability
+is not assessable from answer text alone and was explicitly excluded from this
+read, matching the review document's own scope note); (4) Alex's
+implementation-approval decision, having now seen the latency, quality, token,
+and cost evidence, is the one remaining step — not yet given as of this
+entry.
