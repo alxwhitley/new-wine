@@ -554,3 +554,61 @@ this document already used for `teacher_specific_v1` — one paid single-case
 gate first, inspect its trace and answer, only then (with separate
 approval) the full paired 12-case × 2-repetition × 2-variant benchmark —
 has not been requested yet for `effort_medium_v1`.
+
+## Effort candidate single-case live gate (2026-08-27)
+
+Alex authorized one paid, read-only run with existing-provider transmission,
+no database writes, and a $0.15 ceiling. `effort_medium_v1` against
+`debate_healing` (an ordinary debate-topic case with no stored-position,
+position-paper, or named-teacher routing involved, chosen so the read isolates
+plain generation behavior rather than a special-cased path) reconciled
+attempted/completed/errored/skipped = **1/1/0/0** at **$0.060663**. Its ignored
+local record is
+`local/2026-08/b6-single-effort-medium-debate-healing-2026-08-27.jsonl`. Query
+expansion preflighted successfully (Groq `openai/gpt-oss-120b`, three variants,
+keywords present). Runtime stayed pinned to `claude-sonnet-5`,
+`prompt_6ea8b855b412`, `policy_v3:quote_selection=false`.
+
+The result mechanically passed: `outcome=answered`, `effort=medium` recorded
+on the `generation.primary` trace stage (confirming the parameter reached the
+real API call), 12 delivered citations, 4 verified references, 18 retrieved
+chunks / 12 retrieved points, zero quote IDs (quote-off constraint intact),
+`stop_reason=end_turn`. The answer read as on-topic and structured (opens by
+naming the debate directly, then a `## Unbelief and the goodness of God`
+section citing Jack Deere) — no visible degradation from the effort change.
+
+Measured stages were:
+
+- routing: 13.72 s;
+- background context: 172 ms;
+- query expansion: 809 ms;
+- retrieval search: 3.70 s;
+- neighbor expansion: 582 ms;
+- total retrieval: 5.18 s;
+- primary generation: 28.69 s (first text 2.04 s), 13,149 input tokens /
+  2,076 output tokens;
+- attribution validation: 733 ms;
+- reference verification: 648 ms;
+- total producer: **49.23 s**.
+
+**This is a mechanical pass, not a latency result — read it as inconclusive,
+not favorable or unfavorable.** Two things keep this single sample from
+supporting any latency claim, consistent with this document's standing
+"one non-blind case cannot establish the required representative latency"
+rule: (1) the 13.72 s routing stage is far outside every prior single-case
+run's routing time in this document (51 ms–161 ms) despite `routing` wrapping
+only `match_position_paper()`, which this candidate never touches — the far
+more likely explanation is a cold-start cost specific to this script invoking
+a fresh Python process with no warm connection pool, not a real production
+routing cost, but it was not independently isolated this session; (2) even
+setting that aside, 28.69 s of primary-generation time is not obviously
+faster than this document's prior default-("high"-)effort single-case
+samples (17.78 s–28.76 s across four earlier gates) — a single paired
+question would be needed to say anything about direction, and this session
+did not run baseline against the same `debate_healing` case for comparison.
+
+No production write, deploy, prompt change, or further paid benchmark call
+was made beyond this one authorized run. The full paired 12-case ×
+2-repetition × 2-variant benchmark (~$2.50–5.00 combined, same structure as
+the `teacher_specific_v1` run) remains the next gate and requires Alex's
+separate approval before it runs.
