@@ -243,10 +243,12 @@ def two_proposals(transcript: VerifiedIssueTranscript) -> list[dict[str, object]
     ]
 
 
-def test_segmentation_uses_complete_issue_medium_reasoning_and_strict_json(verified_issue):
+def test_segmentation_uses_complete_issue_high_reasoning_and_strict_json(verified_issue):
     """A truncated prompt or unconstrained response could silently lose articles.
-    Reasoning effort raised low->medium 2026-08-27 (New Wine A2): low reasoning
-    let segmentation stop 54% through a real 32-page issue without error."""
+    Reasoning effort raised low->medium->high, both 2026-08-27 (New Wine A2):
+    low reasoning let segmentation stop 54% through a real 32-page issue
+    without error; medium reasoning then produced an implausibly-large
+    single/few-article segmentation in 3 of 6 consecutive live attempts."""
     proposals = two_proposals(verified_issue)
     client = FakeStructuredClient(segmentation_response(verified_issue, proposals))
 
@@ -254,7 +256,7 @@ def test_segmentation_uses_complete_issue_medium_reasoning_and_strict_json(verif
 
     request = client.last_request
     assert request["model"] == MODEL
-    assert request["reasoning_effort"] == "medium"
+    assert request["reasoning_effort"] == "high"
     assert "must never overlap" in request["instructions"]
     assert request["issue_transcript"] == verified_issue.text
     assert request["pages"] == [

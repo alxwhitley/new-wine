@@ -25,9 +25,17 @@ ARTICLE_MODEL = "openai/gpt-oss-120b"
 # that silently stopped 54% of the way through a 32-page issue -- not a
 # token-budget truncation (it used 1,359 of 65,536 allowed output tokens).
 # The review stage, same model at "medium", caught the same class of gap
-# correctly. This is a recorded design decision per Invariant 17's "explicitly
-# unstable" model/effort snapshot, not a silent drift.
-SEGMENTATION_REASONING = "medium"
+# correctly.
+#
+# Raised again, "medium" -> "high", same day, same issue: across live
+# validation attempts against this real 32-page/121,011-char issue, "medium"
+# reasoning produced an implausibly-large single/few-article segmentation
+# (caught deterministically by _MAX_ARTICLE_CHARS) in roughly half of all
+# attempts that reached segmentation at all (3 of 6 consecutive attempts,
+# 2026-08-27) -- a real, recurring tendency, not one-off noise. This is a
+# recorded design decision per Invariant 17's "explicitly unstable"
+# model/effort snapshot, not a silent drift.
+SEGMENTATION_REASONING = "high"
 REVIEW_REASONING = "medium"
 SEGMENTATION_INSTRUCTIONS = (
     "Segment every authored article in the complete verified magazine transcript. "
