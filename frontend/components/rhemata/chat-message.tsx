@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, memo } from "react";
-import { ThumbsUp, ThumbsDown, Quote } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Quote, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -431,27 +431,44 @@ function CitationFallback({
   citations: Citation[];
   onCitationClick?: (citation: Citation, index: number) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <section className="mt-4 border-t border-border pt-3" aria-label="Sources">
-      <h3 className="mb-2 text-sm font-semibold text-foreground">Sources</h3>
-      <div className="space-y-1">
-        {citations.map((citation, index) => (
-          <button
-            key={`${citation.chunk_id}-${index}`}
-            type="button"
-            onClick={() => onCitationClick?.(citation, index + 1)}
-            className="flex min-h-11 w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <span className="shrink-0 font-medium text-primary">[{index + 1}]</span>
-            <span className="min-w-0">
-              <span className="block truncate text-foreground">
-                {citation.document_title || "Source"}
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="flex min-h-11 items-center gap-1.5 rounded-md py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        Sources ({citations.length})
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 transition-transform motion-reduce:transition-none",
+            expanded && "rotate-180"
+          )}
+        />
+      </button>
+      {expanded ? (
+        <div className="mt-2 space-y-1">
+          {citations.map((citation, index) => (
+            <button
+              key={`${citation.chunk_id}-${index}`}
+              type="button"
+              onClick={() => onCitationClick?.(citation, index + 1)}
+              className="flex min-h-11 w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <span className="shrink-0 font-medium text-primary">[{index + 1}]</span>
+              <span className="min-w-0">
+                <span className="block truncate text-foreground">
+                  {citation.document_title || "Source"}
+                </span>
+                {citation.author ? <span className="block truncate text-xs">{citation.author}</span> : null}
               </span>
-              {citation.author ? <span className="block truncate text-xs">{citation.author}</span> : null}
-            </span>
-          </button>
-        ))}
-      </div>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
