@@ -283,6 +283,18 @@ export function AnalyticsPanel({ accessToken }: AnalyticsPanelProps) {
         </div>
       ) : null}
 
+      {/* Stale-data notice: recent searches not yet classified aren't
+          reflected in the topic breakdown below yet. */}
+      {!loading && summary && summary.finalization_pending > 0 && (
+        <div role="status" className="mb-6 rounded-lg border border-border bg-muted/40 p-3">
+          <p className="text-xs text-muted-foreground">
+            {summary.finalization_pending} recent search
+            {summary.finalization_pending !== 1 ? "es are" : " is"} still being classified and{" "}
+            {summary.finalization_pending !== 1 ? "aren't" : "isn't"} reflected in the topic breakdown yet.
+          </p>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
