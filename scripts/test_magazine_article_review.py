@@ -499,8 +499,9 @@ def test_oversized_other_non_article_span_rejected_deterministically():
     ("The Call of Love", "New Wine Forum") into "other_non_article" spans of
     3,770 and 31,718 chars instead of correctly identifying them -- the
     semantic reviewer caught both, but that's a paid call this check can
-    preempt for egregious cases. Named categories (masthead, etc.) are
-    unaffected -- see test_non_article_span_accounts_for_a_real_gap."""
+    preempt for egregious cases. Named categories get a looser (not zero)
+    cap -- see test_oversized_named_non_article_span_rejected_deterministically
+    below for why they aren't exempt either."""
     filler = "Unclassified filler text fills this whole page over and over. " * 40
     assert len(filler) > 2000
     transcript = verified_transcript(
@@ -528,6 +529,56 @@ def test_oversized_other_non_article_span_rejected_deterministically():
             {
                 "category": "other_non_article",
                 "reason": "unclassified material",
+                "transcript_start": non_article_start,
+                "transcript_end": non_article_end,
+            }
+        ],
+    )
+    client = FakeStructuredClient(response)
+
+    with pytest.raises(
+        ArticleReviewError, match="non_article_span_implausibly_large"
+    ):
+        segment_articles(transcript, client)
+
+
+def test_oversized_named_non_article_span_rejected_deterministically():
+    """A NAMED category (advertisement, masthead, etc.) past 5,000 chars is
+    also rejected -- named categories are not exempt. Live evidence, the
+    very next attempt after the other_non_article-only cap shipped (New Wine
+    A2, Issue 02-1973, 2026-08-27): the model dodged that cap by labeling a
+    113,294-char span (93% of the whole 121,011-char issue, containing SIX
+    real articles) as "advertisement" instead of "other_non_article". No
+    real 32-page magazine issue is 93% ads. The semantic reviewer caught all
+    six again, but that's exactly the paid call this deterministic layer
+    exists to preempt."""
+    filler = "Unclassified filler text fills this whole page over and over. " * 100
+    assert len(filler) > 5000
+    transcript = verified_transcript(
+        "SHORT ARTICLE\nBy Ada North\nA complete short article.\n",
+        filler,
+    )
+    proposal = [
+        proposed_article(
+            transcript,
+            article_id="short-article",
+            filename="short-article.txt",
+            title="Short Article",
+            author="Ada North",
+            source_pages=[1],
+            start_text="SHORT ARTICLE",
+            end_text="A complete short article.",
+        )
+    ]
+    non_article_start = proposal[0]["transcript_end"]
+    non_article_end = len(transcript.text)
+    response = segmentation_response(
+        transcript,
+        proposal,
+        non_article_spans=[
+            {
+                "category": "advertisement",
+                "reason": "letters, subscription notices, conference ads",
                 "transcript_start": non_article_start,
                 "transcript_end": non_article_end,
             }

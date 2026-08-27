@@ -77,13 +77,27 @@ _NON_ARTICLE_CATEGORIES = frozenset(
 # two real articles ("The Call of Love", "New Wine Forum"), the model dumped
 # them into vague "other_non_article" spans of 3,770 and 31,718 chars -- the
 # semantic reviewer caught both, but that's a paid call this check can
-# preempt. Only the "other_non_article" catch-all is capped: named categories
-# (masthead, table_of_contents, etc.) can legitimately run large -- a real
-# masthead was observed live at 4,152 chars -- because naming a category is
-# an affirmative claim about the content, not a shrug. 2,000 sits below both
-# observed violations and the largest confirmed-legitimate "other_non_article"
-# case seen so far (874 chars, "Tapes by Don Basham" in an earlier run).
+# preempt.
+#
+# The first version of this cap applied only to "other_non_article",
+# reasoning that a NAMED category (masthead, advertisement, etc.) was an
+# affirmative claim deserving more trust -- a real masthead was observed live
+# at 4,152 chars. That reasoning did not survive contact with the very next
+# live attempt, same day: the model dodged the cap by labeling a 113,294-char
+# span (93% of the whole 121,011-char issue, containing SIX real articles --
+# "The Nature of Obedience", "Bible Study", "The Call of Love", "The
+# Apostle", "Keeping the Unity", "New Wine Forum") as "advertisement" instead
+# of "other_non_article". No real 32-page magazine issue is 93% ads. The
+# semantic reviewer caught all six again, but the whole point of this
+# deterministic layer is to preempt paying for that call.
+#
+# Both categories are now capped, at different thresholds: "other_non_article"
+# stays tight (it's the vaguest, no content claim at all); the four named
+# categories get more room (5,000 chars, comfortably above the one confirmed-
+# legitimate case seen so far -- the 4,152-char masthead -- but two orders of
+# magnitude below every observed abuse case: 3,770 / 31,718 / 113,294 chars).
 _OTHER_NON_ARTICLE_MAX_CHARS = 2000
+_NAMED_NON_ARTICLE_MAX_CHARS = 5000
 _SEMANTIC_FIELDS = (
     "start_coherent",
     "end_coherent",
@@ -587,10 +601,12 @@ def segment_articles(
         end = _require_int(proposed["transcript_end"], "non_article_span_invalid")
         if start < 0 or start >= end or end > len(transcript.text):
             raise ArticleReviewError("non_article_span_invalid")
-        if (
-            category == "other_non_article"
-            and end - start > _OTHER_NON_ARTICLE_MAX_CHARS
-        ):
+        span_max_chars = (
+            _OTHER_NON_ARTICLE_MAX_CHARS
+            if category == "other_non_article"
+            else _NAMED_NON_ARTICLE_MAX_CHARS
+        )
+        if end - start > span_max_chars:
             raise ArticleReviewError("non_article_span_implausibly_large")
         non_article_spans.append((start, end, category, reason))
 
