@@ -43,12 +43,17 @@ check that a broken gate would double-count). `async_chat.py` surfaces the
 computed cost/turn estimate in the result payload (`null` for guests — no
 server-side conversation row to accumulate against, v1 scope). Frontend:
 `ConversationLengthNudge` component + `useChat.ts`/`page.tsx` wiring.
-Committed `70f6a3b`, pushed to `origin/main`; Railway `rhemata` +
-`answer-worker` both confirmed **Online** post-deploy (backend confirmed
-live, 200 at `/`), Vercel production deployment confirmed **Ready**.
-**Not yet done, both need Alex:** nudge copy is drafted but unreviewed
-(deliberately says nothing about cost/tokens — see the component's own
-comment); no live/E2E verification through a real conversation yet.
+Committed `70f6a3b` (feature) + `647e5b4` (session-close docs) + `36a1410`
+(copy revision), pushed to `origin/main`. Railway `rhemata` +
+`answer-worker` confirmed **Online** post-deploy (backend confirmed live,
+200 at `/`); Vercel confirmed **Ready** at both the deploy alias and the
+real production domain `rhemata.app` (200). Nudge copy reviewed against
+PRODUCT.md Section 8 / POSITIONING.md's anti-references (the first draft
+was generic productivity-app phrasing; revised to state a real, checkable
+fact — past conversations stay in sidebar history) and **approved by
+Alex**. Phases A-E of the spec are all DONE. **Only remaining item:** Phase
+F, live/E2E verification through a real conversation once usage crosses
+the $0.50 threshold — nothing to force, just observe when it happens.
 
 **Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
 
@@ -109,6 +114,6 @@ Two independent items, both Alex's call: (1) flip
 `async_answer_config.experimental_teacher_routing_enabled` to `true`
 (attended Database-write) to fix the B6-F1 named-teacher core-journey
 failure in production — unchanged from the prior session, still held; (2)
-review the long-conversation-handoff nudge copy and do a live check once
-real usage crosses the $0.50 threshold. Active blocker count **1** (B6-F1,
-unchanged).
+long-conversation-handoff is fully shipped (code, migration, copy all
+live) — nothing left to do but observe its first real trigger. Active
+blocker count **1** (B6-F1, unchanged).
