@@ -11,7 +11,9 @@ function harness(responses) {
   const service = createReviewService({
     request: async (path, options = {}) => {
       calls.push({path, options});
-      return responses.shift();
+      const response = responses.shift();
+      if (response instanceof Error) throw response;
+      return response;
     },
     sessionStore: {
       getActiveTabId: async () => activeReviewTabId,
@@ -35,6 +37,16 @@ test("inactive tabs cannot read or decide", async () => {
   const result = await h.service.handle({type: MESSAGE_TYPES.DECIDE_APPROVE}, 99);
   assert.deepEqual(result, {active: false});
   assert.equal(h.calls.length, 1);
+});
+
+test("tracked state request returns structured active server error", async () => {
+  const h = harness([
+    {done: false, candidate: {name: "First", link: "https://first.example", remaining: 2}},
+    new Error("server unavailable"),
+  ]);
+  await h.service.handle({type: MESSAGE_TYPES.START_REVIEW}, 41);
+  const result = await h.service.handle({type: MESSAGE_TYPES.GET_REVIEW_STATE}, 41);
+  assert.deepEqual(result, {active: true, error: "server unavailable"});
 });
 
 test("decision messages map to one fixed endpoint and server-owned action", async () => {

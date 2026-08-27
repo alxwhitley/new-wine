@@ -26,19 +26,26 @@ export function createReviewService({request, sessionStore}) {
 
       if (!(await requireActive(tabId))) return {active: false};
 
-      if (message.type === MESSAGE_TYPES.GET_REVIEW_STATE) {
-        const payload = await request("/api/review/current");
-        return {active: true, ...payload};
-      }
+      try {
+        if (message.type === MESSAGE_TYPES.GET_REVIEW_STATE) {
+          const payload = await request("/api/review/current");
+          return {active: true, ...payload};
+        }
 
-      const action = message.type === MESSAGE_TYPES.DECIDE_APPROVE
-        ? "approve"
-        : "reject";
-      const payload = await request("/api/review/decision", {
-        method: "POST",
-        body: `action=${action}`,
-      });
-      return {active: true, ...payload};
+        const action = message.type === MESSAGE_TYPES.DECIDE_APPROVE
+          ? "approve"
+          : "reject";
+        const payload = await request("/api/review/decision", {
+          method: "POST",
+          body: `action=${action}`,
+        });
+        return {active: true, ...payload};
+      } catch (error) {
+        return {
+          active: true,
+          error: error?.message || "Review server request failed",
+        };
+      }
     },
   };
 }

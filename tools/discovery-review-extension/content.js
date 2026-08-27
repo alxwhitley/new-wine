@@ -14,11 +14,18 @@
       const runtimeError = chrome.runtime.lastError;
       if (runtimeError) return reject(new Error(runtimeError.message));
       if (!response || response.error) {
-        return reject(new Error(response?.error || "No response from review extension"));
+        const error = new Error(response?.error || "No response from review extension");
+        error.active = response?.active === true;
+        return reject(error);
       }
       resolve(response);
     });
   });
+
+  function isControllerPage() {
+    return location.origin === "http://127.0.0.1:8765"
+      && document.getElementById("review-controller");
+  }
 
   function createElement(tagName, text) {
     const element = document.createElement(tagName);
@@ -212,8 +219,7 @@
   }
 
   async function boot() {
-    const isController = location.origin === "http://127.0.0.1:8765"
-      && document.getElementById("review-controller");
+    const isController = isControllerPage();
     const response = await send(isController ? TYPES.START : TYPES.STATE);
     if (!response.active) return;
     if (response.done) return renderDone();
@@ -222,10 +228,12 @@
   }
 
   boot().catch((error) => {
-    if (location.origin === "http://127.0.0.1:8765") {
+    if (isControllerPage()) {
       console.error("Rhemata review extension:", error);
       return;
     }
-    renderConnectionError(error.message || "The review server is unavailable.");
+    if (error.active) {
+      renderConnectionError(error.message || "The review server is unavailable.");
+    }
   });
 })();
