@@ -6,7 +6,11 @@ docs/ingestion/master_ingestion_queue_discovery.tsv.
 Alex's explicit requirement (2026-08-25): find links to blogs/material,
 review them, approve them for ingestion -- nothing else. So this page shows
 exactly two things per candidate: their name, and a link to their site.
-Two buttons, no forms:
+The controller opens one candidate site in a child tab and keeps the local
+Approve / Do Not Approve controls in the original tab. After a successful
+decision it closes the reviewed child, opens the next candidate, and updates
+the controller without a page reload. It never opens the whole backlog at
+once. Two decisions, no forms:
   Yes -- approved for ingestion. Writes a new row to the Approved Sites file
          automatically (name, attribute_to, blog_url, approved=TRUE,
          approved_at) -- nothing to type. If that name already has an
@@ -65,7 +69,7 @@ from typing import List, Optional, Tuple
 
 import uvicorn
 from fastapi import FastAPI, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -228,6 +232,58 @@ def reject_candidate(name: str) -> None:
     sheet_io.write_tab(DISCOVERY_PATH, d_headers, d_rows)
 
 
+def decide_and_advance(action: str, name: str, link: str) -> dict:
+    """Persist one controller decision, then return the fresh next item."""
+    if action == "approve":
+        approve_candidate(name, link)
+    elif action == "reject":
+        reject_candidate(name)
+    else:
+        raise ValueError(f"Unknown review action: {action!r}")
+
+    found = next_candidate()
+    if found is None:
+        return {"done": True, "candidate": None}
+    row, next_link, remaining = found
+    return {
+        "done": False,
+        "candidate": {
+            "name": row["name"],
+            "link": next_link,
+            "remaining": remaining,
+        },
+    }
+
+
+def current_review_payload() -> dict:
+    found = next_candidate()
+    if found is None:
+        return {"done": True, "candidate": None}
+    row, link, remaining = found
+    return {
+        "done": False,
+        "candidate": {
+            "name": row["name"],
+            "link": link,
+            "remaining": remaining,
+        },
+    }
+
+
+def decide_current_and_advance(action: str) -> dict:
+    found = next_candidate()
+    if found is None:
+        return {"done": True, "candidate": None}
+    row, link, _remaining = found
+    if action == "approve":
+        approve_candidate(row["name"], link)
+    elif action == "reject":
+        reject_candidate(row["name"])
+    else:
+        raise ValueError(f"Unknown review action: {action!r}")
+    return current_review_payload()
+
+
 # ---------------------------------------------------------------------------
 # HTML -- plain string templates, no templating engine dependency.
 # ---------------------------------------------------------------------------
@@ -247,10 +303,15 @@ _STYLE = """
   .actions { margin-top: 2.5rem; display: flex; gap: 1rem; justify-content: center; }
   button { font-size: 1.25rem; padding: 0.9rem 2.5rem; border-radius: 0.75rem;
            border: none; cursor: pointer; font-weight: 600; }
+  button:disabled { cursor: wait; opacity: 0.55; }
+  .open { background: #292524; color: white; margin-top: 1.5rem; }
+  .open:hover { background: #44403c; }
   .yes { background: #16a34a; color: white; }
   .yes:hover { background: #15803d; }
   .no { background: #e7e5e4; color: #1c1917; }
   .no:hover { background: #d6d3d1; }
+  .status { color: #57534e; min-height: 1.5rem; margin-top: 1rem; }
+  .status.error { color: #b91c1c; }
 </style>
 """
 
@@ -263,20 +324,134 @@ def _render_candidate(row: dict, link: str, remaining: int) -> str:
     name = row["name"]
     return _page(
         f"""
-        <p class="count">{remaining} left to review</p>
-        <h1>{_esc(name)}</h1>
-        <p><a class="link" href="{_esc(link)}" target="_blank" rel="noopener">{_esc(link)}</a></p>
+        <section id="review-controller" data-name="{_esc(name)}" data-link="{_esc(link)}">
+        <p class="count"><span id="remaining">{remaining}</span> left to review</p>
+        <h1 id="candidate-name">{_esc(name)}</h1>
+        <p><a id="candidate-link" class="link" href="{_esc(link)}" target="_blank" rel="noopener">{_esc(link)}</a></p>
+        <button id="open-site" class="open" type="button">Start Review</button>
+        <p id="review-status" class="status">Open the site to begin.</p>
         <div class="actions">
-          <form method="post" action="/yes">
-            <input type="hidden" name="name" value="{_esc(name)}">
-            <input type="hidden" name="link" value="{_esc(link)}">
-            <button class="yes" type="submit">Yes</button>
-          </form>
-          <form method="post" action="/no">
-            <input type="hidden" name="name" value="{_esc(name)}">
-            <button class="no" type="submit">No</button>
-          </form>
+          <button id="approve" class="yes" type="button" disabled>Approve</button>
+          <button id="reject" class="no" type="button" disabled>Do Not Approve</button>
         </div>
+        </section>
+        <script>
+        (() => {{
+          const controller = document.getElementById("review-controller");
+          const openButton = document.getElementById("open-site");
+          const approveButton = document.getElementById("approve");
+          const rejectButton = document.getElementById("reject");
+          const status = document.getElementById("review-status");
+          let siteWindow = null;
+
+          const current = () => ({{
+            name: controller.dataset.name,
+            link: controller.dataset.link,
+          }});
+
+          const setBusy = (busy) => {{
+            openButton.disabled = busy;
+            approveButton.disabled = busy;
+            rejectButton.disabled = busy;
+          }};
+
+          const setStatus = (message, isError = false) => {{
+            status.textContent = message;
+            status.classList.toggle("error", isError);
+          }};
+
+          const openBlankChild = (windowName) => {{
+            const child = window.open("about:blank", windowName);
+            if (child) child.opener = null;
+            return child;
+          }};
+
+          const navigateChild = (child, url) => {{
+            child.location.replace(url);
+            child.focus();
+          }};
+
+          const openCurrentSite = () => {{
+            const child = openBlankChild("rhemata-review-site");
+            if (!child) {{
+              setStatus("The website tab was blocked. Allow popups for 127.0.0.1, then try again.", true);
+              return;
+            }}
+            siteWindow = child;
+            navigateChild(siteWindow, current().link);
+            openButton.textContent = "Reopen Site";
+            approveButton.disabled = false;
+            rejectButton.disabled = false;
+            setStatus("Review the website, then choose a decision here.");
+          }};
+
+          const renderNext = (candidate) => {{
+            controller.dataset.name = candidate.name;
+            controller.dataset.link = candidate.link;
+            document.getElementById("candidate-name").textContent = candidate.name;
+            const link = document.getElementById("candidate-link");
+            link.href = candidate.link;
+            link.textContent = candidate.link;
+            document.getElementById("remaining").textContent = candidate.remaining;
+            openButton.textContent = "Reopen Site";
+          }};
+
+          const renderDone = () => {{
+            controller.innerHTML = `<h1>You're all caught up.</h1><p class="count">Nothing left to review right now.</p>`;
+          }};
+
+          const decide = async (action) => {{
+            // Reserve the successor tab during this click. Waiting until the
+            // network response returns would let popup blockers reject it.
+            const nextWindow = openBlankChild("rhemata-review-next");
+            if (!nextWindow) {{
+              setStatus("The next website tab was blocked. Allow popups before saving this decision.", true);
+              return;
+            }}
+
+            const reviewed = current();
+            setBusy(true);
+            setStatus("Saving decision…");
+            try {{
+              const body = new URLSearchParams({{
+                action,
+                name: reviewed.name,
+                link: reviewed.link,
+              }});
+              const response = await fetch("/decision", {{
+                method: "POST",
+                headers: {{"Content-Type": "application/x-www-form-urlencoded"}},
+                body,
+              }});
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || "The decision could not be saved.");
+
+              if (siteWindow && !siteWindow.closed) siteWindow.close();
+              if (result.done) {{
+                nextWindow.close();
+                siteWindow = null;
+                renderDone();
+                return;
+              }}
+
+              renderNext(result.candidate);
+              nextWindow.name = "rhemata-review-site";
+              siteWindow = nextWindow;
+              navigateChild(siteWindow, result.candidate.link);
+              setBusy(false);
+              setStatus("Decision saved. Review the next website.");
+            }} catch (error) {{
+              nextWindow.close();
+              setBusy(false);
+              setStatus(error.message || "The decision could not be saved.", true);
+            }}
+          }};
+
+          openButton.addEventListener("click", openCurrentSite);
+          approveButton.addEventListener("click", () => decide("approve"));
+          rejectButton.addEventListener("click", () => decide("reject"));
+        }})();
+        </script>
         """
     )
 
@@ -317,6 +492,40 @@ def no(name: str = Form(...)):
     except RuntimeError as exc:
         return HTMLResponse(_render_error(str(exc)), status_code=409)
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/decision", response_class=JSONResponse)
+def decision(
+    action: str = Form(...), name: str = Form(...), link: str = Form("")
+) -> JSONResponse:
+    try:
+        result = decide_and_advance(action, name, link)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    except RuntimeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=409)
+    return JSONResponse(result)
+
+
+@app.get("/api/review/current", response_class=JSONResponse)
+def api_review_current() -> JSONResponse:
+    return JSONResponse(current_review_payload())
+
+
+@app.post("/api/review/start", response_class=JSONResponse)
+def api_review_start() -> JSONResponse:
+    return JSONResponse(current_review_payload())
+
+
+@app.post("/api/review/decision", response_class=JSONResponse)
+def api_review_decision(action: str = Form(...)) -> JSONResponse:
+    try:
+        result = decide_current_and_advance(action)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    except RuntimeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=409)
+    return JSONResponse(result)
 
 
 # ---------------------------------------------------------------------------
