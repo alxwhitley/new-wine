@@ -461,16 +461,36 @@ def test_small_formatting_gap_within_tolerance_does_not_reject_deterministically
     assert len(manifest.articles) == 2
 
 
-def test_non_article_span_accounts_for_a_real_gap(verified_long_issue):
+def test_non_article_span_accounts_for_a_real_gap():
     """A legitimate non-article gap (an ad, a subscription notice -- see
     fixtures/magazine_review/clean_issue.json's 128-char page-2 gap) must be
     expressible via non_article_spans and not rejected, while still being
-    recorded for provenance rather than silently disappearing."""
-    proposal = two_long_proposals(verified_long_issue)[:1]
+    recorded for provenance rather than silently disappearing. The article
+    body here is sized so the ad stays comfortably under both the per-span
+    and total-fraction caps (see test_oversized_*_rejected_deterministically
+    and test_oversized_non_article_total_fraction_rejected_deterministically
+    for where those caps bite)."""
+    filler = "This sentence continues the thought with more detail. " * 30
+    transcript = verified_transcript(
+        f"LONG FIRST\nBy Ada North\n{filler}The opening closes here.\n",
+        "TAPE MINISTRY AD\nOrder Derek Prince's teaching tapes today.",
+    )
+    proposal = [
+        proposed_article(
+            transcript,
+            article_id="long-first",
+            filename="long-first.txt",
+            title="Long First",
+            author="Ada North",
+            source_pages=[1],
+            start_text="LONG FIRST",
+            end_text="The opening closes here.",
+        )
+    ]
     non_article_start = proposal[0]["transcript_end"]
-    non_article_end = len(verified_long_issue.text)
+    non_article_end = len(transcript.text)
     response = segmentation_response(
-        verified_long_issue,
+        transcript,
         proposal,
         non_article_spans=[
             {
@@ -483,7 +503,7 @@ def test_non_article_span_accounts_for_a_real_gap(verified_long_issue):
     )
     client = FakeStructuredClient(response)
 
-    manifest = segment_articles(verified_long_issue, client)
+    manifest = segment_articles(transcript, client)
 
     assert len(manifest.articles) == 1
     assert manifest.non_article_spans == (
@@ -588,6 +608,51 @@ def test_oversized_named_non_article_span_rejected_deterministically():
 
     with pytest.raises(
         ArticleReviewError, match="non_article_span_implausibly_large"
+    ):
+        segment_articles(transcript, client)
+
+
+def test_oversized_non_article_total_fraction_rejected_deterministically():
+    """Many small non_article_spans, each individually under both per-span
+    caps, must not add up past 40% of the transcript either -- otherwise the
+    model could dodge the per-span caps by simply splitting the same abuse
+    into more, smaller pieces instead of one large one."""
+    article_body = "This sentence continues the thought with more detail. " * 60
+    ad_body = "Order tapes today. " * 35  # ~700 chars, well under both per-span caps
+    assert 500 < len(ad_body) < 2000
+    parts = [f"LONG FIRST\nBy Ada North\n{article_body}The opening closes here.\n"]
+    parts.extend(f"AD {i}\n{ad_body}" for i in range(4))
+    transcript = verified_transcript(*parts)
+    proposal = [
+        proposed_article(
+            transcript,
+            article_id="long-first",
+            filename="long-first.txt",
+            title="Long First",
+            author="Ada North",
+            source_pages=[1],
+            start_text="LONG FIRST",
+            end_text="The opening closes here.",
+        )
+    ]
+    ad_starts = [transcript.text.index(f"AD {i}") for i in range(4)]
+    ad_ends = ad_starts[1:] + [len(transcript.text)]
+    non_article_spans = [
+        {
+            "category": "advertisement",
+            "reason": f"tape ad {i}",
+            "transcript_start": start,
+            "transcript_end": end,
+        }
+        for i, (start, end) in enumerate(zip(ad_starts, ad_ends))
+    ]
+    total_non_article = sum(s["transcript_end"] - s["transcript_start"] for s in non_article_spans)
+    assert total_non_article / len(transcript.text) > 0.40
+    response = segmentation_response(transcript, proposal, non_article_spans=non_article_spans)
+    client = FakeStructuredClient(response)
+
+    with pytest.raises(
+        ArticleReviewError, match="non_article_total_fraction_implausible"
     ):
         segment_articles(transcript, client)
 

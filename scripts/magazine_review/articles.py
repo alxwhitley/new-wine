@@ -98,6 +98,15 @@ _NON_ARTICLE_CATEGORIES = frozenset(
 # magnitude below every observed abuse case: 3,770 / 31,718 / 113,294 chars).
 _OTHER_NON_ARTICLE_MAX_CHARS = 2000
 _NAMED_NON_ARTICLE_MAX_CHARS = 5000
+# Per-span caps don't stop the model spreading the same abuse across many
+# smaller spans that each individually stay under a cap. No real 32-page
+# magazine issue is mostly ads. 0.40 sits above the fraction seen in the one
+# run with NO missing-article findings (retry_13: effectively 0%) and at/
+# below the fraction seen in the two runs that DID have real missing
+# articles (New Wine A2, Issue 02-1973, 2026-08-27: 43% with 2 articles
+# missing, 93.8% with 6 missing) -- so it would have caught both live
+# regressions on its own, independent of the per-span caps above.
+_NON_ARTICLE_TOTAL_FRACTION_MAX = 0.40
 _SEMANTIC_FIELDS = (
     "start_coherent",
     "end_coherent",
@@ -609,6 +618,14 @@ def segment_articles(
         if end - start > span_max_chars:
             raise ArticleReviewError("non_article_span_implausibly_large")
         non_article_spans.append((start, end, category, reason))
+
+    # Per-span caps (above) don't stop the model from spreading the same
+    # abuse across many smaller spans that each individually stay under the
+    # cap. This aggregate check closes that -- see
+    # _NON_ARTICLE_TOTAL_FRACTION_MAX's definition for the reasoning.
+    non_article_total_chars = sum(end - start for start, end, _, _ in non_article_spans)
+    if non_article_total_chars > _NON_ARTICLE_TOTAL_FRACTION_MAX * len(transcript.text):
+        raise ArticleReviewError("non_article_total_fraction_implausible")
 
     # Unified coverage check across BOTH articles and non_article_spans --
     # merged and sorted, the whole transcript must be accounted for with no
