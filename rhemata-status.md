@@ -7,9 +7,12 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-27. **PLAN.md has zero active blockers.** This session
+Last verified: 2026-08-27. **PLAN.md has zero active blockers.** One session
 shipped and locally merged the hardened in-page Discovery review extension.
-New Wine A2 remains the next scheduled corpus thread; see docs/roadmap.md.
+A concurrent session made real progress on New Wine A2 — two root causes of
+the `non_article_span_implausibly_large` recurrence diagnosed and fixed, but
+the issue still hasn't cleared the article gate end-to-end; see below and
+docs/roadmap.md.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -50,12 +53,35 @@ their completed implementation is present in the merge. The feature branch
 and worktree remain intact because repository policy requires separate,
 explicit approval before deleting anything under `~/rhemata/`.
 
-**New Wine A2 — still scheduled and not cleared end-to-end.** The existing
-pipeline corrections remain as recorded in `docs/roadmap.md`. Issue 02-1973
-still needs a standalone segmentation-only diagnosis of the recurring
-`non_article_span_implausibly_large` refusal using the cached transcript before
-more blind CLI retries. Production database ingest remains a separate,
-attended, explicitly approved operation.
+**New Wine A2 — two real fixes shipped and live-validated (commits
+`d011fac`, `ae37d3b`); Issue 02-1973 still hasn't cleared the article gate
+end-to-end.** Two standalone segmentation-only diagnostic calls against the
+cached OCR transcript (no CLI, no OCR cost, `local/2026-08/diagnose_a2_*.py`
+— gitignored, not committed) showed `non_article_span_implausibly_large`
+was not a cap-sizing problem: "Keeping the Unity" (a reprint) and "New Wine
+Forum" (a reader Q&A column) were consistently misfiled as non-article
+material instead of recognized as articles — the same two articles the
+semantic reviewer had already confirmed real in `e8ca4a3`. Fixed via
+explicit instruction wording (`d011fac`), validated live. A second, real
+live-CLI defect — `article_spans_overlap` firing on a genuinely
+non-overlapping article set, 3 of 4 real attempts (v22/v24/v25) — was
+root-caused to an ordering bug (the check compared each article only to the
+previous one in the model's raw return order instead of sorting by position
+first, unlike the coverage check just below it) and fixed the same way
+(`ae37d3b`), also validated live.
+
+Neither fix closes the recurrence itself: after both fixes landed, real
+attempts still hit a fresh `non_article_span_implausibly_large` (v28), a
+stochastically inconsistent semantic-reviewer stage
+(`article_failure_reasons_invalid` on an identical 10-article input, twice
+in a row, then a clean `status=passed` on a third identical attempt), and
+one new confirmed risk: that one clean pass approved "Spiritual Potpourri,"
+a 27,165-char span merging the real Forum content with what look like
+separate advertisements under one invented title — under
+`_MAX_ARTICLE_CHARS`, `adjacent_bleed` not flagged, nothing in the pipeline
+catches it. Full detail: CLAUDE.md's New Wine landmine entry. Production
+database ingest remains a separate, attended, explicitly approved
+operation; nothing in this session's work wrote to the database.
 
 **Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
 
@@ -65,10 +91,13 @@ attended, explicitly approved operation.
 
 - **Scheduled**: quote accuracy/relevance repair before any attended
   re-enable.
-- **Scheduled A2:** see Current state above — Issue 02-1973 isn't through
-  the article gate yet. Production database ingest for this or any New
-  Wine issue remains a separate, attended, explicitly approved operation
-  regardless of how clean a review run gets.
+- **Scheduled A2:** see Current state above — two fixes shipped, but Issue
+  02-1973 still isn't through the article gate. Next: diagnose the
+  reviewer-stage `article_failure_reasons_invalid` inconsistency and the
+  Spiritual-Potpourri ad-bleed risk directly, same no-CLI method. Production
+  database ingest for this or any New Wine issue remains a separate,
+  attended, explicitly approved operation regardless of how clean a review
+  run gets.
 - **Parked:** the extension's JavaScript success validator treats a
   32-character whitespace capability/revision as syntactically long enough.
   The Python server still rejects it before mutation, so this is a diagnostic
@@ -91,7 +120,9 @@ attended, explicitly approved operation.
 ## Next single item
 
 **No active blocker.** New Wine A2 is the live thread: diagnose the
-`non_article_span_implausibly_large` recurrence directly (cheap — OCR is
-fully cached) before running more blind CLI retries. Real database ingest
-for this or any New Wine issue remains a separate, attended, explicitly
-approved operation regardless of how clean a review run gets.
+semantic-reviewer stage's `article_failure_reasons_invalid` inconsistency
+and the Spiritual-Potpourri ad-bleed risk directly (cheap — OCR is fully
+cached), the same standalone no-CLI method used this session, before
+running more blind CLI retries. Real database ingest for this or any New
+Wine issue remains a separate, attended, explicitly approved operation
+regardless of how clean a review run gets.

@@ -1007,12 +1007,49 @@ different row, per the hard rule above.
   specific checks. A future session finding a NEW gaming pattern here
   should add a new targeted check with the same live-evidence discipline
   (real numbers from a real failure, not a guessed threshold), not assume
-  these five are exhaustive. `non_article_span_implausibly_large` was still
-  recurring as of session end (6 of the last 8 attempts that reached
-  segmentation) even after its own fix (commit `683b973`) — undiagnosed,
-  not yet known whether these are false positives needing another cap
-  adjustment or genuine catches. Full trail: `rhemata-status.md`'s
-  2026-08-27 entry, commits `37e2746`..`683b973`.
+  these five are exhaustive.
+
+  **`non_article_span_implausibly_large`'s recurrence diagnosed, later the
+  same day (commits `d011fac`, `ae37d3b`) — two real causes found, not a
+  cap-sizing problem.** Two standalone segmentation-only diagnostic calls
+  against the cached transcript (no CLI, no OCR cost — same method as
+  `683b973`) showed "Keeping the Unity" (a labeled reprint) and "New Wine
+  Forum" (a reader Q&A column) were consistently filed as
+  `other_non_article` instead of recognized as articles, in both runs — the
+  same two articles the semantic reviewer already confirmed real back in
+  `e8ca4a3`. Fixed by naming both content shapes explicitly in
+  `SEGMENTATION_INSTRUCTIONS` (`d011fac`). Separately, a real live CLI
+  attempt against the actual issue found `article_spans_overlap` firing on
+  a genuinely non-overlapping article set 3 of 4 times: the check compared
+  each article only to the PREVIOUS one in the model's raw return order,
+  not sorted by position, so an out-of-order-but-non-overlapping return
+  (e.g. "Editorial" placed after a later article) tripped a false positive
+  every time — the coverage check just below it already sorted for exactly
+  this reason. Fixed by sorting before the article-only check too
+  (`ae37d3b`). Both fixes are live-validated and loosen no cap.
+
+  **Neither fix closes the underlying recurrence.** Close to fifteen live
+  calls this session (pre- and post-fix, standalone diagnostic and real
+  CLI) surfaced several distinct failure shapes unrelated to the two fixed
+  causes: page-marker-driven article fragmentation, a giant lazy
+  non-article dump swallowing over half the issue, a fabricated
+  mega-article merging real content with ads, and — new this session — the
+  semantic REVIEWER stage's own inconsistency: `article_failure_reasons_invalid`
+  on an identical 10-article input, twice in a row, then a clean
+  `status=passed` on a third identical attempt. The recurrence is dominated
+  by run-to-run model variance at "high" reasoning, not one deterministic
+  gap — a future session should not expect a single instruction or cap
+  change to close it.
+
+  **New, unresolved: a passing review can still approve ads bundled into an
+  article.** The one clean `status=passed` run approved "Spiritual
+  Potpourri," a 27,165-char span merging the real Forum Q&A content with
+  what appear to be separate advertisements under one invented title —
+  under `_MAX_ARTICLE_CHARS`, and the reviewer did not flag
+  `adjacent_bleed`. Nothing in the pipeline catches this today; do not
+  trust a "passed" issue decision from this pipeline without checking the
+  actual article boundaries. Full trail: `rhemata-status.md`'s 2026-08-27
+  entry, commits `37e2746`..`683b973`, `d011fac`, `ae37d3b`.
 - **A tracked master spreadsheet for ingestion candidates now exists —
   separate from, and layered on top of, `source_ingest_queue` (Invariant
   16), not a replacement for it.** Built 2026-08-19 as a single `.xlsx`

@@ -89,15 +89,37 @@ quarantine. No stage transfers automatically from one source to another.
    `37e2746`..`683b973`, 213/214 tests passing. 21 live attempts run
    (~$0.87 confirmed spend, real total likely $1.2–1.5 — the pipeline
    doesn't record cost from a call that raised after being billed).
-   **Issue 02-1973 still has not cleared the article gate end-to-end** —
-   `non_article_span_implausibly_large` is recurring on most attempts even
-   after its own fix; full detail and the next diagnostic step:
-   `rhemata-status.md`'s 2026-08-27 entry.
-   Next: diagnose that recurrence directly (a standalone segmentation-only
-   call reusing the cached transcript, no CLI, no new OCR cost), then rerun
-   the no-write article/proposition gates, and obtain Alex's separate
-   approval before any attended database write. No benchmark decision or
-   pipeline fix authorizes a database write or file move.
+   **2026-08-27, later same day: two of the suspected recurrence causes
+   diagnosed and fixed (commits `d011fac`, `ae37d3b`).** Two standalone
+   segmentation-only diagnostic calls against the cached transcript (no CLI,
+   no OCR cost) showed `non_article_span_implausibly_large` was not a
+   cap-sizing problem: "Keeping the Unity" (a reprint) and "New Wine Forum"
+   (a reader Q&A column) were consistently misfiled as non-article material
+   instead of recognized as articles — the same two articles the semantic
+   reviewer had already confirmed real in `e8ca4a3`. Fixed via explicit
+   instruction wording (`d011fac`). Separately, a real live-CLI defect —
+   `article_spans_overlap` firing on a genuinely non-overlapping article set,
+   3 of 4 real attempts — was root-caused to an ordering bug (the check
+   compared each article only to the previous one in the model's raw return
+   order instead of sorting by position first) and fixed to match the
+   coverage check's existing pattern (`ae37d3b`).
+   **Issue 02-1973 still has not cleared the article gate end-to-end** — the
+   recurrence is dominated by run-to-run model variance, not one
+   deterministic gap. Live samples after both fixes still hit a fresh
+   `non_article_span_implausibly_large`, a stochastically inconsistent
+   semantic-reviewer stage (`article_failure_reasons_invalid` on an
+   identical input twice, then a clean pass on a third identical attempt),
+   and one confirmed new risk: a passing review once approved "Spiritual
+   Potpourri," a 27K-char span merging real Forum content with what look
+   like separate advertisements under one invented title, uncaught by any
+   check. Full detail: `rhemata-status.md`'s 2026-08-27 entry and CLAUDE.md's
+   New Wine landmine entry.
+   Next: diagnose the reviewer stage's `article_failure_reasons_invalid`
+   inconsistency and the ad-bleed risk directly (same no-CLI, cached-OCR
+   method), then rerun the no-write article/proposition gates, and obtain
+   Alex's separate approval before any attended database write. No
+   benchmark decision or pipeline fix authorizes a database write or file
+   move.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing
