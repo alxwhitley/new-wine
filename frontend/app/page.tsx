@@ -23,6 +23,7 @@ import {
 } from "@/components/rhemata/conversation-length-nudge";
 import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
+import { ConsentGate } from "@/components/rhemata/consent-gate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
 import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference, type CuratedTeacher } from "@/lib/study-reference";
@@ -43,7 +44,7 @@ const SUGGESTIONS = [
 ];
 
 export default function Home() {
-  const { user, accessToken, signIn, signUp } = useAuth();
+  const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
   const [showLogin, setShowLogin] = useState(false);
   const [showGate, setShowGate] = useState(false);
@@ -638,6 +639,7 @@ export default function Home() {
           initialMode={loginInitialMode}
         />
       )}
+      <ConsentGate accessToken={accessToken} hasUser={!!user} onDecline={signOut} />
     </div>
   );
 }
