@@ -353,3 +353,37 @@ this session.
     is the one shipped to production — a build that reverted to calling
     `derive_subject_key()` directly from `async_chat.py` would silently
     break `withdraw()`'s ability to find pre-rotation rows.
+
+## Post-build verification pass, same session (2026-08-27)
+
+Independently re-verified before treating this as done: re-ran all 15 test
+files myself (132 assertions, 0 failures — 2 more than originally reported,
+see below), confirmed a clean `tsc --noEmit`, confirmed the 37 pre-existing
+lint problems all predate this session (none in `AnalyticsPanel.tsx` or
+`consent-gate.tsx`), confirmed the backend imports cleanly with both new
+routers mounted, read the migration and every service/router file directly
+rather than trusting the spec's own description of them, and commissioned a
+second fresh-context privacy/security reviewer (independent of whichever
+review produced Findings 1-2 above) against the 9 questions in the driving
+directive — verdict SAFE on all 9, no findings beyond what's already
+disclosed in this document.
+
+That pass found and fixed two real, minor correctness gaps, neither a
+privacy/security defect:
+
+- `finalizer.py`'s `finalize_ready_jobs()` stamped every other
+  classifier-provenance column (`classifier_version`/`model`/
+  `prompt_version`/`confidence`) but never set `occ["finalized_at"]` —
+  the schema column existed and was even in `_MutableRow`'s write-back
+  allowlist, just never assigned. Fixed to stamp it alongside the other
+  provenance fields.
+- `aggregation.get_summary()`'s `topics_with_open_gaps` counted any topic
+  with a historical `no_material` occurrence in the window, with no check
+  against `search_gap_details.status` — so a topic whose only gap had
+  already been resolved still counted as having an "open" gap, overstating
+  the header stat this feature exists to make trustworthy. Fixed to join
+  against `search_gap_details` and require `status='open'`.
+
+Both fixes are TDD (failing test added and observed red before the fix
+landed) and covered by the existing test files, not new ones — see commit
+`5e1a62b`.
