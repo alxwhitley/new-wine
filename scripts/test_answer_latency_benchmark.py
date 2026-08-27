@@ -165,6 +165,83 @@ def test_generation_trace_is_observational_only():
     check("generation token usage is recorded", stage["output_tokens"] == 17)
 
 
+def test_generation_effort_defaults_to_unset_and_is_recorded_when_requested():
+    default_client = FakeClient(generation_events())
+    with (
+        patch.object(producer_module, "get_anthropic_client", return_value=default_client),
+        patch.object(producer_module, "get_generation_model", return_value="test-model"),
+    ):
+        producer_module._generate_and_capture([], ["Vlad Savchuk"])
+    check(
+        "default generation call omits output_config (byte-identical to pre-candidate behavior)",
+        "output_config" not in default_client.messages.calls[0],
+    )
+
+    effort_client = FakeClient(generation_events())
+    trace = LatencyTrace(clock=FakeClock([20.0, 20.1, 20.4, 21.0]))
+    with (
+        patch.object(producer_module, "get_anthropic_client", return_value=effort_client),
+        patch.object(producer_module, "get_generation_model", return_value="test-model"),
+    ):
+        producer_module._generate_and_capture(
+            [], ["Vlad Savchuk"], trace=trace, stage_name="generation.primary", effort="medium"
+        )
+    check(
+        "effort candidate sets output_config.effort without touching thinking/max_tokens",
+        effort_client.messages.calls[0]["output_config"] == {"effort": "medium"}
+        and effort_client.messages.calls[0]["thinking"] == {"type": "disabled"},
+    )
+    stage = trace.to_dict()["stages"][0]
+    check("trace records the requested effort", stage["effort"] == "medium")
+
+    default_trace = LatencyTrace(clock=FakeClock([0.0, 0.1, 0.4, 1.0]))
+    with (
+        patch.object(producer_module, "get_anthropic_client", return_value=FakeClient(generation_events())),
+        patch.object(producer_module, "get_generation_model", return_value="test-model"),
+    ):
+        producer_module._generate_and_capture([], ["Vlad Savchuk"], trace=default_trace, stage_name="generation.primary")
+    check(
+        "trace labels an unset effort as default rather than omitting the field",
+        default_trace.to_dict()["stages"][0]["effort"] == "default",
+    )
+
+
+def test_run_case_forwards_the_effort_candidate_variant():
+    seen = []
+
+    def fake_produce(
+        db, question, messages=None, topics_established=None, trace=None,
+        experimental_generation_effort=None,
+    ):
+        seen.append(experimental_generation_effort)
+        with trace.span("producer.total"):
+            pass
+        return ProducerResult(
+            answer="Candidate answer.", outcome="answered", model="test-model"
+        )
+
+    case = {
+        "id": "effort-case",
+        "category": "ordinary",
+        "question": "What does the source teach about grace?",
+        "messages": [],
+    }
+    try:
+        record = run_case(
+            case,
+            repetition=1,
+            supabase=object(),
+            produce_fn=fake_produce,
+            variant="effort_medium_v1",
+        )
+    except TypeError:
+        check("run_case accepts the effort candidate variant", False)
+        return
+
+    check("effort candidate reaches the producer", seen == ["medium"])
+    check("effort candidate variant is retained for blind pairing", record["variant"] == "effort_medium_v1")
+
+
 def test_producer_trace_covers_the_guarded_answer_path():
     chunk = {
         "id": "chunk-1",
@@ -189,7 +266,7 @@ def test_producer_trace_covers_the_guarded_answer_path():
         retrieval_trace_seen.append(trace)
         return [chunk], [citation], 1, False
 
-    def fake_generate(history, permitted_names=None, trace=None, stage_name="generation"):
+    def fake_generate(history, permitted_names=None, trace=None, stage_name="generation", effort=None):
         with trace.span(stage_name):
             pass
         return "Vlad Savchuk answers from the source [1].", "<answer>ok</answer>", "end_turn", {
@@ -598,6 +675,8 @@ def test_run_case_records_and_forwards_the_candidate_variant():
 def main():
     test_trace_records_nested_monotonic_spans()
     test_generation_trace_is_observational_only()
+    test_generation_effort_defaults_to_unset_and_is_recorded_when_requested()
+    test_run_case_forwards_the_effort_candidate_variant()
     test_producer_trace_covers_the_guarded_answer_path()
     test_experimental_teacher_routing_only_bypasses_topic_positions_when_required()
     test_explicit_named_teacher_source_boundary()

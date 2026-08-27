@@ -522,7 +522,7 @@ def _build_history(messages: List[Dict[str, Any]], context: str, question: str) 
 
 
 # ---- generation with usage capture (MIRROR of chat._stream_answer; DRIFT POINT) --
-def _generate_and_capture(history, permitted_names=None, trace=None, stage_name="generation"):
+def _generate_and_capture(history, permitted_names=None, trace=None, stage_name="generation", effort=None):
     from app.services import answer_toolbox
     system = answer_toolbox.ANSWER_SYSTEM_BLOCKS
     if permitted_names is not None:
@@ -552,9 +552,17 @@ def _generate_and_capture(history, permitted_names=None, trace=None, stage_name=
 
     def _run_stream(trace_stage=None):
         nonlocal stop_reason
-        stream = client.messages.create(
+        create_kwargs = dict(
             model=model_used, max_tokens=GEN_MAX_TOKENS, thinking={"type": "disabled"}, system=system, messages=history, stream=True,
         )
+        # B6 latency candidate (benchmark-only; effort=None leaves this key
+        # unset, so default production behavior is byte-identical to before
+        # this parameter existed -- Sonnet 5 then defaults to effort="high").
+        # See docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md's
+        # "Read-only candidate classification" section.
+        if effort:
+            create_kwargs["output_config"] = {"effort": effort}
+        stream = client.messages.create(**create_kwargs)
         for ev in stream:
             if trace is not None:
                 trace.mark(trace_stage, "first_event_ms")
@@ -586,6 +594,7 @@ def _generate_and_capture(history, permitted_names=None, trace=None, stage_name=
             trace_stage.update(usage)
             trace_stage["model"] = model_used
             trace_stage["stop_reason"] = stop_reason
+            trace_stage["effort"] = effort or "default"
 
     raw_output = "".join(raw_full)
     answer = answer_toolbox._extract_answer_from_raw(raw_output, stop_reason) or answer_toolbox._NO_ANSWER_FALLBACK
@@ -711,20 +720,20 @@ def _match_stored_position_for_answer(
 
 def produce(
     supabase, question, messages=None, topics_established=None, trace=None,
-    experimental_teacher_routing=False,
+    experimental_teacher_routing=False, experimental_generation_effort=None,
 ):
     with _trace_span(trace, "producer.total"):
         return _produce(
             supabase, question, messages, topics_established, trace,
-            experimental_teacher_routing,
+            experimental_teacher_routing, experimental_generation_effort,
         )
 
 
 def _produce(
     supabase, question, messages=None, topics_established=None, trace=None,
-    experimental_teacher_routing=False,
+    experimental_teacher_routing=False, experimental_generation_effort=None,
 ):
-    # type: (object, str, Optional[List[Dict[str, Any]]], Optional[Dict[str, int]], Optional[Any], bool) -> ProducerResult
+    # type: (object, str, Optional[List[Dict[str, Any]]], Optional[Dict[str, int]], Optional[Any], bool, Optional[str]) -> ProducerResult
     """Position-paper interception -> background-topic injection -> retrieve ->
     buffered generation -> ungrounded-attribution resolution (regenerate-once-
     then-refuse) -> verify_references. Matches chat.py's ordering exactly. Raises
@@ -873,7 +882,8 @@ def _produce(
         })
 
     answer, raw_output, _sr, usage, model_used = _generate_and_capture(
-        history, trace=trace, stage_name="generation.primary"
+        history, trace=trace, stage_name="generation.primary",
+        effort=experimental_generation_effort,
     )
     total_usage = dict(usage)
 
@@ -896,6 +906,7 @@ def _produce(
                     permitted_names=permitted_names,
                     trace=trace,
                     stage_name="generation.attribution_retry",
+                    effort=experimental_generation_effort,
                 )
                 total_usage = _add_usage(total_usage, usage2)
                 if _has_ungrounded(answer2, raw2):
