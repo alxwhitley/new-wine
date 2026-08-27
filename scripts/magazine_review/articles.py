@@ -107,6 +107,24 @@ _NAMED_NON_ARTICLE_MAX_CHARS = 5000
 # missing, 93.8% with 6 missing) -- so it would have caught both live
 # regressions on its own, independent of the per-span caps above.
 _NON_ARTICLE_TOTAL_FRACTION_MAX = 0.40
+# All three checks above bound how much can be excluded as non-article. None
+# of them stop the inverse abuse: proposing too FEW articles by making one
+# article absurdly large. Live evidence, the attempt immediately after
+# e8ca4a3 shipped (New Wine A2, Issue 02-1973, 2026-08-27): the model
+# proposed exactly ONE "article" -- title "New Wine February 1973 Issue",
+# author "Various" -- spanning the ENTIRE 121,011-char/32-page transcript.
+# 100% coverage, 0% non-article, so every check above passed trivially, and
+# for the first time this session the semantic reviewer approved it too
+# (verdict=True, issue_coverage_complete=True, status=passed) -- its
+# instructions judge each proposed article's own start/end/transitions/
+# attribution, not whether the NUMBER of articles is plausible for an issue
+# this long. Without a rate-limit error on the next (proposition) stage,
+# this would have silently proceeded as a "passed" issue.
+# 30,000 sits well above the longest confirmed-legitimate single article
+# seen live so far (20,711 chars, "The Apostle" in Issue 02-1973's
+# 2026-08-27 attempt, itself independently verdict=True on its own
+# start/end/attribution) and far below the 121,011-char abuse case.
+_MAX_ARTICLE_CHARS = 30000
 _SEMANTIC_FIELDS = (
     "start_coherent",
     "end_coherent",
@@ -552,6 +570,8 @@ def segment_articles(
         end = _require_int(proposed["transcript_end"], "article_span_invalid")
         if start < 0 or start >= end or end > len(transcript.text):
             raise ArticleReviewError("article_span_invalid")
+        if end - start > _MAX_ARTICLE_CHARS:
+            raise ArticleReviewError("article_implausibly_long")
         if start < previous_end:
             raise ArticleReviewError("article_spans_overlap")
         source_pages = _source_pages_for_span(transcript, start, end)

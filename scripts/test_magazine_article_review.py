@@ -657,6 +657,42 @@ def test_oversized_non_article_total_fraction_rejected_deterministically():
         segment_articles(transcript, client)
 
 
+def test_single_article_spanning_whole_issue_rejected_deterministically():
+    """A single article past 30,000 chars is rejected before the paid
+    semantic review call -- the inverse of the non-article-abuse cases
+    above: too FEW articles by making one absurdly large, rather than too
+    much non-article content. Live evidence, the attempt immediately after
+    e8ca4a3 shipped (New Wine A2, Issue 02-1973, 2026-08-27): the model
+    proposed exactly one "article" -- title "New Wine February 1973 Issue",
+    author "Various" -- spanning the entire 121,011-char/32-page transcript.
+    100% coverage, 0% non-article, so every prior check passed trivially,
+    and for the first time this session the semantic reviewer approved it
+    too (verdict=True, status=passed) -- only an unrelated rate-limit error
+    on the next stage stopped it from proceeding as a "passed" issue."""
+    filler = "This sentence continues the thought with more detail. " * 600
+    assert len(filler) > 30000
+    transcript = verified_transcript(
+        f"WHOLE ISSUE\nBy Various\n{filler}The issue closes here.\n"
+    )
+    proposal = [
+        proposed_article(
+            transcript,
+            article_id="whole-issue",
+            filename="whole-issue.txt",
+            title="New Wine February 1973 Issue",
+            author="Various",
+            source_pages=[1],
+            start_text="WHOLE ISSUE",
+            end_text="The issue closes here.",
+        )
+    ]
+    response = segmentation_response(transcript, proposal)
+    client = FakeStructuredClient(response)
+
+    with pytest.raises(ArticleReviewError, match="article_implausibly_long"):
+        segment_articles(transcript, client)
+
+
 def test_issue_coverage_verdict_quarantines_content_the_reviewer_flags_missing(
     verified_issue,
 ):
