@@ -740,3 +740,38 @@ read, matching the review document's own scope note); (4) Alex's
 implementation-approval decision, having now seen the latency, quality, token,
 and cost evidence, is the one remaining step — not yet given as of this
 entry.
+
+## Implementation decision and production activation (2026-08-27)
+
+**Decision: ACCEPT and IMPLEMENT.** Alex approved turning this on, explicitly
+choosing hardcoding over a DB flag — unlike B6-F1's `experimental_teacher_
+routing_enabled`, this candidate now affects every single answer, not a
+narrow named-teacher edge case, and Alex judged the extra flag-gating
+machinery not worth building for that shape of change.
+
+Built and shipped the same session (commit `8290849`): `produce()`/`_produce()`
+drop the `experimental_generation_effort` opt-in parameter entirely — it is no
+longer a caller-supplied override anywhere in the codebase. Both generation
+call sites (`generation.primary` and `generation.attribution_retry`) now pass
+a new module constant, `GENERATION_EFFORT = "medium"`, unconditionally. No
+caller needed to change: `answer_worker.py` never referenced the removed
+parameter. `answer_latency_benchmark.py`'s `effort_medium_v1` variant is
+retired along with the opt-in it exercised — production has nothing left to
+opt into — while `_generate_and_capture()`'s underlying `effort` parameter
+stays available as a generic, reusable knob for any future B6 candidate.
+
+New regression coverage (`test_production_generation_hardcodes_medium_effort`)
+proves `produce()` no longer accepts an effort override and that both
+generation call sites hardcode `"medium"`. Full offline suite (65 checks) and
+both live-DB integration suites that exercise `produce()` end-to-end
+(`test_single_teacher_lock.py`, `test_position_paper_fence.py`) stayed green
+against the real generation path, confirming the signature change didn't
+break any existing caller.
+
+**Deployed and confirmed live**, both Railway services: `rhemata` backend
+deployment settled to `Online` after a clean build; `answer-worker` restarted
+with a fresh container (`Starting Container` at the top of its log buffer,
+`answer_worker starting: concurrency=4 poll=1.0s fake=False` — confirming the
+real `produce()` path, not the worker's synthetic test stand-in). This closes
+the B6 latency track's `effort=medium` candidate: it is no longer a
+candidate, it is what every real answer now uses.
