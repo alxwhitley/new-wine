@@ -434,3 +434,123 @@ variant, model, timing, cost, and token fields are hidden and that every pair
 has the five-axis rubric. Human scoring is not required to reject a candidate
 that already failed the prerequisite latency gate; the packet remains available
 for targeted integrity review of the named-teacher correction.
+
+**Correction, 2026-08-26:** these three artifacts (`b6-blind-review-packet-2026-08-25.json`,
+`b6-blind-review-key-2026-08-25.json`, `b6-mechanical-comparison-2026-08-25.json`)
+were generated inside the `codex/b6-answer-latency` worktree
+(`/Users/alexwhitley/.codex/worktrees/70be/rhemata`) and live under that
+worktree's own gitignored `local/2026-08/`, not the main tree's — a session
+locating them by the main-tree path alone will find nothing there.
+
+## Blind human quality review and decision (2026-08-26)
+
+A separate session located the packet, key, and mechanical report in the
+`codex/b6-answer-latency` worktree and mechanically re-verified blindness before
+any human scoring: the only fields present on either side of a pair are
+`answer`, `citations`, `citation_count`, `retrieved_chunk_count`,
+`retrieved_point_count`, `outcome`, `verified_reference_count`, `review`,
+`notes`, `overall` — no model, cost, timing, token, variant, or policy field
+anywhere in the packet.
+
+Only the two `named_teacher_deliverance` pairs (repetitions 1 and 2) are
+relevant to this integrity review — this correction changes the named-teacher
+route only. Both pairs were presented to Alex blind, one at a time, and his
+scores were locked and saved
+(`local/2026-08/b6-blind-review-scores-2026-08-25.json`, same worktree) before
+the unblinding key was opened.
+
+**Alex's blind findings, both repetitions:** the variant that answered had no
+hard failure across theological accuracy, teacher representation, retrieval
+depth, citation/source faithfulness, or durable-job recoverability — content
+read as faithful to Derek Prince's actual teaching, and citations backed the
+claims. The variant that refused was assessed as the known pre-existing
+problem this correction exists to fix, not a new hard failure introduced by
+the comparison.
+
+**Unblinding:** r1 = `{A: teacher_specific_v1, B: baseline}`; r2 = `{A: baseline,
+B: teacher_specific_v1}`. In both repetitions, Alex's blind preference landed on
+`teacher_specific_v1` (the candidate).
+
+**Reconciliation against the mechanical report:** across the full 24-pair
+batch, baseline logged exactly 2 `refused_attribution` outcomes and both
+occurred on `named_teacher_deliverance`; candidate answered 24/24 with zero
+refusals anywhere. Candidate cost less overall ($1.348848 vs $1.395375
+baseline). This case's own latency favored baseline (34.38 s median refusal vs
+41.19 s candidate median answer) — not a like-for-like comparison and out of
+scope for this integrity review, which already excluded latency per the
+separately-failed representative gate above.
+
+**Adjacent finding, flagged not pursued:** the mechanical report's
+`known_runtime_observation` — candidate repetition 1 logged fail-safe
+JSON-parse failures on "both position-paper exclusion classifier calls" —
+points at the two `paper_fence_*` cases (baptism/tongues), not
+`named_teacher_deliverance`, since the teacher-specific gate diverts
+named-teacher questions before position-paper interception runs. Unrelated to
+this decision; recorded here for a future session, not investigated further.
+
+**Decision: ACCEPT.** Alex confirmed ACCEPT for `teacher_specific_v1` as a
+named-teacher integrity correction — no protected-axis hard failure, and more
+source-faithful than baseline for the named-teacher case. This closes the
+review step of B6-F1's smallest closure. The candidate remains opt-in/dormant
+code with no production caller; enabling it is a separate, explicitly-approved
+activation step, not authorized by this decision. No production write,
+deploy, prompt change, or paid benchmark call was made to reach this decision.
+
+## Effort candidate built (2026-08-27) — offline only, no paid call yet
+
+`teacher_specific_v1` is now closed as B6-F1 (an integrity fix, not a
+suite-wide latency win — the representative paired gate rejected it as a
+latency direction above). This session picks up the one candidate this
+document's "Read-only candidate classification" section named but never
+built or benchmarked: `output_config: {"effort": "medium"}` on the primary
+generation call, which Anthropic documents as the same model at moderate
+token/speed/cost savings, compatible with `thinking: {"type": "disabled"}`
+(unchanged, still set at every call site).
+
+Confirmed against current Anthropic documentation before writing any code
+(not assumed from training data): the installed `anthropic` SDK is `1.0.0`
+(floor-pinned `>=0.39.0` in `backend/requirements.txt`) and its
+`messages.create` accepts `output_config`; Sonnet 5 supports
+`low`/`medium`/`high`/`xhigh`/`max` effort (default `high`, equivalent to
+omitting the field) and accepts `thinking: {"type": "disabled"}`.
+
+**Built, opt-in, byte-identical default behavior:**
+
+- `producer.py::_generate_and_capture()` gained an `effort=None` parameter.
+  When `None` (every existing call site, and the default production path),
+  `output_config` is never added to the request — the exact kwargs sent to
+  `client.messages.create()` are unchanged from before this parameter
+  existed. When set, it adds `output_config={"effort": effort}` only;
+  `thinking`, `max_tokens`, `system`, and `messages` are untouched.
+- `producer.py::produce()`/`_produce()` gained
+  `experimental_generation_effort=None`, threaded to both the primary
+  generation call and the attribution-retry generation call (both use the
+  same mechanism, so both should move together under this candidate).
+- The trace stage now records `effort` (`"default"` when unset, else the
+  requested value) — this rides inside the already-hidden `trace` blind
+  field, so it needs no new entry in the fixture's `blind_fields_hidden`
+  list to stay invisible to a blind reviewer.
+- `scripts/answer_latency_benchmark.py` gained a third
+  `BENCHMARK_VARIANTS` entry, `effort_medium_v1`, wired in `run_case()` to
+  pass `experimental_generation_effort="medium"`.
+- New offline coverage in `scripts/test_answer_latency_benchmark.py` (6
+  checks, all passing): the default call omits `output_config` entirely;
+  the candidate call sets `output_config={"effort": "medium"}` while
+  leaving `thinking` untouched; the trace records the requested effort and
+  labels an unset effort `"default"`; `run_case` forwards
+  `experimental_generation_effort="medium"` for the new variant and
+  retains it in the record for blind pairing. The full existing suite
+  (65 checks total) still passes, including the untouched
+  `teacher_specific_v1` coverage. Also re-ran, unchanged and green, the two
+  other test files that exercise `producer.produce()` end-to-end against
+  the real DB (`scripts/test_single_teacher_lock.py`,
+  `scripts/test_position_paper_fence.py`) — both call the real
+  `_generate_and_capture()` with the new parameter at its default, so this
+  is direct confirmation the change is inert unless explicitly requested.
+
+**Not done, and not authorized by this entry:** no paid call, no database
+write, no deploy, no production activation. The exact prerequisite chain
+this document already used for `teacher_specific_v1` — one paid single-case
+gate first, inspect its trace and answer, only then (with separate
+approval) the full paired 12-case × 2-repetition × 2-variant benchmark —
+has not been requested yet for `effort_medium_v1`.
