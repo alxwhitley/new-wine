@@ -6,7 +6,11 @@ docs/ingestion/master_ingestion_queue_discovery.tsv.
 Alex's explicit requirement (2026-08-25): find links to blogs/material,
 review them, approve them for ingestion -- nothing else. So this page shows
 exactly two things per candidate: their name, and a link to their site.
-Two buttons, no forms:
+The controller opens one candidate site in a child tab and keeps the local
+Approve / Do Not Approve controls in the original tab. After a successful
+decision it closes the reviewed child, opens the next candidate, and updates
+the controller without a page reload. It never opens the whole backlog at
+once. Two decisions, no forms:
   Yes -- approved for ingestion. Writes a new row to the Approved Sites file
          automatically (name, attribute_to, blog_url, approved=TRUE,
          approved_at) -- nothing to type. If that name already has an
@@ -55,7 +59,11 @@ Python 3.12 (Invariant 1).
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import html
+import json
+import secrets
 import sys
 import threading
 import webbrowser
@@ -65,7 +73,7 @@ from typing import List, Optional, Tuple
 
 import uvicorn
 from fastapi import FastAPI, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -78,10 +86,23 @@ APPROVED_PATH = sheet_io.TAB_FILES[APPROVED_TAB]
 
 app = FastAPI()
 
+_MUTATION_CAPABILITY = secrets.token_urlsafe(32)
+_REVISION_SECRET = secrets.token_bytes(32)
+_DECISION_LOCK = threading.Lock()
+_VALID_ACTIONS = frozenset({"approve", "reject"})
+
 
 class StaleFileError(RuntimeError):
     """Raised when a target file changed on disk between being read and
     being written back -- see the module docstring's 2026-08-26 note."""
+
+
+class MutationCapabilityError(RuntimeError):
+    """Raised when a mutating loopback request lacks server authorization."""
+
+
+class CandidateRevisionError(RuntimeError):
+    """Raised when the candidate changed after the extension displayed it."""
 
 
 def _refuse_if_changed(path: Path, expected_mtime: float) -> None:
@@ -90,6 +111,20 @@ def _refuse_if_changed(path: Path, expected_mtime: float) -> None:
             f"'{path.name}' changed on disk while this action was in progress "
             "-- reload the page and try again so nothing gets silently overwritten."
         )
+
+
+def _require_mutation_capability(presented: str) -> None:
+    if not presented or not hmac.compare_digest(
+        str(presented), _MUTATION_CAPABILITY
+    ):
+        raise MutationCapabilityError(
+            "This review request is not authorized -- reload the local controller."
+        )
+
+
+def _validate_action(action: str) -> None:
+    if action not in _VALID_ACTIONS:
+        raise ValueError(f"Unknown review action: {action!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +177,79 @@ def next_candidate() -> Optional[Tuple[dict, str, int]]:
         return None
     row, link = queue[0]
     return row, link, len(queue)
+
+
+def _review_payload(found: Optional[Tuple[dict, str, int]]) -> dict:
+    if found is None:
+        return {"done": True, "candidate": None}
+    row, link, remaining = found
+    return {
+        "done": False,
+        "candidate": {
+            "name": row["name"],
+            "link": link,
+            "remaining": remaining,
+        },
+    }
+
+
+def _read_review_snapshot() -> tuple[
+    dict, Optional[Tuple[dict, str, int]], bytes, int, str
+]:
+    """Read one internally consistent queue snapshot and issue its token."""
+    for _attempt in range(3):
+        before_stat = DISCOVERY_PATH.stat()
+        before_bytes = DISCOVERY_PATH.read_bytes()
+        queue = build_queue(load_discovery_rows())
+        after_bytes = DISCOVERY_PATH.read_bytes()
+        after_stat = DISCOVERY_PATH.stat()
+        if (
+            before_bytes == after_bytes
+            and before_stat.st_mtime_ns == after_stat.st_mtime_ns
+        ):
+            found = None
+            if queue:
+                row, link = queue[0]
+                found = row, link, len(queue)
+            revision_material = (
+                b"discovery-review-v1\0"
+                + str(after_stat.st_mtime_ns).encode("ascii")
+                + b"\0"
+                + after_bytes
+            )
+            revision = hmac.new(
+                _REVISION_SECRET, revision_material, hashlib.sha256
+            ).hexdigest()
+            return (
+                _review_payload(found),
+                found,
+                after_bytes,
+                after_stat.st_mtime_ns,
+                revision,
+            )
+    raise StaleFileError(
+        "Discovery file changed while its review state was being read -- retry."
+    )
+
+
+def _extension_review_payload() -> dict:
+    payload, _found, _raw_bytes, _mtime_ns, revision = _read_review_snapshot()
+    return {
+        **payload,
+        "capability": _MUTATION_CAPABILITY,
+        "revision": revision,
+    }
+
+
+def _refuse_if_revision_changed(expected_bytes: bytes, expected_mtime_ns: int) -> None:
+    current_stat = DISCOVERY_PATH.stat()
+    if (
+        current_stat.st_mtime_ns != expected_mtime_ns
+        or DISCOVERY_PATH.read_bytes() != expected_bytes
+    ):
+        raise CandidateRevisionError(
+            "The review candidate changed after it was displayed -- reload before deciding."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -198,8 +306,15 @@ def _append_approved_site(rows: List[dict], headers: List[str], *, name: str, li
     rows.append(new_row)
 
 
-def approve_candidate(name: str, link: str) -> None:
+def approve_candidate(
+    name: str,
+    link: str,
+    *,
+    expected_discovery_revision: Optional[tuple[bytes, int]] = None,
+) -> None:
     discovery_mtime = DISCOVERY_PATH.stat().st_mtime
+    if expected_discovery_revision is not None:
+        _refuse_if_revision_changed(*expected_discovery_revision)
     approved_mtime = APPROVED_PATH.stat().st_mtime
     d_headers, d_rows = sheet_io.read_tab(DISCOVERY_PATH)
     d_headers = _ensure_columns(d_headers, d_rows, "reviewed_at", "review_notes")
@@ -219,13 +334,70 @@ def approve_candidate(name: str, link: str) -> None:
     sheet_io.write_tab(DISCOVERY_PATH, d_headers, d_rows)
 
 
-def reject_candidate(name: str) -> None:
+def reject_candidate(
+    name: str,
+    *,
+    expected_discovery_revision: Optional[tuple[bytes, int]] = None,
+) -> None:
     discovery_mtime = DISCOVERY_PATH.stat().st_mtime
+    if expected_discovery_revision is not None:
+        _refuse_if_revision_changed(*expected_discovery_revision)
     d_headers, d_rows = sheet_io.read_tab(DISCOVERY_PATH)
     d_headers = _ensure_columns(d_headers, d_rows, "reviewed_at", "review_notes")
     _mark_discovery_reviewed(d_rows, name, status="rejected", note="Passed on via review tool")
     _refuse_if_changed(DISCOVERY_PATH, discovery_mtime)
     sheet_io.write_tab(DISCOVERY_PATH, d_headers, d_rows)
+
+
+def decide_and_advance(action: str, name: str, link: str) -> dict:
+    """Persist one controller decision, then return the fresh next item."""
+    _validate_action(action)
+    if action == "approve":
+        approve_candidate(name, link)
+    else:
+        reject_candidate(name)
+    return current_review_payload()
+
+
+def current_review_payload() -> dict:
+    return _review_payload(next_candidate())
+
+
+def decide_current_and_advance(action: str, revision: str) -> dict:
+    _validate_action(action)
+    with _DECISION_LOCK:
+        (
+            payload,
+            found,
+            discovery_bytes,
+            discovery_mtime_ns,
+            fresh_revision,
+        ) = _read_review_snapshot()
+        if not revision or not hmac.compare_digest(str(revision), fresh_revision):
+            raise CandidateRevisionError(
+                "The review candidate changed after it was displayed -- reload before deciding."
+            )
+        if found is None:
+            return {
+                **payload,
+                "capability": _MUTATION_CAPABILITY,
+                "revision": fresh_revision,
+            }
+
+        row, link, _remaining = found
+        expected_revision = discovery_bytes, discovery_mtime_ns
+        if action == "approve":
+            approve_candidate(
+                row["name"],
+                link,
+                expected_discovery_revision=expected_revision,
+            )
+        else:
+            reject_candidate(
+                row["name"],
+                expected_discovery_revision=expected_revision,
+            )
+        return _extension_review_payload()
 
 
 # ---------------------------------------------------------------------------
@@ -247,10 +419,15 @@ _STYLE = """
   .actions { margin-top: 2.5rem; display: flex; gap: 1rem; justify-content: center; }
   button { font-size: 1.25rem; padding: 0.9rem 2.5rem; border-radius: 0.75rem;
            border: none; cursor: pointer; font-weight: 600; }
+  button:disabled { cursor: wait; opacity: 0.55; }
+  .open { background: #292524; color: white; margin-top: 1.5rem; }
+  .open:hover { background: #44403c; }
   .yes { background: #16a34a; color: white; }
   .yes:hover { background: #15803d; }
   .no { background: #e7e5e4; color: #1c1917; }
   .no:hover { background: #d6d3d1; }
+  .status { color: #57534e; min-height: 1.5rem; margin-top: 1rem; }
+  .status.error { color: #b91c1c; }
 </style>
 """
 
@@ -261,22 +438,139 @@ def _page(body: str) -> str:
 
 def _render_candidate(row: dict, link: str, remaining: int) -> str:
     name = row["name"]
+    capability_json = json.dumps(_MUTATION_CAPABILITY)
     return _page(
         f"""
-        <p class="count">{remaining} left to review</p>
-        <h1>{_esc(name)}</h1>
-        <p><a class="link" href="{_esc(link)}" target="_blank" rel="noopener">{_esc(link)}</a></p>
+        <section id="review-controller" data-name="{_esc(name)}" data-link="{_esc(link)}">
+        <p class="count"><span id="remaining">{remaining}</span> left to review</p>
+        <h1 id="candidate-name">{_esc(name)}</h1>
+        <p><a id="candidate-link" class="link" href="{_esc(link)}" target="_blank" rel="noopener">{_esc(link)}</a></p>
+        <button id="open-site" class="open" type="button">Start Review</button>
+        <p id="review-status" class="status">Open the site to begin.</p>
         <div class="actions">
-          <form method="post" action="/yes">
-            <input type="hidden" name="name" value="{_esc(name)}">
-            <input type="hidden" name="link" value="{_esc(link)}">
-            <button class="yes" type="submit">Yes</button>
-          </form>
-          <form method="post" action="/no">
-            <input type="hidden" name="name" value="{_esc(name)}">
-            <button class="no" type="submit">No</button>
-          </form>
+          <button id="approve" class="yes" type="button" disabled>Approve</button>
+          <button id="reject" class="no" type="button" disabled>Do Not Approve</button>
         </div>
+        </section>
+        <script>
+        (() => {{
+          const capability = {capability_json};
+          const controller = document.getElementById("review-controller");
+          const openButton = document.getElementById("open-site");
+          const approveButton = document.getElementById("approve");
+          const rejectButton = document.getElementById("reject");
+          const status = document.getElementById("review-status");
+          let siteWindow = null;
+
+          const current = () => ({{
+            name: controller.dataset.name,
+            link: controller.dataset.link,
+          }});
+
+          const setBusy = (busy) => {{
+            openButton.disabled = busy;
+            approveButton.disabled = busy;
+            rejectButton.disabled = busy;
+          }};
+
+          const setStatus = (message, isError = false) => {{
+            status.textContent = message;
+            status.classList.toggle("error", isError);
+          }};
+
+          const openBlankChild = (windowName) => {{
+            const child = window.open("about:blank", windowName);
+            if (child) child.opener = null;
+            return child;
+          }};
+
+          const navigateChild = (child, url) => {{
+            child.location.replace(url);
+            child.focus();
+          }};
+
+          const openCurrentSite = () => {{
+            const child = openBlankChild("rhemata-review-site");
+            if (!child) {{
+              setStatus("The website tab was blocked. Allow popups for 127.0.0.1, then try again.", true);
+              return;
+            }}
+            siteWindow = child;
+            navigateChild(siteWindow, current().link);
+            openButton.textContent = "Reopen Site";
+            approveButton.disabled = false;
+            rejectButton.disabled = false;
+            setStatus("Review the website, then choose a decision here.");
+          }};
+
+          const renderNext = (candidate) => {{
+            controller.dataset.name = candidate.name;
+            controller.dataset.link = candidate.link;
+            document.getElementById("candidate-name").textContent = candidate.name;
+            const link = document.getElementById("candidate-link");
+            link.href = candidate.link;
+            link.textContent = candidate.link;
+            document.getElementById("remaining").textContent = candidate.remaining;
+            openButton.textContent = "Reopen Site";
+          }};
+
+          const renderDone = () => {{
+            controller.innerHTML = `<h1>You're all caught up.</h1><p class="count">Nothing left to review right now.</p>`;
+          }};
+
+          const decide = async (action) => {{
+            // Reserve the successor tab during this click. Waiting until the
+            // network response returns would let popup blockers reject it.
+            const nextWindow = openBlankChild("rhemata-review-next");
+            if (!nextWindow) {{
+              setStatus("The next website tab was blocked. Allow popups before saving this decision.", true);
+              return;
+            }}
+
+            const reviewed = current();
+            setBusy(true);
+            setStatus("Saving decision…");
+            try {{
+              const body = new URLSearchParams({{
+                action,
+                name: reviewed.name,
+                link: reviewed.link,
+                capability,
+              }});
+              const response = await fetch("/decision", {{
+                method: "POST",
+                headers: {{"Content-Type": "application/x-www-form-urlencoded"}},
+                body,
+              }});
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || "The decision could not be saved.");
+
+              if (siteWindow && !siteWindow.closed) siteWindow.close();
+              if (result.done) {{
+                nextWindow.close();
+                siteWindow = null;
+                renderDone();
+                return;
+              }}
+
+              renderNext(result.candidate);
+              nextWindow.name = "rhemata-review-site";
+              siteWindow = nextWindow;
+              navigateChild(siteWindow, result.candidate.link);
+              setBusy(false);
+              setStatus("Decision saved. Review the next website.");
+            }} catch (error) {{
+              nextWindow.close();
+              setBusy(false);
+              setStatus(error.message || "The decision could not be saved.", true);
+            }}
+          }};
+
+          openButton.addEventListener("click", openCurrentSite);
+          approveButton.addEventListener("click", () => decide("approve"));
+          rejectButton.addEventListener("click", () => decide("reject"));
+        }})();
+        </script>
         """
     )
 
@@ -302,21 +596,78 @@ def index() -> HTMLResponse:
 
 
 @app.post("/yes")
-def yes(name: str = Form(...), link: str = Form(...)):
+def yes(
+    name: str = Form(...),
+    link: str = Form(...),
+    capability: str = Form(""),
+):
     try:
+        _require_mutation_capability(capability)
         approve_candidate(name, link)
+    except MutationCapabilityError as exc:
+        return HTMLResponse(_render_error(str(exc)), status_code=403)
     except RuntimeError as exc:
         return HTMLResponse(_render_error(str(exc)), status_code=409)
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/no")
-def no(name: str = Form(...)):
+def no(name: str = Form(...), capability: str = Form("")):
     try:
+        _require_mutation_capability(capability)
         reject_candidate(name)
+    except MutationCapabilityError as exc:
+        return HTMLResponse(_render_error(str(exc)), status_code=403)
     except RuntimeError as exc:
         return HTMLResponse(_render_error(str(exc)), status_code=409)
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/decision", response_class=JSONResponse)
+def decision(
+    action: str = Form(...),
+    name: str = Form(...),
+    link: str = Form(""),
+    capability: str = Form(""),
+) -> JSONResponse:
+    try:
+        _require_mutation_capability(capability)
+        result = decide_and_advance(action, name, link)
+    except MutationCapabilityError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=403)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    except RuntimeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=409)
+    return JSONResponse(result)
+
+
+@app.get("/api/review/current", response_class=JSONResponse)
+def api_review_current() -> JSONResponse:
+    return JSONResponse(_extension_review_payload())
+
+
+@app.post("/api/review/start", response_class=JSONResponse)
+def api_review_start() -> JSONResponse:
+    return JSONResponse(_extension_review_payload())
+
+
+@app.post("/api/review/decision", response_class=JSONResponse)
+def api_review_decision(
+    action: str = Form(...),
+    capability: str = Form(""),
+    revision: str = Form(""),
+) -> JSONResponse:
+    try:
+        _require_mutation_capability(capability)
+        result = decide_current_and_advance(action, revision)
+    except MutationCapabilityError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=403)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    except RuntimeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=409)
+    return JSONResponse(result)
 
 
 # ---------------------------------------------------------------------------

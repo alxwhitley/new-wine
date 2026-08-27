@@ -9,11 +9,16 @@ Run: python3.12 scripts/test_review_discovery_candidates.py
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import sys
 import tempfile
+from unittest.mock import patch
 from pathlib import Path
+
+from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -213,6 +218,381 @@ finally:
     tool.DISCOVERY_PATH = _original_discovery_path
     tool.APPROVED_PATH = _original_approved_path
     shutil.rmtree(_discovery_path.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# decide_and_advance -- controller-facing operation. A successful decision
+# must persist through the real TSV write path and return the next candidate
+# in one response, so the browser can close the reviewed site and navigate
+# its reserved successor tab without a page reload or popup-blocked open.
+# ---------------------------------------------------------------------------
+_decision_discovery_path, _decision_approved_path = _build_test_files(
+    [
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "First", "claimed_main_url": "https://first.example.com"},
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "Second", "claimed_main_url": "https://second.example.com"},
+    ]
+)
+try:
+    tool.DISCOVERY_PATH = _decision_discovery_path
+    tool.APPROVED_PATH = _decision_approved_path
+
+    after_approve = tool.decide_and_advance(
+        "approve", "First", "https://first.example.com"
+    )
+    check(
+        "approve-and-advance returns the next candidate",
+        after_approve == {
+            "done": False,
+            "candidate": {
+                "name": "Second",
+                "link": "https://second.example.com",
+                "remaining": 1,
+            },
+        },
+    )
+    _, decision_approved_rows = sheet_io.read_tab(tool.APPROVED_PATH)
+    check(
+        "approve-and-advance persists the approval before returning",
+        [row["name"] for row in decision_approved_rows] == ["First"],
+    )
+
+    after_reject = tool.decide_and_advance(
+        "reject", "Second", "https://second.example.com"
+    )
+    check(
+        "reject-and-advance returns the terminal state",
+        after_reject == {"done": True, "candidate": None},
+    )
+    _, decision_discovery_rows = sheet_io.read_tab(tool.DISCOVERY_PATH)
+    second_decision_row = next(
+        row for row in decision_discovery_rows if row["name"] == "Second"
+    )
+    check(
+        "reject-and-advance persists rejection before returning",
+        second_decision_row["verification_status"] == "rejected",
+    )
+
+    try:
+        tool.decide_and_advance("skip", "Second", "https://second.example.com")
+        check("unknown controller decision is rejected", False)
+    except ValueError:
+        check("unknown controller decision is rejected", True)
+finally:
+    tool.DISCOVERY_PATH = _original_discovery_path
+    tool.APPROVED_PATH = _original_approved_path
+    shutil.rmtree(_decision_discovery_path.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Controller HTTP contract -- the real local app must expose a JSON decision
+# endpoint so browser JavaScript can save and advance without a page reload.
+# ---------------------------------------------------------------------------
+_http_discovery_path, _http_approved_path = _build_test_files(
+    [
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "HTTP First", "claimed_main_url": "https://http-first.example.com"},
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "HTTP Second", "claimed_main_url": "https://http-second.example.com"},
+    ]
+)
+try:
+    tool.DISCOVERY_PATH = _http_discovery_path
+    tool.APPROVED_PATH = _http_approved_path
+    client = TestClient(tool.app)
+    landing = client.get("/")
+    check("controller landing page succeeds", landing.status_code == 200)
+    check(
+        "controller exposes an explicit site-tab opener",
+        'id="open-site"' in landing.text,
+    )
+    check(
+        "controller exposes approve and reject decision controls",
+        'id="approve"' in landing.text and 'id="reject"' in landing.text,
+    )
+    check(
+        "controller exposes a visible tab-lifecycle status",
+        'id="review-status"' in landing.text,
+    )
+    capability_match = re.search(
+        r"const capability = (\"(?:[^\"\\]|\\.)*\");",
+        landing.text,
+    )
+    controller_capability = (
+        json.loads(capability_match.group(1)) if capability_match else "missing"
+    )
+    check(
+        "controller receives an unguessable mutation capability in local HTML",
+        capability_match is not None and len(controller_capability) >= 32,
+    )
+    response = client.post(
+        "/decision",
+        data={
+            "action": "approve",
+            "name": "HTTP First",
+            "link": "https://http-first.example.com",
+            "capability": controller_capability,
+        },
+    )
+    check("controller decision endpoint succeeds", response.status_code == 200)
+    check(
+        "controller decision endpoint returns the fresh next candidate",
+        response.json() == {
+            "done": False,
+            "candidate": {
+                "name": "HTTP Second",
+                "link": "https://http-second.example.com",
+                "remaining": 1,
+            },
+        },
+    )
+finally:
+    tool.DISCOVERY_PATH = _original_discovery_path
+    tool.APPROVED_PATH = _original_approved_path
+    shutil.rmtree(_http_discovery_path.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Extension API -- the extension must receive its candidate identity from the
+# server, so a stale or spoofed browser payload can never decide another row.
+# ---------------------------------------------------------------------------
+_api_discovery_path, _api_approved_path = _build_test_files(
+    [
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "API First", "claimed_main_url": "https://api-first.example.com"},
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "API Second", "claimed_main_url": "https://api-second.example.com"},
+    ]
+)
+try:
+    tool.DISCOVERY_PATH = _api_discovery_path
+    tool.APPROVED_PATH = _api_approved_path
+    client = TestClient(tool.app)
+
+    api_current = client.get("/api/review/current")
+    current_payload = api_current.json()
+    check(
+        "extension current endpoint returns the first fresh candidate",
+        api_current.status_code == 200
+        and current_payload.get("done") is False
+        and current_payload.get("candidate") == {
+            "name": "API First",
+            "link": "https://api-first.example.com",
+            "remaining": 2,
+        }
+        and set(current_payload) == {
+            "done", "candidate", "capability", "revision",
+        }
+        and isinstance(current_payload.get("capability"), str)
+        and len(current_payload.get("capability", "")) >= 32
+        and isinstance(current_payload.get("revision"), str)
+        and len(current_payload.get("revision", "")) >= 32,
+    )
+
+    before_start_discovery = tool.DISCOVERY_PATH.read_bytes()
+    before_start_approved = tool.APPROVED_PATH.read_bytes()
+    api_start = client.post("/api/review/start")
+    start_payload = api_start.json()
+    check(
+        "extension start is read-only and returns the same candidate",
+        api_start.status_code == 200
+        and start_payload == current_payload
+        and tool.DISCOVERY_PATH.read_bytes() == before_start_discovery
+        and tool.APPROVED_PATH.read_bytes() == before_start_approved,
+    )
+
+    spoofed_approve = client.post(
+        "/api/review/decision",
+        data={
+            "action": "approve",
+            "capability": start_payload.get("capability", "missing"),
+            "revision": start_payload.get("revision", "missing"),
+            "name": "API Second",
+            "link": "https://api-second.example.com",
+        },
+    )
+    check(
+        "extension decision ignores caller candidate identity and advances",
+        spoofed_approve.status_code == 200
+        and spoofed_approve.json()["candidate"]["name"] == "API Second",
+    )
+    _, approved_rows = sheet_io.read_tab(tool.APPROVED_PATH)
+    check(
+        "extension approval persists the server-selected first candidate",
+        [row["name"] for row in approved_rows] == ["API First"],
+    )
+
+    api_done = client.post(
+        "/api/review/decision",
+        data={
+            "action": "reject",
+            "capability": spoofed_approve.json().get("capability", "missing"),
+            "revision": spoofed_approve.json().get("revision", "missing"),
+        },
+    )
+    check(
+        "extension final decision returns terminal state",
+        api_done.status_code == 200
+        and api_done.json().get("done") is True
+        and api_done.json().get("candidate") is None
+        and set(api_done.json()) == {
+            "done", "candidate", "capability", "revision",
+        }
+        and isinstance(api_done.json().get("revision"), str),
+    )
+finally:
+    tool.DISCOVERY_PATH = _original_discovery_path
+    tool.APPROVED_PATH = _original_approved_path
+    shutil.rmtree(_api_discovery_path.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Every fallback/extension mutation route requires the unguessable capability.
+# A cross-origin form/fetch can reach loopback, so loopback binding alone is
+# not authorization. Missing and guessed values must fail before any TSV byte
+# changes.
+# ---------------------------------------------------------------------------
+for route, base_data in (
+    ("/yes", {"name": "Guarded", "link": "https://guarded.example.com"}),
+    ("/no", {"name": "Guarded"}),
+    (
+        "/decision",
+        {
+            "action": "approve",
+            "name": "Guarded",
+            "link": "https://guarded.example.com",
+        },
+    ),
+    (
+        "/api/review/decision",
+        {"action": "approve", "revision": "guessed-revision"},
+    ),
+):
+    for capability_label, capability_data in (
+        ("missing", {}),
+        ("wrong", {"capability": "guessed-capability"}),
+    ):
+        guarded_discovery, guarded_approved = _build_test_files(
+            [
+                {
+                    "verification_status": "unverified",
+                    "already_in_corpus": False,
+                    "name": "Guarded",
+                    "claimed_main_url": "https://guarded.example.com",
+                },
+            ]
+        )
+        try:
+            tool.DISCOVERY_PATH = guarded_discovery
+            tool.APPROVED_PATH = guarded_approved
+            client = TestClient(tool.app)
+            before_discovery = guarded_discovery.read_bytes()
+            before_approved = guarded_approved.read_bytes()
+            denied = client.post(route, data={**base_data, **capability_data})
+            check(
+                f"{route} rejects {capability_label} mutation capability",
+                denied.status_code == 403,
+            )
+            check(
+                f"{route} {capability_label} capability refusal changes no TSV bytes",
+                guarded_discovery.read_bytes() == before_discovery
+                and guarded_approved.read_bytes() == before_approved,
+            )
+        finally:
+            tool.DISCOVERY_PATH = _original_discovery_path
+            tool.APPROVED_PATH = _original_approved_path
+            shutil.rmtree(guarded_discovery.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# The extension decision is bound to the exact server-issued queue revision.
+# If the first eligible row changes after GET/START, the old decision gets a
+# 409 and both files remain byte-identical to their post-mutation state.
+# ---------------------------------------------------------------------------
+_revision_discovery_path, _revision_approved_path = _build_test_files(
+    [
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "Revision A", "claimed_main_url": "https://revision-a.example.com"},
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "Revision B", "claimed_main_url": "https://revision-b.example.com"},
+    ]
+)
+try:
+    tool.DISCOVERY_PATH = _revision_discovery_path
+    tool.APPROVED_PATH = _revision_approved_path
+    client = TestClient(tool.app)
+    issued = client.post("/api/review/start").json()
+
+    revision_headers, revision_rows = sheet_io.read_tab(tool.DISCOVERY_PATH)
+    revision_rows[0]["verification_status"] = "verified"
+    sheet_io.write_tab(tool.DISCOVERY_PATH, revision_headers, revision_rows)
+    after_mutation_discovery = tool.DISCOVERY_PATH.read_bytes()
+    after_mutation_approved = tool.APPROVED_PATH.read_bytes()
+
+    conflicted = client.post(
+        "/api/review/decision",
+        data={
+            "action": "approve",
+            "capability": issued.get("capability", "missing"),
+            "revision": issued.get("revision", "missing"),
+        },
+    )
+    check(
+        "extension refuses a decision when the issued candidate revision changed",
+        conflicted.status_code == 409,
+    )
+    check(
+        "candidate revision conflict leaves both TSV files byte-identical",
+        tool.DISCOVERY_PATH.read_bytes() == after_mutation_discovery
+        and tool.APPROVED_PATH.read_bytes() == after_mutation_approved,
+    )
+finally:
+    tool.DISCOVERY_PATH = _original_discovery_path
+    tool.APPROVED_PATH = _original_approved_path
+    shutil.rmtree(_revision_discovery_path.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Invalid actions are validated before the terminal/empty-queue return.
+# ---------------------------------------------------------------------------
+_invalid_discovery_path, _invalid_approved_path = _build_test_files([])
+try:
+    tool.DISCOVERY_PATH = _invalid_discovery_path
+    tool.APPROVED_PATH = _invalid_approved_path
+    client = TestClient(tool.app)
+    issued = client.post("/api/review/start").json()
+    before_discovery = tool.DISCOVERY_PATH.read_bytes()
+    before_approved = tool.APPROVED_PATH.read_bytes()
+    invalid = client.post(
+        "/api/review/decision",
+        data={
+            "action": "skip",
+            "capability": issued.get("capability", "missing"),
+            "revision": issued.get("revision", "missing"),
+        },
+    )
+    check("empty-queue extension request still rejects unknown action", invalid.status_code == 400)
+    check(
+        "unknown empty-queue action changes no TSV bytes",
+        tool.DISCOVERY_PATH.read_bytes() == before_discovery
+        and tool.APPROVED_PATH.read_bytes() == before_approved,
+    )
+
+    with patch.object(
+        tool,
+        "decide_current_and_advance",
+        side_effect=tool.StaleFileError("Discovery file changed"),
+    ):
+        stale = client.post(
+            "/api/review/decision",
+            data={
+                "action": "approve",
+                "capability": issued.get("capability", "missing"),
+                "revision": issued.get("revision", "missing"),
+            },
+        )
+    check(
+        "extension stale-file refusal is a retryable conflict",
+        stale.status_code == 409
+        and stale.json() == {"error": "Discovery file changed"},
+    )
+finally:
+    tool.DISCOVERY_PATH = _original_discovery_path
+    tool.APPROVED_PATH = _original_approved_path
+    shutil.rmtree(_invalid_discovery_path.parent, ignore_errors=True)
 
 
 print(f"\n{len(_checks) - len(_failures)}/{len(_checks)} checks passed")

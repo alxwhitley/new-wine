@@ -1111,6 +1111,28 @@ different row, per the hard rule above.
   (manual-review provenance, separate from `claimed_*`/`agent_verified_*`)
   and `auto_link_check`/`auto_link_check_at` columns to Discovery.
 
+**2026-08-27: local in-page Discovery review extension.**
+`tools/discovery-review-extension/` is an unpacked Manifest V3 extension that
+requests content-script access on HTTP/HTTPS pages so it can show a bottom
+Approve / Do Not Approve bar, but displays that bar only in the one tab that
+started a local review session. The toolbar uses a closed Shadow DOM and
+accepts decisions only from trusted browser events. Its service worker can call
+only the fixed `http://127.0.0.1:8765/api/review/*` contract. Every mutating
+fallback or extension route requires an unguessable capability generated once
+per server process; the fallback controller receives it only in its local
+rendered page, while the extension capability and opaque candidate-revision
+token remain only in `chrome.storage.session` and are stripped before any
+response reaches the content script. The server binds that revision to the
+fresh Discovery TSV bytes/mtime, re-reads it at decision time, and returns 409
+with no write when the displayed candidate state changed. Successful extension
+payloads are exact-schema validated and only absolute HTTP(S) candidate URLs
+may render or navigate. Decisions reuse `review_discovery_candidates.py` and
+`ingestion_sheet_io.py` to update only the Discovery and Approved Sites TSVs.
+The extension has no database or ingestion authority. A new successful start
+deactivates the prior tab through `tabs.sendMessage()` without requesting the
+`tabs` manifest permission. The fallback remains
+`python3.12 scripts/review_discovery_candidates.py` and its local controller.
+
 - **Quote selection on the async answer path is now contained behind an
   explicit, default-off flag — shipped 2026-08-18 (PLAN.md W1, same PR as the
   Invariant 16 widening above), because the quote rail has a live, systemic
