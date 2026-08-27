@@ -8,9 +8,8 @@ table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-27. **PLAN.md has zero active blockers.** This session
-fixed a UI regression, committed a stray migration, and did substantial New
-Wine A2 pipeline work (below) — see docs/roadmap.md's A2 entry for the
-roadmap-level pointer.
+shipped and locally merged the hardened in-page Discovery review extension.
+New Wine A2 remains the next scheduled corpus thread; see docs/roadmap.md.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -19,65 +18,44 @@ for this file.
 
 ## Current state
 
-**Chat input focus ring — DONE, live (commit `a26d1f6`).** Removed the
-mouse-focus ring on the prompt capsule (a prior session's uncommitted fix);
-verified live in the running dev server before pushing.
+**Discovery review extension — DONE, merged locally to `main` (merge
+`daead27`).** `tools/discovery-review-extension/` is an unpacked Chrome MV3
+extension that puts Approve / Do Not Approve controls on the active candidate
+site and advances that same tab after a saved decision. The local FastAPI
+server remains the sole TSV writer and chooses candidate identity from a fresh
+queue read. Mutations require a process-random capability; extension decisions
+also carry a worker-only opaque queue revision so a changed queue returns 409
+instead of applying the click to another candidate. The toolbar uses a closed
+Shadow DOM, accepts trusted browser clicks only, validates response shape and
+HTTP(S) navigation, and deactivates an older review tab after a new start.
+It has no database, crawler, ingestion-worker, or production-host authority.
 
-**Migration 091 + B6-F1 routing-flag scripts — committed (commit `2e6bde1`).**
-Already live in production from a prior session; only the repo record was
-missing. No new DB write — brings the repo in sync with already-applied state.
+**Verification:** Python review tests 80/80, TSV tests 79/79, blog-link tests
+24/24, Node extension tests 31/31, plus a headed Chromium proof covering the
+normal two-candidate flow and hostile synthetic clicks, four cross-origin
+mutation attempts, queue-change conflicts with byte preservation, malformed
+and non-HTTP payload refusal, inactive-tab isolation, old-tab deactivation,
+same-tab navigation, and terminal state. Real ingestion TSV hashes were
+preserved; no production database or ingestion operation ran.
 
-**New Wine A2 — substantial progress, Issue 02-1973 still not cleared
-end-to-end.** Root-caused and fixed the original defect (segmentation
-silently stopped 54% through the 32-page issue at low reasoning, no error),
-then found and fixed five further defects through live validation the same
-day, each unit-tested before moving on (9 commits, `37e2746`..`683b973`,
-213/214 tests passing — the one failure is a pre-existing, unrelated
-PyMuPDF/venv environment quirk, confirmed via `git stash` to predate this
-session):
-- Deterministic full-coverage check (`article_coverage_incomplete`) — the
-  original fix.
-- `non_article_spans`: non-article content now has an explicit home instead
-  of becoming a silent gap.
-- Three rounds of size/fraction caps, each closing a gaming pattern the
-  model found live in direct response to the previous fix: dumping real
-  articles into oversized `other_non_article` spans, then oversized NAMED
-  categories, then spread across many spans under the per-span cap
-  (closed with an aggregate 40%-of-issue cap) — then, most seriously, one
-  giant article covering the whole issue, which slipped past the semantic
-  reviewer too (`_MAX_ARTICLE_CHARS` closes this).
-- Reasoning raised low→medium→high; instructions strengthened to require
-  fine-grained decomposition, not just full coverage.
-- `letters_to_editor` category added + `other_non_article` cap widened
-  2,000→2,500, found via a direct diagnostic call (bypassing the CLI,
-  reusing the cached OCR transcript) that showed an otherwise-correct
-  11-article segmentation being rejected only for two legitimate spans with
-  nowhere good to go.
-- Per-page OCR result cache (`local/magazine_review_ocr_page_cache.json`,
-  gitignored) — pure efficiency, no safety-rule change. All 32 pages of
-  this issue are now cached; a retry costs $0 in OCR.
+**Discovery queue snapshot (read-only, 2026-08-27):** 118 candidates total:
+111 unverified and 7 rejected. Approved Sites has 18 rows, with 1 currently
+marked `approved=TRUE`. Alex's modified Discovery TSV remains intentionally
+uncommitted. Run instructions are in
+`tools/discovery-review-extension/README.md`.
 
-**21 live attempts run today** against the real Issue 02-1973 PDF. 14
-reached real segmentation output; the rest failed earlier on OCR content,
-provider rate limits, empty/refused model output, or connection errors —
-infra noise, not a code gap. Confirmed cost from decision files that
-recorded it: **$0.87** — a known floor, not the true total: the pipeline
-doesn't record cost from a call that raised after being billed, so real
-spend is likely closer to $1.2–1.5. Of the $3 validation headroom Alex set
-this session, this is well within budget.
+**Merge preservation:** the prior two-script controller edits were saved in a
+recoverable stash before the merge because `main` had advanced independently;
+their completed implementation is present in the merge. The feature branch
+and worktree remain intact because repository policy requires separate,
+explicit approval before deleting anything under `~/rhemata/`.
 
-**Not yet resolved:** `non_article_span_implausibly_large` is still firing
-on most recent attempts (6 of the last 8 that reached segmentation, v14
-onward) even after the `letters_to_editor`/cap-widening fix. Unlike the
-`article_implausibly_long` recurrence earlier (fully resolved by the
-reasoning bump + instruction fix), this one hasn't yet had its own
-diagnostic pass post-fix — v20/v21's exact offending spans are unknown (no
-manifest persists when `segment_articles()` rejects). Next session should
-run the same diagnostic method used for the `letters_to_editor` fix (a
-standalone segmentation-only call reusing the cached transcript, no CLI, no
-new OCR cost — see the script pattern in commit `683b973`'s message) before
-assuming these are all false positives worth loosening a cap for; some may
-be genuine catches.
+**New Wine A2 — still scheduled and not cleared end-to-end.** The existing
+pipeline corrections remain as recorded in `docs/roadmap.md`. Issue 02-1973
+still needs a standalone segmentation-only diagnosis of the recurring
+`non_article_span_implausibly_large` refusal using the cached transcript before
+more blind CLI retries. Production database ingest remains a separate,
+attended, explicitly approved operation.
 
 **Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
 
@@ -91,6 +69,10 @@ be genuine catches.
   the article gate yet. Production database ingest for this or any New
   Wine issue remains a separate, attended, explicitly approved operation
   regardless of how clean a review run gets.
+- **Parked:** the extension's JavaScript success validator treats a
+  32-character whitespace capability/revision as syntactically long enough.
+  The Python server still rejects it before mutation, so this is a diagnostic
+  contract mismatch, not an authorization bypass.
 - **Triggered**: JWKS unknown-`kid` rate limit — residual belongs at the
   edge.
 - Carried, not re-checked this session: `scripts/test_metering.py` writes
