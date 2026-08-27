@@ -8,10 +8,11 @@ table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-27. **PLAN.md has zero active blockers.** New Wine A2
-is the live critical-path thread (concurrent session, still open — see
-below). This session built and independently verified a full search-
-analytics/corpus-gap dashboard in an isolated, unmerged worktree; it does
-not touch the critical path and is not live anywhere.
+is the live critical-path thread, still open — this session landed a third
+fix (see below) but the issue still hasn't cleared the article gate
+end-to-end. A prior session this same day built and independently verified a
+full search-analytics/corpus-gap dashboard in an isolated, unmerged worktree;
+it does not touch the critical path and is not live anywhere.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -59,17 +60,29 @@ queue snapshot (2026-08-27): 118 candidates (111 unverified, 7 rejected);
 Approved Sites 18 rows, 1 `approved=TRUE`. Alex's modified Discovery TSV
 remains intentionally uncommitted.
 
-**New Wine A2 — two real fixes shipped and live-validated (`d011fac`,
-`ae37d3b`); Issue 02-1973 still hasn't cleared the article gate end-to-
-end.** `non_article_span_implausibly_large` was traced to two articles
-("Keeping the Unity," "New Wine Forum") being consistently misfiled as
-non-article material — fixed via explicit instruction wording. A separate
-`article_spans_overlap` false-positive was root-caused to an unsorted
-comparison order and fixed to match the coverage check's existing pattern.
-Neither fix closes the underlying recurrence: post-fix runs still hit a
-fresh `non_article_span_implausibly_large`, an inconsistent semantic-
-reviewer stage, and one new confirmed risk (a passing review once approved
-an ad-bleed span, "Spiritual Potpourri," uncaught by any check). Full
+**New Wine A2 — three real fixes shipped and live-validated (`d011fac`,
+`ae37d3b`, `3bc8780`); Issue 02-1973 still hasn't cleared the article gate
+end-to-end.** `non_article_span_implausibly_large` was traced to two
+articles ("Keeping the Unity," "New Wine Forum") being consistently
+misfiled as non-article material — fixed via explicit instruction wording.
+A separate `article_spans_overlap` false-positive was root-caused to an
+unsorted comparison order and fixed. This session root-caused the
+"Spiritual Potpourri ad-bleed" finding: it was never ads (that was an
+unverified guess) — direct transcript inspection showed a genuine content
+misattribution, "keeping_the_unity"'s title and content bled into
+"spiritual_potpourri"'s span. Confirmed the semantic reviewer is
+non-deterministic on identical input (4 live calls, 4 different outcomes,
+caught the bug only once). Fixed with a new deterministic check
+(`segment_articles()` now rejects a span opening with another article's own
+title) — calibrated against every known-good manifest on hand, zero false
+positives, confirmed a second independent live occurrence in `retry_13`
+(2026-08-25). Still open: the reviewer's own non-determinism itself is
+unaddressed (this fix preempts one defect class before the reviewer sees
+it, but doesn't fix the reviewer); the literal
+`article_failure_reasons_invalid` schema-mismatch string was never
+reproduced in 4 tries, though the same underlying flip-flopping was, every
+time. No live full-CLI attempt was run against the fix — Alex chose to
+close the session here rather than spend more API cost this pass. Full
 detail: CLAUDE.md's New Wine landmine entry. No database write occurred.
 
 **Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
@@ -88,13 +101,14 @@ detail: CLAUDE.md's New Wine landmine entry. No database write occurred.
   rather than clean them up.
 - **Scheduled**: quote accuracy/relevance repair before any attended
   re-enable.
-- **Scheduled A2:** see Current state above — two fixes shipped, but Issue
-  02-1973 still isn't through the article gate. Next: diagnose the
-  reviewer-stage `article_failure_reasons_invalid` inconsistency and the
-  Spiritual-Potpourri ad-bleed risk directly, same no-CLI method. Production
-  database ingest for this or any New Wine issue remains a separate,
-  attended, explicitly approved operation regardless of how clean a review
-  run gets.
+- **Scheduled A2:** see Current state above — three fixes shipped, but Issue
+  02-1973 still isn't through the article gate. Next: a live full-CLI
+  attempt against the fixed code to see how far it now gets, then continue
+  diagnosing the reviewer's own non-determinism directly (same no-CLI/replay
+  method — `local/2026-08/diagnose_a2_review_replay.py`, gitignored, pins
+  segmentation and hits only the live review call). Production database
+  ingest for this or any New Wine issue remains a separate, attended,
+  explicitly approved operation regardless of how clean a review run gets.
 - **Parked:** the extension's JavaScript success validator treats a
   32-character whitespace capability/revision as syntactically long enough.
   The Python server still rejects it before mutation, so this is a diagnostic
@@ -117,12 +131,13 @@ detail: CLAUDE.md's New Wine landmine entry. No database write occurred.
 ## Next single item
 
 **No active blocker.** New Wine A2 remains the live critical-path thread:
-diagnose the semantic-reviewer stage's `article_failure_reasons_invalid`
-inconsistency and the Spiritual-Potpourri ad-bleed risk directly (cheap —
-OCR is fully cached), the same standalone no-CLI method used this session,
-before running more blind CLI retries. Real database ingest for this or any
-New Wine issue remains a separate, attended, explicitly approved operation
-regardless of how clean a review run gets.
+run a live full-CLI attempt against the now-fixed code (`3bc8780`) to see
+current state, then keep diagnosing the semantic reviewer's own
+non-determinism (confirmed, not yet fixed) with the same cheap replay
+method — OCR and now segmentation-for-this-input are both cached/pinned, so
+only the review call itself costs anything. Real database ingest for this
+or any New Wine issue remains a separate, attended, explicitly approved
+operation regardless of how clean a review run gets.
 
 Separately, not competing for the critical-path slot: Alex has a
 repo-complete, verified search-analytics dashboard waiting for a merge/

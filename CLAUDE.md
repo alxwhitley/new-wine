@@ -1041,15 +1041,35 @@ different row, per the hard rule above.
   gap — a future session should not expect a single instruction or cap
   change to close it.
 
-  **New, unresolved: a passing review can still approve ads bundled into an
-  article.** The one clean `status=passed` run approved "Spiritual
-  Potpourri," a 27,165-char span merging the real Forum Q&A content with
-  what appear to be separate advertisements under one invented title —
-  under `_MAX_ARTICLE_CHARS`, and the reviewer did not flag
-  `adjacent_bleed`. Nothing in the pipeline catches this today; do not
-  trust a "passed" issue decision from this pipeline without checking the
-  actual article boundaries. Full trail: `rhemata-status.md`'s 2026-08-27
-  entry, commits `37e2746`..`683b973`, `d011fac`, `ae37d3b`.
+  **CORRECTED, later the same day (commit `3bc8780`) — the "Spiritual
+  Potpourri" span was never ads; that was an unverified guess, corrected
+  here rather than left standing.** Direct inspection of the raw OCR
+  transcript found the article labeled "spiritual_potpourri" (27,165
+  chars, under `_MAX_ARTICLE_CHARS`, reviewer said `adjacent_bleed=[]`)
+  opened at `transcript_start+0` with the literal title and reprint
+  credit of a DIFFERENT real article, "keeping_the_unity" — whose own
+  labeled span had in turn absorbed the tail of the article before it
+  ("The Apostle - God's Master Builder"). A genuine content
+  misattribution, not ad-bundling. Diagnosed by pinning segmentation to a
+  fixed captured output and calling the review stage live 4 times against
+  byte-identical input: caught once (mislabeled "duplications"), missed 3
+  times (clean pass twice, an unrelated article flagged once) — the
+  reviewer is confirmed non-deterministic on identical input, not a
+  reliable backstop for this defect class. A second, independent live
+  occurrence in `retry_13` (2026-08-25) confirmed the pattern recurs: an
+  874-char "Tapes by Don Basham" article opens with "The Call of Love"'s
+  title and first line. **Fixed**: `segment_articles()` now rejects a
+  span whose first 200 chars (clamped to its own end) contain another
+  article's own title as normalized text — zero false positives against
+  every known-good manifest on hand (v3, v5, v6, retry_13's other 15
+  articles), catches both real occurrences via the real code path. This
+  narrows the "several distinct failure shapes" list two paragraphs above
+  by one; the reviewer's own non-determinism (the
+  `article_failure_reasons_invalid`-class inconsistency) is unresolved —
+  the literal error string was not reproduced in these 4 tries, but the
+  underlying flip-flopping was, repeatedly, on the same input. Full
+  trail: `rhemata-status.md`'s 2026-08-27 entry, commits
+  `37e2746`..`683b973`, `d011fac`, `ae37d3b`, `3bc8780`.
 - **A tracked master spreadsheet for ingestion candidates now exists —
   separate from, and layered on top of, `source_ingest_queue` (Invariant
   16), not a replacement for it.** Built 2026-08-19 as a single `.xlsx`
