@@ -692,6 +692,22 @@ shape as the `teacher_specific_v1` packet: each side of a pair carries only
 model, trace, cost, or token field anywhere, mechanically confirmed by
 scanning the packet text for every `blind_fields_hidden` key. The A/B
 assignment is randomized once per repetition (not per pair), matching the
-documented `teacher_specific_v1` key shape. Full 24-pair human review has not
-run yet — that is Alex's own time, not something built or simulated this
-session.
+documented `teacher_specific_v1` key shape.
+
+**Scope decision (Alex, 2026-08-27): a full 24-pair human review is not
+required.** Asked directly, Alex chose a targeted subset over the complete
+set — the six repetition-1 pairs from the categories where doctrinal nuance
+and misattribution risk are highest (`debate_healing`,
+`debate_prophetic_accountability`, `debate_apostolic_authority`,
+`debate_eschatology`, `paper_fence_baptism`, `paper_fence_tongues`), on the
+reasoning that mechanical parity was already strong (identical outcome
+distribution, identical refusing cases, matched citation/retrieval counts)
+and the axis mechanical checks structurally cannot cover —
+theological_accuracy, teacher_representation, citation_source_faithfulness —
+is exactly where the highest-nuance content lives. A targeted, readable
+review document
+(`local/2026-08/b6-blind-review-targeted-six-2026-08-27.md`) was built from
+the existing packet (both sides' answer, citations, outcome, retrieved/
+verified counts; still no variant/model/cost/token field, independently
+re-scanned for leaks) and delivered to Alex. Review itself has not happened
+yet as of this entry.
