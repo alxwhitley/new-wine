@@ -51,7 +51,16 @@ SEGMENTATION_INSTRUCTIONS = (
     "transcript span in `non_article_spans`, each with a category and a specific "
     "reason. Do not stop partway through a long transcript -- before responding, "
     "verify that your combined `articles` and `non_article_spans` spans, placed in "
-    "transcript order, reach the transcript's exact final character with no gap."
+    "transcript order, reach the transcript's exact final character with no gap. "
+    "A multi-page issue ordinarily contains MANY distinct authored articles and "
+    "MANY separate pieces of non-article material -- each advertisement, letter, "
+    "notice, or announcement is its own separate span, never merged with another. "
+    "Combining multiple distinct pieces of content into one large span, whether "
+    "labeled as an article or as non-article material, is wrong even if it "
+    "achieves full coverage: full coverage with the wrong granularity is still "
+    "wrong. If a span you are about to return covers more than a few pages, stop "
+    "and check whether it actually contains multiple distinct pieces that must be "
+    "split apart."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
