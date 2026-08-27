@@ -2,6 +2,7 @@
 """Deterministic checks for the B6 latency benchmark instrumentation."""
 from __future__ import annotations
 
+import inspect
 import json
 import sys
 import tempfile
@@ -206,40 +207,68 @@ def test_generation_effort_defaults_to_unset_and_is_recorded_when_requested():
     )
 
 
-def test_run_case_forwards_the_effort_candidate_variant():
-    seen = []
+def test_production_generation_hardcodes_medium_effort():
+    """B6 latency decision (Alex, 2026-08-27): effort=medium is hardcoded into
+    every real produce() call, not an opt-in candidate anymore -- this proves
+    it reaches the actual API request on both the primary call and the
+    attribution retry, with no caller-supplied override needed or accepted."""
+    seen_effort = []
 
-    def fake_produce(
-        db, question, messages=None, topics_established=None, trace=None,
-        experimental_generation_effort=None,
-    ):
-        seen.append(experimental_generation_effort)
-        with trace.span("producer.total"):
+    def fake_generate(history, permitted_names=None, trace=None, stage_name="generation", effort=None):
+        seen_effort.append((stage_name, effort))
+        with trace.span(stage_name):
             pass
-        return ProducerResult(
-            answer="Candidate answer.", outcome="answered", model="test-model"
-        )
+        if stage_name == "generation.primary":
+            return "An answer crediting nobody.", "<answer>ok</answer>", "end_turn", {
+                "input_tokens": 100, "output_tokens": 20, "cache_read_tokens": 0, "cache_write_tokens": 0,
+            }, "test-model"
+        return "Vlad Savchuk answers from the source [1].", "<answer>ok</answer>", "end_turn", {
+            "input_tokens": 100, "output_tokens": 20, "cache_read_tokens": 0, "cache_write_tokens": 0,
+        }, "test-model"
 
-    case = {
-        "id": "effort-case",
-        "category": "ordinary",
-        "question": "What does the source teach about grace?",
-        "messages": [],
+    chunk = {
+        "id": "chunk-1", "document_id": "doc-1", "title": "Test source", "author": "Vlad Savchuk",
+        "content": "Grounded source text.", "citation_mode": "citable", "source_kind": "sermon_transcript",
     }
-    try:
-        record = run_case(
-            case,
-            repetition=1,
-            supabase=object(),
-            produce_fn=fake_produce,
-            variant="effort_medium_v1",
-        )
-    except TypeError:
-        check("run_case accepts the effort candidate variant", False)
-        return
+    citation = {
+        "chunk_id": "chunk-1", "document_title": "Test source", "author": "Vlad Savchuk",
+        "content": "Grounded source text.", "url": None,
+    }
 
-    check("effort candidate reaches the producer", seen == ["medium"])
-    check("effort candidate variant is retained for blind pairing", record["variant"] == "effort_medium_v1")
+    with (
+        patch.object(position_papers, "match_position_paper", return_value=None),
+        patch.object(stored_position_topics, "match_stored_position", return_value=None),
+        patch.object(producer_module, "_inject_background_topics", return_value=([], set(), {})),
+        patch.object(producer_module, "_retrieve", return_value=([chunk], [citation], 1, False)),
+        patch.object(reference_verifier, "build_retrieval_grounding", return_value=object()),
+        patch.object(reference_verifier, "build_name_universe", return_value=[]),
+        # First call (unattributed) triggers the retry path so both generation
+        # call sites run; the second (attributed) satisfies the retry.
+        patch.object(answer_toolbox, "_ungrounded_reference_teachers", side_effect=[["Vlad Savchuk"], []]),
+        patch.object(reference_verifier, "ungrounded_prose_teachers", return_value=[]),
+        patch.object(reference_verifier, "verify_references", return_value=[]),
+        patch.object(producer_module, "_generate_and_capture", side_effect=fake_generate),
+        patch.dict(
+            sys.modules,
+            {"app.services.quotes": SimpleNamespace(quote_selection_enabled=lambda: False)},
+        ),
+    ):
+        trace = LatencyTrace()
+        result = producer_module.produce(object(), "What does the source teach?", trace=trace)
+
+    check(
+        "produce() no longer accepts an effort override parameter",
+        "experimental_generation_effort" not in inspect.signature(producer_module.produce).parameters,
+    )
+    check(
+        "primary generation hardcodes medium effort",
+        ("generation.primary", "medium") in seen_effort,
+    )
+    check(
+        "attribution retry also hardcodes medium effort",
+        ("generation.attribution_retry", "medium") in seen_effort,
+    )
+    check("hardcoded-effort answer still delivers", result.outcome == "answered")
 
 
 def test_producer_trace_covers_the_guarded_answer_path():
@@ -676,7 +705,7 @@ def main():
     test_trace_records_nested_monotonic_spans()
     test_generation_trace_is_observational_only()
     test_generation_effort_defaults_to_unset_and_is_recorded_when_requested()
-    test_run_case_forwards_the_effort_candidate_variant()
+    test_production_generation_hardcodes_medium_effort()
     test_producer_trace_covers_the_guarded_answer_path()
     test_experimental_teacher_routing_only_bypasses_topic_positions_when_required()
     test_explicit_named_teacher_source_boundary()

@@ -22,7 +22,7 @@ DEFAULT_FIXTURE = ROOT / "scripts" / "answer_latency_benchmark_cases.json"
 BASELINE_REPETITIONS = 2
 ESTIMATED_COST_PER_GENERATION_USD = 0.075
 BASELINE_COST_CEILING_USD = 2.50
-BENCHMARK_VARIANTS = ("baseline", "teacher_specific_v1", "effort_medium_v1")
+BENCHMARK_VARIANTS = ("baseline", "teacher_specific_v1")
 QUERY_EXPANSION_PROBE = "How does biblical covenant language shape interpretation?"
 PROTECTED_QUALITY_AXES = [
     "theological_accuracy",
@@ -159,8 +159,6 @@ def run_case(
     producer_options = {}
     if variant == "teacher_specific_v1":
         producer_options["experimental_teacher_routing"] = True
-    elif variant == "effort_medium_v1":
-        producer_options["experimental_generation_effort"] = "medium"
     result = produce_fn(
         supabase,
         case["question"],

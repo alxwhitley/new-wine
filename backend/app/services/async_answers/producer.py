@@ -75,6 +75,16 @@ logger = logging.getLogger(__name__)
 # chat._stream_answer.
 GEN_MAX_TOKENS = 8000
 
+# B6 latency decision (Alex, 2026-08-27), hardcoded not flag-gated: the
+# `effort_medium_v1` candidate's representative paired benchmark measured
+# 25.46% faster median producer time (49.41s -> 36.83s), 11/12 cases faster,
+# no p90 regression, and a targeted 6-pair blind human quality review across
+# the doctrinally sensitive categories (healing, prophetic accountability,
+# apostolic authority, eschatology, baptism, tongues) found zero hard
+# failures on either variant. Full detail:
+# docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md.
+GENERATION_EFFORT = "medium"
+
 # ---- policy versioning for the reuse key -----------------------------------
 # prompt_version is a real fingerprint of the exact instruction wording the
 # writer sees (system_prompt.txt + guardrails). A wording change busts reuse.
@@ -720,20 +730,20 @@ def _match_stored_position_for_answer(
 
 def produce(
     supabase, question, messages=None, topics_established=None, trace=None,
-    experimental_teacher_routing=False, experimental_generation_effort=None,
+    experimental_teacher_routing=False,
 ):
     with _trace_span(trace, "producer.total"):
         return _produce(
             supabase, question, messages, topics_established, trace,
-            experimental_teacher_routing, experimental_generation_effort,
+            experimental_teacher_routing,
         )
 
 
 def _produce(
     supabase, question, messages=None, topics_established=None, trace=None,
-    experimental_teacher_routing=False, experimental_generation_effort=None,
+    experimental_teacher_routing=False,
 ):
-    # type: (object, str, Optional[List[Dict[str, Any]]], Optional[Dict[str, int]], Optional[Any], bool, Optional[str]) -> ProducerResult
+    # type: (object, str, Optional[List[Dict[str, Any]]], Optional[Dict[str, int]], Optional[Any], bool) -> ProducerResult
     """Position-paper interception -> background-topic injection -> retrieve ->
     buffered generation -> ungrounded-attribution resolution (regenerate-once-
     then-refuse) -> verify_references. Matches chat.py's ordering exactly. Raises
@@ -883,7 +893,7 @@ def _produce(
 
     answer, raw_output, _sr, usage, model_used = _generate_and_capture(
         history, trace=trace, stage_name="generation.primary",
-        effort=experimental_generation_effort,
+        effort=GENERATION_EFFORT,
     )
     total_usage = dict(usage)
 
@@ -906,7 +916,7 @@ def _produce(
                     permitted_names=permitted_names,
                     trace=trace,
                     stage_name="generation.attribution_retry",
-                    effort=experimental_generation_effort,
+                    effort=GENERATION_EFFORT,
                 )
                 total_usage = _add_usage(total_usage, usage2)
                 if _has_ungrounded(answer2, raw2):
