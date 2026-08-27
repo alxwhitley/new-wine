@@ -612,3 +612,86 @@ was made beyond this one authorized run. The full paired 12-case ×
 2-repetition × 2-variant benchmark (~$2.50–5.00 combined, same structure as
 the `teacher_specific_v1` run) remains the next gate and requires Alex's
 separate approval before it runs.
+
+## Representative paired gate — effort_medium_v1 (2026-08-27)
+
+Alex approved the same consolidated queue used for `teacher_specific_v1`: two
+repetitions of all 12 fixed cases for both the pinned baseline and
+`effort_medium_v1`, no database writes, separate $2.50 ceilings, $5.00
+combined maximum. Both paid batches reconciled completely:
+
+- baseline: **24/24/0/0**, $1.435451, 22 answered and the same two expected
+  `named_teacher_deliverance` attribution refusals seen in every prior
+  baseline run in this document;
+- candidate: **24/24/0/0**, $1.232525, 22 answered and the identical two
+  refusals — same cases, same repetitions, no new or different refusal;
+- combined: **48/48/0/0**, $2.667976, zero quote records and no database
+  writes, under the $5.00 ceiling.
+
+**The representative latency gate PASSES, for the first time on this
+track:**
+
+- median producer time: 49.41 s baseline versus **36.83 s candidate — 25.46%
+  faster**, clearing the 20% requirement;
+- paired case wins: **21 of 24** individual generations faster, and **11 of
+  12** cases faster when each case's two repetitions are collapsed to their
+  median (this document's own prior "8 of 12" `teacher_specific_v1` figure
+  was reported at case granularity, so this second number is the
+  apples-to-apples comparison against the 10-of-12 requirement; both
+  granularities clear it independently). The lone case where the candidate's
+  median was slower is `debate_healing` (52.03 s → 55.59 s) — the same case
+  used for the 2026-08-27 single-case gate above, where the candidate's one
+  sample (28.69 s generation) also ran on the slower side of this case's own
+  range; nothing else about that case stands out as different from the other
+  eleven;
+- p90: **60.40 s baseline versus 48.58 s candidate — no regression** (p90
+  improved too, not just held flat).
+
+The improvement traces to the intended mechanism, not a confound: median
+`generation.primary` time fell from 36.05 s to 28.27 s (a 7.78 s drop,
+consistent with the aggregate producer-level improvement), while median
+`retrieval` time was flat within noise (5.95 s baseline versus 6.97 s
+candidate — retrieval is untouched by this candidate and, if anything, ran
+slightly slower for the candidate batch, so it is not doing the work). Retry
+counts were identical (3 attribution retries in each batch). Output tokens
+fell from 69,494 to 50,209 (27.8%) and input tokens were flat (349,304 versus
+344,266) — consistent with Anthropic's documented "moderate token savings"
+framing for medium effort, and the reason the candidate batch also cost less
+($1.232525 versus $1.435451).
+
+**Adjacent, not new:** both batches logged the same fail-safe
+`position_paper_exclusion` classifier JSON-parse failures on
+`paper_fence_baptism`/`paper_fence_tongues` this document already recorded as
+a known runtime observation for `teacher_specific_v1`'s paired run, plus one
+`Lexicon retrieval failed ... statement timeout` fail-soft skip during the
+candidate batch. All three are pre-existing resilience paths unrelated to the
+effort parameter — none affected reconciliation (48/48/0/0 completed) or
+outcome parity between variants, and none is investigated further here.
+
+**What this does and does not authorize.** This closes acceptance criterion 1
+(the fixed 12-case latency gate) and criterion 2 (nothing else was changed —
+model, prompt version, retrieval policy, position-paper/stored-position
+behavior, attribution checks, reference verification, and quote-off state all
+stayed pinned; `output_config.effort` is the sole, separately-reviewed
+variable). Criteria 3 (blind human quality review across the five protected
+axes) and 4 (Alex's implementation approval after seeing this evidence) are
+**not yet done**. Unlike `teacher_specific_v1`, this candidate now legitimately
+reaches the blind-review step — it is the first candidate on this track to
+clear the latency bar at all. No production write, deploy, prompt change, or
+further paid call was made beyond the two authorized batches above; building
+the blind packet from the already-collected records requires no further
+provider spend.
+
+A 24-pair blinded packet and separate unblinding key were generated under
+ignored `local/2026-08/` paths
+(`b6-blind-review-packet-effort-medium-2026-08-27.json`,
+`b6-blind-review-key-effort-medium-2026-08-27.json`), following the same
+shape as the `teacher_specific_v1` packet: each side of a pair carries only
+`answer`, `citations`, `citation_count`, `retrieved_chunk_count`,
+`retrieved_point_count`, `outcome`, `verified_reference_count` — no variant,
+model, trace, cost, or token field anywhere, mechanically confirmed by
+scanning the packet text for every `blind_fields_hidden` key. The A/B
+assignment is randomized once per repetition (not per pair), matching the
+documented `teacher_specific_v1` key shape. Full 24-pair human review has not
+run yet — that is Alex's own time, not something built or simulated this
+session.
