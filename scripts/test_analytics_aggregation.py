@@ -31,6 +31,10 @@ def check(label: str, condition: bool, detail: str = None) -> None:
 
 
 class _FakeQuery:
+    """Fixture rows already represent exactly the origin='user' /
+    created_at>=since window -- eq/gte are no-ops here, matching the
+    original fixtures (which carry no origin/created_at fields at all)."""
+
     def __init__(self, rows):
         self._rows = rows
 
@@ -47,12 +51,38 @@ class _FakeQuery:
         return SimpleNamespace(data=self._rows)
 
 
-class _FakeSupabase:
+class _FakeGapQuery:
+    """Real filtering for search_gap_details -- exercises the
+    occurrence_id/status filter get_summary() actually applies."""
+
     def __init__(self, rows):
         self._rows = rows
 
-    def table(self, _name):
-        return _FakeQuery(self._rows)
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, col, val):
+        self._rows = [r for r in self._rows if r.get(col) == val]
+        return self
+
+    def in_(self, col, values):
+        values = set(values)
+        self._rows = [r for r in self._rows if r.get(col) in values]
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=self._rows)
+
+
+class _FakeSupabase:
+    def __init__(self, rows, gap_rows=None):
+        self._rows = rows
+        self._gap_rows = gap_rows or []
+
+    def table(self, name):
+        if name == "search_gap_details":
+            return _FakeGapQuery(list(self._gap_rows))
+        return _FakeQuery(list(self._rows))
 
 
 def main() -> int:
@@ -60,27 +90,38 @@ def main() -> int:
 
     rows = [
         # Deliverance Ministry: 3 total, 2 no_material -> failure_rate 0.667
-        {"primary_topic": "Deliverance Ministry", "outcome": "no_material", "classification_status": "classified"},
-        {"primary_topic": "Deliverance Ministry", "outcome": "no_material", "classification_status": "classified"},
-        {"primary_topic": "Deliverance Ministry", "outcome": "answered", "classification_status": "classified"},
+        # -- one gap still open (dm-1), one already resolved (dm-2). The
+        # topic still has an open gap because of dm-1.
+        {"id": "occ-dm-1", "primary_topic": "Deliverance Ministry", "outcome": "no_material", "classification_status": "classified"},
+        {"id": "occ-dm-2", "primary_topic": "Deliverance Ministry", "outcome": "no_material", "classification_status": "classified"},
+        {"id": "occ-dm-3", "primary_topic": "Deliverance Ministry", "outcome": "answered", "classification_status": "classified"},
         # Speaking in Tongues: 4 total, 1 no_material -> failure_rate 0.25
-        {"primary_topic": "Speaking in Tongues", "outcome": "no_material", "classification_status": "classified"},
-        {"primary_topic": "Speaking in Tongues", "outcome": "answered", "classification_status": "classified"},
-        {"primary_topic": "Speaking in Tongues", "outcome": "answered", "classification_status": "classified"},
-        {"primary_topic": "Speaking in Tongues", "outcome": "answered", "classification_status": "pending"},
+        # -- its only gap (sit-1) has ALREADY BEEN RESOLVED, so this topic
+        # must NOT count toward topics_with_open_gaps even though it has a
+        # historical no_material occurrence.
+        {"id": "occ-sit-1", "primary_topic": "Speaking in Tongues", "outcome": "no_material", "classification_status": "classified"},
+        {"id": "occ-sit-2", "primary_topic": "Speaking in Tongues", "outcome": "answered", "classification_status": "classified"},
+        {"id": "occ-sit-3", "primary_topic": "Speaking in Tongues", "outcome": "answered", "classification_status": "classified"},
+        {"id": "occ-sit-4", "primary_topic": "Speaking in Tongues", "outcome": "answered", "classification_status": "pending"},
         # Unclassified: 1 total, answered
-        {"primary_topic": "Unclassified", "outcome": "answered", "classification_status": "classified"},
+        {"id": "occ-u-1", "primary_topic": "Unclassified", "outcome": "answered", "classification_status": "classified"},
         # A pending row with no topic assigned yet
-        {"primary_topic": None, "outcome": None, "classification_status": "pending"},
+        {"id": "occ-p-1", "primary_topic": None, "outcome": None, "classification_status": "pending"},
     ]
-    supabase = _FakeSupabase(rows)
+    gap_rows = [
+        {"occurrence_id": "occ-dm-1", "status": "open"},
+        {"occurrence_id": "occ-dm-2", "status": "resolved"},
+        {"occurrence_id": "occ-sit-1", "status": "resolved"},
+    ]
+    supabase = _FakeSupabase(rows, gap_rows=gap_rows)
 
     summary = aggregation.get_summary(supabase, days=30)
     check("monitored_searches counts every origin='user' row in the window", summary["monitored_searches"] == 9)
     check("no_material_count counts exactly the no_material outcomes", summary["no_material_count"] == 3)
     check("missing_content_rate is no_material / total", abs(summary["missing_content_rate"] - (3 / 9)) < 1e-9)
-    check("topics_with_open_gaps counts distinct topics with a no_material occurrence (2, not 3)",
-          summary["topics_with_open_gaps"] == 2)
+    check("topics_with_open_gaps counts only topics with a STILL-OPEN gap (1: Deliverance Ministry via dm-1) "
+          "-- Speaking in Tongues' only gap is resolved and must not count",
+          summary["topics_with_open_gaps"] == 1)
     check("unclassified_rate counts primary_topic == 'Unclassified' exactly (1/9), not the untagged-pending row too",
           abs(summary["unclassified_rate"] - (1 / 9)) < 1e-9)
     check("finalization_pending counts classification_status == 'pending'", summary["finalization_pending"] == 2)

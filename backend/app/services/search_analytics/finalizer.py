@@ -25,6 +25,7 @@ Python 3.9 (Invariant 1).
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Callable, Dict
 
 from .classifier import ClassificationFailedError, classify_topic as _default_classify
@@ -68,6 +69,7 @@ def finalize_ready_jobs(
 
             counts["jobs_classified"] += 1
             outcome = job.get("outcome")
+            finalized_at = datetime.now(timezone.utc).isoformat()
 
             for occ in occurrences:
                 occ["primary_topic"] = classification.topic
@@ -77,6 +79,7 @@ def finalize_ready_jobs(
                 occ["classifier_model"] = classification.model
                 occ["classifier_prompt_version"] = classification.prompt_version
                 occ["classifier_confidence"] = classification.confidence
+                occ["finalized_at"] = finalized_at
                 counts["occurrences_finalized"] += 1
 
                 if occ["origin"] == "admin_retest":

@@ -137,6 +137,9 @@ def main() -> int:
     check("both occurrence rows are marked classified",
           tables.occurrences["occ-1"]["classification_status"] == "classified"
           and tables.occurrences["occ-2"]["classification_status"] == "classified")
+    check("both occurrence rows are stamped with a finalized_at timestamp",
+          tables.occurrences["occ-1"].get("finalized_at") is not None
+          and tables.occurrences["occ-2"].get("finalized_at") is not None)
     gap = list(tables.gaps.values())[0]
     check("the gap stores the REDACTED text, never the raw question",
           "me@example.com" not in gap["redacted_question"])

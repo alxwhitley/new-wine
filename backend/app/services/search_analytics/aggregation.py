@@ -14,24 +14,45 @@ def _since_iso(days: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
 
+def _open_gap_topics(supabase, no_material_rows: List[Dict[str, object]]) -> set:
+    """Topics with at least one STILL-OPEN gap among the given no_material
+    occurrence rows -- a resolved gap must not count, even though its
+    occurrence remains a real historical no_material search. Requires a
+    second query because gap status lives on search_gap_details, not on
+    search_occurrences itself."""
+    occurrence_ids = [r["id"] for r in no_material_rows if r.get("id")]
+    if not occurrence_ids:
+        return set()
+    gap_result = (
+        supabase.table("search_gap_details")
+        .select("occurrence_id, status")
+        .in_("occurrence_id", occurrence_ids)
+        .eq("status", "open")
+        .execute()
+    )
+    open_occurrence_ids = {g["occurrence_id"] for g in (gap_result.data or [])}
+    return {
+        r.get("primary_topic") for r in no_material_rows
+        if r.get("id") in open_occurrence_ids and r.get("primary_topic")
+    }
+
+
 def get_summary(supabase, days: int = 30) -> Dict[str, object]:
     since = _since_iso(days)
     result = (
         supabase.table("search_occurrences")
-        .select("primary_topic, outcome, classification_status")
+        .select("id, primary_topic, outcome, classification_status")
         .eq("origin", "user")
         .gte("created_at", since)
         .execute()
     )
     rows = result.data or []
     total = len(rows)
-    no_material = sum(1 for r in rows if r.get("outcome") == "no_material")
+    no_material_rows = [r for r in rows if r.get("outcome") == "no_material"]
+    no_material = len(no_material_rows)
     unclassified = sum(1 for r in rows if r.get("primary_topic") == "Unclassified")
     pending = sum(1 for r in rows if r.get("classification_status") == "pending")
-    open_gap_topics = {
-        r.get("primary_topic") for r in rows
-        if r.get("outcome") == "no_material" and r.get("primary_topic")
-    }
+    open_gap_topics = _open_gap_topics(supabase, no_material_rows)
     return {
         "monitored_searches": total,
         "no_material_count": no_material,
