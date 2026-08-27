@@ -75,10 +75,6 @@ from app.services.search_analytics.occurrences import (
     OccurrenceWriteFailedError,
     create_occurrence,
 )
-from app.services.search_analytics.subject_key import (
-    CURRENT_SUBJECT_KEY_VERSION,
-    derive_subject_key,
-)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -220,7 +216,13 @@ async def submit(
         consent_status = await run_in_threadpool(consent_service.get_consent_status, supabase, user_id)
         if consent_status["acknowledged"] and not consent_status["needs_acknowledgment"]:
             submission_id = req.submission_id or str(uuid.uuid4())
-            subject_key = derive_subject_key(user_id, CURRENT_SUBJECT_KEY_VERSION)
+            # Routed through consent_service (not derive_subject_key directly)
+            # so a stale post-rotation key is transparently caught up here,
+            # at point of use, with the old key preserved for withdraw() --
+            # 2026-08-27 privacy review, Finding 2.
+            key_state = await run_in_threadpool(consent_service.get_or_rotate_subject_key, supabase, user_id)
+            subject_key = key_state["subject_key"]
+            subject_key_version = key_state["subject_key_version"]
 
             def _record_occurrence():
                 db = Db()
@@ -231,7 +233,7 @@ async def submit(
                         job_id=job["id"],
                         origin="user",
                         subject_key=subject_key,
-                        subject_key_version=CURRENT_SUBJECT_KEY_VERSION,
+                        subject_key_version=subject_key_version,
                         question=req.question,
                     )
                 finally:

@@ -67,6 +67,7 @@ def _run_submit(req, user_id, consent_status, occurrence_side_effect=None):
          patch.object(async_chat, "Db", return_value=_NoopDb()), \
          patch.object(async_chat.jobs, "enqueue", return_value={"reason": "new", "job": {"id": "job-1", "status": "queued", "outcome": None}}), \
          patch.object(consent_module, "get_consent_status", return_value=consent_status), \
+         patch.object(consent_module, "get_or_rotate_subject_key", return_value={"subject_key": "fake-subject-key", "subject_key_version": 1}), \
          patch.object(async_chat, "create_occurrence", side_effect=fake_create_occurrence):
         result = asyncio.run(async_chat.submit(req, _FakeRequest(), user_id=user_id))
     return result, calls

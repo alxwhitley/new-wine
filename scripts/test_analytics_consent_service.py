@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
@@ -115,6 +116,26 @@ def main() -> int:
     consent.acknowledge(supabase, user_id)
     status3 = consent.get_consent_status(supabase, user_id)
     check("re-acknowledging the same version is a no-op success", status3["needs_acknowledgment"] is False)
+
+    # 2026-08-27 privacy review, Finding 2: an HMAC rotation (a version
+    # bump with NO policy_version change, so needs_acknowledgment never
+    # fires) must still preserve the old key for withdraw() to find, and
+    # must actually pick up the new key on the next occurrence write.
+    row_before_rotation = supabase._store["analytics_consent"][user_id]
+    key_before_rotation = row_before_rotation["subject_key"]
+    with patch.dict(os.environ, {"ANALYTICS_HMAC_SECRET_V2": "test-secret-v2"}, clear=False), \
+         patch.object(consent, "CURRENT_SUBJECT_KEY_VERSION", 2):
+        key_state = consent.get_or_rotate_subject_key(supabase, user_id)
+        check("get_or_rotate_subject_key advances to the new version", key_state["subject_key_version"] == 2)
+        check("get_or_rotate_subject_key returns a genuinely different key after rotation",
+              key_state["subject_key"] != key_before_rotation)
+        row_after_rotation = supabase._store["analytics_consent"][user_id]
+        retired = row_after_rotation.get("retired_subject_keys") or []
+        check("the OLD key is preserved in retired_subject_keys, not silently dropped",
+              any(entry.get("key") == key_before_rotation and entry.get("version") == 1 for entry in retired))
+        check("calling it again (already current) does not duplicate the retired entry",
+              len(consent.get_or_rotate_subject_key(supabase, user_id).get("subject_key", "")) > 0
+              and len(row_after_rotation.get("retired_subject_keys") or []) == 1)
 
     print("\n%d passed, %d failed" % (_pass, _fail))
     return 1 if _fail else 0

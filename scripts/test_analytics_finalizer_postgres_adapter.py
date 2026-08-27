@@ -76,9 +76,20 @@ def main() -> int:
     job_ids = tables.pending_job_ids()
     check("pending_job_ids queries search_occurrences joined to done answer_jobs",
           job_ids == ["job-A"])
-    executed_query = cursor.executed[0][0]
+    executed_query, executed_params = cursor.executed[0]
     check("the join filters on classification_status='pending' and status='done'",
           "classification_status = 'pending'" in executed_query and "j.status = 'done'" in executed_query)
+
+    # 2026-08-27 privacy review, additional observation: the SQL-side LIMIT
+    # must be parameterized from the constructor, not hardcoded, so it
+    # always agrees with finalize_ready_jobs()'s own Python-side slice.
+    check("LIMIT is a bound parameter, not a hardcoded literal", "LIMIT %s" in executed_query)
+    check("the default limit (50) is passed as the actual bound parameter", executed_params == (50,))
+
+    cursor2 = _ScriptedCursor({"SELECT DISTINCT o.job_id": [[]]})
+    PostgresTables(_FakeConn(cursor2), limit=200).pending_job_ids()
+    check("a custom limit is threaded through to the SQL-side cap",
+          cursor2.executed[0][1] == (200,))
 
     print("\n%d passed, %d failed" % (_pass, _fail))
     return 1 if _fail else 0

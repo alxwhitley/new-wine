@@ -105,8 +105,13 @@ class PostgresTables:
     finalize_ready_jobs() expects, backed by direct SQL against a live
     psycopg2 connection (via async_answers.db.dict_cursor)."""
 
-    def __init__(self, conn):
+    def __init__(self, conn, limit: int = 50):
         self._conn = conn
+        # 2026-08-27 privacy review, additional observation: this SQL-side
+        # cap must match (or exceed) finalize_ready_jobs()'s own Python-side
+        # `[:limit]` slice, or a caller passing a larger limit would
+        # silently be under-served by a smaller hardcoded database LIMIT.
+        self._limit = limit
         self.answer_jobs = _AnswerJobsView(conn)
         self.occurrences = _OccurrencesView(conn)
 
@@ -117,7 +122,8 @@ class PostgresTables:
                 "SELECT DISTINCT o.job_id FROM search_occurrences o "
                 "JOIN answer_jobs j ON j.id = o.job_id "
                 "WHERE o.classification_status = 'pending' AND j.status = 'done' "
-                "LIMIT 50"
+                "LIMIT %s",
+                (self._limit,),
             )
             return [r["job_id"] for r in cur.fetchall()]
 
@@ -219,14 +225,16 @@ class _OccurrencesView:
         self._conn = conn
 
 
-def run_finalizer_once(db) -> dict:
+def run_finalizer_once(db, limit: int = 50) -> dict:
     """Real-connection entry point: db.run(fn) hands `fn` a live psycopg2
     connection (async_answers.db.Db's contract) -- wrap it in
-    PostgresTables before delegating to the pure logic above."""
+    PostgresTables before delegating to the pure logic above. `limit` is
+    threaded through to BOTH the SQL-side cap (PostgresTables) and the
+    Python-side slice (finalize_ready_jobs) so the two always agree."""
 
     def _wrapped(conn):
-        tables = PostgresTables(conn)
-        return finalize_ready_jobs(_SingleRunDb(tables))
+        tables = PostgresTables(conn, limit=limit)
+        return finalize_ready_jobs(_SingleRunDb(tables), limit=limit)
 
     return db.run(_wrapped)
 
