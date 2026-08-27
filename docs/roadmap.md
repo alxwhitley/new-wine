@@ -273,7 +273,17 @@ extraction-attempt history instrumentation.
 1. Manna code/repository/domain/copy/visual migration.
 2. Verse-linked commentary enrichment with side-by-side modernization review.
 3. Feedback-to-reviewable-content flags, never direct eligibility mutation.
-4. Consent-based search analytics and corpus-gap alerts.
+4. ~~Consent-based search analytics and corpus-gap alerts.~~ Specified and
+   built 2026-08-27: `docs/superpowers/specs/2026-08-27-search-analytics-and-corpus-gap-dashboard.md`,
+   migration 093 (**not applied**), worktree branch
+   `worktree-search-analytics-corpus-gap` (22 commits, unmerged/unpushed —
+   not on `main`, no deploy). 132 local tests pass; typecheck/lint clean;
+   two independent fresh-context privacy/security reviews both returned
+   SAFE. Residual: Alex's review + the spec's own 10-step attended rollout
+   checklist (migration apply, HMAC secret, finalizer deployment decision,
+   retention-job schedule, explicit sign-off on the disclosed
+   service-role-DB-access anonymity boundary). See `rhemata-status.md`'s
+   2026-08-27 entry.
 5. Specific follow-up questions that move users outward.
 6. ~~Long-conversation handoff with a token trigger, provenance, privacy, and user control.~~ Specified and built 2026-08-26: `docs/superpowers/specs/2026-08-26-long-conversation-handoff.md`, migration 092 (applied live), deployed `70f6a3b`. Residual, not yet done: nudge copy unreviewed; no live/E2E verification. See `rhemata-status.md`'s 2026-08-26 entry.
 7. An isolated Precept Austin retrieval experiment without weakening exclusions.
