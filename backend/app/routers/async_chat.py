@@ -53,6 +53,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -68,8 +70,18 @@ from app.services.async_answers.config import estimate_cost_usd, load_config
 from app.services.async_answers.db import Db
 from app.services.async_answers.metering import enforce_query_limit
 from app.services.async_answers.producer import current_policy
+from app.services.search_analytics import consent as consent_service
+from app.services.search_analytics.occurrences import (
+    OccurrenceWriteFailedError,
+    create_occurrence,
+)
+from app.services.search_analytics.subject_key import (
+    CURRENT_SUBJECT_KEY_VERSION,
+    derive_subject_key,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class AsyncChatRequest(BaseModel):
@@ -77,6 +89,12 @@ class AsyncChatRequest(BaseModel):
     messages: List[Dict[str, Any]] = []
     topics_established: Dict[str, int] = {}
     idempotency_key: Optional[str] = None
+    # submission_id: analytics-only idempotency key, distinct from
+    # idempotency_key above (which dedups the answer_jobs row itself). Two
+    # different submission_ids that happen to share one job (single-flight
+    # collapse) must still create two separate analytics occurrences --
+    # that's why this can never be the same field as idempotency_key.
+    submission_id: Optional[str] = None
     # anon_id: guest metering key (mirrors chat.py's ChatRequest.anon_id). Required
     # for guests, ignored for authenticated callers.
     anon_id: Optional[str] = None
@@ -190,6 +208,43 @@ async def submit(
     if result.get("reason") == "rejected_backpressure":
         raise HTTPException(status_code=503, detail="queue_full")
     job = result["job"]
+
+    # Search-analytics occurrence: one per accepted submission, only for an
+    # authenticated account with current-version consent. A guest or a
+    # not-yet-consented account is simply not monitored -- no error, no
+    # occurrence. Runs AFTER enqueue: it needs job["id"]. origin is always
+    # "user" here -- never client-suppliable -- the only other origin,
+    # "admin_retest", is written exclusively by the admin retest endpoint
+    # calling create_occurrence() directly.
+    if user_id:
+        consent_status = await run_in_threadpool(consent_service.get_consent_status, supabase, user_id)
+        if consent_status["acknowledged"] and not consent_status["needs_acknowledgment"]:
+            submission_id = req.submission_id or str(uuid.uuid4())
+            subject_key = derive_subject_key(user_id, CURRENT_SUBJECT_KEY_VERSION)
+
+            def _record_occurrence():
+                db = Db()
+                try:
+                    create_occurrence(
+                        db,
+                        submission_id=submission_id,
+                        job_id=job["id"],
+                        origin="user",
+                        subject_key=subject_key,
+                        subject_key_version=CURRENT_SUBJECT_KEY_VERSION,
+                        question=req.question,
+                    )
+                finally:
+                    db.close()
+
+            try:
+                await run_in_threadpool(_record_occurrence)
+            except OccurrenceWriteFailedError:
+                logger.exception(
+                    "search-analytics occurrence could not be durably recorded for a consented account -- refusing rather than serving an unmonitored search"
+                )
+                raise HTTPException(status_code=503, detail="analytics_unavailable")
+
     resp = {"reason": result["reason"], **_public_job(job)}
     if usage_meta:
         resp["usage"] = usage_meta  # authenticated-user weekly usage (parity with chat.py meta.usage)
