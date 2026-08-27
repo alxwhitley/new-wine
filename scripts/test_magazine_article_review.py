@@ -769,6 +769,98 @@ def test_single_article_spanning_whole_issue_rejected_deterministically():
         segment_articles(transcript, client)
 
 
+def test_foreign_article_title_bled_into_span_rejected_deterministically():
+    """An article whose span opens with a DIFFERENT article's title is
+    rejected before the paid semantic review call -- a well-formed span
+    (correct length, no overlap, full coverage) can still open with the
+    wrong content if a boundary lands one section too late. Live evidence,
+    New Wine A2, Issue 02-1973, 2026-08-27: an article labeled
+    "spiritual_potpourri" opened at transcript_start+0 with
+    "Keeping\nthe\nUnity\n\nReprinted with permission..." -- word-for-word
+    the title and reprint credit of the separate "keeping_the_unity"
+    article. The semantic reviewer, given this exact input, caught it in
+    only 1 of 4 live repeated calls -- not a reliable backstop on its own.
+    See _TITLE_BLEED_WINDOW_CHARS above."""
+    transcript = verified_transcript(
+        "KEEPING THE UNITY\nReprinted with permission.\nThe real body of "
+        "this article discusses denominational harmony at length.\n",
+        "SPIRITUAL POTPOURRI\nKeeping The Unity\nReprinted with permission.\n"
+        "The bled-in title above belongs to the previous article, not this "
+        "one -- the real Forum content would follow here.",
+    )
+    proposal = [
+        proposed_article(
+            transcript,
+            article_id="keeping_the_unity",
+            filename="keeping-the-unity.txt",
+            title="Keeping The Unity",
+            author="Reprinted",
+            source_pages=[1],
+            start_text="KEEPING THE UNITY",
+            end_text="denominational harmony at length.",
+        ),
+        proposed_article(
+            transcript,
+            article_id="spiritual_potpourri",
+            filename="spiritual-potpourri.txt",
+            title="Spiritual Potpourri",
+            author="New Wine Forum",
+            source_pages=[2],
+            start_text="SPIRITUAL POTPOURRI",
+            end_text="the real Forum content would follow here.",
+        ),
+    ]
+    response = segmentation_response(transcript, proposal)
+    client = FakeStructuredClient(response)
+
+    with pytest.raises(ArticleReviewError, match="foreign_article_title_in_span"):
+        segment_articles(transcript, client)
+
+
+def test_partial_title_word_overlap_does_not_reject_deterministically():
+    """Sharing a single word with another article's title is not enough to
+    trigger the bleed check -- only the OTHER article's FULL normalized
+    title landing inside this span's opening window counts. Guards against
+    flagging legitimate coincidental word overlap (e.g. two unrelated
+    articles both mentioning "spirit")."""
+    transcript = verified_transcript(
+        "THE UNITY OF THE SPIRIT\nBy Ada North\nThis article discusses "
+        "walking worthy of the calling with which you were called.\n",
+        "SPIRITUAL POTPOURRI\nBy New Wine Forum\nFrom time to time we "
+        "receive letters from our readers on matters of common concern.",
+    )
+    proposal = [
+        proposed_article(
+            transcript,
+            article_id="unity-of-the-spirit",
+            filename="unity-of-the-spirit.txt",
+            title="The Unity of the Spirit",
+            author="Ada North",
+            source_pages=[1],
+            start_text="THE UNITY OF THE SPIRIT",
+            end_text="with which you were called.",
+        ),
+        proposed_article(
+            transcript,
+            article_id="spiritual-potpourri",
+            filename="spiritual-potpourri.txt",
+            title="Spiritual Potpourri",
+            author="New Wine Forum",
+            source_pages=[2],
+            start_text="SPIRITUAL POTPOURRI",
+            end_text="matters of common concern.",
+        ),
+    ]
+    response = segmentation_response(transcript, proposal)
+    client = FakeStructuredClient(response)
+
+    manifest = segment_articles(transcript, client)
+    assert [a.article_id for a in manifest.articles] == [
+        "unity-of-the-spirit",
+        "spiritual-potpourri",
+    ]
+
+
 def test_issue_coverage_verdict_quarantines_content_the_reviewer_flags_missing(
     verified_issue,
 ):

@@ -190,6 +190,37 @@ _NON_ARTICLE_TOTAL_FRACTION_MAX = 0.40
 # 2026-08-27 attempt, itself independently verdict=True on its own
 # start/end/attribution) and far below the 121,011-char abuse case.
 _MAX_ARTICLE_CHARS = 30000
+# All checks above bound span SHAPE (length, overlap, coverage) but never
+# look at whether a span's own content matches its claimed title -- a
+# well-formed span can still open with a DIFFERENT article's title and
+# content bled across a misplaced boundary. Found live 2026-08-27 (New Wine
+# A2, Issue 02-1973): the article labeled "spiritual_potpourri" (correct
+# length, no overlap, full coverage -- every check above passed) opened at
+# transcript_start+0 with "Keeping\nthe\nUnity\n\nReprinted with permission
+# ..." -- word-for-word the title and reprint credit of the separate
+# "keeping_the_unity" article, whose own labeled span had in turn absorbed
+# the tail of the article before it ("The Apostle - God's Master Builder").
+# The semantic reviewer, given this exact input across 4 live repeated
+# calls (segmentation replayed from a fixed capture, only the review call
+# live), caught it only once -- mislabeled as "duplications" -- and missed
+# it 3 times (a clean pass twice, an unrelated article flagged once):
+# confirmed non-deterministic, not a reliable backstop for this defect
+# class on its own.
+#
+# A second, independent live occurrence confirmed the pattern recurs, not a
+# one-off: retry_13 (2026-08-25) has an 874-char article labeled "Tapes by
+# Don Basham" opening with "the\ncall\nof love\n\nMy Beloved has said..." --
+# the title and opening lines of the separate "The Call of Love" article.
+#
+# 200 chars comfortably covers both observed bleed blocks (the Keeping the
+# Unity title+credit ran 166 chars before its own page marker; the Call of
+# Love title+first line ran under 100) with margin, while staying far
+# short of a legitimate article's own body. Checked with zero false
+# positives against every other known-good manifest on hand for this issue
+# (v3: 5 articles, v5: 1, v6: 1, and the other 15 articles in retry_13's
+# own 17-article set) -- see rhemata-status.md's 2026-08-27 entry.
+_TITLE_BLEED_WINDOW_CHARS = 200
+_MIN_BLEED_TITLE_CHARS = 8
 _SEMANTIC_FIELDS = (
     "start_coherent",
     "end_coherent",
@@ -214,6 +245,10 @@ class StructuredOutputClient(Protocol):
 
 def _fingerprint(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _normalize_heading(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
 
 
 def _canonical_json(value: object) -> str:
@@ -697,6 +732,22 @@ def segment_articles(
         seen_ids.add(normalized_id)
         seen_filenames.add(normalized_filename)
         previous_end = end
+
+    # Cross-article title-bleed check -- see _TITLE_BLEED_WINDOW_CHARS above.
+    normalized_titles = {
+        article.article_id: _normalize_heading(article.title) for article in articles
+    }
+    for article in articles:
+        window_end = min(
+            article.transcript_start + _TITLE_BLEED_WINDOW_CHARS, article.transcript_end
+        )
+        window = _normalize_heading(transcript.text[article.transcript_start : window_end])
+        for other in articles:
+            if other.article_id == article.article_id:
+                continue
+            other_title = normalized_titles[other.article_id]
+            if len(other_title) >= _MIN_BLEED_TITLE_CHARS and other_title in window:
+                raise ArticleReviewError("foreign_article_title_in_span")
 
     non_article_span_keys = {"category", "reason", "transcript_start", "transcript_end"}
     non_article_spans: list[tuple[int, int, str, str]] = []
