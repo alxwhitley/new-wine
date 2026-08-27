@@ -76,10 +76,28 @@ quarantine. No stage transfers automatically from one source to another.
    terminal artifacts remain local-only and intentionally untracked under
    `docs/audits/2026-08/new_wine_issue_02_1973_review_2026-08-25_retry_13/`
    because the Git remote is public.
-   Next: inspect and correct the quarantined article boundaries, rerun the
-   no-write article/proposition gates, and obtain Alex's separate approval
-   before any attended database write. No benchmark decision authorizes a
-   database write or file move.
+   **2026-08-27 (pipeline correction, not yet a clean pass):** root-caused
+   and fixed the article boundaries defect (segmentation silently stopped
+   54% through the issue at low reasoning) plus five further defects found
+   through live validation the same day — a full-coverage check, an
+   explicit `non_article_spans` mechanism, three rounds of size/fraction
+   caps closing gaming patterns the model found live (including one that
+   slipped past the semantic reviewer: a single article spanning the whole
+   issue), a reasoning bump low→medium→high, strengthened instructions
+   requiring fine-grained decomposition, and a per-page OCR cache (all 32
+   pages of this issue now cached, $0 OCR cost per retry). 9 commits,
+   `37e2746`..`683b973`, 213/214 tests passing. 21 live attempts run
+   (~$0.87 confirmed spend, real total likely $1.2–1.5 — the pipeline
+   doesn't record cost from a call that raised after being billed).
+   **Issue 02-1973 still has not cleared the article gate end-to-end** —
+   `non_article_span_implausibly_large` is recurring on most attempts even
+   after its own fix; full detail and the next diagnostic step:
+   `rhemata-status.md`'s 2026-08-27 entry.
+   Next: diagnose that recurrence directly (a standalone segmentation-only
+   call reusing the cached transcript, no CLI, no new OCR cost), then rerun
+   the no-write article/proposition gates, and obtain Alex's separate
+   approval before any attended database write. No benchmark decision or
+   pipeline fix authorizes a database write or file move.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing

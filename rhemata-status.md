@@ -8,9 +8,9 @@ table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-27. **PLAN.md has zero active blockers.** This session
-shipped one UI fix and closed out the B6 general-latency track end to end
-(measured, reviewed, decided, deployed) — see PLAN.md/docs/roadmap.md for the
-pointer, full trail in `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
+fixed a UI regression, committed a stray migration, and did substantial New
+Wine A2 pipeline work (below) — see docs/roadmap.md's A2 entry for the
+roadmap-level pointer.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -19,35 +19,65 @@ for this file.
 
 ## Current state
 
-**Sources disclosure toggle — DONE, live (commit `3f75d2b`).** The citation
-fallback list (shown when an answer's citations aren't referenced inline as
-`[N]`) rendered fully open by default. Now a closed `Sources (N)` button with
-a chevron; the list only mounts on click. Verified via a dev-only preview
-page (blocked in prod) since the fallback path doesn't fire on most answers.
-Deployed to Vercel, confirmed 200 on `rhemata.app`.
+**Chat input focus ring — DONE, live (commit `a26d1f6`).** Removed the
+mouse-focus ring on the prompt capsule (a prior session's uncommitted fix);
+verified live in the running dev server before pushing.
 
-**B6 general answer-latency — DONE, live (commits `07f6922`, `98748ed` →
-`f00b303`).** Every real answer now generates with Anthropic's
-`output_config.effort="medium"` instead of the implicit `high` default —
-hardcoded, not flag-gated (Alex's explicit call: this affects every answer,
-not a narrow edge case, so the flag machinery wasn't judged worth it).
-Measured **25.46% faster median producer time** (49.41s → 36.83s), 11/12
-cases faster, no p90 regression, on the fixed 12-case paired benchmark (48
-paid generations, ~$2.67 total). A targeted 6-pair blind human quality
-review across the doctrinally sensitive categories (healing, prophetic
-accountability, apostolic authority, eschatology, baptism, tongues) found
-**zero hard failures** on either variant — the one flagged minor concern
-turned out, after unblinding, to belong to the old baseline, not the
-candidate. Both Railway services (`rhemata`, `answer-worker`) confirmed
-redeployed and healthy; `answer-worker` logs show `fake=False` (the real
-`produce()` path). Full trail, including the rejected `teacher_specific_v1`
-candidate this superseded (kept as B6-F1, a separate named-teacher integrity
-fix, unaffected by this): `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
+**Migration 091 + B6-F1 routing-flag scripts — committed (commit `2e6bde1`).**
+Already live in production from a prior session; only the repo record was
+missing. No new DB write — brings the repo in sync with already-applied state.
 
-**Worth watching, not a known problem:** the blind review was 6 pairs, not
-24 — a real but small sample. If a real answer reads unusually thin or
-hedge-y going forward, this is the first place to look; reverting is a
-one-line code change (`GENERATION_EFFORT` in `producer.py`).
+**New Wine A2 — substantial progress, Issue 02-1973 still not cleared
+end-to-end.** Root-caused and fixed the original defect (segmentation
+silently stopped 54% through the 32-page issue at low reasoning, no error),
+then found and fixed five further defects through live validation the same
+day, each unit-tested before moving on (9 commits, `37e2746`..`683b973`,
+213/214 tests passing — the one failure is a pre-existing, unrelated
+PyMuPDF/venv environment quirk, confirmed via `git stash` to predate this
+session):
+- Deterministic full-coverage check (`article_coverage_incomplete`) — the
+  original fix.
+- `non_article_spans`: non-article content now has an explicit home instead
+  of becoming a silent gap.
+- Three rounds of size/fraction caps, each closing a gaming pattern the
+  model found live in direct response to the previous fix: dumping real
+  articles into oversized `other_non_article` spans, then oversized NAMED
+  categories, then spread across many spans under the per-span cap
+  (closed with an aggregate 40%-of-issue cap) — then, most seriously, one
+  giant article covering the whole issue, which slipped past the semantic
+  reviewer too (`_MAX_ARTICLE_CHARS` closes this).
+- Reasoning raised low→medium→high; instructions strengthened to require
+  fine-grained decomposition, not just full coverage.
+- `letters_to_editor` category added + `other_non_article` cap widened
+  2,000→2,500, found via a direct diagnostic call (bypassing the CLI,
+  reusing the cached OCR transcript) that showed an otherwise-correct
+  11-article segmentation being rejected only for two legitimate spans with
+  nowhere good to go.
+- Per-page OCR result cache (`local/magazine_review_ocr_page_cache.json`,
+  gitignored) — pure efficiency, no safety-rule change. All 32 pages of
+  this issue are now cached; a retry costs $0 in OCR.
+
+**21 live attempts run today** against the real Issue 02-1973 PDF. 14
+reached real segmentation output; the rest failed earlier on OCR content,
+provider rate limits, empty/refused model output, or connection errors —
+infra noise, not a code gap. Confirmed cost from decision files that
+recorded it: **$0.87** — a known floor, not the true total: the pipeline
+doesn't record cost from a call that raised after being billed, so real
+spend is likely closer to $1.2–1.5. Of the $3 validation headroom Alex set
+this session, this is well within budget.
+
+**Not yet resolved:** `non_article_span_implausibly_large` is still firing
+on most recent attempts (6 of the last 8 that reached segmentation, v14
+onward) even after the `letters_to_editor`/cap-widening fix. Unlike the
+`article_implausibly_long` recurrence earlier (fully resolved by the
+reasoning bump + instruction fix), this one hasn't yet had its own
+diagnostic pass post-fix — v20/v21's exact offending spans are unknown (no
+manifest persists when `segment_articles()` rejects). Next session should
+run the same diagnostic method used for the `letters_to_editor` fix (a
+standalone segmentation-only call reusing the cached transcript, no CLI, no
+new OCR cost — see the script pattern in commit `683b973`'s message) before
+assuming these are all false positives worth loosening a cap for; some may
+be genuine catches.
 
 **Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
 
@@ -57,20 +87,12 @@ one-line code change (`GENERATION_EFFORT` in `producer.py`).
 
 - **Scheduled**: quote accuracy/relevance repair before any attended
   re-enable.
-- **Scheduled A2:** correct the omitted New Wine article + two
-  continuations, rerun local no-write gates.
+- **Scheduled A2:** see Current state above — Issue 02-1973 isn't through
+  the article gate yet. Production database ingest for this or any New
+  Wine issue remains a separate, attended, explicitly approved operation
+  regardless of how clean a review run gets.
 - **Triggered**: JWKS unknown-`kid` rate limit — residual belongs at the
   edge.
-- **Repo hygiene, unresolved across multiple sessions now:** two loose ends
-  sitting in the working tree, neither touched this session because their
-  origin/intent is unclear —
-  `frontend/components/rhemata/chat-input.tsx` has an uncommitted one-line
-  CSS change (drops the focus ring on the prompt cluster), and migration 091
-  plus its three scripts (`apply_migration_091.py`,
-  `flip_teacher_specific_routing_flag.py`, `test_teacher_specific_routing_flag.py`)
-  were applied live for B6-F1 but never `git add`ed. Both are low-risk to sit
-  as-is; worth a deliberate decision (commit or discard) next time someone's
-  in this area.
 - Carried, not re-checked this session: `scripts/test_metering.py` writes
   live to production despite the `test_*.py` naming (self-cleans, verified
   zero residual, but read any `scripts/test_*.py` before batch-running it);
@@ -78,14 +100,16 @@ one-line code change (`GENERATION_EFFORT` in `producer.py`).
   CSP, deferred Next.js major bump); staging source name still reads
   `"Vlad Savchuk (web staging)"`; Bonnke URL suspect; no retention/TTL logic
   for user data; `rhemata_readonly_analysis` has no grant on PII/user
-  tables; full cascading account deletion still unbuilt.
+  tables; full cascading account deletion still unbuilt; New Wine review
+  pipeline's cost-reporting gap (noted above) is a real observability nit,
+  not fixed this session.
 
 ---
 
 ## Next single item
 
-**No active blocker.** Both items this session shipped are fully closed and
-live. Next work is whatever Alex prioritizes from `docs/roadmap.md`'s
-Scheduled list (quote accuracy/relevance repair, New Wine A2 correction, the
-B1–B7 product track) — none is currently authorized as a Blocker. Active
-blocker count **0**.
+**No active blocker.** New Wine A2 is the live thread: diagnose the
+`non_article_span_implausibly_large` recurrence directly (cheap — OCR is
+fully cached) before running more blind CLI retries. Real database ingest
+for this or any New Wine issue remains a separate, attended, explicitly
+approved operation regardless of how clean a review run gets.

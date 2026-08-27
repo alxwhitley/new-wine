@@ -966,26 +966,53 @@ different row, per the hard rule above.
     source promotion is a separate explicit operation. The credential-free
     fake-provider proof in `scripts/test_magazine_review_end_to_end.py` builds
     confidence in this mechanism but does not open roadmap trigger A2 or select
-    an OCR model. **Planning snapshot, 2026-08-25—explicitly unstable:** the
-    initial OCR winner is still pending among Gemini 2.5 Flash, Google
-    Enterprise Document OCR, and Gemini 3.6 Flash; page-completeness review and
-    the one permitted targeted retry use Gemini 3.6 Flash; segmentation uses
-    Groq `openai/gpt-oss-120b` at low reasoning, while issue-wide article review
-    uses it at medium reasoning; proposition extraction remains the existing
-    GPT-OSS 120B v3.1 path and support review uses GPT-OSS 120B at medium
-    reasoning. The Groq planning price snapshot is **$0.15 per million input
-    tokens and $0.60 per million output tokens**. The accepted design's Google
-    snapshot points to the official Gemini API pricing, Gemini Batch API, and
-    Google Document AI pricing sources: Enterprise Document OCR is priced per
-    page, and eligible Gemini Batch/Flex processing is discounted; no Google
-    dollar amount is made durable here. Recheck every model's availability and
-    all provider prices at the official sources before the paid blind benchmark
+    an OCR model. **Planning snapshot, 2026-08-25, corrected 2026-08-27 — still
+    explicitly unstable:** the initial OCR winner is still pending among Gemini
+    2.5 Flash, Google Enterprise Document OCR, and Gemini 3.6 Flash;
+    page-completeness review and the one permitted targeted retry use Gemini
+    3.6 Flash; segmentation uses Groq `openai/gpt-oss-120b` at **high**
+    reasoning (raised low→medium→high, 2026-08-27, New Wine A2 live
+    validation — low silently under-covered a real 32-page issue, medium
+    still produced an implausibly-large single/few-article segmentation in
+    roughly half of live attempts; full trail in `rhemata-status.md`'s
+    2026-08-27 entry and commits `37e2746`..`683b973`), while issue-wide
+    article review uses it at medium reasoning; proposition extraction
+    remains the existing GPT-OSS 120B v3.1 path and support review uses
+    GPT-OSS 120B at medium reasoning. The Groq planning price snapshot is
+    **$0.15 per million input tokens and $0.60 per million output tokens**.
+    The accepted design's Google snapshot points to the official Gemini API
+    pricing, Gemini Batch API, and Google Document AI pricing sources:
+    Enterprise Document OCR is priced per page, and eligible Gemini
+    Batch/Flex processing is discounted; no Google dollar amount is made
+    durable here. Recheck every model's availability and all provider prices
+    at the official sources before the paid blind benchmark
     or any paid review run.
 
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **New Wine article-segmentation guardrails are reactive, not proven
+  exhaustive — 2026-08-27.** Live validation against Issue 02-1973 found
+  FIVE distinct ways the model could technically satisfy "full coverage"
+  while producing wrong output, each discovered live and fixed with a
+  targeted deterministic check as it was found, not designed upfront:
+  `scripts/magazine_review/articles.py`'s `_COVERAGE_GAP_TOLERANCE_CHARS`,
+  `_OTHER_NON_ARTICLE_MAX_CHARS`, `_NAMED_NON_ARTICLE_MAX_CHARS`,
+  `_NON_ARTICLE_TOTAL_FRACTION_MAX`, `_MAX_ARTICLE_CHARS`. One (a single
+  article spanning the whole 121,011-char issue) slipped past the semantic
+  reviewer too (`verdict=True`, `status=passed`) — fail-closed by
+  construction only guarantees SOMETHING catches an unsafe case eventually,
+  not that every layer catches every case; specific defects still need
+  specific checks. A future session finding a NEW gaming pattern here
+  should add a new targeted check with the same live-evidence discipline
+  (real numbers from a real failure, not a guessed threshold), not assume
+  these five are exhaustive. `non_article_span_implausibly_large` was still
+  recurring as of session end (6 of the last 8 attempts that reached
+  segmentation) even after its own fix (commit `683b973`) — undiagnosed,
+  not yet known whether these are false positives needing another cap
+  adjustment or genuine catches. Full trail: `rhemata-status.md`'s
+  2026-08-27 entry, commits `37e2746`..`683b973`.
 - **A tracked master spreadsheet for ingestion candidates now exists —
   separate from, and layered on top of, `source_ingest_queue` (Invariant
   16), not a replacement for it.** Built 2026-08-19 as a single `.xlsx`
