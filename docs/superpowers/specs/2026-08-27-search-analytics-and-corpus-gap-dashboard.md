@@ -25,10 +25,35 @@ missing-content work can be prioritized by real demand instead of guesswork.
 
 Privacy is the load-bearing constraint, not an afterthought: successfully
 answered question wording is never persisted or returned by any API,
-tester identity is never derivable from stored rows, and even the one
-exception (a `no_material` question, needed to diagnose *why* the corpus
-failed) is deterministically redacted and time-boxed for automatic
-deletion after the gap is resolved.
+tester identity is never derivable through the dashboard, the admin API,
+or by anyone holding only the `anon`/`authenticated` Postgres roles — and
+even the one exception (a `no_material` question, needed to diagnose *why*
+the corpus failed) is deterministically redacted and time-boxed for
+automatic deletion after the gap is resolved.
+
+**Corrected 2026-08-27, same session, fresh-context privacy review Finding
+1 — the boundary above is real but narrower than an earlier draft of this
+paragraph claimed ("tester identity is never derivable from stored
+rows," unqualified).** `analytics_consent` stores `user_id` and
+`subject_key` on the same row (required so `withdraw()` can look up which
+key(s) to purge — this is the directive's own "private versioned subject
+key if needed for deletion" field, not a bug). Anyone with the SAME
+direct-Postgres/service-role access this feature's own maintenance
+scripts (`retention.py`, `finalizer.py`) already require can trivially
+join `analytics_consent` to `search_occurrences` on `subject_key` and
+de-anonymize every occurrence — no cryptography needed, and separately,
+anyone holding an `ANALYTICS_HMAC_SECRET_V*` value plus `auth.users` (a
+small, enumerable table in a private beta) can forward-compute
+`derive_subject_key()` for every real account and match it against stored
+keys. Neither path is reachable through any HTTP surface this feature
+exposes (every admin route filters columns to exclude `subject_key`, and
+RLS + explicit `REVOKE` correctly block `anon`/`authenticated` PostgREST
+access) — the boundary genuinely holds against the dashboard, the API,
+and any client-side actor. It does **not** hold against the same
+operator-level DB access this single-operator beta already relies on for
+routine maintenance. This is very likely an acceptable tradeoff (Alex
+already has that level of access for a hundred other reasons), but it is
+a decision, not a null risk — see rollout checklist item 8.
 
 ## Non-goals (restated from the directive, binding)
 
@@ -314,3 +339,17 @@ this session.
    runs.
 8. Revisit Assumption 4 above (server-side consent enforcement) if Alex
    wants defense-in-depth beyond the frontend gate.
+9. Explicitly confirm the corrected anonymity boundary above (Finding 1):
+   safe against the dashboard/API/`anon`/`authenticated` roles, not safe
+   against direct service-role DB access. If this isn't acceptable, the
+   fix is architectural (stop storing `subject_key` on `analytics_consent`
+   and instead re-derive it at withdrawal time against every known HMAC
+   secret version) and needs to happen before real beta data accumulates,
+   not after.
+10. Before ever rotating `ANALYTICS_HMAC_SECRET_V*` (setting a `_V2`,
+    bumping `CURRENT_SUBJECT_KEY_VERSION` in code): confirm
+    `consent.get_or_rotate_subject_key()`'s rotation-catch-up path (fixed
+    2026-08-27, this session, after the fresh-context review's Finding 2)
+    is the one shipped to production — a build that reverted to calling
+    `derive_subject_key()` directly from `async_chat.py` would silently
+    break `withdraw()`'s ability to find pre-rotation rows.
