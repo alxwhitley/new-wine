@@ -76,6 +76,12 @@ class AsyncAnswerConfig:
     # Stage 2: the seconds-reversible traffic switch, default OFF. The frontend
     # routes to the async path only when this is true AND the routes are mounted.
     serving_enabled: bool = False
+    # B6-F1 (migration 091): the seconds-reversible switch for the reviewed
+    # named-teacher source-boundary correction (Alex ACCEPT, 2026-08-26).
+    # answer_worker.py threads this straight into produce()'s
+    # experimental_teacher_routing parameter. Default OFF -- production
+    # behaviour is unchanged until this is explicitly flipped.
+    experimental_teacher_routing_enabled: bool = False
 
 
 def load_config(db) -> AsyncAnswerConfig:
@@ -87,7 +93,8 @@ def load_config(db) -> AsyncAnswerConfig:
             cur.execute(
                 "SELECT paused, max_queue_depth, reuse_ttl_seconds, rpm_limit, "
                 "itpm_limit, otpm_limit, spend_ceiling_usd, spend_window, "
-                "lease_seconds, serving_enabled FROM async_answer_config WHERE id = 1"
+                "lease_seconds, serving_enabled, experimental_teacher_routing_enabled "
+                "FROM async_answer_config WHERE id = 1"
             )
             return cur.fetchone()
 
@@ -107,6 +114,7 @@ def load_config(db) -> AsyncAnswerConfig:
         spend_window=row["spend_window"],
         lease_seconds=int(row["lease_seconds"]),
         serving_enabled=bool(row["serving_enabled"]),
+        experimental_teacher_routing_enabled=bool(row["experimental_teacher_routing_enabled"]),
     )
 
 

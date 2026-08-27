@@ -62,11 +62,13 @@ def _seconds_to_next_minute() -> int:
     return max(1, 61 - int(time.time()) % 60)
 
 
-def _fake_produce(supabase, question, messages=None, topics_established=None):
+def _fake_produce(supabase, question, messages=None, topics_established=None, experimental_teacher_routing=False):
     """Zero-cost stand-in for produce(): simulates generation latency and
     returns canned verified output with synthetic token counts. Proves the queue
     mechanics (durability, single-flight, kill-safety, reconnect, spend halt,
-    concurrency) without any Anthropic spend. Not for the accuracy-check proof."""
+    concurrency) without any Anthropic spend. Not for the accuracy-check proof.
+    Accepts experimental_teacher_routing for signature parity with produce()
+    (Worker._tick() always passes it); this stand-in ignores it."""
     time.sleep(float(os.environ.get("ASYNC_FAKE_LATENCY", "2.0")))
     return ProducerResult(
         answer="[fake] verified answer to: %s" % question,
@@ -171,6 +173,7 @@ class Worker:
             result = self.produce_fn(
                 self._supabase_client(), job["question"],
                 job.get("messages") or [], job.get("topics_established") or {},
+                experimental_teacher_routing=cfg.experimental_teacher_routing_enabled,
             )
         except Exception as exc:
             status = jobs.fail_or_requeue(db, job_id, "producer error: %r" % exc)
