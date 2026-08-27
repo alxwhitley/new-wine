@@ -183,6 +183,9 @@ class _FixtureArticleClient:
                     }
                     for article in response["articles"]
                 ],
+                "non_article_spans": copy.deepcopy(
+                    response.get("non_article_spans", [])
+                ),
             }
         elif request["stage"] == "article_completeness_review":
             response = self._fixture["review"]

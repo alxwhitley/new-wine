@@ -707,6 +707,7 @@ class ArticleManifest:
     reviewer_prompt_fingerprint: str
     reviewer_usage: Mapping[str, float | int]
     reviewer_cost_usd: float
+    non_article_spans: Tuple[Tuple[int, int, str, str], ...] = ()
     issue_coverage_complete: bool = True
     missing_substantive_spans: Tuple[Tuple[int, int, str], ...] = ()
     missing_articles: Tuple[str, ...] = ()
@@ -730,6 +731,17 @@ class ArticleManifest:
         _require_sha256(self.reviewer_prompt_fingerprint, "article_reviewer_prompt_fingerprint_invalid")
         _require_usage(self.reviewer_usage, "article_reviewer_usage_invalid")
         _require_cost(self.reviewer_cost_usd, "article_reviewer_cost_invalid")
+        if not isinstance(self.non_article_spans, tuple):
+            raise ArtifactValidationError("article_non_article_spans_invalid")
+        for span in self.non_article_spans:
+            if not isinstance(span, tuple) or len(span) != 4:
+                raise ArtifactValidationError("article_non_article_spans_invalid")
+            start = _require_nonnegative_int(span[0], "article_non_article_spans_invalid")
+            end = _require_nonnegative_int(span[1], "article_non_article_spans_invalid")
+            _require_nonempty(span[2], "article_non_article_spans_invalid")
+            _require_nonempty(span[3], "article_non_article_spans_invalid")
+            if end <= start or end > len(self.transcript):
+                raise ArtifactValidationError("article_non_article_spans_invalid")
         if not isinstance(self.issue_coverage_complete, bool):
             raise ArtifactValidationError("article_issue_coverage_invalid")
         if not isinstance(self.missing_substantive_spans, tuple):
@@ -798,6 +810,15 @@ class ArticleManifest:
             "reviewer_prompt_fingerprint": self.reviewer_prompt_fingerprint,
             "reviewer_usage": dict(self.reviewer_usage),
             "reviewer_cost_usd": self.reviewer_cost_usd,
+            "non_article_spans": [
+                {
+                    "transcript_start": start,
+                    "transcript_end": end,
+                    "category": category,
+                    "reason": reason,
+                }
+                for start, end, category, reason in self.non_article_spans
+            ],
             "issue_coverage_complete": self.issue_coverage_complete,
             "missing_substantive_spans": [
                 {
@@ -819,7 +840,8 @@ class ArticleManifest:
             {
                 "identity", "issue_hash", "ocr_artifact_hash", "transcript", "articles", "segmentation_model",
                 "segmentation_prompt_fingerprint", "segmentation_usage", "segmentation_cost_usd", "reviewer_model",
-                "reviewer_prompt_fingerprint", "reviewer_usage", "reviewer_cost_usd", "issue_coverage_complete",
+                "reviewer_prompt_fingerprint", "reviewer_usage", "reviewer_cost_usd", "non_article_spans",
+                "issue_coverage_complete",
                 "missing_substantive_spans", "missing_articles", "status", "quarantine_reasons",
             },
             "article_manifest_invalid",
@@ -839,6 +861,15 @@ class ArticleManifest:
                 reviewer_prompt_fingerprint=raw["reviewer_prompt_fingerprint"],
                 reviewer_usage=raw["reviewer_usage"],
                 reviewer_cost_usd=raw["reviewer_cost_usd"],
+                non_article_spans=tuple(
+                    (
+                        item["transcript_start"],
+                        item["transcript_end"],
+                        item["category"],
+                        item["reason"],
+                    )
+                    for item in raw["non_article_spans"]
+                ),
                 issue_coverage_complete=raw["issue_coverage_complete"],
                 missing_substantive_spans=tuple(
                     (

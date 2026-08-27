@@ -20,7 +20,14 @@ from .schemas import (
 
 
 ARTICLE_MODEL = "openai/gpt-oss-120b"
-SEGMENTATION_REASONING = "low"
+# Raised from "low" 2026-08-27 (New Wine A2, Issue 02-1973): at low reasoning
+# the model proposed a plausible, schema-valid, but incomplete article set
+# that silently stopped 54% of the way through a 32-page issue -- not a
+# token-budget truncation (it used 1,359 of 65,536 allowed output tokens).
+# The review stage, same model at "medium", caught the same class of gap
+# correctly. This is a recorded design decision per Invariant 17's "explicitly
+# unstable" model/effort snapshot, not a silent drift.
+SEGMENTATION_REASONING = "medium"
 REVIEW_REASONING = "medium"
 SEGMENTATION_INSTRUCTIONS = (
     "Segment every authored article in the complete verified magazine transcript. "
@@ -28,7 +35,15 @@ SEGMENTATION_INSTRUCTIONS = (
     "unique output filename, title, author, and exact transcript span. Do not return "
     "article text or source pages: the pipeline derives them from the verified "
     "transcript after validating each span. Return spans in ascending transcript "
-    "order; article spans must never overlap."
+    "order; article spans must never overlap. "
+    "Every character of the transcript belongs to exactly one of two things: an "
+    "authored article, or non-authored material (an advertisement, the masthead, "
+    "the table of contents, a subscription notice, or similar). Account for all of "
+    "it: return authored articles in `articles` and everything else as an exact "
+    "transcript span in `non_article_spans`, each with a category and a specific "
+    "reason. Do not stop partway through a long transcript -- before responding, "
+    "verify that your combined `articles` and `non_article_spans` spans, placed in "
+    "transcript order, reach the transcript's exact final character with no gap."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
@@ -40,18 +55,22 @@ REVIEW_INSTRUCTIONS = (
     "the proposed set, with its exact transcript span and a specific reason."
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-# A deliberately loose pre-filter, not a full-coverage guarantee. Legitimate
-# non-substantive content (a subscription notice, a short ad -- see
-# fixtures/magazine_review/clean_issue.json's page 2, a 128-char gap the
-# segmenter correctly leaves unassigned) can leave real, valid gaps. The two
-# live defects this exists to catch (New Wine Issue 02-1973, retry_13: a
-# dropped page-3 continuation and an entire 13-page/55,107-char dead zone
-# containing a whole omitted article) were 5,190 and 55,107 chars -- 10x and
-# 100x this threshold. Genuine small-scale omissions stay the semantic
-# reviewer's job via missing_substantive_spans/issue_coverage_complete; this
-# check only catches egregious truncation cheaply, before paying for that
-# review call.
-_COVERAGE_GAP_TOLERANCE_CHARS = 500
+# Non-article content (ads, mastheads, subscription notices) now has an
+# explicit home in non_article_spans (added 2026-08-27), so this tolerance no
+# longer needs to absorb it -- it's back to a tight bound covering only real
+# inter-span whitespace/running-header formatting noise, observed live to top
+# out at 18 chars. A genuinely dropped article or continuation runs into the
+# thousands (New Wine A2, Issue 02-1973, retry_13: 5,190 and 55,107 chars).
+_COVERAGE_GAP_TOLERANCE_CHARS = 50
+_NON_ARTICLE_CATEGORIES = frozenset(
+    {
+        "advertisement",
+        "masthead",
+        "table_of_contents",
+        "subscription_notice",
+        "other_non_article",
+    }
+)
 _SEMANTIC_FIELDS = (
     "start_coherent",
     "end_coherent",
@@ -298,6 +317,20 @@ def _segmentation_schema() -> dict[str, object]:
             },
         },
     }
+    non_article_span = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["category", "reason", "transcript_start", "transcript_end"],
+        "properties": {
+            "category": {
+                "type": "string",
+                "enum": sorted(_NON_ARTICLE_CATEGORIES),
+            },
+            "reason": {"type": "string", "minLength": 1},
+            "transcript_start": {"type": "integer", "minimum": 0},
+            "transcript_end": {"type": "integer", "minimum": 1},
+        },
+    }
     return {
         "type": "json_schema",
         "json_schema": {
@@ -306,11 +339,20 @@ def _segmentation_schema() -> dict[str, object]:
             "schema": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["ocr_identity", "transcript_hash", "articles"],
+                "required": [
+                    "ocr_identity",
+                    "transcript_hash",
+                    "articles",
+                    "non_article_spans",
+                ],
                 "properties": {
                     "ocr_identity": {"type": "string"},
                     "transcript_hash": {"type": "string"},
                     "articles": {"type": "array", "minItems": 1, "items": article},
+                    "non_article_spans": {
+                        "type": "array",
+                        "items": non_article_span,
+                    },
                 },
             },
         },
@@ -433,7 +475,7 @@ def segment_articles(
     )
     output = _require_exact_keys(
         output,
-        {"ocr_identity", "transcript_hash", "articles"},
+        {"ocr_identity", "transcript_hash", "articles", "non_article_spans"},
         "segmentation_output_invalid",
     )
     if output["ocr_identity"] != transcript.ocr_identity:
@@ -443,6 +485,9 @@ def segment_articles(
     raw_articles = output["articles"]
     if not isinstance(raw_articles, list) or not raw_articles:
         raise ArticleReviewError("articles_required")
+    raw_non_article_spans = output["non_article_spans"]
+    if not isinstance(raw_non_article_spans, list):
+        raise ArticleReviewError("non_article_spans_required")
 
     seen_ids: set[str] = set()
     seen_filenames: set[str] = set()
@@ -473,8 +518,6 @@ def segment_articles(
             raise ArticleReviewError("article_span_invalid")
         if start < previous_end:
             raise ArticleReviewError("article_spans_overlap")
-        if start - previous_end > _COVERAGE_GAP_TOLERANCE_CHARS:
-            raise ArticleReviewError("article_coverage_incomplete")
         source_pages = _source_pages_for_span(transcript, start, end)
         if not source_pages:
             raise ArticleReviewError("article_source_pages_required")
@@ -517,7 +560,43 @@ def segment_articles(
         seen_filenames.add(normalized_filename)
         previous_end = end
 
-    if len(transcript.text) - previous_end > _COVERAGE_GAP_TOLERANCE_CHARS:
+    non_article_span_keys = {"category", "reason", "transcript_start", "transcript_end"}
+    non_article_spans: list[tuple[int, int, str, str]] = []
+    for raw in raw_non_article_spans:
+        proposed = _require_exact_keys(
+            raw, non_article_span_keys, "non_article_span_invalid"
+        )
+        category = proposed["category"]
+        if category not in _NON_ARTICLE_CATEGORIES:
+            raise ArticleReviewError("non_article_span_invalid")
+        reason = _require_nonempty(proposed["reason"], "non_article_span_invalid")
+        start = _require_int(proposed["transcript_start"], "non_article_span_invalid")
+        end = _require_int(proposed["transcript_end"], "non_article_span_invalid")
+        if start < 0 or start >= end or end > len(transcript.text):
+            raise ArticleReviewError("non_article_span_invalid")
+        non_article_spans.append((start, end, category, reason))
+
+    # Unified coverage check across BOTH articles and non_article_spans --
+    # merged and sorted, the whole transcript must be accounted for with no
+    # overlap and no gap past a small formatting-noise tolerance. Real
+    # inter-span whitespace/running-header gaps observed live top out at 18
+    # chars; a genuinely dropped article or continuation runs into the
+    # thousands (New Wine A2, Issue 02-1973, retry_13: 5,190 and 55,107
+    # chars). Non-article content (ads, mastheads, subscription notices) no
+    # longer needs a wide fudge factor -- it now has an explicit home in
+    # non_article_spans, so this tolerance is tight again.
+    covered = sorted(
+        [(a.transcript_start, a.transcript_end) for a in articles]
+        + [(s, e) for s, e, _, _ in non_article_spans]
+    )
+    cursor = 0
+    for start, end in covered:
+        if start < cursor:
+            raise ArticleReviewError("coverage_spans_overlap")
+        if start - cursor > _COVERAGE_GAP_TOLERANCE_CHARS:
+            raise ArticleReviewError("article_coverage_incomplete")
+        cursor = max(cursor, end)
+    if len(transcript.text) - cursor > _COVERAGE_GAP_TOLERANCE_CHARS:
         raise ArticleReviewError("article_coverage_incomplete")
 
     manifest = ArticleManifest(
@@ -526,6 +605,7 @@ def segment_articles(
         ocr_artifact_hash=transcript.ocr_identity,
         transcript=transcript.text,
         articles=tuple(articles),
+        non_article_spans=tuple(non_article_spans),
         segmentation_model=ARTICLE_MODEL,
         segmentation_prompt_fingerprint=_config_fingerprint(_segmentation_config()),
         segmentation_usage=usage,

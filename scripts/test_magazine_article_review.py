@@ -146,6 +146,7 @@ def proposed_article(
 def segmentation_response(
     transcript: VerifiedIssueTranscript,
     articles: list[dict[str, object]],
+    non_article_spans: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     return {
         "output": {
@@ -159,6 +160,7 @@ def segmentation_response(
                 }
                 for article in articles
             ],
+            "non_article_spans": non_article_spans or [],
         },
         "usage": {"input_tokens": 120, "output_tokens": 35},
         "cost_usd": 0.012,
@@ -241,8 +243,10 @@ def two_proposals(transcript: VerifiedIssueTranscript) -> list[dict[str, object]
     ]
 
 
-def test_segmentation_uses_complete_issue_low_reasoning_and_strict_json(verified_issue):
-    """A truncated prompt or unconstrained response could silently lose articles."""
+def test_segmentation_uses_complete_issue_medium_reasoning_and_strict_json(verified_issue):
+    """A truncated prompt or unconstrained response could silently lose articles.
+    Reasoning effort raised low->medium 2026-08-27 (New Wine A2): low reasoning
+    let segmentation stop 54% through a real 32-page issue without error."""
     proposals = two_proposals(verified_issue)
     client = FakeStructuredClient(segmentation_response(verified_issue, proposals))
 
@@ -250,7 +254,7 @@ def test_segmentation_uses_complete_issue_low_reasoning_and_strict_json(verified
 
     request = client.last_request
     assert request["model"] == MODEL
-    assert request["reasoning_effort"] == "low"
+    assert request["reasoning_effort"] == "medium"
     assert "must never overlap" in request["instructions"]
     assert request["issue_transcript"] == verified_issue.text
     assert request["pages"] == [
@@ -438,22 +442,53 @@ def test_mid_sequence_gap_past_tolerance_rejected_deterministically(
         segment_articles(verified_long_issue, client)
 
 
-def test_small_gap_within_tolerance_does_not_reject_deterministically(
+def test_small_formatting_gap_within_tolerance_does_not_reject_deterministically(
     verified_long_issue,
 ):
-    """Legitimate non-substantive content (a short ad, a subscription notice
-    -- see fixtures/magazine_review/clean_issue.json's 128-char page-2 gap)
-    can leave a real gap; the deterministic pre-filter must stay loose
-    enough not to flag it, leaving the judgment call to the semantic
-    reviewer where it belongs."""
+    """Ordinary inter-span whitespace/running-header noise (observed live to
+    top out at 18 chars) must not trip the deterministic pre-filter. Since
+    non_article_spans gives real non-article content (ads, subscription
+    notices) an explicit home, this tolerance is now narrowly about
+    formatting noise, not ad-sized gaps -- see
+    test_non_article_span_accounts_for_a_real_gap below for that case."""
     proposals = two_long_proposals(verified_long_issue)
     response = segmentation_response(verified_long_issue, proposals)
-    response["output"]["articles"][0]["transcript_end"] -= 200
+    response["output"]["articles"][0]["transcript_end"] -= 20
     client = FakeStructuredClient(response)
 
     manifest = segment_articles(verified_long_issue, client)
 
     assert len(manifest.articles) == 2
+
+
+def test_non_article_span_accounts_for_a_real_gap(verified_long_issue):
+    """A legitimate non-article gap (an ad, a subscription notice -- see
+    fixtures/magazine_review/clean_issue.json's 128-char page-2 gap) must be
+    expressible via non_article_spans and not rejected, while still being
+    recorded for provenance rather than silently disappearing."""
+    proposal = two_long_proposals(verified_long_issue)[:1]
+    non_article_start = proposal[0]["transcript_end"]
+    non_article_end = len(verified_long_issue.text)
+    response = segmentation_response(
+        verified_long_issue,
+        proposal,
+        non_article_spans=[
+            {
+                "category": "advertisement",
+                "reason": "full-page ad for tape ministry",
+                "transcript_start": non_article_start,
+                "transcript_end": non_article_end,
+            }
+        ],
+    )
+    client = FakeStructuredClient(response)
+
+    manifest = segment_articles(verified_long_issue, client)
+
+    assert len(manifest.articles) == 1
+    assert manifest.non_article_spans == (
+        (non_article_start, non_article_end, "advertisement", "full-page ad for tape ministry"),
+    )
 
 
 def test_issue_coverage_verdict_quarantines_content_the_reviewer_flags_missing(

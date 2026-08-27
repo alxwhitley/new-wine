@@ -128,6 +128,14 @@
           "transcript_end": 265,
           "text": "GRACE FOR THE JOURNEY\nBy Ada North\nGrace is received by faith, not earned by effort. This gift forms a generous life because believers freely share what God has given them. The article closes by calling readers to serve their neighbors with humility."
         }
+      ],
+      "non_article_spans": [
+        {
+          "category": "subscription_notice",
+          "reason": "Page 2 is a subscription renewal notice, not an authored article.",
+          "transcript_start": 282,
+          "transcript_end": 393
+        }
       ]
     },
     "review": {
