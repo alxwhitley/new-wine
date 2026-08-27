@@ -286,6 +286,32 @@ def test_segmentation_uses_complete_issue_high_reasoning_and_strict_json(verifie
     ]
 
 
+def test_segmentation_tolerates_out_of_order_non_overlapping_articles(verified_issue):
+    """A real live segmentation call, 2026-08-27 (New Wine A2, Issue
+    02-1973), returned ten genuinely non-overlapping articles with one
+    ("Editorial") placed after a later article in list order despite
+    starting earlier in the transcript -- the instructions ask for
+    ascending order, but nothing enforces it. The overlap check compared
+    each article only to the PREVIOUS one in raw list order (not sorted),
+    so this out-of-order-but-non-overlapping return raised
+    article_spans_overlap three of four times on real live retries against
+    the real issue, even though there was no actual overlap. The coverage
+    check just below this one already sorts by transcript_start before
+    comparing -- this proves the same pattern for the article-only check:
+    swapping two genuinely non-overlapping proposals' list order must not
+    change the outcome."""
+    proposals = two_proposals(verified_issue)
+    reordered = [proposals[1], proposals[0]]
+    client = FakeStructuredClient(segmentation_response(verified_issue, reordered))
+
+    manifest = segment_articles(verified_issue, client)
+
+    assert [article.article_id for article in manifest.articles] == [
+        "first-light",
+        "second-voice",
+    ]
+
+
 def test_blank_image_page_reaches_article_segmentation() -> None:
     """A passed image-only page may have a zero-length transcript span."""
     transcript = verified_transcript(

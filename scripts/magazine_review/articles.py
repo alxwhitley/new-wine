@@ -620,6 +620,23 @@ def segment_articles(
         "transcript_start",
         "transcript_end",
     }
+    # Sort by transcript_start before checking overlap, rather than trusting
+    # the model's own return order -- found live 2026-08-27 (New Wine A2,
+    # Issue 02-1973): three of four real segmentation calls against this
+    # issue returned a genuinely non-overlapping article ("Editorial") after
+    # a later article in list order, which this check (comparing only to the
+    # PREVIOUS article in raw list order) mistook for a real overlap every
+    # time. The instructions ask for ascending order, but nothing enforced
+    # it. The coverage check further below already sorts by start before
+    # comparing, for the same reason -- this makes the article-only check
+    # match that pattern. A malformed entry (non-mapping, missing/non-int
+    # start) sorts first so the per-article validation below still raises
+    # its own precise error instead of a sort-time crash.
+    def _sort_key(raw: object) -> int:
+        start = raw.get("transcript_start") if isinstance(raw, Mapping) else None
+        return start if isinstance(start, int) and not isinstance(start, bool) else -1
+
+    raw_articles = sorted(raw_articles, key=_sort_key)
     for raw in raw_articles:
         proposed = _require_exact_keys(raw, article_keys, "segmentation_article_invalid")
         article_id = _require_nonempty(proposed["article_id"], "article_id_required")
