@@ -15,6 +15,7 @@ import {
   Check,
   User as UserIcon,
   Link2,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -50,6 +51,7 @@ import type { CorpusCard } from "@/components/admin/corpus-types";
 import { CorpusDocumentsPanel, CopyButton } from "@/components/admin/CorpusDocumentsPanel";
 import type { CorpusLicenseSource } from "@/components/admin/CorpusDocumentsPanel";
 import { SourceQueuePanel } from "@/components/admin/SourceQueuePanel";
+import { AnalyticsPanel } from "@/components/admin/AnalyticsPanel";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -132,7 +134,7 @@ const FEEDBACK_TABS: { key: FeedbackTab; label: string }[] = [
   { key: "word_study", label: "Word Studies" },
 ];
 
-type TopTab = "profile" | "corpus" | "feedback" | "contributors" | "notes-queue" | "source-queue";
+type TopTab = "profile" | "corpus" | "feedback" | "contributors" | "notes-queue" | "source-queue" | "analytics";
 type CorpusSubView = "documents" | "sources" | "pipelines";
 
 type NavTab = {
@@ -151,6 +153,7 @@ const NAV_TABS: NavTab[] = [
   { key: "contributors", label: "Contributors", icon: Users    },
   { key: "notes-queue",  label: "Notes Queue",  icon: Inbox    },
   { key: "source-queue", label: "Source Queue", icon: Link2    },
+  { key: "analytics",    label: "Analytics",    icon: BarChart3 },
 ];
 
 // Pipeline command reference (Pipelines sub-view)
@@ -1352,6 +1355,11 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
               {/* ── Source Queue ─────────────────────────────────── */}
               {activeTab === "source-queue" && (
                 <SourceQueuePanel accessToken={accessToken} />
+              )}
+
+              {/* ── Analytics ────────────────────────────────────── */}
+              {activeTab === "analytics" && (
+                <AnalyticsPanel accessToken={accessToken} />
               )}
 
               {/* ── Corpus ──────────────────────────────────────── */}
