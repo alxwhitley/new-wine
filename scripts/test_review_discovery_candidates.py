@@ -9,7 +9,9 @@ Run: python3.12 scripts/test_review_discovery_candidates.py
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -309,12 +311,24 @@ try:
         "controller exposes a visible tab-lifecycle status",
         'id="review-status"' in landing.text,
     )
+    capability_match = re.search(
+        r"const capability = (\"(?:[^\"\\]|\\.)*\");",
+        landing.text,
+    )
+    controller_capability = (
+        json.loads(capability_match.group(1)) if capability_match else "missing"
+    )
+    check(
+        "controller receives an unguessable mutation capability in local HTML",
+        capability_match is not None and len(controller_capability) >= 32,
+    )
     response = client.post(
         "/decision",
         data={
             "action": "approve",
             "name": "HTTP First",
             "link": "https://http-first.example.com",
+            "capability": controller_capability,
         },
     )
     check("controller decision endpoint succeeds", response.status_code == 200)
@@ -351,26 +365,33 @@ try:
     client = TestClient(tool.app)
 
     api_current = client.get("/api/review/current")
+    current_payload = api_current.json()
     check(
         "extension current endpoint returns the first fresh candidate",
         api_current.status_code == 200
-        and api_current.json() == {
-            "done": False,
-            "candidate": {
-                "name": "API First",
-                "link": "https://api-first.example.com",
-                "remaining": 2,
-            },
-        },
+        and current_payload.get("done") is False
+        and current_payload.get("candidate") == {
+            "name": "API First",
+            "link": "https://api-first.example.com",
+            "remaining": 2,
+        }
+        and set(current_payload) == {
+            "done", "candidate", "capability", "revision",
+        }
+        and isinstance(current_payload.get("capability"), str)
+        and len(current_payload.get("capability", "")) >= 32
+        and isinstance(current_payload.get("revision"), str)
+        and len(current_payload.get("revision", "")) >= 32,
     )
 
     before_start_discovery = tool.DISCOVERY_PATH.read_bytes()
     before_start_approved = tool.APPROVED_PATH.read_bytes()
     api_start = client.post("/api/review/start")
+    start_payload = api_start.json()
     check(
         "extension start is read-only and returns the same candidate",
         api_start.status_code == 200
-        and api_start.json() == api_current.json()
+        and start_payload == current_payload
         and tool.DISCOVERY_PATH.read_bytes() == before_start_discovery
         and tool.APPROVED_PATH.read_bytes() == before_start_approved,
     )
@@ -379,6 +400,8 @@ try:
         "/api/review/decision",
         data={
             "action": "approve",
+            "capability": start_payload.get("capability", "missing"),
+            "revision": start_payload.get("revision", "missing"),
             "name": "API Second",
             "link": "https://api-second.example.com",
         },
@@ -395,12 +418,22 @@ try:
     )
 
     api_done = client.post(
-        "/api/review/decision", data={"action": "reject"}
+        "/api/review/decision",
+        data={
+            "action": "reject",
+            "capability": spoofed_approve.json().get("capability", "missing"),
+            "revision": spoofed_approve.json().get("revision", "missing"),
+        },
     )
     check(
         "extension final decision returns terminal state",
         api_done.status_code == 200
-        and api_done.json() == {"done": True, "candidate": None},
+        and api_done.json().get("done") is True
+        and api_done.json().get("candidate") is None
+        and set(api_done.json()) == {
+            "done", "candidate", "capability", "revision",
+        }
+        and isinstance(api_done.json().get("revision"), str),
     )
 finally:
     tool.DISCOVERY_PATH = _original_discovery_path
@@ -409,24 +442,131 @@ finally:
 
 
 # ---------------------------------------------------------------------------
-# Extension API invalid actions must reject before a file write.
+# Every fallback/extension mutation route requires the unguessable capability.
+# A cross-origin form/fetch can reach loopback, so loopback binding alone is
+# not authorization. Missing and guessed values must fail before any TSV byte
+# changes.
 # ---------------------------------------------------------------------------
-_invalid_discovery_path, _invalid_approved_path = _build_test_files(
+for route, base_data in (
+    ("/yes", {"name": "Guarded", "link": "https://guarded.example.com"}),
+    ("/no", {"name": "Guarded"}),
+    (
+        "/decision",
+        {
+            "action": "approve",
+            "name": "Guarded",
+            "link": "https://guarded.example.com",
+        },
+    ),
+    (
+        "/api/review/decision",
+        {"action": "approve", "revision": "guessed-revision"},
+    ),
+):
+    for capability_label, capability_data in (
+        ("missing", {}),
+        ("wrong", {"capability": "guessed-capability"}),
+    ):
+        guarded_discovery, guarded_approved = _build_test_files(
+            [
+                {
+                    "verification_status": "unverified",
+                    "already_in_corpus": False,
+                    "name": "Guarded",
+                    "claimed_main_url": "https://guarded.example.com",
+                },
+            ]
+        )
+        try:
+            tool.DISCOVERY_PATH = guarded_discovery
+            tool.APPROVED_PATH = guarded_approved
+            client = TestClient(tool.app)
+            before_discovery = guarded_discovery.read_bytes()
+            before_approved = guarded_approved.read_bytes()
+            denied = client.post(route, data={**base_data, **capability_data})
+            check(
+                f"{route} rejects {capability_label} mutation capability",
+                denied.status_code == 403,
+            )
+            check(
+                f"{route} {capability_label} capability refusal changes no TSV bytes",
+                guarded_discovery.read_bytes() == before_discovery
+                and guarded_approved.read_bytes() == before_approved,
+            )
+        finally:
+            tool.DISCOVERY_PATH = _original_discovery_path
+            tool.APPROVED_PATH = _original_approved_path
+            shutil.rmtree(guarded_discovery.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# The extension decision is bound to the exact server-issued queue revision.
+# If the first eligible row changes after GET/START, the old decision gets a
+# 409 and both files remain byte-identical to their post-mutation state.
+# ---------------------------------------------------------------------------
+_revision_discovery_path, _revision_approved_path = _build_test_files(
     [
-        {"verification_status": "unverified", "already_in_corpus": False, "name": "Invalid Action", "claimed_main_url": "https://invalid-action.example.com"},
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "Revision A", "claimed_main_url": "https://revision-a.example.com"},
+        {"verification_status": "unverified", "already_in_corpus": False, "name": "Revision B", "claimed_main_url": "https://revision-b.example.com"},
     ]
 )
+try:
+    tool.DISCOVERY_PATH = _revision_discovery_path
+    tool.APPROVED_PATH = _revision_approved_path
+    client = TestClient(tool.app)
+    issued = client.post("/api/review/start").json()
+
+    revision_headers, revision_rows = sheet_io.read_tab(tool.DISCOVERY_PATH)
+    revision_rows[0]["verification_status"] = "verified"
+    sheet_io.write_tab(tool.DISCOVERY_PATH, revision_headers, revision_rows)
+    after_mutation_discovery = tool.DISCOVERY_PATH.read_bytes()
+    after_mutation_approved = tool.APPROVED_PATH.read_bytes()
+
+    conflicted = client.post(
+        "/api/review/decision",
+        data={
+            "action": "approve",
+            "capability": issued.get("capability", "missing"),
+            "revision": issued.get("revision", "missing"),
+        },
+    )
+    check(
+        "extension refuses a decision when the issued candidate revision changed",
+        conflicted.status_code == 409,
+    )
+    check(
+        "candidate revision conflict leaves both TSV files byte-identical",
+        tool.DISCOVERY_PATH.read_bytes() == after_mutation_discovery
+        and tool.APPROVED_PATH.read_bytes() == after_mutation_approved,
+    )
+finally:
+    tool.DISCOVERY_PATH = _original_discovery_path
+    tool.APPROVED_PATH = _original_approved_path
+    shutil.rmtree(_revision_discovery_path.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Invalid actions are validated before the terminal/empty-queue return.
+# ---------------------------------------------------------------------------
+_invalid_discovery_path, _invalid_approved_path = _build_test_files([])
 try:
     tool.DISCOVERY_PATH = _invalid_discovery_path
     tool.APPROVED_PATH = _invalid_approved_path
     client = TestClient(tool.app)
-
+    issued = client.post("/api/review/start").json()
     before_discovery = tool.DISCOVERY_PATH.read_bytes()
     before_approved = tool.APPROVED_PATH.read_bytes()
-    invalid = client.post("/api/review/decision", data={"action": "skip"})
-    check("extension rejects unknown action", invalid.status_code == 400)
+    invalid = client.post(
+        "/api/review/decision",
+        data={
+            "action": "skip",
+            "capability": issued.get("capability", "missing"),
+            "revision": issued.get("revision", "missing"),
+        },
+    )
+    check("empty-queue extension request still rejects unknown action", invalid.status_code == 400)
     check(
-        "unknown extension action changes no TSV bytes",
+        "unknown empty-queue action changes no TSV bytes",
         tool.DISCOVERY_PATH.read_bytes() == before_discovery
         and tool.APPROVED_PATH.read_bytes() == before_approved,
     )
@@ -437,7 +577,12 @@ try:
         side_effect=tool.StaleFileError("Discovery file changed"),
     ):
         stale = client.post(
-            "/api/review/decision", data={"action": "approve"}
+            "/api/review/decision",
+            data={
+                "action": "approve",
+                "capability": issued.get("capability", "missing"),
+                "revision": issued.get("revision", "missing"),
+            },
         )
     check(
         "extension stale-file refusal is a retryable conflict",

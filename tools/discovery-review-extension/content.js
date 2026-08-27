@@ -8,6 +8,9 @@
     REJECT: "DECIDE_REJECT",
   });
   const HOST_ID = "rhemata-discovery-review-host";
+  const DEACTIVATE_TYPE = "DEACTIVATE_REVIEW";
+  let toolbarHost = null;
+  let toolbarRoot = null;
 
   const send = (type) => new Promise((resolve, reject) => {
     chrome.runtime.sendMessage({type}, (response) => {
@@ -33,15 +36,21 @@
     return element;
   }
 
+  function removeToolbar() {
+    toolbarHost?.remove();
+    toolbarHost = null;
+    toolbarRoot = null;
+  }
+
   function prepareToolbar() {
-    let host = document.getElementById(HOST_ID);
-    if (!host) {
-      host = document.createElement("div");
-      host.id = HOST_ID;
-      document.documentElement.append(host);
+    if (!toolbarHost) {
+      document.getElementById(HOST_ID)?.remove();
+      toolbarHost = document.createElement("div");
+      toolbarHost.id = HOST_ID;
+      document.documentElement.append(toolbarHost);
+      toolbarRoot = toolbarHost.attachShadow({mode: "closed"});
     }
-    const shadow = host.shadowRoot || host.attachShadow({mode: "open"});
-    shadow.replaceChildren();
+    toolbarRoot.replaceChildren();
 
     const style = createElement("style");
     style.textContent = `
@@ -111,13 +120,12 @@
     const bar = createElement("section");
     bar.className = "bar";
     bar.setAttribute("aria-label", "Rhemata discovery review");
-    shadow.append(style, bar);
+    toolbarRoot.append(style, bar);
     return bar;
   }
 
   function setStatus(message, isError) {
-    const status = document.getElementById(HOST_ID)?.shadowRoot
-      ?.getElementById("rhemata-review-status");
+    const status = toolbarRoot?.getElementById("rhemata-review-status");
     if (!status) return;
     status.textContent = message;
     status.setAttribute("aria-invalid", String(Boolean(isError)));
@@ -155,8 +163,14 @@
     reject.textContent = "Do Not Approve";
     const controls = [approve, reject];
 
-    approve.addEventListener("click", () => decide(TYPES.APPROVE, controls));
-    reject.addEventListener("click", () => decide(TYPES.REJECT, controls));
+    approve.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
+      decide(TYPES.APPROVE, controls);
+    });
+    reject.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
+      decide(TYPES.REJECT, controls);
+    });
     summary.append(name, remaining, status);
     actions.append(approve, reject);
     bar.append(summary, actions);
@@ -192,7 +206,8 @@
     status.setAttribute("aria-invalid", "true");
     const retry = createElement("button", "Retry");
     retry.type = "button";
-    retry.addEventListener("click", () => {
+    retry.addEventListener("click", (event) => {
+      if (!event.isTrusted) return;
       retry.disabled = true;
       boot().catch((error) => {
         retry.disabled = false;
@@ -207,6 +222,10 @@
     setStatus("Saving decision…", false);
     try {
       const response = await send(type);
+      if (!response.active) {
+        removeToolbar();
+        return;
+      }
       if (response.done) {
         renderDone();
         return;
@@ -221,7 +240,10 @@
   async function boot() {
     const isController = isControllerPage();
     const response = await send(isController ? TYPES.START : TYPES.STATE);
-    if (!response.active) return;
+    if (!response.active) {
+      removeToolbar();
+      return;
+    }
     if (response.done) return renderDone();
     if (isController) return location.replace(response.candidate.link);
     renderToolbar(response.candidate);
@@ -235,5 +257,10 @@
     if (error.active) {
       renderConnectionError(error.message || "The review server is unavailable.");
     }
+  });
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== DEACTIVATE_TYPE) return;
+    removeToolbar();
   });
 })();

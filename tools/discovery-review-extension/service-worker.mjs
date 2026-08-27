@@ -1,6 +1,7 @@
 import {createReviewService} from "./review-service.mjs";
 
 const SERVER_ORIGIN = "http://127.0.0.1:8765";
+const SESSION_KEY = "reviewSession";
 
 async function request(path, options = {}) {
   const headers = options.body
@@ -13,16 +14,24 @@ async function request(path, options = {}) {
 }
 
 const sessionStore = {
-  async getActiveTabId() {
-    const value = await chrome.storage.session.get("activeReviewTabId");
-    return value.activeReviewTabId ?? null;
+  async getReviewSession() {
+    const value = await chrome.storage.session.get(SESSION_KEY);
+    return value[SESSION_KEY] ?? null;
   },
-  async setActiveTabId(tabId) {
-    await chrome.storage.session.set({activeReviewTabId: tabId});
+  async setReviewSession(reviewSession) {
+    await chrome.storage.session.set({[SESSION_KEY]: reviewSession});
   },
 };
 
-const service = createReviewService({request, sessionStore});
+async function deactivateTab(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, {type: "DEACTIVATE_REVIEW"});
+  } catch {
+    // The old tab may already be closed, navigating, or without a receiver.
+  }
+}
+
+const service = createReviewService({request, sessionStore, deactivateTab});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   service.handle(message, sender.tab?.id)
