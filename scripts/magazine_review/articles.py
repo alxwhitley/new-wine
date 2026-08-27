@@ -79,12 +79,23 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 # out at 18 chars. A genuinely dropped article or continuation runs into the
 # thousands (New Wine A2, Issue 02-1973, retry_13: 5,190 and 55,107 chars).
 _COVERAGE_GAP_TOLERANCE_CHARS = 50
+# "letters_to_editor" added 2026-08-27: a real, recurring magazine section
+# (reader mail, no single author) that doesn't fit any other named category.
+# A direct diagnostic call against Issue 02-1973 (New Wine A2, high
+# reasoning + the strengthened instructions) produced an otherwise-correct
+# 11-article segmentation -- full coverage, no gaps, no overlaps, every
+# article under the size cap -- rejected only because "Letters to the
+# Editor" (3,840 chars) had nowhere to go but the tight "other_non_article"
+# bucket. retry_13 (2026-08-25) independently treated the same content as
+# its own thing too (a full article, 3,744 chars) -- two independent runs
+# agreeing this is a real, distinct category, not noise.
 _NON_ARTICLE_CATEGORIES = frozenset(
     {
         "advertisement",
         "masthead",
         "table_of_contents",
         "subscription_notice",
+        "letters_to_editor",
         "other_non_article",
     }
 )
@@ -108,12 +119,18 @@ _NON_ARTICLE_CATEGORIES = frozenset(
 # semantic reviewer caught all six again, but the whole point of this
 # deterministic layer is to preempt paying for that call.
 #
-# Both categories are now capped, at different thresholds: "other_non_article"
-# stays tight (it's the vaguest, no content claim at all); the four named
-# categories get more room (5,000 chars, comfortably above the one confirmed-
-# legitimate case seen so far -- the 4,152-char masthead -- but two orders of
-# magnitude below every observed abuse case: 3,770 / 31,718 / 113,294 chars).
-_OTHER_NON_ARTICLE_MAX_CHARS = 2000
+# Both categories are capped, at different thresholds: "other_non_article"
+# stays tighter (it's the vaguest, no content claim at all); the named
+# categories get more room, comfortably above confirmed-legitimate cases but
+# two orders of magnitude below every observed abuse case (3,770 / 31,718 /
+# 113,294 chars).
+# other_non_article raised 2,000 -> 2,500 same day (New Wine A2, Issue
+# 02-1973): a direct diagnostic call otherwise producing a correct 11-article
+# segmentation combined "editorial and table of contents" into one
+# other_non_article span of 2,410 chars -- a real, plausible pairing (both
+# are staff-written, neither has a byline warranting article treatment), not
+# abuse, just barely over the old cap.
+_OTHER_NON_ARTICLE_MAX_CHARS = 2500
 _NAMED_NON_ARTICLE_MAX_CHARS = 5000
 # Per-span caps don't stop the model spreading the same abuse across many
 # smaller spans that each individually stay under a cap. No real 32-page

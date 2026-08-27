@@ -513,8 +513,56 @@ def test_non_article_span_accounts_for_a_real_gap():
     )
 
 
+def test_letters_to_editor_is_a_valid_named_category():
+    """"letters_to_editor" (added 2026-08-27) must be accepted and treated
+    as a named category (the 5,000-char cap, not the tighter
+    other_non_article one) -- a real, recurring magazine section (reader
+    mail, no single author) confirmed by two independent live runs (New
+    Wine A2, Issue 02-1973: retry_13 treated it as its own article, a
+    direct 2026-08-27 diagnostic call treated it as non-article) that
+    doesn't fit any other named category."""
+    filler = "This sentence continues the thought with more detail. " * 30
+    transcript = verified_transcript(
+        f"LONG FIRST\nBy Ada North\n{filler}The opening closes here.\n",
+        "LETTERS TO THE EDITOR\nDear editor, thank you for this magazine.",
+    )
+    proposal = [
+        proposed_article(
+            transcript,
+            article_id="long-first",
+            filename="long-first.txt",
+            title="Long First",
+            author="Ada North",
+            source_pages=[1],
+            start_text="LONG FIRST",
+            end_text="The opening closes here.",
+        )
+    ]
+    non_article_start = proposal[0]["transcript_end"]
+    non_article_end = len(transcript.text)
+    response = segmentation_response(
+        transcript,
+        proposal,
+        non_article_spans=[
+            {
+                "category": "letters_to_editor",
+                "reason": "reader mail, no single author",
+                "transcript_start": non_article_start,
+                "transcript_end": non_article_end,
+            }
+        ],
+    )
+    client = FakeStructuredClient(response)
+
+    manifest = segment_articles(transcript, client)
+
+    assert manifest.non_article_spans == (
+        (non_article_start, non_article_end, "letters_to_editor", "reader mail, no single author"),
+    )
+
+
 def test_oversized_other_non_article_span_rejected_deterministically():
-    """A vague "other_non_article" span past 2,000 chars is rejected before
+    """A vague "other_non_article" span past 2,500 chars is rejected before
     the paid semantic review call. Live evidence, same-day validation of the
     coverage-completeness fix (New Wine A2, Issue 02-1973, 2026-08-27): once
     full coverage was required, the model started dumping real articles
@@ -524,8 +572,8 @@ def test_oversized_other_non_article_span_rejected_deterministically():
     preempt for egregious cases. Named categories get a looser (not zero)
     cap -- see test_oversized_named_non_article_span_rejected_deterministically
     below for why they aren't exempt either."""
-    filler = "Unclassified filler text fills this whole page over and over. " * 40
-    assert len(filler) > 2000
+    filler = "Unclassified filler text fills this whole page over and over. " * 45
+    assert len(filler) > 2500
     transcript = verified_transcript(
         "SHORT ARTICLE\nBy Ada North\nA complete short article.\n",
         filler,
