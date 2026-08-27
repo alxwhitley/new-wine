@@ -60,7 +60,38 @@ SEGMENTATION_INSTRUCTIONS = (
     "achieves full coverage: full coverage with the wrong granularity is still "
     "wrong. If a span you are about to return covers more than a few pages, stop "
     "and check whether it actually contains multiple distinct pieces that must be "
-    "split apart."
+    "split apart. "
+    # Added 2026-08-27, same New Wine A2 investigation, after two standalone
+    # diagnostic calls against Issue 02-1973's cached transcript (no CLI, no
+    # OCR cost) showed non_article_span_implausibly_large recurring for a
+    # reason unrelated to cap size: "Keeping the Unity" (a labeled reprint)
+    # and "New Wine Forum" (a reader Q&A column) were consistently filed as
+    # other_non_article instead of recognized as articles, in both runs --
+    # the same two articles the semantic reviewer already confirmed real
+    # back when the model dumped 93% of this issue as "advertisement"
+    # (e8ca4a3). A third, unexplained ~3,000-char "reference table" span
+    # also recurred at the same transcript position in both runs, immediately
+    # after Bible Study -- most likely that article's own supporting content.
+    # A follow-up validation call with this addition correctly recognized
+    # both articles and folded the reference table into Bible Study's span.
+    # Not a reliability fix: three further live samples the same day showed
+    # three DIFFERENT failure shapes unrelated to this specific blind spot
+    # (a giant lazy non-article dump, an out-of-order article_spans_overlap,
+    # a fabricated mega-article merging real content with ads) -- the
+    # recurrence is dominated by run-to-run model variance, not one
+    # deterministic gap. This addition is kept because it is strictly
+    # correct per the established e8ca4a3 precedent and has no downside (it
+    # loosens no cap), not because it closes the recurrence.
+    "Two content shapes are still authored articles and must never be filed as "
+    "non-article material: an article explicitly labeled as reprinted from "
+    "another publication, credited with its own author or original source -- "
+    "the reprint label does not make it filler; and a recurring reader "
+    "question-and-answer or discussion column with substantive original "
+    "written content, even when no single person is credited for the whole "
+    "column -- use the column's own name, or \"Readers\" if none is given, as "
+    "its author. A supporting reference table, chart, or list that is part of "
+    "an article's own content belongs inside that article's span, not as a "
+    "separate non-article span."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
