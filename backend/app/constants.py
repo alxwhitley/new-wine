@@ -150,7 +150,7 @@ def resolve_book_abbrev(book_raw: str) -> Optional[str]:
     return BOOK_MAP.get(normalized) or BOOK_MAP.get(normalized.rstrip('s'))
 
 
-# ── Topic taxonomy (257 tags, 15 categories) ─────────────────────────────────
+# ── Topic taxonomy (258 tags, 15 categories) ─────────────────────────────────
 # Keep in sync with scripts/taxonomy.py and taxonomy.md.
 
 VALID_TAGS = {
@@ -187,7 +187,7 @@ VALID_TAGS = {
     # 5. Presence, Worship & Encounter
     "Worship in Spirit and Truth", "Deep Intimacy with God", "Spiritual Hunger",
     "Encounter with God", "Revival Culture", "Intimacy with God", "Knowing God",
-    "God's Presence", "Revival", "Worship",
+    "God's Presence", "Revival", "Worship", "Fear of the Lord",
     # 6. Fivefold Ministry
     "Fivefold Ministry", "Ephesians 4 Leadership", "Equipping the Saints",
     "Recognizing Your Ministry Gift", "Apostolic Ministry", "Apostolic Authority",
