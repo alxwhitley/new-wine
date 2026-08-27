@@ -81,6 +81,43 @@ def verified_issue() -> VerifiedIssueTranscript:
     )
 
 
+@pytest.fixture
+def verified_long_issue() -> VerifiedIssueTranscript:
+    """Two pages long enough (~700 chars each) to test the coverage-gap
+    tolerance boundary -- the small verified_issue fixture above is too
+    short for a realistic gap/shrink to stay within a valid span."""
+    filler = "This sentence continues the thought with more detail. " * 12
+    return verified_transcript(
+        f"LONG FIRST\nBy Ada North\n{filler}The opening closes here.\n",
+        f"LONG SECOND\nBy Ben South\n{filler}The second closes here.",
+    )
+
+
+def two_long_proposals(transcript: VerifiedIssueTranscript) -> list[dict[str, object]]:
+    return [
+        proposed_article(
+            transcript,
+            article_id="long-first",
+            filename="long-first.txt",
+            title="Long First",
+            author="Ada North",
+            source_pages=[1],
+            start_text="LONG FIRST",
+            end_text="The opening closes here.",
+        ),
+        proposed_article(
+            transcript,
+            article_id="long-second",
+            filename="long-second.txt",
+            title="Long Second",
+            author="Ben South",
+            source_pages=[2],
+            start_text="LONG SECOND",
+            end_text="The second closes here.",
+        ),
+    ]
+
+
 def proposed_article(
     transcript: VerifiedIssueTranscript,
     *,
@@ -342,7 +379,9 @@ def test_reviewer_receives_complete_issue_and_all_articles(verified_issue):
 
 def test_mid_thought_ending_quarantines_issue(verified_issue):
     """A missing final paragraph must never survive issue approval."""
-    proposal = two_proposals(verified_issue)[:1]
+    # Full coverage (both articles proposed) so this exercises the semantic
+    # end_coherent check, not the deterministic coverage-gap gate below.
+    proposal = two_proposals(verified_issue)
     response = passing_review_response(verified_issue, proposal)
     response["output"]["articles"][0].update(
         end_coherent=False,
@@ -365,19 +404,79 @@ def test_mid_thought_ending_quarantines_issue(verified_issue):
     assert manifest.articles[0].verdict is False
 
 
-def test_issue_coverage_verdict_quarantines_whole_omitted_article(verified_issue):
-    """Per-proposal passes cannot hide a second substantive article omitted upstream."""
-    proposal = two_proposals(verified_issue)[:1]
+def test_whole_omitted_article_leaves_tail_gap_rejected_deterministically(
+    verified_long_issue,
+):
+    """A second substantive article never proposed leaves a tail gap far past
+    ordinary page-break/ad noise -- the deterministic coverage check catches
+    this before the paid semantic review call ever runs (New Wine A2, Issue
+    02-1973: exactly this shape -- a 55,107-char/13-page dead zone containing
+    a whole omitted Derek Prince article -- reached live review and cost real
+    money before being caught)."""
+    proposal = two_long_proposals(verified_long_issue)[:1]
+    client = FakeStructuredClient(
+        segmentation_response(verified_long_issue, proposal)
+    )
+
+    with pytest.raises(ArticleReviewError, match="article_coverage_incomplete"):
+        segment_articles(verified_long_issue, client)
+
+
+def test_mid_sequence_gap_past_tolerance_rejected_deterministically(
+    verified_long_issue,
+):
+    """A dropped continuation mid-issue, not just a missing tail, must be
+    caught too -- mirrors the live page-3 finding: a 5,190-char continuation
+    of "Health and Healing ... Part I" dropped between two proposed
+    articles."""
+    proposals = two_long_proposals(verified_long_issue)
+    response = segmentation_response(verified_long_issue, proposals)
+    response["output"]["articles"][0]["transcript_end"] -= 550
+    client = FakeStructuredClient(response)
+
+    with pytest.raises(ArticleReviewError, match="article_coverage_incomplete"):
+        segment_articles(verified_long_issue, client)
+
+
+def test_small_gap_within_tolerance_does_not_reject_deterministically(
+    verified_long_issue,
+):
+    """Legitimate non-substantive content (a short ad, a subscription notice
+    -- see fixtures/magazine_review/clean_issue.json's 128-char page-2 gap)
+    can leave a real gap; the deterministic pre-filter must stay loose
+    enough not to flag it, leaving the judgment call to the semantic
+    reviewer where it belongs."""
+    proposals = two_long_proposals(verified_long_issue)
+    response = segmentation_response(verified_long_issue, proposals)
+    response["output"]["articles"][0]["transcript_end"] -= 200
+    client = FakeStructuredClient(response)
+
+    manifest = segment_articles(verified_long_issue, client)
+
+    assert len(manifest.articles) == 2
+
+
+def test_issue_coverage_verdict_quarantines_content_the_reviewer_flags_missing(
+    verified_issue,
+):
+    """The semantic reviewer's coverage verdict must still be honored even
+    when every proposed span is present and contiguous -- a raw offset gap
+    is not the only way real content goes missing (e.g. a photo caption or
+    sidebar never entered the transcript at all, so there is no gap to
+    detect deterministically). Mirrors a real live finding: Issue 02-1973's
+    "page 7 continuation" flag sat inside an ordinary ~17-char page-break
+    gap, not a detectable span gap, and only the semantic reviewer caught
+    it."""
+    proposal = two_proposals(verified_issue)
     response = passing_review_response(verified_issue, proposal)
-    missing_start = verified_issue.text.index("SECOND VOICE")
     response["output"].update(
         issue_coverage_complete=False,
-        missing_articles=["Second Voice by Ben South"],
+        missing_articles=["Sidebar photo caption (untranscribed)"],
         missing_substantive_spans=[
             {
-                "transcript_start": missing_start,
-                "transcript_end": len(verified_issue.text),
-                "reason": "substantive authored article absent from proposed set",
+                "transcript_start": proposal[1]["transcript_start"],
+                "transcript_end": proposal[1]["transcript_end"],
+                "reason": "sidebar caption on this page never entered the transcript",
             }
         ],
     )
@@ -391,9 +490,11 @@ def test_issue_coverage_verdict_quarantines_whole_omitted_article(verified_issue
 
     assert reviewed.status == "quarantined"
     assert reviewed.issue_coverage_complete is False
-    assert reviewed.missing_articles == ("Second Voice by Ben South",)
-    assert reviewed.missing_substantive_spans[0][0] == missing_start
-    assert "missing_article:Second Voice by Ben South" in reviewed.quarantine_reasons
+    assert reviewed.missing_articles == ("Sidebar photo caption (untranscribed)",)
+    assert (
+        "missing_article:Sidebar photo caption (untranscribed)"
+        in reviewed.quarantine_reasons
+    )
 
 
 @pytest.mark.parametrize(

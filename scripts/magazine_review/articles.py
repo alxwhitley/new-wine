@@ -40,6 +40,18 @@ REVIEW_INSTRUCTIONS = (
     "the proposed set, with its exact transcript span and a specific reason."
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+# A deliberately loose pre-filter, not a full-coverage guarantee. Legitimate
+# non-substantive content (a subscription notice, a short ad -- see
+# fixtures/magazine_review/clean_issue.json's page 2, a 128-char gap the
+# segmenter correctly leaves unassigned) can leave real, valid gaps. The two
+# live defects this exists to catch (New Wine Issue 02-1973, retry_13: a
+# dropped page-3 continuation and an entire 13-page/55,107-char dead zone
+# containing a whole omitted article) were 5,190 and 55,107 chars -- 10x and
+# 100x this threshold. Genuine small-scale omissions stay the semantic
+# reviewer's job via missing_substantive_spans/issue_coverage_complete; this
+# check only catches egregious truncation cheaply, before paying for that
+# review call.
+_COVERAGE_GAP_TOLERANCE_CHARS = 500
 _SEMANTIC_FIELDS = (
     "start_coherent",
     "end_coherent",
@@ -461,6 +473,8 @@ def segment_articles(
             raise ArticleReviewError("article_span_invalid")
         if start < previous_end:
             raise ArticleReviewError("article_spans_overlap")
+        if start - previous_end > _COVERAGE_GAP_TOLERANCE_CHARS:
+            raise ArticleReviewError("article_coverage_incomplete")
         source_pages = _source_pages_for_span(transcript, start, end)
         if not source_pages:
             raise ArticleReviewError("article_source_pages_required")
@@ -502,6 +516,9 @@ def segment_articles(
         seen_ids.add(normalized_id)
         seen_filenames.add(normalized_filename)
         previous_end = end
+
+    if len(transcript.text) - previous_end > _COVERAGE_GAP_TOLERANCE_CHARS:
+        raise ArticleReviewError("article_coverage_incomplete")
 
     manifest = ArticleManifest(
         identity=_stage_identity(transcript, transcript_hash),
