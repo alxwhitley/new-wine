@@ -9,16 +9,13 @@ relevance are below the desired bar; re-enablement requires the Scheduled
 repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
-**Current item:** **B6-F1 — named-teacher/stored-position route collision**, a
-new Blocker found by the 2026-08-25 B6 single-case gate. The exact question
-asked what Derek Prince teaches about deliverance; topic-only stored-position
-routing supplied 15 citable propositions from Vlad Savchuk alone, and both
-generation attempts correctly failed the attribution guard. The user received
-a clean refusal instead of a named-teacher answer. The source-faithful
-correction remains opt-in and dormant after the representative latency gate
-rejected it as a suite-wide speed improvement. B6-F1 now awaits the targeted
-blind human quality review and one explicit implementation decision.
-Quote repair remains Scheduled, not an active Blocker.
+**Current item:** None — **B6-F1 is DONE** (2026-08-26). The activation flag
+was flipped to `true` and its wiring code was found to have been drafted but
+never actually deployed (only the migration and `producer.py`'s underlying
+correction were live); committed and deployed same day, commit `77fbb52`. A
+live smoke check against the exact reproduction question confirmed the fix
+— see the closed entry below. **Active blocker count: 0.** Quote repair
+remains Scheduled, not an active Blocker.
 
 ## Governing boundary
 
@@ -41,33 +38,33 @@ Quote repair remains Scheduled, not an active Blocker.
 
 ### B6-F1 — Named-teacher/stored-position route collision
 
-**Status:** BLOCKER — the source-boundary correction passed live, but the
-representative latency candidate was rejected on 2026-08-25. The production
-default remains unchanged. Full evidence and timing:
-`docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
+**Status:** DONE (2026-08-26). A Derek Prince deliverance question was being
+intercepted by topic-only stored evidence from Vlad Savchuk and cleanly
+refused after two attribution failures. The source-boundary correction
+(teacher identity resolved via canonical `source_id`, enforced before/after
+neighbor expansion, evidence capped at 12 chunks) passed its targeted blind
+human quality review — Alex recorded **ACCEPT** 2026-08-26, no protected-axis
+hard failure across both relevant blind pairs. (Separately, the same
+candidate was rejected 2026-08-25 as a suite-wide *latency* direction — only
+2.81% median improvement against the required 20%; that finding stands,
+unrelated to this closure.)
 
-- **Failure:** a Derek Prince deliverance question was intercepted by topic-only
-  stored evidence from Vlad Savchuk and cleanly refused after two attribution
-  failures, breaking the named-teacher core journey.
-- **Integrity evidence:** the opt-in candidate resolved explicit teacher identity
-  through canonical `source_id`, enforced it before and after neighbor expansion,
-  hard-capped evidence at 12 chunks, and answered three paid exact-case runs with
-  Derek Prince-only citations, no attribution retry, and no quotes. Generic and
-  multi-teacher behavior remains unchanged under deterministic tests.
-- **Representative result:** baseline and candidate each completed 24 paid,
-  read-only generations (48/48/0/0 total, $2.744223, no database writes). Median
-  improved only 2.81% versus the required 20%, 8 of 12 cases were faster versus
-  the required 10, and p90 did not regress. The candidate is therefore rejected
-  as the B6 latency direction.
-- **Production boundary:** the teacher-specific route and source lock remain
-  opt-in benchmark code with no production caller. The separately approved Groq
-  query-expansion correction may ship. Quotes remain off; no prompt safeguard,
-  generation model, attribution rule, reference verifier, or evidence requirement
-  changed.
-- **Smallest closure:** conduct a targeted blind human quality review of the
-  named-teacher integrity correction and make one explicit implementation
-  decision. Any suite-wide latency direction is separate Scheduled B6 work and
-  requires a mechanism that affects the generation bottleneck across the suite.
+Migration 091 added the activation flag; Alex flipped it to `true`
+2026-08-26 (attended). The flip initially had **zero effect** — the wiring
+code that reads the flag (`config.py`) and threads it into the real
+`produce()` call (`answer_worker.py`) had been drafted but never actually
+committed or deployed, despite this file previously describing it as
+"wired." Found via a live smoke check, not assumed: the exact reproduction
+question still returned `refused_attribution` after the flip. Fixed same
+day, commit `77fbb52`, deployed to Railway `rhemata` + `answer-worker`. A
+second live smoke check against the identical reproduction question then
+confirmed the fix genuinely works: `outcome=answered`, 12/12 citations
+attributed to Derek Prince alone, zero attribution retry.
+
+Full evidence and timing: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
+Any suite-wide latency direction remains separate Scheduled B6 work
+(`docs/roadmap.md`) and needs a mechanism that addresses the generation
+bottleneck across the whole suite, not just named-teacher routing.
 
 ### W1–W4 — Safe web-article runway
 
