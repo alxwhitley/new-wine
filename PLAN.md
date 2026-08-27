@@ -17,6 +17,14 @@ live smoke check against the exact reproduction question confirmed the fix
 — see the closed entry below. **Active blocker count: 0.** Quote repair
 remains Scheduled, not an active Blocker.
 
+**B6 general answer-latency — DONE, live (2026-08-27), not a Blocker item.**
+Never promoted past `docs/roadmap.md`'s Scheduled B6 latency work; recorded
+here only as a pointer. `output_config.effort="medium"` is now hardcoded into
+every real answer generation (commits `07f6922`→`f00b303`): 25.46% faster
+median producer time on the fixed 12-case paired benchmark, no p90
+regression, zero hard failures on a targeted 6-pair blind quality review.
+Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
+
 ## Governing boundary
 
 - A new finding interrupts this queue only if it can plausibly cause theological

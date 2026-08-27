@@ -124,30 +124,22 @@ is complete; it is not future work.
 
 ### Answer-generation latency benchmark — B6
 
-Two attended production mobile queries on 2026-08-25 showed queue time was not
-the bottleneck: jobs `8677f62d-7ce9-4c3f-b9a5-dd256566a635` and
-`71ba8da6-0d81-406f-b01f-e9db0caafc2a` queued for 0.62s and 0.94s, while
-worker execution took 61.47s and 64.34s. Those intervals run from `started_at`
-to `finished_at` and do not isolate model generation. The client-only reveal
-tail is now capped at six seconds, and the UI sets an honest expectation while
-preserving reload continuity. Further latency work is Scheduled under B6: instrument a
-representative answer set, compare candidate changes blind for answer integrity
-and source faithfulness, and ship only a measured improvement that does not
-weaken the theological/teacher-representation gates. Do not shorten prompts,
-reduce evidence, or swap the generation model on latency evidence alone.
-
-The 2026-08-25 B6 session confirmed that answer query expansion's former
-hardcoded Groq model returned 404 on the current key and silently fell back to
-the original query. Alex approved moving expansion to the already-used
-`openai/gpt-oss-120b`; repeated paid preflights returned three query variants
-plus keyword routing. The 48-generation paired benchmark then rejected the
-teacher-specific retrieval candidate as a suite-wide latency direction: median
-improved only 2.81% against 20% required, 8 of 12 cases were faster against 10
-required, and p90 did not regress. The candidate affects only named-teacher
-routing, so it is retained as an integrity correction pending targeted blind
-human review rather than treated as a general performance fix. Any later B6
-latency candidate must address the generation bottleneck across the suite and
-repeat the same blind, source-faithful gate. Full evidence:
+**DONE, live (2026-08-27).** Two attended production mobile queries on
+2026-08-25 showed queue time was not the bottleneck: jobs
+`8677f62d-7ce9-4c3f-b9a5-dd256566a635` and `71ba8da6-0d81-406f-b01f-e9db0caafc2a`
+queued for 0.62s and 0.94s, while worker execution took 61.47s and 64.34s.
+Root cause traced to generation itself (median ~35s of that time was the
+model's own reasoning before writing). The teacher-specific retrieval
+candidate tested that day was rejected as a suite-wide latency direction
+(2.81% median improvement against 20% required) and was retained instead as
+the separate B6-F1 named-teacher integrity fix. The candidate that actually
+closed this: Anthropic's `output_config.effort="medium"`, now hardcoded into
+every real answer generation. Measured 25.46% faster median producer time
+(49.41s → 36.83s) on the fixed 12-case paired benchmark, 11/12 cases faster,
+no p90 regression, and zero hard failures on a targeted 6-pair blind human
+quality review across the doctrinally sensitive categories. No prompt
+shortening, evidence reduction, or model swap — the same model, less
+reasoning depth before answering. Full trail:
 `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ### Dependency and hardening follow-up (from the 2026-08-24 scan)
