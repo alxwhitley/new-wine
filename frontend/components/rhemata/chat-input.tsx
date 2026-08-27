@@ -47,7 +47,7 @@ export function ChatInput({
         onSubmit={handleSubmit}
         className={cn("mx-auto", embedded ? "max-w-none" : "max-w-2xl")}
       >
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-popover px-4 py-1.5 focus-within:ring-1 focus-within:ring-ring md:py-2">
+        <div className="flex items-end gap-2 rounded-2xl border border-border bg-popover px-4 py-1.5 md:py-2">
           <textarea
             ref={textareaRef}
             value={input}
