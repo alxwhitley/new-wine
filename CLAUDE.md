@@ -1111,6 +1111,18 @@ different row, per the hard rule above.
   (manual-review provenance, separate from `claimed_*`/`agent_verified_*`)
   and `auto_link_check`/`auto_link_check_at` columns to Discovery.
 
+**2026-08-27: local in-page Discovery review extension.**
+`tools/discovery-review-extension/` is an unpacked Manifest V3 extension that
+requests content-script access on HTTP/HTTPS pages so it can show a bottom
+Approve / Do Not Approve bar, but displays that bar only in the one tab that
+started a local review session. Its service worker can call only the fixed
+`http://127.0.0.1:8765/api/review/*` contract. The server re-reads and selects
+the current candidate at decision time; the page and extension never choose a
+row identity. Decisions reuse `review_discovery_candidates.py` and
+`ingestion_sheet_io.py` to update only the Discovery and Approved Sites TSVs.
+The extension has no database or ingestion authority. The fallback remains
+`python3.12 scripts/review_discovery_candidates.py` and its local controller.
+
 - **Quote selection on the async answer path is now contained behind an
   explicit, default-off flag — shipped 2026-08-18 (PLAN.md W1, same PR as the
   Invariant 16 widening above), because the quote rail has a live, systemic
