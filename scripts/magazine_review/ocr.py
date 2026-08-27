@@ -534,6 +534,109 @@ def _matching_resume(
     return value
 
 
+# Per-page OCR result cache -- separate from _matching_resume above, which
+# only helps when an ENTIRE prior manifest matches (same PDF, same pages,
+# same config). Added 2026-08-27 (New Wine A2): live retries showed OCR
+# completeness is stochastic per page (identical page image, different pass/
+# fail outcome across independent attempts -- retry_13 vs 2026-08-27 both
+# passed all 32 pages on IDENTICAL image hashes to different pages that
+# failed on other attempts), so a whole-manifest resume never helps a retry
+# after a partial failure -- every page gets re-OCR'd even though only 1-2
+# ever actually failed. This cache is local-only and deliberately never
+# stores a FAILED result: reusing a failure would freeze in bad luck instead
+# of giving a retry a fresh independent draw, defeating the point.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_PAGE_CACHE_PATH = _REPO_ROOT / "local" / "magazine_review_ocr_page_cache.json"
+_PAGE_CACHE_CONTENT_KEYS = (
+    "initial_text",
+    "initial_text_hash",
+    "initial_provider",
+    "initial_model",
+    "initial_prompt_fingerprint",
+    "initial_usage",
+    "initial_cost_usd",
+    "initial_timestamp",
+    "reviewer_model",
+    "reviewer_prompt_fingerprint",
+    "reviewer_complete",
+    "reviewer_reasons",
+    "reviewer_usage",
+    "reviewer_cost_usd",
+    "reviewer_timestamp",
+    "repaired_text",
+    "repaired_text_hash",
+    "repair_provider",
+    "repair_model",
+    "repair_prompt_fingerprint",
+    "repair_usage",
+    "repair_cost_usd",
+    "repair_timestamp",
+    "text",
+    "final_text_hash",
+    "repair_attempts",
+    "complete",
+    "reasons",
+)
+
+
+def _page_cache_key(
+    image_hash: str,
+    initial_provider: str,
+    initial_model: str,
+    reviewer_model: str,
+    initial_prompt_fingerprint: str,
+    reviewer_prompt_fingerprint: str,
+) -> str:
+    return _sha256_text(
+        "|".join(
+            (
+                image_hash,
+                initial_provider,
+                initial_model,
+                reviewer_model,
+                initial_prompt_fingerprint,
+                reviewer_prompt_fingerprint,
+            )
+        )
+    )
+
+
+def _load_page_cache() -> dict[str, dict]:
+    try:
+        raw = _PAGE_CACHE_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _lookup_page_cache(key: str) -> dict | None:
+    entry = _load_page_cache().get(key)
+    if not isinstance(entry, dict) or not entry.get("complete"):
+        return None
+    if set(entry) != set(_PAGE_CACHE_CONTENT_KEYS):
+        return None
+    return entry
+
+
+def _store_page_cache_entry(key: str, page: OCRPage) -> None:
+    if not page.complete:
+        return
+    full = page.to_dict()
+    entry = {name: full[name] for name in _PAGE_CACHE_CONTENT_KEYS}
+    cache = _load_page_cache()
+    cache[key] = entry
+    _PAGE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = _PAGE_CACHE_PATH.with_name(_PAGE_CACHE_PATH.name + ".tmp")
+    tmp_path.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=None), encoding="utf-8"
+    )
+    tmp_path.replace(_PAGE_CACHE_PATH)
+
+
 def review_issue_ocr(
     pdf_path: Path,
     config: OCRReviewConfig,
@@ -563,6 +666,29 @@ def review_issue_ocr(
     transcript_cursor = 0
 
     for rendered_page in rendered_pages:
+        cache_key = _page_cache_key(
+            rendered_page.image_hash,
+            config.initial_provider.candidate.provider,
+            config.initial_provider.candidate.model,
+            config.reviewer.model,
+            _prompt_fingerprint(INITIAL_OCR_INSTRUCTIONS),
+            _prompt_fingerprint(PAGE_REVIEW_INSTRUCTIONS),
+        )
+        cached = _lookup_page_cache(cache_key)
+        if cached is not None:
+            page_end = transcript_cursor + len(cached["text"])
+            pages.append(
+                OCRPage(
+                    page_number=rendered_page.page_number,
+                    image_hash=rendered_page.image_hash,
+                    transcript_start=transcript_cursor,
+                    transcript_end=page_end,
+                    **cached,
+                )
+            )
+            transcript_cursor = page_end
+            continue
+
         fixture = _page_fixture(rendered_page, INITIAL_OCR_INSTRUCTIONS)
         initial = _validate_ocr_response(
             config.initial_provider.transcribe(fixture), "initial_ocr"
@@ -642,46 +768,46 @@ def review_issue_ocr(
                 f"page:{rendered_page.page_number}:ocr_incomplete_after_repair"
             )
         page_end = transcript_cursor + len(final_text)
-        pages.append(
-            OCRPage(
-                page_number=rendered_page.page_number,
-                image_hash=rendered_page.image_hash,
-                initial_text=initial.text,
-                initial_text_hash=_sha256_text(initial.text),
-                initial_provider=config.initial_provider.candidate.provider,
-                initial_model=config.initial_provider.candidate.model,
-                initial_prompt_fingerprint=_prompt_fingerprint(
-                    INITIAL_OCR_INSTRUCTIONS
-                ),
-                initial_usage=dict(initial.usage),
-                initial_cost_usd=initial.cost_usd,
-                initial_timestamp=initial_timestamp,
-                reviewer_model=config.reviewer.model,
-                reviewer_prompt_fingerprint=_prompt_fingerprint(
-                    PAGE_REVIEW_INSTRUCTIONS
-                ),
-                reviewer_complete=first_review.review["complete"],
-                reviewer_reasons=_review_reasons(first_review),
-                reviewer_usage=reviewer_usage,
-                reviewer_cost_usd=reviewer_cost,
-                reviewer_timestamp=reviewer_timestamp,
-                repaired_text=repaired_text,
-                repaired_text_hash=repaired_text_hash,
-                repair_provider=repair_provider,
-                repair_model=repair_model,
-                repair_prompt_fingerprint=repair_prompt_fingerprint,
-                repair_usage=repair_usage,
-                repair_cost_usd=repair_cost_usd,
-                repair_timestamp=repair_timestamp,
-                text=final_text,
-                final_text_hash=_sha256_text(final_text),
-                transcript_start=transcript_cursor,
-                transcript_end=page_end,
-                repair_attempts=repair_attempts,
-                complete=complete,
-                reasons=reasons,
-            )
+        page = OCRPage(
+            page_number=rendered_page.page_number,
+            image_hash=rendered_page.image_hash,
+            initial_text=initial.text,
+            initial_text_hash=_sha256_text(initial.text),
+            initial_provider=config.initial_provider.candidate.provider,
+            initial_model=config.initial_provider.candidate.model,
+            initial_prompt_fingerprint=_prompt_fingerprint(
+                INITIAL_OCR_INSTRUCTIONS
+            ),
+            initial_usage=dict(initial.usage),
+            initial_cost_usd=initial.cost_usd,
+            initial_timestamp=initial_timestamp,
+            reviewer_model=config.reviewer.model,
+            reviewer_prompt_fingerprint=_prompt_fingerprint(
+                PAGE_REVIEW_INSTRUCTIONS
+            ),
+            reviewer_complete=first_review.review["complete"],
+            reviewer_reasons=_review_reasons(first_review),
+            reviewer_usage=reviewer_usage,
+            reviewer_cost_usd=reviewer_cost,
+            reviewer_timestamp=reviewer_timestamp,
+            repaired_text=repaired_text,
+            repaired_text_hash=repaired_text_hash,
+            repair_provider=repair_provider,
+            repair_model=repair_model,
+            repair_prompt_fingerprint=repair_prompt_fingerprint,
+            repair_usage=repair_usage,
+            repair_cost_usd=repair_cost_usd,
+            repair_timestamp=repair_timestamp,
+            text=final_text,
+            final_text_hash=_sha256_text(final_text),
+            transcript_start=transcript_cursor,
+            transcript_end=page_end,
+            repair_attempts=repair_attempts,
+            complete=complete,
+            reasons=reasons,
         )
+        pages.append(page)
+        _store_page_cache_entry(cache_key, page)
         transcript_cursor = page_end
 
     manifest = OCRManifest(

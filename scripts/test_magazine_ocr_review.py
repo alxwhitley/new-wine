@@ -333,7 +333,7 @@ def test_matching_manifest_resumes_without_provider_or_reviewer_calls(
 
 
 def test_render_hash_mismatch_recomputes_instead_of_resuming_stale_manifest(
-    two_page_pdf: Path, tmp_path: Path
+    two_page_pdf: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A changed deterministic render must recompute rather than abort or resume."""
     artifact_dir = tmp_path / "artifacts"
@@ -346,6 +346,16 @@ def test_render_hash_mismatch_recomputes_instead_of_resuming_stale_manifest(
     stale = replace(first, pages=(stale_first_page, first.pages[1]))
     write_artifact(artifact_dir / "ocr_manifest.json", stale)
     refreshed_config = passing_config({1: "new first page", 2: "new second page"})
+    # This test is about NOT trusting a stored manifest whose own recorded
+    # hash doesn't match a fresh render -- unrelated to the separate
+    # content-addressed per-page OCR cache (magazine_review/ocr.py, added
+    # 2026-08-27), which would otherwise correctly (and safely) reuse page
+    # 1/2's prior result here since the underlying PDF page images are
+    # byte-identical across both calls in this fixture. Force a cache miss
+    # so this test still exercises "every call happens fresh."
+    monkeypatch.setattr(
+        "magazine_review.ocr._PAGE_CACHE_PATH", tmp_path / "second_run_cache.json"
+    )
 
     refreshed = review_issue_ocr(two_page_pdf, refreshed_config, artifact_dir)
 
@@ -628,6 +638,80 @@ def test_default_run_calls_the_legacy_issue_path_without_review_arguments(
     extract_magazine.run(max_issues=1)
 
     assert calls == [pdf_path]
+
+
+def test_passing_page_reused_from_cache_on_a_fresh_artifact_dir(
+    two_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A page that already passed must not be re-OCR'd on an independent
+    retry (a new --artifact-dir, same underlying PDF) -- the exact New Wine
+    A2 gap this cache exists to close: live retries re-paid for all 32 pages
+    every attempt even though only 1-2 pages ever actually failed."""
+    first_config = passing_config({1: "article page one", 2: "advertisement page two"})
+    first = review_issue_ocr(two_page_pdf, first_config, tmp_path / "attempt-1")
+    assert first_config.initial_provider.page_numbers == [1, 2]
+
+    second_config = passing_config({1: "SHOULD NOT BE USED", 2: "SHOULD NOT BE USED"})
+    second = review_issue_ocr(two_page_pdf, second_config, tmp_path / "attempt-2")
+
+    assert second_config.initial_provider.page_numbers == []
+    assert second_config.reviewer.page_numbers == []
+    assert second.status == "passed"
+    assert second.pages[0].text == "article page one"
+    assert second.pages[1].text == "advertisement page two"
+    assert second.pages[0].image_hash == first.pages[0].image_hash
+
+
+def test_failed_page_is_never_cached(
+    two_page_pdf: Path, tmp_path: Path
+) -> None:
+    """A page that never passed (even after the one allowed repair) must not
+    be reused -- caching a known failure would freeze in bad luck instead of
+    giving a retry a fresh, independent draw, which is the entire point of
+    retrying a stochastic OCR call."""
+    initial = FakeOCRProvider(
+        BenchmarkCandidate("accepted-provider", "accepted-model"),
+        {1: "article page one", 2: "advertisement page two"},
+    )
+    reviewer = FakeReviewer(
+        [
+            review(True),
+            review(False, missing_regions=("coupon price",), reason="missing ad copy"),
+            review(False, missing_regions=("coupon price",), reason="still missing"),
+        ]
+    )
+    repair = FakeOCRProvider(
+        BenchmarkCandidate("Gemini", "gemini-3.6-flash"),
+        {2: "still incomplete repair"},
+    )
+    first = review_issue_ocr(
+        two_page_pdf,
+        config(initial=initial, reviewer=reviewer, repair=repair),
+        tmp_path / "attempt-1",
+    )
+    assert first.status == "quarantined"
+    assert first.pages[1].complete is False
+
+    second_initial = FakeOCRProvider(
+        BenchmarkCandidate("accepted-provider", "accepted-model"),
+        {1: "article page one", 2: "advertisement page two, second try"},
+    )
+    second_reviewer = FakeReviewer([review(True), review(True)])
+    second_repair = FakeOCRProvider(
+        BenchmarkCandidate("Gemini", "gemini-3.6-flash"), {2: "unused"}
+    )
+    second = review_issue_ocr(
+        two_page_pdf,
+        config(initial=second_initial, reviewer=second_reviewer, repair=second_repair),
+        tmp_path / "attempt-2",
+    )
+
+    # Page 1 passed on attempt 1 -- correctly reused from cache, no new call.
+    # Page 2 failed on attempt 1 -- correctly NOT reused, gets a fresh draw.
+    assert second_initial.page_numbers == [2]
+    assert second.status == "passed"
+    assert second.pages[0].text == "article page one"
+    assert second.pages[1].text == "advertisement page two, second try"
 
 
 if __name__ == "__main__":
