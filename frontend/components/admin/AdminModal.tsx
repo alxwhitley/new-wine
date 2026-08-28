@@ -11,8 +11,6 @@ import {
   Users,
   Inbox,
   Database,
-  Copy,
-  Check,
   User as UserIcon,
   Link2,
   BarChart3,
@@ -49,7 +47,6 @@ import CardModal from "@/components/admin/card-modal";
 import { CARDS, GROUPS, FUTURE_TARGETS } from "@/components/admin/corpus-data";
 import type { CorpusCard } from "@/components/admin/corpus-types";
 import { CorpusDocumentsPanel, CopyButton } from "@/components/admin/CorpusDocumentsPanel";
-import type { CorpusLicenseSource } from "@/components/admin/CorpusDocumentsPanel";
 import { SourceQueuePanel } from "@/components/admin/SourceQueuePanel";
 import { AnalyticsPanel } from "@/components/admin/AnalyticsPanel";
 

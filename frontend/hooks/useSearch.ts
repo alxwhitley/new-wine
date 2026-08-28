@@ -22,7 +22,7 @@ export function useSearch() {
       setDocuments(res.documents);
       setChunks(res.chunks);
       setHasSearched(true);
-    } catch (err) {
+    } catch {
       setError("Search failed. Please try again.");
     } finally {
       setLoading(false);

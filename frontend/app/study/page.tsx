@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Search, Menu, Bookmark, Flag, ChevronDown, ChevronUp, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
@@ -721,7 +721,10 @@ export default function StudyPage() {
   const [wordStudyLoading, setWordStudyLoading] = useState(false);
 
   const [savedWords, setSavedWords] = useState<SavedWord[]>([]);
-  const savedStrongsSet = new Set(savedWords.map((w) => w.strongs_number));
+  const savedStrongsSet = useMemo(
+    () => new Set(savedWords.map((w) => w.strongs_number)),
+    [savedWords]
+  );
 
   const [corpusResults, setCorpusResults] = useState<CorpusResult[]>([]);
   const [corpusLoading, setCorpusLoading] = useState(false);

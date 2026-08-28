@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 
 interface LoginModalProps {

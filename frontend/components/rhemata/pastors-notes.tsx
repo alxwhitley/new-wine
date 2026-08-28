@@ -92,7 +92,7 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
         setCardsError(true);
       })
       .finally(() => setCardsLoading(false));
-  }, [verseId]);
+  }, [verseId, accessToken]);
 
   async function handleAddNote() {
     if (!accessToken || !verseId) return;

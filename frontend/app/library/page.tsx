@@ -179,10 +179,6 @@ function PastorsNoteCard({ note }: { note: PastorsNote }) {
 
 type ContentFilter = "all" | "articles" | "sermons" | "books";
 
-type UnifiedResult =
-  | { type: "doc"; data: DocumentSearchResult }
-  | { type: "book"; data: Book };
-
 export default function LibraryPage() {
   const { user, accessToken, loading: authLoading, signIn, signUp } = useAuth();
   const { role } = useUserRole(accessToken);

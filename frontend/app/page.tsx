@@ -15,7 +15,6 @@ import { SourcePanel } from "@/components/rhemata/source-panel";
 import { StudyPanel } from "@/components/rhemata/study-panel";
 import { PinDropdown } from "@/components/rhemata/pin-dropdown";
 import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
-import { UsageRing } from "@/components/rhemata/usage-ring";
 import { WeeklyLimitCard } from "@/components/rhemata/weekly-limit-card";
 import {
   ConversationLengthNudge,

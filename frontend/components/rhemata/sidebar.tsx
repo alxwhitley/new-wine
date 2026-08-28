@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LogIn, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2, ChevronRight } from "lucide-react";
+import { Plus, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
