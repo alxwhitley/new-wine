@@ -337,6 +337,14 @@ export async function streamAsyncChatMessage(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (options?.token) headers["Authorization"] = `Bearer ${options.token}`;
 
+  // Stable per-submission id for the search-analytics occurrence ledger
+  // (docs/superpowers/specs/2026-08-27-search-analytics-and-corpus-gap-
+  // dashboard.md) -- generated once per call, distinct from any job-level
+  // dedup key, so a genuine retry of this exact fetch (not a fresh user
+  // resubmission) would carry the same id if this function is ever
+  // wrapped in a retry helper later.
+  const submissionId = crypto.randomUUID();
+
   // 1. Submit (returns instantly with a durable job id). Metering happens here,
   //    server-side, keyed on the caller -- so usage arrives in the submit response.
   let submitRes: Response;
@@ -349,6 +357,7 @@ export async function streamAsyncChatMessage(
         messages: options?.messages ?? [],
         topics_established: options?.topicsEstablished ?? {},
         anon_id: options?.anonId ?? null,
+        submission_id: submissionId,
       }),
     });
   } catch {

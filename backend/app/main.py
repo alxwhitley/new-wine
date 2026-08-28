@@ -46,7 +46,7 @@ async def security_headers(request: Request, call_next):
     )
     return response
 
-from app.routers import search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes, async_chat, corpus_inventory
+from app.routers import search, document, ingest, ingest_queue, study, admin, feedback, library, pastors_notes, usage, account, quotes, answer_quotes, async_chat, corpus_inventory, analytics, admin_analytics
 
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(document.router, prefix="/document", tags=["document"])
@@ -87,6 +87,14 @@ app.include_router(async_chat.router, prefix="/async-chat", tags=["async-chat"])
 # 2026-08-17) -- include_in_schema=False just keeps it off /docs and
 # /openapi.json, it is not a security boundary.
 app.include_router(corpus_inventory.router, prefix="/corpus-inventory", tags=["corpus-inventory"])
+
+# Search analytics and corpus-gap dashboard (docs/roadmap.md Horizon item
+# 4; docs/superpowers/specs/2026-08-27-search-analytics-and-corpus-gap-
+# dashboard.md). /analytics/consent is any-authenticated-user (own consent
+# row, same posture as /account/delete-request); /admin/analytics/* is
+# entirely require_admin_role-gated.
+app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(admin_analytics.router, prefix="/admin/analytics", tags=["admin-analytics"])
 
 @app.get("/")
 async def root():
