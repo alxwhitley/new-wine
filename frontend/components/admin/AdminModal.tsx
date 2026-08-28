@@ -94,6 +94,8 @@ interface DeletionRequest {
   user_id: string;
   email: string;
   created_at: string;
+  status: "pending" | "failed";
+  failure_reason: string | null;
 }
 
 interface Contributor {
@@ -345,6 +347,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
   const [deletionRequestsLoaded, setDeletionRequestsLoaded] = useState(false);
   const [deletionRequestsLoading, setDeletionRequestsLoading] = useState(true);
   const [resolveIds, setResolveIds] = useState<Set<string>>(new Set());
+  const [deletionConfirmTarget, setDeletionConfirmTarget] = useState<DeletionRequest | null>(null);
 
   // ── Notes queue ────────────────────────────────────────────────
   const [pendingNotes, setPendingNotes] = useState<PendingNote[]>([]);
@@ -718,7 +721,14 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
         });
         if (res.ok) {
           setDeletionRequests((prev) => prev.filter((r) => r.id !== id));
-          showToast("Deletion request marked resolved.");
+          showToast("Account permanently deleted.");
+        } else {
+          // A real failure now (e.g. reconciliation found a remaining row,
+          // or the Auth API call itself failed) -- refresh so the row's
+          // status/failure_reason reflect what actually happened, and say
+          // so instead of silently doing nothing.
+          setDeletionRequestsLoaded(false);
+          showToast("Deletion failed -- see the request's status for details.");
         }
       } finally {
         setResolveIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
@@ -1245,17 +1255,24 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
                                   <p className="text-xs text-muted-foreground mt-1">
                                     Requested {fmtDate(req.created_at)}
                                   </p>
+                                  {req.status === "failed" && (
+                                    <p className="text-xs text-destructive mt-1">
+                                      Failed: {req.failure_reason || "unknown error"} — safe to retry.
+                                    </p>
+                                  )}
                                 </div>
                                 <Button
-                                  variant="outline"
+                                  variant="destructive"
                                   size="sm"
-                                  onClick={() => handleResolveDeletion(req.id)}
+                                  onClick={() => setDeletionConfirmTarget(req)}
                                   disabled={resolveIds.has(req.id)}
                                 >
                                   {resolveIds.has(req.id) ? (
                                     <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : req.status === "failed" ? (
+                                    "Retry deletion"
                                   ) : (
-                                    "Mark resolved"
+                                    "Delete account"
                                   )}
                                 </Button>
                               </div>
@@ -1722,6 +1739,37 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
           </div>
         )}
 
+        {/* Deletion confirmation — a real, irreversible account + data
+            deletion now fires from this button, not a status flip. */}
+        <AlertDialog
+          open={!!deletionConfirmTarget}
+          onOpenChange={(isOpen) => { if (!isOpen) setDeletionConfirmTarget(null); }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Permanently delete {deletionConfirmTarget?.email || "this account"}?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This deletes the account and all of its data — conversations, saved words,
+                pastoral notes, usage history, and search history. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (deletionConfirmTarget) handleResolveDeletion(deletionConfirmTarget.id);
+                  setDeletionConfirmTarget(null);
+                }}
+              >
+                Permanently delete
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Revoke sheet — portaled via SheetPortal */}
         <Sheet
           open={!!revokeTarget}
@@ -1774,7 +1822,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
                 <AlertDialogHeader>
                   <AlertDialogTitle>Request sent</AlertDialogTitle>
                   <AlertDialogDescription>
-                    We&apos;ve logged your request. We&apos;ll follow up by email before anything is removed.
+                    We&apos;ve logged your request. An admin will review it before anything is deleted.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -1787,8 +1835,8 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
                   <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This sends a request to remove your account and data — conversations, saved words, and any
-                    pastoral notes you&apos;ve contributed. We&apos;ll follow up by email to confirm before anything
-                    is deleted.
+                    pastoral notes you&apos;ve contributed. An admin will review your request before anything
+                    is deleted. This cannot be undone once it happens.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 {deleteStatus === "error" && deleteError && (
