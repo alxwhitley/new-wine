@@ -114,7 +114,26 @@ SEGMENTATION_INSTRUCTIONS = (
     "all-capitals line inside a flowing paragraph (a subsection heading "
     "such as a one-word rubric in the middle of an article) is not a new "
     "article's title -- keep reading until you find that article's own "
-    "distinct heading before starting a new span."
+    "distinct heading before starting a new span. "
+    # Added 2026-08-28, same New Wine A2 investigation: a segmentation-only
+    # diagnostic against Issue 02-1973's cached transcript found the model
+    # correctly recognizing the opening of the "Forum" reader Q&A column as
+    # its own article, then mislabeling that SAME column's own continuing
+    # content -- three consecutive spans, 16,788 chars total -- as three
+    # separate "advertisement" spans, each just over the named-category cap.
+    # Direct inspection of the full merged text found zero commercial
+    # language anywhere in it (no product, price, ordering instruction, or
+    # address to write to) -- it was the unbroken continuation of the same
+    # Basham/Prince dialogue on "slain in the Spirit" and spiritual
+    # discipline already correctly filed under "forum" moments earlier.
+    "Only categorize a span `advertisement` if it actually promotes a "
+    "specific product, service, event, or subscription -- naming what is "
+    "offered, a price, or an address or method to respond. A reader "
+    "question-and-answer or discussion column's own continuing content is "
+    "never an advertisement merely because its topic shifts, a new "
+    "question begins, or a different speaker is quoted partway through -- "
+    "keep it inside that column's own article span until the text itself "
+    "turns to genuinely promotional material."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
