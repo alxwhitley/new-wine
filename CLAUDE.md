@@ -1070,6 +1070,33 @@ different row, per the hard rule above.
   underlying flip-flopping was, repeatedly, on the same input. Full
   trail: `rhemata-status.md`'s 2026-08-27 entry, commits
   `37e2746`..`683b973`, `d011fac`, `ae37d3b`, `3bc8780`.
+
+  **Further diagnosed and partially fixed, later the same day (commit
+  `d5420e3`) — `foreign_article_title_in_span` (added `3bc8780`, above)
+  was firing correctly but frequently: 4 of 6 live full-CLI attempts
+  against Issue 02-1973 this session hit it, all the same shape.**
+  Root-caused via a segmentation-only diagnostic call: the model drew
+  "The Apostle - God's Master Builder"'s end boundary immediately after
+  the page-23 marker and labeled the continuation "Keeping the Unity" —
+  but that text is mid-sentence apostleship content ("...the apostle
+  holds on... TEAMS...") running to the same article's own page-23
+  footer; the real "Keeping the Unity" heading, confirmed against this
+  issue's own table of contents ("KEEPING THE UNITY .24"), sits ~5,800
+  chars later, and everything downstream shifted by one label as a
+  result. Fixed by telling `SEGMENTATION_INSTRUCTIONS` not to anchor a
+  boundary on a bare page marker and not to mistake a standalone
+  all-caps in-article subheading for a new article's title. **Validated,
+  not a full close:** 86 existing unit tests still pass; of 4 further
+  live checks post-fix, 1 was a clean segmentation pass with the correct
+  3-way split (Apostle / Keeping the Unity / Forum, matching the
+  diagnosed ToC structure), 1 reproduced the same title-bleed defect
+  again, and 2 hit unrelated pre-existing guardrails
+  (`coverage_spans_overlap`, `non_article_span_implausibly_large`)
+  instead — recurrence rate on the target defect dropped (1/4 vs. 4/6
+  pre-fix) but is not eliminated. Confirms this landmine's own standing
+  conclusion: model variance at "high" segmentation reasoning, not one
+  deterministic gap. Issue 02-1973 still has not cleared the article
+  gate end-to-end. Full trail: `rhemata-status.md`'s 2026-08-27 entry.
 - **A tracked master spreadsheet for ingestion candidates now exists —
   separate from, and layered on top of, `source_ingest_queue` (Invariant
   16), not a replacement for it.** Built 2026-08-19 as a single `.xlsx`

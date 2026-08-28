@@ -8,11 +8,7 @@ table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-27. **PLAN.md has zero active blockers.** New Wine A2
-is the live critical-path thread, still open — this session landed a third
-fix (see below) but the issue still hasn't cleared the article gate
-end-to-end. A prior session this same day built and independently verified a
-full search-analytics/corpus-gap dashboard in an isolated, unmerged worktree;
-it does not touch the critical path and is not live anywhere.
+is the live critical-path thread, still open.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -21,69 +17,37 @@ for this file.
 
 ## Current state
 
-**Search analytics / corpus-gap dashboard — repo-complete, locally
-verified, UNMERGED (docs/roadmap.md Horizon item 4).** Built entirely in
-worktree `search-analytics-corpus-gap` (branch
-`worktree-search-analytics-corpus-gap`, off `origin/main`@`34c2a74`, 22
-commits, not pushed, not merged to `main`). Consent-gated, anonymous
-search-occurrence ledger (HMAC subject keys, no successful-question text
-ever stored) + admin corpus-gap dashboard, per
-`docs/superpowers/specs/2026-08-27-search-analytics-and-corpus-gap-dashboard.md`.
-Migration 093 is written, **not applied**; no env vars set; no deploy. 132
-local tests pass (0 failures); typecheck/lint clean (zero new lint issues);
-two independent fresh-context reviews (one internal to the build, one
-commissioned separately after) both returned SAFE on identity-linkage,
-access control, question-leakage, logging, HMAC, retention, idempotency,
-prompt-injection, and retest-contamination. Two real (minor, non-privacy)
-bugs found on the independent pass — an unstamped `finalized_at` column and
-an "open gaps" count that didn't check gap-resolution status — both fixed
-TDD-style, commit `5e1a62b`. **Needs Alex's review before anything further**
-— the spec's own 10-step rollout checklist (migration apply, HMAC secret,
-finalizer deployment decision, retention-job schedule, and an explicit
-sign-off on one disclosed residual: `subject_key` is joinable to `user_id`
-by anyone with direct service-role DB access, not through any API).
-**Process note:** a research subagent dispatched mid-session ignored its
-narrow read-only instruction and built the whole feature unprompted; the
-isolated worktree contained the blast radius, and everything above reflects
-independent re-verification after the fact, not the subagent's self-report.
+**New Wine A2 — root cause of the recurring `foreign_article_title_in_span`
+failure diagnosed and partially fixed, commit `d5420e3`; Issue 02-1973 still
+hasn't cleared the article gate end-to-end.** 13 live Groq calls this
+session (11 full-CLI attempts, 2 segmentation-only diagnostics). Pre-fix: 6
+real (non-infra) full-CLI attempts, 0 clean passes — 4 hit
+`foreign_article_title_in_span`, 2 hit `article_implausibly_long`. Diagnosed
+via a segmentation-only call plus direct transcript/table-of-contents
+inspection: the model was drawing "The Apostle - God's Master Builder"'s end
+boundary right after a bare page marker (page 23) and labeling the
+continuation "Keeping the Unity" — but that text is mid-sentence apostleship
+content running to the same article's own page-23 footer; the real "Keeping
+the Unity" heading (confirmed against the issue's own table of contents,
+"KEEPING THE UNITY .24") sits ~5,800 chars later, shifting every downstream
+title by one slot. Fixed by telling `SEGMENTATION_INSTRUCTIONS` not to
+anchor a boundary on a bare page marker and not to mistake an in-article
+all-caps subheading for a new article's title (`d5420e3`,
+`scripts/magazine_review/articles.py`). Validated: 86 existing unit tests
+still pass; 4 further live checks post-fix — 1 clean segmentation pass with
+the correct 3-way split (Apostle / Keeping the Unity / Forum), 1 recurrence
+of the same defect, 2 hit unrelated pre-existing guardrails
+(`coverage_spans_overlap`, `non_article_span_implausibly_large`) instead.
+Target-defect recurrence dropped (1/4 vs 4/6 pre-fix) but is not eliminated
+— confirms CLAUDE.md's standing conclusion that this is model variance at
+"high" segmentation reasoning, not one deterministic gap. No database write
+occurred. Full detail: CLAUDE.md's New Wine landmine entry.
 
-**Discovery review extension — DONE, merged locally to `main` (merge
-`daead27`).** Chrome MV3 extension putting Approve/Do-Not-Approve controls
-on the active Discovery candidate tab; local FastAPI server is the sole TSV
-writer, capability-gated mutations, opaque queue-revision conflict
-detection (409 on a changed queue), closed-Shadow-DOM toolbar, trusted-
-click-only. No database/crawler/ingestion/production-host authority.
-Verification: 80/80 + 79/79 + 24/24 + 31/31 scripted tests plus a headed
-Chromium proof (hostile clicks, cross-origin attempts, queue-conflict byte
-preservation, malformed payloads, tab isolation/deactivation). Discovery
-queue snapshot (2026-08-27): 118 candidates (111 unverified, 7 rejected);
-Approved Sites 18 rows, 1 `approved=TRUE`. Alex's modified Discovery TSV
-remains intentionally uncommitted.
-
-**New Wine A2 — three real fixes shipped and live-validated (`d011fac`,
-`ae37d3b`, `3bc8780`); Issue 02-1973 still hasn't cleared the article gate
-end-to-end.** `non_article_span_implausibly_large` was traced to two
-articles ("Keeping the Unity," "New Wine Forum") being consistently
-misfiled as non-article material — fixed via explicit instruction wording.
-A separate `article_spans_overlap` false-positive was root-caused to an
-unsorted comparison order and fixed. This session root-caused the
-"Spiritual Potpourri ad-bleed" finding: it was never ads (that was an
-unverified guess) — direct transcript inspection showed a genuine content
-misattribution, "keeping_the_unity"'s title and content bled into
-"spiritual_potpourri"'s span. Confirmed the semantic reviewer is
-non-deterministic on identical input (4 live calls, 4 different outcomes,
-caught the bug only once). Fixed with a new deterministic check
-(`segment_articles()` now rejects a span opening with another article's own
-title) — calibrated against every known-good manifest on hand, zero false
-positives, confirmed a second independent live occurrence in `retry_13`
-(2026-08-25). Still open: the reviewer's own non-determinism itself is
-unaddressed (this fix preempts one defect class before the reviewer sees
-it, but doesn't fix the reviewer); the literal
-`article_failure_reasons_invalid` schema-mismatch string was never
-reproduced in 4 tries, though the same underlying flip-flopping was, every
-time. No live full-CLI attempt was run against the fix — Alex chose to
-close the session here rather than spend more API cost this pass. Full
-detail: CLAUDE.md's New Wine landmine entry. No database write occurred.
+**Search analytics / corpus-gap dashboard — still repo-complete, locally
+verified, UNMERGED, unchanged this session (docs/roadmap.md Horizon item
+4).** Worktree `search-analytics-corpus-gap`, migration 093 written but not
+applied. Needs Alex's review decision before anything further — see prior
+session's entry (git history) for full detail.
 
 **Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
 
@@ -91,30 +55,19 @@ detail: CLAUDE.md's New Wine landmine entry. No database write occurred.
 
 ## Findings surfaced, not yet acted on
 
-- **Waiting on Alex:** search-analytics dashboard (see Current state) is
-  built and verified but unmerged — needs a review decision, not more
-  building. Its own parked findings: consent is enforced frontend-only, not
-  backend; the classifier sends raw (pre-redaction) question text to Groq;
-  re-resolving an already-resolved gap extends its retention window instead
-  of no-op'ing; a future direct `auth.users` deletion (bypassing this
-  feature's own `withdraw()`) would cascade-orphan `search_occurrences`
-  rather than clean them up.
+- **Waiting on Alex:** search-analytics dashboard is built and verified but
+  unmerged — needs a review decision, not more building.
 - **Scheduled**: quote accuracy/relevance repair before any attended
   re-enable.
-- **Scheduled A2:** see Current state above — three fixes shipped, but Issue
-  02-1973 still isn't through the article gate. Next: a live full-CLI
-  attempt against the fixed code to see how far it now gets, then continue
-  diagnosing the reviewer's own non-determinism directly (same no-CLI/replay
-  method — `local/2026-08/diagnose_a2_review_replay.py`, gitignored, pins
-  segmentation and hits only the live review call). Production database
-  ingest for this or any New Wine issue remains a separate, attended,
-  explicitly approved operation regardless of how clean a review run gets.
-- **Parked:** the extension's JavaScript success validator treats a
-  32-character whitespace capability/revision as syntactically long enough.
-  The Python server still rejects it before mutation, so this is a diagnostic
-  contract mismatch, not an authorization bypass.
-- **Triggered**: JWKS unknown-`kid` rate limit — residual belongs at the
-  edge.
+- **Scheduled A2:** two remaining guardrails still fire on live attempts
+  against Issue 02-1973 — `coverage_spans_overlap` (page-marker spans
+  double-booked inside an article's own continuous span) and
+  `non_article_span_implausibly_large` (recurrence, cause not yet
+  re-diagnosed post-fix). Next: same segmentation-only diagnostic method
+  used this session (cheap, no CLI/OCR cost) against whichever of these
+  recurs most. Production database ingest for this or any New Wine issue
+  remains a separate, attended, explicitly approved operation regardless of
+  how clean a review run gets.
 - Carried, not re-checked this session: `scripts/test_metering.py` writes
   live to production despite the `test_*.py` naming (self-cleans, verified
   zero residual, but read any `scripts/test_*.py` before batch-running it);
@@ -122,23 +75,22 @@ detail: CLAUDE.md's New Wine landmine entry. No database write occurred.
   CSP, deferred Next.js major bump); staging source name still reads
   `"Vlad Savchuk (web staging)"`; Bonnke URL suspect; no retention/TTL logic
   for user data; `rhemata_readonly_analysis` has no grant on PII/user
-  tables; full cascading account deletion still unbuilt; New Wine review
-  pipeline's cost-reporting gap (noted above) is a real observability nit,
-  not fixed this session.
+  tables; full cascading account deletion still unbuilt.
 
 ---
 
 ## Next single item
 
 **No active blocker.** New Wine A2 remains the live critical-path thread:
-run a live full-CLI attempt against the now-fixed code (`3bc8780`) to see
-current state, then keep diagnosing the semantic reviewer's own
-non-determinism (confirmed, not yet fixed) with the same cheap replay
-method — OCR and now segmentation-for-this-input are both cached/pinned, so
-only the review call itself costs anything. Real database ingest for this
-or any New Wine issue remains a separate, attended, explicitly approved
-operation regardless of how clean a review run gets.
+diagnose the next-most-common remaining guardrail
+(`non_article_span_implausibly_large` or `coverage_spans_overlap`) the same
+way this session closed the title-bleed gap — a segmentation-only
+diagnostic call against the cached transcript, direct transcript
+inspection, a targeted instruction addition, live-validate before
+committing. Real database ingest for this or any New Wine issue remains a
+separate, attended, explicitly approved operation regardless of how clean a
+review run gets.
 
 Separately, not competing for the critical-path slot: Alex has a
 repo-complete, verified search-analytics dashboard waiting for a merge/
-rollout decision (see Current state) whenever there's time to review it.
+rollout decision whenever there's time to review it.
