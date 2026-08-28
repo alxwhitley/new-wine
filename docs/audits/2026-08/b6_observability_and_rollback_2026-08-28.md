@@ -173,7 +173,7 @@ Concrete, not just the task's own template language:
 | Trigger | Threshold | Source |
 |---|---|---|
 | Security/privacy defect or data-integrity failure | Any confirmed instance | — |
-| New client error affecting the core journey (ask → answer) | Any new, reproducible instance not present before this rollout | Client-error reporting path (pending decision, see below) or direct user report |
+| New client error affecting the core journey (ask → answer) | Any new, reproducible instance not present before this rollout | Direct user report or manual spot-check only — no automated client-error reporting exists (Alex's decision, see below: skipped for beta launch) |
 | API 5xx rate | More than 2× the pre-rollout baseline rate | Railway Observability tab |
 | p95 answer latency | More than 50% above the recorded p90 baseline of 48.58 s, i.e. **above ~73 s** sustained (not one outlier job) | Query #6 above |
 
@@ -250,6 +250,9 @@ task, so both need Alex's explicit privacy approval before either is built:
    database/logs, nothing leaves this infrastructure, but it's still a new
    collection of client-side data that didn't exist before.
 
-Neither has been built. Raised to Alex separately from this document (plain-
-language question, per this session's standing instruction) rather than
-decided here.
+**Decided 2026-08-28 (Alex): skip client-error reporting for beta launch.**
+Neither option is being built. Beta ships with no visibility into
+client-side errors beyond the browser's own console and direct user
+reports. Recorded as a deliberate, known gap — not an oversight — and a
+real candidate for a later session once the beta has real usage to justify
+the added collection (self-built) or the third-party data flow (Sentry).
