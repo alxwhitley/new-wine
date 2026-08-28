@@ -94,7 +94,20 @@ def column_exists(cur, table: str, column: str) -> bool:
 def run_verify(cur) -> None:
     tables = ["analytics_consent", "search_occurrences", "search_gap_details"]
     for t in tables:
-        check("%s exists" % t, table_exists(cur, t))
+        exists = table_exists(cur, t)
+        check("%s exists" % t, exists)
+        if not exists:
+            # rls_enabled()'s ::regclass cast raises UndefinedTable on a
+            # missing table -- found live 2026-08-28 running this exact
+            # dry-run against a pre-migration schema, which crashed the
+            # whole verify pass after one FAIL instead of reporting the
+            # remaining checks. Report them as FAIL and move on instead of
+            # querying a table that isn't there.
+            check("%s has RLS enabled" % t, False, "table does not exist")
+            check("%s has a service_role policy" % t, False, "table does not exist")
+            for role in ("anon", "authenticated"):
+                check("%s has no grant to %s" % (t, role), False, "table does not exist")
+            continue
         check("%s has RLS enabled" % t, rls_enabled(cur, t))
         check("%s has a service_role policy" % t, has_service_role_policy(cur, t))
         for role in ("anon", "authenticated"):
