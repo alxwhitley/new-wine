@@ -3,6 +3,7 @@ import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -99,3 +100,59 @@ app.include_router(admin_analytics.router, prefix="/admin/analytics", tags=["adm
 @app.get("/")
 async def root():
     return {"message": "Rhemata API"}
+
+
+# Liveness/readiness (B6 Task 5.3). Deliberately return only a status word and
+# per-check booleans -- never a stack trace, DSN fragment, or exception
+# message -- so this stays safe as a public, unauthenticated surface.
+
+@app.get("/health")
+async def health():
+    """Liveness only: the process is up and serving HTTP. No dependency I/O."""
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness: can this instance actually serve a request right now.
+
+    Checks the two things that would make requests fail even though the
+    process itself is alive: DB reachability and presence of the API keys
+    every answer path depends on. Deliberately does NOT call out to
+    Anthropic/OpenAI/Cohere/Groq -- Railway polls this on an interval, and a
+    live call to every provider on each poll would be slow and non-free for
+    zero real signal (a missing key is already caught by presence-checking
+    it; a provider outage belongs in the answer-path's own error handling,
+    not this probe).
+    """
+    checks = {}
+
+    try:
+        from app.services.async_answers.db import connect as _connect_db
+
+        conn = _connect_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        finally:
+            conn.close()
+        checks["database"] = True
+    except Exception:
+        checks["database"] = False
+
+    for key in (
+        "SUPABASE_URL",
+        "SUPABASE_DB_URL",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "COHERE_API_KEY",
+        "GROQ_API_KEY",
+    ):
+        checks[key.lower()] = bool(os.environ.get(key))
+
+    ok = all(checks.values())
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "ok" if ok else "not_ready", "checks": checks},
+    )
