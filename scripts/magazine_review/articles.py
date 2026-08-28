@@ -91,7 +91,30 @@ SEGMENTATION_INSTRUCTIONS = (
     "column -- use the column's own name, or \"Readers\" if none is given, as "
     "its author. A supporting reference table, chart, or list that is part of "
     "an article's own content belongs inside that article's span, not as a "
-    "separate non-article span."
+    "separate non-article span. "
+    # Added 2026-08-27, same New Wine A2 investigation, after live diagnosis
+    # of a recurring foreign_article_title_in_span failure (4 of 6 live
+    # attempts against Issue 02-1973 this session): the transcript itself
+    # showed the model drawing an article boundary immediately after a page
+    # marker (start of page 23), then labeling that span "Keeping the Unity"
+    # -- but the text there is mid-sentence continuation of "The Apostle -
+    # God's Master Builder" ("...the apostle holds on... TEAMS... apostolic
+    # character..."), running to that same article's own page-23 footer. The
+    # real "Keeping the Unity" heading, confirmed against this issue's own
+    # table of contents ("KEEPING THE UNITY .24"), sits ~5,800 chars later.
+    # Every downstream title then shifts by one slot: real "Keeping the
+    # Unity" content gets called "Spiritual Potpourri", and the real
+    # "Spiritual Potpourri"/"New Wine Forum" heading (ToC: ".26") never gets
+    # its own boundary at all, buried inside that oversized span instead.
+    "An article's span must begin at content that is genuinely that "
+    "article's own opening -- its title, byline, or lead sentence -- never "
+    "at a page-marker position alone. Text that continues a sentence or "
+    "topic from the previous page is still part of that earlier article, "
+    "even immediately after a new page begins. A short, standalone "
+    "all-capitals line inside a flowing paragraph (a subsection heading "
+    "such as a one-word rubric in the middle of an article) is not a new "
+    "article's title -- keep reading until you find that article's own "
+    "distinct heading before starting a new span."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
