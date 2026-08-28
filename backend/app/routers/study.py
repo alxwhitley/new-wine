@@ -1049,7 +1049,11 @@ async def get_teacher_card(
     try:
         embedding = embed_text(question)
     except Exception:
-        logger.exception("Embedding failed for teacher-position query: %s", question[:100])
+        # Packet 4, Task 4.4 (2026-08-28): this used to log up to 100 chars
+        # of the user's actual question text -- removed; the exception
+        # itself and source_id are enough to diagnose an embedding-service
+        # failure without retaining what could be sensitive question content.
+        logger.exception("Embedding failed for teacher-position query, source_id=%s", source_id)
         raise HTTPException(status_code=500, detail="Embedding service error")
 
     document_ids = [d["id"] for d in non_commentary_docs]

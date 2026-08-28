@@ -69,7 +69,12 @@ def enforce_query_limit(
                 "p_ip_address": client_ip,
             }).execute()
             count = result.data if isinstance(result.data, int) else 0
-            logger.info("[GUEST] anon_id=%s ip=%s query_count=%s", anon_id, client_ip, count)
+            # Packet 4, Task 4.4 (2026-08-28): this used to log the raw
+            # anon_id and raw client IP on every guest request -- removed;
+            # query_count is the only value with routine diagnostic value
+            # here, and the RPC call itself (not this log line) is the
+            # actual place anon_id/client_ip need to be used.
+            logger.info("[GUEST] query_count=%s", count)
             # count == -1 is the RPC's sentinel for "too many new guest sessions
             # from this IP recently" (migration 057) -- same user-facing message
             # as the ordinary limit, so an abuser rotating anon_id gets no signal
@@ -79,7 +84,7 @@ def enforce_query_limit(
         except HTTPException:
             raise
         except Exception:
-            logger.exception("Guest query count check failed for anon_id=%s -- failing closed", anon_id)
+            logger.exception("Guest query count check failed -- failing closed")
             raise HTTPException(status_code=503, detail="metering_unavailable")
         return {}
 

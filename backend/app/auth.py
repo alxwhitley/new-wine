@@ -43,7 +43,7 @@ def get_optional_user(request: Request) -> Optional[str]:
         logger.info("[AUTH] JWT decoded successfully, user_id=%s", user_id)
         return user_id
     except Exception as e:
-        logger.warning("[AUTH] JWT decode failed: %s: %s | token prefix: %s...", type(e).__name__, e, token[:20])
+        logger.warning("[AUTH] JWT decode failed: %s: %s", type(e).__name__, e)
         return None
 
 
