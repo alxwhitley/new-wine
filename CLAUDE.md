@@ -1097,6 +1097,33 @@ different row, per the hard rule above.
   conclusion: model variance at "high" segmentation reasoning, not one
   deterministic gap. Issue 02-1973 still has not cleared the article
   gate end-to-end. Full trail: `rhemata-status.md`'s 2026-08-27 entry.
+
+  **A second, distinct `non_article_span_implausibly_large` cause found
+  and fixed the following session (commit `4bad5b5`): the model
+  correctly recognized the opening of the "New Wine Forum" reader Q&A
+  column as its own article, then mislabeled that SAME column's own
+  continuing content — three consecutive spans, 16,788 chars total — as
+  three separate `advertisement` spans, each just over the 5,000-char
+  named-category cap (5,625 / 5,594 / 5,533 chars).** Direct inspection
+  of the full merged text found zero commercial language anywhere in
+  it (no product, price, ordering instruction, or address to write
+  to) — it was the unbroken continuation of the same Basham/Prince
+  dialogue on "slain in the Spirit" and spiritual discipline already
+  correctly filed under "forum" moments earlier, not three real ads.
+  Fixed by requiring actual promotional content (a named product,
+  service, event, subscription, price, or response address) before a
+  span may be categorized `advertisement`. Validated: 86 existing unit
+  tests still pass; 2 of 2 real live checks post-fix show zero
+  fake-advertisement mislabeling — one correctly unified the entire
+  real column into a single 22,562-char article span, exactly matching
+  the issue's own table of contents ("NEW WINE FORUM .26"). Both
+  fixes are now live (`d5420e3`, `4bad5b5`); 4 further live full-CLI
+  attempts the same session still failed on other, already-documented
+  variance (`article_implausibly_long` twice, `non_article_span_implausibly_large`
+  twice — a large non-article dump swallowing part of "The Apostle",
+  unrelated to either fix). Issue 02-1973 still has not cleared the
+  article gate end-to-end. Full trail: `rhemata-status.md`'s 2026-08-27
+  entry.
 - **A tracked master spreadsheet for ingestion candidates now exists —
   separate from, and layered on top of, `source_ingest_queue` (Invariant
   16), not a replacement for it.** Built 2026-08-19 as a single `.xlsx`
