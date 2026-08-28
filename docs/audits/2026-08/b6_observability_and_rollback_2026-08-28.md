@@ -219,20 +219,29 @@ data-integrity trigger means ROLLBACK regardless of the others.
 
 ## Backups / RPO / RTO
 
-Supabase manages automated backups for this project. Checked this session
-via the `claude_ai_Supabase` MCP tool's `list_projects` — it returned only
-one project ("Grocery App", `waljyghafnwrawijmqhe`, created 2026-08-24), not
-Rhemata. That MCP connection is authenticated to a different Supabase
-account/organization than whatever actually hosts Rhemata's production
-database, so it has no visibility into Rhemata's real backup configuration
-and cannot be used to confirm this. **Action before Task 5.4, requires
-Alex:** confirm via Rhemata's actual Supabase dashboard (Project Settings →
-Database → Backups) that backups are current and that the retention window
-matches the accepted RPO/RTO posture; record the actual numbers here rather
-than assuming. A non-production export/restore round trip (the task's "if
-practical" item) is a real, if low-risk, infrastructure action — flagged
-for Alex's call during Task 5.4 rather than performed unattended in this
-repo-only prep session.
+**Correction:** this section originally said the backup/RPO/RTO posture was
+unconfirmed and needed a fresh Alex dashboard check before Task 5.4. That was
+wrong — a real, dated, dashboard-sourced inventory already exists and was
+already closed by Alex's explicit acceptance:
+`docs/audits/2026-08/w9_recoverability_inventory_2026-08-19.md` (PLAN.md's
+W9 entry). Should have been checked before writing the paragraph below;
+correcting here rather than leaving it standing, per this repo's own "repo
+wins over chat premises" discipline.
+
+**Authoritative posture (2026-08-19, closed):** scheduled daily physical
+backups enabled, PITR disabled, 7 daily restore points visible (~10.6 GB DB).
+Implied RPO ~24h worst case (writes since the last midnight-UTC backup).
+Implied RTO unverified — no timed project-level restore has been run; Alex
+explicitly accepted this as unproven rather than requiring a drill. A
+smaller-scope restore (single document, 9-table footprint including
+embeddings) was separately proven 2026-07-24
+(`scripts/export_restore_document.py`) — a full project-level restore
+remains the unproven piece. Nothing about this session's changes (search
+analytics, observability endpoints, accessibility fixes) alters this
+posture or reopens the question. The task's "if practical" non-production
+export/restore round trip was already judged not required to close this —
+Alex's 2026-08-19 acceptance covers it. No further action needed before
+Task 5.4 on this specific item.
 
 ## Client-error reporting — decision needed before this task is complete
 
