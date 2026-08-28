@@ -57,7 +57,7 @@ export default function SourcesPage() {
         </li>
         <li>
           <strong className="font-semibold text-card-foreground">Theological review.</strong>{" "}Featured voices are selected against our theological foundations (see{" "}
-          <Link href="/beliefs" className="text-primary underline-offset-4 hover:underline">Our Theological Lens</Link>) — not scraped indiscriminately.
+          <Link href="/beliefs" className="text-primary underline underline-offset-4">Our Theological Lens</Link>) — not scraped indiscriminately.
         </li>
       </ArticleOl>
 

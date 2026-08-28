@@ -15,9 +15,12 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+    <main className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
       <h1 className="text-lg font-medium text-foreground">Something went wrong</h1>
-      <p className="text-sm text-destructive">
+      {/* axe: text-destructive against bg-background measured 4.02:1, short of
+          WCAG AA's 4.5:1 -- same scoped override as pastors-notes.tsx, not a
+          change to the shared --destructive token. */}
+      <p className="text-sm text-[hsl(0_84%_72%)]">
         An unexpected error occurred. You can try again or head back home.
       </p>
       <div className="flex items-center gap-4">
@@ -31,6 +34,6 @@ export default function Error({
           Back to home
         </Link>
       </div>
-    </div>
+    </main>
   );
 }

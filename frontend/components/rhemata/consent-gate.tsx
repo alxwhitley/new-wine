@@ -80,9 +80,14 @@ export function ConsentGate({ accessToken, hasUser, onDecline }: ConsentGateProp
   if (status !== "needed") return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="consent-gate-heading"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm"
+    >
       <div className="relative w-full max-w-md mx-4 rounded-lg border border-border bg-card shadow-lg p-6">
-        <h2 className="font-sans text-xl font-semibold text-foreground mb-1">
+        <h2 id="consent-gate-heading" className="font-sans text-xl font-semibold text-foreground mb-1">
           Before you continue
         </h2>
         <p className="text-sm text-muted-foreground mb-4">

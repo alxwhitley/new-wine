@@ -8,11 +8,11 @@ import { cn } from "@/lib/utils";
 
 export function ArticlePage({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-background text-foreground min-h-screen font-sans antialiased">
+    <main className="bg-background text-foreground min-h-screen font-sans antialiased">
       <article className="max-w-2xl mx-auto px-4 pt-16 pb-24 md:pt-20 md:pb-32">
         {children}
       </article>
-    </div>
+    </main>
   );
 }
 
