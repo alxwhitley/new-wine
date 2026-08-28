@@ -229,7 +229,7 @@ export default function QuoteReviewPage() {
       {currentDocument && !currentDocument.cleared && (
         <div className="border border-border rounded-lg p-4 bg-card flex flex-col gap-2">
           <p className="text-sm text-foreground">
-            This document has not been cleared for quoting yet. Say why it's safe to source quotes
+            This document has not been cleared for quoting yet. Say why it&apos;s safe to source quotes
             from before selecting any text.
           </p>
           <textarea
@@ -316,7 +316,7 @@ export default function QuoteReviewPage() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Why it's clear to use</label>
+            <label className="text-xs text-muted-foreground">Why it&apos;s clear to use</label>
             <textarea
               data-testid="reviewer-note-input"
               value={note}

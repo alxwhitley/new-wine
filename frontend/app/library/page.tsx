@@ -911,7 +911,7 @@ export default function LibraryPage() {
                       </div>
                     ) : discoverErrors.featured && featuredDocs.length === 0 ? (
                       <div className="flex flex-col items-start gap-1.5 mb-6">
-                        <p className="text-sm text-muted-foreground">Couldn't load featured content — check your connection.</p>
+                        <p className="text-sm text-muted-foreground">Couldn&apos;t load featured content — check your connection.</p>
                         <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : featuredDocs.length > 0 ? (
@@ -1137,7 +1137,7 @@ export default function LibraryPage() {
                       </div>
                     ) : discoverErrors.recent ? (
                       <div className="flex flex-col items-start gap-1.5">
-                        <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
+                        <p className="text-sm text-muted-foreground">Couldn&apos;t load — check your connection.</p>
                         <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : (
@@ -1194,7 +1194,7 @@ export default function LibraryPage() {
                       </div>
                     ) : discoverErrors.archive ? (
                       <div className="flex flex-col items-start gap-1.5">
-                        <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
+                        <p className="text-sm text-muted-foreground">Couldn&apos;t load — check your connection.</p>
                         <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : (
@@ -1205,7 +1205,7 @@ export default function LibraryPage() {
                   {/* 6. Pastors' Notes */}
                   <section className="mt-10">
                     <div className="mb-4">
-                      <h3 className="text-sm font-medium text-foreground mb-0.5 text-balance">Pastors' Notes</h3>
+                      <h3 className="text-sm font-medium text-foreground mb-0.5 text-balance">Pastors&apos; Notes</h3>
                       <span className="text-[11px] text-muted-foreground/60">Scripture reflections from community pastors and teachers</span>
                     </div>
                     {discoverLoading ? (
@@ -1222,7 +1222,7 @@ export default function LibraryPage() {
                       </div>
                     ) : discoverErrors.notes ? (
                       <div className="flex flex-col items-start gap-1.5">
-                        <p className="text-sm text-muted-foreground">Couldn't load — check your connection.</p>
+                        <p className="text-sm text-muted-foreground">Couldn&apos;t load — check your connection.</p>
                         <button onClick={() => loadDiscover(accessToken)} className="text-xs text-primary hover:underline underline-offset-4 transition-colors cursor-pointer">Try again</button>
                       </div>
                     ) : (

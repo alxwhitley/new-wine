@@ -33,9 +33,19 @@ export default function BookExcerptPage() {
   const [data, setData] = useState<BookExcerptResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Resets loading synchronously during render when the effect's own
+  // trigger condition newly becomes true (React's documented "adjusting
+  // state when a prop changes" pattern) instead of as the effect's own
+  // first statement.
+  const loadKey = id && !authLoading ? `${id}|${accessToken ?? ""}` : null;
+  const [resolvedLoadKey, setResolvedLoadKey] = useState<string | null>(null);
+  if (loadKey !== resolvedLoadKey) {
+    setResolvedLoadKey(loadKey);
+    if (loadKey) setLoading(true);
+  }
+
   useEffect(() => {
     if (!id || authLoading) return;
-    setLoading(true);
     getBookExcerpts(id, accessToken)
       .then(setData)
       .catch(() => {})

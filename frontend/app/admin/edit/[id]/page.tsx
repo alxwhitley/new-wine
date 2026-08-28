@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -23,14 +23,19 @@ export default function AdminEditPage() {
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<SaveState>("idle");
 
-  const origTitle = useRef("");
-  const origAuthor = useRef("");
-  const origContent = useRef("");
+  // State, not refs: isDirty reads these during render, and refs must
+  // never be read during render (react-hooks/refs) -- their mutation
+  // doesn't reliably trigger a re-render on its own. These are already
+  // only ever written alongside title/author/content's own setters below,
+  // so making them state changes nothing behaviorally.
+  const [origTitle, setOrigTitle] = useState("");
+  const [origAuthor, setOrigAuthor] = useState("");
+  const [origContent, setOrigContent] = useState("");
 
   const isDirty =
-    title !== origTitle.current ||
-    author !== origAuthor.current ||
-    content !== origContent.current;
+    title !== origTitle ||
+    author !== origAuthor ||
+    content !== origContent;
 
   // Role gate
   useEffect(() => {
@@ -42,18 +47,27 @@ export default function AdminEditPage() {
       .catch(() => router.replace("/"));
   }, [authLoading, user, accessToken, router, roleChecked]);
 
-  // Load document
+  // Load document. Resets loading synchronously during render when the
+  // effect's own trigger condition newly becomes true (React's documented
+  // "adjusting state when a prop changes" pattern) instead of as the
+  // effect's own first statement.
+  const loadKey = accessToken && id && roleChecked ? `${accessToken}|${id}` : null;
+  const [resolvedLoadKey, setResolvedLoadKey] = useState<string | null>(null);
+  if (loadKey !== resolvedLoadKey) {
+    setResolvedLoadKey(loadKey);
+    if (loadKey) setLoading(true);
+  }
+
   useEffect(() => {
     if (!accessToken || !id || !roleChecked) return;
-    setLoading(true);
     getDocumentForEdit(id, accessToken)
       .then((doc) => {
         setTitle(doc.title || "");
         setAuthor(doc.author || "");
         setContent(doc.content || "");
-        origTitle.current = doc.title || "";
-        origAuthor.current = doc.author || "";
-        origContent.current = doc.content || "";
+        setOrigTitle(doc.title || "");
+        setOrigAuthor(doc.author || "");
+        setOrigContent(doc.content || "");
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -73,9 +87,9 @@ export default function AdminEditPage() {
     setSaveState("saving");
     try {
       await updateDocument(id, { title, author, content }, accessToken);
-      origTitle.current = title;
-      origAuthor.current = author;
-      origContent.current = content;
+      setOrigTitle(title);
+      setOrigAuthor(author);
+      setOrigContent(content);
       setSaveState("success");
       setTimeout(() => setSaveState("idle"), 2000);
     } catch {

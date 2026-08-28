@@ -31,15 +31,24 @@ export function useInterlinear(verseId: string | null): {
 
   const isNT = !!verseId && NT_BOOKS.has(verseId.split(".")[0]);
 
-  useEffect(() => {
+  // Reset synchronously during render when verseId changes (React's
+  // documented "adjusting state when a prop changes" pattern) rather than
+  // as the effect's own first statements -- avoids an extra committed
+  // render showing the previous verse's stale tokens.
+  const [resolvedVerseId, setResolvedVerseId] = useState(verseId);
+  if (verseId !== resolvedVerseId) {
+    setResolvedVerseId(verseId);
     setTokens([]);
+    const book = verseId?.split(".")[0];
+    setLoading(!!verseId && !!book && INTERLINEAR_BOOKS.has(book));
+  }
 
+  useEffect(() => {
     if (!verseId) return;
 
     const book = verseId.split(".")[0];
     if (!INTERLINEAR_BOOKS.has(book)) return;
 
-    setLoading(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/interlinear?verse_id=${encodeURIComponent(verseId)}`)
       .then((res) => { if (!res.ok) throw new Error("interlinear fetch failed"); return res.json(); })
       .then((data: Array<{ original_word: string; transliteration: string; strongs_number: string; english_gloss: string; morphology: string; word_position: number }>) => {

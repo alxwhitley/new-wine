@@ -141,11 +141,17 @@ export default function Home() {
     };
   }, []);
 
+  // Reset synchronously during render when accessToken becomes falsy
+  // (React's documented "adjusting state when a prop changes" pattern)
+  // instead of as the effect's own first statements.
+  const [resolvedPinsToken, setResolvedPinsToken] = useState(accessToken);
+  if (accessToken !== resolvedPinsToken) {
+    setResolvedPinsToken(accessToken);
+    if (!accessToken) setStudyPins([]);
+  }
+
   useEffect(() => {
-    if (!accessToken) {
-      setStudyPins([]);
-      return;
-    }
+    if (!accessToken) return;
     let cancelled = false;
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/pins`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -378,14 +384,18 @@ export default function Home() {
   const isEmpty = messages.length === 0;
   const { inputFocused } = useChatFocus();
 
-  const [greeting, setGreeting] = useState("What would you like to learn about?");
-  useEffect(() => {
+  // Computed once via useState's lazy initializer, guaranteed to run
+  // exactly once for this component instance's lifetime -- not in an
+  // effect (react-hooks/set-state-in-effect) and not a bare call during
+  // render (new Date() is impure, react-hooks/purity), matching the same
+  // pattern already used for sidebar.tsx's skeleton-width randomization.
+  const [greeting] = useState(() => {
     const h = new Date().getHours();
-    if (h >= 5 && h < 12) setGreeting("Good morning, what would you like to learn about?");
-    else if (h >= 12 && h < 17) setGreeting("Good afternoon, what would you like to learn about?");
-    else if (h >= 17 && h < 21) setGreeting("Good evening, what would you like to learn about?");
-    else setGreeting("You're up late. What would you like to explore?");
-  }, []);
+    if (h >= 5 && h < 12) return "Good morning, what would you like to learn about?";
+    if (h >= 12 && h < 17) return "Good afternoon, what would you like to learn about?";
+    if (h >= 17 && h < 21) return "Good evening, what would you like to learn about?";
+    return "You're up late. What would you like to explore?";
+  });
 
   return (
     // Outermost shell: sidebar tone, full viewport

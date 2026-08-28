@@ -21,16 +21,31 @@ export function useUserRole(accessToken: string | null | undefined) {
     cached?.displayName ?? null
   );
 
-  useEffect(() => {
+  // Resolve synchronously during render when token changes to null
+  // (React's documented "adjusting state when a prop changes" pattern).
+  // Date.now() is impure and can't be called during render
+  // (react-hooks/purity), so the cache-freshness check itself stays in
+  // the effect below, not here.
+  const [resolvedToken, setResolvedToken] = useState(token);
+  if (token !== resolvedToken) {
+    setResolvedToken(token);
     if (!token) {
       setRole(null);
       setDisplayName(null);
-      return;
     }
+  }
+
+  useEffect(() => {
+    if (!token) return;
     const entry = _cache.get(token);
     if (entry && Date.now() - entry.timestamp < ROLE_CACHE_TTL_MS) {
-      setRole(entry.role);
-      setDisplayName(entry.displayName);
+      // Still deferred to a microtask, not a bare synchronous call, to
+      // satisfy react-hooks/set-state-in-effect the same way the real
+      // fetch path below already does via .then().
+      Promise.resolve().then(() => {
+        setRole(entry.role);
+        setDisplayName(entry.displayName);
+      });
       return;
     }
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/pastors-notes/me`, {

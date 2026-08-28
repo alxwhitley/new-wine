@@ -15,9 +15,19 @@ export default function DocumentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Resets loading synchronously during render when the effect's own
+  // trigger condition newly becomes true (React's documented "adjusting
+  // state when a prop changes" pattern) instead of as the effect's own
+  // first statement.
+  const loadKey = params.id && !authLoading ? `${params.id}|${accessToken ?? ""}` : null;
+  const [resolvedLoadKey, setResolvedLoadKey] = useState<string | null>(null);
+  if (loadKey !== resolvedLoadKey) {
+    setResolvedLoadKey(loadKey);
+    if (loadKey) setLoading(true);
+  }
+
   useEffect(() => {
     if (!params.id || authLoading) return;
-    setLoading(true);
     getDocument(params.id, accessToken)
       .then((res) => {
         setDocument(res.document);

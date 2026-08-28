@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function AuthErrorPage() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background">
@@ -8,12 +10,12 @@ export default function AuthErrorPage() {
         <p className="text-sm text-muted-foreground mb-6">
           Invalid or expired link. Please request a new password reset.
         </p>
-        <a
+        <Link
           href="/"
           className="text-sm text-primary hover:underline"
         >
           Back to sign in
-        </a>
+        </Link>
       </div>
     </div>
   );

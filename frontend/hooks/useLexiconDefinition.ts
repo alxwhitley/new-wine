@@ -20,8 +20,19 @@ export function useLexiconDefinition(
 ): LexiconEntry | null {
   const [lexiconContent, setLexiconContent] = useState<string | null>(null);
 
+  // Reset synchronously during render when strongs becomes falsy (React's
+  // documented "adjusting state when a prop changes" pattern) instead of
+  // as the effect's first statement. The fetch path below is unchanged --
+  // it still doesn't pre-clear content between two different truthy
+  // `strongs` values, matching existing behavior exactly.
+  const [resolvedStrongs, setResolvedStrongs] = useState(strongs);
+  if (strongs !== resolvedStrongs) {
+    setResolvedStrongs(strongs);
+    if (!strongs) setLexiconContent(null);
+  }
+
   useEffect(() => {
-    if (!strongs) { setLexiconContent(null); return; }
+    if (!strongs) return;
     const params = new URLSearchParams({ strongs });
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/lexicon?${params}`, {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},

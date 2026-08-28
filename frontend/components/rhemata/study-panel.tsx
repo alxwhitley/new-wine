@@ -48,12 +48,22 @@ function useVerseText(ref: StudyReference | null): {
   // reset to perform for that case at all.
   const targetKey = ref && ref.type === "verse" ? verseId(ref) : null;
 
+  // Reset synchronously during render when targetKey changes (React's
+  // documented "adjusting state when a prop changes" pattern) instead of
+  // as the effect's own first statements.
+  const [resolvedTargetKey, setResolvedTargetKey] = useState(targetKey);
+  if (targetKey !== resolvedTargetKey) {
+    setResolvedTargetKey(targetKey);
+    if (targetKey) {
+      setLoading(true);
+      setError(false);
+      setData(null);
+    }
+  }
+
   useEffect(() => {
     if (!targetKey) return;
     let cancelled = false;
-    setLoading(true);
-    setError(false);
-    setData(null);
     supabase
       .from("verses")
       .select("text, translation")
@@ -174,10 +184,14 @@ function PanelBody({
 
   // A stale word selection from a previously-viewed verse would be actively
   // wrong (matches nothing, or the wrong thing, in the new verse's tokens) —
-  // reset it whenever the reference changes.
-  useEffect(() => {
+  // reset it whenever the reference changes. Adjusted synchronously during
+  // render (React's documented pattern) rather than via an effect whose
+  // entire body was just this one unconditional reset.
+  const [resolvedVerseIdStr, setResolvedVerseIdStr] = useState(verseIdStr);
+  if (verseIdStr !== resolvedVerseIdStr) {
+    setResolvedVerseIdStr(verseIdStr);
     setSelectedStrongs(null);
-  }, [verseIdStr]);
+  }
 
   // Swap-in-place (Phase 2): a second underline click while the panel is
   // already open updates `reference` in place — this component re-renders,

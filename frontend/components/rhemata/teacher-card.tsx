@@ -17,12 +17,23 @@ function useTeacherCard(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
+  // Reset synchronously during render when the (sourceId, question) pair
+  // changes (React's documented "adjusting state when a prop changes"
+  // pattern) instead of as the effect's own first statements.
+  const key = sourceId && question ? `${sourceId}|${question}` : null;
+  const [resolvedKey, setResolvedKey] = useState(key);
+  if (key !== resolvedKey) {
+    setResolvedKey(key);
+    if (key) {
+      setLoading(true);
+      setError(false);
+      setData(null);
+    }
+  }
+
   useEffect(() => {
     if (!sourceId || !question) return;
     let cancelled = false;
-    setLoading(true);
-    setError(false);
-    setData(null);
     const params = new URLSearchParams({ question });
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/study/teacher/${sourceId}?${params}`, {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},

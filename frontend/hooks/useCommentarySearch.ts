@@ -33,9 +33,14 @@ export function useCommentarySearch(
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
-  const fetchCommentary = useCallback((text: string, off: number, vId?: string) => {
+  // Runs the fetch only -- does NOT set the initial loading/loadingMore
+  // flag itself. Callers are responsible for that: the effect below sets
+  // it via the render-time-adjustment pattern (react-hooks/set-state-in-effect
+  // forbids a synchronous setState call as an effect's own first
+  // statement), while loadMore (a real event handler, not an effect) sets
+  // it directly, which is fine there.
+  const runFetch = useCallback((text: string, off: number, vId?: string) => {
     const isLoadMore = off > 0;
-    if (isLoadMore) { setLoadingMore(true); } else { setLoading(true); }
     const params = new URLSearchParams({ verse_text: text, offset: String(off) });
     if (vId) params.set("verse_id", vId);
     if (sourceKindFilter) params.set("source_kind_filter", sourceKindFilter);
@@ -57,19 +62,32 @@ export function useCommentarySearch(
       .finally(() => { if (isLoadMore) { setLoadingMore(false); } else { setLoading(false); } });
   }, [accessToken, sourceKindFilter]);
 
-  useEffect(() => {
+  // Reset/kick off synchronously during render when verseText or verseId
+  // change (React's documented "adjusting state when a prop changes"
+  // pattern) instead of as the effect's own first statements.
+  const key = `${verseText ?? ""}|${verseId ?? ""}`;
+  const [resolvedKey, setResolvedKey] = useState(key);
+  if (key !== resolvedKey) {
+    setResolvedKey(key);
     if (!verseText) {
       setResults([]);
       setOffset(0);
       setHasMore(false);
-      return;
+    } else {
+      setLoading(true);
     }
-    fetchCommentary(verseText, 0, verseId ?? undefined);
-  }, [verseText, verseId, fetchCommentary]);
+  }
+
+  useEffect(() => {
+    if (!verseText) return;
+    runFetch(verseText, 0, verseId ?? undefined);
+  }, [verseText, verseId, runFetch]);
 
   const loadMore = useCallback(() => {
-    if (verseText) fetchCommentary(verseText, offset + 3, verseId ?? undefined);
-  }, [verseText, verseId, offset, fetchCommentary]);
+    if (!verseText) return;
+    setLoadingMore(true);
+    runFetch(verseText, offset + 3, verseId ?? undefined);
+  }, [verseText, verseId, offset, runFetch]);
 
   return { results, loading, loadingMore, hasMore, loadMore };
 }

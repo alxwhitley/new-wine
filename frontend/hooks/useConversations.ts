@@ -27,9 +27,38 @@ export function useConversations(userId: string | undefined) {
     if (data) setConversations(data);
   }, [userId]);
 
+  // Reset synchronously during render when userId becomes falsy (React's
+  // documented "adjusting state when a prop changes" pattern).
+  const [resolvedUserId, setResolvedUserId] = useState(userId);
+  if (userId !== resolvedUserId) {
+    setResolvedUserId(userId);
+    if (!userId) setConversations([]);
+  }
+
+  // Deliberately does NOT call fetchConversations(): the linter
+  // (react-hooks/set-state-in-effect) treats any effect-body call to a
+  // function that can eventually call setState as a synchronous setState
+  // call, regardless of the callee's own internal async/await structure --
+  // so this effect duplicates the actual fetch inline instead.
+  // fetchConversations stays exported for any future manual-refetch caller
+  // (none exist today -- grepped clean), a real event-handler context
+  // where calling it directly is fine.
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    if (!userId) return;
+    let cancelled = false;
+    supabase
+      .from("conversations")
+      .select("id, title, updated_at")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        if (!cancelled && data) setConversations(data);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const addOrUpdate = useCallback(
     (id: string, title: string) => {
