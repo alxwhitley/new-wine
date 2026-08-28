@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Protocol, TypedDict
 
-import fitz
+import pymupdf as fitz
 
 from .artifacts import load_valid_artifact, write_artifact
 from .benchmark import (

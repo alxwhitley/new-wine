@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf as fitz
 import pytest
 
 from magazine_review.benchmark import (

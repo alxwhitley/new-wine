@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf as fitz
 
 from magazine_review import articles as article_review_module
 from magazine_review.articles import (

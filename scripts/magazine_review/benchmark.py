@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-import fitz
+import pymupdf as fitz
 
 
 FIXTURE_CLASSES = frozenset({"severe_failure", "good_control"})
