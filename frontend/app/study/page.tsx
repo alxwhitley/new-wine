@@ -312,6 +312,7 @@ function VerseSearch({
         <button
           onClick={onSubmit}
           disabled={loading}
+          aria-label="Search verse or word"
           className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           {loading ? (

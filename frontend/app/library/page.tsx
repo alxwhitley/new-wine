@@ -14,7 +14,7 @@ import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/rhemata/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { ABBREV_TO_NAME as VERSE_BOOK_NAMES } from "@/lib/generated/book-maps";
 import {
@@ -226,6 +226,7 @@ export default function LibraryPage() {
   });
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersButtonRef = useRef<HTMLButtonElement>(null);
   const [draftAuthors, setDraftAuthors] = useState<string[]>([]);
   const [draftEra, setDraftEra] = useState("");
 
@@ -561,7 +562,7 @@ export default function LibraryPage() {
         <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
           <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
             <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
-              <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
+              <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
                 <Menu className="h-5 w-5" />
               </button>
               <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
@@ -654,7 +655,7 @@ export default function LibraryPage() {
 
           {/* Top bar (mobile only) */}
           <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30 border-b border-border">
-            <button onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
+            <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
             <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
@@ -691,6 +692,7 @@ export default function LibraryPage() {
                     />
                   </div>
                   <button
+                    ref={filtersButtonRef}
                     aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
                     onClick={() => {
                       setDraftAuthors(selectedAuthors);
@@ -714,6 +716,7 @@ export default function LibraryPage() {
                   <button
                     onClick={handleSearch}
                     disabled={loading}
+                    aria-label="Search"
                     className="min-h-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center gap-2 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                   >
                     <span className="hidden sm:inline">Search</span>
@@ -1059,7 +1062,7 @@ export default function LibraryPage() {
                             {imgSrc && !failedAuthorImages.has(author.name) ? (
                               <Image
                                 src={imgSrc}
-                                alt={author.name}
+                                alt=""
                                 width={24}
                                 height={24}
                                 className={cn(
@@ -1241,9 +1244,14 @@ export default function LibraryPage() {
             ? "h-[85vh] overflow-y-auto rounded-t-xl p-0 bg-popover"
             : "w-80 max-w-80 p-0 bg-popover"}
           showCloseButton={true}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            filtersButtonRef.current?.focus();
+          }}
         >
           <div className="px-5 pt-5 pb-8 flex flex-col gap-6">
-            <h2 className="font-sans text-lg font-semibold text-foreground">Filters</h2>
+            <SheetTitle className="font-sans text-lg">Filters</SheetTitle>
+            <SheetDescription className="sr-only">Filter the library by author and era.</SheetDescription>
 
             {/* Authors */}
             <div>

@@ -248,7 +248,13 @@ export function PastorsNotesSection({ verseId, accessToken, role, userId }: Prop
         </div>
       ) : cardsError ? (
         <div className="rounded-lg border border-border bg-card p-6 text-center">
-          <p className="text-sm text-destructive">
+          {/* axe: text-destructive against bg-card measured 4.02:1, short of
+              WCAG AA's 4.5:1 -- scoped override here only, not a change to
+              the shared --destructive token (18 other call sites use it,
+              mostly as a button/icon color against different backgrounds
+              where it already passes; auditing all of them is out of scope
+              for this one error message). */}
+          <p className="text-sm text-[hsl(0_84%_72%)]">
             Couldn&apos;t load notes — try again.
           </p>
         </div>
