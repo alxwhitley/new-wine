@@ -133,7 +133,39 @@ SEGMENTATION_INSTRUCTIONS = (
     "never an advertisement merely because its topic shifts, a new "
     "question begins, or a different speaker is quoted partway through -- "
     "keep it inside that column's own article span until the text itself "
-    "turns to genuinely promotional material."
+    "turns to genuinely promotional material. "
+    # Added 2026-08-28, same New Wine A2 investigation: a fresh
+    # segmentation-only diagnostic against Issue 02-1973's cached
+    # transcript reproduced a distinct failure -- not the previously-fixed
+    # page-marker or forum-as-ads defects. The model proposed one
+    # "Health and Healing-IT'S UP TO YOU!" article span running the full
+    # length of pages 2-8, then separately proposed an "Editorial" article
+    # and a "table_of_contents" non-article span landing INSIDE that same
+    # range (a direct self-contradiction the existing overlap check
+    # correctly rejected before any downstream stage ran), and mislabeled
+    # roughly 12,700 chars of that same range -- three full pages of
+    # genuine Derek Prince healing/atonement content -- as "Whitespace and
+    # separator lines between sections." Direct inspection of the
+    # transcript confirmed the real structure: this article's own content
+    # genuinely resumes on page 6 after Letters to the Editor, an
+    # Editorial, the table of contents, and a subscription notice are
+    # inserted on page 5 -- a real magazine layout, not a model error to
+    # route around. An independent prior segmentation of this same issue
+    # (retry_13, 2026-08-25) reached the same structure on its own,
+    # filing the two halves as "Health and Healing - It's Up to You!
+    # (Part I)" and a distinct "Health and Healing - Continuation
+    # (Part II)" article rather than merging them -- corroborating
+    # evidence from a separate run, not a guessed fix.
+    "When an article's own content is interrupted by other magazine "
+    "material -- an editorial, letters to the editor, the table of "
+    "contents, a subscription notice, or any other genuinely separate "
+    "piece -- and then resumes later, never extend that article's span "
+    "across the interruption and never describe the resumed portion as "
+    "blank, whitespace, or filler. Return each physically separate run of "
+    "that article's own text as its own article entry, in transcript "
+    "order, using the same title with a part label such as \"(Part I)\" "
+    "and \"(Part II)\" or \"(continued)\", and the same author, with its "
+    "own unique article_id and filename."
 )
 REVIEW_INSTRUCTIONS = (
     "Review the complete proposed article set against the complete verified issue in "
