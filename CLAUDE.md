@@ -395,15 +395,21 @@ approved in production still pass every tightened rule), and
     corpus — it's a historical label on written content, not a signal that
     the text needs audio confirmation. Nothing was relabeled; no audio-
     verification mechanism was built; nothing gates on transcript status.
-    **The stated residual risk is prospective, not retrospective — it
-    applies to how the corpus could grow, not to anything in it today.**
-    Concretely: if a future YouTube/SermonIndex ingestion pass (currently
-    halted, see the Landmines "YouTube ingestion has stopped" entry) brings
-    in genuinely auto-transcribed audio material under `sermon_transcript`
-    or a similar label, this quote rail has no check that would catch a
-    mistranscribed word or phrase reaching the quote surface. A future
-    session must find this recorded here before quoting from newly-ingested
-    audio-sourced material, not discover the gap by shipping a bad quote.
+    **REALIZED 2026-08-29 — the risk is no longer prospective. This
+    corrects the entry's own earlier "prospective, not retrospective —
+    applies to how the corpus could grow, not to anything in it today"
+    framing in place, rather than stacking a note on top of it.** The CLF
+    Church ingestion (56 YouTube sermons — see the Landmines entry below)
+    put genuinely auto-transcribed audio into the corpus under
+    `sermon_transcript`, and a mistranscription is confirmed present in it:
+    one sermon's captions render "ceasing" as "seizing", found while
+    auditing that document's `1 Thessalonians 5:17` reference. Nothing
+    gates on transcript status, so this quote rail still has no check that
+    would stop a garbled phrase reaching the quote surface. There is no
+    live exposure today only because `QUOTE_SELECTION_ENABLED=false`
+    (Settled #30). Before that flag is flipped back on, CLF material must
+    be either excluded from quoting or given an audio-confirmation step —
+    do not discover this by shipping a bad quote.
 
 ## Settled product decisions (2026-08-08, session 2) — position-layer governance, quote-rail scope, product rename
 
@@ -2073,11 +2079,22 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   via this route; a stale-looking ingest queue is a decision, not an
   oversight. See `docs/plan-archive.md` #44 for the reason (duplicate
   clip/full-sermon content found the same day). **The exception, already
-  executed:** Alex explicitly reversed this for his own church's playlist
-  (Christian Life Fellowship, Raleigh) on 2026-08-29 — 49 sermons ingested,
-  re-ingested after the caption defect below, and verified against source.
-  That reversal covers CLF Church alone; it does not reopen the queue for any
-  other channel.
+  executed:** Alex explicitly reversed this for his own church's material
+  (Christian Life Fellowship, Raleigh) on 2026-08-29 — two playlists,
+  56 sermons total, every one verified verbatim against source: 49 from
+  "Sermons" (ingested, then re-ingested after the caption defect below) and
+  7 from "Sermon Archive". That reversal covers CLF Church alone; it does not
+  reopen the queue for any other channel. **Both stages are `--sheet`-scoped
+  (`youtube_triage.py --sheet NAME --add URL`, then `youtube_ingest.py
+  --sheet NAME`) — that is what keeps a CLF run off the other tabs.** The
+  `run_queue_*.py` wrappers are the all-tabs form: a bare `run_queue_ingest.py`
+  would ingest every `ingest=TRUE`+`triaged` row in the workbook, which as of
+  2026-08-29 is 731 videos across Sermonindex, Philip Anthony Mitchell, and
+  Gabriel Heights — all outside the reversal, and all on non-`owned` sources,
+  so they would also fire proposition extraction. Never run the bare form to
+  ingest one channel. Related trap: `documents.url` carries **no unique
+  constraint**, so nothing in the schema stops the same video becoming two
+  documents — any new ingest path must dedup for itself.
 - **No mechanism exists anywhere in this schema to link two documents as one
   work.** The standing "link, don't merge" policy for split-work groups and
   duplicate clips (`docs/plan-archive.md` #44) has no table or column backing it yet —
