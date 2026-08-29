@@ -145,6 +145,21 @@ def exclude_contradicting_teachers(
             }],
         )
         raw = response.content[0].text.strip()
+        if not raw:
+            # Diagnostic capture for the rare empty-response case (found live
+            # 2026-08-29, never reproduced in 4+ direct retries) -- the plain
+            # JSONDecodeError below tells us nothing about WHY. Log what the
+            # API actually returned so a recurrence is investigable instead
+            # of another dead end.
+            logger.warning(
+                "position_paper_exclusion: empty content from classifier call -- "
+                "request_id=%s stop_reason=%s model=%s usage=%s n_content_blocks=%s",
+                getattr(response, "_request_id", None),
+                getattr(response, "stop_reason", None),
+                getattr(response, "model", None),
+                getattr(response, "usage", None),
+                len(response.content) if response.content else 0,
+            )
         if raw.startswith("```"):
             raw = raw.strip("`")
             if raw.startswith("json"):
