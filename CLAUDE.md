@@ -1013,6 +1013,43 @@ different row, per the hard rule above.
   cap before emitting any output) with usage never captured, because the
   test harness's own error handling didn't capture usage on that failure
   path. Total estimated spend against a $1 approved ceiling: ~$2.5.
+- **RESOLVED 2026-08-29 (commit `9a9ecf0`) — `segment_articles()` and
+  `review_articles_against_issue()` no longer stamp a false
+  `segmentation_model`/`reviewer_model`.** Both used to hardcode the
+  `ARTICLE_MODEL` module constant on the returned manifest regardless of
+  which client actually ran the call — found live the same day via a real
+  Claude Opus 5 segmentation test whose manifest falsely claimed
+  gpt-oss-120b had segmented it
+  (`docs/audits/2026-08/new_wine_opus_segmentation_e2e_test_2026-08-29.md`).
+  `StructuredOutputClient` now declares a required `model: str` attribute
+  (mirroring `GroqStructuredOutputClient.model`, which already existed);
+  both stages stamp from `client.model` instead. The existing lineage
+  checks (`manifest.segmentation_model`/`reviewer_model != ARTICLE_MODEL`)
+  are unchanged but now do real work instead of comparing the same
+  hardcoded constant to itself. Mutation-proven:
+  `scripts/test_magazine_article_review.py`'s three new tests fail without
+  the fix (one specifically proves the lineage check was previously
+  trivially-passing) and pass with it. Live-proven the same day on real
+  Opus 5 data, both directions: a segmentation replay correctly
+  reconstructs `segmentation_model="claude-opus-5"`, and the lineage gate
+  correctly refuses to let review proceed on that manifest without an
+  explicit, disclosed bypass
+  (`docs/audits/2026-08/new_wine_opus_review_e2e_test_2026-08-29.md`).
+- **The article-review stage's own `missing_substantive_spans` complaint has
+  a confirmed false-positive mode — do not trust it without checking
+  `non_article_spans` first, 2026-08-29.** In the same live Opus 5 review
+  test above, both "missing" spans it flagged (a page-4 Letters-to-the-
+  Editor department, a page-22 conference advertisement) were independently
+  confirmed present the whole time — correctly classified as
+  `non_article_spans`, contiguous, zero coverage gap either side. The
+  reviewer appears to compare only against `manifest.articles`, not the
+  full `articles + non_article_spans` partition the schema's coverage
+  design actually uses. This does not mean the reviewer's OTHER complaint
+  classes (split-article disagreement, page-marker-past-true-end) are also
+  false — those remain unverified — only that `missing_substantive_spans`
+  specifically needs a manual cross-check against `non_article_spans`
+  before being treated as a real content gap. Full detail:
+  `docs/audits/2026-08/new_wine_opus_review_e2e_test_2026-08-29.md`.
 - **`--primary` (the gold brand token, `frontend/app/globals.css`) is used
   three conflicting ways — no single shade satisfies WCAG AA in all three,
   2026-08-28.** (1) white text on `bg-primary` (`Button`'s default variant,
