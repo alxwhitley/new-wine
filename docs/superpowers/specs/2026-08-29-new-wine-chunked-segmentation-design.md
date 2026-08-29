@@ -1,194 +1,188 @@
-# New Wine Chunked Article Segmentation — Design Proposal
+# New Wine A2 Segmentation — Pressure-Test Findings
 
-**Status:** Proposed 2026-08-29, not yet approved. No production code changed
-by this document. Written per this repo's standing "architectural approval
-gate" pattern (see PLAN.md Task 4.2) — implementation needs Alex's sign-off
-on the design before any code lands.
+> **Filename is stale.** This file was created 2026-08-29 as a chunked-
+> segmentation *design proposal* (commit `15f6b1d`). That proposal was
+> refuted the same day by adversarial review and direct measurement, and the
+> file was rewritten as a findings record. It is kept at its original path
+> because renaming a file in this repo requires Alex's explicit approval at
+> that moment. **No design in this document is approved. Do not implement
+> from it.**
 
-## Why this exists
+**Status:** Two candidate designs were proposed and both were refuted. What
+remains is measured evidence and a list of properties any future design must
+satisfy. A real design pass has not happened yet.
+
+## Why this file exists
 
 Task 1.1 of `docs/superpowers/plans/2026-08-28-back-to-back-completion-queue.md`
-asked for one segmentation-only diagnostic call against Issue 02-1973's
-cached transcript, then a classification: instruction defect, deterministic
-validation defect, semantic-review defect, or irreducible model variance. The
-call (2026-08-29, `openai/gpt-oss-120b`, `high` reasoning, **$0.0364**,
-against the already-cached, already-OCR-passed transcript — zero new OCR
-cost) rejected on `article_implausibly_long`. Inspecting the raw output
-against the real transcript text and the issue's own table of
-contents/page markers found the rejection trigger understated the real
-defect. Alex reviewed this finding and directed scoping a chunked/windowed
-redesign rather than another single-call instruction patch.
+required classifying the remaining Issue 02-1973 segmentation failure as an
+instruction defect, deterministic-validation defect, semantic-review defect,
+or irreducible model variance. One live segmentation-only call was made
+against the cached transcript, then two designs were proposed and
+adversarially reviewed. Both failed. This records what was actually
+established, so a future session does not re-derive it or act on a refuted
+recommendation.
 
-## The finding (evidence, not inference)
+## Provider spend
 
-For roughly the back 40% of the 121,011-char transcript (from ~char 76,000
-onward — inside real page ~20 of 32), the model's proposed spans and
-category labels stop corresponding to the actual text at those character
-offsets, even though the numbers still "tile" (contiguous coverage, no
-crash, no obvious internal contradiction from the schema's point of view).
-Confirmed by direct text/ToC/page-marker inspection:
+One successful live Groq segmentation call, `openai/gpt-oss-120b`, `high`
+reasoning, against the cached (already-OCR-passed) transcript: **$0.0364**.
+One earlier attempt returned a Cloudflare 524 with no response body and no
+charge. Zero OCR cost — the per-page cache was used. No database write, no
+file promotion, no production change.
 
-- Its `"Keeping the Unity"` span `[76743:88688]` is real `"THE APOSTLE"`
-  body content (the apostleship/Titus discussion, real page ~21-22).
-- Its `"Christian Growth Conference advertisement"` span `[88888:93291]` is,
-  word for word, the real `"Keeping the Unity"` article — confirmed by its
-  own reprint byline ("Reprinted with permission: 'Keep The Unity' - New
-  Adventures in Prayer..."), which the model's own `articles` list uses as
-  that article's `author` field, just at the wrong offset entirely
-  (`[76743:88688]`, not here).
-- Its `"THE APOSTLE-GOD'S MASTER BUILDER"` span `[110353:121011]` is nowhere
-  near the real title (confirmed at `62128`: `"=== PAGE 18 ===\nTHE\nAPOSTLE-\n
-  GOD'S\nMASTER\nBUILDER\n\nby Derek Prince"`). The claimed range is real
-  `"New Wine Forum"` reader Q&A content plus the one genuine (not
-  duplicated) end-of-issue ad block (real Christian Growth Conference ad
-  confirmed at page 31, offset `115873`).
-- Three spans the model explicitly labeled `"(duplicate)"` are not
-  duplicates — they're the single real ad occurrence, mislabeled as a copy
-  of a fabricated earlier placement the model invented at `[88888:99065]`.
-- Real structure, reconstructed from the issue's own table of contents
-  (`"THE APOSTLE-GOD'S MASTER BUILDER" .18`, `"KEEPING THE UNITY" .24`,
-  `"NEW WINE FORUM" .26`) and page markers: `"the call of love"` ends
-  ~`62124`; `"THE APOSTLE"` real span is ~`[62110:88690]` (~26,580 chars,
-  comfortably under the 30,000 cap on its own); `"Keeping the Unity"` real
-  span is ~`[88690:93293]` (~4,600 chars); `"New Wine Forum"` real span is
-  ~`[93293:115873]` (~22,580 chars, a long reader Q&A column, consistent
-  with `SEGMENTATION_INSTRUCTIONS`' own description of that content shape);
-  real end-of-issue ads are `[115873:121011]`, once each, not duplicated.
+## Refuted design 1: windowed / chunked segmentation
 
-This is categorically different from the four defects already fixed this
-week (page-marker boundary anchoring `d5420e3`, forum-content-as-ads
-`4bad5b5`, foreign-title-bleed `3bc8780`, reprint/Q&A recognition
-`d011fac`) — those were all mislabeling of text the model was reading
-correctly at the right position. This is the model's positional/offset
-grounding itself breaking down deep into one long single-shot call.
-Classified: **model scaling limit** (variance inherent to the current
-single-call, whole-121K-char architecture), not an instruction gap — no
-instruction wording tells the model where character 88,690 is; that has to
-come from the model's own internal tracking across a ~30K-token input, and
-that tracking is what's failing here.
+**Proposal:** split the 121,011-char transcript into overlapping page-anchored
+windows, segment each separately, merge deterministically.
 
-## Why chunking should help
+**Stated motivation:** the model's positional/offset grounding degrades deep
+into a long single-shot call.
 
-- Every confirmed positional failure sits deep into the transcript (>60%
-  through a single ~30K-token call). Everything the model got right in the
-  same run — correctly finding `"Health and Healing"`, `"Editorial"`,
-  `"The Nature of Obedience"`, `"BIBLE STUDY"`, and even the real page-18
-  `"THE APOSTLE"` title text being present and legible in the transcript —
-  sits earlier in the document.
-- Bounding how much transcript the model must track positionally in one
-  call is the direct lever against a distance-dependent grounding failure.
-  This doesn't need better instructions; it needs giving the model less to
-  lose track of at once.
-- Page markers (`=== PAGE N ===`) are exact, already verified by the OCR
-  completeness-review stage, and free to locate deterministically (a Python
-  regex or the already-parsed `VerifiedTranscriptPage.transcript_start/
-  transcript_end`) — no model call needed to find them. This makes
-  page-anchored windowing safe as a chunking boundary: nothing about where
-  a window starts or ends is something the model has to compute.
+**Refuted by measurement.** In the back 40% of the transcript — precisely the
+region where grounding was claimed to break down — every model-proposed
+boundary fell within **31 characters** of a real `=== PAGE N ===` marker, most
+within **2**, including at offset **118,901 of 121,011**. The boundaries that
+sit far from a page marker (420–2,009 chars) are all in the *front* of the
+document, in the letters-to-the-editor section, where the model was correctly
+doing fine-grained mid-page splitting. Positional tracking is not the failing
+component.
 
-## Proposed design
+**A second claim in the original proposal was also false.** It stated the
+proposed spans "tile, with no obvious internal contradiction." The article
+spans contain **3 overlaps**: one article claimed `[61247:104708]` (43,461
+chars) while three other separately-proposed articles sat inside that same
+range.
 
-### Windowing
+**Independent reason not to build it.** Windowing would have removed the
+issue's table of contents (page 5, offset ~13,497) from every later window,
+so windows covering pages 20–32 would carry strictly *less* information about
+what articles exist. The proposal would have destroyed the most useful signal
+in the document.
 
-Split `VerifiedIssueTranscript` into overlapping windows of consecutive
-**pages** (never arbitrary char offsets, which would risk chopping
-mid-word/mid-sentence and adding a second, self-inflicted grounding
-problem), using the already-verified per-page offsets — pure Python, zero
-cost, zero model risk. Window N covers pages `[a, b]`; window N+1 covers
-pages `[b-overlap, c]`. Overlap must comfortably exceed the longest
-confirmed-legitimate article seen so far (26,580 chars / ~6 pages, "THE
-APOSTLE") so a full article is very likely to sit entirely inside at least
-one window even when it straddles a window seam.
+## Refuted design 2: table-of-contents-anchored segmentation
 
-### Per-window segmentation call
+**Proposal:** parse the printed ToC for (title, author, page); map printed page
+N to the `=== PAGE N ===` offset; set each article's start there and its end at
+the next article's start; verify the title appears within 300 chars of the
+marker; use the model only *within* established spans.
 
-- Same `SEGMENTATION_INSTRUCTIONS`, same model and reasoning effort, scoped
-  to one window's text, with window-relative (not global) offsets.
-- Add two boolean fields to the article schema for this call only:
-  `continues_from_before` (this window's first proposed article actually
-  started earlier, outside this window) and `continues_after` (this
-  window's last proposed article actually continues past this window). This
-  lets the model say "I can't see the true boundary here" instead of
-  guessing one.
-- Reuse the existing per-window coverage/overlap/size-cap checks, scoped to
-  that window's own text length rather than the whole issue.
+**The skeleton generalizes; the authorship model does not.** Using the
+proposal's own normalization (NFKC, lowercase, strip non-alphanumerics), ToC
+page → page marker → title-present verified **12/12 across four additional
+issues** (02-1976, 02-1977, 02-1978, 02-1979) and **6/7** on Issue 02-1973 —
+18/19 across five issues, all measured from already-extracted transcripts at
+zero cost.
 
-### Deterministic merge (no model call)
+**Refuted anyway, on the product's most severe axis.** Every one of these is
+confirmed against the real transcript:
 
-- Translate every window-relative offset to a global transcript offset
-  using that window's own first-page `transcript_start` — arithmetic only,
-  so this step cannot itself introduce a new positional-grounding failure.
-- In each overlap region between adjacent windows, reconcile: if window N's
-  `continues_after` article and window N+1's `continues_from_before`
-  article agree (normalized title/author match — the same normalization
-  rule the existing title-bleed check already uses), merge them into one
-  article spanning the min-start/max-end. If they disagree, or a window's
-  "complete" article is contradicted by its neighbor's proposal over the
-  same text, **fail closed** — this is a quarantine-or-repair case (open
-  question 2 below), never a silent pick.
-- Run the **existing, unmodified** deterministic validation (coverage,
-  overlap, `_MAX_ARTICLE_CHARS`, `_OTHER_NON_ARTICLE_MAX_CHARS`/
-  `_NAMED_NON_ARTICLE_MAX_CHARS`, `_NON_ARTICLE_TOTAL_FRACTION_MAX`,
-  `_TITLE_BLEED_WINDOW_CHARS`) against the merged, whole-issue candidate —
-  none of these checks need to change; they already operate on one
-  (articles, non_article_spans) set regardless of how many calls produced
-  it.
+1. **The ToC's author column is not reliably an author.** Issue 02-1973's ToC
+   reads `NEW WINE FORUM — Spiritual Potpourri`. "Spiritual Potpourri" is the
+   column's *subtitle*. The page itself reads: *"Answering our questions are:
+   Bob Mumford, Derek Prince, Charles Simpson and Don Basham."* It is a
+   four-way dialogue among named, then-living ministers. A one-author-per-span
+   model assigns a single wrong author to a ~22–27K-char span feeding
+   proposition extraction — ranked failure mode #2 (teacher
+   misrepresentation), generated by construction. The original proposal
+   asserted Spiritual Potpourri "is the listed author"; that assertion was
+   wrong.
+2. **A ToC row can have no author at all.** `| **KEEPING THE UNITY** | **.24**
+   |` — title and page only. `articles.py:777` requires a non-empty author.
+   The adjacent article is Derek Prince's.
+3. **Real authored content can be absent from the ToC.** Page 5 carries an
+   `## Editorial`. Under this design it is absorbed into the first article's
+   span and attributed to Derek Prince.
+4. **Title-presence is not a start-detector.** `HEALTH AND HEALING-IT'S UP TO
+   YOU!` verifies at page **1** (cover teaser) as well as its real start on
+   page 2. All seven titles also appear together on the ToC page.
+5. **The 300-char verification window is larger than the pages it checks.**
+   Page 18's body is **94 chars**, page 9 is **123**, page 24 is **182** — the
+   window reads past the page boundary, including the next `=== PAGE N ===`
+   marker. Title-splash opening pages are the common case in this magazine,
+   not an edge case.
+6. **Starting a span at the marker offset embeds the marker in the article
+   body.** `=== PAGE 2 ===\n` is 15 characters; the proposal's own offsets
+   (185, 62108) sit exactly that far below the real body starts (200, 62124),
+   so literal `=== PAGE 18 ===` text would reach proposition extraction.
+7. **A contiguous `(start, end)` pair cannot represent a real article.**
+   "Health and Healing" runs pages 2–3, is interrupted by letters/editorial/
+   ToC/subscription notice on pages 4–5, and resumes pages 6–8. The existing
+   overlap check (`articles.py:766`), coverage check (`:874`), and
+   `_source_pages_for_span` all assume contiguity.
+8. **The last article has no defined end.** Taking end-of-transcript makes the
+   Forum span swallow pages 31–32, which are pure advertising — including
+   doctrinal-sounding ad copy ("The healing ministry is presented as part of
+   Christ's redemptive work on the cross") that would feed proposition
+   extraction.
+9. **Printed folio == PDF page index is a property of this issue, not of the
+   design.** `_render_pages` numbers by PDF index; the ToC lists printed
+   folios. They coincide here because this issue's cover is folio 1 with no
+   inserts. Bound-in cards, foldouts, and unpaginated plates break it. A −1
+   shift still yields a *partial* (1/7) pass, and the proposal stated no rule
+   that a partial pass must quarantine.
+10. **It defeats four existing hard-won guards by construction.** Absorbing
+    ads/masthead/editorial/ToC *into* article spans leaves `non_article_spans`
+    near-empty, making `_NON_ARTICLE_TOTAL_FRACTION_MAX`,
+    `_NAMED_NON_ARTICLE_MAX_CHARS`, `_OTHER_NON_ARTICLE_MAX_CHARS`, and the
+    `advertisement` content requirement added in `4bad5b5` vacuous. Each was
+    added in response to a specific reproduced live failure; the proposal
+    replaced none of them.
+11. **Under OCR noise its dominant failure mode is mass false quarantine.**
+    The ToC becomes load-bearing for title, author, *and* page number. A
+    single OCR error in a printed title breaks the normalized substring match
+    and quarantines an otherwise-good issue — the opposite of the
+    generalize-to-the-backlog requirement (167 PDFs, 8–99 pages, 1969–1985).
 
-### What stays exactly the same
+**Also recorded, on evidence presentation:** "6 of 7 titles verified" was
+offered as supporting evidence. Under this pipeline's own fail-closed contract
+(Invariant 17), one failed article quarantines the entire issue — so 6/7 is a
+quarantine, not a partial success. It should not have been written up as
+support.
 
-- `review_articles_against_issue()` — one whole-issue, fresh-context
-  semantic review pass over the merged article set, unchanged. Today's
-  finding doesn't implicate this stage's own accuracy (it never even ran;
-  segmentation failed deterministic validation first), and it doesn't carry
-  the same global-offset-counting burden segmentation does — it judges each
-  article's own narrative coherence, not where every character sits.
-- `ArticleManifest`/`ArticleRecord`, the `write_artifact` identity/hash-chain
-  discipline, and every existing deterministic cap and its documented
-  reasoning.
-- Proposition extraction and everything downstream, unchanged.
+## What survives
 
-## Open questions requiring Alex's decision before implementation
+One principle, and only one:
 
-1. **Window size / overlap.** Needs live calibration against real evidence,
-   not a guessed number — same "reasoned starting point, not a calibrated
-   constant" posture as `DOMINANCE_THRESHOLD` (Invariant 20). Starting
-   proposal to calibrate from: 10-page windows / 3-page overlap (roughly
-   35-40K chars per window) — comfortably inside the zone this session's
-   evidence still shows as reliable, but unverified until tested.
-2. **Boundary-conflict handling.** When two adjacent windows disagree about
-   a straddling article, does the whole issue quarantine immediately
-   (matching the standing "one failed page/article/proposition quarantines
-   everything" posture, Invariant 17), or does it get one bounded
-   automatic repair pass first (matching the existing OCR page-repair
-   precedent — re-run just the two conflicting windows with the specific
-   disagreement named)? This is a real product-posture call, not a default
-   I should pick unilaterally.
-3. **Cost.** More, smaller calls instead of one large one. Today's single
-   whole-issue call cost $0.0364. A first-pass, unverified estimate: 4
-   windows at roughly a third of the input size each ≈ $0.06-0.10 total for
-   segmentation — comfortably inside the existing $1.25 per-issue ceiling
-   and the $50 corpus-wide rule, but this needs a real measured number
-   before anyone relies on it.
-4. **Does chunking need to touch OCR completeness review too?** No evidence
-   from today's finding says so — OCR passed cleanly (32/32 pages) before
-   segmentation ran. Out of scope unless new evidence says otherwise.
+> **Derive article character offsets deterministically from verified page
+> markers. Never treat model-emitted character offsets as the source of truth
+> for a span boundary.**
 
-## Non-goals
+Everything layered on top of that principle in both proposals is refuted.
 
-- No code changes in this pass — design only.
-- No new live/paid calls beyond the one already spent ($0.0364) diagnosing
-  today's finding.
-- Does not touch OCR, proposition extraction, or the semantic review stage's
-  own logic.
-- Does not authorize a production database write, source-file promotion, or
-  file move (unchanged from this queue's Packet 1 non-goals and Invariant
-  17).
+## Properties any future design must satisfy
 
-## Suggested next step (pending Alex's approval)
+Derived from the failures above, not from preference:
 
-A bounded, named-cost live calibration: implement the windowing/merge layer
-above, run it against Issue 02-1973's cached transcript, and compare its
-merged output directly against the ground-truth positions this session
-hand-verified (listed under "The finding," anchored to the issue's own
-table of contents and page markers) before touching `articles.py`'s
-production call path.
+- Authorship comes from the **printed byline on the page**, not from the ToC,
+  with a hard refusal when byline and ToC disagree.
+- **Multi-author articles are first-class**, not an exception — the proof
+  issue contains one.
+- An article is a **list of discontiguous spans**, not a `(start, end)` pair;
+  the overlap, coverage, and source-page logic must be updated to match.
+- The **folio → PDF-index mapping is verified per issue** by its own
+  deterministic check, independent of the title check, and a *partial* match
+  must quarantine rather than pass.
+- The **last article needs a defined end** that does not swallow back-matter
+  advertising.
+- Page-marker text must be **excluded from article body spans**.
+- The non-article size/fraction/category guards need an **equivalent that
+  still functions** when ads fall inside an article's page range.
+- **Content absent from the ToC** (editorials, letters, unlisted pieces) must
+  be detected and never silently attributed to an adjacent named author.
+- A **no-ToC path** is required: at least one issue checked (02-1980) had no
+  detectable contents block, and the backlog includes 8-page newsletters and
+  special editions.
+- ToC layout varies substantially — **six distinct formats across six issues**
+  examined — so ToC parsing cannot be a fixed regex.
+
+## Classification of the original Task 1.1 question
+
+The remaining Issue 02-1973 failure is **not** an instruction defect and
+**not** primarily a deterministic-validation defect. The model locates
+boundaries accurately and then attaches the wrong article identity to them.
+Whether that is best called irreducible model variance or a fixable
+architecture problem is **still open** — this session refuted two candidate
+architectures without establishing a third.
+
+**Issue 02-1973 remains not ingestion-ready. No database write is authorized.**
