@@ -114,12 +114,24 @@ quarantine. No stage transfers automatically from one source to another.
    like separate advertisements under one invented title, uncaught by any
    check. Full detail: `rhemata-status.md`'s 2026-08-27 entry and CLAUDE.md's
    New Wine landmine entry.
-   Next: diagnose the reviewer stage's `article_failure_reasons_invalid`
-   inconsistency and the ad-bleed risk directly (same no-CLI, cached-OCR
-   method), then rerun the no-write article/proposition gates, and obtain
-   Alex's separate approval before any attended database write. No
-   benchmark decision or pipeline fix authorizes a database write or file
-   move.
+   **2026-08-27/28 (further diagnosed, two more real causes fixed,
+   `d5420e3`, `4bad5b5`):** a `foreign_article_title_in_span` defect (a
+   span opening mid-sentence with a different article's own title bleeding
+   in) and a second distinct `non_article_span_implausibly_large` cause
+   (the "New Wine Forum" reader Q&A column's own continuation mislabeled
+   as three separate fake `advertisement` spans, zero commercial language
+   in any of them) were both root-caused and fixed. 86 existing unit tests
+   still pass; live re-checks show reduced but not eliminated recurrence.
+   **Issue 02-1973 still has not cleared the article gate end-to-end** —
+   the remaining live failure is a large non-article dump absorbing part
+   of "The Apostle" article, plus continued `article_implausibly_long`/
+   title-bleed variance. Full trail: CLAUDE.md's New Wine landmine entry.
+   Next: same method (segmentation-only diagnostic call, direct inspection
+   of raw spans/transcript, targeted instruction fix, live-validate) on
+   the remaining failure, then rerun the no-write article/proposition
+   gates, and obtain Alex's separate approval before any attended database
+   write. No benchmark decision or pipeline fix authorizes a database
+   write or file move.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing
@@ -273,20 +285,20 @@ extraction-attempt history instrumentation.
 1. Manna code/repository/domain/copy/visual migration.
 2. Verse-linked commentary enrichment with side-by-side modernization review.
 3. Feedback-to-reviewable-content flags, never direct eligibility mutation.
-4. ~~Consent-based search analytics and corpus-gap alerts.~~ Specified and
-   built 2026-08-27; **merged to `main` 2026-08-28** (commit `d636173`, zero
-   conflicts, isolation reverified) — no longer sitting unmerged on
-   `worktree-search-analytics-corpus-gap`. Migration 093 is still **not
-   applied**, no deploy yet. Alex's review/policy decisions are DONE, not
-   residual: privacy boundary accepted as-is; finalizer runs on a timer, not
-   an always-on worker; retention runs daily; consent enforcement is
-   frontend-only quiet-skip. Full rollout instructions (exact commands,
-   secret scope, smoke sequence, rollback posture) written:
-   `docs/audits/2026-08/search_analytics_rollout_packet_2026-08-28.md`. What's
-   left is purely execution — apply migration 093, set
-   `ANALYTICS_HMAC_SECRET_V1` on `rhemata` only, deploy, run the smoke
-   sequence — bundled into the pending attended B6/B7 rollout (Task 5.4,
-   `docs/superpowers/plans/2026-08-28-back-to-back-completion-queue.md`).
+4. ~~Consent-based search analytics and corpus-gap alerts.~~ Specified,
+   built, and **live in production 2026-08-29** (Task 5.4 attended
+   rollout, ACCEPTed by Alex): migration 093 applied, `ANALYTICS_HMAC_SECRET_V1`
+   set on `rhemata`, finalizer (`*/5 * * * *`) and retention (`0 6 * * *`)
+   running as Railway Cron Jobs, both verified via real runs. **Residual,
+   Alex's explicit decision, not an oversight:** the production smoke
+   sequence never ran, so the feature's core privacy guarantee (no
+   question wording stored) is unverified in production. Full sequence
+   still available whenever wanted:
+   `docs/audits/2026-08/search_analytics_rollout_packet_2026-08-28.md`
+   Section 6. See `rhemata-status.md`'s Task 5.4 entry for the rollout
+   detail, including a Railway cron-service setup trap worth knowing
+   before creating another one (Railpack-builder default, no env-var
+   inheritance).
 5. Specific follow-up questions that move users outward.
 6. ~~Long-conversation handoff with a token trigger, provenance, privacy, and user control.~~ Specified and built 2026-08-26: `docs/superpowers/specs/2026-08-26-long-conversation-handoff.md`, migration 092 (applied live), deployed `70f6a3b`. Residual, not yet done: nudge copy unreviewed; no live/E2E verification. See `rhemata-status.md`'s 2026-08-26 entry.
 7. An isolated Precept Austin retrieval experiment without weakening exclusions.

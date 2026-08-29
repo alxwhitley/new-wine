@@ -7,10 +7,11 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-28. **PLAN.md has zero active blockers.** The B6/B7
+Last verified: 2026-08-29. **PLAN.md has zero active blockers.** The B6/B7
 release-candidate gate (`docs/superpowers/plans/2026-08-28-back-to-back-completion-queue.md`)
-is the live critical-path thread: Tasks 5.1–5.3 done, Task 5.4 (attended
-rollout) is next.
+reached Task 5.4 (attended rollout) and closed it with **Alex's explicit
+ACCEPT decision, 2026-08-29** — beta is open. Packet 6 (final session
+records/roadmap update) is the only formally unclosed piece of that queue.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -28,18 +29,16 @@ what's left.
    (`d5420e3`, `4bad5b5`) but Issue 02-1973 still hasn't cleared the article
    gate end-to-end; recurring failure modes remain (see CLAUDE.md's New Wine
    Landmines entry for full diagnostic detail). No database write occurred.
-2. **Search analytics — merged to `main`** (`d636173`), migration 093 **not
-   applied**. Alex's policy decisions are made (privacy accepted as-is,
-   finalizer on a timer, daily retention, frontend-only quiet-skip consent).
-   Rollout instructions written:
-   `docs/audits/2026-08/search_analytics_rollout_packet_2026-08-28.md`.
+2. **Search analytics — live in production** (migration 093 applied, secret
+   set, finalizer + retention cron jobs running — see Task 5.4 below). Smoke
+   sequence deferred (Findings section).
 3. **Circular loading ring — shipped** (`0e4442a`), replacing the old
    answer-wait copy; browser-verified across desktop/mobile/reduced-motion.
 4. **B4/B5 launch hardening — done.** Dependency fixes (Next.js, pdfplumber;
    starlette/fastapi explicitly accepted as-is, Alex's call). Account
-   deletion made real, reconciled, idempotent (`760f253`) — **code is
-   complete but migration 094 (`deletion_audit_log`) is NOT applied**, so
-   this isn't live yet. Teacher-card metering confirmed already-guarded, now
+   deletion made real, reconciled, idempotent (`760f253`), migration 094
+   applied — code is live, but see Findings: real deletion still
+   unverified. Teacher-card metering confirmed already-guarded, now
    has real regression coverage. Three sensitive-logging leaks removed
    (JWT prefixes, raw guest IPs, question text). A real unbounded
    `answer_jobs` content-retention gap closed (90-day purge, isolated-fixture
@@ -72,21 +71,62 @@ what's left.
 
 **Quote rail:** still off (`QUOTE_SELECTION_ENABLED=false`), unchanged.
 
+**Task 5.4 — attended rollout, done, ACCEPTed 2026-08-29:**
+- Pushed 45 local commits to `origin/main` (Railway + Vercel deploy on push;
+  they were sitting unpushed since the prior session — confirmed live via a
+  404 on `/health` before the push, 200 after).
+- Migration 093 (search analytics) applied — 46/46 verified on a fresh
+  connection. Migration 094 (`deletion_audit_log`) applied — 18/18 verified
+  on a fresh connection.
+- `ANALYTICS_HMAC_SECRET_V1` generated and set on `rhemata` only; service
+  restarted to pick it up (confirmed via `/ready`).
+- Two Railway Cron Job services created and verified running:
+  `search-analytics-finalizer` (`*/5 * * * *`) and
+  `search-analytics-retention` (`0 6 * * *`), both rooted at `/` with
+  `/opt/venv/bin/python scripts/search_analytics_*.py` start commands.
+  **Non-obvious setup trap, worth knowing before creating another Railway
+  cron service in this project:** a freshly `railway add`-ed service
+  defaults to the Railpack builder, which does not read this repo's
+  `nixpacks.toml` and fails immediately (`Script start.sh not found`) —
+  Builder must be manually switched to Nixpacks in Settings, AND the start
+  command must use the venv path (`/opt/venv/bin/python`, not `python3`) to
+  match where Nixpacks actually installs dependencies. Also: a new service
+  does not inherit any other service's env vars — `SUPABASE_DB_URL` +
+  `GROQ_API_KEY` (finalizer) and `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`
+  (retention) had to be copied over explicitly. Finalizer verified via
+  several real 5-minute runs (clean zero-count result dict, zero
+  failures); retention verified via its real 6am UTC firing
+  (`{'purged': 0}`, expected).
+- **Explicitly skipped, Alex's decision, not an oversight:** the analytics
+  production smoke sequence (consent flow, one real answered question,
+  dashboard field-allowlist check) — the feature's core privacy guarantee
+  (no question wording stored anywhere) shipped to production
+  **unverified**. Live account-deletion verification remains separately
+  blocked (below), so that half of the smoke plan didn't run either.
+- First-hour watch was a **point-in-time snapshot, not a continuous
+  first-hour trace** (time passed during cron troubleshooting): queue
+  depth 0, failed jobs 0, expired leases 0, finalizer backlog 0, no
+  worker/latency activity in the last hour (expected — no real traffic
+  yet). API 5xx rate was not checked (Railway-dashboard-only, no CLI/DB
+  access to it from this session).
+
 ---
 
 ## Findings surfaced, not yet acted on
 
-- **Two migrations pending, both need Task 5.4's attended rollout:**
-  093 (search analytics tables) and 094 (`deletion_audit_log` +
-  `deletion_requests` schema widening — account deletion isn't live without
-  this).
+- **Analytics smoke sequence never ran — do this before trusting the
+  feature's privacy guarantee.** Full sequence:
+  `docs/audits/2026-08/search_analytics_rollout_packet_2026-08-28.md`
+  Section 6. Any real logged-in account works (does not need to be
+  disposable — that requirement is specific to account-deletion testing
+  below).
 - **Live account-deletion verification is genuinely blocked, not skipped.**
   Only a mocked unit test exists (`scripts/test_account_deletion.py`,
   12/12). The real test plan
   (`docs/audits/2026-08/b4_account_deletion_design_2026-08-28.md` Section 5)
-  needs Alex to create a real designated test account first, then a real,
-  attended deletion against production — cannot be done autonomously (Session
-  Routing hard rule).
+  needs Alex to create a real designated (disposable) test account first,
+  then a real, attended deletion against production — cannot be done
+  autonomously (Session Routing hard rule).
 - **Scheduled**: quote accuracy/relevance repair before any attended
   re-enable.
 - **Scheduled A2:** the remaining recurring failure is a large non-article
@@ -105,15 +145,11 @@ what's left.
 
 ## Next single item
 
-**Task 5.4 — the attended production rollout** (`docs/superpowers/plans/2026-08-28-back-to-back-completion-queue.md`).
-Get explicit approval for the exact action list, then: apply migrations 093
-+ 094, set `ANALYTICS_HMAC_SECRET_V1` on `rhemata` only, configure
-finalizer/retention schedules, deploy backend/worker/frontend, verify
-liveness/readiness, run the analytics + core-journey smoke sequence (not a
-magazine ingest), watch the first hour against the documented rollback
-triggers, record ACCEPT/HOLD/ROLLBACK, open the beta only on ACCEPT. Then
-Packet 6 (final session records) closes the queue.
+**Packet 6 — final session records**, closing the back-to-back completion
+queue: update `docs/roadmap.md` (replace stale A2 wording, mark completed
+Horizon work), record process measures, one docs-only closeout commit.
 
-Separately, not competing for the critical-path slot: New Wine A2's
-remaining segmentation variance, and the live account-deletion verification
-blocked on Alex creating a test account.
+Separately, not competing for the critical-path slot: the analytics smoke
+sequence (deferred, not run — see above), the live account-deletion
+verification blocked on Alex creating a disposable test account, and New
+Wine A2's remaining segmentation variance.
