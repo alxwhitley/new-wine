@@ -156,10 +156,30 @@ quarantine. No stage transfers automatically from one source to another.
    approved $1 budget (confirmed $1.4776 + an unmeasured ~$1 estimate from
    a failed attempt) debugging real SDK/schema mechanics against the full
    transcript instead of a cheap dummy request first — recorded in
-   CLAUDE.md's Landmines. Next: Alex is getting a second opinion (Grok) on
-   model choice before any further live-call spend is authorized. No
-   benchmark decision or pipeline fix authorizes a database write or file
-   move.
+   CLAUDE.md's Landmines.
+   **2026-08-29, continued: Grok-collaborative design pressure-test
+   (v1.1→v1.4) plus a $3 live Opus 5 test, both closing this same day.**
+   Five rounds of zero-cost fixture-testing against real Issue 02-1973 data
+   refined a folio-mapping hatch procedure, a jump-resolution algorithm, and
+   marker-exclusion semantics — real defects found and fixed each round,
+   none yet implemented in `articles.py`. Full trail:
+   `docs/audits/2026-08/new_wine_free_checks_2026-08-29.md`. Separately,
+   Alex approved a $3 live test: Claude Opus 5 segmented the full transcript
+   through the real, unmodified `segment_articles()` and passed every
+   production gate — 10 articles, 24 non-article spans, zero failures,
+   correctly handling every previously-failing hard case (both interrupted
+   articles, the Keeping the Unity reprint credit, the New Wine Forum
+   panel). A second clean pass, moving past n=1. Real usage logged: 52,930
+   in / 53,125 out tokens, $1.5928 of the $3 ceiling. A real bug was found,
+   not fixed: `segment_articles()` hardcodes the manifest's
+   `segmentation_model` to a module constant regardless of which client
+   actually ran — this test's own result carries a false provenance stamp.
+   Full trail: `docs/audits/2026-08/new_wine_opus_segmentation_e2e_test_2026-08-29.md`.
+   Article review, proposition extraction, and the v1.4 design remain
+   untested — Issue 02-1973 is still not ingestion-ready. Next model-choice/
+   architecture decision is Alex's, not pre-selected; no further live-call
+   spend without a fresh named ceiling. No benchmark decision or pipeline
+   fix authorizes a database write or file move.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing
@@ -305,8 +325,28 @@ procedure; test guest-limit abuse; recheck admin minimums and the quote verifier
 
 Also parked: the unmerged Claude CLI harness adapter and all harness
 improvements; missing-author cleanup; one-off visibility reviews; quote-status
-cleanup; `jewish_perspectives`; the teacher-card refusal-copy question; and
-extraction-attempt history instrumentation.
+cleanup; `jewish_perspectives`; the teacher-card refusal-copy question;
+extraction-attempt history instrumentation; and `bible_refs.py`'s measured
+~0.4% reference-hallucination rate (2 of 514 on real sermon text, 2026-08-29
+— the two bad rows were removed, the extractor itself was not changed).
+
+### Historical YouTube caption duplication — needs a cost estimate first
+
+318 YouTube-sourced documents ingested before 2026-08-29 carry residual
+caption duplication left by the retired `llama-3.3-70b-versatile` cleaning
+pass: Ravenhill 117, Savchuk 126, Poonen 50, Kolenda 11, Deere 6, Conlon 6.
+Unlike the CLF defect fixed that day, **content is complete** — that model
+preserved everything and merely left duplicate fragments behind, roughly 6%
+of positions at worst. Re-ingesting through the `json3` path would make the
+whole YouTube corpus properly verbatim, which matters for the quote
+architecture's exact-substring matching against stored chunk text.
+
+Deferred by Alex's explicit choice, 2026-08-29. Not schedulable as-is: these
+sources are licensed/unlicensed, so re-ingestion regenerates the propositions
+layer (Invariant 10/11 provenance machinery) and needs a real cost estimate
+against the $50 ceiling before anyone starts. The mechanism already exists and
+is proven — `scripts/reingest_clf_youtube_2026-08-29.py` is the working
+pattern, including the `removed_urls` trap it deliberately avoids.
 
 ### Horizon — requires a fresh specification
 

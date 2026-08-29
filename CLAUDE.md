@@ -992,6 +992,38 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **An LLM told to "preserve ALL content verbatim" will quietly rewrite
+  instead, and nothing compared stored text against source — RESOLVED
+  2026-08-29 (commit `617341c`); recorded because the failure class outlives
+  the fix.** `youtube_ingest.py` fetched captions with `--convert-subs srt`,
+  which flattens YouTube's rolling-window cue format into literally
+  TRIPLICATED text (a 9,327-word sermon arrived as 27,783 words), then relied
+  on a Groq model to undo that while "preserving ALL theological content
+  verbatim." Measured on one real 6,000-word chunk: `openai/gpt-oss-120b`
+  kept 38%, `openai/gpt-oss-20b` 7.5%, and `qwen/qwen3.6-27b` was accurate but
+  truncated mid-transcript after spending its whole budget on hidden
+  reasoning. 49 live documents sat at roughly a third of true length and
+  nothing noticed, because no check ever compared stored text to its source.
+  Four durable lessons: (1) the native **`json3`** sub-format carries each
+  word exactly once — the duplication was never in the source data, the
+  pipeline manufactured it; never write a dedup pass for SRT triplication,
+  avoid creating it. `_parse_json3()` must INCLUDE `aAppend` events, which
+  carry the `\n` separators — dropping them glues words across cue boundaries.
+  (2) **`--print` implies `--simulate` in yt-dlp** and silently suppresses the
+  subtitle write; `--no-simulate` is required alongside it, or every video
+  falls through to Whisper. (3) Every model on the current Groq roster is a
+  reasoning model and none is safe for a copy-don't-rewrite task — a model
+  swap alone converted a working pipeline into a silently destructive one.
+  (4) A historical control is the fastest way to date a regression: the same
+  code under the older `llama-3.3-70b-versatile` had preserved ~100%, which
+  located the fault in the model swap, not the code. Guards now in place:
+  `scripts/test_youtube_caption_extraction.py` (mutation-proven) and a
+  coverage gate requiring captions to span ≥85% of the real video duration or
+  fall back to Whisper rather than store short. **Deliberately left alone:**
+  `scripts/clean_transcripts.py`, a separate legacy script wired into
+  `youtube_pipeline.sh`, still hardcodes the dead `llama-3.3-70b-versatile`
+  AND performs the same destructive rewrite — it fails loudly on the dead
+  model rather than corrupting anything.
 - **New-provider structured-output integration must be mechanics-tested on a
   trivial dummy request before spending on the real large document —
   2026-08-29.** Testing Claude Opus 5 as an alternate New Wine segmentation
@@ -2033,13 +2065,19 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   schema-level blocker only — a real deletion implementation (the Supabase
   Admin API call, ordering, audit-trail snapshot before the
   `deletion_requests` row itself cascades away) is still unbuilt.
-- **YouTube ingestion has stopped — Alex's decision, 2026-07-25.** Do not run
-  `run_queue_triage.py` / `run_queue_ingest.py` or otherwise pull new YouTube
-  material without checking with Alex first. Vlad Savchuk and Zac Poonen — 61%
-  of the current propositions layer between them — both entered via this
-  route; a stale-looking ingest queue is a decision, not an oversight. See
-  `docs/plan-archive.md` #44 for the reason (duplicate clip/full-sermon content found the
-  same day).
+- **YouTube ingestion is still gated on Alex — his decision 2026-07-25,
+  narrowly and deliberately reversed 2026-08-29 for ONE channel only.** Do not
+  run `run_queue_triage.py` / `run_queue_ingest.py` or otherwise pull new
+  YouTube material without checking with Alex first. Vlad Savchuk and Zac
+  Poonen — 61% of the current propositions layer between them — both entered
+  via this route; a stale-looking ingest queue is a decision, not an
+  oversight. See `docs/plan-archive.md` #44 for the reason (duplicate
+  clip/full-sermon content found the same day). **The exception, already
+  executed:** Alex explicitly reversed this for his own church's playlist
+  (Christian Life Fellowship, Raleigh) on 2026-08-29 — 49 sermons ingested,
+  re-ingested after the caption defect below, and verified against source.
+  That reversal covers CLF Church alone; it does not reopen the queue for any
+  other channel.
 - **No mechanism exists anywhere in this schema to link two documents as one
   work.** The standing "link, don't merge" policy for split-work groups and
   duplicate clips (`docs/plan-archive.md` #44) has no table or column backing it yet —
