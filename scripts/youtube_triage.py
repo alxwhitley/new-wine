@@ -472,12 +472,21 @@ def process_sheet(
             continue
 
         # Dedup: skip URLs already in the sheet so re-runs with a larger limit
-        # are purely additive and never double-write existing rows.
-        existing_urls = all_urls_in_sheet(ws)
-        new_videos = [v for v in videos if v["url"] not in existing_urls]
+        # are purely additive and never double-write existing rows. The set is
+        # updated as we go so it also absorbs repeats WITHIN this batch -- a
+        # playlist can list the same video twice (CLF's "Sermon Archive" lists
+        # three), and documents.url carries no unique constraint, so a second
+        # row would become a second document with nothing to catch it.
+        seen_urls = all_urls_in_sheet(ws)
+        new_videos = []
+        for v in videos:
+            if v["url"] in seen_urls:
+                continue
+            seen_urls.add(v["url"])
+            new_videos.append(v)
         n_dupes = len(videos) - len(new_videos)
         if n_dupes:
-            print(f"  ↳ dedup: {n_dupes} already in tab, skipping")
+            print(f"  ↳ dedup: {n_dupes} already in tab or repeated in playlist, skipping")
 
         if whitelist_names:
             for v in new_videos:
