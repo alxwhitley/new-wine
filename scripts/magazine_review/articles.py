@@ -313,6 +313,8 @@ class ArticleReviewError(ArtifactValidationError):
 class StructuredOutputClient(Protocol):
     """Injected, no-policy boundary around one stateless structured model call."""
 
+    model: str
+
     def complete(self, request: dict[str, object]) -> Mapping[str, object]:
         """Return output, usage, and cost for exactly one request."""
 
@@ -884,7 +886,7 @@ def segment_articles(
         transcript=transcript.text,
         articles=tuple(articles),
         non_article_spans=tuple(non_article_spans),
-        segmentation_model=ARTICLE_MODEL,
+        segmentation_model=client.model,
         segmentation_prompt_fingerprint=_config_fingerprint(_segmentation_config()),
         segmentation_usage=usage,
         segmentation_cost_usd=cost,
@@ -1118,7 +1120,7 @@ def review_articles_against_issue(
     reviewed_manifest = replace(
         manifest,
         articles=tuple(reviewed_articles),
-        reviewer_model=ARTICLE_MODEL,
+        reviewer_model=client.model,
         reviewer_prompt_fingerprint=_config_fingerprint(_review_config()),
         reviewer_usage=usage,
         reviewer_cost_usd=cost,

@@ -57,6 +57,8 @@ def verified_transcript(*page_texts: str) -> VerifiedIssueTranscript:
 class FakeStructuredClient:
     """No-network client double that records complete structured requests."""
 
+    model = MODEL
+
     def __init__(self, *responses: dict[str, object]) -> None:
         self.responses = list(responses)
         self.requests: list[dict[str, object]] = []
@@ -1216,3 +1218,69 @@ def test_realistic_issue_failure_quarantines(
     assert client.last_request["articles"][0]["text"] == proposal["text"]
     assert reviewed.status == "quarantined"
     assert set(reviewed.articles[0].reasons) == set(failure_reasons.values())
+
+
+def test_segmentation_model_reflects_the_client_that_actually_ran(verified_issue):
+    """`segment_articles()` must stamp `segmentation_model` from the client
+    that actually performed the call, not the hardcoded ARTICLE_MODEL
+    constant -- found live 2026-08-29 when a one-off Claude Opus 5 test's
+    resulting manifest falsely claimed gpt-oss-120b had segmented it
+    (docs/audits/2026-08/new_wine_opus_segmentation_e2e_test_2026-08-29.md)."""
+    proposals = two_proposals(verified_issue)
+    client = FakeStructuredClient(segmentation_response(verified_issue, proposals))
+    client.model = "claude-opus-5"
+
+    manifest = segment_articles(verified_issue, client)
+
+    assert manifest.segmentation_model == "claude-opus-5"
+
+
+def test_reviewer_model_reflects_the_client_that_actually_ran(verified_issue):
+    """Same defect, review stage: `review_articles_against_issue()` must stamp
+    `reviewer_model` from the client that actually ran the review call, not
+    the hardcoded ARTICLE_MODEL constant."""
+    proposals = two_proposals(verified_issue)
+    segmented = segment_articles(
+        verified_issue,
+        FakeStructuredClient(segmentation_response(verified_issue, proposals)),
+    )
+    review_response = passing_review_response(verified_issue, proposals)
+    for article_review in review_response["output"]["articles"]:
+        article_review["failure_reasons"] = {
+            field: None
+            for field in (
+                "start_coherent",
+                "end_coherent",
+                "transitions_ok",
+                "omissions",
+                "duplications",
+                "adjacent_bleed",
+                "attribution_ok",
+            )
+        }
+    review_client = FakeStructuredClient(review_response)
+    review_client.model = "claude-opus-5"
+
+    reviewed = review_articles_against_issue(verified_issue, segmented, review_client)
+
+    assert reviewed.reviewer_model == "claude-opus-5"
+
+
+def test_review_rejects_a_manifest_segmented_by_an_undeclared_model(verified_issue):
+    """Once segmentation_model honestly reflects the real client, the
+    existing lineage check (`manifest.segmentation_model != ARTICLE_MODEL`)
+    stops trivially passing by accident and actually catches a real
+    model-mixing mismatch -- the exact gap the Opus test's manifest exposed."""
+    proposals = two_proposals(verified_issue)
+    mixed_model_client = FakeStructuredClient(
+        segmentation_response(verified_issue, proposals)
+    )
+    mixed_model_client.model = "claude-opus-5"
+    segmented = segment_articles(verified_issue, mixed_model_client)
+
+    review_client = FakeStructuredClient()
+    with pytest.raises(
+        ArticleReviewError, match="manifest_segmentation_model_mismatch"
+    ):
+        review_articles_against_issue(verified_issue, segmented, review_client)
+    assert review_client.requests == []

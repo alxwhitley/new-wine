@@ -18,6 +18,7 @@ import ingest_magazine
 import propositions
 import review_magazine_issue as runner
 import shared_ingest
+from magazine_review.articles import ARTICLE_MODEL
 from magazine_review.benchmark import BenchmarkCandidate, OCRResponse
 from magazine_review.ocr import (
     INITIAL_OCR_INSTRUCTIONS,
@@ -162,6 +163,8 @@ class _FixturePageReviewer:
 
 
 class _FixtureArticleClient:
+    model = ARTICLE_MODEL
+
     def __init__(self, fixture: dict[str, Any], calls: ExternalCalls) -> None:
         self._fixture = fixture
         self._calls = calls
