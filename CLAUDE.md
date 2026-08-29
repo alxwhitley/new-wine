@@ -992,6 +992,27 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **New-provider structured-output integration must be mechanics-tested on a
+  trivial dummy request before spending on the real large document —
+  2026-08-29.** Testing Claude Opus 5 as an alternate New Wine segmentation
+  candidate burned real money debugging SDK/schema mechanics against the
+  full 121K-char Issue 02-1973 transcript instead of a cheap dummy call
+  first. Three concrete gotchas, now known: (1) `messages.create()` refuses
+  a large `max_tokens` outright (client-side, unbilled) — use
+  `messages.stream()` + `.get_final_message()` instead. (2) Claude's
+  `output_config.format.schema` 400s on `minimum`/`maximum` on an integer
+  property, which OpenAI/Groq accept — strip them before reuse; this
+  pipeline's own Python validation (`articles.py`'s `segment_articles()`)
+  already enforces the same bounds independently, so nothing is lost. (3)
+  Any client implementing this pipeline's `StructuredOutputClient` Protocol
+  must return EXACTLY `{output, usage, cost_usd}` —
+  `_response_envelope()`'s `_require_exact_keys` check rejects an otherwise-
+  valid, already-billed response for carrying one extra key (a test
+  client's own diagnostic field, in this case). A separate, earlier attempt
+  at a smaller `max_tokens` almost certainly also cost real money (hit the
+  cap before emitting any output) with usage never captured, because the
+  test harness's own error handling didn't capture usage on that failure
+  path. Total estimated spend against a $1 approved ceiling: ~$2.5.
 - **`--primary` (the gold brand token, `frontend/app/globals.css`) is used
   three conflicting ways — no single shade satisfies WCAG AA in all three,
   2026-08-28.** (1) white text on `bg-primary` (`Button`'s default variant,

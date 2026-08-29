@@ -126,12 +126,40 @@ quarantine. No stage transfers automatically from one source to another.
    the remaining live failure is a large non-article dump absorbing part
    of "The Apostle" article, plus continued `article_implausibly_long`/
    title-bleed variance. Full trail: CLAUDE.md's New Wine landmine entry.
-   Next: same method (segmentation-only diagnostic call, direct inspection
-   of raw spans/transcript, targeted instruction fix, live-validate) on
-   the remaining failure, then rerun the no-write article/proposition
-   gates, and obtain Alex's separate approval before any attended database
-   write. No benchmark decision or pipeline fix authorizes a database
-   write or file move.
+   **2026-08-29: two more segmentation redesigns proposed and refuted the
+   same day, before Alex saw either one.** A chunked/windowed redesign
+   (`15f6b1d`) was refuted on measurement: its premise (positional
+   grounding degrades late in a long transcript) was directly falsified —
+   every proposed boundary in the back 40% of the transcript sat within 31
+   chars of a real page marker. A table-of-contents-anchored redesign was
+   drafted with per-claim evidence tags specifically to avoid that mistake,
+   proactively adversarially reviewed before being shown to Alex, and was
+   refuted anyway: a claim tagged verified was false (Issue 02-1980 does
+   have a ToC, a 7th distinct format across issues examined), the proposed
+   article-end marker doubles as a real subscription-form checkbox in the
+   same issue, the discontiguous-span schema had no algorithm that would
+   ever populate more than one span, and it contradicted an already-shipped
+   instruction (`d011fac`) for Forum-style panel columns. Full detail and
+   the properties any future design must satisfy:
+   `docs/superpowers/specs/2026-08-29-new-wine-chunked-segmentation-design.md`
+   and `docs/superpowers/specs/2026-08-29-new-wine-toc-anchored-segmentation-v2.md`.
+   **Separately, discovered the segmentation MODEL itself was never
+   actually benchmarked for this task** — `openai/gpt-oss-120b` was a
+   forced substitution when Groq retired the prior default, unlike OCR,
+   which got a real blind benchmark before a model was chosen. A live
+   comparison call (Claude Opus 5, same transcript/schema/deterministic
+   validation) produced the first clean pass on Issue 02-1973 recorded
+   across the whole A2 effort — correctly discontiguous "The Apostle,"
+   correct reprint attribution for "Keeping the Unity," an honest
+   collective label for the Forum panel instead of a fabricated single
+   author. One run only, not proof of reliability. The test overran its
+   approved $1 budget (confirmed $1.4776 + an unmeasured ~$1 estimate from
+   a failed attempt) debugging real SDK/schema mechanics against the full
+   transcript instead of a cheap dummy request first — recorded in
+   CLAUDE.md's Landmines. Next: Alex is getting a second opinion (Grok) on
+   model choice before any further live-call spend is authorized. No
+   benchmark decision or pipeline fix authorizes a database write or file
+   move.
 3. **A3 — Existing converted sources and missing combinations.** Reconcile
    Ravenhill, Savchuk, and Poonen visibility/content; preserve the distinction
    between candidate and approved quote; keep the 12 HelloAO missing
