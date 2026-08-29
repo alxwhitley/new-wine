@@ -7,17 +7,20 @@ status=triaged:
 
   1. Resolve source via source_resolver (channel_name → alias lookup).
      Sentinel hit → status=needs_source, skip (no unattributed content).
-  2. Fetch transcript: yt-dlp auto-captions first, Whisper-medium fallback.
-  3. Clean via Groq (same CLEANING_PROMPT as scrape_individual_videos.py).
-  4. Write temp .txt to sources/youtube/cleaned/ with correct metadata headers.
-  5. Call ingest_file() directly (same path as all other documents), which
+  2. Fetch transcript: yt-dlp auto-captions in NATIVE json3 format, with a
+     Whisper-medium fallback. Caption completeness is verified against the
+     video's real duration — a truncated track falls back to Whisper rather
+     than being stored short. No LLM rewriting happens anywhere on this path;
+     stored text is the speaker's verbatim words (see try_auto_captions).
+  3. Write temp .txt to sources/youtube/cleaned/ with correct metadata headers.
+  4. Call ingest_file() directly (same path as all other documents), which
      internally handles, in order:
        - chunk → embed → document row → chunks table
        - propositions.process_document() — gate lives in propositions.py
          (fires for unlicensed/licensed sources; skips owned/public_domain).
          Not called directly in this file — inherited via ingest_file().
        - topic tagging (Groq)
-  6. Delete temp .txt; write status=done in sheet.
+  5. Delete temp .txt; write status=done in sheet.
 
 Idempotent: rows with status != "triaged" are skipped.
 One bad video never kills the run — exceptions captured as status=failed.
@@ -32,6 +35,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -66,14 +70,18 @@ COL     = {name: i + 1 for i, name in enumerate(COLUMNS)}
 
 # ── Transcript utilities (inlined from scrape_individual_videos.py) ───────────
 
-CLEANING_PROMPT = (
-    "You are cleaning a YouTube sermon transcript for a theological research "
-    "database. Remove ALL advertisement segments, sponsor reads, and promotional "
-    "content. Remove non-speech markers like [music], [laughter], [applause], "
-    "[clears throat], [cough]. Remove auto-caption filler artifacts like repeated "
-    "phrases or mid-sentence restarts. Preserve ALL theological content verbatim. "
-    "Return only the cleaned text with no commentary or preamble."
-)
+# Auto-caption completeness guardrail. This is the check whose absence let
+# ~38%-length transcripts reach production unnoticed (2026-08-29): a caption
+# track that stops well before the end of the video is now rejected, and the
+# video falls back to Whisper instead of being stored short and silent.
+_MIN_CAPTION_COVERAGE = 0.85
+_LARGE_GAP_WARN_S = 180
+
+# Auto-captions mark non-speech as bracketed tokens -- [music], [applause],
+# [cheering], [laughter], [snorts] all observed live. Brackets never carry
+# legitimate spoken words in this format, so a length-bounded generic pattern
+# is both safe and future-proof.
+_NON_SPEECH_MARKER_RE = re.compile(r"\[[^\]]{1,30}\]")
 
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".opus", ".ogg", ".webm", ".wav"}
 
@@ -101,37 +109,110 @@ def _ytdlp_base_args(ytdlp):
     return args
 
 
+def _parse_json3(path) -> Optional[Tuple[str, int, int]]:
+    """Extract transcript text + timing coverage from a yt-dlp json3 caption file.
+
+    Returns (text, last_caption_end_ms, largest_internal_gap_ms), or None if
+    the file is unparseable or carries no text.
+
+    Every `segs` entry is concatenated in document order, INCLUDING the
+    `aAppend` events: those carry the "\\n" line separators, and dropping them
+    glues words together across cue boundaries ("everybody.Well,").
+    """
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return None
+
+    parts = []
+    spans = []  # (start_ms, end_ms) for text-bearing events only
+    for ev in data.get("events", []):
+        piece = "".join(seg.get("utf8", "") for seg in (ev.get("segs") or []))
+        parts.append(piece)
+        if piece.strip():
+            start = ev.get("tStartMs") or 0
+            spans.append((start, start + (ev.get("dDurationMs") or 0)))
+
+    if not spans:
+        return None
+
+    text = _NON_SPEECH_MARKER_RE.sub(" ", "".join(parts))
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return None
+
+    spans.sort()
+    last_end = max(end for _, end in spans)
+    max_gap = max(
+        (spans[i + 1][0] - spans[i][1] for i in range(len(spans) - 1)),
+        default=0,
+    )
+    return text, last_end, max_gap
+
+
 def try_auto_captions(ytdlp, url, tmp_dir):
-    """Try to download auto-generated English captions via yt-dlp. Returns text or None."""
+    """Download YouTube auto-captions as native json3 and return the transcript.
+
+    json3 is requested deliberately INSTEAD OF `--convert-subs srt`. The SRT
+    conversion flattens YouTube's rolling-window cue format into literally
+    triplicated text -- proven live 2026-08-29: a 9,327-word sermon came back
+    as 27,783 words, and the Groq "cleaning" pass meant to undo that instead
+    discarded ~62% of the real sermon. json3 carries each word exactly once,
+    so there is no duplication to remove, no dedup regex, and no cleaning
+    model anywhere on this path.
+
+    Returns transcript text, or None -- which triggers the Whisper fallback --
+    when captions are absent, too short, or stop well before the end of the
+    video.
+    """
     import os as _os
     out_template = _os.path.join(tmp_dir, "%(id)s.%(ext)s")
     cmd = _ytdlp_base_args(ytdlp) + [
         "--write-auto-sub", "--sub-lang", "en",
-        "--skip-download", "--convert-subs", "srt",
+        "--skip-download", "--sub-format", "json3",
+        # `--print` implies `--simulate` in yt-dlp, which silently suppresses
+        # the subtitle write -- `--no-simulate` is required alongside it, or
+        # captions are never saved and every video falls through to Whisper.
+        "--print", "%(duration)s", "--no-simulate",
         "-o", out_template,
         url,
     ]
-    subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    # Same invocation reports the real duration, so completeness costs no
+    # extra network round-trip.
+    duration_s = None
+    for line in result.stdout.strip().splitlines():
+        if line.strip().isdigit():
+            duration_s = int(line.strip())
+            break
+
     for f in _os.listdir(tmp_dir):
-        if f.endswith(".srt"):
-            srt_path = _os.path.join(tmp_dir, f)
-            raw = Path(srt_path).read_text(encoding="utf-8", errors="replace")
-            lines = []
-            for line in raw.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                if re.match(r"^\d+$", line):
-                    continue
-                if re.match(r"\d{2}:\d{2}:\d{2}", line):
-                    continue
-                line = re.sub(r"<[^>]+>", "", line)
-                if line:
-                    lines.append(line)
-            text = " ".join(lines)
-            text = re.sub(r"\b(\w+(?:\s+\w+){0,3})\s+\1\b", r"\1", text)
-            if len(text.split()) > 100:
-                return text
+        if not f.endswith(".json3"):
+            continue
+        parsed = _parse_json3(_os.path.join(tmp_dir, f))
+        if not parsed:
+            return None
+        text, last_end_ms, max_gap_ms = parsed
+        if len(text.split()) <= 100:
+            return None
+
+        if duration_s:
+            coverage = (last_end_ms / 1000.0) / duration_s
+            if coverage < _MIN_CAPTION_COVERAGE:
+                print("    captions stop at {:.0f}s of {:,.0f}s ({:.0%}) — "
+                      "rejecting as truncated, will try Whisper".format(
+                          last_end_ms / 1000.0, duration_s, coverage))
+                return None
+            print("    captions cover {:.0%} of {:,.0f}s".format(coverage, duration_s))
+        else:
+            print("    WARNING: could not read video duration — "
+                  "caption completeness unverified")
+
+        if max_gap_ms > _LARGE_GAP_WARN_S * 1000:
+            print("    WARNING: largest caption gap is {:.0f}s".format(
+                max_gap_ms / 1000.0))
+        return text
     return None
 
 
@@ -159,34 +240,15 @@ def download_and_whisper(ytdlp, url, tmp_dir):
     return result["text"].strip()
 
 
-def clean_transcript(raw):
-    """Clean transcript via Groq, chunking if needed."""
-    from groq import Groq
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
-    words = raw.split()
-    chunk_words = 6000
-    if len(words) <= chunk_words:
-        chunks = [raw]
-    else:
-        chunks = [
-            " ".join(words[i:i + chunk_words])
-            for i in range(0, len(words), chunk_words)
-        ]
-    print("     Cleaning via Groq ({} chunk(s), {:,} words)...".format(len(chunks), len(words)))
-    cleaned_parts = []
-    for i, chunk in enumerate(chunks, 1):
-        if len(chunks) > 1:
-            print("       Chunk {}/{}...".format(i, len(chunks)))
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            max_tokens=8192,
-            messages=[
-                {"role": "system", "content": CLEANING_PROMPT},
-                {"role": "user", "content": chunk},
-            ],
-        )
-        cleaned_parts.append((response.choices[0].message.content or "").strip())
-    return "\n\n".join(cleaned_parts)
+# NOTE -- there is deliberately no clean_transcript()/CLEANING_PROMPT here any
+# more (removed 2026-08-29, Alex's decision). Do not reintroduce an LLM pass
+# over transcript text on this path. The only job that pass genuinely did was
+# undoing SRT triplication, which json3 makes impossible to create. Measured
+# on one real 9,327-word sermon, every currently-available Groq model rewrites
+# rather than copies: gpt-oss-120b kept 38%, gpt-oss-20b 7.5%, and qwen3.6-27b
+# truncated mid-transcript after burning its budget on hidden reasoning. Stored
+# chunk text must remain the speaker's actual words -- quote verification does
+# exact-substring matching against it (CLAUDE.md Settled decisions #16-19).
 
 
 # ── Sheet helpers ─────────────────────────────────────────────────────────────
@@ -457,15 +519,12 @@ def ingest_video(
     if not raw_text:
         return "failed", display_name, "no captions and Whisper returned nothing"
 
-    # ── 3. Groq clean ─────────────────────────────────────────────────────────
-    print("  cleaning via Groq ({:,} words, method={})...".format(len(raw_text.split()), method))
-    try:
-        cleaned = clean_transcript(raw_text)
-        print("    {:,} words after cleaning".format(len(cleaned.split())))
-    except Exception as exc:
-        return "failed", display_name, "Groq clean error: {}".format(exc)
-
-    # ── 4. Write temp .txt ────────────────────────────────────────────────────
+    # ── 3. Write temp .txt ────────────────────────────────────────────────────
+    # No cleaning/rewriting step by design -- what was fetched is what gets
+    # stored, verbatim. See the note where clean_transcript() used to live.
+    cleaned = raw_text
+    print("  storing {:,} words verbatim (method={})".format(
+        len(cleaned.split()), method))
     video_id = extract_video_id(url)
     fname    = "{}_{}.txt".format(video_id, _slugify(video_title))
     tmp_path = CLEANED_DIR / fname
@@ -473,7 +532,7 @@ def ingest_video(
     _write_transcript_file(tmp_path, video_title, speaker, channel_name, url, cleaned)
     print("  wrote: {}  (speaker={!r})".format(fname, speaker or "—"))
 
-    # ── 5. Ingest through the full pipeline ───────────────────────────────────
+    # ── 4. Ingest through the full pipeline ───────────────────────────────────
     # Pass the gate-approved source_id through explicitly rather than letting
     # ingest_file re-resolve it from the SOURCE:/SPEAKER: headers just written
     # above. The two resolution orders differ (speaker-first here vs.
