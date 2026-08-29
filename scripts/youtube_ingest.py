@@ -178,7 +178,7 @@ def clean_transcript(raw):
         if len(chunks) > 1:
             print("       Chunk {}/{}...".format(i, len(chunks)))
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             max_tokens=8192,
             messages=[
                 {"role": "system", "content": CLEANING_PROMPT},
@@ -218,20 +218,53 @@ def _slugify(title: str, max_len: int = 50) -> str:
     return s[:max_len].rstrip("_")
 
 
+_SPEAKER_WORD = r"(?:[A-Z][a-z]+|[A-Z]{2,4}(?![a-z]))"
+_SPEAKER_NAME = rf"{_SPEAKER_WORD}(?:\s+{_SPEAKER_WORD})+"
+_SPEAKER_MULTI = rf"{_SPEAKER_NAME}(?:\s*(?:&|\band\b)\s*{_SPEAKER_NAME})*"
+
+# Trailing words that look name-shaped (Title-Case) but are video-title noise,
+# not part of a speaker's name — e.g. "| Paul Kidd Sermon", "| ... | CLF Raleigh".
+# Found live 2026-08-29 on the CLF Church playlist batch (2 of 50 titles).
+_SPEAKER_TRAILING_JUNK = {
+    "sermon", "service", "church", "message", "teaching", "session",
+    "morning", "evening", "night", "raleigh",
+}
+
+# Known misspellings in source video titles, corrected on extraction rather
+# than left to propagate into documents.author. Add an entry only when a
+# typo is independently confirmed (e.g. the correct spelling appears
+# elsewhere in the same batch) — never a guess.
+_SPEAKER_NAME_FIXES = {
+    "shabaka willliams": "Shabaka Williams",  # CLF Church playlist, 2026-08-29
+}
+
+
 def _extract_speaker(title: str) -> str:
     """Best-effort speaker extraction from a video title.
-    Handles patterns like 'by Sam Storms', '| Sam Storms', '- Michael Rowntree'.
+    Handles patterns like 'by Sam Storms', '| Sam Storms', '- Michael Rowntree',
+    all-caps initials ('| Bishop JB Masinde'), co-speakers ('| Paul Kidd &
+    Alex Whitley' -> 'Paul Kidd, Alex Whitley'), and a trailing noise word
+    ('| Paul Kidd Sermon' -> 'Paul Kidd').
     Returns '' if not found.
     """
-    # "by Firstname Lastname" — most common in Convergence titles
-    m = re.search(r"\bby\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)", title)
-    if m:
-        return m.group(1)
-    # "- Firstname Lastname" or "| Firstname Lastname" at end
-    m = re.search(r"[|\-—]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*(?:[|\-]|$)", title)
-    if m:
-        return m.group(1)
-    return ""
+    # "by Firstname Lastname[, & Firstname Lastname]" — most common in Convergence titles
+    m = re.search(rf"\bby\s+({_SPEAKER_MULTI})", title)
+    if not m:
+        # "- Firstname Lastname" or "| Firstname Lastname" at end
+        m = re.search(rf"[|\-—]\s*({_SPEAKER_MULTI})\s*(?:[|\-]|$)", title)
+    if not m:
+        return ""
+
+    names = []
+    for raw_name in re.split(r"\s*(?:&|\band\b)\s*", m.group(1)):
+        words = raw_name.split()
+        while len(words) > 1 and words[-1].strip(".,").lower() in _SPEAKER_TRAILING_JUNK:
+            words.pop()
+        if words:
+            clean = " ".join(words)
+            clean = _SPEAKER_NAME_FIXES.get(clean.lower(), clean)
+            names.append(clean)
+    return ", ".join(names)
 
 
 def _write_transcript_file(

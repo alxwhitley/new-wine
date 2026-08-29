@@ -56,7 +56,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 from source_resolver import normalize_alias_key  # noqa: E402
 
-MODEL      = "llama-3.3-70b-versatile"
+MODEL      = "openai/gpt-oss-120b"
 BATCH_SIZE = 10   # titles per Groq call (smaller = less blast radius on mismatch)
 
 COLUMNS = ["url", "video_title", "channel_name", "guess", "ingest", "status", "resolved_source"]

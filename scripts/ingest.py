@@ -180,7 +180,7 @@ Return only the JSON object. No explanation, no markdown.
 """
 
     response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -236,7 +236,7 @@ def _parse_tag_json(raw):
 def _call_groq_tags(content):
     """Call Groq for topic tagging and return raw response text."""
     response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         max_tokens=512,
         messages=[
             {"role": "system", "content": TAG_SYSTEM_PROMPT},

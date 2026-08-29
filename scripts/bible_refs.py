@@ -22,7 +22,7 @@ from groq import Groq
 
 
 MAX_REF_CONTENT_CHARS = 12000
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 
 _groq_client: Optional[Groq] = None

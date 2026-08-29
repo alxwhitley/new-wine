@@ -21,7 +21,8 @@ every exclusion is logged (question, teacher, topic, what was excluded) so
 the false-exclusion rate is measurable later, per the same
 measure-before-building discipline used elsewhere in this codebase.
 
-ONE classification call per question, not one per teacher: the retrieved
+ONE classification call normally (at most two after a call/parse failure),
+not one per teacher: the retrieved
 chunks (already capped to a small final set by the time this runs -- see
 chat.py's own Step 4.5 / producer.py's mirror, both AFTER rerank + neighbor
 expansion) are grouped by author, and a single structured call judges every
@@ -124,14 +125,14 @@ def exclude_contradicting_teachers(
     pillar's own body (get_paper_body(pillar_key)), passed in rather than
     re-fetched here so the caller's own cache is reused, not duplicated.
 
-    No chunks / no distinct authors -> no-op, (chunks, []). Any classifier
-    parse or API failure -> no-op, fail-safe toward NOT excluding (see
-    module docstring)."""
+    No chunks / no distinct authors -> no-op, (chunks, []). A classifier
+    parse or API failure is retried once; a second failure -> no-op, fail-safe
+    toward NOT excluding (see module docstring)."""
     groups = _group_chunks_by_author(chunks)
     if not groups:
         return chunks, []
 
-    try:
+    def _call_and_parse_classifier():
         client = get_anthropic_client()
         response = client.messages.create(
             model=get_generation_model(),
@@ -148,14 +149,26 @@ def exclude_contradicting_teachers(
             raw = raw.strip("`")
             if raw.startswith("json"):
                 raw = raw[4:]
-        verdicts = json.loads(raw)
+        return json.loads(raw)
+
+    try:
+        verdicts = _call_and_parse_classifier()
     except Exception:
-        logger.exception(
-            "position_paper_exclusion: classifier call/parse failed for "
-            "pillar=%s -- failing safe, no exclusion applied this question",
+        logger.warning(
+            "position_paper_exclusion: classifier call/parse failed for pillar=%s "
+            "-- retrying once",
             pillar_key,
+            exc_info=True,
         )
-        return chunks, []
+        try:
+            verdicts = _call_and_parse_classifier()
+        except Exception:
+            logger.exception(
+                "position_paper_exclusion: classifier call/parse failed for "
+                "pillar=%s -- failing safe, no exclusion applied this question",
+                pillar_key,
+            )
+            return chunks, []
 
     excluded_authors = []  # type: List[str]
     for v in verdicts if isinstance(verdicts, list) else []:

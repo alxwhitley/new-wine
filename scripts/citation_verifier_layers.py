@@ -650,7 +650,12 @@ def call_layer3_llm(reference: str, source_text: str) -> bool:
             model=pw.EXTRACTION_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
-            max_tokens=200,
+            # EXTRACTION_MODEL (openai/gpt-oss-120b) is a reasoning model --
+            # its chain-of-thought tokens count against max_tokens before any
+            # output is emitted. 200 was sized for a non-reasoning model and
+            # silently starved every real call (finish_reason="length", empty
+            # content) -- found live 2026-08-29 auditing CLF Church bible_refs.
+            max_tokens=2000,
         )
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
