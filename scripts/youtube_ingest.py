@@ -22,7 +22,7 @@ status=triaged:
        - topic tagging (Groq)
   5. RETAIN the .txt by moving it to sources/youtube/ingested/; write
      status=done in sheet. A stored document must never exist only in
-     Supabase. This step used to delete the file instead, which is why 357
+     Supabase. This step used to delete the file instead, which is why 301
      of 374 YouTube documents had no local copy as of 2026-08-30. Only a
      FAILED ingest deletes, so ingested/ means "this is in the corpus".
 
@@ -69,8 +69,15 @@ QUEUE_PATH   = ROOT / "sources" / "youtube" / "ingest_queue.xlsx"
 CLEANED_DIR  = ROOT / "sources" / "youtube" / "cleaned"
 # Every stored document must also exist as a local file -- Supabase is not the
 # only copy. A successful ingest MOVES its transcript here; it used to be
-# unlinked outright, which left 357 of 374 YouTube documents with no local
+# unlinked outright, which left 301 of 374 YouTube documents with no local
 # copy at all between 2026-06-03 and 2026-08-30.
+#
+# Files written from here are video-id prefixed ("{video_id}_{slug}.txt").
+# NEVER recover that id by splitting the filename on "_" -- YouTube ids
+# legitimately contain underscores ("Al_a7taOEo0", "Icli_wYAfTo"), and doing
+# so silently truncates them and reports files as missing. Match on the
+# "{video_id}_" prefix instead. Older files here predate this convention and
+# carry a slug only, with no id at all.
 INGESTED_DIR = ROOT / "sources" / "youtube" / "ingested"
 COOKIES_PATH = ROOT / "scripts" / "youtube_cookies.txt"
 
