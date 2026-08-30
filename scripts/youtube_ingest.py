@@ -12,7 +12,7 @@ status=triaged:
      video's real duration — a truncated track falls back to Whisper rather
      than being stored short. No LLM rewriting happens anywhere on this path;
      stored text is the speaker's verbatim words (see try_auto_captions).
-  3. Write temp .txt to sources/youtube/cleaned/ with correct metadata headers.
+  3. Write .txt to sources/youtube/cleaned/ with correct metadata headers.
   4. Call ingest_file() directly (same path as all other documents), which
      internally handles, in order:
        - chunk → embed → document row → chunks table
@@ -20,7 +20,11 @@ status=triaged:
          (fires for unlicensed/licensed sources; skips owned/public_domain).
          Not called directly in this file — inherited via ingest_file().
        - topic tagging (Groq)
-  5. Delete temp .txt; write status=done in sheet.
+  5. RETAIN the .txt by moving it to sources/youtube/ingested/; write
+     status=done in sheet. A stored document must never exist only in
+     Supabase. This step used to delete the file instead, which is why 357
+     of 374 YouTube documents had no local copy as of 2026-08-30. Only a
+     FAILED ingest deletes, so ingested/ means "this is in the corpus".
 
 Idempotent: rows with status != "triaged" are skipped.
 One bad video never kills the run — exceptions captured as status=failed.
@@ -63,6 +67,11 @@ from source_resolver import resolve_source_id, SENTINEL_SOURCE_ID, normalize_ali
 
 QUEUE_PATH   = ROOT / "sources" / "youtube" / "ingest_queue.xlsx"
 CLEANED_DIR  = ROOT / "sources" / "youtube" / "cleaned"
+# Every stored document must also exist as a local file -- Supabase is not the
+# only copy. A successful ingest MOVES its transcript here; it used to be
+# unlinked outright, which left 357 of 374 YouTube documents with no local
+# copy at all between 2026-06-03 and 2026-08-30.
+INGESTED_DIR = ROOT / "sources" / "youtube" / "ingested"
 COOKIES_PATH = ROOT / "scripts" / "youtube_cookies.txt"
 
 COLUMNS = ["url", "video_title", "channel_name", "guess", "ingest", "status", "resolved_source"]
@@ -548,11 +557,31 @@ def ingest_video(
     except Exception as exc:
         ingest_status = "error"
         ingest_reason = str(exc)
-    finally:
+
+    # ── 5. Retain the local copy ──────────────────────────────────────────────
+    # A stored document must never exist only in Supabase. On success the
+    # transcript MOVES to ingested/ and stays there; only a failed ingest is
+    # cleaned up, so ingested/ continues to mean "this is in the corpus".
+    # Failing to retain is a real failure of the run, not a cosmetic one --
+    # it is reported rather than swallowed, but it never invalidates a
+    # database write that already succeeded.
+    retain_note = ""
+    if ingest_status in ("processed", "skipped"):
+        try:
+            INGESTED_DIR.mkdir(parents=True, exist_ok=True)
+            final_path = INGESTED_DIR / fname
+            tmp_path.replace(final_path)
+            print("  retained: sources/youtube/ingested/{}".format(fname))
+        except Exception as exc:
+            retain_note = ", RETAIN FAILED: {}".format(exc)
+            print("  !! RETAIN FAILED ({}) -- document is in the database but "
+                  "has no local copy: {}".format(exc, fname))
+    else:
         tmp_path.unlink(missing_ok=True)
 
     if ingest_status in ("processed", "skipped"):
-        return "done", display_name, "method={}, ingest={}".format(method, ingest_status)
+        return "done", display_name, "method={}, ingest={}{}".format(
+            method, ingest_status, retain_note)
     else:
         return "failed", display_name, "ingest_file: {}/{}".format(ingest_status, ingest_reason)
 
