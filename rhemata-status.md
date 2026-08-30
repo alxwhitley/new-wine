@@ -7,10 +7,11 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-29. **PLAN.md has zero active blockers.** This session
+Last verified: 2026-08-30. **PLAN.md has zero active blockers.** This session
 ingested a second CLF playlist (7 sermons, verified verbatim against source),
-held 15 of its entries back as out-of-shape for the corpus, and fixed a
-duplicate-document defect in triage. Committed and pushed through `9224650`.
+held 15 of its entries back as out-of-shape for the corpus, fixed a
+duplicate-document defect in triage, and stopped the YouTube path from
+deleting its own local transcripts. Committed through `5c94b3c`.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -63,6 +64,29 @@ gathering) — likely a bad upload; check before ingesting it under any policy.
 sermons, including one titled "Sunday Morning Service") and 1 row still
 `needs_source` from the prior session ("Freedom from Guilt, Shame &
 Rejection | Scott Woodard") — alias never resolved, never ingested.
+
+**Fixed: the YouTube path deleted its own local transcripts (commit
+`5c94b3c`).** `ingest_video()` wrote the transcript to `sources/youtube/
+cleaned/`, ingested from it, then unlinked it — deliberate (the docstring
+listed "Delete temp .txt" as step 5), but it left stored documents existing
+only in Supabase. **Measured 2026-08-30: 357 of 374 YouTube documents have no
+local file** — Savchuk 126, Ravenhill 117, CLF 56, Poonen 50, Conlon 6, Deere
+1, Brown 1; the archive had not been written to since 2026-06-03. A
+successful ingest now MOVES the file to `sources/youtube/ingested/`; only a
+failed one deletes, so that directory means "this is in the corpus".
+`scripts/test_youtube_local_retention.py` is offline and mutation-proven.
+**Note `sources/web/` is a different lane** (web scrapes, currently Derek
+Prince only) — not where YouTube material belongs.
+
+**The 357 existing documents are NOT backfilled — Alex has not picked an
+approach.** Two options, which genuinely differ: re-fetch from YouTube (true
+source text; correct for CLF's 56, but wrong for the ~299 ingested under the
+pre-`617341c` destructive path, whose stored text no longer matches a fresh
+fetch) versus reconstruct from the database (guarantees the local copy
+mirrors what actually serves; needs de-overlapping, since chunks overlap by
+80 tokens and concatenating them inflates ~17%). Recommendation on record:
+reconstruct from the DB, so the parked caption-duplication defect stays
+visible rather than being papered over by a fresh fetch.
 
 **Fixed: triage could create duplicate documents (commit `9224650`).**
 `process_sheet()` built its dedup set once from the sheet, so a URL listed
