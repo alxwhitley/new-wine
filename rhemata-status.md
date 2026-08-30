@@ -96,14 +96,11 @@ unique constraint, so that becomes two documents with nothing to catch it.
 before this run, so the defect had never fired.
 
 **New Wine A2 — unchanged, still NOT ingestion-ready, still deliberately held
-by Alex with no next step selected.** Nothing this session touched it. The
-three gates (article review never legitimately passed for Issue 02-1973; Opus
-not wired into `review_magazine_issue.py`; proposition extraction never
-attempted) and the open resume options are in
-`docs/audits/2026-08/new_wine_opus_review_e2e_test_2026-08-29.md` and the
-prior status entry in git history. **Do not spend live-call budget there
-without a fresh named ceiling** — the $3 approved 2026-08-29 is spent
-($0.63 of it) and does not carry forward.
+by Alex with no next step selected.** Untouched this session. Three gates and
+the open resume options:
+`docs/audits/2026-08/new_wine_opus_review_e2e_test_2026-08-29.md`. **Do not
+spend live-call budget there without a fresh named ceiling** — the $3
+approved 2026-08-29 is spent and does not carry forward.
 
 **Quote rail: still off (`QUOTE_SELECTION_ENABLED=false`) — and a standing
 risk became real this session.** Settled #19's residual risk was recorded as
@@ -120,16 +117,14 @@ material needs either exclusion from quoting or an audio-confirmation step.**
 
 - **318 historical YouTube documents carry residual caption duplication**
   (Ravenhill 117, Savchuk 126, Poonen 50, Kolenda 11, Deere 6, Conlon 6).
-  Content is COMPLETE — the retired model preserved everything, it only left
-  duplicate fragments behind. A different, milder defect than CLF's.
-  Re-ingesting them regenerates propositions, so it needs its own cost
-  estimate first. Classified in `docs/roadmap.md` Parked; deferred by Alex's
-  explicit choice 2026-08-29.
+  Content is COMPLETE — a milder defect than CLF's. Re-ingesting regenerates
+  propositions, so it needs its own cost estimate first. `docs/roadmap.md`
+  Parked; deferred by Alex 2026-08-29. Overlaps the 357 un-backfilled local
+  files above — decide both together, not separately.
 - **`bible_refs.py` hallucinated 2 of 514 references (~0.4%)** on real sermon
-  text. Small, but the same class of LLM over-reach just removed from the
-  transcript path — worth knowing before the next large ingestion run. The 7
-  sermons added 2026-08-29 audited clean (111/111 genuine), so the rate
-  remains 2 of 625 across everything checked; not re-measured, just extended.
+  text — the same class of LLM over-reach removed from the transcript path.
+  The 7 sermons added 2026-08-29 audited clean (111/111), so the rate stands
+  at 2 of 625 checked; extended, not re-measured.
 - **Scheduled**: quote accuracy/relevance repair before any attended
   re-enable.
 - **Live account-deletion verification** — genuinely blocked, needs Alex to
