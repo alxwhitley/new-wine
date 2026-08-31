@@ -83,8 +83,10 @@ per-document strings would recreate this defect at scale.
 **Guest-speaker attribution — DECIDED 2026-08-31: leave as-is.** Closed, not an
 open finding. Do not re-raise it as a live risk.
 
-**Privacy policy + ToS — DECIDED 2026-08-31: draft first, classify after.**
-Still needs legal entity, jurisdiction, and a contact address from Alex.
+**Privacy policy + ToS — DECIDED 2026-08-31: draft first, classify after; then
+DEFERRED by Alex the same day.** A deliberate hold, not an oversight — drafting
+is blocked until Alex supplies the legal entity, jurisdiction, and a contact
+address. Nothing to do until then.
 `POLICY_COPY` in `consent.py` is binding and duplicated in `consent-gate.tsx`;
 they must move together (proven byte-identical).
 
