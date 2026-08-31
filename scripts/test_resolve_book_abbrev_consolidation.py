@@ -15,7 +15,7 @@ ordinal-strip regex -- the actual thing that drifted silently before
 ... a future edit to one must be mirrored here").
 
 Run from project root:
-  /private/tmp/rhemata-w1w4-venv/bin/python scripts/test_resolve_book_abbrev_consolidation.py
+  /private/tmp/newwine-w1w4-venv/bin/python scripts/test_resolve_book_abbrev_consolidation.py
 """
 import os
 import re

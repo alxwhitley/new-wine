@@ -7,7 +7,7 @@
     APPROVE: "DECIDE_APPROVE",
     REJECT: "DECIDE_REJECT",
   });
-  const HOST_ID = "rhemata-discovery-review-host";
+  const HOST_ID = "newwine-discovery-review-host";
   const DEACTIVATE_TYPE = "DEACTIVATE_REVIEW";
   let toolbarHost = null;
   let toolbarRoot = null;
@@ -119,13 +119,13 @@
 
     const bar = createElement("section");
     bar.className = "bar";
-    bar.setAttribute("aria-label", "Rhemata discovery review");
+    bar.setAttribute("aria-label", "New Wine discovery review");
     toolbarRoot.append(style, bar);
     return bar;
   }
 
   function setStatus(message, isError) {
-    const status = toolbarRoot?.getElementById("rhemata-review-status");
+    const status = toolbarRoot?.getElementById("newwine-review-status");
     if (!status) return;
     status.textContent = message;
     status.setAttribute("aria-invalid", String(Boolean(isError)));
@@ -145,7 +145,7 @@
     remaining.textContent = `${candidate.remaining} left to review`;
 
     const status = createElement("span");
-    status.id = "rhemata-review-status";
+    status.id = "newwine-review-status";
     status.className = "status";
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
@@ -153,12 +153,12 @@
     const actions = createElement("div");
     actions.className = "actions";
     const approve = createElement("button");
-    approve.id = "rhemata-review-approve";
+    approve.id = "newwine-review-approve";
     approve.className = "primary";
     approve.type = "button";
     approve.textContent = "Approve";
     const reject = createElement("button");
-    reject.id = "rhemata-review-reject";
+    reject.id = "newwine-review-reject";
     reject.type = "button";
     reject.textContent = "Do Not Approve";
     const controls = [approve, reject];
@@ -193,14 +193,14 @@
     const bar = prepareToolbar();
     const instruction = createElement(
       "strong",
-      "Start the Rhemata review server, then retry",
+      "Start the New Wine review server, then retry",
     );
     instruction.className = "name";
     const status = createElement(
       "span",
       message || "The review server is unavailable.",
     );
-    status.id = "rhemata-review-status";
+    status.id = "newwine-review-status";
     status.className = "status";
     status.setAttribute("role", "status");
     status.setAttribute("aria-invalid", "true");
@@ -251,7 +251,7 @@
 
   boot().catch((error) => {
     if (isControllerPage()) {
-      console.error("Rhemata review extension:", error);
+      console.error("New Wine review extension:", error);
       return;
     }
     if (error.active) {

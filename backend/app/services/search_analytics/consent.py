@@ -19,8 +19,8 @@ from .subject_key import CURRENT_SUBJECT_KEY_VERSION, derive_subject_key
 CURRENT_POLICY_VERSION = "v1"
 
 POLICY_COPY = (
-    "During this private beta, Rhemata tracks the topics you search so we "
-    "can understand what material is most needed. When Rhemata says it "
+    "During this private beta, New Wine tracks the topics you search so we "
+    "can understand what material is most needed. When New Wine says it "
     "does not have enough material, the wording of that question may be "
     "stored after obvious personal details are removed. Your name and "
     "email are not shown in analytics. Open gap wording is deleted 30 "

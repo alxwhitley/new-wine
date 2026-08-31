@@ -2,7 +2,7 @@ import type { CorpusCard, FutureTarget } from "./corpus-types";
 
 // Single source of truth for the repo path these commands assume when pasted
 // into a terminal. Update this one line if the repo ever moves.
-const REPO_ROOT = "/Users/alexwhitley/rhemata";
+const REPO_ROOT = "/Users/alexwhitley/newwine";
 
 export const GROUPS = [
   "Pipelines",

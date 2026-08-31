@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/guard_pretooluse.py'"
+            "command": "'/Users/alexwhitley/newwine/.codex/hooks/guard_pretooluse.py'"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/guard_pretooluse.py'"
+            "command": "'/Users/alexwhitley/newwine/.codex/hooks/guard_pretooluse.py'"
           }
         ]
       },
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/guard_pretooluse.py'"
+            "command": "'/Users/alexwhitley/newwine/.codex/hooks/guard_pretooluse.py'"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/alexwhitley/rhemata/.codex/hooks/deterministic_gate.py'"
+            "command": "'/Users/alexwhitley/newwine/.codex/hooks/deterministic_gate.py'"
           }
         ]
       }

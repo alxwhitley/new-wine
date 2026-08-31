@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rhemata WEB Bible Ingestion Script
+New Wine WEB Bible Ingestion Script
 
 Parses the World English Bible VPL file and inserts verses into the
 Supabase verses table via psycopg2 direct connection.
@@ -190,7 +190,7 @@ def main():
     test_mode = "--test" in sys.argv
     max_verses = 100 if test_mode else None
 
-    print("Rhemata WEB Bible Ingestion")
+    print("New Wine WEB Bible Ingestion")
     if test_mode:
         print("TEST MODE: limited to 100 verses")
     print("=" * 60)

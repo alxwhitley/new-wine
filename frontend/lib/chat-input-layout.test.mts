@@ -7,7 +7,7 @@ const pageSource = readFileSync(
   "utf8",
 );
 const inputSource = readFileSync(
-  new URL("../components/rhemata/chat-input.tsx", import.meta.url),
+  new URL("../components/newwine/chat-input.tsx", import.meta.url),
   "utf8",
 );
 

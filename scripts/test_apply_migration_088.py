@@ -260,7 +260,7 @@ class SnapshotTests(unittest.TestCase):
 class FixtureCleanupTests(unittest.TestCase):
     def test_cleanup_validates_exact_uuid_and_marker_before_delete(self):
         fixture_id = "44444444-4444-4444-4444-444444444444"
-        marker = "https://example.invalid/rhemata-source-ingest-fixture/44444444"
+        marker = "https://example.invalid/newwine-source-ingest-fixture/44444444"
         connection = RecordingConnection(results=[(fixture_id, marker), (fixture_id,)])
 
         self.assertTrue(
@@ -292,7 +292,7 @@ class FixtureCleanupTests(unittest.TestCase):
             apply_migration_088._cleanup_fixture(
                 mismatch,
                 "44444444-4444-4444-4444-444444444444",
-                "https://example.invalid/rhemata-source-ingest-fixture/44444444",
+                "https://example.invalid/newwine-source-ingest-fixture/44444444",
             )
         self.assertEqual(len(mismatch.calls), 1)
 
@@ -392,7 +392,7 @@ class ConcurrentClaimVerificationTests(unittest.TestCase):
     def test_two_claimers_are_scoped_to_one_fixture_and_cleanup_reconciles(self):
         fixture_id = "55555555-5555-5555-5555-555555555555"
         user_id = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-        marker = "https://example.invalid/rhemata-source-ingest-fixture/55555555"
+        marker = "https://example.invalid/newwine-source-ingest-fixture/55555555"
         setup = RecordingConnection(
             results=[(0,), (user_id,), None, (fixture_id,)]
         )
@@ -459,7 +459,7 @@ class ConcurrentClaimVerificationTests(unittest.TestCase):
     def test_connection_failure_after_fixture_commit_still_cleans_exact_fixture(self):
         fixture_id = "66666666-6666-6666-6666-666666666666"
         user_id = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-        marker = "https://example.invalid/rhemata-source-ingest-fixture/66666666"
+        marker = "https://example.invalid/newwine-source-ingest-fixture/66666666"
         setup = RecordingConnection(results=[(0,), (user_id,), None, (fixture_id,)])
         first_claimer = RecordingConnection()
         cleanup = RecordingConnection(results=[(fixture_id, marker), (fixture_id,)])

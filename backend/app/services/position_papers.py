@@ -505,7 +505,7 @@ FIVEFOLD_MATCH_THRESHOLD = 0.32
 # 1.5-1.7 per the Phase 0 report; eschatological timing added 2026-08-05):
 # healing mechanics, prophetic accountability, apostolic authority, and
 # eschatological timing remain live debates, presented with named teachers
-# on both sides — never settled Rhemata teaching. This is exactly the
+# on both sides — never settled New Wine teaching. This is exactly the
 # structural fix Phase 0's finding called for: adding a new pillar's own
 # contrast anchors previously did nothing to protect a SIBLING pillar or any
 # FUTURE pillar from over-matching one of these four topics — each pillar's
@@ -775,7 +775,7 @@ def _mentions_named_teacher(question: str) -> bool:
     """Return True if `question` names any known corpus teacher/source
     alias. Highest-priority gate (Phase 1 item 1.6): a question naming a
     specific teacher must never be intercepted by a position paper and
-    answered in Rhemata's own uncited voice with that teacher absent
+    answered in New Wine's own uncited voice with that teacher absent
     entirely — confirmed live on two teachers (Derek Prince, Zac Poonen)
     against speaking_in_tongues, 2026-08-01.
 
@@ -901,10 +901,10 @@ def match_position_paper(question: str) -> Optional[str]:
 # via substitution — not a duplicated hardcoded string per pillar) ────────
 # Deliberately NOT ANSWER_SYSTEM_BLOCKS (chat.py's normal prompt) — that
 # prompt is built around numbered [Source N]/[Background] citation labels,
-# an <answer>/<reference_mentions> XML wrapper, and a "Rhemata can make
+# an <answer>/<reference_mentions> XML wrapper, and a "New Wine can make
 # mistakes" machine-fallback disclaimer posture that all belong to the
 # cited-retrieval path, not this one. This path answers directly in
-# Rhemata's own voice with no citation and no XML wrapper at all — output
+# New Wine's own voice with no citation and no XML wrapper at all — output
 # is streamed as plain prose.
 #
 # {voice_topic_name} and {heading_list} are the only two pillar-specific
@@ -913,18 +913,18 @@ def match_position_paper(question: str) -> Optional[str]:
 # per-pillar list — so a shared template can never leak one pillar's own
 # section headings into a different pillar's "don't reuse these" rule, and
 # a future pillar gets a correct avoid-list automatically, with no new code.
-_VOICE_SYSTEM_TEMPLATE = """You are Rhemata, speaking on {voice_topic_name} in your own confident, pastorally warm teaching voice. This is settled Rhemata teaching, stated directly as your own conviction — not a survey of outside sources, not a report of what someone else believes.
+_VOICE_SYSTEM_TEMPLATE = """You are New Wine, speaking on {voice_topic_name} in your own confident, pastorally warm teaching voice. This is settled New Wine teaching, stated directly as your own conviction — not a survey of outside sources, not a report of what someone else believes.
 
-You will be given the full substance of what Rhemata teaches on this topic in a second block below. Ground every claim in that material and in the Scripture it references. Do not draw on outside knowledge, other theological traditions, or training data beyond what is given there.
+You will be given the full substance of what New Wine teaches on this topic in a second block below. Ground every claim in that material and in the Scripture it references. Do not draw on outside knowledge, other theological traditions, or training data beyond what is given there.
 
 Hard rules for this answer:
 - Never cite, name, or attribute this teaching to any author, source, title, or document. Never use the phrase "position paper," "this document," "this material," or any variant that reveals a written document lies behind your answer. Speak it as your own settled understanding.
-- Never add a disclaimer such as "Rhemata can make mistakes" or "please let us know if you see any errors" or any similar wording — that belongs to a different, unrelated part of the product and has no place in this answer.
+- Never add a disclaimer such as "New Wine can make mistakes" or "please let us know if you see any errors" or any similar wording — that belongs to a different, unrelated part of the product and has no place in this answer.
 - Do not dump the material's section headers or bullet points verbatim, and do not reproduce its structure mechanically. Read the whole body of material, then write fresh, natural, conversational prose that answers the specific question actually asked, drawing together whichever parts of the material are relevant to it, in your own words and your own structure.
 - This applies even to broad questions like "what is {voice_topic_name}" that could touch most of the material below. A broad question is not an invitation to summarize the whole document section-by-section in its own order. Instead, pick the 2-4 ideas most relevant to what was actually asked and build your own arc through them — you do not need to cover every section of the material in one answer, and you should not walk through it start to finish the way it's laid out below.
 - If you use a heading or a bolded label standing in for one, it must be worded differently from every heading in the material below — never reuse one of the material's own section headings verbatim, whether as a "##" heading, a **bolded** label, or any other formatting. This material's own section headings are: {heading_list}. Do not reuse any of them, in any formatting, even inside a longer answer. When in doubt, prefer no heading at all and let short paragraphs carry the structure instead.
 - You may name and quote specific Bible verses directly and confidently — Scripture is not a source attribution, it is the Word itself, and the material below cites it throughout.
-- Write with the same conviction, warmth, and first-person confidence as Rhemata's normal voice: open with a direct answer to the question (no hedged preamble, no "some believe..." framing), build the biblical case, and land on a clear, settled takeaway.
+- Write with the same conviction, warmth, and first-person confidence as New Wine's normal voice: open with a direct answer to the question (no hedged preamble, no "some believe..." framing), build the biblical case, and land on a clear, settled takeaway.
 - Scale length to the question: a narrow question deserves a focused answer (roughly 150-250 words); a broad "what is..." style question can run longer (roughly 250-400 words). Do not pad a simple answer and do not truncate a broad one.
 - Short paragraphs. A light heading or two is fine if it helps a longer answer breathe, but never copy the material's own headings word-for-word as if transcribing a document."""
 
@@ -1104,7 +1104,7 @@ def generate_position_paper_answer(
         {
             "type": "text",
             "text": (
-                "Here is the full body of what Rhemata teaches on this topic — "
+                "Here is the full body of what New Wine teaches on this topic — "
                 "treat this as your own settled understanding, not as an "
                 "external source to cite:\n\n" + paper_body
             ),
@@ -1151,7 +1151,7 @@ def generate_position_paper_answer(
 # thin retrieval, never a match failure, never an error; chat.py's/
 # producer.py's own callers are responsible for only reaching this when
 # that specific condition holds.
-DISCLAIMER_TEXT = "Rhemata can make mistakes. Please let us know if you see any."
+DISCLAIMER_TEXT = "New Wine can make mistakes. Please let us know if you see any."
 
 
 def render_paper_voice_with_disclaimer(pillar_key, question, messages=None):

@@ -816,7 +816,7 @@ def dry_run_sources_magazine() -> None:
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Rhemata magazine ingestion")
+    parser = argparse.ArgumentParser(description="New Wine magazine ingestion")
     parser.add_argument(
         "--dry-run-sources",
         action="store_true",

@@ -81,7 +81,7 @@ NEAR_MISS_MAX = 40
 NEAR_MISS_NAME_COUNT = 3  # how many nearest adjacent snippets to surface
 
 EMPTY_MESSAGE_TOPIC = (
-    "I couldn't find enough in Rhemata's library to give a grounded answer on "
+    "I couldn't find enough in New Wine's library to give a grounded answer on "
     "that."
 )
 
@@ -91,7 +91,7 @@ def _empty_message_teacher(teacher_name: str) -> str:
     the teacher never taught it. Rule 1: identical wording whether coverage is
     thin or zero -- thinness is never exposed."""
     return (
-        f"I couldn't find enough of {teacher_name}'s teaching in Rhemata's "
+        f"I couldn't find enough of {teacher_name}'s teaching in New Wine's "
         "library to give a grounded answer on that."
     )
 

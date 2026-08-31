@@ -26,7 +26,7 @@ mirroring test_write_accounting_loop_fix.py's helper of the same name) so
 the proof for the "no longer recorded as a write" claims is an actual
 write-state file with zero/nonzero matching records, not just a bare
 function-call assertion. Uses a monkeypatched WRITE_STATE_DIR pointed at a
-fresh tempfile.mkdtemp() -- the real /tmp/rhemata-harness-writes directory
+fresh tempfile.mkdtemp() -- the real /tmp/newwine-harness-writes directory
 is never touched by this suite.
 
 Manual check()/sys.exit(1) pattern, matching this repo's existing ad hoc
@@ -58,7 +58,7 @@ def check(label, condition, detail=""):
 
 
 def fresh_state_dir():
-    d = tempfile.mkdtemp(prefix="rhemata-harness-writes-test-")
+    d = tempfile.mkdtemp(prefix="newwine-harness-writes-test-")
     guard.WRITE_STATE_DIR = d
     return d
 
@@ -125,7 +125,7 @@ def scenario_a():
     # test_write_accounting_loop_fix.py's scenario_a().
     grep_cmd = (
         'grep -rl "ALTER TABLE sources\\|ALTER TABLE source_aliases" '
-        '/Users/alexwhitley/rhemata/migrations/ | sort -V'
+        '/Users/alexwhitley/newwine/migrations/ | sort -V'
     )
 
     check("A1: is_write_class() is False for the literal 2026-07-18 grep command",

@@ -1,16 +1,16 @@
-# Rhemata Discovery Review Extension
+# New Wine Discovery Review Extension
 
 ## Install once
 
 1. Open `chrome://extensions` in Chrome.
 2. Enable **Developer mode**.
 3. Click **Load unpacked**.
-4. Select `~/rhemata/tools/discovery-review-extension/`.
+4. Select `~/newwine/tools/discovery-review-extension/`.
 
 ## Review candidates
 
 ```bash
-cd ~/rhemata
+cd ~/newwine
 python3.12 scripts/review_discovery_candidates.py
 ```
 

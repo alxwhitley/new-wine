@@ -8,7 +8,7 @@ Loads backend/app/.env (SUPABASE_URL/SUPABASE_SERVICE_KEY) before importing
 the app, drives it with an in-process fastapi.testclient.TestClient (never
 real network traffic, never a deployed instance), and independently
 cross-checks the CSV's row counts against a SEPARATE live connection via
-the read-only rhemata_readonly_analysis role
+the read-only newwine_readonly_analysis role
 (scripts/corpus_data_quality_sweep.py's connect_readonly()) -- never the
 same client/credential used by the endpoint itself.
 
@@ -95,7 +95,7 @@ def main() -> int:
         "header=%r" % (header,),
     )
 
-    print("Connecting via rhemata_readonly_analysis for independent cross-check...")
+    print("Connecting via newwine_readonly_analysis for independent cross-check...")
     conn = sweep.connect_readonly()
     cur = conn.cursor()
     cur.execute("SELECT count(*) FROM documents")

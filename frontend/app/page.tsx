@@ -8,21 +8,21 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
-import { Sidebar } from "@/components/rhemata/sidebar";
-import { ChatMessage } from "@/components/rhemata/chat-message";
-import { ChatInput } from "@/components/rhemata/chat-input";
-import { SourcePanel } from "@/components/rhemata/source-panel";
-import { StudyPanel } from "@/components/rhemata/study-panel";
-import { PinDropdown } from "@/components/rhemata/pin-dropdown";
-import { LoadingIndicator } from "@/components/rhemata/loading-indicator";
-import { WeeklyLimitCard } from "@/components/rhemata/weekly-limit-card";
+import { Sidebar } from "@/components/newwine/sidebar";
+import { ChatMessage } from "@/components/newwine/chat-message";
+import { ChatInput } from "@/components/newwine/chat-input";
+import { SourcePanel } from "@/components/newwine/source-panel";
+import { StudyPanel } from "@/components/newwine/study-panel";
+import { PinDropdown } from "@/components/newwine/pin-dropdown";
+import { LoadingIndicator } from "@/components/newwine/loading-indicator";
+import { WeeklyLimitCard } from "@/components/newwine/weekly-limit-card";
 import {
   ConversationLengthNudge,
   CONVERSATION_LENGTH_NUDGE_THRESHOLD_USD,
-} from "@/components/rhemata/conversation-length-nudge";
+} from "@/components/newwine/conversation-length-nudge";
 import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
-import { ConsentGate } from "@/components/rhemata/consent-gate";
+import { ConsentGate } from "@/components/newwine/consent-gate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
 import { referenceKey, referenceFromVerseId, verseId as verseIdOf, type StudyReference, type CuratedTeacher } from "@/lib/study-reference";
@@ -34,7 +34,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 // not the whole StudyReference) while they complete signup, then landed
 // automatically — see handleToggleStudyPin's guest branch and
 // handleSignUpWithPendingPin below.
-const PENDING_PIN_KEY = "rhemata_pending_pin";
+const PENDING_PIN_KEY = "newwine_pending_pin";
 
 const SUGGESTIONS = [
   "What is the baptism of the Holy Spirit?",

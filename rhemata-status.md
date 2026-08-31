@@ -1,4 +1,4 @@
-# Rhemata — Live Status
+# New Wine — Live Status
 
 Point-in-time state only. Overwritten each session, not appended to. Never
 durable truth — the durable records are the code, git history, PLAN.md
@@ -8,17 +8,16 @@ table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-31. **PLAN.md has zero active blockers — B7 is DONE
-and live** (migration 095 applied and independently verified, all four Railway
-services deployed at `6e0bb4a`). **The product is renamed New Wine and
-`newwine.app` is live**; a CORS gap that broke every API call from it was found
-and fixed the same session. Also (attended): guarded then renamed the
+and live** (migration 095 applied and independently verified, four Railway
+services deployed at `6e0bb4a`). **The Rhemata → New Wine rename is EXECUTED in
+the codebase** (branch `rename/newwine-full-sweep`, `a6f1575`, NOT pushed) and
+migration 096 is applied — see the rename block for what deliberately stays on
+the old name. A CORS gap that broke every API call from `newwine.app` was fixed
+the same session. Earlier across 2026-08-30/31: held 15 CLF recordings out
+permanently, ingested 7 of 10 misclassified `unknown` rows (CLF YouTube
+56 → 63), cleaned CLF citable authors 16 → 12, fixed two ingest defects
+(`5c94b3c`, `9224650`), first off-machine `sources/` backup, and guarded the
 production-writing metering script (`scripts/verify_metering_live.py`).
-Earlier across
-2026-08-30/31: ruled the 15 held CLF recordings out permanently, cleared and
-ingested 7 of the 10 misclassified `unknown` rows (CLF YouTube 56 → 63),
-cleaned CLF's citable author names 16 → 12, fixed two ingest defects
-(`5c94b3c`, `9224650`), and gave `sources/` its first off-machine backup. The
-CLF tab is fully triaged with nothing undecided.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -29,12 +28,11 @@ for this file.
 
 **CLF Church — 63 YouTube documents (live, 2026-08-31), 0 duplicate URLs
 corpus-wide.** Plus 15 pre-existing non-YouTube CLF docs, so a bare `count(*)`
-on the source reads 78 — filter on `url ILIKE '%youtu%'` before comparing
-against any YouTube figure. Zero propositions throughout: `owned` sources skip
-the license gate. Every CLF document has a local file. **The CLF tab is fully
-triaged — nothing undecided:** 15 `held_permanent`, 7 ingested and
-source-verified, 3 `held_speaker`, 1 `unavailable`; the ingest gate matches 0
-rows. Ingest/verification traps live in CLAUDE.md's YouTube landmine.
+reads 78 — filter on `url ILIKE '%youtu%'` before comparing YouTube figures.
+Zero propositions throughout: `owned` sources skip the license gate. **Fully
+triaged, nothing undecided:** 15 `held_permanent`, 7 ingested, 3
+`held_speaker`, 1 `unavailable`; ingest gate matches 0 rows. Traps: CLAUDE.md's
+YouTube landmine.
 
 **The 15 held permanently (Alex, 2026-08-30)** are held on content shape and
 pastoral-privacy exposure, **not runtime** — do not reopen as a length
@@ -42,44 +40,60 @@ question, and no trimming step may be built to salvage them. CLAUDE.md +
 `docs/audits/2026-08/clf_held_recordings_review_2026-08-30.md`. **The 3 held on
 speaker grounds:** Jeremy Porras (not CLF), Angel Woodard, Tiffany Cogdell.
 
-**CLF answers name the individual preacher, not the church — names cleaned
-2026-08-31 (7 attended DB writes, 16 → 12 citable, no artifacts left).**
-`producer.py` builds `permitted_names` from `documents.author`, so guest
-speakers are citable authorities alongside Derek Prince. **Still open:** guest
-preachers who spoke once at CLF remain named citable voices without their
-knowledge — ranked failure mode #2, live not closed.
+**CLF answers name the individual preacher, not the church** — names cleaned
+2026-08-31 (16 → 12 citable). `producer.py` builds `permitted_names` from
+`documents.author`. **Still open:** guest preachers who spoke once at CLF are
+named citable voices without their knowledge — ranked failure mode #2, live.
 
-**Search analytics: VERIFIED working in production, end to end (2026-08-31).**
-Phase A found the pipeline had never had an *opportunity* to run rather than
-being broken; two real searches then proved every stage by fresh read-only
-query. Both cron services run on schedule. Smoke rows deliberately **kept**.
-Evidence and five still-unverified residuals:
-`docs/audits/2026-08/analytics_production_smoke_2026-08-31.md`.
+**Search analytics VERIFIED in production end to end, and B7 DONE and live.**
+Analytics can no longer cost a user their answer; both privacy protections
+preserved exactly. A 5s budget bounds the path; a degraded outcome stamps
+`answer_jobs.analytics_outcome` (read via `scripts/analytics_health_report.py`).
+**Not claimed:** the marker has never fired, nothing having degraded since.
+Five analytics residuals unverified. Detail: PLAN.md B7 +
+`docs/audits/2026-08/analytics_{production_smoke,answer_coupling}_2026-08-31.md`.
 
-**B7 — DONE and live (2026-08-31).** Analytics can no longer cost a user
-their answer; both privacy protections are preserved exactly (unknown consent
-never resolves to "consented"; nothing is written under a key `withdraw()`
-could not find). A 5s budget bounds the path, and a degraded outcome stamps
-`answer_jobs.analytics_outcome` — read it with
-`scripts/analytics_health_report.py`. **Not claimed:** the marker has never
-fired in production, because nothing has degraded since it went live. PLAN.md
-B7 and `docs/audits/2026-08/analytics_answer_coupling_2026-08-31.md` hold the
-detail.
+**Rename to New Wine — EXECUTED in the codebase, commit `a6f1575` on branch
+`rename/newwine-full-sweep` (local, NOT pushed, NOT deployed).** Two passes:
+user-facing copy, then identifiers/directories/config. `newwine.app` is live
+(Cloudflare → Vercel), apex and `www`. The collision with the New Wine
+*magazine* source is **accepted** by Alex — do not re-raise.
 
-**Rename to New Wine — decided, barely started.** `newwine.app` is live
-(Cloudflare → Vercel), apex and `www`. Settled #25 corrected: it recorded
-"Manna", never implemented. The collision with the New Wine *magazine* source
-is **accepted** by Alex — do not re-raise. **Renamed so far: nothing** — the
-app still says Rhemata in its title, UI, system prompt, and consent copy. 972
-hits across 219 files, categorized, three traps flagged:
-`docs/audits/2026-08/rename_inventory_2026-08-31.md`.
+**The inventory that scoped this searched "rhemata" only** and so missed two
+further live names, both now renamed and both recorded in Settled #25:
+**UpperWord** branded the marketing homepage from `8795384` (2026-08-13) —
+wordmark, nav, hero, CTA, the first thing any `newwine.app` visitor saw; and
+**Manna** was genuinely built and shipped (`df27425`/`d3f7dbf`/`6e9ff7a`), not
+"never implemented" as Settled #25 claimed. Future sweeps must search every
+legacy name.
+
+Done: component directory, Manna hero files/CSS vars/ARIA id, admin route,
+5 localStorage keys (guest sessions logged out, approved), beta code
+(`rhema` → **`newwine`**, client-side only, visible in the bundle), Chrome
+extension incl. DOM ids, script/CLI/docstring text, governing docs.
+**Migration 096 applied and verified live:** role → `newwine_readonly_analysis`,
+14 RLS policies and 21 grants followed by OID, SCRAM password preserved,
+`.env.readonly-analysis` username updated, connection re-proved read-only
+(77 sources readable, writes refused). POSITIONING.md's "A Note on the Name"
+(Acts 2:13 / Luke 5:37-38) and the `/home` tagline (`οἶνον νέον εἰς ἀσκοὺς
+καινοὺς — Luke 5:38`) both **approved by Alex 2026-08-31**.
+
+**Deliberately still on the old name:** applied migrations (rewriting them
+would make the repo claim something was applied that never was); this file's
+filename; the DB source row below and the `COLLECTION_SOURCE_HINTS` regex +
+`common_religious_vocab.json` provenance that name it;
+`sources/magazine/rhemata_tracker.xlsx`; Railway/Vercel/`rhemata.app`; the
+biblical word "manna" in corpus data; 5 orphaned hero PNGs, zero references.
+
+**Fixed en route, both broken before this work:** `.codex/hooks.json` pointed
+all four hooks at the dead `/Users/alexwhitley/rhemata` — including
+`guard_pretooluse.py`, so the governed-file guard was silently not firing —
+and the admin panel handed out corpus commands rooted at the same dead path.
 
 **CORS fixed 2026-08-31 — Railway config, so nothing in git shows it.**
-`ALLOWED_ORIGINS` was `https://rhemata.app` alone while `newwine.app` was
-already serving: the page loaded and **every browser API call from it failed**.
-Now all three origins (`www` needs its own — distinct origin; `rhemata.app`
-kept for the transition). Verified live, including that a foreign origin still
-400s. Rollback is one `railway variable set`.
+`ALLOWED_ORIGINS` was `rhemata.app` alone while `newwine.app` was already
+serving, so every browser API call from it failed. Now all three origins
+(`www` is a distinct origin and needs its own). Foreign origins still 400.
 
 **No privacy policy and no terms of service exist** (route inventory), flagged
 by Alex 2026-08-31. **Unclassified** — needs his Blocker/Scheduled call. The
@@ -105,18 +119,31 @@ exclusion or an audio-confirmation step.**
 ## Findings surfaced, not yet acted on
 
 - **The 301 missing local files and the 318 caption-duplication set are one
-  decision, not two** — heavy overlap, both Savchuk/Ravenhill/Poonen-dominated.
-  The 301 are pre-`617341c` so a fresh fetch will not match and the backfill
-  correctly refuses; the 318 carry duplication but COMPLETE content. One
-  re-ingest fixes both, costs real money, needs a cost estimate first.
-  `docs/roadmap.md` Parked; deferred by Alex 2026-08-29.
-- **`sources/` must never go in this repo** — the GitHub repo is PUBLIC and
-  `/sources/` is gitignored; committing it would publish the New Wine PDFs,
-  Precept Austin, Derek Prince scrapes, and living ministers' transcripts,
-  inverting the license gate, safe_mode, hidden staging, and the PA lockout in
-  one irreversible move. **Backup gap largely closed 2026-08-30** — copied to
-  iCloud Drive (1,150 files, 496 MB, verified); sync, not versioned, so it
-  guards against machine loss, not bad edits.
+  decision, not two** — heavy overlap, Savchuk/Ravenhill/Poonen-dominated. The
+  301 are pre-`617341c` so a fresh fetch won't match; the 318 carry duplication
+  but COMPLETE content. One re-ingest fixes both, costs real money, needs a
+  cost estimate first. `docs/roadmap.md` Parked; deferred by Alex 2026-08-29.
+- **`sources/` must never go in this repo** — the GitHub remote is PUBLIC and
+  `/sources/` is gitignored; committing it would publish the magazine PDFs,
+  Precept Austin, Derek Prince scrapes and living ministers' transcripts,
+  inverting the license gate, safe_mode, hidden staging and the PA lockout in
+  one irreversible move. **The same rule keeps the 60 untracked
+  `new_wine_issue_02_1973_review_*` dirs out of git** — deliberately untracked,
+  and excluded by hand from commit `a6f1575`. Backup: iCloud Drive copy
+  2026-08-30 (1,150 files, 496 MB, verified); sync, not versioned.
+- **The house source row is still named "Rhemata"** —
+  `bf6d9e28-1cfd-4431-975b-df2ca1b9cfdf`, `owned`/`shown`, slug `rhemata`,
+  plus one `source_aliases` row (`rhemata`/`Rhemata`). It is the publisher
+  container the 8 position papers + "The Gift of Prophecy" were ingested
+  under: 9 documents, 70 chunks, **0 citable** (all `silent_context`,
+  `author=None`), so it never appears in an answer citation — but it is shown
+  and can surface wherever sources are enumerated. Verified 2026-08-31 that no
+  live code reads `sources.slug` or matches the literal name, so a rename is
+  display-only. Renaming needs `sources.name`, `sources.slug`, and both alias
+  columns moved together (Invariant 6: `alias_key` must be lowercase/stripped/
+  collapsed — `new wine`). `COLLECTION_SOURCE_HINTS` and
+  `common_religious_vocab.json` name this row and follow it, not the product.
+  Attended DB write, not done.
 - **11 ingested CLF documents contain an offering appeal**, one an usher
   direction, one a dismissal. Auditing those 11 for named-congregant content
   is open.
@@ -127,12 +154,10 @@ exclusion or an audio-confirmation step.**
   test account from Alex first (Session Routing hard rule).
 - **Production-writing script guards (2026-08-31, Alex approved).**
   `scripts/verify_metering_live.py` (was `test_metering.py`): `--apply`
-  required, import side-effect-free, out of the `test_*.py` namespace. All
-  three stand together. `scripts/test_teacher_card.py` shares the shape but
-  only `.select()`s — **Alex's decision: leave it alone, accepted not
-  pending.**
+  required, import side-effect-free, out of `test_*.py`. `test_teacher_card.py`
+  shares the shape but only `.select()`s — **Alex: leave it, accepted.**
 - Carried, not re-checked: staging source still reads `"Vlad Savchuk (web
-  staging)"`; Bonnke URL suspect; `rhemata_readonly_analysis` still has no
+  staging)"`; Bonnke URL suspect; `newwine_readonly_analysis` still has no
   grant on PII/user tables — **deliberately deferred and untouched; neither
   the smoke nor B7 needed it.**
 
@@ -145,8 +170,9 @@ from zero (neither route exists). Blocked on him: legal entity/jurisdiction, a
 contact address for data and rights-holder requests, and how the already-live
 consent copy folds in. **Needs a Blocker/Scheduled classification first.**
 
-Also open, none started: **rename execution** (scoped, nothing renamed yet);
-**guest-speaker attribution** (live product question the 2026-08-31 cleanup did
+Rename: code done (`a6f1575`, unpushed) — remaining is **push + deploy**, the
+DB source row above, and Railway/Vercel/domain identifiers. Also open, none
+started: **guest-speaker attribution** (live product question the 2026-08-31 cleanup did
 not answer); **the 301 / 318 re-ingest** (needs a named cost estimate); **New
 Wine A2** (needs a fresh live-call ceiling); **quote accuracy/relevance
 repair** (the Scheduled gate on any quote-rail re-enable, `docs/roadmap.md`).

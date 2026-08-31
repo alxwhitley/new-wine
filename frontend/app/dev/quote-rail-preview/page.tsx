@@ -1,7 +1,7 @@
 "use client";
 
 import { notFound } from "next/navigation";
-import { ChatMessage, QuoteRailView } from "@/components/rhemata/chat-message";
+import { ChatMessage, QuoteRailView } from "@/components/newwine/chat-message";
 import type { ResolvedQuote } from "@/lib/api";
 
 /**

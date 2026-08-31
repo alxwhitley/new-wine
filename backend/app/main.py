@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-app = FastAPI(title="Rhemata", description="Theological knowledge base and AI chat tool")
+app = FastAPI(title="New Wine", description="Theological knowledge base and AI chat tool")
 
 allowed_origins = [
     o.strip()
@@ -99,7 +99,7 @@ app.include_router(admin_analytics.router, prefix="/admin/analytics", tags=["adm
 
 @app.get("/")
 async def root():
-    return {"message": "Rhemata API"}
+    return {"message": "New Wine API"}
 
 
 # Liveness/readiness (B6 Task 5.3). Deliberately return only a status word and

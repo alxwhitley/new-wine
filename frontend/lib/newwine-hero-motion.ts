@@ -1,4 +1,4 @@
-export type MannaHeroTransforms = {
+export type NewWineHeroTransforms = {
   backgroundScale: number;
   backgroundY: number;
   copyOpacity: number;
@@ -7,7 +7,7 @@ export type MannaHeroTransforms = {
   productY: number;
 };
 
-const STATIC_TRANSFORMS: MannaHeroTransforms = {
+const STATIC_TRANSFORMS: NewWineHeroTransforms = {
   backgroundScale: 1,
   backgroundY: 0,
   copyOpacity: 1,
@@ -24,10 +24,10 @@ function lerp(start: number, end: number, progress: number): number {
   return Number((start + (end - start) * progress).toFixed(4));
 }
 
-export function getMannaHeroTransforms(
+export function getNewWineHeroTransforms(
   progress: number,
   reducedMotion = false,
-): MannaHeroTransforms {
+): NewWineHeroTransforms {
   if (reducedMotion) return STATIC_TRANSFORMS;
 
   const value = clampHeroProgress(progress);

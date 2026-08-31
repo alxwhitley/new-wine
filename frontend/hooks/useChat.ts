@@ -33,7 +33,7 @@ export interface WeeklyLimitDetail {
 }
 
 function getAnonId(): string {
-  const key = "rhemata_anon_id";
+  const key = "newwine_anon_id";
   let id = localStorage.getItem(key);
   if (!id) {
     id = crypto.randomUUID();

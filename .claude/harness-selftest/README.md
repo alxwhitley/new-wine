@@ -6,7 +6,7 @@ DB, the corpus, or any real ingest/migration — these are text fixtures
 representing what a bad executor report would look like, used to prove the
 review layer actually rejects bad work instead of rubber-stamping it.
 
-This suite does ZERO real Rhemata work. It is part of the harness-build
+This suite does ZERO real New Wine work. It is part of the harness-build
 session (2026-07-10), gated separately from live work per that session's
 scope rules.
 
@@ -97,7 +97,7 @@ markdown fixture. This is a standalone Python script (this repo's ad hoc
 installed) that drives the real, unmodified `guard_pretooluse.py` and
 `deterministic_gate.py` functions across simulated multi-turn retries,
 isolated via a monkeypatched `WRITE_STATE_DIR` (`tempfile.mkdtemp()`, never
-the real `/tmp/rhemata-harness-writes`).
+the real `/tmp/newwine-harness-writes`).
 
 Regression test for the 2026-07-18 executor loop (rhemata-status.md's "Known
 Harness Bugs"): a benign `grep` for a bare SQL-verb-shaped pattern against a

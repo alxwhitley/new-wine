@@ -45,7 +45,7 @@ def _minimal_valid_packet():
         "lane": "kimi_implementation",
         "assigned_worker": {"worker_id": "kimi-1", "provider": "opencode", "model": "kimi-k2.7-code"},
         "starting_revision": "a" * 40,
-        "worktree": {"path": "/Users/alexwhitley/.codex/worktrees/75cf/rhemata", "branch": "o2-test"},
+        "worktree": {"path": "/Users/alexwhitley/.codex/worktrees/75cf/newwine", "branch": "o2-test"},
         "writable_paths": ["scripts/harness_contracts/v1/packet.py"],
         "forbidden_surfaces": [],
         "required_context": [{"path": "PLAN.md", "sha256": "b" * 64}],

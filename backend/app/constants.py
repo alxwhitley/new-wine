@@ -1,4 +1,4 @@
-"""Shared constants for the Rhemata backend."""
+"""Shared constants for the New Wine backend."""
 
 import re
 from typing import Optional

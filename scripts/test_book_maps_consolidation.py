@@ -69,7 +69,7 @@ def _load_module(name, path):
 
 
 def _load_constants():
-    return _load_module("rhemata_constants", REPO_ROOT / "backend" / "app" / "constants.py")
+    return _load_module("newwine_constants", REPO_ROOT / "backend" / "app" / "constants.py")
 
 
 def _load_generator():

@@ -309,7 +309,7 @@ def main() -> None:
     # test run, so it never touches the real closeness_review/ directory
     # (and so a stale prior run's file can't contaminate the assertions).
     scratch_dir = Path(
-        "/private/tmp/claude-501/-Users-alexwhitley-rhemata/"
+        "/private/tmp/claude-501/-Users-alexwhitley-newwine/"
         "089de4dc-bced-40ff-98c1-e156d293aed9/scratchpad"
     )
     scratch_dir.mkdir(parents=True, exist_ok=True)

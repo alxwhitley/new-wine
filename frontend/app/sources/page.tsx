@@ -11,40 +11,40 @@ import {
 } from "@/components/marketing/article";
 
 export const metadata = {
-  title: "How Rhemata Handles Sources",
-  description: "Transparency about where Rhemata's content comes from, how it's used, and how we protect the people who wrote it.",
+  title: "How New Wine Handles Sources",
+  description: "Transparency about where New Wine's content comes from, how it's used, and how we protect the people who wrote it.",
 };
 
 export default function SourcesPage() {
   return (
     <ArticlePage>
-      <ArticleH1>How Rhemata Handles Sources</ArticleH1>
+      <ArticleH1>How New Wine Handles Sources</ArticleH1>
       <ArticleDek>
         Transparency about where our content comes from, how it&rsquo;s used, and how we protect the people who wrote it.
       </ArticleDek>
       <ArticleDivider />
 
-      <ArticleH2>Rhemata is not trained on this content</ArticleH2>
+      <ArticleH2>New Wine is not trained on this content</ArticleH2>
       <ArticleP>
-        Rhemata does not train an AI model on the books, sermons, and commentaries in its library. There is no model that has absorbed these works and learned to imitate them.
+        New Wine does not train an AI model on the books, sermons, and commentaries in its library. There is no model that has absorbed these works and learned to imitate them.
       </ArticleP>
       <ArticleP>
-        Instead, Rhemata is a{" "}<strong className="font-semibold text-card-foreground">retrieval and citation system</strong>.{" "}When you ask a question, Rhemata searches its indexed library for relevant passages, retrieves them, and presents an answer built on those passages — with every claim traced back to a named author and source. The original works remain intact, attributed, and pointed back to. Nothing is absorbed, blended, or anonymized into a model.
+        Instead, New Wine is a{" "}<strong className="font-semibold text-card-foreground">retrieval and citation system</strong>.{" "}When you ask a question, New Wine searches its indexed library for relevant passages, retrieves them, and presents an answer built on those passages — with every claim traced back to a named author and source. The original works remain intact, attributed, and pointed back to. Nothing is absorbed, blended, or anonymized into a model.
       </ArticleP>
       <ArticleP>
-        This distinction is the foundation of everything we do. AI tools that flatten a thousand voices into one synthetic answer erase the people who did the work. Rhemata exists to do the opposite: put named voices in front of you, with receipts.
+        This distinction is the foundation of everything we do. AI tools that flatten a thousand voices into one synthetic answer erase the people who did the work. New Wine exists to do the opposite: put named voices in front of you, with receipts.
       </ArticleP>
 
       <ArticleH2>Every claim is attributed, never invented</ArticleH2>
       <ArticleP>
-        Rhemata does not put words in a teacher&rsquo;s mouth. Every claim in an answer is a{" "}<strong className="font-semibold text-card-foreground">paraphrase</strong>{" "}of what a named source actually teaches — labeled as summary, never presented as the teacher&rsquo;s own words — and it is always attributed by name, with a link back to where the real teaching lives. No AI-invented citations. No anonymous synthesis presented as someone&rsquo;s words.
+        New Wine does not put words in a teacher&rsquo;s mouth. Every claim in an answer is a{" "}<strong className="font-semibold text-card-foreground">paraphrase</strong>{" "}of what a named source actually teaches — labeled as summary, never presented as the teacher&rsquo;s own words — and it is always attributed by name, with a link back to where the real teaching lives. No AI-invented citations. No anonymous synthesis presented as someone&rsquo;s words.
       </ArticleP>
       <ArticleP>
-        Verified, character-for-character verbatim quoting — software-confirmed against the source before a quote can ever be served — is on our roadmap. It is not live yet. Until it ships, Rhemata paraphrases and cites; it does not quote freely.
+        Verified, character-for-character verbatim quoting — software-confirmed against the source before a quote can ever be served — is on our roadmap. It is not live yet. Until it ships, New Wine paraphrases and cites; it does not quote freely.
       </ArticleP>
 
       <ArticleH2>How content enters the library</ArticleH2>
-      <ArticleP>Every source in Rhemata passes through the same pipeline:</ArticleP>
+      <ArticleP>Every source in New Wine passes through the same pipeline:</ArticleP>
       <ArticleOl>
         <li>
           <strong className="font-semibold text-card-foreground">Classification.</strong>{" "}Before anything is served, each source is assigned a rights status: public domain, owned, licensed, or unverified.
@@ -63,7 +63,7 @@ export default function SourcesPage() {
 
       <ArticleH2>What we prioritize</ArticleH2>
       <ArticleP>
-        The heart of Rhemata&rsquo;s library is{" "}<strong className="font-semibold text-card-foreground">public domain literature</strong>{" "}— the writers of past centuries whose works belong to everyone: R.A. Torrey, Andrew Murray, Charles Finney, the voices of the early Pentecostal outpouring, and many more. These works are freely quotable, and Rhemata&rsquo;s mission is to put them back in front of a generation that has never read them.
+        The heart of New Wine&rsquo;s library is{" "}<strong className="font-semibold text-card-foreground">public domain literature</strong>{" "}— the writers of past centuries whose works belong to everyone: R.A. Torrey, Andrew Murray, Charles Finney, the voices of the early Pentecostal outpouring, and many more. These works are freely quotable, and New Wine&rsquo;s mission is to put them back in front of a generation that has never read them.
       </ArticleP>
       <ArticleP>
         For contemporary voices, we pursue{" "}<strong className="font-semibold text-card-foreground">direct permission from authors, estates, and ministries</strong>.{" "}Where content carries open licenses (such as Creative Commons), we honor the license terms, including attribution requirements.
@@ -74,7 +74,7 @@ export default function SourcesPage() {
 
       <ArticleH2>For authors and rights holders</ArticleH2>
       <ArticleP>
-        If you are an author, publisher, or rights holder and believe your content appears in Rhemata improperly — or if you&rsquo;d like to discuss how your work is represented — contact us directly:
+        If you are an author, publisher, or rights holder and believe your content appears in New Wine improperly — or if you&rsquo;d like to discuss how your work is represented — contact us directly:
       </ArticleP>
       <p className="font-serif font-semibold text-card-foreground mb-4">[contact email]</p>
       <ArticleP>
@@ -86,10 +86,10 @@ export default function SourcesPage() {
 
       <ArticleH2>Why we built it this way</ArticleH2>
       <ArticleP>
-        Rhemata&rsquo;s audience carries a healthy suspicion of AI — and we share it. An AI that invents quotes, launders sources, or speaks as an anonymous oracle is not a tool for serious theological study. Every safeguard on this page exists for one reason: so that when Rhemata shows you what Torrey or Murray said, you can trust that they actually said it — and go read them yourself.
+        New Wine&rsquo;s audience carries a healthy suspicion of AI — and we share it. An AI that invents quotes, launders sources, or speaks as an anonymous oracle is not a tool for serious theological study. Every safeguard on this page exists for one reason: so that when New Wine shows you what Torrey or Murray said, you can trust that they actually said it — and go read them yourself.
       </ArticleP>
       <ArticleP>
-        Rhemata is not a substitute for the sources. It is a doorway to them.
+        New Wine is not a substitute for the sources. It is a doorway to them.
       </ArticleP>
     </ArticlePage>
   );

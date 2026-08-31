@@ -1,15 +1,15 @@
 ---
 name: session-close
 description: >
-  Close out a Rhemata session by updating the governing status/roadmap files
+  Close out a New Wine session by updating the governing status/roadmap files
   under the Session close contract. Trigger when Alex says "update the files
   to close the session", "close out the session", "session close", or
-  "wrap this session" in the rhemata repo (not the ~/websites/ vault wrap).
+  "wrap this session" in the newwine repo (not the ~/websites/ vault wrap).
 ---
 
-# Session close (Rhemata)
+# Session close (New Wine)
 
-**When to use:** end of a rhemata work session, when updating durable state.
+**When to use:** end of a newwine work session, when updating durable state.
 **Not for:** `~/websites/` client projects (use chat-wrap / vault wrap there).
 
 ## Contract (exact)
@@ -38,7 +38,7 @@ description: >
 
 4. **No `log.md`.** One was created 2026-08-04 out of habit from the
    `~/websites/` client-project session-contract pattern (which pairs
-   `log.md` + `plan.md`) — that pattern doesn't apply here. Rhemata's own
+   `log.md` + `plan.md`) — that pattern doesn't apply here. New Wine's own
    contract is `rhemata-status.md` (state) + `PLAN.md` (roadmap); do not
    create or add to `log.md` going forward.
 

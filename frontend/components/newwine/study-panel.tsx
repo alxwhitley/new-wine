@@ -12,14 +12,14 @@ import {
   referenceLabel,
   referenceKey,
 } from "@/lib/study-reference";
-import { AccordionRow } from "@/components/rhemata/accordion-row";
-import { CommentaryAccordionRow } from "@/components/rhemata/commentary-accordion-row";
-import { PastorsNotesSection } from "@/components/rhemata/pastors-notes";
-import { InterlinearBlocks } from "@/components/rhemata/interlinear-blocks";
+import { AccordionRow } from "@/components/newwine/accordion-row";
+import { CommentaryAccordionRow } from "@/components/newwine/commentary-accordion-row";
+import { PastorsNotesSection } from "@/components/newwine/pastors-notes";
+import { InterlinearBlocks } from "@/components/newwine/interlinear-blocks";
 import { useInterlinear } from "@/hooks/useInterlinear";
-import { WordDefinitionCard, type WordDefinition } from "@/components/rhemata/word-definition-card";
+import { WordDefinitionCard, type WordDefinition } from "@/components/newwine/word-definition-card";
 import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
-import { TeacherCard } from "@/components/rhemata/teacher-card";
+import { TeacherCard } from "@/components/newwine/teacher-card";
 
 // ── Verse text fetch ─────────────────────────────────────────────────────────
 // Reuses the same `verses` table + verse_id shape already proven in
@@ -635,6 +635,6 @@ export function StudyPanel({ isOpen, onClose, reference, pins, onTogglePin, acce
 }
 
 // Edge-tab re-entry removed (SP2 Phase 5) — replaced by the top-bar pin
-// dropdown (components/rhemata/pin-dropdown.tsx), which is reachable
+// dropdown (components/newwine/pin-dropdown.tsx), which is reachable
 // regardless of panel state and lets you pick a specific pin rather than
 // only reopening "the last one."

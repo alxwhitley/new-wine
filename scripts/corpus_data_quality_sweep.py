@@ -2,7 +2,7 @@
 """
 corpus_data_quality_sweep.py — overnight, READ-ONLY corpus data-quality sweep.
 
-Connects ONLY via backend/app/.env.readonly-analysis (rhemata_readonly_analysis).
+Connects ONLY via backend/app/.env.readonly-analysis (newwine_readonly_analysis).
 Never loads backend/app/.env. Never INSERT/UPDATE/DELETE/DDL.
 
 Flags five classes of document-level quality problems:
@@ -51,7 +51,7 @@ PROGRESS_PATH = REVIEW_DIR / "progress.json"
 CALIBRATION_MD = REVIEW_DIR / "calibration.md"
 RUN_LOG = REVIEW_DIR / "run.log"
 
-ROLE_NAME = "rhemata_readonly_analysis"
+ROLE_NAME = "newwine_readonly_analysis"
 
 # Progress heartbeat every N documents during the chunk-scan phase.
 PROGRESS_EVERY = 25
@@ -238,7 +238,7 @@ def rewrite_findings_md(findings: List[Dict[str, Any]], meta: Dict[str, Any]) ->
     A = lines.append
     A("# Corpus Data-Quality Sweep — Findings")
     A("")
-    A("Read-only diagnostic. Connection: `rhemata_readonly_analysis` only.")
+    A("Read-only diagnostic. Connection: `newwine_readonly_analysis` only.")
     A("No database writes. No pipeline edits. Findings only — no fixes proposed.")
     A("")
     A("- Generated / last rewritten: **%s**" % _utc_now())
@@ -333,9 +333,9 @@ def connect_readonly():
         raise RuntimeError("READONLY_ANALYSIS_DB_URL not found in %s" % READONLY_ENV_PATH)
 
     # Refuse to use the main app URL even if someone swapped the file.
-    if "rhemata_readonly_analysis" not in url:
+    if ROLE_NAME not in url:
         raise RuntimeError(
-            "Connection string does not name rhemata_readonly_analysis — refusing to connect."
+            "Connection string does not name %s — refusing to connect." % ROLE_NAME
         )
 
     p = urlparse(url)
@@ -1161,7 +1161,7 @@ def write_calibration_md(cal: Dict[str, Any], meta: Dict[str, Any]) -> None:
     A("check of whether the general sweep logic surfaced each known case.")
     A("")
     A("- Written: **%s**" % _utc_now())
-    A("- Connection: `rhemata_readonly_analysis` (read-only)")
+    A("- Connection: `newwine_readonly_analysis` (read-only)")
     A("- Documents available to detectors: **%s**" % meta.get("documents_examined", "?"))
     A("")
     A("| Case | Result | Detail |")
@@ -1407,7 +1407,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         log("Findings file: %s" % FINDINGS_MD)
         log("JSONL: %s" % FINDINGS_JSONL)
         log("Calibration: %s" % CALIBRATION_MD)
-        log("Connection used throughout: rhemata_readonly_analysis (read-only)")
+        log("Connection used throughout: newwine_readonly_analysis (read-only)")
         log("Nothing outside the review directory was written; no DB writes.")
         log("Elapsed: %.1fs" % (time.time() - t0))
         return 0

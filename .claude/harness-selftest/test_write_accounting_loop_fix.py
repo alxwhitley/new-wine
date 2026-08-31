@@ -18,7 +18,7 @@ This suite drives the REAL, unmodified `guard_pretooluse.py` and
 literal grep command recorded in the real surviving 2026-07-18 write-state
 log (read-only reference, never modified), through a monkeypatched
 WRITE_STATE_DIR pointed at a fresh tempfile.mkdtemp() -- the real
-/tmp/rhemata-harness-writes directory is never touched by this suite.
+/tmp/newwine-harness-writes directory is never touched by this suite.
 
 2026-07-31 update (see .claude/harness-selftest/test_sql_verb_narrowing.py
 and guard_pretooluse.py's own 2026-07-31 module-docstring entry): the
@@ -64,7 +64,7 @@ def check(label, condition, detail=""):
 
 
 def fresh_state_dir():
-    d = tempfile.mkdtemp(prefix="rhemata-harness-writes-test-")
+    d = tempfile.mkdtemp(prefix="newwine-harness-writes-test-")
     gate.WRITE_STATE_DIR = d
     guard.WRITE_STATE_DIR = d
     return d
@@ -121,11 +121,11 @@ def scenario_a():
     agent_id = "executor-A"
 
     # The literal command from the real surviving 2026-07-18 write-state
-    # log (/tmp/rhemata-harness-writes/f117e483-....jsonl, read-only
+    # log (/tmp/newwine-harness-writes/f117e483-....jsonl, read-only
     # reference) -- directory-only grep target, bare SQL-verb match.
     grep_cmd = (
         'grep -rl "ALTER TABLE sources\\|ALTER TABLE source_aliases" '
-        '/Users/alexwhitley/rhemata/migrations/ | sort -V'
+        '/Users/alexwhitley/newwine/migrations/ | sort -V'
     )
     rm_cmd = "rm scratch_diagnostic.txt"
 

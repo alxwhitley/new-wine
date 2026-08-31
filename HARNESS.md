@@ -1,4 +1,4 @@
-# Rhemata — Harness / Agentic-Loop Gate Design
+# New Wine — Harness / Agentic-Loop Gate Design
 
 Load for harness/hook sessions only. Not always-loaded.
 

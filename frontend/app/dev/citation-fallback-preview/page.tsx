@@ -1,7 +1,7 @@
 "use client";
 
 import { notFound } from "next/navigation";
-import { ChatMessage } from "@/components/rhemata/chat-message";
+import { ChatMessage } from "@/components/newwine/chat-message";
 import type { Citation } from "@/lib/api";
 
 /**

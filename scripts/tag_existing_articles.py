@@ -3,7 +3,7 @@
 Tag Existing Articles
 
 Backfills topic_tags for all magazine articles.
-Uses Groq Llama 3.3 70B to assign 5-8 tags from the Rhemata taxonomy.
+Uses Groq Llama 3.3 70B to assign 5-8 tags from the New Wine taxonomy.
 Validates tags against the taxonomy and retries if too few valid tags.
 """
 

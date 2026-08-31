@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rhemata Precept Austin Word Study Ingestion Script
+New Wine Precept Austin Word Study Ingestion Script
 
 Reads extracted word study .txt files from sources/precept_austin/raw/,
 chunks with tiktoken, embeds with OpenAI, and inserts into Supabase.
@@ -252,7 +252,7 @@ def _is_chunk_index_collision(exc):
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Rhemata Precept Austin Word Study Ingestion")
+    parser = argparse.ArgumentParser(description="New Wine Precept Austin Word Study Ingestion")
     parser.add_argument("--dry-run", action="store_true",
                          help="Preview parsed metadata and chunk content — no DB reads or writes")
     parser.add_argument("--source-dir", type=str, default=None,
@@ -263,7 +263,7 @@ def main():
     # rather than erroring on an "unrecognized" argument.
     args, _unknown = parser.parse_known_args()
 
-    print("Rhemata Precept Austin Word Study Ingestion ({})".format(_lang))
+    print("New Wine Precept Austin Word Study Ingestion ({})".format(_lang))
     print("=" * 60)
 
     index_lookup = load_index()

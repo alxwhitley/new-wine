@@ -1,4 +1,4 @@
-# Rhemata — Private-Beta Blocker Plan
+# New Wine — Private-Beta Blocker Plan
 
 > This is the only active work queue. Later work lives in `docs/roadmap.md`;
 > completed and superseded reasoning lives in `docs/plan-archive.md`.

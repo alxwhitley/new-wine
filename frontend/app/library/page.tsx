@@ -11,7 +11,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useConversations } from "@/hooks/useConversations";
-import { Sidebar } from "@/components/rhemata/sidebar";
+import { Sidebar } from "@/components/newwine/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -218,11 +218,11 @@ export default function LibraryPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedAuthors, setSelectedAuthors] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
-    try { return JSON.parse(localStorage.getItem("rhemata:library:authors") ?? "[]"); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem("newwine:library:authors") ?? "[]"); } catch { return []; }
   });
   const [eraFilter, setEraFilter] = useState<string>(() => {
     if (typeof window === "undefined") return "";
-    try { return localStorage.getItem("rhemata:library:era") ?? ""; } catch { return ""; }
+    try { return localStorage.getItem("newwine:library:era") ?? ""; } catch { return ""; }
   });
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -303,10 +303,10 @@ export default function LibraryPage() {
 
   // ── Persist filters across sessions ───────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem("rhemata:library:authors", JSON.stringify(selectedAuthors));
+    localStorage.setItem("newwine:library:authors", JSON.stringify(selectedAuthors));
   }, [selectedAuthors]);
   useEffect(() => {
-    localStorage.setItem("rhemata:library:era", eraFilter);
+    localStorage.setItem("newwine:library:era", eraFilter);
   }, [eraFilter]);
 
   // ── Focus effects ──────────────────────────────────────────────────────────
@@ -565,7 +565,7 @@ export default function LibraryPage() {
               <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
                 <Menu className="h-5 w-5" />
               </button>
-              <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
+              <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">New Wine</h1>
               <div className="md:hidden min-w-[44px]" />
             </div>
             <div className="flex-1 overflow-y-auto">
@@ -658,7 +658,7 @@ export default function LibraryPage() {
             <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
+            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">New Wine</h1>
             <div className="md:hidden min-w-[44px]" />
           </div>
 

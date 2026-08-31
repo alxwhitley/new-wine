@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { WordToken } from "@/components/rhemata/interlinear-blocks";
+import type { WordToken } from "@/components/newwine/interlinear-blocks";
 
 // SP2 Phase 6: extracted verbatim out of app/study/page.tsx's inline fetch
 // effect — see PLAN.md Task 20. Only the tokens/loading/isNT fetch logic

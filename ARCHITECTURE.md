@@ -1,11 +1,11 @@
-# Rhemata — Architecture Reference
+# New Wine — Architecture Reference
 
 Load on demand. Not always-loaded. See `CLAUDE.md` for invariants.
 
 **Eviction rule:** if you can learn it by reading the repo in under 2 minutes,
 delete it rather than maintain a copy. This file decays silently.
 
-Repo root: `/Users/alexwhitley/rhemata`
+Repo root: `/Users/alexwhitley/newwine`
 
 ---
 
@@ -223,7 +223,7 @@ placeholder into its ingested content.
 **Corrected 2026-08-06 (CLAUDE.md Settled decisions #8/#16/#17) — a position
 paper is constraining silent context, never a served answer.** Until this
 date, a match bypassed retrieval entirely and served the paper's own
-pre-written body directly, uncited, in Rhemata's own voice — the SHIPPED
+pre-written body directly, uncited, in New Wine's own voice — the SHIPPED
 mechanism CLAUDE.md's Settled decision #8 flagged, from 2026-08-01, as
 directly contradicting decision #8 itself. That conflict is now resolved in
 decision #8's favor, not left standing:
@@ -371,9 +371,9 @@ compliant writer.
 # Backend deploys to Railway on push to main. There is no local backend.
 git add -A && git commit -m '...' && git push
 
-cd /Users/alexwhitley/rhemata/frontend && npm run dev   # localhost:3000
+cd /Users/alexwhitley/newwine/frontend && npm run dev   # localhost:3000
 
-cd /Users/alexwhitley/rhemata
+cd /Users/alexwhitley/newwine
 python3 scripts/ingest.py                               # standalone
 
 python3 scripts/extract_magazine.py                     # magazine: extract

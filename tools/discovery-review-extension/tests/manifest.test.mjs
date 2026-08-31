@@ -105,7 +105,7 @@ async function runContent({
   }
   if (hostCollision) {
     const collision = new FakeElement("main", environment);
-    collision.id = "rhemata-discovery-review-host";
+    collision.id = "newwine-discovery-review-host";
     collision.textContent = "Host page content";
     documentElement.append(collision);
   }
@@ -144,11 +144,11 @@ test("tracked localhost candidate gets Retry while controller keeps fallback UI"
     response: serverError,
   });
   const candidate = candidateRun.document;
-  const host = candidate.getElementById("rhemata-discovery-review-host");
+  const host = candidate.getElementById("newwine-discovery-review-host");
   assert.ok(host);
   assert.match(
     visibleText(candidateRun.environment.shadowRoots[0]),
-    /Start the Rhemata review server, then retry/,
+    /Start the New Wine review server, then retry/,
   );
   assert.match(visibleText(candidateRun.environment.shadowRoots[0]), /Retry/);
 
@@ -158,7 +158,7 @@ test("tracked localhost candidate gets Retry while controller keeps fallback UI"
     response: serverError,
   });
   const controller = controllerRun.document;
-  assert.equal(controller.getElementById("rhemata-discovery-review-host"), null);
+  assert.equal(controller.getElementById("newwine-discovery-review-host"), null);
 });
 
 test("runtime transport failure cannot add DOM before tracked status is known", async () => {
@@ -166,7 +166,7 @@ test("runtime transport failure cannot add DOM before tracked status is known", 
     origin: "https://inactive.example",
     runtimeError: {message: "extension context invalidated"},
   });
-  assert.equal(document.getElementById("rhemata-discovery-review-host"), null);
+  assert.equal(document.getElementById("newwine-discovery-review-host"), null);
 });
 
 test("inactive response does not remove a host-page element with the reserved ID", async () => {
@@ -176,7 +176,7 @@ test("inactive response does not remove a host-page element with the reserved ID
     response: {active: false},
   });
   assert.equal(
-    document.getElementById("rhemata-discovery-review-host").textContent,
+    document.getElementById("newwine-discovery-review-host").textContent,
     "Host page content",
   );
 });
@@ -194,7 +194,7 @@ test("toolbar uses a closed shadow root inaccessible to host-page JavaScript", a
       },
     },
   });
-  const host = run.document.getElementById("rhemata-discovery-review-host");
+  const host = run.document.getElementById("newwine-discovery-review-host");
   assert.ok(host);
   assert.equal(host.shadowRoot, null);
   assert.deepEqual(run.environment.shadowModes, ["closed"]);
@@ -218,7 +218,7 @@ test("synthetic candidate-page clicks cannot submit a decision", async () => {
   });
   const approve = findById(
     run.environment.shadowRoots[0],
-    "rhemata-review-approve",
+    "newwine-review-approve",
   );
   await approve.listeners.click({isTrusted: false});
   await new Promise((resolve) => setImmediate(resolve));
@@ -244,12 +244,12 @@ test("an active-false operation removes the old toolbar", async () => {
   });
   const approve = findById(
     run.environment.shadowRoots[0],
-    "rhemata-review-approve",
+    "newwine-review-approve",
   );
   await approve.listeners.click({isTrusted: true});
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(
-    run.document.getElementById("rhemata-discovery-review-host"),
+    run.document.getElementById("newwine-discovery-review-host"),
     null,
   );
   assert.equal(run.location.replacedWith, null);
@@ -271,7 +271,7 @@ test("worker deactivation message promptly removes the old toolbar", async () =>
   assert.equal(run.environment.runtimeListeners.length, 1);
   run.environment.runtimeListeners[0]({type: "DEACTIVATE_REVIEW"});
   assert.equal(
-    run.document.getElementById("rhemata-discovery-review-host"),
+    run.document.getElementById("newwine-discovery-review-host"),
     null,
   );
 });

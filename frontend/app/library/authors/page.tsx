@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
-import { Sidebar } from "@/components/rhemata/sidebar";
+import { Sidebar } from "@/components/newwine/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +64,7 @@ export default function AuthorsPage() {
             <button aria-label="Open sidebar" onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
+            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">New Wine</h1>
             <div className="md:hidden min-w-[44px]" />
           </div>
 

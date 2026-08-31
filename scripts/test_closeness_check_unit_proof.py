@@ -235,7 +235,7 @@ def main() -> None:
 
     subset = [by_phrase[STOCK_PHRASE], by_phrase[RAVENHILL_STRESS_PHRASE]]
     scratch_dir = Path(
-        "/private/tmp/claude-501/-Users-alexwhitley-rhemata/"
+        "/private/tmp/claude-501/-Users-alexwhitley-newwine/"
         "089de4dc-bced-40ff-98c1-e156d293aed9/scratchpad"
     )
     scratch_dir.mkdir(parents=True, exist_ok=True)

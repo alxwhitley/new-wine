@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-shared_ingest.py — shared document-writer chokepoint for Rhemata ingest scripts.
+shared_ingest.py — shared document-writer chokepoint for New Wine ingest scripts.
 
 Owns the common resolve -> insert -> chunk -> embed -> propositions flow that
 every document-writing ingest script needs. Converted so far: ingest.py

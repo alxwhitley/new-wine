@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rhemata Document Ingestion Script
+New Wine Document Ingestion Script
 Extracts text from PDFs, DOCX, and DOC files, auto-detects metadata via Claude,
 chunks by paragraph, embeds with OpenAI, writes to Supabase.
 """
@@ -479,7 +479,7 @@ def ingest_file(file_path: Path, dry_run: bool = False, is_copyrighted: bool = F
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Rhemata document ingestion")
+    parser = argparse.ArgumentParser(description="New Wine document ingestion")
     parser.add_argument("--dry-run", action="store_true", help="Preview chunk content without writing to Supabase")
     parser.add_argument("--dry-run-sources", action="store_true",
                         help="Resolve attribution strings and print source_id table — no DB writes, no chunking")

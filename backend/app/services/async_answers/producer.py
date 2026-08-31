@@ -803,7 +803,7 @@ def _produce(
                 if paper_body:
                     topic_context_parts.append(
                         "[House Position] (citation_mode=silent_context) This is "
-                        "Rhemata's own settled house position on %s. It bounds what "
+                        "New Wine's own settled house position on %s. It bounds what "
                         "this answer may claim — do not state anything that "
                         "contradicts it. Never cite, name, quote, or copy its exact "
                         "wording into your answer.\n\n%s" % (pillar["voice_topic_name"], paper_body)

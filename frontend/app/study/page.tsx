@@ -10,17 +10,17 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
-import { Sidebar } from "@/components/rhemata/sidebar";
-import type { SavedWord } from "@/components/rhemata/sidebar";
+import { Sidebar } from "@/components/newwine/sidebar";
+import type { SavedWord } from "@/components/newwine/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
 import BetaGate from "@/components/auth/BetaGate";
 import { supabase } from "@/lib/supabase";
 import { getAdjacentVerseId } from "@/lib/verse-counts";
 import { useUserRole } from "@/hooks/useUserRole";
-import { PastorsNotesSection } from "@/components/rhemata/pastors-notes";
-import { InterlinearBlocks, type WordToken } from "@/components/rhemata/interlinear-blocks";
+import { PastorsNotesSection } from "@/components/newwine/pastors-notes";
+import { InterlinearBlocks, type WordToken } from "@/components/newwine/interlinear-blocks";
 import { useInterlinear } from "@/hooks/useInterlinear";
-import type { WordDefinition } from "@/components/rhemata/word-definition-card";
+import type { WordDefinition } from "@/components/newwine/word-definition-card";
 import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
 import { useCommentarySearch, type CommentaryResult } from "@/hooks/useCommentarySearch";
 import { formatCommentaryContent } from "@/lib/format-commentary-content";
@@ -1089,7 +1089,7 @@ export default function StudyPage() {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">Rhemata</h1>
+            <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">New Wine</h1>
             <button
               onClick={() => setSidebarOpen(true)}
               aria-label="Saved words"

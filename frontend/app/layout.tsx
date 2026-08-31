@@ -5,7 +5,7 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Rhemata — Theological Research Assistant",
+  title: "New Wine — Theological Research Assistant",
   description: "AI-powered theological research tool for charismatic Christians",
 };
 

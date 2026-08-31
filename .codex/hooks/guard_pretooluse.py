@@ -222,7 +222,7 @@ def _is_read_only_text_pipeline(command: str) -> bool:
 # state, consumed once at the same subagent's SubagentStop, not durable
 # project data. Avoids needing a .gitignore entry or any risk of ever being
 # committed. Keyed by session_id so concurrent/sequential runs don't collide.
-WRITE_STATE_DIR = "/tmp/rhemata-harness-writes"
+WRITE_STATE_DIR = "/tmp/newwine-harness-writes"
 
 # Session #5.5 Phase 3 piece 2b-i: script-invocation detection. NEW,
 # first-pass, note-taking only -- does NOT imply a write happened, only that

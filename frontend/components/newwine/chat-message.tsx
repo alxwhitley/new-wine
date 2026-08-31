@@ -231,7 +231,7 @@ function FeedbackModal({
         <DialogHeader>
           <DialogTitle>What went wrong?</DialogTitle>
           <DialogDescription>
-          Your feedback helps improve Rhemata
+          Your feedback helps improve New Wine
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 pb-4">
@@ -288,7 +288,7 @@ function FeedbackButtons({
       if (messageId) body.message_id = messageId;
       if (comment) body.comment = comment;
       if (!accessToken) {
-        body.anon_id = localStorage.getItem("rhemata_anon_id") || undefined;
+        body.anon_id = localStorage.getItem("newwine_anon_id") || undefined;
       }
 
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/feedback`, {

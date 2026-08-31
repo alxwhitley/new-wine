@@ -95,7 +95,7 @@ export function ConsentGate({ accessToken, hasUser, onDecline }: ConsentGateProp
         </p>
         <p className="text-sm text-foreground leading-relaxed mb-6">
           {policyCopy ??
-            "During this private beta, Rhemata tracks the topics you search so we can understand what material is most needed. When Rhemata says it does not have enough material, the wording of that question may be stored after obvious personal details are removed. Your name and email are not shown in analytics. Open gap wording is deleted 30 days after the gap is resolved. Please do not include sensitive personal information in your questions."}
+            "During this private beta, New Wine tracks the topics you search so we can understand what material is most needed. When New Wine says it does not have enough material, the wording of that question may be stored after obvious personal details are removed. Your name and email are not shown in analytics. Open gap wording is deleted 30 days after the gap is resolved. Please do not include sensitive personal information in your questions."}
         </p>
 
         {error && <p className="text-sm text-destructive mb-4">{error}</p>}

@@ -8,13 +8,13 @@ product
 
 ## Users
 
-Curious lay believers in the charismatic / Spirit-filled tradition — not seminary students, not pastors preparing sermons as a primary use case, but ordinary people going deeper. They open Rhemata mid-week because a verse struck them, a teaching raised a question, or they want to know what a trusted voice from church history said on a topic. They are not power users; they don't want a research cockpit. They want one trustworthy answer and a path to go further if they choose.
+Curious lay believers in the charismatic / Spirit-filled tradition — not seminary students, not pastors preparing sermons as a primary use case, but ordinary people going deeper. They open New Wine mid-week because a verse struck them, a teaching raised a question, or they want to know what a trusted voice from church history said on a topic. They are not power users; they don't want a research cockpit. They want one trustworthy answer and a path to go further if they choose.
 
 **Context of use:** personal devotional time, Bible study prep, listening to a sermon and wanting to follow a thread. Likely on a phone or laptop, alone, unhurried but not leisurely — they have a question and want it answered well.
 
 ## Product Purpose
 
-Rhemata is a RAG-powered theological research tool for the charismatic tradition. It surfaces answers from a curated corpus — sermons, magazine articles, Bible study materials, and books from teachers like Derek Prince, Andrew Murray, and Jack Deere — in response to natural-language questions, with inline citations. The study layer adds interlinear Bible text, lexicon lookups, and word studies. Success looks like: a lay reader asks a genuine spiritual question and gets a grounded, cited answer in seconds, with a clear path to go deeper.
+New Wine is a RAG-powered theological research tool for the charismatic tradition. It surfaces answers from a curated corpus — sermons, magazine articles, Bible study materials, and books from teachers like Derek Prince, Andrew Murray, and Jack Deere — in response to natural-language questions, with inline citations. The study layer adds interlinear Bible text, lexicon lookups, and word studies. Success looks like: a lay reader asks a genuine spiritual question and gets a grounded, cited answer in seconds, with a clear path to go deeper.
 
 ## Brand Personality
 
@@ -27,7 +27,7 @@ Voice: confident without being authoritative in a way that shuts down the Spirit
 ## Anti-references
 
 - **Logos Bible Software / Olive Tree**: dense panel-heavy interface, overwhelming reference-book aesthetic, designed for scholars not seekers. Too many panes. Too much chrome. The opposite of disappearing into the Word.
-- **Generic AI chat (ChatGPT / Claude.ai)**: grey bubble streams with no theological identity. Could be talking to anyone about anything. Rhemata should feel distinctly like a tool built for *this* corpus, *this* tradition.
+- **Generic AI chat (ChatGPT / Claude.ai)**: grey bubble streams with no theological identity. Could be talking to anyone about anything. New Wine should feel distinctly like a tool built for *this* corpus, *this* tradition.
 - **Megachurch website aesthetics**: stock photography of raised hands, prosperity-adjacent gold-and-dark palettes, corporate church marketing, fonts that shout CONFERENCE. The design should feel like a study room, not a stage.
 - **Academic journal UI**: dry, gray, purely functional. Correct but not alive.
 
