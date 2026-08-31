@@ -288,22 +288,37 @@ def _mark_discovery_reviewed(rows: List[dict], name: str, *, status: str, note: 
     row["review_notes"] = note
 
 
-def _approved_sites_has_name(rows: List[dict], name: str) -> bool:
+def _find_approved_site(rows: List[dict], name: str) -> Optional[dict]:
     target = name.strip().lower()
-    return any(r.get("name") and str(r["name"]).strip().lower() == target for r in rows)
+    return next(
+        (r for r in rows if r.get("name") and str(r["name"]).strip().lower() == target),
+        None,
+    )
 
 
-def _append_approved_site(rows: List[dict], headers: List[str], *, name: str, link: str) -> None:
+def _approval_fields(*, name: str, link: str) -> dict:
     today = date.today().isoformat()
-    new_row = {h: None for h in headers}
-    new_row.update({
+    return {
         "approved": "TRUE",
         "name": name,
         "attribute_to": name,
         "blog_url": link,
         "approved_at": f"{today} -- review tool approval (Discovery: {name})",
-    })
+    }
+
+
+def _append_approved_site(rows: List[dict], headers: List[str], *, name: str, link: str) -> None:
+    new_row = {h: None for h in headers}
+    new_row.update(_approval_fields(name=name, link=link))
     rows.append(new_row)
+
+
+def _approve_site(rows: List[dict], headers: List[str], *, name: str, link: str) -> None:
+    existing = _find_approved_site(rows, name)
+    if existing is None:
+        _append_approved_site(rows, headers, name=name, link=link)
+    elif sheet_io.parse_bool_cell(existing.get("approved")) is not True:
+        existing.update(_approval_fields(name=name, link=link))
 
 
 def approve_candidate(
@@ -320,8 +335,7 @@ def approve_candidate(
     d_headers = _ensure_columns(d_headers, d_rows, "reviewed_at", "review_notes")
     a_headers, a_rows = sheet_io.read_tab(APPROVED_PATH)
 
-    if not _approved_sites_has_name(a_rows, name):
-        _append_approved_site(a_rows, a_headers, name=name, link=link)
+    _approve_site(a_rows, a_headers, name=name, link=link)
 
     _mark_discovery_reviewed(d_rows, name, status="verified", note="Approved -> Approved Sites")
 

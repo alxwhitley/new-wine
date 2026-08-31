@@ -194,6 +194,7 @@ try:
     _, a_rows4 = sheet_io.read_tab(tool.APPROVED_PATH)
     gamma_rows = [r for r in a_rows4 if r["name"] == "Already Approved Elsewhere"]
     check("approving an already-approved-elsewhere name does not duplicate the Approved Sites row", len(gamma_rows) == 1)
+    check("approving an already-approved-elsewhere name preserves its original provenance", gamma_rows[0]["approved_at"] == "2026-01-01 -- prior manual approval")
     _, d_rows4 = sheet_io.read_tab(tool.DISCOVERY_PATH)
     gamma_discovery = next(r for r in d_rows4 if r["name"] == "Already Approved Elsewhere")
     check("but the Discovery row is still marked verified", gamma_discovery["verification_status"] == "verified")
@@ -218,6 +219,51 @@ finally:
     tool.DISCOVERY_PATH = _original_discovery_path
     tool.APPROVED_PATH = _original_approved_path
     shutil.rmtree(_discovery_path.parent, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Existing proposal promotion -- a prefilled Approved Sites row with a blank
+# `approved` cell must become a real approval in place, not merely suppress a
+# duplicate while Discovery is marked verified.
+# ---------------------------------------------------------------------------
+_proposal_discovery_path, _proposal_approved_path = _build_test_files(
+    [
+        {
+            "verification_status": "unverified",
+            "already_in_corpus": False,
+            "name": "Existing Proposal",
+            "claimed_main_url": "https://new.example.com/blog",
+        },
+    ],
+    [
+        {
+            "approved": "",
+            "name": "Existing Proposal",
+            "attribute_to": "Old Attribution",
+            "blog_url": "https://old.example.com",
+            "proposal_notes": "Prefilled proposal",
+            "approved_at": "",
+        },
+    ],
+)
+try:
+    tool.DISCOVERY_PATH = _proposal_discovery_path
+    tool.APPROVED_PATH = _proposal_approved_path
+
+    tool.approve_candidate("Existing Proposal", "https://new.example.com/blog")
+
+    _, proposal_rows = sheet_io.read_tab(tool.APPROVED_PATH)
+    check("existing proposal approval does not duplicate the Approved Sites row", len(proposal_rows) == 1)
+    proposal = proposal_rows[0]
+    check("existing proposal approval sets approved=TRUE", proposal["approved"] == "TRUE")
+    check("existing proposal approval refreshes attribute_to", proposal["attribute_to"] == "Existing Proposal")
+    check("existing proposal approval refreshes blog_url", proposal["blog_url"] == "https://new.example.com/blog")
+    check("existing proposal approval records approval provenance", "review tool approval" in proposal["approved_at"])
+    check("existing proposal approval preserves proposal notes", proposal["proposal_notes"] == "Prefilled proposal")
+finally:
+    tool.DISCOVERY_PATH = _original_discovery_path
+    tool.APPROVED_PATH = _original_approved_path
+    shutil.rmtree(_proposal_discovery_path.parent, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
