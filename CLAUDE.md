@@ -998,7 +998,7 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
-- **A blanket product-name sweep corrupts three things that look like the
+- **A blanket product-name sweep corrupts four things that look like the
   product name and are not — proven by doing it, 2026-08-31.** The
   Rhemata -> New Wine rename (`a6f1575`) is done; what survives is the rule
   for any future rename. (1) **Data-matching code:** `COLLECTION_SOURCE_HINTS`
@@ -1013,11 +1013,22 @@ different row, per the hard rule above.
   CLAUDE.md's own Settled #25 (inverted "rebranded Rhemata -> UpperWord",
   rewrote the inventory's search term, and turned that entry's own "ta
   rhemata" warning into "ta newwine") and DESIGN.md's reference to the
-  retired `rhemata-brand.md`. All four were caught and repaired the same
-  session, but only because they were re-read afterwards. **Applied
-  migrations, dated `docs/` audits, and `scripts/archive/` were excluded up
-  front and are the reason the damage stayed small** — exclude them by
-  default, and diff every governing-doc sweep before trusting it.
+  retired `rhemata-brand.md`. Those were caught and repaired the same
+  session, but only because they were re-read afterwards. (4) **Credentials
+  and other literals that merely look like prose** — the category the same-day
+  review MISSED, and the reason this entry no longer claims the damage was
+  contained. The sweep rewrote the beta gate's password (`code === "rhema"`
+  -> `"newwine"`, `BetaGate.tsx`) and shipped it, so every beta tester was
+  locked out of production until Alex hit it himself and it was fixed in
+  `5473265`. A password, token, or fixture value does not read as a
+  product-name reference when scanning a rename diff, and no test covered it.
+  It now lives alone in `frontend/lib/beta-access.ts` under a test asserting
+  the literal, which is the general fix: **a swept literal must be pinned by a
+  test, because reading the diff demonstrably does not catch this class.**
+  **Applied migrations, dated `docs/` audits, and `scripts/archive/` were
+  excluded up front and are the reason the damage stayed as small as it did**
+  — exclude them by default, diff every governing-doc sweep before trusting
+  it, and grep the result for string comparisons, not just prose.
 
 - **Rotating `CURRENT_SUBJECT_KEY_VERSION` is no longer an outage — that
   exposure is genuinely closed, 2026-08-31 (B7 item 2, commit `f2ee6ff`).
