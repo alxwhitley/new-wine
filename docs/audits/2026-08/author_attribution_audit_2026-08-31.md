@@ -4,6 +4,15 @@ Read-only. SELECT-only against the live database through a read-only
 transaction; zero writes, zero DDL. Method: `documents.author` joined to
 `sources`, grouped by `citation_mode`.
 
+> **RESOLVED the same day — both halves.** Root cause fixed forward in
+> `scripts/youtube_ingest.py` (`_verified_speaker()`, commit `fe0718a`, with
+> `scripts/test_youtube_speaker_attribution.py`, 22 checks including a mutation
+> proof). The seven existing rows were repaired by an attended write:
+> `scripts/archive/2026-08/fix_unverified_authors_2026-08-31.py --apply`,
+> `UPDATE 7`, committed, reconciled from a fresh connection. Citable author
+> groups went **55 → 48**; zero citable rows carry any target string. Findings
+> 1 and 2 below are the historical record of what was wrong, not open work.
+
 **Why only citable rows matter.** `reference_verifier.build_retrieval_grounding()`
 builds `author_keys` from the author of *citable* evidence. A `silent_context`
 document cannot put a name into an answer's permitted-name set, so a malformed

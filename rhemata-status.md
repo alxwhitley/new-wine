@@ -60,17 +60,25 @@ terminal status before judging.
 references (teacher grounded to a real `source_id`), zero attribution retry,
 `quote_ids: []` confirming Settled #30's rail-off posture holds live.
 
-**Author attribution — 7 LIVE defects, audit written, fix NOT applied.**
+**Author attribution — 7 defects found and BOTH HALVES FIXED 2026-08-31.**
 `docs/audits/2026-08/author_attribution_audit_2026-08-31.md`. Five title
 fragments (`Day Abortion`, `Do This Instead`, `Watch Message`, `Your Porn
 Battle Plan`, `This Is How You Should Fight Your Battles`) and two identity
-splits (`Vlad`, `Pastor Vlad`) are **citable** under the Vlad Savchuk source,
-so each enters the permitted-name set the answer writer may attribute to. Three
-non-problems recorded so nobody "fixes" them: comma-joined authors are already
-all `silent_context`; `Jamieson, Fausset & Brown` is a genuine joint work, not
-a defect; and 119 Savchuk documents with `author = NULL` correctly fall back to
-the source name — repairing those into per-document strings would recreate the
-defect at scale. Root-causing the speaker parser is the repo-only half.
+splits (`Vlad`, `Pastor Vlad`) were **citable** under the Vlad Savchuk source,
+so each was entering the permitted-name set the answer writer may attribute to.
+Root cause: `_extract_speaker()` matches any run of Title-Case words after a
+`|`/`-`/`—` (it split "Modern-Day Abortion" mid-phrase), and the `via` value
+proving the string never matched an alias was computed then discarded. Fixed
+forward in `scripts/youtube_ingest.py::_verified_speaker()` (`fe0718a`,
+22-check test with a mutation proof), and the 7 rows repaired by attended write
+(`scripts/archive/2026-08/fix_unverified_authors_2026-08-31.py`, `UPDATE 7`,
+reconciled from a fresh connection). Citable author groups **55 → 48**.
+
+Three non-problems recorded so nobody "fixes" them: comma-joined authors are
+already all `silent_context`; `Jamieson, Fausset & Brown` is a genuine joint
+work, not a defect; and Savchuk documents with `author = NULL` correctly fall
+back to the source name — that is the HEALTHY state, and repairing them into
+per-document strings would recreate this defect at scale.
 
 **Guest-speaker attribution — DECIDED 2026-08-31: leave as-is.** Closed, not an
 open finding. Do not re-raise it as a live risk.
