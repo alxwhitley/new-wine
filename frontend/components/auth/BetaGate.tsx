@@ -15,7 +15,7 @@ export default function BetaGate({ onSuccess, onClose }: BetaGateProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (code === "newwine") {
+    if (code === "rhema") {
       sessionStorage.setItem("beta_access", "1");
       onSuccess();
     } else {
