@@ -216,26 +216,24 @@ def check_candidate(url: str, declared_author: str) -> dict:
     except (FetchRejected, FetchTransient) as exc:
         return {"url": url, "outcome": "fetch_failed", "detail": str(exc)}
 
-    article_text = ""
     try:
         article = extract_article_bounded(fetched.content)
-        article_text = article.text
     except HtmlRejected as exc:
-        # Byline can still clear via <meta>/JSON-LD even when the article
-        # body itself couldn't be isolated -- only the "By <Name>" text
-        # fallback needs article_text, so this is not a hard failure here.
-        article_extraction_note = str(exc)
-    else:
-        article_extraction_note = None
+        return {
+            "url": url,
+            "final_url": fetched.final_url,
+            "outcome": "extraction_failed",
+            "detail": str(exc),
+        }
 
-    verdict = verify_byline(fetched.content, article_text, declared_author)
+    verdict = verify_byline(fetched.content, article.text, declared_author)
     return {
         "url": url,
         "final_url": fetched.final_url,
         "outcome": verdict.status,
         "found_name": verdict.found_name,
         "signal_source": verdict.signal_source,
-        "article_extraction_note": article_extraction_note,
+        "article_extraction_note": None,
     }
 
 

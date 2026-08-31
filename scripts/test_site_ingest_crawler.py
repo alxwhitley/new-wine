@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import ingestion_sheet_io
 
@@ -24,6 +25,7 @@ from source_ingest_queue.byline_verify import (
     names_match,
     verify_byline,
 )
+from source_ingest_queue.fetcher import FetchResult
 from source_ingest_queue.link_discovery import discover_links, same_registrable_host
 
 _checks = []
@@ -130,6 +132,23 @@ check("verify_byline: REAL PRECEDENT mismatch caught (Vlad declared, Lana found)
 
 unconfirmed = verify_byline(b"<html><body>no signals here</body></html>", "no by-line here either", "Craig Keener")
 check("verify_byline: no signal is unconfirmed, not a silent pass", unconfirmed.status == "unconfirmed")
+
+# Candidate screening must stop before queue insertion when the exact article
+# extractor the worker will use has already refused the page. A metadata
+# byline can establish authorship, but it cannot make an empty body ingestible.
+thin_candidate = FetchResult(
+    content=b'<html><head><meta name="author" content="Craig Keener"></head><body><article></article></body></html>',
+    final_url="https://craigkeener.com/thin-post/",
+    sha256="0" * 64,
+    byte_count=105,
+    filename="thin-post",
+)
+with patch.object(site_ingest_crawler, "fetch_html", return_value=thin_candidate):
+    thin_result = site_ingest_crawler.check_candidate(
+        "https://craigkeener.com/thin-post", "Craig S. Keener"
+    )
+check("candidate with refused article extraction is not confirmed", thin_result["outcome"] == "extraction_failed")
+check("candidate extraction refusal retains the exact gate reason", str(thin_result.get("detail", "")).startswith("article_too_thin:"))
 
 # ---------------------------------------------------------------------------
 # link_discovery: same_registrable_host
