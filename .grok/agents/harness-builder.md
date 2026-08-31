@@ -1,6 +1,6 @@
 ---
 name: harness-builder
-description: Second permitted builder for repo-only Rhemata harness work, alongside Claude Code. Mechanical work only, packet-scoped, reviewed by Sonnet. Attended-only — read the mandatory warning below before running this agent at all.
+description: Second permitted builder for repo-only New Wine harness work, alongside Claude Code. Mechanical work only, packet-scoped, reviewed by Sonnet. Attended-only — read the mandatory warning below before running this agent at all.
 ---
 
 # Role

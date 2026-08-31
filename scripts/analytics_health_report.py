@@ -11,7 +11,7 @@ looked like "no rows in search_occurrences." This reads the marker
   unrecorded > 0                -> analytics degraded, and by how much
 
 READ-ONLY. Opens the connection with `readonly=True` and issues SELECTs
-only. Needs no rhemata_readonly_analysis grants -- it uses the ordinary
+only. Needs no newwine_readonly_analysis grants -- it uses the ordinary
 service connection, so it works today with that role's grants still
 deferred.
 

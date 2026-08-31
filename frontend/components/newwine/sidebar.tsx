@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useUserRole } from "@/hooks/useUserRole";
-import { UsageRing } from "@/components/rhemata/usage-ring";
+import { UsageRing } from "@/components/newwine/usage-ring";
 import { AdminModal } from "@/components/admin/AdminModal";
 import { FooterNav } from "@/components/marketing/footer-nav";
 import { isFullNavEnabled } from "@/lib/chat-only-beta-flag";
@@ -161,7 +161,7 @@ export function Sidebar({
       {/* Wordmark + close button (mobile) */}
       <div className="flex items-center justify-between pb-4">
         <h1 className="font-sans text-2xl font-semibold text-foreground tracking-tight">
-          Rhemata
+          New Wine
         </h1>
         <button
           onClick={onClose}

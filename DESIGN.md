@@ -1,5 +1,5 @@
-# Rhemata Design System v2 — "Lumen System"
-*Extracted from withlumen.app source (MIT, github.com/andrewhuang427/lumen-ai). This replaces rhemata-brand.md as the styling authority. Every component must use these tokens — no hardcoded hex values, no inline style hover handlers.*
+# New Wine Design System v2 — "Lumen System"
+*Extracted from withlumen.app source (MIT, github.com/andrewhuang427/lumen-ai). This replaces newwine-brand.md as the styling authority. Every component must use these tokens — no hardcoded hex values, no inline style hover handlers.*
 
 ---
 
@@ -103,9 +103,9 @@
 
 ---
 
-## Rhemata Extension Rules (surfaces Lumen doesn't have)
+## New Wine Extension Rules (surfaces Lumen doesn't have)
 
-| Rhemata element | Token mapping |
+| New Wine element | Token mapping |
 |---|---|
 | Inline citations | `text-primary underline-offset-4 hover:underline` (link variant) — drop the old #d4b96a highlight-pill treatment |
 | Citation source panel | Sheet component (shadcn), `bg-popover` |

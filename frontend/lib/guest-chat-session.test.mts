@@ -90,7 +90,7 @@ test("rejects malformed or unsupported guest-session data", () => {
 });
 
 test("keeps reconnectable jobs only for transient delivery failures", () => {
-  assert.equal(shouldRetainPendingGuestJob("Rhemata is temporarily unavailable."), true);
+  assert.equal(shouldRetainPendingGuestJob("New Wine is temporarily unavailable."), true);
   assert.equal(shouldRetainPendingGuestJob("timeout_waiting_for_answer"), true);
   assert.equal(shouldRetainPendingGuestJob("generation_failed"), false);
   assert.equal(shouldRetainPendingGuestJob("generation_canceled"), false);

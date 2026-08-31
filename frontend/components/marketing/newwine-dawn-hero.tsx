@@ -5,11 +5,11 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { ProductImagePlaceholder } from "@/components/marketing/product-image-placeholder";
-import { getMannaHeroTransforms } from "@/lib/manna-hero-motion";
+import { getNewWineHeroTransforms } from "@/lib/newwine-hero-motion";
 
-import styles from "./manna-dawn-hero.module.css";
+import styles from "./newwine-dawn-hero.module.css";
 
-type MannaDawnHeroProps = {
+type NewWineDawnHeroProps = {
   onPrimaryAction: () => void;
 };
 
@@ -18,17 +18,17 @@ const MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 function writeMotionVariables(root: HTMLElement, reducedMotion: boolean): void {
   const range = Math.max(1, root.offsetHeight - window.innerHeight);
   const progress = -root.getBoundingClientRect().top / range;
-  const values = getMannaHeroTransforms(progress, reducedMotion);
+  const values = getNewWineHeroTransforms(progress, reducedMotion);
 
-  root.style.setProperty("--manna-background-scale", String(values.backgroundScale));
-  root.style.setProperty("--manna-background-y", `${values.backgroundY}%`);
-  root.style.setProperty("--manna-copy-opacity", String(values.copyOpacity));
-  root.style.setProperty("--manna-copy-y", `${values.copyY}px`);
-  root.style.setProperty("--manna-product-scale", String(values.productScale));
-  root.style.setProperty("--manna-product-y", `${values.productY}vh`);
+  root.style.setProperty("--newwine-background-scale", String(values.backgroundScale));
+  root.style.setProperty("--newwine-background-y", `${values.backgroundY}%`);
+  root.style.setProperty("--newwine-copy-opacity", String(values.copyOpacity));
+  root.style.setProperty("--newwine-copy-y", `${values.copyY}px`);
+  root.style.setProperty("--newwine-product-scale", String(values.productScale));
+  root.style.setProperty("--newwine-product-y", `${values.productY}vh`);
 }
 
-export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
+export function NewWineDawnHero({ onPrimaryAction }: NewWineDawnHeroProps) {
   const rootRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -65,7 +65,7 @@ export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
   }, []);
 
   return (
-    <section ref={rootRef} className={styles.root} aria-labelledby="manna-hero-title">
+    <section ref={rootRef} className={styles.root} aria-labelledby="newwine-hero-title">
       <div className={styles.stickyFrame}>
         <video
           ref={videoRef}
@@ -80,10 +80,10 @@ export function MannaDawnHero({ onPrimaryAction }: MannaDawnHeroProps) {
 
         <div className={styles.copy}>
           <div className={styles.eyebrow}>Spirit-filled Bible study</div>
-          <h1 id="manna-hero-title">Go deeper with voices you can trust.</h1>
-          <p>UpperWord brings Scripture and trusted Spirit-filled teachers into one grounded study experience—with every answer connected to its sources.</p>
+          <h1 id="newwine-hero-title">Go deeper with voices you can trust.</h1>
+          <p>New Wine brings Scripture and trusted Spirit-filled teachers into one grounded study experience—with every answer connected to its sources.</p>
           <div className={styles.actions}>
-            <Button className={styles.primaryAction} size="lg" onClick={onPrimaryAction}>Try UpperWord</Button>
+            <Button className={styles.primaryAction} size="lg" onClick={onPrimaryAction}>Try New Wine</Button>
             <Button className={styles.secondaryAction} variant="outline" size="lg" asChild>
               <Link href="/sources">Explore the sources</Link>
             </Button>

@@ -226,7 +226,7 @@ export async function streamChatMessage(
  *  _NO_ANSWER_FALLBACK string. Two candidates were drafted 2026-08-07;
  *  Alex confirmed this one. */
 const _SERVICE_UNAVAILABLE_MESSAGE =
-  "I wasn't able to reach Rhemata's answer service just now. Please try again in a moment.";
+  "I wasn't able to reach New Wine's answer service just now. Please try again in a moment.";
 
 /** Client-side reading-pace reveal (~250 chars/sec), matching the server's old
  *  PLAYBACK_CHARS_PER_SEC. Fires only after the fully-checked answer has arrived. */

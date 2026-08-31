@@ -191,7 +191,7 @@ def main() -> None:
     # touches (or is contaminated by) the real reference_grounding_review/
     # directory.
     scratch_dir = Path(
-        "/private/tmp/claude-501/-Users-alexwhitley-rhemata/"
+        "/private/tmp/claude-501/-Users-alexwhitley-newwine/"
         "947652e0-7a9a-4bf5-9c8c-badd1f72dc29/scratchpad"
     )
     scratch_dir.mkdir(parents=True, exist_ok=True)
@@ -521,7 +521,7 @@ def test_bypass_reconstruction_direct_call_shape() -> None:
     fake_client = _FakeGroqClient(mock_response_json)
 
     scratch_dir = Path(
-        "/private/tmp/claude-501/-Users-alexwhitley-rhemata/"
+        "/private/tmp/claude-501/-Users-alexwhitley-newwine/"
         "947652e0-7a9a-4bf5-9c8c-badd1f72dc29/scratchpad"
     )
     scratch_dir.mkdir(parents=True, exist_ok=True)

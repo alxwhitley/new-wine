@@ -490,7 +490,7 @@ def _render_candidate(row: dict, link: str, remaining: int) -> str:
           }};
 
           const openCurrentSite = () => {{
-            const child = openBlankChild("rhemata-review-site");
+            const child = openBlankChild("newwine-review-site");
             if (!child) {{
               setStatus("The website tab was blocked. Allow popups for 127.0.0.1, then try again.", true);
               return;
@@ -521,7 +521,7 @@ def _render_candidate(row: dict, link: str, remaining: int) -> str:
           const decide = async (action) => {{
             // Reserve the successor tab during this click. Waiting until the
             // network response returns would let popup blockers reject it.
-            const nextWindow = openBlankChild("rhemata-review-next");
+            const nextWindow = openBlankChild("newwine-review-next");
             if (!nextWindow) {{
               setStatus("The next website tab was blocked. Allow popups before saving this decision.", true);
               return;
@@ -554,7 +554,7 @@ def _render_candidate(row: dict, link: str, remaining: int) -> str:
               }}
 
               renderNext(result.candidate);
-              nextWindow.name = "rhemata-review-site";
+              nextWindow.name = "newwine-review-site";
               siteWindow = nextWindow;
               navigateChild(siteWindow, result.candidate.link);
               setBusy(false);

@@ -70,7 +70,7 @@ def test_disclaimer_text():
     print("=" * 78)
     _check(
         "exact required wording",
-        pp.DISCLAIMER_TEXT == "Rhemata can make mistakes. Please let us know if you see any.",
+        pp.DISCLAIMER_TEXT == "New Wine can make mistakes. Please let us know if you see any.",
     )
 
 

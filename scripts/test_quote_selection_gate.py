@@ -2,7 +2,7 @@
 """Repository-only regression coverage for the quote-selection containment gate.
 
 Run from the repository root:
-  /private/tmp/rhemata-w1w4-venv/bin/python scripts/test_quote_selection_gate.py
+  /private/tmp/newwine-w1w4-venv/bin/python scripts/test_quote_selection_gate.py
 """
 import asyncio
 import json

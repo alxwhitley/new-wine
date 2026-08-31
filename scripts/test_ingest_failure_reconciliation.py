@@ -67,7 +67,7 @@ def check(label, condition):
 
 def main():
     capture = _CaptureHandler()
-    test_logger = logging.getLogger("rhemata.test.ingest_reconciliation")
+    test_logger = logging.getLogger("newwine.test.ingest_reconciliation")
     test_logger.handlers = [capture]
     test_logger.propagate = False
     test_logger.setLevel(logging.ERROR)

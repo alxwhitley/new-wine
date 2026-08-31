@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        source: "/rhemata-corpus-admin",
+        source: "/newwine-corpus-admin",
         destination: "/admin",
         permanent: true,
       },

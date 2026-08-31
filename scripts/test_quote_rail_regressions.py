@@ -25,7 +25,7 @@ Article-supported answer proof is N/A until W5–W6 lands a live article
 on the answer path — recorded as an explicit skip, not a silent pass.
 
 Run from project root:
-  /private/tmp/rhemata-w1w4-venv/bin/python scripts/test_quote_rail_regressions.py
+  /private/tmp/newwine-w1w4-venv/bin/python scripts/test_quote_rail_regressions.py
 """
 from __future__ import annotations
 
@@ -505,7 +505,7 @@ def test_teacher_card_has_no_quote_rail():
 
 def test_presentation_contract_in_frontend():
     print("\n6. Presentation contract (QuoteRail source)")
-    chat_message = (ROOT / "frontend" / "components" / "rhemata" / "chat-message.tsx").read_text(
+    chat_message = (ROOT / "frontend" / "components" / "newwine" / "chat-message.tsx").read_text(
         encoding="utf-8"
     )
     check("QuoteRail function exists", "function QuoteRail" in chat_message)

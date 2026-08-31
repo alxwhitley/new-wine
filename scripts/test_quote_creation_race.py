@@ -39,7 +39,7 @@ reproduces the duplicate -- proving the wrapping is actually load-bearing
 in the real function, not just that _creation_lock works in isolation.
 
 Run from project root:
-  /private/tmp/rhemata-w1w4-venv/bin/python scripts/test_quote_creation_race.py
+  /private/tmp/newwine-w1w4-venv/bin/python scripts/test_quote_creation_race.py
 """
 from __future__ import annotations
 

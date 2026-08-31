@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scrape_youtube.py — Rhemata YouTube Transcript Scraper
+scrape_youtube.py — New Wine YouTube Transcript Scraper
 
 Pipeline:
   1. Load env vars from .env

@@ -1,10 +1,10 @@
 .root {
-  --manna-background-scale: 1;
-  --manna-background-y: 0%;
-  --manna-copy-opacity: 1;
-  --manna-copy-y: 0px;
-  --manna-product-scale: 0.82;
-  --manna-product-y: 34vh;
+  --newwine-background-scale: 1;
+  --newwine-background-y: 0%;
+  --newwine-copy-opacity: 1;
+  --newwine-copy-y: 0px;
+  --newwine-product-scale: 0.82;
+  --newwine-product-y: 34vh;
   --marketing-rule: #2a2927;
   --marketing-muted: #aaa7a0;
   --marketing-product: #202020;
@@ -51,8 +51,8 @@
   display: block;
   width: 100%;
   height: 100%;
-  transform: translate3d(0, var(--manna-background-y), 0)
-    scale(var(--manna-background-scale));
+  transform: translate3d(0, var(--newwine-background-y), 0)
+    scale(var(--newwine-background-scale));
 }
 
 .copy {
@@ -63,8 +63,8 @@
   margin-left: clamp(1.5rem, 8vw, 8rem);
   padding-top: clamp(7.75rem, 14vh, 10rem);
   text-align: left;
-  opacity: var(--manna-copy-opacity);
-  transform: translate3d(0, var(--manna-copy-y), 0);
+  opacity: var(--newwine-copy-opacity);
+  transform: translate3d(0, var(--newwine-copy-y), 0);
   will-change: opacity, transform;
   min-width: 0;
 }
@@ -144,8 +144,8 @@
   bottom: -5vh;
   width: min(74rem, calc(100% - 4rem));
   aspect-ratio: 16 / 10;
-  transform: translate3d(-50%, var(--manna-product-y), 0)
-    scale(var(--manna-product-scale));
+  transform: translate3d(-50%, var(--newwine-product-y), 0)
+    scale(var(--newwine-product-scale));
   transform-origin: 50% 100%;
   will-change: transform;
 }

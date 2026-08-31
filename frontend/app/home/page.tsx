@@ -6,7 +6,7 @@ import Link from "next/link";
 import BetaGate from "@/components/auth/BetaGate";
 import LoginModal from "@/components/auth/LoginModal";
 import { FooterNav } from "@/components/marketing/footer-nav";
-import { MannaDawnHero } from "@/components/marketing/manna-dawn-hero";
+import { NewWineDawnHero } from "@/components/marketing/newwine-dawn-hero";
 import { ProductImagePlaceholder } from "@/components/marketing/product-image-placeholder";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,7 +38,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function QuestionRail() {
   return (
-    <div className={styles.questionRail} aria-label="Questions UpperWord can help explore">
+    <div className={styles.questionRail} aria-label="Questions New Wine can help explore">
       <div className={styles.questionTrack}>
         {[...QUESTIONS, ...QUESTIONS].map((question, index) => (
           <span key={`${question}-${index}`} className={styles.question} aria-hidden={index >= QUESTIONS.length}>
@@ -67,7 +67,7 @@ export default function HomePage() {
     <>
       <div className={`${styles.marketingSurface} overflow-x-clip`}>
         <nav className={styles.nav} aria-label="Primary navigation">
-          <Link href="/" className={styles.wordmark}>UpperWord</Link>
+          <Link href="/" className={styles.wordmark}>New Wine</Link>
           <ul className={styles.navLinks}>
             {([['About', '#'], ['Features', '#'], ...(isFullNavEnabled() ? [['Study', '/study']] : [])] as [string, string][]).map(([label, href]) => (
               <li key={label}><Link href={href}>{label}</Link></li>
@@ -76,7 +76,7 @@ export default function HomePage() {
           <Button className={styles.navAction} size="sm" onClick={openAuthGate}>Become a test user</Button>
         </nav>
 
-        <MannaDawnHero onPrimaryAction={openAuthGate} />
+        <NewWineDawnHero onPrimaryAction={openAuthGate} />
         <QuestionRail />
 
         <section className={`${styles.section} ${styles.centeredSection}`}>
@@ -95,7 +95,7 @@ export default function HomePage() {
                 </ul>
               </article>
               <article className={styles.comparisonGroup}>
-                <p className={styles.groupLabel}>Rhemata</p>
+                <p className={styles.groupLabel}>New Wine</p>
                 <h3>A known, trusted lineage.</h3>
                 <ul>
                   <li>Drawn only from vetted sources within the charismatic tradition.</li>
@@ -106,7 +106,7 @@ export default function HomePage() {
               </article>
             </div>
             <blockquote>&ldquo;You wouldn&rsquo;t take spiritual counsel from a stranger with no name.&rdquo;</blockquote>
-            <p className={styles.centeredBody}>In matters of faith, <em>who</em> is speaking matters. Rhemata is built on voices you&rsquo;d actually choose.</p>
+            <p className={styles.centeredBody}>In matters of faith, <em>who</em> is speaking matters. New Wine is built on voices you&rsquo;d actually choose.</p>
           </div>
         </section>
 
@@ -115,9 +115,9 @@ export default function HomePage() {
             <div>
               <SectionLabel>Ask Anything</SectionLabel>
               <h2>Ask about the baptism of the Holy Spirit. Get an answer — not a survey.</h2>
-              <p>Ask general AI and you get &ldquo;some Christians believe&hellip; others hold&hellip;&rdquo; — every tradition averaged into one careful, beige paragraph. Rhemata answers only from vetted sources across the Spirit-filled tradition, so your question gets an answer with conviction behind it.</p>
+              <p>Ask general AI and you get &ldquo;some Christians believe&hellip; others hold&hellip;&rdquo; — every tradition averaged into one careful, beige paragraph. New Wine answers only from vetted sources across the Spirit-filled tradition, so your question gets an answer with conviction behind it.</p>
               <p>That includes historic voices like <strong>Derek Prince</strong>, <strong>Andrew Murray</strong>, and <strong>Bob Mumford</strong>, alongside teachers like <strong>Jack Deere</strong> and <strong>Dr. Michael Brown</strong>.</p>
-              <p>And Rhemata doesn&rsquo;t present AI-generated wording as a teacher&rsquo;s exact words.</p>
+              <p>And New Wine doesn&rsquo;t present AI-generated wording as a teacher&rsquo;s exact words.</p>
               <p>Every answer points back to the voices behind it, with the link to the full teaching right there.</p>
             </div>
             <ProductImagePlaceholder className={styles.productFrame} />
@@ -158,7 +158,7 @@ export default function HomePage() {
 
         <section className={styles.section}>
           <div className={styles.wideContainer}>
-            <h2>Explore more in Rhemata</h2>
+            <h2>Explore more in New Wine</h2>
             <div className={styles.exploreGrid}>
               {EXPLORE_CARDS.map(({ marker, title, body }) => (
                 <article key={title} className={styles.exploreGroup}>
@@ -173,7 +173,7 @@ export default function HomePage() {
 
         <section className={`${styles.section} ${styles.finalCta}`}>
           <h2>Help us build it. Become a test user.</h2>
-          <p>Rhemata is in active beta. Jump in free, explore everything, and help shape where it goes — no card required.</p>
+          <p>New Wine is in active beta. Jump in free, explore everything, and help shape where it goes — no card required.</p>
           <div className={styles.finalActions}>
             <Button className={styles.primaryAction} size="lg" onClick={openAuthGate}>Become a test user</Button>
             <Button className={styles.secondaryAction} variant="outline" size="lg" asChild><Link href="/sources">Explore the sources</Link></Button>
@@ -182,13 +182,13 @@ export default function HomePage() {
 
         <footer className={styles.footer}>
           <div className={styles.footerTop}>
-            <div><div className={styles.footerBrand}>Rhemata</div><p>Spirit-led Bible study for the charismatic tradition. Scholarly but accessible. Conviction, not performance.</p></div>
+            <div><div className={styles.footerBrand}>New Wine</div><p>Spirit-led Bible study for the charismatic tradition. Scholarly but accessible. Conviction, not performance.</p></div>
             <div className={styles.footerColumns}>
               <div><h4>Product</h4><ul><li><Link href="/">Chat</Link><small>Study tools built into every conversation</small></li><li><span>Pastors&rsquo; Notes</span><small>A small, growing collection</small></li><li><span>Discover · Coming soon</span></li></ul></div>
               <div><h4>Company</h4><ul>{["About", "Contact", "Privacy Policy", "Terms of Service"].map((label) => <li key={label}><Link href="/">{label}</Link></li>)}</ul></div>
             </div>
           </div>
-          <div className={styles.footerBottom}><div><FooterNav /><p>© 2026 Rhemata. All rights reserved.</p></div><p>ῥήματά ἐστιν πνεῦμα καὶ ζωή εἰσιν — John 6:63</p></div>
+          <div className={styles.footerBottom}><div><FooterNav /><p>© 2026 New Wine. All rights reserved.</p></div><p>οἶνον νέον εἰς ἀσκοὺς καινοὺς — Luke 5:38</p></div>
         </footer>
       </div>
 

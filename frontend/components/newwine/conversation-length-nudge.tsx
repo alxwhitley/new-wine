@@ -8,7 +8,7 @@
 // based server-side (Alex is covering beta spend directly), but the reason
 // this is a nudge and not a hard cap is product philosophy, not cost
 // (CLAUDE.md: "the goal is sending users back to real teachers... a feature
-// that makes a user say 'I don't need my pastor, I have Rhemata' gets
+// that makes a user say 'I don't need my pastor, I have New Wine' gets
 // killed") -- so the copy stays about conversation focus, never spend.
 //
 // Copy reviewed 2026-08-26 against PRODUCT.md Section 8 (voice: Grounded,
@@ -16,7 +16,7 @@
 // POSITIONING.md's anti-reference to generic AI chat ("could be talking to
 // anyone about anything"). The first draft ("keeps each one focused and
 // easy to come back to") was exactly that -- boilerplate productivity-app
-// copy with no Rhemata identity, and no honest claim behind it. This
+// copy with no New Wine identity, and no honest claim behind it. This
 // version instead states a real, verifiable fact about the product (past
 // conversations stay in the sidebar history) rather than a vague
 // convenience claim. "Start a new conversation ->" is copied verbatim from

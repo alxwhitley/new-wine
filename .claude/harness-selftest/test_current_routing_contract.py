@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[2]
-ACTIVE_ROOT = Path(os.environ.get("RHEMATA_ACTIVE_ROOT", REPO))
+ACTIVE_ROOT = Path(os.environ.get("NEWWINE_ACTIVE_ROOT", REPO))
 CODEX_GUARD_PATH = ACTIVE_ROOT / ".codex" / "hooks" / "guard_pretooluse.py"
 CLAUDE_GUARD_PATH = ACTIVE_ROOT / ".claude" / "hooks" / "guard_pretooluse.py"
 GUARD_PATH = CODEX_GUARD_PATH

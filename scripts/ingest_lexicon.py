@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rhemata STEPBible Lexicon Ingestion Script
+New Wine STEPBible Lexicon Ingestion Script
 Parses TBESG, TBESH, and TFLSJ TSV files from sources/stepbible/,
 embeds each lexical entry, and inserts into Supabase.
 
@@ -382,7 +382,7 @@ def print_resume_status():
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Rhemata STEPBible Lexicon Ingestion")
+    parser = argparse.ArgumentParser(description="New Wine STEPBible Lexicon Ingestion")
     parser.add_argument("--test", action="store_true", help="Limit to 50 entries per file")
     parser.add_argument("--lexicon", type=str, default=None,
                         help="Run a single lexicon: TBESG, TBESH, or TFLSJ")
@@ -411,7 +411,7 @@ def main():
     else:
         configs = FILE_CONFIGS
 
-    print("Rhemata STEPBible Lexicon Ingestion")
+    print("New Wine STEPBible Lexicon Ingestion")
     if args.test:
         print("TEST MODE: limited to 50 entries per file")
     print("="*60)

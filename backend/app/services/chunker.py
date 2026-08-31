@@ -1,5 +1,5 @@
 """
-Token-based text chunker for Rhemata.
+Token-based text chunker for New Wine.
 
 Splits text into chunks of ~chunk_target tokens with overlap.
 Breaking priority: headings → paragraph breaks → sentence boundaries → hard split.

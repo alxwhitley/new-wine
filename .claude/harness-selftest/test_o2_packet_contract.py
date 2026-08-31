@@ -28,7 +28,7 @@ def _minimal_valid_packet():
         },
         "starting_revision": "a" * 40,
         "worktree": {
-            "path": "/Users/alexwhitley/.codex/worktrees/75cf/rhemata",
+            "path": "/Users/alexwhitley/.codex/worktrees/75cf/newwine",
             "branch": "o2-test",
         },
         "writable_paths": ["scripts/harness_contracts/v1/packet.py"],

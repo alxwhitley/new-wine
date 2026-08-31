@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Source resolver for Rhemata ingest pipeline.
+Source resolver for New Wine ingest pipeline.
 
 normalize_alias_key() now lives in backend/app/services/source_resolver.py —
 the canonical home, shared with the backend's reference-verification code

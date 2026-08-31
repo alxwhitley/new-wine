@@ -1,7 +1,7 @@
 import type { Citation } from "./api";
 import type { VerifiedReference } from "./study-reference";
 
-export const GUEST_CHAT_SESSION_KEY = "rhemata_guest_chat_v1";
+export const GUEST_CHAT_SESSION_KEY = "newwine_guest_chat_v1";
 
 export interface GuestChatMessage {
   role: "user" | "assistant";

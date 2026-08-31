@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Rhemata Discovery Review",
+  "name": "New Wine Discovery Review",
   "version": "1.0.0",
-  "description": "Review Rhemata ingestion candidates from their websites.",
+  "description": "Review New Wine ingestion candidates from their websites.",
   "permissions": ["storage"],
   "host_permissions": ["http://127.0.0.1:8765/*"],
   "background": {

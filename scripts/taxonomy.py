@@ -1,4 +1,4 @@
-"""Shared topic taxonomy for Rhemata ingestion and tagging scripts.
+"""Shared topic taxonomy for New Wine ingestion and tagging scripts.
 
 This is the canonical source of truth (a hardcoded literal, not parsed from
 any file). taxonomy.md is generated FROM this file for human-readable

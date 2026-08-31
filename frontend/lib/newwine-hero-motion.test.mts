@@ -4,8 +4,8 @@ import test from "node:test";
 
 import {
   clampHeroProgress,
-  getMannaHeroTransforms,
-} from "./manna-hero-motion.ts";
+  getNewWineHeroTransforms,
+} from "./newwine-hero-motion.ts";
 
 test("clamps hero progress to the inclusive zero-to-one range", () => {
   assert.equal(clampHeroProgress(-0.4), 0);
@@ -14,7 +14,7 @@ test("clamps hero progress to the inclusive zero-to-one range", () => {
 });
 
 test("returns the approved start, midpoint, and end transforms", () => {
-  assert.deepEqual(getMannaHeroTransforms(0), {
+  assert.deepEqual(getNewWineHeroTransforms(0), {
     backgroundScale: 1,
     backgroundY: 0,
     copyOpacity: 1,
@@ -23,7 +23,7 @@ test("returns the approved start, midpoint, and end transforms", () => {
     productY: 34,
   });
 
-  assert.deepEqual(getMannaHeroTransforms(0.5), {
+  assert.deepEqual(getNewWineHeroTransforms(0.5), {
     backgroundScale: 1.04,
     backgroundY: -1.5,
     copyOpacity: 0.5,
@@ -32,7 +32,7 @@ test("returns the approved start, midpoint, and end transforms", () => {
     productY: 17,
   });
 
-  assert.deepEqual(getMannaHeroTransforms(1), {
+  assert.deepEqual(getNewWineHeroTransforms(1), {
     backgroundScale: 1.08,
     backgroundY: -3,
     copyOpacity: 0,
@@ -43,7 +43,7 @@ test("returns the approved start, midpoint, and end transforms", () => {
 });
 
 test("reduced motion keeps copy visible and disables transforms", () => {
-  assert.deepEqual(getMannaHeroTransforms(0.75, true), {
+  assert.deepEqual(getNewWineHeroTransforms(0.75, true), {
     backgroundScale: 1,
     backgroundY: 0,
     copyOpacity: 1,
@@ -55,15 +55,15 @@ test("reduced motion keeps copy visible and disables transforms", () => {
 
 test("hero component keeps copy semantic and has no fabricated app controls", () => {
   const source = readFileSync(
-    new URL("../components/marketing/manna-dawn-hero.tsx", import.meta.url),
+    new URL("../components/marketing/newwine-dawn-hero.tsx", import.meta.url),
     "utf8",
   );
 
   assert.match(source, /<h1/);
   assert.match(source, /Spirit-filled Bible study/);
   assert.match(source, /Go deeper with voices you can trust\./);
-  assert.match(source, /UpperWord brings Scripture and trusted Spirit-filled teachers/);
-  assert.match(source, />Try UpperWord</);
+  assert.match(source, /New Wine brings Scripture and trusted Spirit-filled teachers/);
+  assert.match(source, />Try New Wine</);
   assert.match(source, /href="\/sources"/);
   assert.match(source, />Explore the sources</);
   assert.match(source, /ProductImagePlaceholder/);
@@ -73,7 +73,7 @@ test("hero component keeps copy semantic and has no fabricated app controls", ()
 
 test("hero uses the supplied upper-room video without the old landscape foreground", () => {
   const source = readFileSync(
-    new URL("../components/marketing/manna-dawn-hero.tsx", import.meta.url),
+    new URL("../components/marketing/newwine-dawn-hero.tsx", import.meta.url),
     "utf8",
   );
 
@@ -110,7 +110,7 @@ test("marketing surface reuses neutral placeholders and removes obsolete mockups
 
   assert.match(page, /home\.module\.css/);
   assert.match(page, /ProductImagePlaceholder/g);
-  assert.match(page, /MannaDawnHero/);
+  assert.match(page, /NewWineDawnHero/);
   assert.match(page, /BetaGate/);
   assert.match(page, /LoginModal/);
   assert.match(page, /Why It Matters/);
@@ -126,7 +126,7 @@ test("marketing surface reuses neutral placeholders and removes obsolete mockups
 
 test("hero pauses its decorative video for reduced motion", () => {
   const source = readFileSync(
-    new URL("../components/marketing/manna-dawn-hero.tsx", import.meta.url),
+    new URL("../components/marketing/newwine-dawn-hero.tsx", import.meta.url),
     "utf8",
   );
 

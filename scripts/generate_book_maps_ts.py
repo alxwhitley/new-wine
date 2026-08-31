@@ -52,7 +52,7 @@ HEADER = """\
 
 
 def _load_constants():
-    spec = importlib.util.spec_from_file_location("rhemata_constants", CONSTANTS_PATH)
+    spec = importlib.util.spec_from_file_location("newwine_constants", CONSTANTS_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

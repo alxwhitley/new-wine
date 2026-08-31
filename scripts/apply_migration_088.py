@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 MIGRATION_PATH = ROOT / "migrations" / "088_source_ingest_runner.sql"
 REVIEW_ROOT = ROOT / "source_ingest_runner_review"
-FIXTURE_PREFIX = "https://example.invalid/rhemata-source-ingest-fixture/"
+FIXTURE_PREFIX = "https://example.invalid/newwine-source-ingest-fixture/"
 
 load_dotenv(ROOT / "backend" / "app" / ".env")
 

@@ -88,7 +88,7 @@ export default function LoginModal({ onClose, onSignIn, onSignUp, reason, initia
 
         {/* Title */}
         <h2 className="font-sans text-xl font-semibold text-foreground mb-1">
-          {mode === "forgot" ? "Reset password" : mode === "signin" ? "Sign in to Rhemata" : "Become a test user"}
+          {mode === "forgot" ? "Reset password" : mode === "signin" ? "Sign in to New Wine" : "Become a test user"}
         </h2>
 
         {/* Subtitle / reason */}

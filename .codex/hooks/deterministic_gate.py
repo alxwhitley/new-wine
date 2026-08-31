@@ -137,7 +137,7 @@ def allow() -> None:
 # shared module, so this string is duplicated, not imported. If one changes,
 # the other must change too; nothing enforces that automatically. Flagged
 # as a real (small) maintenance risk, not hidden.
-WRITE_STATE_DIR = "/tmp/rhemata-harness-writes"
+WRITE_STATE_DIR = "/tmp/newwine-harness-writes"
 
 
 COMPLETION_WORDS = re.compile(

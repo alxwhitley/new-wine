@@ -30,11 +30,11 @@ NEW one, and genuine false positives found in the live "Baptism in the Holy
 Spirit"-tagged cluster are now rejected while a genuine true positive is
 still selected. Quote texts below are real, already-approved, already-
 public corpus content (captured 2026-08-18 via the read-only
-rhemata_readonly_analysis role) -- hardcoded here rather than queried live
+newwine_readonly_analysis role) -- hardcoded here rather than queried live
 so this test does not depend on live DB state or credentials to reproduce.
 
 Run from project root:
-  /private/tmp/rhemata-w1w4-venv/bin/python scripts/test_quote_passage_relevance.py
+  /private/tmp/newwine-w1w4-venv/bin/python scripts/test_quote_passage_relevance.py
 """
 from __future__ import annotations
 
@@ -515,7 +515,7 @@ def test_idempotency_ignores_revoked():
 #
 # Real, already-approved, already-public quote text from the live "Baptism
 # in the Holy Spirit"-tagged cluster (14 quotes, captured 2026-08-18 via
-# the read-only rhemata_readonly_analysis role). Three of these are
+# the read-only newwine_readonly_analysis role). Three of these are
 # genuinely unrelated to a baptism-in-the-Holy-Spirit question despite
 # sharing that exact topic tag; one is a direct, explicit match.
 # ─────────────────────────────────────────────────────────────────────────

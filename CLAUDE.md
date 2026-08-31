@@ -1,14 +1,14 @@
-# Rhemata — Agent Context
+# New Wine — Agent Context
 
 AI-assisted Bible study tool for Spirit-filled/charismatic believers. RAG chat
 with inline citations over a vetted, named corpus. Product model: Magisterium AI.
 UX model: Perplexity.
 
-**Design filter for any new feature:** does it make Rhemata sound more like a
+**Design filter for any new feature:** does it make New Wine sound more like a
 spiritual authority in its own right, or more like a directory pointing to real
 ones? The former is always wrong. Time-in-app is not a success metric — the goal
 is sending users back to real teachers and real churches. A feature that makes a
-user say "I don't need my pastor, I have Rhemata" gets killed regardless of
+user say "I don't need my pastor, I have New Wine" gets killed regardless of
 quality.
 
 ---
@@ -91,7 +91,7 @@ later session makes deliberately).
    never blended.** **RESOLVED 2026-08-06, alongside decision #8** — the
    flagged guardrail (`system_prompt.txt`'s conviction-first self-check) no
    longer instructs the model to silently rewrite an already-attributed
-   dissenting teacher into agreement; it now states Rhemata's conviction
+   dissenting teacher into agreement; it now states New Wine's conviction
    alongside a named source's own view, never instead of it. The deeper case
    this guarded against — a genuinely contradicting teacher reaching the
    writer for a position-paper-matched topic — is now handled upstream by
@@ -323,7 +323,7 @@ Landmines correction on that job for why).
     without Alex revisiting it first.
 17. **If excluding every retrieved teacher would leave an empty answer, fall
     back to the position paper's own voice — a sanctioned form under the
-    No-Oracle Rule — carrying the standard disclaimer** ("Rhemata can make
+    No-Oracle Rule — carrying the standard disclaimer** ("New Wine can make
     mistakes. Please let us know if you see any."), appended deterministically
     in code, never left to the model to phrase. This is the ONLY sanctioned
     reason for this fallback: never thin retrieval, never a match failure,
@@ -435,7 +435,7 @@ PLAN.md's Open Decisions note.
 
 24. **Quotes serve on `producer.py` only — the sole chat-style/async answer path, not the sole served-generation surface.** Corrected 2026-08-15: this decision originally read "there is exactly one answer path today, and it always runs quote selection," which was never true of `get_teacher_card()` (`GET /study/teacher/{source_id}`), a second, always-existing served-generation surface — full correction at the Landmines entry on the 2026-08-07 mirror-unification job. `chat.py` (the synchronous fallback this decision originally distinguished against) is still deleted — that part stands. What's actually true: quote selection is wired into `producer.py` alone; `get_teacher_card()` never selected or served quotes and still doesn't (confirmed 2026-08-15 — out of scope for that session's guard work, since there was nothing there to guard). If a second synchronous CHAT-STYLE path is ever reintroduced, this decision's original policy (quotes on the primary/proven path only, revisit after concurrency is proven at the 100-dial) governs again.
 
-25. **The product is renamed New Wine** (Alex's direction, 2026-08-31). Rhemata is retired as the product name. **This supersedes the "Manna" naming this decision carried from 2026-08-08 — corrected in place, not stacked, because a stale target name is exactly the kind of thing a future session would act on.** Manna was never implemented anywhere; the only trace is one unbuilt hero plan (`docs/superpowers/plans/2026-08-10-manna-dawn-hero.md`), and the "provision, not source" framing dies with it. `newwine.app` is registered, DNS-live on Cloudflare → Vercel, and serving. **The name collision with the New Wine magazine corpus source (Invariant 17, `scripts/magazine_review/`, roadmap A2) is ACCEPTED, not overlooked** — Alex's ruling: it is New Wine *magazine* vs New Wine *app*, uncopyrighted. Do not re-raise it. Naming decision only: renaming the repo, the Vercel/Railway projects, the `rhemata_readonly_analysis` role, or any identifier is separate work — full scoping, all 972 hits categorized, in `docs/audits/2026-08/rename_inventory_2026-08-31.md`. Three traps recorded there worth knowing before anyone starts: the `ῥήματά`/John 6:63 tagline is the old name's own etymology and cannot be find-and-replaced; the five `rhemata*` localStorage keys will log out guests if renamed without migration; and a `chunks` row in a public-domain Jamieson-Fausset-Brown commentary contains the transliterated Greek "ta rhemata" and must never be swept.
+25. **The product is renamed New Wine** (Alex's direction, 2026-08-31). Rhemata is retired as the product name. **This supersedes the "Manna" naming this decision carried from 2026-08-08 — corrected in place, not stacked, because a stale target name is exactly the kind of thing a future session would act on.** **Correction, 2026-08-31 (this entry previously claimed "Manna was never implemented anywhere; the only trace is one unbuilt hero plan" — that was false and is corrected in place, not stacked).** Manna WAS built and shipped: the dawn hero landed 2026-08-10 (`df27425`, `d3f7dbf`, `6e9ff7a`) as `manna-dawn-hero.tsx` + `manna-hero-motion.ts` + `--manna-*` CSS variables, and was live on `/home` until the 2026-08-31 rename pass renamed it to `newwine-dawn-hero`. The "provision, not source" framing does die with the name. **A THIRD legacy name also existed and no document recorded it: UpperWord.** The marketing surface was rebranded New Wine → UpperWord on 2026-08-13 (`8795384`), so the homepage wordmark, nav, hero copy and CTA read "UpperWord" — the first thing any visitor to `newwine.app` saw — until the same pass. Both are now New Wine. `newwine.app` is registered, DNS-live on Cloudflare → Vercel, and serving. **The name collision with the New Wine magazine corpus source (Invariant 17, `scripts/magazine_review/`, roadmap A2) is ACCEPTED, not overlooked** — Alex's ruling: it is New Wine *magazine* vs New Wine *app*, uncopyrighted. Do not re-raise it. Naming decision only: renaming the repo, the Vercel/Railway projects, the `rhemata_readonly_analysis` role, or any identifier is separate work — full scoping in `docs/audits/2026-08/rename_inventory_2026-08-31.md` — but **read that inventory's scope before trusting its counts: it searched "newwine" only, so its 972 hits across 219 files missed every "UpperWord" and "Manna" instance entirely**, including the live homepage wordmark. Any future name sweep must search all legacy names, not just the most recent one. Three traps recorded there worth knowing before anyone starts: the `ῥήματά`/John 6:63 tagline is the old name's own etymology and cannot be find-and-replaced; the five `newwine*` localStorage keys will log out guests if renamed without migration; and a `chunks` row in a public-domain Jamieson-Fausset-Brown commentary contains the transliterated Greek "ta newwine" and must never be swept.
 
 26. **Precept Austin word-study material: excluded for now, not permanently.** Corrects the framing implied by the archive's old "PA permanently excluded" shorthand (`docs/plan-archive.md`, an unrelated older "gift"-reversal episode, not this retrieval exclusion — but close enough in wording to invite confusion). The 2026-08-07 hard-exclusion fix (Landmines, below) stays exactly as built — nothing here weakens it. What's new: finding a reliable, trustworthy method of reintroducing PA word-study content into answers without meaning drift is now a recorded future initiative (needs real scoping before any work happens; not scheduled — PLAN.md Horizon item 7). Distinct from Open Decision #10 (PA word-study *rewrite*/modernization) — a different question. **The separate, permanent exclusion of Precept Austin from the quote pipeline and from paraphrase generation is UNCHANGED** — this decision touches only the answer-retrieval hard-exclusion, not those.
 
@@ -1084,28 +1084,6 @@ different row, per the hard rule above.
   cap before emitting any output) with usage never captured, because the
   test harness's own error handling didn't capture usage on that failure
   path. Total estimated spend against a $1 approved ceiling: ~$2.5.
-- **RESOLVED 2026-08-29 (commit `9a9ecf0`) — `segment_articles()` and
-  `review_articles_against_issue()` no longer stamp a false
-  `segmentation_model`/`reviewer_model`.** Both used to hardcode the
-  `ARTICLE_MODEL` module constant on the returned manifest regardless of
-  which client actually ran the call — found live the same day via a real
-  Claude Opus 5 segmentation test whose manifest falsely claimed
-  gpt-oss-120b had segmented it
-  (`docs/audits/2026-08/new_wine_opus_segmentation_e2e_test_2026-08-29.md`).
-  `StructuredOutputClient` now declares a required `model: str` attribute
-  (mirroring `GroqStructuredOutputClient.model`, which already existed);
-  both stages stamp from `client.model` instead. The existing lineage
-  checks (`manifest.segmentation_model`/`reviewer_model != ARTICLE_MODEL`)
-  are unchanged but now do real work instead of comparing the same
-  hardcoded constant to itself. Mutation-proven:
-  `scripts/test_magazine_article_review.py`'s three new tests fail without
-  the fix (one specifically proves the lineage check was previously
-  trivially-passing) and pass with it. Live-proven the same day on real
-  Opus 5 data, both directions: a segmentation replay correctly
-  reconstructs `segmentation_model="claude-opus-5"`, and the lineage gate
-  correctly refuses to let review proceed on that manifest without an
-  explicit, disclosed bypass
-  (`docs/audits/2026-08/new_wine_opus_review_e2e_test_2026-08-29.md`).
 - **The article-review stage's own `missing_substantive_spans` complaint has
   a confirmed false-positive mode — do not trust it without checking
   `non_article_spans` first, 2026-08-29.** In the same live Opus 5 review
@@ -1121,361 +1099,143 @@ different row, per the hard rule above.
   specifically needs a manual cross-check against `non_article_spans`
   before being treated as a real content gap. Full detail:
   `docs/audits/2026-08/new_wine_opus_review_e2e_test_2026-08-29.md`.
-- **`--primary` (the gold brand token, `frontend/app/globals.css`) is used
-  three conflicting ways — no single shade satisfies WCAG AA in all three,
-  2026-08-28.** (1) white text on `bg-primary` (`Button`'s default variant,
-  `Badge`, 15+ call sites), (2) dark text on `bg-primary` (chat Send button,
-  `text-background`), (3) `text-primary` as a plain link/accent color on the
-  dark background, 28+ files. A Python WCAG contrast sweep at this hue/
-  saturation confirmed the passing ranges for (1) and (2)/(3) don't overlap
-  — darkening `--primary` to fix (1) (as first approved and briefly shipped
-  this session, then reverted) breaks (2) and (3). The actual fix: leave
-  `--primary` untouched, flip `--primary-foreground` from white to the same
-  dark shade (2) already used — every `text-primary-foreground` call site is
-  paired with `bg-primary` (confirmed by grep), so this fixes (1) by making
-  it identical to the already-passing (2) pairing, with zero effect on (2)
-  or (3). Before touching either token again, re-read
-  `docs/audits/2026-08/b6_accessibility_pass_2026-08-28.md`'s "The
-  `--primary` conflict" section — the full math is there, not repeated here.
-- **The Next.js/Turbopack dev server can silently serve stale compiled CSS
-  after a `globals.css` token edit — 2026-08-28.** Editing a `:root` CSS
-  variable and reloading the browser (even with a full process
-  kill+restart of `next dev`) served the OLD value from a persistent
-  `.next/dev/static/chunks/*.css` cache; confirmed by curling the compiled
-  CSS chunk directly and finding the pre-edit value byte-for-byte, twice,
-  across two separate restarts. Only `rm -rf .next` before restarting
-  actually picked up the change. Any session verifying a CSS token change in
-  a real browser must `rm -rf frontend/.next` before restarting `next dev`,
-  not just kill and relaunch the process — a plain restart looks like it
-  worked (fresh PID, "Ready" banner) but silently isn't.
 - **The `claude_ai_Supabase` MCP tool is connected to an unrelated Supabase
-  account, not Rhemata's — 2026-08-28.** `list_projects` returns exactly one
+  account, not New Wine's — 2026-08-28.** `list_projects` returns exactly one
   project, "Grocery App" (`waljyghafnwrawijmqhe`, created 2026-08-24) — not
-  the Rhemata production project. Any read (backup config, table list,
+  the New Wine production project. Any read (backup config, table list,
   advisors) via this MCP tool during a session on this repo is checking the
   wrong database entirely; it will not error, it will just silently answer
   about a different project. Use the real `psycopg2`/`SUPABASE_DB_URL`
   connection (`app.services.async_answers.db.connect()`) for real read-only
-  checks against Rhemata's actual database instead.
+  checks against New Wine's actual database instead.
 - **New Wine article-segmentation guardrails are reactive, not proven
-  exhaustive — 2026-08-27.** Live validation against Issue 02-1973 found
-  FIVE distinct ways the model could technically satisfy "full coverage"
-  while producing wrong output, each discovered live and fixed with a
-  targeted deterministic check as it was found, not designed upfront:
+  exhaustive — and the recurrence is dominated by run-to-run model variance at
+  "high" reasoning, not one deterministic gap.** Live validation against Issue
+  02-1973 found at least seven distinct ways the model could technically satisfy
+  "full coverage" while producing wrong output, each discovered live and fixed
+  with a targeted deterministic check as it appeared, never designed upfront:
   `scripts/magazine_review/articles.py`'s `_COVERAGE_GAP_TOLERANCE_CHARS`,
   `_OTHER_NON_ARTICLE_MAX_CHARS`, `_NAMED_NON_ARTICLE_MAX_CHARS`,
-  `_NON_ARTICLE_TOTAL_FRACTION_MAX`, `_MAX_ARTICLE_CHARS`. One (a single
-  article spanning the whole 121,011-char issue) slipped past the semantic
-  reviewer too (`verdict=True`, `status=passed`) — fail-closed by
-  construction only guarantees SOMETHING catches an unsafe case eventually,
-  not that every layer catches every case; specific defects still need
-  specific checks. A future session finding a NEW gaming pattern here
-  should add a new targeted check with the same live-evidence discipline
-  (real numbers from a real failure, not a guessed threshold), not assume
-  these five are exhaustive.
+  `_NON_ARTICLE_TOTAL_FRACTION_MAX`, and `_MAX_ARTICLE_CHARS`; plus
+  `foreign_article_title_in_span` (a span opening with a DIFFERENT article's own
+  title and credit — two independent real occurrences, a genuine content
+  misattribution rather than ad-bundling); plus a requirement that a span carry
+  actual promotional content (named product, service, event, subscription,
+  price, or response address) before it may be categorized `advertisement` —
+  added after three consecutive spans totalling 16,788 chars of a real reader
+  Q&A column were filed as three separate fake ads, with zero commercial
+  language anywhere in them. Two ordering/anchoring bugs were fixed alongside:
+  the article-overlap check compared each article only to the PREVIOUS one in
+  the model's raw return order rather than sorted by position (false positives
+  3 of 4 runs), and boundaries were being anchored on bare page markers and on
+  standalone all-caps in-article subheadings.
 
-  **`non_article_span_implausibly_large`'s recurrence diagnosed, later the
-  same day (commits `d011fac`, `ae37d3b`) — two real causes found, not a
-  cap-sizing problem.** Two standalone segmentation-only diagnostic calls
-  against the cached transcript (no CLI, no OCR cost — same method as
-  `683b973`) showed "Keeping the Unity" (a labeled reprint) and "New Wine
-  Forum" (a reader Q&A column) were consistently filed as
-  `other_non_article` instead of recognized as articles, in both runs — the
-  same two articles the semantic reviewer already confirmed real back in
-  `e8ca4a3`. Fixed by naming both content shapes explicitly in
-  `SEGMENTATION_INSTRUCTIONS` (`d011fac`). Separately, a real live CLI
-  attempt against the actual issue found `article_spans_overlap` firing on
-  a genuinely non-overlapping article set 3 of 4 times: the check compared
-  each article only to the PREVIOUS one in the model's raw return order,
-  not sorted by position, so an out-of-order-but-non-overlapping return
-  (e.g. "Editorial" placed after a later article) tripped a false positive
-  every time — the coverage check just below it already sorted for exactly
-  this reason. Fixed by sorting before the article-only check too
-  (`ae37d3b`). Both fixes are live-validated and loosen no cap.
-
-  **Neither fix closes the underlying recurrence.** Close to fifteen live
-  calls this session (pre- and post-fix, standalone diagnostic and real
-  CLI) surfaced several distinct failure shapes unrelated to the two fixed
-  causes: page-marker-driven article fragmentation, a giant lazy
-  non-article dump swallowing over half the issue, a fabricated
-  mega-article merging real content with ads, and — new this session — the
-  semantic REVIEWER stage's own inconsistency: `article_failure_reasons_invalid`
-  on an identical 10-article input, twice in a row, then a clean
-  `status=passed` on a third identical attempt. The recurrence is dominated
-  by run-to-run model variance at "high" reasoning, not one deterministic
-  gap — a future session should not expect a single instruction or cap
-  change to close it.
-
-  **CORRECTED, later the same day (commit `3bc8780`) — the "Spiritual
-  Potpourri" span was never ads; that was an unverified guess, corrected
-  here rather than left standing.** Direct inspection of the raw OCR
-  transcript found the article labeled "spiritual_potpourri" (27,165
-  chars, under `_MAX_ARTICLE_CHARS`, reviewer said `adjacent_bleed=[]`)
-  opened at `transcript_start+0` with the literal title and reprint
-  credit of a DIFFERENT real article, "keeping_the_unity" — whose own
-  labeled span had in turn absorbed the tail of the article before it
-  ("The Apostle - God's Master Builder"). A genuine content
-  misattribution, not ad-bundling. Diagnosed by pinning segmentation to a
-  fixed captured output and calling the review stage live 4 times against
-  byte-identical input: caught once (mislabeled "duplications"), missed 3
-  times (clean pass twice, an unrelated article flagged once) — the
-  reviewer is confirmed non-deterministic on identical input, not a
-  reliable backstop for this defect class. A second, independent live
-  occurrence in `retry_13` (2026-08-25) confirmed the pattern recurs: an
-  874-char "Tapes by Don Basham" article opens with "The Call of Love"'s
-  title and first line. **Fixed**: `segment_articles()` now rejects a
-  span whose first 200 chars (clamped to its own end) contain another
-  article's own title as normalized text — zero false positives against
-  every known-good manifest on hand (v3, v5, v6, retry_13's other 15
-  articles), catches both real occurrences via the real code path. This
-  narrows the "several distinct failure shapes" list two paragraphs above
-  by one; the reviewer's own non-determinism (the
-  `article_failure_reasons_invalid`-class inconsistency) is unresolved —
-  the literal error string was not reproduced in these 4 tries, but the
-  underlying flip-flopping was, repeatedly, on the same input. Full
-  trail: `rhemata-status.md`'s 2026-08-27 entry, commits
-  `37e2746`..`683b973`, `d011fac`, `ae37d3b`, `3bc8780`.
-
-  **Further diagnosed and partially fixed, later the same day (commit
-  `d5420e3`) — `foreign_article_title_in_span` (added `3bc8780`, above)
-  was firing correctly but frequently: 4 of 6 live full-CLI attempts
-  against Issue 02-1973 this session hit it, all the same shape.**
-  Root-caused via a segmentation-only diagnostic call: the model drew
-  "The Apostle - God's Master Builder"'s end boundary immediately after
-  the page-23 marker and labeled the continuation "Keeping the Unity" —
-  but that text is mid-sentence apostleship content ("...the apostle
-  holds on... TEAMS...") running to the same article's own page-23
-  footer; the real "Keeping the Unity" heading, confirmed against this
-  issue's own table of contents ("KEEPING THE UNITY .24"), sits ~5,800
-  chars later, and everything downstream shifted by one label as a
-  result. Fixed by telling `SEGMENTATION_INSTRUCTIONS` not to anchor a
-  boundary on a bare page marker and not to mistake a standalone
-  all-caps in-article subheading for a new article's title. **Validated,
-  not a full close:** 86 existing unit tests still pass; of 4 further
-  live checks post-fix, 1 was a clean segmentation pass with the correct
-  3-way split (Apostle / Keeping the Unity / Forum, matching the
-  diagnosed ToC structure), 1 reproduced the same title-bleed defect
-  again, and 2 hit unrelated pre-existing guardrails
-  (`coverage_spans_overlap`, `non_article_span_implausibly_large`)
-  instead — recurrence rate on the target defect dropped (1/4 vs. 4/6
-  pre-fix) but is not eliminated. Confirms this landmine's own standing
-  conclusion: model variance at "high" segmentation reasoning, not one
-  deterministic gap. Issue 02-1973 still has not cleared the article
-  gate end-to-end. Full trail: `rhemata-status.md`'s 2026-08-27 entry.
-
-  **A second, distinct `non_article_span_implausibly_large` cause found
-  and fixed the following session (commit `4bad5b5`): the model
-  correctly recognized the opening of the "New Wine Forum" reader Q&A
-  column as its own article, then mislabeled that SAME column's own
-  continuing content — three consecutive spans, 16,788 chars total — as
-  three separate `advertisement` spans, each just over the 5,000-char
-  named-category cap (5,625 / 5,594 / 5,533 chars).** Direct inspection
-  of the full merged text found zero commercial language anywhere in
-  it (no product, price, ordering instruction, or address to write
-  to) — it was the unbroken continuation of the same Basham/Prince
-  dialogue on "slain in the Spirit" and spiritual discipline already
-  correctly filed under "forum" moments earlier, not three real ads.
-  Fixed by requiring actual promotional content (a named product,
-  service, event, subscription, price, or response address) before a
-  span may be categorized `advertisement`. Validated: 86 existing unit
-  tests still pass; 2 of 2 real live checks post-fix show zero
-  fake-advertisement mislabeling — one correctly unified the entire
-  real column into a single 22,562-char article span, exactly matching
-  the issue's own table of contents ("NEW WINE FORUM .26"). Both
-  fixes are now live (`d5420e3`, `4bad5b5`); 4 further live full-CLI
-  attempts the same session still failed on other, already-documented
-  variance (`article_implausibly_long` twice, `non_article_span_implausibly_large`
-  twice — a large non-article dump swallowing part of "The Apostle",
-  unrelated to either fix). Issue 02-1973 still has not cleared the
-  article gate end-to-end. Full trail: `rhemata-status.md`'s 2026-08-27
-  entry.
-- **A tracked master spreadsheet for ingestion candidates now exists —
-  separate from, and layered on top of, `source_ingest_queue` (Invariant
-  16), not a replacement for it.** Built 2026-08-19 as a single `.xlsx`
-  workbook; **converted 2026-08-26 to one plain-text TSV file per former
-  tab** (git can't show line-level diffs on a binary workbook) — the
-  `.xlsx` no longer exists. Current files, all under `docs/ingestion/`,
-  deliberately tracked in git (unlike the gitignored YouTube/magazine
-  trackers — git history is this data's backup/recovery mechanism):
-  `master_ingestion_queue_read_me.tsv` (human-readable instructions),
-  `master_ingestion_queue_discovery.tsv` (raw, unvetted candidates — a real
-  reusable sync script, `scripts/sync_master_ingestion_queue.py`,
-  structurally never opens this file, so a Discovery row cannot reach the
-  database through that path — proved by mechanism 2026-08-26: `read_sheet()`
-  still succeeds with the Discovery file physically removed from disk),
-  `master_ingestion_queue_queue.tsv` (vetted rows shaped to match
-  `source_ingest_queue` exactly), and `master_ingestion_queue_approved_sites.tsv`
-  (site_ingest_crawler.py's sole input, Invariant 16). One shared module,
+  **Three things a future session must not assume.** (1) These checks are not
+  exhaustive — a new gaming pattern needs a new targeted check built from real
+  numbers in a real failure, not a guessed threshold. (2) Fail-closed guarantees
+  that SOMETHING catches an unsafe case eventually, not that every layer catches
+  every case: a single article spanning the whole 121,011-char issue passed the
+  semantic reviewer with `verdict=True`, `status=passed`. (3) **The semantic
+  reviewer is confirmed non-deterministic on byte-identical input** — four
+  live calls against a pinned segmentation caught a real misattribution once and
+  missed it three times, and an identical 10-article input produced
+  `article_failure_reasons_invalid` twice then a clean pass on the third
+  attempt. It is not a reliable backstop for any defect class. Separately, its
+  `missing_substantive_spans` complaint has a confirmed false-positive mode —
+  see the entry above. Issue 02-1973 still has not cleared the article gate
+  end-to-end. Full trail: `rhemata-status.md`'s 2026-08-27 entry and commits
+  `37e2746`..`683b973`, `d011fac`, `ae37d3b`, `3bc8780`, `d5420e3`, `4bad5b5`.
+- **The master ingestion spreadsheet is four plain-text TSVs under
+  `docs/ingestion/`, layered on top of `source_ingest_queue` (Invariant 16), not
+  a replacement for it.** Converted from a binary `.xlsx` 2026-08-26 so git can
+  diff it; deliberately tracked in git, unlike the gitignored YouTube/magazine
+  trackers — git history is this data's backup and recovery mechanism. The
+  files: `master_ingestion_queue_read_me.tsv`, `..._discovery.tsv` (raw,
+  unvetted candidates), `..._queue.tsv` (vetted rows shaped to match
+  `source_ingest_queue`), and `..._approved_sites.tsv`
+  (`site_ingest_crawler.py`'s sole input). **One shared module,
   `scripts/ingestion_sheet_io.py`, is the only place that knows the TSV
-  encoding (escaped tab-delimited, one row per line, lossless — every
-  script that reads or writes one of these four files must go through it,
-  same "one shared implementation" discipline as `normalize_alias_key`).
-  **Alex's explicit, standing decision: this data is the single master
-  source of truth for ingestion candidates; on any disagreement with the
-  database it silently overwrites.** The sync script is dry-run-by-default,
-  `--apply` required to write (same convention as
-  `scripts/apply_migration_088.py`) — creates missing Queue rows, overwrites
-  differing fields, never deletes (a database row with no Queue counterpart
-  is reported as an orphan for a manual decision, never removed
-  automatically). It has been run for real (`--apply`) exactly once so far
-  and that run was a genuine no-op (0 creates, 0 overwrites) — **the
-  real-write path itself is still unproven against an actual change.**
-  **The admin panel's existing ingest-queue submission form is a
-  deliberately accepted trap, not a bug**: it still writes straight to
-  `source_ingest_queue`, is NOT part of the sync, and anything submitted
-  through it will be silently overwritten by the next `--apply` run unless
-  someone also adds it to the Queue file by hand — raised to Alex directly
-  and left as-is on purpose. Discovery fields named with a `claimed_`
-  prefix (`claimed_main_url`, `claimed_blog_or_articles_url`,
-  `claimed_licensing_status`, `claimed_platform_size`,
-  `claimed_written_content_exists`) are guesses from automated research
-  passes, never a confirmed site visit — treat as unverified regardless of
-  how confident the source wording sounds. At least two rows are flagged
-  known-suspect and unchecked: Loren Cunningham and Reinhard Bonnke, both
-  deceased, both listed with clean, live-looking personal domains — a
-  specific red-flag pattern in this data, not yet manually verified either
-  way.
+  encoding** — every script reading or writing one of these must go through it,
+  the same "one shared implementation" discipline as `normalize_alias_key`.
 
-  **2026-08-26: Discovery gained a real human-clearance layer, distinct
-  from the `claimed_*` automated-guess fields.** Four independent booleans
-  (`site_visited_by_human`, `author_identity_confirmed`,
+  **Alex's explicit, standing decision: this data is the single master source of
+  truth for ingestion candidates; on any disagreement with the database it
+  silently overwrites.** `scripts/sync_master_ingestion_queue.py` is
+  dry-run-by-default (`--apply` required to write), creates missing Queue rows
+  and overwrites differing fields but never deletes (an orphan database row is
+  reported for a manual decision, never removed), and structurally never opens
+  the Discovery file — so a Discovery row cannot reach the database through it,
+  proved by mechanism 2026-08-26. It has been run with `--apply` exactly once
+  and that run was a genuine no-op, so **the real-write path is still unproven
+  against an actual change.**
+
+  **The admin panel's ingest-queue submission form is a deliberately accepted
+  trap, not a bug**: it writes straight to `source_ingest_queue`, is NOT part of
+  the sync, and anything submitted through it will be silently overwritten by
+  the next `--apply` unless someone also adds it to the Queue file by hand.
+  Raised to Alex directly and left as-is on purpose.
+
+  **Trust levels inside Discovery.** Fields named with a `claimed_` prefix are
+  guesses from automated research passes, never a confirmed site visit — treat
+  as unverified regardless of how confident the wording sounds. The four
+  human-clearance booleans (`site_visited_by_human`, `author_identity_confirmed`,
   `licensing_posture_confirmed`, `content_type_confirmed`) plus
-  `clearance_checked_at`, all blank/FALSE on every pre-existing row —
-  nothing retroactively marked as checked. `clearance_cost_lane`
-  (`free_and_clear` / `likely_permissive` / `needs_conversation`, one of
-  three values, unclassified on every existing row) and `blog_index_url`
-  (the candidate's blog/article index page, distinct from
-  `claimed_main_url`; the existing empty, dead `archive_url` column was
-  deliberately left alone rather than repurposed — its original intent
-  looks different). No new "declined" column was added:
-  `verification_status='rejected'` + `reviewed_at` + `review_notes` already satisfied every
-  requirement (retained, filterable, structurally unreachable by the sync
-  script) for a Discovery candidate that's been reviewed and passed on.
+  `clearance_checked_at` are blank/FALSE on every pre-existing row; nothing was
+  retroactively marked as checked. At least two rows are flagged known-suspect
+  and unchecked: Loren Cunningham and Reinhard Bonnke, both deceased, both
+  listed with clean, live-looking personal domains — a specific red-flag pattern
+  in this data, not yet manually verified either way.
 
-  **Two local review tools now exist for this Discovery backlog (built
-  2026-08-25) — check for these before rebuilding either.**
-  `scripts/review_discovery_candidates.py`: a local FastAPI page
-  (`python3.12 scripts/review_discovery_candidates.py`), one Discovery
-  candidate at a time (name + link only, nothing else), Yes writes an
-  Approved Sites row automatically and marks the row `verified`, No marks
-  it `rejected` permanently — no forms, no session state, every page load
-  re-reads the file fresh. **2026-08-26: the Excel `~$` lock-file refusal
-  is gone** (plain TSV carries no such marker) — replaced by a real
-  mtime-based staleness guard (`StaleFileError`, shared with
-  `check_discovery_blog_links.py`) that refuses a write if either target
-  file changed on disk since it was read. The same conversion fixed a live
-  bug the format change would otherwise have introduced silently: the
-  queue filter's `already_in_corpus is True` / `claimed_written_content_exists
-  is False` identity checks would have stopped filtering anything the
-  moment those became TSV strings instead of real Excel booleans — now
-  routed through `ingestion_sheet_io.parse_bool_cell()`.
-  `scripts/check_discovery_blog_links.py`: a one-shot live fetch+link-check
-  per unverified candidate (reuses the crawler's own SSRF-safe fetch and
-  post-link detection), labels a new `auto_link_check` column
-  (`looks_like_blog` / `no_blog_detected` / `check_failed`, cached so
-  reruns only cost new candidates) — the review tool skips
-  `no_blog_detected` rows automatically. A `check_failed` fetch is never
-  treated as "no blog"; it stays visible for manual review. Real run
-  2026-08-25 against all 109 unverified candidates: only 26
-  `looks_like_blog`, 2 `no_blog_detected`, **81 `check_failed`** — mostly
-  sites bot-blocking the fetch, most likely because
-  `source_ingest_queue/fetcher.py` sends no `User-Agent` header at all.
-  Not fixed this session — would likely also raise the crawler's own real
-  success rate on approved sites, not just this checker's, but touches
-  shared SSRF-hardened fetch infrastructure so wants a deliberate decision
-  before changing it. Both tools add `reviewed_at`/`review_notes`
-  (manual-review provenance, separate from `claimed_*`/`agent_verified_*`)
-  and `auto_link_check`/`auto_link_check_at` columns to Discovery.
+  **Review tooling already exists — check before rebuilding any of it.**
+  `scripts/review_discovery_candidates.py` (local FastAPI, one candidate at a
+  time, Yes writes an Approved Sites row and marks the row `verified`, No marks
+  it `rejected`; mtime-based `StaleFileError` guard refuses a write if either
+  target file changed on disk since it was read),
+  `scripts/check_discovery_blog_links.py` (one-shot live fetch + link check,
+  reusing the crawler's SSRF-safe fetch, cached in `auto_link_check`), and
+  `tools/discovery-review-extension/` (unpacked MV3 extension, closed Shadow
+  DOM, capability-gated `http://127.0.0.1:8765/api/review/*` contract, opaque
+  revision token bound to the fresh TSV bytes so a changed candidate returns 409
+  with no write; no database or ingestion authority whatsoever). A real run
+  against all 109 unverified candidates returned only 26 `looks_like_blog`, 2
+  `no_blog_detected`, and **81 `check_failed`** — mostly sites bot-blocking the
+  fetch, most likely because `source_ingest_queue/fetcher.py` sends no
+  `User-Agent` header at all. Not fixed: it would likely raise the crawler's own
+  real success rate too, but it touches shared SSRF-hardened fetch
+  infrastructure and wants a deliberate decision first. A `check_failed` is
+  never treated as "no blog" — it stays visible for manual review.
 
-**2026-08-27: local in-page Discovery review extension.**
-`tools/discovery-review-extension/` is an unpacked Manifest V3 extension that
-requests content-script access on HTTP/HTTPS pages so it can show a bottom
-Approve / Do Not Approve bar, but displays that bar only in the one tab that
-started a local review session. The toolbar uses a closed Shadow DOM and
-accepts decisions only from trusted browser events. Its service worker can call
-only the fixed `http://127.0.0.1:8765/api/review/*` contract. Every mutating
-fallback or extension route requires an unguessable capability generated once
-per server process; the fallback controller receives it only in its local
-rendered page, while the extension capability and opaque candidate-revision
-token remain only in `chrome.storage.session` and are stripped before any
-response reaches the content script. The server binds that revision to the
-fresh Discovery TSV bytes/mtime, re-reads it at decision time, and returns 409
-with no write when the displayed candidate state changed. Successful extension
-payloads are exact-schema validated and only absolute HTTP(S) candidate URLs
-may render or navigate. Decisions reuse `review_discovery_candidates.py` and
-`ingestion_sheet_io.py` to update only the Discovery and Approved Sites TSVs.
-The extension has no database or ingestion authority. A new successful start
-deactivates the prior tab through `tabs.sendMessage()` without requesting the
-`tabs` manifest permission. The fallback remains
-`python3.12 scripts/review_discovery_candidates.py` and its local controller.
+- **Quote selection is contained behind `QUOTE_SELECTION_ENABLED`, and the
+  current production posture is OFF** on both Railway `rhemata` and
+  `answer-worker` (Alex, 2026-08-25 — the user-facing rail was insufficiently
+  accurate and relevant; Settled #30, repair Scheduled in `docs/roadmap.md`).
+  `quote_selection_enabled()` requires the exact string `"true"`; anything else,
+  including case variants, is off. With it off the producer never calls the
+  selector and emits no `quote_ids`; the reuse/dedup key (`current_policy()`'s
+  `policy_version`) changes with the flag so a cached or reused answer can never
+  cross flag state; and SSE delivery re-checks the flag at read time, so an
+  already-completed job's persisted `quote_ids` are suppressed. Proven in
+  `scripts/test_quote_selection_gate.py`. Flipping the flag is the
+  seconds-reversible kill switch in both directions.
 
-- **Quote selection on the async answer path is now contained behind an
-  explicit, default-off flag — shipped 2026-08-18 (PLAN.md W1, same PR as the
-  Invariant 16 widening above), because the quote rail has a live, systemic
-  relevance defect, not because quoting itself was found unsafe.** The defect:
-  quote matching keyed off the inherited `quotes.topic` document-level tag
-  rather than the quoted passage itself, so a quote could be selected for an
-  answer its actual text doesn't support — confirmed live 2026-08-18, not just
-  suspected: 636 approved quotes span only 115 distinct topics ("Holiness"
-  alone covers 49 quotes across 12 different documents), and 14 real quotes
-  tagged "Baptism in the Holy Spirit" scored an exact, identical tie against a
-  real baptism question under the old design, several of them on passages with
-  nothing to do with the question. **RESOLVED same day (commit `82ec0f5`,
-  `backend/app/services/quotes.py::select_quotes_for_answer`) — the passage-
-  level relevance, deterministic tie-breaking, and idempotent-creation part of
-  the fix (PLAN.md W7's first bullet) is built, not queued**: relevance now
-  scores each candidate's own `quote_text`, not `quotes.topic`; selection is a
-  strict `(score, id)` total order query with no DB row-order dependence;
-  `create_and_approve_quote()` returns an existing matching row instead of
-  duplicating one on a repeat call. `scripts/test_quote_passage_relevance.py`
-  covers this with both mocked-embedding mechanism checks and real embedding
-  calls against real corpus text, mutation-proven. **Still queued, unchanged
-  by this fix:** the re-audit of existing approved/pending quotes as untrusted
-  legacy data (PLAN.md W7's third bullet) and everything in W8. **RESOLVED
-  2026-08-19 — the idempotency race flagged 2026-08-18 (PLAUSIBLE, not
-  CONFIRMED at the time) is closed.** The idempotency check
-  (`_find_existing_quote_for_passage`) was a non-atomic SELECT-then-INSERT
-  with no DB uniqueness constraint or lock behind it — a genuine concurrent
-  call could duplicate a row. Closed by wrapping
-  `create_and_approve_quote()`'s check-then-insert body in a Postgres
-  session-level advisory lock (`quotes.py::_creation_lock`), keyed on the
-  exact `(chunk_id, quote_text, teacher_source_id)` triple; no migration
-  required. Mutation-proven with real threads racing the real function
-  (`scripts/test_quote_creation_race.py`): the lock wiring was temporarily
-  removed from `create_and_approve_quote()` and the protected-race test's
-  assertions failed reliably; restoring it passed again. Commits `aac7f7e`,
-  `046180d`, `46a6a5f`.
-  **Correction, same session: an earlier claim that migration 088 provided
-  a unique-constraint backstop on the quotes tables was FALSE.** Migration
-  088 is `source_ingest_runner.sql` (Invariant 16) — unrelated to quotes.
-  No unique constraint of any kind existed on `quotes` or
-  `quote_source_revisions` before this fix; the race was fully open until
-  the advisory lock closed it. Recorded here as a correction, not silently
-  dropped.
-  `quote_selection_enabled()` (`backend/app/services/quotes.py`) requires the
-  exact string `"true"` on `QUOTE_SELECTION_ENABLED`; anything else, including
-  case variants, is off. With it off: the producer never calls the selector
-  and emits no `quote_ids` on a fresh answer; the reuse/dedup key
-  (`current_policy()`'s `policy_version`, `async_answers/producer.py`) changes
-  with the flag so a cached/reused answer can never cross flag state; an
-  in-flight single-flight job likewise can never cross flag state; and SSE
-  delivery re-checks the flag at read time, so an already-completed job's
-  persisted `quote_ids` are suppressed if the flag is off when it's served.
-  Proven in `scripts/test_quote_selection_gate.py`. **Corrected 2026-08-19 —
-  the deployed default is no longer off.** Alex attended
-  `QUOTE_SELECTION_ENABLED=true` on Railway `rhemata` + `answer-worker` after
-  promoting the 28 gold `quote_quality_v1` rows to approved; smoke job
-  `6e1e0b62-…` ran with `policy_v3:quote_selection=true` and returned only
-  gold-pipeline eligible IDs. Selection still requires
-  `status=approved AND selection_eligible AND quality_pipeline_version IS NOT
-  NULL` — legacy rows stay unserved. Visual/taste polish on Settled #28
-  presentation remains deferred to a later UI-focused chat session;
-  flipping the flag off again is still the seconds-reversible kill switch
-  (exact `"true"` only).
-  **Corrected again 2026-08-25 — the current production posture is off.** Alex
-  found the user-facing rail insufficiently accurate and relevant, so both
-  Railway services now have `QUOTE_SELECTION_ENABLED=false`; the repair and
-  attended re-enable gate are recorded in Settled #30 and `docs/roadmap.md`.
+  **Why it was contained: a systemic RELEVANCE defect, not a finding that
+  quoting itself is unsafe.** Matching keyed off the inherited document-level
+  `quotes.topic` rather than the quoted passage — 636 approved quotes spanned
+  only 115 topics ("Holiness" alone covering 49 across 12 documents), and 14
+  real quotes tied exactly against one real baptism question, several on
+  passages with nothing to do with it. Fixed (`82ec0f5`): relevance now scores
+  each candidate's own `quote_text`; selection is a strict `(score, id)` total
+  order with no DB row-order dependence; `create_and_approve_quote()` returns an
+  existing matching row instead of duplicating. Its check-then-insert race is
+  closed by a Postgres session-level advisory lock keyed on the exact
+  `(chunk_id, quote_text, teacher_source_id)` triple (`quotes.py::_creation_lock`),
+  mutation-proven with real racing threads — there is **no unique constraint of
+  any kind** on `quotes` or `quote_source_revisions` behind it (an earlier claim
+  that migration 088 provided one was false; 088 is the unrelated source-ingest
+  runner). Selection additionally requires `status=approved AND
+  selection_eligible AND quality_pipeline_version IS NOT NULL`, so legacy rows
+  stay unserved. **Still queued:** re-auditing existing approved/pending quotes
+  as untrusted legacy data (PLAN.md W7) and everything in W8.
 - **Railway `rhemata` service builder can silently drift to Railpack without
   `rootDirectory=/backend`.** Observed 2026-08-19: GitHub-triggered deploys
   after `ad0dc0a` failed with connect-deadline / snapshot errors while the
@@ -1619,183 +1379,72 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   this misfire is always harmless** — it can consume a full turn and
   block real work; reformulate, don't just retry.
 
-- **RESOLVED 2026-08-09 — `quote_source_revisions.passage_text` was
-  captured as just the candidate span, not the full chunk — silently
-  defeating the DB trigger's own substring check for any row written that
-  way.** Found 2026-08-09 reviewing
-  `scripts/extract_quote_candidates_derek_prince.py`'s 249-row batch: that
-  script's INSERT originally stored `passage_text = <the extracted quote
-  text itself>`, unlike `create_and_approve_quote()`
-  (`backend/app/services/quotes.py`), which stores the FULL chunk content.
-  Migration 082's own header describes `quote_source_revisions` as "an
-  immutable snapshot of exactly one chunk's text ... a later edit to a
-  chunk must never retroactively change what an already-approved quote is
-  judged against." Fixed the same session: the Prince extractor now stores
-  the full source chunk text in `passage_text`, matching the intended
-  snapshot convention. The remaining 247-document rerun and any future
-  rerun use the corrected snapshot. The original 249 rows written with the
-  span-only snapshot were reviewed/approved under `verify_quote_candidate()`'s
-  live re-check, so they remain safe, but their stored snapshots are
-  technically vestigial. **Verified, not assumed (2026-08-09, same-day
-  follow-up):** a rollback-only transaction test inserted an identical
-  fabricated `quote_text` two ways against a real, cleared document — under
-  the old convention (`passage_text = quote_text`) the trigger let it
-  through with no exception; under the fixed convention (`passage_text =
-  chunks.content`) the trigger correctly raised "quote_text is not an
-  exact substring of its captured source passage". Everything rolled back,
-  zero residue confirmed by a follow-up query. The 239 quotes approved
-  before this fix were deliberately NOT regenerated — their correctness
-  rests on `verify_quote_candidate()`'s independent live check at approval
-  time, not on the trigger's snapshot, and this product has no live
-  chunk-edit/reuse path today that the vestigial snapshot would need to
-  guard against. Regenerating them is optional hygiene, not required —
-  Alex's call.
-- **RESOLVED 2026-08-07 — the Precept Austin "citable author" leak (PLAN.md
-  Phase 2) is closed.** Root cause: `is_commentary_chunk()`
-  (`backend/app/services/answer_toolbox.py`) only matched
-  `source_kind`/`source_type` literally equal to `"commentary"`. Precept
-  Austin's 2,176 documents are tagged `source_kind="word_study"`,
-  `source_type="background"` (never `"commentary"`) — so they were never
-  excluded, hard or soft (`SOURCE_KIND_FUSION_WEIGHTS` has no `word_study`
-  entry either). Confirmed live before the fix: an ordinary question
-  ("What is the meaning of grace in the Christian life?") retrieved 33 of
-  67 total chunks from Precept Austin, several `citation_mode='citable'`
-  (1,779 of the 2,176 PA documents carry `citable` — a pre-2026-05-24
-  ingestion-script-vintage artifact, unrelated to this fix and not
-  corrected retroactively), with 3 reaching the pre-rerank top-30 pool
-  that feeds the final answer. Fix: `is_commentary_chunk()` now checks
-  membership in `_COMMENTARY_EQUIVALENT_KINDS = {"commentary",
-  "word_study"}` — `word_study` is Precept Austin's only source_kind, so
-  this closes all of it, not a source-ID-specific patch; `_NEIGHBOR_SKIP_KINDS`
-  also gained `"word_study"` for the same defense-in-depth reason
-  `"commentary"` is already there. Re-running the exact reproduction
-  question post-fix through `producer._retrieve()` end-to-end returns 0
-  Precept Austin chunks. `scripts/test_commentary_answer_exclusion.py`
-  extended with word_study cases, all passing. Lexicon (`source_kind=
-  "lexicon"`, also `source_type="background"`) is untouched — it keeps its
-  existing soft down-weight and dedicated word-study-query retrieval path;
-  only Precept Austin's `word_study` kind is newly hard-excluded. **This
-  exclusion is a current retrieval-path default, not a permanent
-  architectural ban — see Settled decision #26 (2026-08-08):** a future,
-  carefully-scoped reintroduction of word-study content is a recorded
-  initiative, not foreclosed; nothing about this fix or that decision
-  weakens PA's separate, permanent exclusion from the quote pipeline and
-  paraphrase generation. **Out of
-  scope, deliberately untouched:** the future word-study lookup panel
-  (Precept Austin content surfaced separately when a user clicks a Greek/
-  Hebrew word) — that's a different, unbuilt surface, scoped for a later
-  session; nothing in `is_word_study_query()` or the `match_lexicon_chunks`
-  retrieval path changed.
-- **RESOLVED 2026-08-07 (mirror-unification job, commits `4557e5c`/`e223c98`)
-  — the quote rail's chat.py asymmetry is gone. CORRECTED 2026-08-15 — this
-  entry's own "the only answer path left" / "no second path left to land
-  on" language was never true and is retracted, not softened.** chat.py
-  (the old synchronous `/chat` path) is deleted — that part is real and
-  unchanged. But `GET /study/teacher/{source_id}` (`get_teacher_card()`,
-  `backend/app/routers/study.py`) is a second, always-existing, live
-  served-generation surface — its own retrieval, its own Anthropic call,
-  synthesizing a named teacher's position on a question. It was never
-  chat.py, so it was never actually in tension with the mirror-unification
-  job's real, narrower scope (chat.py vs producer.py) — the overclaim was
-  treating "the only ANSWER path" as "the only served-GENERATION surface,"
-  language this file repeated in several places (all corrected the same
-  session — see Settled decision #24 and the Phase 1/position-layer
-  decisions above).
+- **`quote_source_revisions.passage_text` must store the FULL chunk text, never
+  just the candidate span** — a span-only snapshot silently defeats the database
+  trigger's own substring check, proven directly in a rollback-only transaction
+  (identical fabricated `quote_text` passed under the old convention, correctly
+  raised under the fixed one). Migration 082 describes this column as "an
+  immutable snapshot of exactly one chunk's text." The 239 quotes approved
+  before the 2026-08-09 fix were deliberately NOT regenerated: their correctness
+  rests on `verify_quote_candidate()`'s independent live check at approval time,
+  not on the trigger's snapshot, and there is no live chunk-edit path today for
+  the vestigial snapshot to guard against. Regenerating them is optional hygiene.
+- **Precept Austin's 2,176 documents are `source_kind="word_study"`, never
+  `"commentary"` — `is_commentary_chunk()` must keep matching
+  `_COMMENTARY_EQUIVALENT_KINDS = {"commentary", "word_study"}`,** or the whole
+  set leaks back into answers as citable. Confirmed live before the 2026-08-07
+  fix: one ordinary grace question retrieved 33 of 67 chunks from Precept
+  Austin, several `citation_mode='citable'` — 1,779 of the 2,176 carry
+  `citable`, a pre-2026-05-24 ingestion-script artifact never corrected
+  retroactively, so the exclusion is the only thing standing between them and an
+  answer. `_NEIGHBOR_SKIP_KINDS` carries `"word_study"` for the same
+  defence-in-depth reason. Lexicon (`source_kind="lexicon"`) is deliberately NOT
+  hard-excluded — it keeps its soft down-weight and its own word-study retrieval
+  path. This is a retrieval-path default, not a permanent architectural ban
+  (Settled #26); PA's separate, permanent exclusion from the quote pipeline and
+  from paraphrase generation is unchanged by either.
+- **`GET /study/teacher/{source_id}` (`get_teacher_card()`) is a SECOND
+  served-generation surface — never write that `producer.py` is the only one.**
+  chat.py is genuinely deleted (2026-08-07 mirror-unification), so `producer.py`
+  is the only CHAT-STYLE answer path; but `get_teacher_card()` has always
+  existed alongside it, synchronous rather than async-queued, with its own
+  retrieval and its own Anthropic call. This file repeated "the only answer
+  path" in several places and every one of them was wrong.
 
-  Found by a read-only F5 path trace (an alternate agent tool, attended,
-  2026-08-15) and
-  corrected the same session: `get_teacher_card()` applies the
-  license/visibility gate but historically skipped commentary exclusion,
-  citation grounding, the position-paper fence, and quote verification.
-  **Fixed this session (build `3678d05`, merge `9dd0438`, independent
-  planner-reviewer `ACCEPT` with reproduced evidence — merged to `main`,
-  pushed to origin, and live in production as of 2026-08-15 (`21f5b14`
-  onward; Railway `rhemata` deployment `e8272119` and `answer-worker`
-  deployment `223d9512` both `SUCCESS`, Vercel deployment
-  `dpl_4KERiVU7cAAXc2ga4Q2AtHYhZp3W` `Ready`, all three confirmed against
-  their own build logs / live 200s, not just dashboard status)):**
-  citation grounding now runs via
-  `reference_verifier.ungrounded_prose_teachers` (regenerate-once-then-
-  refuse, reusing `answer_toolbox._ATTRIBUTION_REFUSAL` verbatim on a
-  second failure); commentary/word_study exclusion now runs by filtering
-  `document_ids` before the `match_teacher_chunks` RPC call, since that RPC
-  (migration 065) returns no `source_kind`/`source_type` to filter on
-  after the fact. **Deliberately NOT applied:** the position-paper fence —
-  `exclude_contradicting_teachers` removes 100% of a contradicting
-  author's chunks, and this surface's retrieval is always exactly one
-  teacher, so applying it would substitute house-position prose for a
-  genuinely dissenting teacher's own card (via the empty-answer fallback)
-  — misrepresentation-by-substitution against ranked failure mode #2 and
-  Settled decision #9, a worse failure than the one being guarded against.
-  **N/A, not a gap:** quote verification — this endpoint never selected or
-  served quotes at all (response shape `{bio, works, position}`, confirmed
-  by this session's own trace); quotes still serve ONLY on `producer.py`.
-  Two residuals the independent reviewer flagged 2026-08-15 are both
-  **RESOLVED, later session the same day.** Bio-mentioned-teacher false
-  positive: fixed by redacting corpus teacher names out of the model's
-  COPY of the bio before generation (the response payload's own `bio`
-  field stays the full, original text) — a first attempt instead
-  pre-grounded the bio-mentioned name into the guard's `author_keys`,
-  which independent review found opened a real hole (a fabricated claim
-  attributed to that name was no longer caught, since the name stayed
-  grounded for the whole answer, not just the triggering fact); that
-  attempt was fully removed, not patched, and the replacement was
-  independently re-verified with a second, different adversarial
-  fabrication scenario. Commentary/word_study query-slot crowding: fixed
-  by decoupling the bibliography display cap (unchanged, still 20) from
-  the candidate-document pool the filter and search run over (raised to
-  200), without forking `is_commentary_chunk()`'s rule into a second
-  copy. Both fixes plus a new, mutation-tested repo regression test
-  (`scripts/test_teacher_card_bio_redaction.py` — each check proven to
-  fail when its fix is reverted, pass when restored) are merged to
-  `main` (`ceb317f`/`bc37749`) and pushed to origin. Still unresolved,
-  untouched by this fix, a copy question not a code gap: the refusal
-  string renders under a named teacher's card heading — reads as the
-  system's own voice, not a misattribution, but Alex hasn't confirmed
-  the copy is right in that slot.
-- **RESOLVED 2026-08-14 — `backend/requirements.txt` now pins `pydantic==2.13.4` and
-  `starlette==0.52.1`; the unpinned condition this entry originally described no
-  longer exists.** Historical record, preserved: `fastapi==0.128.8`/`uvicorn` were
-  pinned but `pydantic`/`starlette` were not, so local and the deployed Railway
-  container could run different transitive versions, and any rebuild pulled whatever
-  was newest. Demonstrated 2026-08-06: the `require_admin_role`/`require_contributor`
-  unreachability bug (`da27fe4`) reproduced locally (Python 3.9 + `pydantic` 2.12.5 →
-  every admin route 422'd) but did NOT manifest on the deployed backend (an older
-  container tolerated the same code) — so production admin auth was actually working
-  while local looked broken, and the fix's "was prod ever broken?" question stayed
-  genuinely open. When a "works here, broken there" behavior gap appears, check the
-  transitive dep versions BEFORE assuming a code difference — that diagnostic lesson
-  still stands regardless of this fix. **Closed 2026-08-14**
-  (`docs/audits/2026-08/deps_pin_pydantic_starlette_2026-08-14.md`): pinning was actioned, not
-  merely offered. That same audit found the original `da27fe4` 422-vs-401 shape does
-  NOT actually reproduce on the now-pinned stack (pydantic 2.13.4 / starlette 0.52.1 /
-  Python 3.12 — both the buggy and fixed `_RequireRole.__call__` shapes return 401
-  there), so the pin alone is not what protects against the bug being reintroduced
-  going forward. The real ongoing guard is a structural regression test
-  (`scripts/test_admin_auth_regression.py`) asserting `_RequireRole.__call__` takes no
-  direct `request` parameter — the actual distinguishing shape, independent of which
-  dependency versions happen to be pinned at any given time. See that audit for the
-  full reasoning.
-- **SUPERSEDED 2026-08-08 — this entry's "RESOLVED 2026-08-06" description no
-  longer describes reality; left in place so the history isn't lost, not
-  because it's still current.** It originally recorded that the home-page
-  quote copy said "a real person reviews and approves it against the original
-  source." That claim was TRUE on 2026-08-06 and is FALSE as of 2026-08-08 —
-  human quote approval was removed that day (see "Settled product decisions
-  (2026-08-08)" below) and the claim was removed from the copy in the same
-  session, shipped together per that section's ordering requirement. Current
-  state: no copy anywhere claims a person reviews or approves quotes, and
-  none makes a competing claim about automatic verification either — Alex's
-  explicit instruction was to say nothing about quote review in either
-  direction. `/sources`' "software verification is roadmap-only, not live"
-  wording is unchanged and is now ALSO stale (quoting itself has been live
-  since the 2026-08-06 wiring) — flagged, explicitly out of scope for the
-  2026-08-08 session, not fixed.
-- **RESOLVED 2026-08-06 — empty living-teacher marketing removed.** John Bevere
-  and Michael Koulianos are no longer named as covered teachers on Home, Library,
-  or Authors. Live corpus browse confirmed zero documents for both; Home now names
-  covered voices including Derek Prince, Andrew Murray, Jack Deere, and Michael
-  Brown. Historical deletion/source records remain in the audit trail.
+  It historically applied the license/visibility gate but skipped commentary
+  exclusion, citation grounding, the position-paper fence, and quote
+  verification. **Fixed 2026-08-15, live in production:** citation grounding
+  runs via `reference_verifier.ungrounded_prose_teachers`
+  (regenerate-once-then-refuse, reusing `answer_toolbox._ATTRIBUTION_REFUSAL`
+  verbatim on a second failure); commentary/word_study exclusion runs by
+  filtering `document_ids` BEFORE the `match_teacher_chunks` RPC, since that RPC
+  returns no `source_kind`/`source_type` to filter on afterward. Corpus teacher
+  names are redacted from the model's COPY of the bio before generation (the
+  response payload's own `bio` field stays original) — an earlier attempt that
+  instead pre-grounded the bio-mentioned name into the guard's `author_keys`
+  opened a real hole (a fabricated claim under that name was no longer caught)
+  and was fully removed, not patched.
+
+  **Deliberately NOT applied: the position-paper fence.**
+  `exclude_contradicting_teachers` removes 100% of a contradicting author's
+  chunks, and this surface's retrieval is always exactly one teacher — so
+  applying it would substitute house-position prose for a genuinely dissenting
+  teacher's own card via the empty-answer fallback: misrepresentation-by-
+  substitution, against ranked failure mode #2 and Settled #9, a worse failure
+  than the one being guarded against. **N/A, not a gap:** quote verification —
+  this endpoint never selected or served quotes and still doesn't. **Still open,
+  a copy question not a code gap:** the refusal string renders under a named
+  teacher's card heading.
+- **When a behavior gap is "works here, broken there," check transitive
+  dependency versions BEFORE assuming a code difference.** `backend/requirements.txt`
+  now pins `pydantic==2.13.4` and `starlette==0.52.1`, but the pin is NOT what
+  guards the admin-auth bug that taught this lesson — the original 422-vs-401
+  shape does not reproduce on the pinned stack at all (both the buggy and fixed
+  `_RequireRole.__call__` shapes return 401 there). The real ongoing guard is
+  `scripts/test_admin_auth_regression.py`, asserting `_RequireRole.__call__`
+  takes no direct `request` parameter — the actual distinguishing shape,
+  independent of which versions happen to be pinned. Full reasoning:
+  `docs/audits/2026-08/deps_pin_pydantic_starlette_2026-08-14.md`.
 - **Stale chat-side figures/premises — verify against the repo/live DB before
   recording.** Twice on 2026-08-03 a confident chat-side assertion was falsified by
   the repo: the "781 / 91%-Prince+Bevere" backfill figure (already retired) and the
@@ -1807,97 +1456,40 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   scale work "until there are users" repeats exactly that reasoning (Project 1's
   100-concurrent dial exists to end it).
 
-- **Project 1 async answer path is BUILT and cutover-WIRED; 3 of 4 pre-flip
-  blockers CLOSED + the worker service now DEPLOYED and VERIFIED end-to-end
-  (2026-08-04, real test); **the traffic switch is now ON — `serving_enabled`
-  read TRUE from the live DB 2026-08-07 (set 2026-08-06 12:48 UTC), so the async
-  path IS serving real traffic** (Stage 2
-  build `dd71b87`; pre-flip blockers `196f1f2`, 2026-08-04; Stage 1 `82413c9`).**
-  `backend/app/services/async_answers/` + `scripts/answer_worker.py` +
-  `backend/app/routers/async_chat.py` run a durable Postgres-backed answer queue
-  (migrations 078/079: `answer_jobs`/`async_answer_config`/`provider_rate_usage`
-  + `corpus_version()`) — as of 2026-08-07 (mirror-unification job, commits
-  `4557e5c`/`e223c98`) this is the only CHAT-STYLE answer path; `/chat`
-  (chat.py) is deleted, not "alongside" it. **Correction, 2026-08-15: this
-  is not the only served-generation surface** — `get_teacher_card()`
-  (`GET /study/teacher/{source_id}`) is a second, structurally different
-  one (synchronous, not async-queued; single-teacher, not corpus-wide);
-  see the Landmines entry on this same mirror-unification job for the full
-  correction and this session's guard fix. **RESOLVED — the mirror/two-level-switch
-  history below is preserved for context, not current state.** Before the
-  fix: chat.py ran alongside the async path as a silently-reachable
-  fallback, gated by a two-level switch (env `ASYNC_ANSWER_ENABLED`
-  mounting the routes + DB `async_answer_config.serving_enabled` as a
-  seconds-reversible rollback dial), and `async_answers/producer.py`,
-  `async_answers/metering.py`, and `async_answers/conversation_store.py`
-  each hand-duplicated a piece of chat.py's logic (retrieval orchestration
-  + generation constants, guest/user metering, conversation persistence)
-  rather than sharing it — a documented DRIFT POINT since Stage 1. All of
-  it is resolved now: shared leaf functions live in
-  `backend/app/services/answer_toolbox.py` (moved out of chat.py, batch 1);
-  metering is one function, `async_answers/metering.py`'s
-  `enforce_query_limit()` (batch 3); the `ASYNC_ANSWER_ENABLED` env gate is
-  removed — `async_chat` mounts unconditionally in `main.py`, same as every
-  other router (batch 4); the frontend's fallback-on-failure behavior is
-  removed entirely, Alex's explicit decision — a failure now surfaces as a
-  real, visible error via `callbacks.onError`, never a silent handoff
-  (batch 3); `async_answer_config.serving_enabled` is now an honest
-  emergency pause (off = the whole product is offline for chat answers,
-  stated plainly in `async_chat.py`'s docstring), not a rollback switch,
-  since there is nothing left to roll back to. `config.py`'s
-  `serving_enabled: bool = False` is still the dataclass FALLBACK, not the
-  live value — read the DB row, never the default, before concluding
-  whether serving is paused. One finding from this job, deliberately NOT
-  fixed: `conversation_store.py`'s persistence was found to be strictly
-  more correct than chat.py's deleted `_save_conversation` (which had real
-  silent-data-loss bugs on a stale client-supplied `conversation_id`, a
-  mid-persist crash, and a non-atomic two-write race) — Alex's explicit
-  call was to let chat.py's buggier version die with the deletion rather
-  than backport a fix into code being removed anyway. **Pre-flip blockers — 3 of 4 CLOSED
-  2026-08-04 (build `196f1f2`):** (a) metering/usage-limit parity — `/async-chat/
-  submit` now takes auth + `anon_id` + IP and meters fail-closed (same
-  `increment_guest_query`/`increment_user_query` RPCs) BEFORE enqueue, keyed on the
-  CALLER, so every submission counts independently even when single-flight collapses
-  it to one generation (proven: 2 users, identical Q, same instant → 1 generation,
-  2 meterings; over-limit → 429 not enqueued); (b) auth→user_id + conversation
-  persistence — `/async-chat/result` persists the completed exchange to the
-  authenticated reader's history in chat.py's exact shape (conversations row + user
-  msg + assistant msg w/ citations + verified_references), per-READER not in the
-  worker (one shared generation → one history PER reader), idempotent across a
-  reconnect re-GET via deterministic uuid5 message ids + `ON CONFLICT DO NOTHING`;
-  (c) `psycopg2-binary==2.9.11` added to `backend/requirements.txt` (the worker +
-  `async_chat` import psycopg2 and failed to import on Railway without it — causally
-  proven in a clean 3.9 venv; one additive line, live app unaffected). Proofs:
-  `scripts/async_metering_persistence_check.py` (24/24). **(d) the DB route —
-  worker now DEPLOYED + VERIFIED end-to-end 2026-08-04 (real test, no flip);
-  residual only.** A separate Railway worker service now exists and its repo-root
-  `nixpacks.toml` build is GREEN: a job inserted straight into `answer_jobs` was
-  claimed in ~3s and completed by a REMOTE container worker
-  (`worker_id=28934160b0d1-1-slot0` — 12-hex container hostname + PID 1, not a
-  local process; none was running) with a real verified answer
-  (`model=claude-sonnet-4-5` not the fake producer, `outcome=answered`, 4 citations
-  + 7 verified_references incl. real teacher pointers), switches untouched, then
-  cleaned. **Pooler residual CLOSED 2026-08-07:** Railway `answer-worker` and
-  `rhemata` backend both have `SUPABASE_DB_URL` on the transaction pooler
-  (`:6543`, host `aws-1-us-east-1.pooler.supabase.com`) — confirmed via
-  `railway variables`, not the DB vantage (Supavisor still masks mode server-
-  side). Local `backend/app/.env` remains `:5432` (session) for dev only.
+- **The async answer path is the only chat-style answer path, it IS serving real
+  traffic, and `config.py`'s `serving_enabled: bool = False` is only the
+  dataclass FALLBACK — read the DB row, never the default, before concluding
+  whether serving is paused.** `backend/app/services/async_answers/` +
+  `scripts/answer_worker.py` + `backend/app/routers/async_chat.py` run a durable
+  Postgres-backed answer queue (migrations 078/079: `answer_jobs`/
+  `async_answer_config`/`provider_rate_usage` + `corpus_version()`).
+  `async_chat` mounts unconditionally in `main.py` — the old
+  `ASYNC_ANSWER_ENABLED` env gate is gone — and the frontend's
+  fallback-on-failure behavior was removed entirely (Alex's explicit call): a
+  failure now surfaces as a real, visible error via `callbacks.onError`, never a
+  silent handoff. With chat.py deleted there is nothing left to roll back to, so
+  `async_answer_config.serving_enabled` is an honest emergency pause — off means
+  the product is offline for chat answers — not a rollback dial.
+
+  **Load-bearing details.** Metering happens BEFORE enqueue and is keyed on the
+  CALLER, so single-flight collapsing two identical questions into one
+  generation still meters both independently. Conversation persistence happens
+  per-READER at `/async-chat/result`, not in the worker (one shared generation →
+  one history per reader), and is idempotent across a reconnect re-GET via
+  deterministic uuid5 message ids + `ON CONFLICT DO NOTHING`;
+  `conversations.user_id` FKs to `auth.users`, so a bad id fails closed
+  (`save_exchange` swallows it, delivery unaffected). Both Railway services run
+  `SUPABASE_DB_URL` on the transaction pooler (`:6543`); local
+  `backend/app/.env` stays `:5432` session mode for dev only.
+
   **Still open:** a controlled real-traffic concurrency window proving the
-  100-dial / >~12/worker ceiling is actually lifted. Note:
-  `conversations.user_id` has an FK to `auth.users`, so persistence needs a real JWT
-  `sub` (always true in prod; a bad id fails closed — `save_exchange` swallows it,
-  delivery unaffected).
-  Observed + faithfully mirrored, NOT fixed: the live `match_position_paper`
-  over-matches "What is deliverance?" -> baptism house voice (a live-behaviour issue,
-  out of scope). **Confirmed safe against the one-hop stored-position injection
-  (2026-08-08 build, `eca8070`):** live-tested this same over-match firing on a
-  "how to pray effectively" phrasing that would otherwise have matched a stored
-  position — `producer.py`'s explicit precedence (a position-paper match always
-  wins) made the stored-position injection defer to the paper-fence path instead
-  of firing. Same pre-existing over-match, not a new failure mode; no fix needed,
-  recorded here only so a future session doesn't rediscover it as new.
-  `corpus_version()`'s one gap: an in-place admin re-chunk edit isn't
-  reflected (reuse defaults OFF, so moot until reuse is enabled).
+  100-dial / >~12-per-worker ceiling is actually lifted. **Known and
+  deliberately unfixed:** the live `match_position_paper` over-matches ("What is
+  deliverance?" → baptism house voice); `producer.py`'s explicit precedence
+  means a paper match always wins over stored-position injection, so this is
+  contained rather than a new failure mode. `corpus_version()` does not reflect
+  an in-place admin re-chunk edit (reuse defaults OFF, so moot until reuse is
+  enabled).
 
 - **The repo-root `nixpacks.toml` is the async worker service's build manifest —
   load-bearing, NOT a stray duplicate of `backend/nixpacks.toml`.** Added
@@ -1916,13 +1508,6 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   landmine's blocker (d)). Pooler port residual closed 2026-08-07; remaining residual
   is a real concurrency window at the 100-dial.
 
-- **RESOLVED 2026-08-08** — `ingest_helloao.py` now routes through
-  `shared_ingest.ingest_document()` (commit `929bc34`, archived PLAN Phase 5 in `docs/plan-archive.md`
-  #13). Verified via `--dry-run`, a real single-item write (independently
-  confirmed in the DB, then deleted), and a full unfiltered batch
-  (`attempted=198 stored=0 skipped=198 failed=0`, reconciled against the
-  live DB). The 0-stored result is a real, pre-existing corpus-content gap,
-  not a script defect — PLAN.md's Ongoing #27 correction has the detail.
 - **Never run a proposition-extraction pass against "all documents with zero
   propositions" — target a NAMED document set by ID.** That bare query returns
   the 2,176 permanently-excluded Precept Austin word-studies (locked out by name,
@@ -1946,147 +1531,64 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   resilience (reopen on `psycopg2` `OperationalError`/`InterfaceError` and
   continue), as `scripts/run_full_backfill.py` already does — never run one on a
   single bare connection.
-- **Corrected 2026-07-30 — no longer true of the majority of the corpus.**
-  A fixed set of **2,409 legacy propositions (created no later than
-  2026-07-23) have NULL provenance permanently** — confirmed corpus-wide
-  2026-07-28, via the same bypass mechanism described below, and this
-  specific set of rows will never retroactively gain provenance (nothing
-  rewrites old rows). **But generation resumed and the backfill ran
-  2026-07-30**, using the now-closed bypass-proofing (Invariant 10): 5,814
-  propositions written since (222 `v3`, 5,592 `v3.1`) all carry correct,
-  verified `prompt_version`/`prompt_fingerprint`/`model` — confirmed by
-  direct query, not assumed. Provenance stamping (migration 067) never
-  fired on an actual write until this session: every write before
-  2026-07-30, including all 2,409 legacy rows, went through a since-deleted
-  one-off script that called `extract_propositions()`/`store_propositions()`
-  directly, bypassing the stamping call site inside `process_document()`.
-  The underlying bypass mechanism itself is now closed (2026-07-30) — see
-  Invariant 10 — an unstamped write is structurally impossible on any
-  future call through `store_propositions()`, not merely discouraged. That
-  fix has no effect on the 2,409 rows already in the table before it
-  landed; it only guarantees writes from 2026-07-29 onward are stamped. A
-  2026-07-23 diagnostic built a reasonably strong circumstantial case for
-  what produced the pre-07-23 rows specifically (git history + a
-  full-corpus text sweep for one known leak), but that's evidence, not a
-  stored fact for those rows. Treat any claim about which prompt version
-  produced any row dated before 2026-07-29 as unverified unless re-checked
-  by the same method (`docs/plan-archive.md` #45.5) — this caveat does NOT extend to the
-  `v3`/`v3.1` rows written 2026-07-30, which carry real, queried-not-
-  inferred provenance.
-- **Citation-fabrication scale claims from 2026-07-28 are superseded — do
-  not cite the 72-reference/64-proposition baseline as ground truth
-  anywhere.** The scanner behind that figure
+- **A fixed set of 2,409 legacy propositions (created no later than 2026-07-23)
+  have NULL provenance permanently** — nothing rewrites old rows. Treat any
+  claim about which prompt version produced a row dated before 2026-07-29 as
+  unverified unless re-checked by the method in `docs/plan-archive.md` #45.5.
+  Every proposition written since 2026-07-29's bypass-proofing build carries
+  real, queried-not-inferred `prompt_version`/`prompt_fingerprint`/`model`
+  (Invariant 10) — this caveat does not extend to those.
+- **Do not cite the 2026-07-28 "72 fabricated references / 64 propositions"
+  baseline anywhere — it is superseded.** The scanner behind it
   (`reference_grounding.find_reference_spans()`) only recognizes compact
   "Book N:M" citations and is blind to spoken forms ("Hebrews chapter ten,
   verse twenty-five") and to the dominant expository pattern where a book is
-  named once and later citations are verse-only — a manual check on 5/5
-  sampled "fabrications" found every one was a genuine reference the scanner
-  simply couldn't parse. Genuine citation fabrication now appears RARE: two
-  cases confirmed to date by direct full-source reading, from two
-  independent detection efforts — Carter Conlon's Matthew 7:21-23 addition
-  (2026-07-24, found via a since-rejected similarity-based misattribution
-  check) and Leonard Ravenhill's Philippians 4:8-9 citation (2026-07-28, a
-  real reference grafted onto the wrong point in the same sermon). A third,
-  structurally different case (Savchuk's "Devil's Voice" — an invented
-  scriptural-AUTHORITY claim with no actual chapter:verse to check) remains
-  confirmed but undetectable by any reference-grounding check by
-  construction — nothing to parse. **Documented here since 2026-07-24/
-  2026-07-28 but never actually remediated until 2026-08-04 — found still
-  live and `eligible=true` by the position-layer design pressure test
-  (`docs/audits/2026-08/position_layer_revival_diagnostic_2026-08-04.md`,
-  "Fabricated-proposition remediation"), because neither case is a
-  closeness or citation-existence failure (both real citations resolve
-  fine; the defect is pairing a real citation with the wrong claim), so
-  neither was ever caught by the automated flagging these two checks
-  otherwise feed.** The two ID-confirmed cases — Conlon
-  (`18783354-931f-4244-bfe3-f47ce185b3ba`) and Ravenhill
-  (`0892b75d-1c9f-4a65-a47e-768c1c5c1803`) — are now `eligible=false`
-  (`scripts/remediate_fabricated_propositions_2026-08-04.py`), removing
-  them from all future position-layer evidence gathering; **content was
-  NOT rewritten for either, and per Settled decision #27 (2026-08-08)
-  never will be** — both passages stay excluded permanently, closing the
-  question this entry originally left open (a rewrite risks introducing a
-  newer, subtler error, and two passages is not a real content gap); both
-  rows still contain their original mispaired wording, just excluded from
-  use. Rebuilding the one position
-  that had consumed the Ravenhill row (`holiness and personal purity`,
-  corpus-scope) surfaced a real, unplanned side effect worth knowing before
-  anyone reruns this pattern elsewhere: with that one proposition gone, the
-  topic's evidence dominance recalculated past `DOMINANCE_THRESHOLD`, and
-  the rebuilt version is now a single-teacher Derek Prince position, not a
-  corpus position — Ravenhill, Murray, and Poonen no longer appear as
-  contributors to this topic at all, an intended consequence of the
-  already-built scope-redetermination logic, not a bug, but a bigger
-  change than "minus one contributor." **The Savchuk case
-  (`23d846db-66de-4cc6-8308-138877fd3772`, in "How to Spot the Devil's
-  Voice in Your Head") is a strong content match but was never
-  ID-confirmed against an original finding. RESOLVED 2026-08-08 — no longer
-  "left untouched, pending Alex's decision": pulled as part of the
-  quote-rail human-approval-removal session, same flag-and-exclude
-  mechanism as Conlon/Ravenhill (`scripts/
-  remediate_savchuk_proposition_2026-08-08.py`), now `eligible=false`.
-  Content NOT rewritten — a distinct, still-open question from Conlon/
-  Ravenhill's Settled decision #27 above: this case was never ID-confirmed
-  against an original finding, unlike those two, so it is not automatically
-  covered by that ruling; zero `position_evidence` rows referenced it, so no
-  position rebuild was needed.** **The spoken-form
-  gap named here is now fixed (2026-07-28,
-  `scripts/citation_verifier_layers.py`'s Layer 1,
-  commit `ff74a42`)** — but that fix lives in the repurposed
-  generation-time verifier (`docs/plan-archive.md` #45.6), not in
-  `reference_grounding.find_reference_spans()`, the scanner
-  `detect_reference_fabrication.py` actually used to produce the baseline
-  below. A trustworthy corpus-wide number still requires an actual
-  corpus-wide re-run using the fixed recognition — demoted to later work,
-  not scheduled (`docs/plan-archive.md` #45.6). Local, gitignored
-  `reference_fabrication_review/corpus_findings.jsonl` holds the stale
-  72-item list; treat every entry in it as a review candidate, not a
-  confirmed problem. See also Invariant 11 — the strip mechanism this scan
-  fed was itself found to have a backwards default; the re-wiring to a
-  confirming step is now DONE (2026-07-30), so this specific blocker on the
-  backfill is cleared, though other archived preconditions (`docs/plan-archive.md` #49) remain.
-- **RESOLVED 2026-08-18 (commit `82ec0f5`) — the book-name map is no longer
-  independently hand-maintained copies.** A 2026-07-28 blast-radius survey
-  (the BOOK_MAP ordinal/spelled/Roman-numeral fix, commit `ee267d4`) found
-  five separate maps and four live-serving consumer sites, and fixed all four
-  sites for that one bug without consolidating the underlying structure — left
-  as a landmine at the time. Re-inventoried 2026-08-18 rather than assumed:
-  the real count was three hand-typed copies, not five — two of the
-  originally-recorded four consumers (the `/study/verse` endpoint and the
-  reference verifier) already shared `backend/app/constants.py` and were never
-  actually forked. A fifth consumer not in the original four-consumer list at
-  all, `frontend/app/library/page.tsx::VERSE_BOOK_NAMES`, was found in the
-  same pass. `backend/app/constants.py::BOOK_MAP`/`ABBREV_TO_NAME` is now the
-  single canonical source; `frontend/app/study/page.tsx` and
-  `frontend/app/library/page.tsx` import the generated
-  `frontend/lib/generated/book-maps.ts` (produced by
-  `scripts/generate_book_maps_ts.py`, which has a `--check` drift gate) instead
-  of hand-typing their own copies. `frontend/lib/study-reference.ts` imports
-  the same generated module for its code/full-name identity but deliberately
-  keeps its own narrower `BOOK_ABBREVS` overlay hand-maintained — its detector
-  is intentionally more conservative than the search-box parsers (no bare
-  "Jos"/"Ezr"/"Act"-style compact forms) and its ordinal-literal forms
-  ("1st Samuel") are load-bearing there in a way they aren't on the backend
-  (which strips ordinals via `resolve_book_abbrev()` before lookup instead) —
-  this is a flagged, deliberate non-union, not leftover drift.
-  `scripts/test_book_maps_consolidation.py` (34 checks, mutation-proven)
-  covers cross-language byte-identity, the drift gate, and that no consumer
-  still hand-types a local copy. The existing "I Genesis 1:1" regression test
-  in the frontend suite still passes unchanged. Same-day follow-up (commit
-  `2ef6860`) also consolidated a second, smaller duplication this survey
-  didn't originally name: `study.py::parse_ref` and `reference_verifier.py::
-  _parse_verse_or_range` each hand-maintained an identical ordinal-strip-then-
-  normalize-then-lookup sequence (reference_verifier.py's own retired comment
-  said "kept independently in sync ... must be mirrored here") — both now call
-  the shared `app.constants.resolve_book_abbrev()`.
-- **RESOLVED 2026-08-06 — `study-reference.ts::detectVerseReferences` no
-  longer underlines an embedded valid substring after an unrecognized
-  alphabetic prefix.** The live bug confirmed 2026-07-28 (`"I Genesis 1:1"`
-  incorrectly underlined only `"Genesis 1:1"`) is covered by a regression
-  test and verified on the real rendered chat-message component. Recognized
-  prefixes (`1 Samuel`, `II Timothy`, `First Corinthians`) remain valid. This
-  fix is deliberately isolated to the chat underliner; the other independent
-  book-name matching copies were not changed.
+  named once and later citations are verse-only. A manual check found 5 of 5
+  sampled "fabrications" were genuine references the scanner simply could not
+  parse. The local, gitignored `reference_fabrication_review/corpus_findings.jsonl`
+  still holds the stale list — treat every entry as a review candidate, never a
+  confirmed problem. A trustworthy corpus-wide number requires a re-run using
+  the fixed recognition in `scripts/citation_verifier_layers.py`'s Layer 1; not
+  scheduled.
+
+  **Genuine citation fabrication appears RARE — three cases, all now excluded
+  from evidence gathering.** Conlon/Matthew 7:21-23
+  (`18783354-931f-4244-bfe3-f47ce185b3ba`) and Ravenhill/Philippians 4:8-9
+  (`0892b75d-1c9f-4a65-a47e-768c1c5c1803`) are both a REAL citation paired with
+  the wrong claim — which is exactly why no closeness or citation-existence
+  check ever caught them, and why they sat live and `eligible=true` for months
+  after being documented. Savchuk's "Devil's Voice"
+  (`23d846db-66de-4cc6-8308-138877fd3772`) is an invented scriptural-AUTHORITY
+  claim with no chapter:verse to check — undetectable by any reference-grounding
+  check by construction. All three are now `eligible=false`. None was rewritten;
+  per Settled #27 the two ID-confirmed ones never will be. Savchuk's stored text
+  remains a separate open question, being the one case never ID-confirmed
+  against an original finding.
+
+  **The side effect worth knowing before rerunning this pattern elsewhere:**
+  removing the single Ravenhill proposition recalculated the topic's evidence
+  dominance past `DOMINANCE_THRESHOLD`, turning `holiness and personal purity`
+  from a 4-teacher corpus position into a Derek Prince-only teacher position —
+  Ravenhill, Murray, and Poonen stopped appearing as contributors at all.
+  Intended behavior of the already-built scope-redetermination logic, but a far
+  bigger change than "minus one contributor."
+- **`backend/app/constants.py::BOOK_MAP`/`ABBREV_TO_NAME` is the single
+  canonical book-name map — do not hand-type a fourth copy.**
+  `frontend/app/study/page.tsx` and `frontend/app/library/page.tsx` import the
+  generated `frontend/lib/generated/book-maps.ts` (produced by
+  `scripts/generate_book_maps_ts.py`, which has a `--check` drift gate);
+  `study.py::parse_ref` and `reference_verifier.py` both call the shared
+  `app.constants.resolve_book_abbrev()` rather than each re-deriving the
+  ordinal-strip-then-normalize-then-lookup sequence.
+  `scripts/test_book_maps_consolidation.py` (34 checks, mutation-proven) covers
+  cross-language byte-identity, the drift gate, and that no consumer still
+  hand-types a local copy. **One deliberate non-union, flagged so it is not read
+  as leftover drift:** `frontend/lib/study-reference.ts` imports the generated
+  module for code/full-name identity but keeps its own narrower `BOOK_ABBREVS`
+  overlay hand-maintained — its detector is intentionally more conservative than
+  the search-box parsers (no bare "Jos"/"Ezr"/"Act"-style compact forms) and its
+  ordinal-literal forms ("1st Samuel") are load-bearing there in a way they are
+  not on the backend, which strips ordinals via `resolve_book_abbrev()` first.
 - Some sources have no alias rows; re-ingesting their content sentinels
   silently. `ALIAS_MISS` is the grep-able breadcrumb.
 - **No cheap check exists for the demonstrated fabrication class: real,
@@ -2200,31 +1702,6 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   book chunks across 10 of 53 documents, and the detector's two regressions
   above are exactly why it isn't safe to lean on for boundary-finding
   either — see archived PLAN Phase 4 in `docs/plan-archive.md`).
-- **CORRECTED 2026-08-01 — no longer an open decision.** The two live
-  imperfections below (originally found 2026-07-31) are now fixed at the
-  data level, not just in code: commit `8e251c8` shipped the byline/
-  apparatus/digit-ratio fixes described in the entry below this one, and a
-  same-session DB-write pass used them to correct both books directly,
-  independently re-verified against a fresh connection (not the
-  correction script's own self-report). "The New Life": the 3 specific
-  propositions (of 411) that came from the Translator's Note were
-  identified via `proposition_chunks` chunk-linkage (disambiguated from
-  10 genuinely-Murray Preface propositions that merely shared one
-  boundary chunk) and deleted — 411 → 408 live propositions. "The Lord's
-  Table": "VII. Saturday" (57 real words, confirmed to have zero existing
-  propositions, same disambiguation method) was extracted and stored as
-  proposition_index 149 — 148 → 149 live propositions. See
-  `rhemata-status.md`'s "Live-DB corrections + Wesley's Journal real
-  write" entry for the full evidentiary detail. Archived Open Decision #22 in `docs/plan-archive.md`
-  should be closed to match — original text left below for the historical
-  record, not because it's still open:
-  - Two book documents already have live propositions with small, known,
-    uncorrected defects (found 2026-07-31, fixed in code for future
-    extractions, not retroactively repaired). "The New Life" (Andrew
-    Murray) has a translator's note misattributed to Murray among its 411
-    live propositions. "The Lord's Table" (Andrew Murray) is missing one
-    real ~57-word entry ("VII. Saturday") that a since-fixed bug wrongly
-    excluded before the book was written.
 - **The third-party-attribution byline detector built to fix the Wesley
   misattribution bug is over-broad and unproven beyond one book — still
   true after committing.** `_has_third_party_byline()` (now committed,
