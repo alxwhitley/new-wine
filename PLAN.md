@@ -9,18 +9,20 @@ relevance are below the desired bar; re-enablement requires the Scheduled
 repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
-**Current item:** None — **B6-F1 is DONE** (2026-08-26). The activation flag
-was flipped to `true` and its wiring code was found to have been drafted but
-never actually deployed (only the migration and `producer.py`'s underlying
-correction were live); committed and deployed same day, commit `77fbb52`. A
-live smoke check against the exact reproduction question confirmed the fix
-— see the closed entry below. **Active blocker count: 0.** Quote repair
-remains Scheduled, not an active Blocker.
+**Current item: B7 — fail-closed analytics → answer coupling.** Alex's
+decision 2026-08-31: this must be resolved before real beta users. **Active
+blocker count: 1.** Quote repair remains Scheduled, not an active Blocker.
 
-**2026-08-31 session (attended, two separate outcomes; neither is a Blocker
-and neither promoted one).** (1) The deferred analytics production smoke ran
-and passed: search analytics genuinely record and process end to end, proven
-by live submission plus independent read, not by code reading —
+**B6-F1 is DONE** (2026-08-26). The activation flag was flipped to `true` and
+its wiring code was found to have been drafted but never actually deployed
+(only the migration and `producer.py`'s underlying correction were live);
+committed and deployed same day, commit `77fbb52`. A live smoke check against
+the exact reproduction question confirmed the fix — see the closed entry below.
+
+**2026-08-31 (attended, three outcomes; one promoted a Blocker).** (1) The
+deferred analytics production smoke ran and passed: search analytics genuinely
+record and process end to end, proven by live submission plus independent
+read, not by code reading —
 `docs/audits/2026-08/analytics_production_smoke_2026-08-31.md`, commit
 `fe1026f`. Five residuals are named there and all remain unverified, chiefly
 personal-wording redaction and the retention purge actually firing; none
@@ -28,8 +30,10 @@ blocks the beta journey. (2) `scripts/verify_metering_live.py` was guarded
 against accidental production writes (`--apply` required, import
 side-effect-free, proven by tripwiring every I/O entry point), commit
 `a395efb`, then renamed out of the `test_*.py` namespace on Alex's approval so
-it stops advertising itself to other plans as the pattern to copy. **Active
-blocker count remains 0.**
+it stops advertising itself to other plans as the pattern to copy. (3) The
+fail-closed coupling that the smoke surfaced was investigated and **promoted
+to Blocker B7 on Alex's decision** — investigation only, deliberately not
+fixed.
 
 **B6 general answer-latency — DONE, live (2026-08-27), not a Blocker item.**
 Never promoted past `docs/roadmap.md`'s Scheduled B6 latency work; recorded
@@ -57,6 +61,55 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
   execution and a **$50 ceiling** unless Alex explicitly approves more.
 
 ## Active blocker sequence
+
+### B7 — Fail-closed analytics → answer coupling
+
+**Status:** OPEN — investigated 2026-08-31, **not fixed**. Alex's decision the
+same day: must be resolved before real beta users. Investigation only; no fix
+was designed, chosen, or implemented, and choosing one is Alex's call.
+
+The problem: an analytics-subsystem failure takes answers away from real users.
+`POST /async-chat/submit` makes three blocking analytics calls
+(`async_chat.py:215-248`) *after* the quota is spent and the job is already
+enqueued. On failure the caller never receives its `job_id`, so the worker
+still generates and pays for an answer nobody receives.
+
+What the investigation changed about the premise, both worth knowing before
+anyone scopes a fix:
+
+- **It is not one fail-closed branch, it is three, and only one is
+  deliberate.** `create_occurrence` is guarded and returns 503
+  `analytics_unavailable`. The two consent reads before it have no `except` at
+  all and produce an unhandled **500**.
+- **It is not limited to consented accounts.** The consent *check* is itself
+  unguarded and runs for every signed-in user, so an `analytics_consent` read
+  failure removes answers from users who never opted in and from users who
+  explicitly withdrew. Guests are fully immune.
+
+Two of the three branches are protecting something real and must keep failing
+closed **with respect to recording** — unknown consent must resolve to "not
+consented," and no occurrence may be written that `withdraw()` could not later
+delete. Neither protection requires withholding an answer; the coupling exists
+because "skip the write" and "reject the request" were never separated. The
+third branch protects analytics completeness only — a product-quality goal, not
+a privacy or safety one.
+
+Blast radius today: no error monitoring of any kind exists, the healthcheck
+(`healthcheckPath = "/"`) stays green throughout, the client reports the
+failure to the user as "Something went wrong. Please try again" while
+internally mislabelling it `queue_full`, and that copy plus the failed-turn
+strip actively invites retries that each burn quota and another generation.
+The analytics feature cannot detect its own outage, because "no rows written"
+is indistinguishable from "no traffic" — the exact ambiguity Phase A of the
+2026-08-31 smoke ran into.
+
+Also latent, and it should gate any key rotation: branch 2 becomes a live
+outage the moment `CURRENT_SUBJECT_KEY_VERSION` is bumped. Separately, no
+timeout is configured anywhere on this path, so a hung dependency hangs the
+request under any remediation.
+
+Six remediation options with explicit tradeoffs, none recommended:
+`docs/audits/2026-08/analytics_answer_coupling_2026-08-31.md`.
 
 ### B6-F1 — Named-teacher/stored-position route collision
 
