@@ -483,6 +483,78 @@ def main():
     check("a cancelled statement is NOT retried (budget cannot silently double)",
           attempts[0] == 1, "attempts=%d" % attempts[0])
 
+    # ── The key-rotation exposure the audit flagged as latent ───────────────
+    #
+    # Before B7, bumping CURRENT_SUBJECT_KEY_VERSION turned every consented
+    # user's next submission into an unguarded derive_subject_key() call. If
+    # the new secret was not configured, MissingHmacSecretError escaped as a
+    # 500 -- a rotation was a live outage. This asserts that is no longer
+    # true, using the REAL consent code path rather than a stand-in, because
+    # a CLAUDE.md landmine is written off the back of it.
+
+    print("\nKEY ROTATION -- a bump with a missing secret is no longer an outage")
+    import os as _os
+    from app.services.search_analytics import consent as real_consent
+
+    class _StaleConsentSupabase:
+        """Returns a consent row one version BEHIND current, which forces
+        _rotate_if_stale() down the derive_subject_key() branch."""
+
+        def table(self, name):
+            return self
+
+        def select(self, *a, **k):
+            return self
+
+        def eq(self, *a, **k):
+            return self
+
+        def limit(self, *a, **k):
+            return self
+
+        def execute(self):
+            class _R:
+                data = [{
+                    "user_id": USER_ID,
+                    "policy_version": "v1",
+                    "subject_key": "old-key",
+                    "subject_key_version": real_consent.CURRENT_SUBJECT_KEY_VERSION - 1,
+                    "retired_subject_keys": [],
+                    "withdrawn_at": None,
+                }]
+            return _R()
+
+    saved = _os.environ.pop(
+        "ANALYTICS_HMAC_SECRET_V%d" % real_consent.CURRENT_SUBJECT_KEY_VERSION, None)
+    try:
+        raised = None
+        try:
+            real_consent.get_or_rotate_subject_key(_StaleConsentSupabase(), USER_ID)
+        except Exception as exc:  # noqa: BLE001
+            raised = exc
+        check("the underlying rotation still raises without the secret (unchanged)",
+              raised is not None and type(raised).__name__ == "MissingHmacSecretError",
+              "raised=%r" % (raised,))
+
+        key_state = recording._deletable_subject_key(_StaleConsentSupabase(), USER_ID)
+        check("...but recording.py absorbs it -> no key, so no write",
+              key_state is None)
+
+        RecordingDb.statements = []
+        out = recording.record_search_occurrence(
+            lambda: RecordingDb(), _StaleConsentSupabase(),
+            user_id=USER_ID, submission_id="s", job_id=JOB_ID, question="q",
+        )
+        check("a rotation with a missing secret degrades, it does not raise",
+              out == recording.SKIPPED_KEY_UNAVAILABLE, "outcome=%s" % out)
+        check("...records nothing", occurrence_writes() == [])
+        check("...and leaves the marker so the silence is visible",
+              len(marker_writes()) == 1)
+    finally:
+        if saved is not None:
+            _os.environ["ANALYTICS_HMAC_SECRET_V%d"
+                        % real_consent.CURRENT_SUBJECT_KEY_VERSION] = saved
+
     print("\nSTRUCTURAL -- the answer path no longer references analytics directly")
     src = (ROOT / "backend" / "app" / "routers" / "async_chat.py").read_text()
     # Compare against executable code only -- a comment mentioning

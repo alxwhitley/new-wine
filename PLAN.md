@@ -10,8 +10,10 @@ repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
 **Current item: B7 — fail-closed analytics → answer coupling.** Alex's
-decision 2026-08-31: this must be resolved before real beta users. **Active
-blocker count: 1.** Quote repair remains Scheduled, not an active Blocker.
+decision 2026-08-31: must be resolved before real beta users. Items 2 and 4
+are built and proven; item 3 is built but **inert until migration 095 is
+applied**, and nothing is deployed. **Active blocker count: 1** — B7 stays
+open until 095 is applied and all three are live. Quote repair remains Scheduled, not an active Blocker.
 
 **B6-F1 is DONE** (2026-08-26). The activation flag was flipped to `true` and
 its wiring code was found to have been drafted but never actually deployed
@@ -32,8 +34,8 @@ side-effect-free, proven by tripwiring every I/O entry point), commit
 `a395efb`, then renamed out of the `test_*.py` namespace on Alex's approval so
 it stops advertising itself to other plans as the pattern to copy. (3) The
 fail-closed coupling that the smoke surfaced was investigated and **promoted
-to Blocker B7 on Alex's decision** — investigation only, deliberately not
-fixed.
+to Blocker B7 on Alex's decision**; a later same-day session built the fix
+(decoupling, marker, timeout) but B7 remains OPEN — see its entry.
 
 **B6 general answer-latency — DONE, live (2026-08-27), not a Blocker item.**
 Never promoted past `docs/roadmap.md`'s Scheduled B6 latency work; recorded
@@ -64,9 +66,62 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ### B7 — Fail-closed analytics → answer coupling
 
-**Status:** OPEN — investigated 2026-08-31, **not fixed**. Alex's decision the
-same day: must be resolved before real beta users. Investigation only; no fix
-was designed, chosen, or implemented, and choosing one is Alex's call.
+**Status: STILL OPEN — code complete, NOT closed.** Items 2 and 4 are built,
+proven, and committed. **Item 3 is built but inert:** the marker cannot be
+written until migration 095 is applied, and it has not been. Nothing in this
+entry is deployed to Railway either. B7 closes when 095 is applied and the
+three items are live — not before.
+
+Remaining to close, both attended and both Alex's:
+
+1. `python3.12 scripts/apply_migration_095.py --apply` (dry-run verified
+   against the live database: 0 columns added, nothing written).
+2. Deploy. Order does not matter for safety — if the code ships first, the
+   marker write fails against the missing column, is caught, and degrades to
+   a log line; it never costs an answer.
+
+**Item 2 — decoupling. DONE (`f2ee6ff`).** When analytics cannot be reached,
+or consent state cannot be determined, the system does not record and answers
+anyway. All three calls moved behind `recording.record_search_occurrence()`,
+which never raises; the router has no except clause by design. Both privacy
+protections preserved exactly — unknown consent never resolves to
+"consented," and nothing is written under a key `withdraw()` could not find.
+Only the consequence of a refusal changed, from "no answer" to "no row."
+`enforce_query_limit` untouched and still fail-closed; guests unchanged.
+
+**Item 3 — marker. BUILT, NOT LIVE.** Migration 095 adds
+`answer_jobs.analytics_outcome`, stamped only on a degraded outcome, so
+"analytics was down for these hours" stops being indistinguishable from
+"nobody searched." Lands over direct Postgres, which survives a PostgREST
+outage, on a row guaranteed to exist because enqueue already succeeded over
+that same connection. Carries no question, no fingerprint, no subject key,
+and `answer_jobs` has no `user_id`, so it creates no account-to-search
+linkage. Read it with `scripts/analytics_health_report.py` — no
+`rhemata_readonly_analysis` grants needed, and those stay deferred.
+
+**Item 4 — timeout. DONE (`f80d4a2`).** No timeout existed anywhere on this
+path, so a hung dependency stalled the request under any remediation. Now 5s,
+taken from `pastors_notes.TAGGING_TIMEOUT`'s precedent (auxiliary enrichment
+on a user-facing path, non-fatal if exceeded) rather than invented, applied
+where it interrupts I/O: a dedicated analytics Supabase client and an opt-in
+`Db(statement_timeout_ms=...)`. The worker's Db carries no budget. A
+`QueryCanceled` is excluded from `Db.run`'s retry, which would otherwise have
+silently doubled it.
+
+**Proof:** `scripts/test_analytics_answer_decoupling.py`, 50 checks, each
+failure mode driven against the real `submit()` and asserted twice — answer
+served, and nothing recorded, the latter observed from actual INSERT
+statements. Mutation-verified: each guard reverted in turn fails the suite,
+including guard 1 recording an unconsented user.
+
+**User-facing half of the audit's (e): resolved by removal, copy untouched
+per Alex.** `analytics_unavailable` no longer exists in any code path, so the
+mislabel where an analytics failure surfaced to the user as `queue_full` is
+gone — those failures no longer reach a user at all. The remaining 503s are
+`async_serving_disabled` (own message) and a genuine `queue_full`, which is
+now accurate whenever it appears.
+
+*Investigation (2026-08-31, no fix designed at the time) below.*
 
 The problem: an analytics-subsystem failure takes answers away from real users.
 `POST /async-chat/submit` makes three blocking analytics calls

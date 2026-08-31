@@ -998,6 +998,37 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **Rotating `CURRENT_SUBJECT_KEY_VERSION` is no longer an outage — that
+  exposure is genuinely closed, 2026-08-31 (B7 item 2, commit `f2ee6ff`).
+  Recorded as a correction, not a standing warning, because the stale form
+  of this warning ("a bump takes the product down") would now send a future
+  session chasing a risk that no longer exists.** What was true until B7:
+  a version bump sent every consented user's next submission through an
+  UNGUARDED `derive_subject_key()` in `async_chat.py`'s `/submit`, so if
+  `ANALYTICS_HMAC_SECRET_V{n+1}` was not configured,
+  `MissingHmacSecretError` escaped as an unhandled 500 and a rotation was a
+  live outage. `search_analytics/recording.py` now absorbs it: no key means
+  no write, and the answer is served regardless. **Proven, not assumed** —
+  `scripts/test_analytics_answer_decoupling.py` drives the REAL
+  `consent.get_or_rotate_subject_key()` with a deliberately stale row and
+  the secret removed from the environment, and asserts it still raises
+  (unchanged), that `recording.py` absorbs it, and that the outcome is
+  `skipped_key_unavailable` rather than an exception.
+
+  **What genuinely remains, and it is a data risk rather than an
+  availability one:** bumping the version without configuring the new
+  secret first silently stops recording for EVERY consented account. No
+  error, no outage, no answer lost — just no analytics, indefinitely, until
+  someone notices. Set `ANALYTICS_HMAC_SECRET_V{n+1}` BEFORE bumping the
+  constant, never after. That silence is visible in
+  `answer_jobs.analytics_outcome` (`skipped_key_unavailable`) via
+  `scripts/analytics_health_report.py` — **but only once migration 095 is
+  applied**; until then a rotation's fallout leaves nothing but a log line.
+  Also unchanged and still load-bearing: `consent.withdraw()` finds rows by
+  the current key plus every entry in `retired_subject_keys`, so a rotation
+  that loses the outgoing key makes its rows undeletable — never write a
+  rotation path that skips preserving it.
+
 - **An LLM told to "preserve ALL content verbatim" will quietly rewrite
   instead, and nothing compared stored text against source — RESOLVED
   2026-08-29 (commit `617341c`); recorded because the failure class outlives
