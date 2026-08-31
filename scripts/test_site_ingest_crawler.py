@@ -139,6 +139,35 @@ check("www. is stripped for comparison", same_registrable_host("https://www.exam
 check("different hosts do not match", not same_registrable_host("https://example.com/a", "https://evil.com/a"))
 check("subdomain is NOT the same host (conservative)", not same_registrable_host("https://blog.example.com/a", "https://example.com/a"))
 
+
+class _ExistingUrlCursor:
+    def execute(self, sql):
+        check("existing URL lookup queries only the queue URL column", sql == "SELECT url FROM source_ingest_queue")
+
+    def fetchall(self):
+        return [
+            {"url": "https://craigkeener.com/remnant-radio-overcoming-hardship/"},
+            {"url": "https://craigkeener.com/another-post/?utm_source=queue#section"},
+            {"url": "https://example.com/not-craig/"},
+        ]
+
+
+known_craig_urls = site_ingest_crawler.existing_urls_for_domain(
+    _ExistingUrlCursor(), "https://craigkeener.com/blog"
+)
+check(
+    "queued trailing-slash URL matches discovery's slashless canonical form",
+    "https://craigkeener.com/remnant-radio-overcoming-hardship" in known_craig_urls,
+)
+check(
+    "queued URL query and fragment are removed by the shared canonical form",
+    "https://craigkeener.com/another-post" in known_craig_urls,
+)
+check(
+    "existing URL lookup remains scoped to the requested host",
+    "https://example.com/not-craig" not in known_craig_urls,
+)
+
 # ---------------------------------------------------------------------------
 # link_discovery: discover_links
 # ---------------------------------------------------------------------------

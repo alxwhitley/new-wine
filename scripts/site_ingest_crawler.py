@@ -96,7 +96,11 @@ from source_ingest_queue.fetcher import (  # noqa: E402
     fetch_html,
 )
 from source_ingest_queue.html_extract import HtmlRejected, extract_article_bounded  # noqa: E402
-from source_ingest_queue.link_discovery import discover_links, same_registrable_host  # noqa: E402
+from source_ingest_queue.link_discovery import (  # noqa: E402
+    discover_links,
+    normalize_candidate_url,
+    same_registrable_host,
+)
 from sync_master_ingestion_queue import determine_default_submitted_by  # noqa: E402
 
 SHEET_PATH = sheet_io.TAB_FILES[APPROVED_TAB]
@@ -197,7 +201,7 @@ def crawl_candidate_urls(blog_url: str, *, max_pages: int) -> List[str]:
 def existing_urls_for_domain(cur, sample_url: str) -> set:
     cur.execute("SELECT url FROM source_ingest_queue")
     return {
-        row["url"]
+        normalize_candidate_url(row["url"])
         for row in cur.fetchall()
         if same_registrable_host(row["url"], sample_url)
     }

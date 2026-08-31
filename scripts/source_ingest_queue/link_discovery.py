@@ -119,6 +119,12 @@ def same_registrable_host(a: str, b: str) -> bool:
     return bool(host_a) and host_a == host_b
 
 
+def normalize_candidate_url(url: str) -> str:
+    """Return the canonical form used for discovered and already-queued URLs."""
+    split = urlsplit(url)
+    return split._replace(fragment="", query="").geturl().rstrip("/")
+
+
 def _looks_like_post_path(path: str) -> bool:
     if not path or path == "/":
         return False
@@ -153,7 +159,7 @@ def discover_links(
             continue
         if not same_registrable_host(absolute, page_url):
             continue
-        normalized = split._replace(fragment="", query="").geturl().rstrip("/")
+        normalized = normalize_candidate_url(absolute)
 
         rel = (link.get("rel") or "").lower()
         text = link.get("text") or ""
