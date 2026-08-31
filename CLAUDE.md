@@ -1514,6 +1514,24 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   `POLICY_VERSION = "policy_v3"` prevents reuse of pre-contract anonymous
   answers; `scripts/test_single_author_attribution_contract.py` is the
   mutation-proven regression.
+- **NEVER write a comma-joined `documents.author` ("Paul Kidd, Shabaka
+  Williams") — it silently breaks attribution grounding, 2026-08-31.**
+  `reference_verifier.build_retrieval_grounding()` builds `author_keys` via
+  `normalize_alias_key(author)` on the WHOLE string and matches it exactly
+  (`normalize_alias_key(name) in grounding.author_keys`); there is no comma
+  splitting anywhere on that path. So a joined author permits only that
+  literal joined string as a name: a *correct* "Paul Kidd" attribution
+  normalizes to `paul kidd`, misses, and drives regenerate-once-then-refuse.
+  `producer.py`'s `permitted_names` inherits the same flaw, and the per-author
+  3-chunk cap treats the joined string as a separate author. `documents.author`
+  is a single text column with no multi-author support — a genuinely
+  two-speaker document must go `citation_mode='silent_context'`, not carry
+  both names. Three CLF documents were found in this state and silenced
+  2026-08-31. The same sweep found title-prefixed duplicates (`Pastor Paul
+  Kidd` vs `Paul Kidd`) each drawing their own share of the 3-chunk cap, and a
+  parser artifact author of `Sunday` (taken from "… | Sunday Message") sitting
+  in the permitted-name set — **check `documents.author` after any
+  title-derived ingest; the speaker parser is not reliable.**
 - **A permission-classifier layer built into the interactive chat-session
   tool became the default permission model 2026-08-14 and blocks direct
   production DB writes from a session on that tool — no settings-based
@@ -2084,7 +2102,20 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   56 sermons total, every one verified verbatim against source: 49 from
   "Sermons" (ingested, then re-ingested after the caption defect below) and
   7 from "Sermon Archive". That reversal covers CLF Church alone; it does not
-  reopen the queue for any other channel. **Both stages are `--sheet`-scoped
+  reopen the queue for any other channel. **The 15 further CLF recordings left
+  at `ingest=FALSE` are held PERMANENTLY — Alex's ruling 2026-08-30. Do not
+  ingest them, and do not reopen this as a runtime/length question: length does
+  not discriminate them** (7 of 14 carry fewer words than the largest CLF
+  document already ingested). They are whole-service uploads carrying
+  **named-congregant pastoral material** — prayer over a named member covering
+  her wayward children and health, a baby dedication naming the infant in full,
+  a woman walked forward and described live — which under a named minister as
+  `sermon_transcript` becomes retrievable teaching material. **No trimming step
+  may be built to salvage them**: the sustained-speech block contains the
+  offering, dedications, and altar calls, so trimming does not isolate the
+  message, and a model deciding where a message ends is the mechanism that
+  discarded 60–75% of every sermon before `617341c`. Evidence:
+  `docs/audits/2026-08/clf_held_recordings_review_2026-08-30.md`. **Both stages are `--sheet`-scoped
   (`youtube_triage.py --sheet NAME --add URL`, then `youtube_ingest.py
   --sheet NAME`) — that is what keeps a CLF run off the other tabs.** The
   `run_queue_*.py` wrappers are the all-tabs form: a bare `run_queue_ingest.py`
@@ -2095,6 +2126,19 @@ deactivates the prior tab through `tabs.sendMessage()` without requesting the
   ingest one channel. Related trap: `documents.url` carries **no unique
   constraint**, so nothing in the schema stops the same video becoming two
   documents — any new ingest path must dedup for itself.
+
+  **Four traps when verifying a YouTube ingest — the first two burned two
+  sessions as false alarms.** (1) Chunks OVERLAP (`chunk_target=550,
+  overlap=80`), so concatenating stored chunks inflates the text by ~17% and
+  can never be compared against source length; check each chunk is a verbatim
+  substring instead. (2) Chunk 0 carries the metadata header, so compare
+  against the COMPOSED file in `sources/youtube/ingested/`, not the raw
+  captions. (3) **Never split a filename on `_` to recover a video id** — ids
+  contain underscores (`Al_a7taOEo0`); match the `{video_id}_` prefix. (4) A
+  successful ingest MOVES its transcript to `sources/youtube/ingested/` and
+  only a FAILED one deletes (`5c94b3c`), so presence in that directory means
+  "this is in the corpus" — `sources/web/` is a different lane (web scrapes)
+  and never holds YouTube material.
 - **No mechanism exists anywhere in this schema to link two documents as one
   work.** The standing "link, don't merge" policy for split-work groups and
   duplicate clips (`docs/plan-archive.md` #44) has no table or column backing it yet —

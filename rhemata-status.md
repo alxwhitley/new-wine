@@ -7,11 +7,12 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-30. **PLAN.md has zero active blockers.** This session
-ingested a second CLF playlist (7 sermons, verified verbatim), held 15
-entries back as out-of-shape for the corpus, fixed a duplicate-document
-defect in triage, stopped the YouTube path deleting its own transcripts, and
-backfilled all 56 CLF local files at zero API cost.
+Last verified: 2026-08-31. **PLAN.md has zero active blockers.** Across
+2026-08-30/31: ruled the 15 held CLF recordings out permanently, cleared and
+ingested 7 of the 10 misclassified `unknown` rows (CLF YouTube 56 → 63),
+cleaned CLF's citable author names 16 → 12, fixed two ingest defects
+(`5c94b3c`, `9224650`), and gave `sources/` its first off-machine backup. The
+CLF tab is now fully triaged with nothing undecided on it.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines
 for this file.
@@ -20,89 +21,47 @@ for this file.
 
 ## Current state
 
-**CLF Church "Sermon Archive" playlist — 7 ingested and source-verified; 25
-deliberately held.** Second playlist under the same one-channel reversal
-(CLAUDE.md Landmines). The prior session's 49 from "Sermons" are unchanged.
-Live count 2026-08-29: **56 CLF YouTube documents**, 0 duplicate YouTube URLs
-corpus-wide.
+**CLF Church — 63 YouTube documents (live, 2026-08-31), 0 duplicate URLs
+corpus-wide.** Plus 15 pre-existing non-YouTube CLF docs, so a bare `count(*)`
+on the source reads 78 — filter on `url ILIKE '%youtu%'` before comparing
+against any YouTube figure. Zero propositions throughout: `owned` sources skip
+the license gate. Every CLF document has a local file. **The CLF tab is fully
+triaged — nothing on it is undecided:** 15 `held_permanent`, 7 ingested and
+source-verified, 3 `held_speaker`, 1 `unavailable`. The ingest gate matches 0
+rows on that tab. Ingest/verification traps have moved to CLAUDE.md's YouTube
+landmine.
 
-1. **Triage** (`youtube_triage.py --sheet NAME --add <playlist>
-   --min-duration 300`): 43 entries → 40 unique → 32 net-new rows. **Both
-   stages must be `--sheet`-scoped** — a bare `run_queue_ingest.py` would
-   have ingested 731 rows across three channels outside the reversal.
-2. **Ingested 7** (`youtube_ingest.py --sheet NAME`): 7 done, 0 failed, 0
-   needs_source, all captions, no Whisper. 189 chunks. Zero propositions.
-3. **Verified verbatim 7/7**, 116–195 wpm against real durations — no
-   truncation signature. Scripture audit clean: 111/111 genuine.
-   **Verification gotcha, both hit this session as false alarms:** chunks
-   overlap (`chunk_target=550, overlap=80`) so concatenating inflates ~17%
-   and cannot be compared to source; and chunk 0 carries the metadata
-   header, so compare against the composed file, not raw captions.
+**15 recordings held permanently (Alex, 2026-08-30)** on content shape and
+pastoral-privacy exposure, **not runtime** — do not reopen as a length
+question, and no trimming step may be built to salvage them. Reasoning in
+CLAUDE.md; evidence in
+`docs/audits/2026-08/clf_held_recordings_review_2026-08-30.md`.
 
-**15 long recordings held at `ingest=FALSE`, pending Alex.** 92–194 min
-against a 65-min median for the existing corpus. Captions show they carry the
-whole service — sound-check, ushering, opening prayer at the front; offering
-and dismissal at the back — which would store as `sermon_transcript` under a
-named minister and become retrievable teaching material. Alex's read was that
-the excess is altar-call-after-the-message; the audio contradicts that (both
-ends), and that conflict was reported, not resolved unilaterally. **No
-trimming step exists and none should be built casually** — a model deciding
-where a message ends is the mechanism that discarded 60–75% of every sermon
-before `617341c`. `qFfoGi7Vexs` ends on material that does not read like a CLF
-service at all — likely a bad upload; check it before any policy applies.
+**3 excluded on speaker grounds (Alex, 2026-08-31):** Jeremy Porras (Raleigh
+Dream Center — not CLF), Angel Woodard, Tiffany Cogdell (unresolved against
+the existing `Tiffany Davis` identity). `AjyYzuiJo50` is `unavailable` — the
+video no longer exists on YouTube; its recorded alias failure was a symptom,
+not the cause.
 
-**Also held:** 10 rows Groq classified `unknown` (several plainly sermons,
-one titled "Sunday Morning Service") and 1 row still `needs_source` from the
-prior session (`AjyYzuiJo50`) — alias never resolved, never ingested.
+**CLF answers name the individual preacher, not the church — name list cleaned
+2026-08-31 (7 attended DB writes, reconciled from a fresh read).**
+`producer.py` builds `permitted_names` from `documents.author`, so guest
+speakers are citable authorities alongside Derek Prince. Alex's ruling: keep
+per-preacher names, fix the data. Citable CLF names **16 → 12**, no artifacts
+left. **Still open:** guest preachers who spoke once at CLF remain named
+citable voices without their knowledge — ranked failure mode #2. Alex chose
+cleanup over resolving that; it is live, not closed.
 
-**Fixed: the YouTube path deleted its own local transcripts (commit
-`5c94b3c`).** `ingest_video()` wrote the transcript to `sources/youtube/
-cleaned/`, ingested from it, then unlinked it — deliberate (the docstring
-listed "Delete temp .txt" as step 5), but it left stored documents existing
-only in Supabase; the archive had been cold since 2026-06-03. A successful
-ingest now MOVES the file to `sources/youtube/ingested/`; only a failed one
-deletes, so that directory means "this is in the corpus".
-`scripts/test_youtube_local_retention.py` is offline and mutation-proven.
-**`sources/web/` is a different lane** (web scrapes) — not where YouTube
-material belongs.
-
-**Coverage 2026-08-30 — 374 YouTube docs: 56 id-named (all CLF, this
-session), 17 old slug-named, 301 with no local file.** Two earlier figures
-were wrong: 357 (loose title matching) and 318 (id matching only). **Never
-split a filename on `_` to recover a video id** — ids contain underscores
-(`Al_a7taOEo0`); match the `{video_id}_` prefix.
-
-**CLF fully backfilled: 56/56, zero API cost.** Captions re-fetched via
-yt-dlp (no key, no billing; SELECT-only DB access), every stored chunk
-verified verbatim against the composed file before keeping it — 0 mismatches,
-0 failures. Safe only because these were re-ingested under the fixed json3
-path, so a fresh fetch reproduces what is stored.
-
-**The remaining 301 must NOT be done this way.** Savchuk 126, Ravenhill 117,
-Poonen 50, Conlon 6, Deere 1, Brown 1 — all pre-`617341c`, so a fresh fetch
-does NOT match what is stored and the script correctly refuses to write.
-Heavy overlap with, not identical to, the parked 318 caption-duplication set.
-Re-ingesting fixes both — and costs real money (non-`owned`, propositions
-regenerate). Alex's call.
-
-**Fixed: triage could create duplicate documents (commit `9224650`).**
-`process_sheet()` built its dedup set once from the sheet, so a URL listed
-twice in the same playlist appended two rows — and `documents.url` has no
-unique constraint, so that becomes two documents with nothing to catch it.
-"Sermon Archive" lists three videos twice. Corpus-wide duplicates were 0
-before this run, so the defect had never fired.
-
-**New Wine A2 — unchanged, still NOT ingestion-ready, still deliberately held
-by Alex with no next step selected.** Untouched this session. Three gates and
-the open resume options:
+**New Wine A2 — unchanged, still NOT ingestion-ready, still held by Alex with
+no next step selected.** Three gates and the open resume options:
 `docs/audits/2026-08/new_wine_opus_review_e2e_test_2026-08-29.md`. **Do not
-spend live-call budget there without a fresh named ceiling** — the $3
-approved 2026-08-29 is spent and does not carry forward.
+spend live-call budget there without a fresh named ceiling** — the $3 approved
+2026-08-29 is spent and does not carry forward.
 
 **Quote rail: still off (`QUOTE_SELECTION_ENABLED=false`) — and a standing
 risk became real.** Settled #19's residual risk read "prospective, not
 retrospective"; that is now false and CLAUDE.md is corrected in place. CLF's
-56 sermons are auto-transcribed audio under `sermon_transcript` and a
+63 sermons are auto-transcribed audio under `sermon_transcript` and a
 mistranscription is confirmed present. Nothing gates on transcript status; no
 exposure only because the flag is off. **Before it flips back on, CLF needs
 exclusion from quoting or an audio-confirmation step.**
@@ -111,43 +70,50 @@ exclusion from quoting or an audio-confirmation step.**
 
 ## Findings surfaced, not yet acted on
 
-- **318 historical YouTube documents carry residual caption duplication**
-  (Ravenhill 117, Savchuk 126, Poonen 50, Kolenda 11, Deere 6, Conlon 6).
-  Content is COMPLETE — a milder defect than CLF's. Re-ingesting regenerates
-  propositions, so it needs its own cost estimate first. `docs/roadmap.md`
-  Parked; deferred by Alex 2026-08-29. Heavily overlaps the 301 missing local
-  files above — decide both together; one re-ingest fixes both.
+- **The 301 missing local files and the 318 caption-duplication set are one
+  decision, not two** — heavy overlap, not identical, both dominated by
+  Savchuk/Ravenhill/Poonen. The 301 are all pre-`617341c`, so a fresh fetch
+  does not match what is stored and the backfill script correctly refuses to
+  write; the 318 carry residual duplication but COMPLETE content. One
+  re-ingest fixes both, costs real money (non-`owned`, propositions
+  regenerate), and needs a named cost estimate first. `docs/roadmap.md`
+  Parked; deferred by Alex 2026-08-29.
+- **`sources/` must never go in this repo** — `github.com/alxwhitley/rhemata`
+  is PUBLIC and `/sources/` is gitignored; committing it would publish the New
+  Wine PDFs, Precept Austin, Derek Prince scrapes, and living ministers'
+  transcripts, inverting the license gate, safe_mode, hidden staging, and the
+  PA lockout in one irreversible move. **Backup gap largely closed 2026-08-30**
+  — irreplaceable material now copied to iCloud Drive → `Rhemata Backup`
+  (1,150 files, 496 MB, verified); public/re-scrapable data deliberately
+  skipped. **Residual risk:** iCloud is sync, not versioned backup — a local
+  corruption propagates. Guards against machine loss, not bad edits.
+- **11 of the ingested CLF documents contain an offering appeal**, and one
+  each an usher direction and a dismissal — a milder, pre-existing form of the
+  whole-service problem the 15 were held for. Whether to audit those 11 for
+  named-congregant content is open.
 - **`bible_refs.py` hallucinated 2 of 514 references (~0.4%)** on real sermon
   text — the same class of LLM over-reach removed from the transcript path.
-  The 7 sermons added 2026-08-29 audited clean (111/111), so the rate stands
-  at 2 of 625 checked; extended, not re-measured.
-- **`sources/` (2.5 GB, 4,589 files) has NO backup and must not go in this
-  repo.** `github.com/alxwhitley/rhemata` is PUBLIC and `/sources/` is
-  gitignored; committing it would publish 195 New Wine PDFs, Precept Austin,
-  Derek Prince scrapes, and living ministers' transcripts — inverting the
-  license gate, safe_mode, hidden staging, and the PA lockout in one move,
-  irreversibly (history, forks, scrapers). Raised 2026-08-30; Alex declined
-  a CLF-only (2.3 MB, `owned`) commit too. Needs a real target — private
-  cloud storage or a separate private repo. **It exists on one machine.**
-- **Scheduled**: quote accuracy/relevance repair before any attended
-  re-enable.
-- **Live account-deletion verification** — blocked, needs Alex to create a
-  real disposable test account first (Session Routing hard rule).
+  The 7 sermons added 2026-08-29 audited clean, so the rate stands at 2 of 625
+  checked; extended, not re-measured.
+- **Live account-deletion verification** — blocked, needs Alex to create a real
+  disposable test account first (Session Routing hard rule).
 - **Analytics production smoke sequence** — deferred by Alex, not run.
-- Carried, not re-checked: `scripts/test_metering.py` writes live to
-  production despite its `test_*.py` name (self-cleans); staging source still
-  reads `"Vlad Savchuk (web staging)"`; Bonnke URL suspect;
+- Carried, not re-checked: `scripts/test_metering.py` writes live to production
+  despite its `test_*.py` name (self-cleans); staging source still reads
+  `"Vlad Savchuk (web staging)"`; Bonnke URL suspect;
   `rhemata_readonly_analysis` has no grant on PII/user tables.
 
 ---
 
 ## Next single item
 
-**None selected.** Three standing candidates, none started, no preference
-recorded by Alex:
+**None selected.** Candidates, none started:
 
-- **The 15 held CLF recordings** (above) — smallest and most concrete.
-- **New Wine A2** — held; needs a fresh named live-call ceiling before any
-  paid run.
+- **Guest-speaker attribution** — the live product question the 2026-08-31
+  cleanup deliberately did not answer (Current state, above). Cheap to scope,
+  no writes.
+- **The 301 / 318 re-ingest** — needs a named cost estimate before Alex can
+  rule (Findings, above).
+- **New Wine A2** — needs a fresh named live-call ceiling before any paid run.
 - **Quote accuracy/relevance repair** — the Scheduled gate blocking any
   attended quote-rail re-enable (`docs/roadmap.md`).
