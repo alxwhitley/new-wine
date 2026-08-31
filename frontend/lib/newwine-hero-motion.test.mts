@@ -111,7 +111,7 @@ test("marketing surface reuses neutral placeholders and removes obsolete mockups
   assert.match(page, /home\.module\.css/);
   assert.match(page, /ProductImagePlaceholder/g);
   assert.match(page, /NewWineDawnHero/);
-  assert.match(page, /BetaGate/);
+  assert.match(page, /useAuthGate/);
   assert.match(page, /LoginModal/);
   assert.match(page, /Why It Matters/);
   assert.match(page, /Ask Anything/);

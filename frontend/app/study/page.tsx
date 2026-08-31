@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/newwine/sidebar";
 import type { SavedWord } from "@/components/newwine/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
-import BetaGate from "@/components/auth/BetaGate";
+import { useAuthGate } from "@/hooks/useAuthGate";
 import { supabase } from "@/lib/supabase";
 import { getAdjacentVerseId } from "@/lib/verse-counts";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -684,19 +684,10 @@ function CommentarySection({
 export default function StudyPage() {
   const { user, accessToken, signIn, signUp } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
-  const [showLogin, setShowLogin] = useState(false);
-  const [showGate, setShowGate] = useState(false);
-  const [loginInitialMode, setLoginInitialMode] = useState<"signin" | "signup">("signup");
+  // In-app surface: anyone already here has an account, so it opens on sign in.
+  const { authOpen, authMode, authReason, openAuth, closeAuth } = useAuthGate("signin");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  function openAuthGate(mode: "signin" | "signup" = "signup") {
-    setLoginInitialMode(mode);
-    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
-      setShowLogin(true);
-    } else {
-      setShowGate(true);
-    }
-  }
 
   const [verseRef, setVerseRef] = useState("John 1:1");
   const [selectedStrongs, setSelectedStrongs] = useState<string | null>(null);
@@ -748,7 +739,7 @@ export default function StudyPage() {
   }, [user]);
 
   const toggleSaveWord = useCallback(async (token: WordToken) => {
-    if (!user) { setShowLogin(true); return; }
+    if (!user) { openAuth("signup", "Sign up to save this word and access it anytime."); return; }
     const isSaved = savedStrongsSet.has(token.strongs);
     if (isSaved) {
       await supabase.from("saved_words").delete().eq("user_id", user.id).eq("strongs_number", token.strongs);
@@ -760,7 +751,7 @@ export default function StudyPage() {
       }).select().single();
       if (data) setSavedWords((prev) => [data, ...prev]);
     }
-  }, [user, savedStrongsSet]);
+  }, [user, savedStrongsSet, openAuth]);
 
   // ── Verse fetching ─────────────────────────────────────────────────────────
 
@@ -1071,7 +1062,7 @@ export default function StudyPage() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}
-        onSignInClick={() => openAuthGate("signup")}
+        onSignInClick={() => openAuth("signin")}
         savedWords={savedWords}
         selectedStrongs={selectedStrongs}
         onSelectSavedWord={handleSidebarSavedWordSelect}
@@ -1468,9 +1459,8 @@ export default function StudyPage() {
         </SheetContent>
       </Sheet>
 
-      {showGate && <BetaGate onSuccess={() => { setShowGate(false); setShowLogin(true); }} onClose={() => setShowGate(false)} />}
-      {showLogin && (
-        <LoginModal onClose={() => setShowLogin(false)} onSignIn={signIn} onSignUp={signUp} initialMode={loginInitialMode} />
+      {authOpen && (
+        <LoginModal onClose={closeAuth} onSignIn={signIn} onSignUp={signUp} reason={authReason} initialMode={authMode} />
       )}
     </div>
   );

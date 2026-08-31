@@ -21,7 +21,7 @@ import {
   CONVERSATION_LENGTH_NUDGE_THRESHOLD_USD,
 } from "@/components/newwine/conversation-length-nudge";
 import LoginModal from "@/components/auth/LoginModal";
-import BetaGate from "@/components/auth/BetaGate";
+import { useAuthGate } from "@/hooks/useAuthGate";
 import { ConsentGate } from "@/components/newwine/consent-gate";
 import type { Citation } from "@/lib/api";
 import type { WeeklyLimitDetail } from "@/hooks/useChat";
@@ -45,19 +45,9 @@ const SUGGESTIONS = [
 export default function Home() {
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
-  const [showLogin, setShowLogin] = useState(false);
-  const [showGate, setShowGate] = useState(false);
-  const [loginInitialMode, setLoginInitialMode] = useState<"signin" | "signup">("signup");
-  const [loginReason, setLoginReason] = useState<string | undefined>();
-
-  function openAuthGate(mode: "signin" | "signup" = "signup") {
-    setLoginInitialMode(mode);
-    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
-      setShowLogin(true);
-    } else {
-      setShowGate(true);
-    }
-  }
+  // In-app surface: anyone already here has an account, so the bare entry
+  // point opens on sign in. Contextual prompts below ask for signup explicitly.
+  const { authOpen, authMode, authReason, openAuth, closeAuth } = useAuthGate("signin");
   const [weeklyLimitDetail, setWeeklyLimitDetail] = useState<WeeklyLimitDetail | null>(null);
   // Long-conversation-handoff nudge (docs/superpowers/specs/2026-08-26-long-
   // conversation-handoff.md): dismissed for the rest of THIS conversation
@@ -89,8 +79,7 @@ export default function Home() {
   } = useChat(
     accessToken,
     () => {
-      setLoginReason("You've used your 6 free searches. Create a free account to keep going.");
-      openAuthGate("signup");
+      openAuth("signup", "You've used your 6 free searches. Create a free account to keep going.");
     },
     (detail) => setWeeklyLimitDetail(detail),
   );
@@ -193,8 +182,7 @@ export default function Home() {
 
       if (!accessToken) {
         sessionStorage.setItem(PENDING_PIN_KEY, verseIdOf(reference));
-        setLoginReason("Sign up to save this verse and access it anytime.");
-        // Close the panel before opening the auth gate: BetaGate/LoginModal
+        // Close the panel before opening the auth gate: the auth card
         // and the study panel's own Radix Dialog overlay are both fixed,
         // full-screen, and z-50 — tied. With the panel left open, its
         // overlay paints on top (later in DOM) and silently swallows every
@@ -203,7 +191,7 @@ export default function Home() {
         // in sessionStorage above, independent of the panel's own state, so
         // closing it here doesn't affect whether the pin lands after signup.
         setStudyPanelOpen(false);
-        openAuthGate("signup");
+        openAuth("signup", "Sign up to save this verse and access it anytime.");
         return "guest_prompt";
       }
 
@@ -240,7 +228,7 @@ export default function Home() {
       setStudyPins((prev) => [...prev, { id: row.id, reference }]);
       return "pinned";
     },
-    [accessToken, studyPins],
+    [accessToken, studyPins, openAuth],
   );
 
   // Wraps useAuth's signUp (LoginModal itself is untouched — it's load-bearing
@@ -412,7 +400,7 @@ export default function Home() {
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
-        onSignInClick={() => { setLoginReason(undefined); openAuthGate("signup"); }}
+        onSignInClick={() => openAuth("signin")}
       />
 
       {/* Chat card wrapper — inset on desktop, full-bleed on mobile. The
@@ -633,19 +621,13 @@ export default function Home() {
         desktopContainer={desktopPanelContainer}
       />
 
-      {showGate && (
-        <BetaGate
-          onSuccess={() => { setShowGate(false); setShowLogin(true); }}
-          onClose={() => setShowGate(false)}
-        />
-      )}
-      {showLogin && (
+      {authOpen && (
         <LoginModal
-          onClose={() => { setShowLogin(false); setLoginReason(undefined); }}
+          onClose={closeAuth}
           onSignIn={signIn}
           onSignUp={handleSignUpWithPendingPin}
-          reason={loginReason}
-          initialMode={loginInitialMode}
+          reason={authReason}
+          initialMode={authMode}
         />
       )}
       <ConsentGate accessToken={accessToken} hasUser={!!user} onDecline={signOut} />

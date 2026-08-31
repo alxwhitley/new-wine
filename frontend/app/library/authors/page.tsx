@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/newwine/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
+import { useAuthGate } from "@/hooks/useAuthGate";
 import { cn } from "@/lib/utils";
 
 const AUTHOR_IMAGES: Record<string, string> = {
@@ -36,8 +37,8 @@ const AUTHORS = [
 
 export default function AuthorsPage() {
   const { user, accessToken, signIn, signUp } = useAuth();
-  const [showLogin, setShowLogin] = useState(false);
-  const [loginReason, setLoginReason] = useState<string | undefined>();
+  // In-app surface: anyone already here has an account, so it opens on sign in.
+  const { authOpen, authMode, authReason, openAuth, closeAuth } = useAuthGate("signin");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { conversations, deleteConversation } = useConversations(user?.id);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
@@ -55,7 +56,7 @@ export default function AuthorsPage() {
         onNewChat={() => { window.location.href = "/"; }}
         onSelectConversation={(id) => { window.location.href = `/?c=${id}`; }}
         onDeleteConversation={deleteConversation}
-        onSignInClick={() => { setLoginReason(undefined); setShowLogin(true); }}
+        onSignInClick={() => openAuth("signin")}
       />
 
       <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
@@ -120,8 +121,8 @@ export default function AuthorsPage() {
         </div>
       </main>
 
-      {showLogin && (
-        <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} />
+      {authOpen && (
+        <LoginModal onClose={closeAuth} onSignIn={signIn} onSignUp={signUp} reason={authReason} initialMode={authMode} />
       )}
     </div>
   );

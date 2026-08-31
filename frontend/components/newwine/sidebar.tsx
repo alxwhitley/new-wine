@@ -365,7 +365,7 @@ export function Sidebar({
           </button>
         ) : (
           <Button size="sm" className="min-h-11 w-full text-background" onClick={onSignInClick}>
-            Become a test user
+            Sign in
           </Button>
         )}
       </div>

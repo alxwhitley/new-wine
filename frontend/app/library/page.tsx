@@ -13,7 +13,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useConversations } from "@/hooks/useConversations";
 import { Sidebar } from "@/components/newwine/sidebar";
 import LoginModal from "@/components/auth/LoginModal";
-import BetaGate from "@/components/auth/BetaGate";
+import { useAuthGate } from "@/hooks/useAuthGate";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { ABBREV_TO_NAME as VERSE_BOOK_NAMES } from "@/lib/generated/book-maps";
@@ -183,20 +183,10 @@ export default function LibraryPage() {
   const { user, accessToken, loading: authLoading, signIn, signUp } = useAuth();
   const { role } = useUserRole(accessToken);
   const isMobile = useIsMobile();
-  const [showLogin, setShowLogin] = useState(false);
-  const [showGate, setShowGate] = useState(false);
-  const [loginInitialMode, setLoginInitialMode] = useState<"signin" | "signup">("signup");
-  const [loginReason, setLoginReason] = useState<string | undefined>();
+  // In-app surface: anyone already here has an account, so it opens on sign in.
+  const { authOpen, authMode, authReason, openAuth, closeAuth } = useAuthGate("signin");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  function openAuthGate(mode: "signin" | "signup" = "signup") {
-    setLoginInitialMode(mode);
-    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
-      setShowLogin(true);
-    } else {
-      setShowGate(true);
-    }
-  }
   const { conversations, deleteConversation } = useConversations(user?.id);
 
   // ── Discover data ──────────────────────────────────────────────────────────
@@ -551,7 +541,7 @@ export default function LibraryPage() {
     onNewChat: () => { window.location.href = "/"; },
     onSelectConversation: (id: string) => { window.location.href = `/?c=${id}`; },
     onDeleteConversation: deleteConversation,
-    onSignInClick: () => { setLoginReason(undefined); openAuthGate("signup"); },
+    onSignInClick: () => openAuth("signin"),
   };
 
   // ── Article reader view ────────────────────────────────────────────────────
@@ -639,8 +629,7 @@ export default function LibraryPage() {
             </div>
           </div>
         </main>
-        {showGate && <BetaGate onSuccess={() => { setShowGate(false); setShowLogin(true); }} onClose={() => setShowGate(false)} />}
-        {showLogin && <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} initialMode={loginInitialMode} />}
+        {authOpen && <LoginModal onClose={closeAuth} onSignIn={signIn} onSignUp={signUp} reason={authReason} initialMode={authMode} />}
       </div>
     );
   }
@@ -1312,9 +1301,8 @@ export default function LibraryPage() {
         </SheetContent>
       </Sheet>
 
-      {showGate && <BetaGate onSuccess={() => { setShowGate(false); setShowLogin(true); }} onClose={() => setShowGate(false)} />}
-      {showLogin && (
-        <LoginModal onClose={() => { setShowLogin(false); setLoginReason(undefined); }} onSignIn={signIn} onSignUp={signUp} reason={loginReason} initialMode={loginInitialMode} />
+      {authOpen && (
+        <LoginModal onClose={closeAuth} onSignIn={signIn} onSignUp={signUp} reason={authReason} initialMode={authMode} />
       )}
     </div>
   );

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 
-import BetaGate from "@/components/auth/BetaGate";
 import LoginModal from "@/components/auth/LoginModal";
+import { useAuthGate } from "@/hooks/useAuthGate";
 import { FooterNav } from "@/components/marketing/footer-nav";
 import { NewWineDawnHero } from "@/components/marketing/newwine-dawn-hero";
 import { ProductImagePlaceholder } from "@/components/marketing/product-image-placeholder";
@@ -52,16 +51,9 @@ function QuestionRail() {
 
 export default function HomePage() {
   const { signIn, signUp } = useAuth();
-  const [showGate, setShowGate] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-
-  function openAuthGate() {
-    if (typeof window !== "undefined" && sessionStorage.getItem("beta_access") === "1") {
-      setShowLogin(true);
-    } else {
-      setShowGate(true);
-    }
-  }
+  // Marketing surface: arrivals here are prospective testers, so it opens on
+  // signup. The card still offers sign in for anyone who already has an account.
+  const { authOpen, authMode, openAuth, closeAuth } = useAuthGate("signup");
 
   return (
     <>
@@ -73,10 +65,10 @@ export default function HomePage() {
               <li key={label}><Link href={href}>{label}</Link></li>
             ))}
           </ul>
-          <Button className={styles.navAction} size="sm" onClick={openAuthGate}>Become a test user</Button>
+          <Button className={styles.navAction} size="sm" onClick={() => openAuth()}>Become a test user</Button>
         </nav>
 
-        <NewWineDawnHero onPrimaryAction={openAuthGate} />
+        <NewWineDawnHero onPrimaryAction={() => openAuth()} />
         <QuestionRail />
 
         <section className={`${styles.section} ${styles.centeredSection}`}>
@@ -175,7 +167,7 @@ export default function HomePage() {
           <h2>Help us build it. Become a test user.</h2>
           <p>New Wine is in active beta. Jump in free, explore everything, and help shape where it goes — no card required.</p>
           <div className={styles.finalActions}>
-            <Button className={styles.primaryAction} size="lg" onClick={openAuthGate}>Become a test user</Button>
+            <Button className={styles.primaryAction} size="lg" onClick={() => openAuth()}>Become a test user</Button>
             <Button className={styles.secondaryAction} variant="outline" size="lg" asChild><Link href="/sources">Explore the sources</Link></Button>
           </div>
         </section>
@@ -192,8 +184,9 @@ export default function HomePage() {
         </footer>
       </div>
 
-      {showGate && <BetaGate onSuccess={() => { setShowGate(false); setShowLogin(true); }} onClose={() => setShowGate(false)} />}
-      {showLogin && <LoginModal onClose={() => setShowLogin(false)} onSignIn={signIn} onSignUp={signUp} initialMode="signup" />}
+      {authOpen && (
+        <LoginModal onClose={closeAuth} onSignIn={signIn} onSignUp={signUp} initialMode={authMode} />
+      )}
     </>
   );
 }
