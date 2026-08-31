@@ -6,7 +6,7 @@
 
 **Architecture:** Frontend: `frontend/components/rhemata/sidebar.tsx` swaps its settings `Sheet` for a `Dialog` (same mechanism `AdminModal.tsx` already uses) and removes the now-redundant `DropdownMenu` wrapper around the footer identity button. Backend: one new table (`deletion_requests`) and one new small router (`account.py`) log a deletion request for manual admin follow-up — no cascading deletion happens anywhere in this plan. `AdminModal.tsx` gets a third card in its existing "Contributors" tab to surface pending deletion requests.
 
-**Tech Stack:** Next.js 16 / React 19 / Tailwind 4 (frontend), FastAPI / Python 3.9 / Supabase Postgres (backend). No test runner exists in either stack — this repo verifies backend changes with standalone scripts run against a real Supabase Postgres connection and, for authenticated endpoints, the live production API (see `scripts/test_pastors_rls.py` and `scripts/test_metering.py` for the established pattern this plan follows).
+**Tech Stack:** Next.js 16 / React 19 / Tailwind 4 (frontend), FastAPI / Python 3.9 / Supabase Postgres (backend). No test runner exists in either stack — this repo verifies backend changes with standalone scripts run against a real Supabase Postgres connection and, for authenticated endpoints, the live production API (see `scripts/test_pastors_rls.py` and `scripts/verify_metering_live.py` for the established pattern this plan follows -- note that script was renamed out of the `test_*.py` namespace and given an `--apply` guard on 2026-08-31; a new production-touching verification script should copy the CURRENT shape, not the unguarded one this plan was written against).
 
 ## Global Constraints
 
@@ -113,7 +113,7 @@ load_dotenv(ROOT / "backend" / "app" / ".env")
 
 # Real, already-registered account used only to obtain a genuine auth.users id
 # for the "authenticated user can insert their own row" RLS check below --
-# same convention scripts/test_metering.py already uses. A freshly-generated
+# same convention scripts/verify_metering_live.py already uses. A freshly-generated
 # uuid4() cannot be used there: deletion_requests.user_id has a real FK to
 # auth.users(id), and unlike the user_a setup insert a few lines below (which
 # bypasses FK checks via session_replication_role = replica), the RLS-scoped
@@ -1059,7 +1059,7 @@ account deletion-request stub against the LIVE production API:
   POST /account/delete-requests/{id}/resolve
 
 Run AFTER pushing to main and confirming the Railway deploy has finished
-(see scripts/test_metering.py for the established pattern this follows).
+(see scripts/verify_metering_live.py for the established pattern this follows).
 
 Requires in backend/app/.env (or environment):
   SUPABASE_DB_URL      -- direct Postgres connection (service role)
@@ -1116,7 +1116,7 @@ def get_db_conn():
 
 def jwt_for_email(db, email):
     """Mint a real access token for `email` via a Supabase magic link --
-    same approach as scripts/test_metering.py."""
+    same approach as scripts/verify_metering_live.py."""
     link = db.auth.admin.generate_link({"type": "magiclink", "email": email})
     resp = httpx.get(
         f"{SB_URL}/auth/v1/verify",
@@ -1246,4 +1246,4 @@ Report back honestly if any of these don't match — this is the only step in th
 
 ## Post-plan cleanup
 
-Delete or archive `scripts/test_deletion_requests_migration.py` and `scripts/test_account_delete_request_e2e.py` only if this repo's convention is to remove one-off verification scripts after landing — check `scripts/` for whether `test_pastors_rls.py` and `test_metering.org.py`-style scripts were kept or removed after their features shipped before deciding either way. Do not delete without checking; this plan does not make that call.
+Delete or archive `scripts/test_deletion_requests_migration.py` and `scripts/test_account_delete_request_e2e.py` only if this repo's convention is to remove one-off verification scripts after landing — check `scripts/` for whether `test_pastors_rls.py` and `verify_metering_live.py`-style scripts were kept or removed after their features shipped before deciding either way. Do not delete without checking; this plan does not make that call.

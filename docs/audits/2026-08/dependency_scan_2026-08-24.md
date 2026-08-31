@@ -130,7 +130,7 @@ endpoint); flagged from the advisory + code read only.
   `python-dotenv` 1.2.1→1.2.3, `python-multipart` 0.0.20→0.0.32, `PyJWT`
   2.12.1→2.13.0 (`backend/requirements.txt`). Verified: fresh venv install
   of the full updated `requirements.txt` succeeded with no conflicts;
-  `scripts/test_admin_auth_regression.py`, `test_metering.py`,
+  `scripts/test_admin_auth_regression.py`, `verify_metering_live.py`,
   `test_quote_rail_regressions.py`, `test_quote_selection_gate.py`,
   `test_teacher_card_bio_redaction.py`, `test_teacher_card_guards.py`,
   `test_resolve_book_abbrev_consolidation.py` all pass under the bumped

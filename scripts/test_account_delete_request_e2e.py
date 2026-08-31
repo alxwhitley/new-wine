@@ -7,7 +7,7 @@ account deletion-request stub against the LIVE production API:
   POST /account/delete-requests/{id}/resolve
 
 Run AFTER pushing to main and confirming the Railway deploy has finished
-(see scripts/test_metering.py for the established pattern this follows).
+(see scripts/verify_metering_live.py for the established pattern this follows).
 
 Requires in backend/app/.env (or environment):
   SUPABASE_DB_URL      -- direct Postgres connection (service role)
@@ -64,7 +64,7 @@ def get_db_conn():
 
 def jwt_for_email(db, email):
     """Mint a real access token for `email` via a Supabase magic link --
-    same approach as scripts/test_metering.py."""
+    same approach as scripts/verify_metering_live.py."""
     link = db.auth.admin.generate_link({"type": "magiclink", "email": email})
     resp = httpx.get(
         f"{SB_URL}/auth/v1/verify",

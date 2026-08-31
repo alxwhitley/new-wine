@@ -24,11 +24,12 @@ by live submission plus independent read, not by code reading —
 `docs/audits/2026-08/analytics_production_smoke_2026-08-31.md`, commit
 `fe1026f`. Five residuals are named there and all remain unverified, chiefly
 personal-wording redaction and the retention purge actually firing; none
-blocks the beta journey. (2) `scripts/test_metering.py` was guarded against
-accidental production writes (`--apply` required, import side-effect-free,
-proven by tripwiring every I/O entry point), commit `a395efb`. One open
-question returned to Alex rather than decided: whether to rename that file
-out of the `test_*.py` namespace. **Active blocker count remains 0.**
+blocks the beta journey. (2) `scripts/verify_metering_live.py` was guarded
+against accidental production writes (`--apply` required, import
+side-effect-free, proven by tripwiring every I/O entry point), commit
+`a395efb`, then renamed out of the `test_*.py` namespace on Alex's approval so
+it stops advertising itself to other plans as the pattern to copy. **Active
+blocker count remains 0.**
 
 **B6 general answer-latency — DONE, live (2026-08-27), not a Blocker item.**
 Never promoted past `docs/roadmap.md`'s Scheduled B6 latency work; recorded

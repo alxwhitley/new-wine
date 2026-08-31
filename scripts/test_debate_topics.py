@@ -34,7 +34,7 @@ fix for the previously-unmetered teacher-card cost/abuse gap), which writes to
 the real `user_usage` table and requires a user_id that is an actual
 auth.users row (a placeholder string 400s on the RPC's uuid param, and a
 syntactically-valid-but-nonexistent UUID FK-violates). Tier B therefore
-resolves a real test user (TEST_EMAIL, same account scripts/test_metering.py
+resolves a real test user (TEST_EMAIL, same account scripts/verify_metering_live.py
 uses) via the admin API rather than a fake id, and each of the 2 calls below
 consumes one real slot against that account's weekly query limit -- a live
 side effect, not just an Anthropic cost, disclosed here so it isn't a
@@ -202,7 +202,7 @@ DEREK_PRINCE_SOURCE_ID = None  # resolved live below, not hardcoded
 
 # Real, existing auth.users account -- get_teacher_card()'s metering call
 # (enforce_query_limit) FK-references auth.users, so this can no longer be a
-# placeholder string. Same account scripts/test_metering.py uses.
+# placeholder string. Same account scripts/verify_metering_live.py uses.
 TEST_EMAIL = "creative@clf-church.com"
 
 

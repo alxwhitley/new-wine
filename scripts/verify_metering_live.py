@@ -2,30 +2,34 @@
 Metering verification script — run from project root.
 Tests: increment sequence, week rollover, hard stop, date_trunc Monday, stale-week GET /usage.
 
-⚠ THIS SCRIPT WRITES TO THE PRODUCTION DATABASE. Despite the test_*.py name it
-is not a pytest test and never was — it applies migration 039 if absent, mints a
-real magic-link JWT for a real account, DELETEs and UPDATEs that account's
-`user_usage` row, and POSTs to the live production API. It self-cleans, so the
-damage is transient, but nothing about the name says any of that.
+⚠ THIS SCRIPT WRITES TO THE PRODUCTION DATABASE. It is not a pytest test and
+never was — it applies migration 039 if absent, mints a real magic-link JWT for
+a real account, DELETEs and UPDATEs that account's `user_usage` row, and POSTs
+to the live production API. It self-cleans, so the damage is transient.
 
-Two guards, added 2026-08-31 (Alex's decision), because the name alone put it one
-`pytest scripts/` away from writing to production:
+It was called `scripts/test_metering.py` until 2026-08-31. That name was the
+whole problem: it put a production writer one `pytest scripts/` away from
+running, and it advertised itself to other plans as the pattern to copy. Three
+things changed, and all three stay — do not undo one because the others cover
+it:
 
-  1. `--apply` is required. A bare invocation prints a refusal and exits 2
+  1. Renamed out of the `test_*.py` namespace, so no test runner collects it.
+  2. `--apply` is required. A bare invocation prints a refusal and exits 2
      WITHOUT connecting to anything. This is the same dry-run-by-default
      convention as scripts/apply_migration_088.py and
      scripts/sync_master_ingestion_queue.py — not a new mechanism.
-  2. Importing this module has no side effects. Every credential read, every
-     connection, and every write now lives inside run_checks(), reached only
+  3. Importing this module has no side effects. Every credential read, every
+     connection, and every write lives inside run_checks(), reached only
      through `if __name__ == "__main__"`. Previously 105 statements ran at
-     module scope, so pytest merely COLLECTING this file executed the whole
-     thing against production.
+     module scope, so merely importing this file executed the whole thing
+     against production.
 
-Deliberately unchanged: what the script does when it IS run with --apply. Same
-checks, same order, same assertions, same output, same cleanup.
+Deliberately unchanged by both the guard and the rename: what the script does
+when it IS run with --apply. Same checks, same order, same assertions, same
+output, same cleanup.
 
 Usage:
-  python3.12 scripts/test_metering.py --apply
+  python3.12 scripts/verify_metering_live.py --apply
 """
 import warnings; warnings.filterwarnings('ignore')
 
@@ -294,7 +298,7 @@ def main(argv=None) -> int:
     )
     args = parser.parse_args(argv)
     if not args.apply:
-        print("REFUSED: scripts/test_metering.py writes to the PRODUCTION database")
+        print("REFUSED: scripts/verify_metering_live.py writes to the PRODUCTION database")
         print("         and API (migration 039, a real magic-link JWT, DELETE/UPDATE")
         print("         on user_usage, live POSTs). It is not a pytest test.")
         print("         Nothing was connected to and nothing was written.")

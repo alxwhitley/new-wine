@@ -26,7 +26,7 @@ load_dotenv(ROOT / "backend" / "app" / ".env")
 
 # Real, already-registered account used only to obtain a genuine auth.users id
 # for the "authenticated user can insert their own row" RLS check below --
-# same convention scripts/test_metering.py already uses. A freshly-generated
+# same convention scripts/verify_metering_live.py already uses. A freshly-generated
 # uuid4() cannot be used there: deletion_requests.user_id has a real FK to
 # auth.users(id), and unlike the user_a setup insert a few lines below (which
 # bypasses FK checks via session_replication_role = replica), the RLS-scoped

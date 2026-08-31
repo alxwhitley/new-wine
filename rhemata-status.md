@@ -9,8 +9,8 @@ specific live query — treat any count seen elsewhere as unverified.
 
 Last verified: 2026-08-31. **PLAN.md has zero active blockers.** This session
 (attended): proved search analytics record and process in production end to
-end, and guarded `scripts/test_metering.py` against accidental production
-writes. Earlier across 2026-08-30/31: ruled the 15 held CLF recordings out
+end, and guarded then renamed the production-writing metering script
+(`scripts/verify_metering_live.py`). Earlier across 2026-08-30/31: ruled the 15 held CLF recordings out
 permanently, cleared and ingested 7 of the 10 misclassified `unknown` rows
 (CLF YouTube 56 → 63), cleaned CLF's citable author names 16 → 12, fixed two
 ingest defects (`5c94b3c`, `9224650`), and gave `sources/` its first
@@ -114,12 +114,9 @@ exclusion from quoting or an audio-confirmation step.**
   extended, not re-measured.
 - **Live account-deletion verification** — blocked, needs Alex to create a real
   disposable test account first (Session Routing hard rule).
-- **`scripts/test_metering.py` is now guarded** (`a395efb`) — `--apply`
-  required, import side-effect-free, proven by tripwiring every I/O entry
-  point; `pytest --collect-only` now reports "no tests collected" where the
-  import previously attempted a production DB connection. **Still open:**
-  whether to rename it out of the `test_*.py` namespace — the guard makes the
-  name harmless, but it still misdescribes the file. Alex's call.
+- **`scripts/verify_metering_live.py` is guarded and renamed** (`a395efb` + this session, Alex approved) — `--apply` required,
+  import side-effect-free, out of the `test_*.py` namespace. All three guards
+  stand together; do not undo one because the others seem to cover it.
 - **Analytics residuals, none blocking:** the classifier stores the same value
   in `classifier_version` and `classifier_prompt_version` and never stores its
   computed `prompt_fingerprint` (Invariant 10's fingerprint-over-label
@@ -128,8 +125,9 @@ exclusion from quoting or an audio-confirmation step.**
   `chunks` sits downstream of retrieval, undiagnosed.
 - **`scripts/test_teacher_card.py` has the same unguarded shape** (module-level
   execution, no `__main__` guard, zero pytest test functions) — but it only
-  `.select()`s, so collection hits production *reads*, not writes. Recorded not
-  chased; a scan of all 109 `scripts/test_*.py` found no other instance.
+  `.select()`s, so collection hits production *reads*, not writes. **Alex's
+  decision 2026-08-31: leave it alone — accepted, not pending.** Do not guard
+  or rename it. A scan of all `scripts/test_*.py` found no other instance.
 - Carried, not re-checked: staging source still reads `"Vlad Savchuk (web
   staging)"`; Bonnke URL suspect; `rhemata_readonly_analysis` has no grant on
   PII/user tables — **still deliberately deferred; Phase A did not need it and
