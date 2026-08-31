@@ -37,11 +37,26 @@ service's builder + `rootDirectory=/backend` before assuming a code problem
 the old identity while the UI says New Wine. Revert all of it with
 `git revert -m 1 abeafd7`.
 
-**Hypothesis to check FIRST, not confirmed:** the GitHub repo was renamed to
-`alxwhitley/new-wine` during this session (discovered via a push redirect;
-the local remote is updated). A repo rename can break a host's GitHub
-integration, so Railway may simply never have been told to build. Check
-whether a deploy was even triggered before debugging the build itself.
+**Root cause CONFIRMED — Railway never received a build trigger. This is not
+a failed build; it is no build.** `railway deployment list` on service
+`rhemata` shows the most recent deployment at **2026-08-31 12:36:09**, while
+the merge to `main` landed at **14:22:19** — nothing was created after the
+push. The Railpack-drift landmine is NOT the cause here and should not be
+chased first.
+
+Most likely trigger: the GitHub repo was renamed to `alxwhitley/new-wine`
+during this session (found via a push redirect; the local git remote is
+updated). Vercel survived it — `newwine.app` is serving the new build,
+Luke 5:38 tagline live, "UpperWord" gone — so the rename did not break every
+integration, but Railway's source link is the prime suspect. **The backend
+will not deploy on its own; Railway's GitHub source needs reconnecting**,
+then a deploy for `rhemata` and `answer-worker`. Deploying is an attended
+gate, deliberately not done at close.
+
+Local side effect of this diagnosis: the Railway CLI is now **linked** to
+`dependable-enthusiasm` / `production` / service `rhemata` from this
+directory, so a stray `railway up` here would deploy. `railway unlink` clears
+it. The Railway service is also still named `rhemata`.
 
 **On deploy, expected not accidental:** guests are logged out and lose saved
 library filters (5 localStorage keys renamed); the beta code is now
