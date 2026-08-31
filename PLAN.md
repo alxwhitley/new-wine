@@ -17,6 +17,19 @@ live smoke check against the exact reproduction question confirmed the fix
 — see the closed entry below. **Active blocker count: 0.** Quote repair
 remains Scheduled, not an active Blocker.
 
+**2026-08-31 session (attended, two separate outcomes; neither is a Blocker
+and neither promoted one).** (1) The deferred analytics production smoke ran
+and passed: search analytics genuinely record and process end to end, proven
+by live submission plus independent read, not by code reading —
+`docs/audits/2026-08/analytics_production_smoke_2026-08-31.md`, commit
+`fe1026f`. Five residuals are named there and all remain unverified, chiefly
+personal-wording redaction and the retention purge actually firing; none
+blocks the beta journey. (2) `scripts/test_metering.py` was guarded against
+accidental production writes (`--apply` required, import side-effect-free,
+proven by tripwiring every I/O entry point), commit `a395efb`. One open
+question returned to Alex rather than decided: whether to rename that file
+out of the `test_*.py` namespace. **Active blocker count remains 0.**
+
 **B6 general answer-latency — DONE, live (2026-08-27), not a Blocker item.**
 Never promoted past `docs/roadmap.md`'s Scheduled B6 latency work; recorded
 here only as a pointer. `output_config.effort="medium"` is now hardcoded into
