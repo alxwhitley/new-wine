@@ -1,4 +1,4 @@
-# Rhemata Roadmap — Later and Dormant Work
+# New Wine Roadmap — Later and Dormant Work
 
 This file preserves work that matters but is not authorized by the current
 private-beta blocker queue. Read `PLAN.md` first. Historical and superseded
@@ -311,7 +311,7 @@ procedure; test guest-limit abuse; recheck admin minimums and the quote verifier
 | Decision 19: commentary modernization | Licensing outcome plus a side-by-side faithfulness-review design |
 | Decision 21: numeral-heading chapter detector | Per-book validation survives both known regressions |
 | Decision 25: study-panel drag-to-follow | Alex finds material mobile benefit |
-| Manna rebrand | Alex schedules the migration as a bounded product phase |
+| New Wine rebrand — remaining half | Code and copy SHIPPED 2026-08-31 (`abeafd7`). Remaining: DB source row, Railway service, Vercel project, GitHub repo, `rhemata.app` retirement — Alex schedules as a bounded phase |
 
 ## Parked
 
@@ -350,7 +350,7 @@ pattern, including the `removed_urls` trap it deliberately avoids.
 
 ### Horizon — requires a fresh specification
 
-1. Manna code/repository/domain/copy/visual migration.
+1. New Wine migration — **code, copy and visual DONE 2026-08-31** (`abeafd7`; the rename also caught two legacy names no document recorded, UpperWord and Manna — see CLAUDE.md Settled #25). Repository, hosting-project and domain identifiers remain.
 2. Verse-linked commentary enrichment with side-by-side modernization review.
 3. Feedback-to-reviewable-content flags, never direct eligibility mutation.
 4. ~~Consent-based search analytics and corpus-gap alerts.~~ Specified,

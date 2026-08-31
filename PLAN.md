@@ -113,7 +113,7 @@ outage, on a row guaranteed to exist because enqueue already succeeded over
 that same connection. Carries no question, no fingerprint, no subject key,
 and `answer_jobs` has no `user_id`, so it creates no account-to-search
 linkage. Read it with `scripts/analytics_health_report.py` — no
-`rhemata_readonly_analysis` grants needed, and those stay deferred.
+`newwine_readonly_analysis` grants needed, and those stay deferred.
 
 **Item 4 — timeout. DONE (`f80d4a2`).** No timeout existed anywhere on this
 path, so a hung dependency stalled the request under any remediation. Now 5s,

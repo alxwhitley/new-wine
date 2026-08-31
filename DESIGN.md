@@ -1,5 +1,5 @@
 # New Wine Design System v2 — "Lumen System"
-*Extracted from withlumen.app source (MIT, github.com/andrewhuang427/lumen-ai). This replaces newwine-brand.md as the styling authority. Every component must use these tokens — no hardcoded hex values, no inline style hover handlers.*
+*Extracted from withlumen.app source (MIT, github.com/andrewhuang427/lumen-ai). This replaces rhemata-brand.md as the styling authority. Every component must use these tokens — no hardcoded hex values, no inline style hover handlers.*
 
 ---
 

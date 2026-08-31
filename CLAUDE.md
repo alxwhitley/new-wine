@@ -415,7 +415,7 @@ approved in production still pass every tightened rule), and
 
 Sixteen decisions Alex made this session, records-only (no code/DB touched
 by the decisions themselves — one live-DB SELECT via the
-`rhemata_readonly_analysis` role confirmed corpus facts for the Phase 4
+`newwine_readonly_analysis` role confirmed corpus facts for the Phase 4
 rescope below). Eight are architecture/product-shape calls, recorded here.
 Four are doctrinal framing calls for named position papers — recorded
 directly in the papers (`docs/position_papers/`), not restated here. Three
@@ -435,7 +435,7 @@ PLAN.md's Open Decisions note.
 
 24. **Quotes serve on `producer.py` only — the sole chat-style/async answer path, not the sole served-generation surface.** Corrected 2026-08-15: this decision originally read "there is exactly one answer path today, and it always runs quote selection," which was never true of `get_teacher_card()` (`GET /study/teacher/{source_id}`), a second, always-existing served-generation surface — full correction at the Landmines entry on the 2026-08-07 mirror-unification job. `chat.py` (the synchronous fallback this decision originally distinguished against) is still deleted — that part stands. What's actually true: quote selection is wired into `producer.py` alone; `get_teacher_card()` never selected or served quotes and still doesn't (confirmed 2026-08-15 — out of scope for that session's guard work, since there was nothing there to guard). If a second synchronous CHAT-STYLE path is ever reintroduced, this decision's original policy (quotes on the primary/proven path only, revisit after concurrency is proven at the 100-dial) governs again.
 
-25. **The product is renamed New Wine** (Alex's direction, 2026-08-31). Rhemata is retired as the product name. **This supersedes the "Manna" naming this decision carried from 2026-08-08 — corrected in place, not stacked, because a stale target name is exactly the kind of thing a future session would act on.** **Correction, 2026-08-31 (this entry previously claimed "Manna was never implemented anywhere; the only trace is one unbuilt hero plan" — that was false and is corrected in place, not stacked).** Manna WAS built and shipped: the dawn hero landed 2026-08-10 (`df27425`, `d3f7dbf`, `6e9ff7a`) as `manna-dawn-hero.tsx` + `manna-hero-motion.ts` + `--manna-*` CSS variables, and was live on `/home` until the 2026-08-31 rename pass renamed it to `newwine-dawn-hero`. The "provision, not source" framing does die with the name. **A THIRD legacy name also existed and no document recorded it: UpperWord.** The marketing surface was rebranded New Wine → UpperWord on 2026-08-13 (`8795384`), so the homepage wordmark, nav, hero copy and CTA read "UpperWord" — the first thing any visitor to `newwine.app` saw — until the same pass. Both are now New Wine. `newwine.app` is registered, DNS-live on Cloudflare → Vercel, and serving. **The name collision with the New Wine magazine corpus source (Invariant 17, `scripts/magazine_review/`, roadmap A2) is ACCEPTED, not overlooked** — Alex's ruling: it is New Wine *magazine* vs New Wine *app*, uncopyrighted. Do not re-raise it. Naming decision only: renaming the repo, the Vercel/Railway projects, the `rhemata_readonly_analysis` role, or any identifier is separate work — full scoping in `docs/audits/2026-08/rename_inventory_2026-08-31.md` — but **read that inventory's scope before trusting its counts: it searched "newwine" only, so its 972 hits across 219 files missed every "UpperWord" and "Manna" instance entirely**, including the live homepage wordmark. Any future name sweep must search all legacy names, not just the most recent one. Three traps recorded there worth knowing before anyone starts: the `ῥήματά`/John 6:63 tagline is the old name's own etymology and cannot be find-and-replaced; the five `newwine*` localStorage keys will log out guests if renamed without migration; and a `chunks` row in a public-domain Jamieson-Fausset-Brown commentary contains the transliterated Greek "ta newwine" and must never be swept.
+25. **The product is renamed New Wine** (Alex's direction, 2026-08-31). Rhemata is retired as the product name. **This supersedes the "Manna" naming this decision carried from 2026-08-08 — corrected in place, not stacked, because a stale target name is exactly the kind of thing a future session would act on.** **Correction, 2026-08-31 (this entry previously claimed "Manna was never implemented anywhere; the only trace is one unbuilt hero plan" — that was false and is corrected in place, not stacked).** Manna WAS built and shipped: the dawn hero landed 2026-08-10 (`df27425`, `d3f7dbf`, `6e9ff7a`) as `manna-dawn-hero.tsx` + `manna-hero-motion.ts` + `--manna-*` CSS variables, and was live on `/home` until the 2026-08-31 rename pass renamed it to `newwine-dawn-hero`. The "provision, not source" framing does die with the name. **A THIRD legacy name also existed and no document recorded it: UpperWord.** The marketing surface was rebranded Rhemata → UpperWord on 2026-08-13 (`8795384`), so the homepage wordmark, nav, hero copy and CTA read "UpperWord" — the first thing any visitor to `newwine.app` saw — until the same pass. Both are now New Wine. `newwine.app` is registered, DNS-live on Cloudflare → Vercel, and serving. **The name collision with the New Wine magazine corpus source (Invariant 17, `scripts/magazine_review/`, roadmap A2) is ACCEPTED, not overlooked** — Alex's ruling: it is New Wine *magazine* vs New Wine *app*, uncopyrighted. Do not re-raise it. Naming decision only: renaming the repo, the Vercel/Railway projects, the `newwine_readonly_analysis` role, or any identifier is separate work — full scoping in `docs/audits/2026-08/rename_inventory_2026-08-31.md` — but **read that inventory's scope before trusting its counts: it searched "rhemata" only, so its 972 hits across 219 files missed every "UpperWord" and "Manna" instance entirely**, including the live homepage wordmark. Any future name sweep must search all legacy names, not just the most recent one. Of the three traps recorded there, two are now spent: the `ῥήματά`/John 6:63 tagline was replaced with Luke 5:38 and the five localStorage keys were renamed (guests logged out, approved). **The third stands permanently: a `chunks` row in a public-domain Jamieson-Fausset-Brown commentary contains the transliterated Greek "ta rhemata" and must never be swept** — it is Greek, not the product name. Corpus data generally is off-limits to any name sweep: `sources/` carries "rhema" as a lexical entry and "manna" as the biblical food throughout.
 
 26. **Precept Austin word-study material: excluded for now, not permanently.** Corrects the framing implied by the archive's old "PA permanently excluded" shorthand (`docs/plan-archive.md`, an unrelated older "gift"-reversal episode, not this retrieval exclusion — but close enough in wording to invite confusion). The 2026-08-07 hard-exclusion fix (Landmines, below) stays exactly as built — nothing here weakens it. What's new: finding a reliable, trustworthy method of reintroducing PA word-study content into answers without meaning drift is now a recorded future initiative (needs real scoping before any work happens; not scheduled — PLAN.md Horizon item 7). Distinct from Open Decision #10 (PA word-study *rewrite*/modernization) — a different question. **The separate, permanent exclusion of Precept Austin from the quote pipeline and from paraphrase generation is UNCHANGED** — this decision touches only the answer-retrieval hard-exclusion, not those.
 
@@ -467,7 +467,7 @@ PLAN.md's Open Decisions note.
     puts the wrong teacher's name beside a claim.
 
     **Corpus concentration, confirmed live 2026-08-19 via the
-    `rhemata_readonly_analysis` role:** of 793 quotes in the corpus, all
+    `newwine_readonly_analysis` role:** of 793 quotes in the corpus, all
     but one are Derek Prince's; Andrew Murray has exactly 1. A 20-quote
     random sample drew 20 Derek Prince quotes, consistent with that
     distribution. Consequence, recorded so a future session does not read
@@ -997,6 +997,27 @@ different row, per the hard rule above.
 ---
 
 ## Landmines (live, as of last audit — verify before trusting)
+
+- **A blanket product-name sweep corrupts three things that look like the
+  product name and are not — proven by doing it, 2026-08-31.** The
+  Rhemata -> New Wine rename (`a6f1575`) is done; what survives is the rule
+  for any future rename. (1) **Data-matching code:** `COLLECTION_SOURCE_HINTS`
+  in `scripts/corpus_data_quality_sweep.py` and the `teachers` provenance in
+  `scripts/data/common_religious_vocab.json` both contain `rhemata` because
+  they name the live `sources` row (`bf6d9e28-...`, still "Rhemata"), not the
+  product — sweeping them silently stops source-name matching. They move when
+  that DB row moves, never before. (2) **Corpus text:** `sources/` carries
+  "rhema" as a Greek lexical entry and "manna" as the biblical food; a
+  public-domain Jamieson-Fausset-Brown `chunks` row contains "ta rhemata".
+  Never in scope. (3) **Historical records:** this same sweep mangled
+  CLAUDE.md's own Settled #25 (inverted "rebranded Rhemata -> UpperWord",
+  rewrote the inventory's search term, and turned that entry's own "ta
+  rhemata" warning into "ta newwine") and DESIGN.md's reference to the
+  retired `rhemata-brand.md`. All four were caught and repaired the same
+  session, but only because they were re-read afterwards. **Applied
+  migrations, dated `docs/` audits, and `scripts/archive/` were excluded up
+  front and are the reason the damage stayed small** — exclude them by
+  default, and diff every governing-doc sweep before trusting it.
 
 - **Rotating `CURRENT_SUBJECT_KEY_VERSION` is no longer an outage — that
   exposure is genuinely closed, 2026-08-31 (B7 item 2, commit `f2ee6ff`).
