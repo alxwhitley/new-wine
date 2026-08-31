@@ -38,7 +38,9 @@ Escape, focus restoration and a backdrop guard. Verified: tsc clean, eslint
 
 **Beta access moved from per-tab `sessionStorage` to per-device
 `localStorage`** (`newwine_beta_access`). Sessions on the old `beta_access`
-key migrate in place. Code matching is now trimmed and case-insensitive.
+key migrate in place. Code matching is now trimmed and case-insensitive —
+raised as a behavior change Alex did not ask for and **explicitly accepted by
+him 2026-08-31**, so do not revert it as unauthorized drift.
 
 **`hooks/useAuthGate.ts` is the single owner of auth-modal state**, replacing
 four hand-copied `openAuthGate` functions. Three copies of the same bypass bug
@@ -48,10 +50,10 @@ this logic into a page.
 
 **Not fixed, pre-existing, confirmed not ours:** a hydration mismatch on
 `<html>` from `next-themes`' `forcedTheme="dark"` (`providers.tsx`). Fires on
-a plain `/home` load with no modal in the DOM. Real, worth a separate look.
+a plain `/home` load with no modal in the DOM. Worth a separate look.
 
 **Not run:** `/impeccable audit` (verify the a11y work against real code),
-`animate`, `polish` — unclassified follow-ups, not blockers.
+`animate`, `polish` — unclassified, not blockers.
 
 **Every push to `main` deploys production.** All four Railway services
 rebuild (`watchPatterns: []`, so even docs-only commits redeploy). Treat
@@ -59,10 +61,9 @@ backend pushes as attended gates. Setting watch patterns would stop docs
 commits redeploying — not done.
 
 **Two traps.** `/async-chat/result` is SSE with JSON spanning multiple
-`data:` lines — parse by EVENT, or an answer reads as zero-citation and looks
-exactly like an attribution-guard failure. Railway deployment meta populates
-progressively; mid-`BUILDING` it reports `rootDirectory`/`configFile` as null,
-indistinguishable from Railpack drift.
+`data:` lines — parse by EVENT, or an answer reads as zero-citation, exactly
+like an attribution-guard failure. Railway deployment meta populates
+progressively; mid-`BUILDING` `rootDirectory`/`configFile` read null.
 
 **Author attribution — 7 defects fixed 2026-08-31**, both halves
 (`docs/audits/2026-08/author_attribution_audit_2026-08-31.md`, `fe0718a` +
@@ -71,9 +72,9 @@ Savchuk documents with `author = NULL` correctly fall back to the source name
 — the HEALTHY state; `Jamieson, Fausset & Brown` is a genuine joint work.
 
 **Decided, do not re-raise:** guest-speaker attribution stays as-is;
-`/corpus-inventory/export`'s missing auth is a decision, guarded by
-`scripts/test_corpus_inventory_endpoint.py` Check 1 — never extend it to
-chunk text, excerpts, or propositions. Privacy policy + ToS DEFERRED until
+`/corpus-inventory/export` stays public (re-confirmed at this session's
+close; now a CLAUDE.md landmine) — never extend it to chunk text, excerpts,
+or propositions. Privacy policy + ToS DEFERRED until
 Alex supplies legal entity, jurisdiction, and contact address; `POLICY_COPY`
 in `consent.py` is duplicated in `consent-gate.tsx` and they move together.
 
@@ -90,10 +91,8 @@ trimming step may be built to salvage them.
 
 **Search analytics live; B7 done.** A degraded outcome stamps
 `answer_jobs.analytics_outcome` (`scripts/analytics_health_report.py`), but
-that marker has never fired. Five residuals unverified.
-
-**New Wine A2 — NOT ingestion-ready, held by Alex.** No live-call budget
-without a fresh named ceiling.
+that marker has never fired. Five residuals unverified. **New Wine A2 is NOT
+ingestion-ready** — held by Alex, no live-call budget without a fresh ceiling.
 
 **Still on the old name deliberately:** applied migrations; this file's
 filename; the DB source row and the two code sites naming it;
@@ -127,8 +126,8 @@ frontend's API base URL must move in lockstep); "manna"/"rhema" in corpus.
   needs `sources.name`, `sources.slug` and both alias columns moved together
   (Invariant 6: `alias_key` → `new wine`). Attended DB write, not done.
 - **11 ingested CLF documents contain an offering appeal**, one an usher
-  direction, one a dismissal. Auditing those 11 for named-congregant content
-  is open.
+  direction, one a dismissal. Auditing them for named-congregant content is
+  open.
 - **`bible_refs.py` hallucinated 2 of 625 references (~0.3%)** on real sermon
   text — extended by the 2026-08-29 clean audit, not re-measured.
 - **Live account-deletion verification** — blocked, needs a real disposable
@@ -141,12 +140,14 @@ frontend's API base URL must move in lockstep); "manna"/"rhema" in corpus.
 
 ## Next single item
 
-**Unresolved contradiction, inherited — Alex resolves before work starts.**
-The prior status file recorded `/corpus-inventory/export` as both "stays
-public, re-confirmed 2026-08-31" and "Next: gate it behind authentication."
-Both cannot stand. Not silently resolved here.
+**None designated — Alex picks.** The inherited contradiction is resolved:
+`/corpus-inventory/export` **stays public** (Alex, 2026-08-31), so "gate it
+behind authentication" is retired, not deferred. That ruling now lives in
+CLAUDE.md's Landmines rather than only here — it kept being re-raised because
+this file is overwritten every session.
 
-Then, unordered and none started: the auth follow-up passes; the
-`next-themes` hydration mismatch; the DB source row rename and remaining
-Vercel/domain/hostname identifiers; the 301/318 re-ingest (cost estimate
-first); New Wine A2 (fresh ceiling); quote repair; privacy/ToS (blocked).
+Open, unordered, none started: the auth follow-up passes (`audit`, `animate`,
+`polish`); the `next-themes` hydration mismatch; the DB source row rename and
+remaining Vercel/domain/hostname identifiers; the 301/318 re-ingest (cost
+estimate first); New Wine A2 (fresh ceiling); quote accuracy/relevance repair;
+privacy/ToS drafts (blocked on legal entity, jurisdiction, contact).

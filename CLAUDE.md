@@ -1030,6 +1030,23 @@ different row, per the hard rule above.
   — exclude them by default, diff every governing-doc sweep before trusting
   it, and grep the result for string comparisons, not just prose.
 
+- **`/corpus-inventory/export` is unauthenticated ON PURPOSE — do not "fix"
+  it. Ruled three times (2026-08-17, re-confirmed 2026-08-31, re-confirmed
+  again at that session's close to resolve a contradiction).** It serves
+  ~3,673 rows of author/title/URL with no auth, deliberately bypassing the
+  license/visibility gate, so an external agent can dedup against the corpus
+  before proposing ingest candidates (CORPUS-INV-001). Reading the router
+  alone makes the missing `Depends(require_admin_role)` look like an
+  oversight; it is the decision. `scripts/test_corpus_inventory_endpoint.py`
+  Check 1 asserts unauthenticated access and is the guard — a change that
+  makes it fail is reverting a ruling, not fixing a hole. **Recorded here
+  because it kept being re-raised: the ruling had only ever lived in
+  `rhemata-status.md`, which is overwritten every session, so each new session
+  met an ungated admin-ish endpoint with no record of why.** The standing
+  limit is unchanged and is the real boundary: **never** extend it to chunk
+  text, excerpts, or proposition content — that is a policy change, not an
+  implementation detail.
+
 - **Rotating `CURRENT_SUBJECT_KEY_VERSION` is no longer an outage — that
   exposure is genuinely closed, 2026-08-31 (B7 item 2, commit `f2ee6ff`).
   Recorded as a correction, not a standing warning, because the stale form
