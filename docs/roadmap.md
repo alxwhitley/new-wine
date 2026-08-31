@@ -311,7 +311,7 @@ procedure; test guest-limit abuse; recheck admin minimums and the quote verifier
 | Decision 19: commentary modernization | Licensing outcome plus a side-by-side faithfulness-review design |
 | Decision 21: numeral-heading chapter detector | Per-book validation survives both known regressions |
 | Decision 25: study-panel drag-to-follow | Alex finds material mobile benefit |
-| New Wine rebrand — remaining half | Code and copy SHIPPED 2026-08-31 (`abeafd7`). Remaining: DB source row, Railway service, Vercel project, GitHub repo, `rhemata.app` retirement — Alex schedules as a bounded phase |
+| New Wine rebrand — remaining half | Code and copy SHIPPED and DEPLOYED 2026-08-31 (`abeafd7`); GitHub repo and Railway service both renamed. Remaining: DB source row, Vercel project, the public API hostname `rhemata-production.up.railway.app` (frontend API base URL must move in lockstep), `rhemata.app` retirement — it currently returns 404 rather than redirecting — Alex schedules as a bounded phase |
 
 ## Parked
 
