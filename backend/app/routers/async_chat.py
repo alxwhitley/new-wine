@@ -54,7 +54,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -70,10 +69,9 @@ from app.services.async_answers.config import estimate_cost_usd, load_config
 from app.services.async_answers.db import Db
 from app.services.async_answers.metering import enforce_query_limit
 from app.services.async_answers.producer import current_policy
-from app.services.search_analytics import consent as consent_service
-from app.services.search_analytics.occurrences import (
-    OccurrenceWriteFailedError,
-    create_occurrence,
+from app.services.search_analytics.recording import (
+    DEGRADED_OUTCOMES,
+    record_search_occurrence,
 )
 
 router = APIRouter()
@@ -212,40 +210,28 @@ async def submit(
     # "user" here -- never client-suppliable -- the only other origin,
     # "admin_retest", is written exclusively by the admin retest endpoint
     # calling create_occurrence() directly.
-    if user_id:
-        consent_status = await run_in_threadpool(consent_service.get_consent_status, supabase, user_id)
-        if consent_status["acknowledged"] and not consent_status["needs_acknowledgment"]:
-            submission_id = req.submission_id or str(uuid.uuid4())
-            # Routed through consent_service (not derive_subject_key directly)
-            # so a stale post-rotation key is transparently caught up here,
-            # at point of use, with the old key preserved for withdraw() --
-            # 2026-08-27 privacy review, Finding 2.
-            key_state = await run_in_threadpool(consent_service.get_or_rotate_subject_key, supabase, user_id)
-            subject_key = key_state["subject_key"]
-            subject_key_version = key_state["subject_key_version"]
-
-            def _record_occurrence():
-                db = Db()
-                try:
-                    create_occurrence(
-                        db,
-                        submission_id=submission_id,
-                        job_id=job["id"],
-                        origin="user",
-                        subject_key=subject_key,
-                        subject_key_version=subject_key_version,
-                        question=req.question,
-                    )
-                finally:
-                    db.close()
-
-            try:
-                await run_in_threadpool(_record_occurrence)
-            except OccurrenceWriteFailedError:
-                logger.exception(
-                    "search-analytics occurrence could not be durably recorded for a consented account -- refusing rather than serving an unmonitored search"
-                )
-                raise HTTPException(status_code=503, detail="analytics_unavailable")
+    #
+    # B7 (2026-08-31): this whole step is now non-blocking for the answer.
+    # record_search_occurrence() never raises -- it returns an outcome and
+    # keeps BOTH privacy protections (unknown consent never resolves to
+    # "consented"; nothing is written that withdraw() could not delete),
+    # changing only the consequence of a refusal from "no answer" to "no
+    # row." There is deliberately no try/except here: if this call ever
+    # needs one, the contract in recording.py has been broken.
+    # docs/audits/2026-08/analytics_answer_coupling_2026-08-31.md
+    outcome = await run_in_threadpool(
+        record_search_occurrence,
+        Db,
+        supabase,
+        user_id=user_id,
+        submission_id=req.submission_id,
+        job_id=job["id"],
+        question=req.question,
+    )
+    if outcome in DEGRADED_OUTCOMES:
+        logger.warning(
+            "search-analytics degraded (%s) -- answer served, occurrence not recorded", outcome
+        )
 
     resp = {"reason": result["reason"], **_public_job(job)}
     if usage_meta:
