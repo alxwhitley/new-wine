@@ -37,6 +37,12 @@ service's builder + `rootDirectory=/backend` before assuming a code problem
 the old identity while the UI says New Wine. Revert all of it with
 `git revert -m 1 abeafd7`.
 
+**Hypothesis to check FIRST, not confirmed:** the GitHub repo was renamed to
+`alxwhitley/new-wine` during this session (discovered via a push redirect;
+the local remote is updated). A repo rename can break a host's GitHub
+integration, so Railway may simply never have been told to build. Check
+whether a deploy was even triggered before debugging the build itself.
+
 **On deploy, expected not accidental:** guests are logged out and lose saved
 library filters (5 localStorage keys renamed); the beta code is now
 **`newwine`** (was `rhema`; client-side only, visible in the bundle); answers
