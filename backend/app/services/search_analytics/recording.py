@@ -49,15 +49,71 @@ Python 3.9 (Invariant 1).
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import Optional
 
-from app.services.async_answers.db import dict_cursor
+from app.services.async_answers.db import Db, dict_cursor
 
 from . import consent as consent_service
 from .occurrences import create_occurrence
 
 logger = logging.getLogger(__name__)
+
+# B7 item 4. Before this, NO timeout existed anywhere on the analytics path,
+# so a dependency that accepted the connection and never answered held the
+# whole request open -- a hang rather than a clean failure, and the one shape
+# that survived the decoupling in this module untouched.
+#
+# The number is taken from this codebase, not invented. pastors_notes.py's
+# TAGGING_TIMEOUT = 5 ("seconds; non-fatal if exceeded") is the exact same
+# shape: auxiliary enrichment on a user-facing request path, where exceeding
+# the budget is explicitly not a failure of the request. That is precisely
+# what analytics recording became once the coupling was removed.
+#
+# The other candidate was PostgREST's own ~8s statement_timeout, documented
+# empirically in ingest.py and admin.py. 5s sits deliberately INSIDE that: we
+# release a hung transport before the platform's own ceiling, and the thing
+# we might cut short is a dashboard row whose loss now costs nothing and is
+# marked. Making a user wait 8s for that trade would be the wrong way round.
+ANALYTICS_TIMEOUT_SECONDS = 5
+ANALYTICS_STATEMENT_TIMEOUT_MS = ANALYTICS_TIMEOUT_SECONDS * 1000
+
+_analytics_supabase_client = None
+
+
+def analytics_supabase():
+    """A Supabase client whose PostgREST timeout is scoped to analytics.
+
+    Deliberately NOT the shared get_supabase() singleton: that one is used by
+    retrieval, quotes, metering, and admin, and lowering its timeout to suit
+    analytics would silently impose an analytics-shaped budget on all of
+    them."""
+    global _analytics_supabase_client
+    if _analytics_supabase_client is None:
+        from supabase import create_client
+
+        # SyncClientOptions, NOT the ClientOptions that `supabase` re-exports
+        # at top level. The latter is the shared async/sync BASE and has no
+        # `storage` field, so create_client() raises AttributeError deep
+        # inside _init_supabase_auth_client on a client built from it. Caught
+        # by test_analytics_submit_wiring.py before this ever deployed --
+        # the top-level export is the obvious import and the wrong one.
+        from supabase.lib.client_options import SyncClientOptions
+
+        _analytics_supabase_client = create_client(
+            os.environ["SUPABASE_URL"],
+            os.environ["SUPABASE_SERVICE_KEY"],
+            options=SyncClientOptions(postgrest_client_timeout=ANALYTICS_TIMEOUT_SECONDS),
+        )
+    return _analytics_supabase_client
+
+
+def analytics_db():
+    """A Db carrying the analytics statement budget. The worker's own Db is
+    constructed without one and is unaffected -- a generation write must
+    never inherit this."""
+    return Db(statement_timeout_ms=ANALYTICS_STATEMENT_TIMEOUT_MS)
 
 # Outcomes. Exactly one is returned per call, and only RECORDED means a row
 # exists. Every SKIPPED_* value means: no occurrence was written, and the

@@ -71,6 +71,8 @@ from app.services.async_answers.metering import enforce_query_limit
 from app.services.async_answers.producer import current_policy
 from app.services.search_analytics.recording import (
     DEGRADED_OUTCOMES,
+    analytics_db,
+    analytics_supabase,
     record_search_occurrence,
 )
 
@@ -219,10 +221,14 @@ async def submit(
     # row." There is deliberately no try/except here: if this call ever
     # needs one, the contract in recording.py has been broken.
     # docs/audits/2026-08/analytics_answer_coupling_2026-08-31.md
+    # analytics_db / analytics_supabase carry the analytics time budget
+    # (B7 item 4). Deliberately NOT the shared Db or get_supabase(): the
+    # worker's generation writes and every other caller must not inherit an
+    # analytics-shaped timeout.
     outcome = await run_in_threadpool(
         record_search_occurrence,
-        Db,
-        supabase,
+        analytics_db,
+        analytics_supabase(),
         user_id=user_id,
         submission_id=req.submission_id,
         job_id=job["id"],

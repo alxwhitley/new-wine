@@ -20,6 +20,7 @@ from typing import Any, Callable, Optional, TypeVar
 from urllib.parse import unquote, urlparse
 
 import psycopg2
+import psycopg2.errors
 import psycopg2.extras
 
 T = TypeVar("T")
@@ -70,8 +71,15 @@ class Db:
     connections must not be shared across threads).
     """
 
-    def __init__(self):
+    def __init__(self, statement_timeout_ms: Optional[int] = None):
         self._conn = None  # type: Optional[Any]
+        # B7 (2026-08-31): opt-in per-statement time budget, applied as
+        # SET LOCAL inside run()'s own transaction so it cannot leak onto
+        # another caller's connection or outlive the transaction.
+        # Default None keeps the worker's behaviour byte-identical -- a
+        # generation write must never be cut short by an analytics-shaped
+        # budget.
+        self._statement_timeout_ms = statement_timeout_ms
 
     @property
     def conn(self):
@@ -104,9 +112,26 @@ class Db:
         for attempt in (1, 2):
             conn = self.conn
             try:
+                if self._statement_timeout_ms is not None:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SET LOCAL statement_timeout = %s", (self._statement_timeout_ms,)
+                        )
                 result = fn(conn)
                 conn.commit()
                 return result
+            except psycopg2.errors.QueryCanceled:
+                # A deliberate server-side cancellation for exceeding the
+                # time budget. QueryCanceled subclasses OperationalError, so
+                # without this clause the handler below would reconnect and
+                # retry it -- silently doubling the wait the budget exists to
+                # bound. Retrying a query the server just cancelled for being
+                # too slow is wrong regardless of caller.
+                try:
+                    conn.rollback()
+                except Exception:
+                    self._reconnect()
+                raise
             except (psycopg2.OperationalError, psycopg2.InterfaceError):
                 self._reconnect()
                 if attempt == 2:

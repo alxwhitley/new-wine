@@ -71,8 +71,9 @@ class RecordingDb:
 
     statements = []
 
-    def __init__(self, on_run=None):
+    def __init__(self, on_run=None, **kwargs):
         self._on_run = on_run
+        self.kwargs = kwargs
         self.closed = False
 
     def run(self, fn):
@@ -118,29 +119,21 @@ class RecordingDb:
 
 
 def failing_db_factory(exc):
-    """A Db factory that succeeds ONCE then raises.
+    """An analytics Db factory that always raises.
 
-    The router's own _enqueue() calls Db() before analytics does, so a
-    factory that always raises would fail the ENQUEUE step and the test
-    would prove nothing about analytics. First call feeds enqueue; the
-    second is the analytics one under test."""
-    calls = [0]
-
+    Simple now that analytics has its own factory (analytics_db) separate
+    from the Db the router's _enqueue() uses -- the earlier version of this
+    helper had to let the first call through because both shared one name."""
     def _factory():
-        calls[0] += 1
-        if calls[0] == 1:
-            return RecordingDb()
         raise exc
 
     return _factory
 
 
 def occurrence_fails_marker_works(exc):
-    """For the direct record_search_occurrence() path (no router, so no
-    _enqueue consuming a call): the FIRST Db() is the occurrence write and
-    must fail, the SECOND is the marker write and must succeed -- which is
-    exactly what proves the marker still lands when the occurrence did
-    not."""
+    """FIRST call is the occurrence write and must fail, SECOND is the
+    marker write and must succeed -- which is what proves the marker still
+    lands when the occurrence did not."""
     calls = [0]
 
     def _factory():
@@ -153,15 +146,8 @@ def occurrence_fails_marker_works(exc):
 
 
 def _second_call_only(cls):
-    """First Db() feeds the router's own _enqueue(); every later one is the
-    analytics path under test."""
-    calls = [0]
-
-    def _factory():
-        calls[0] += 1
-        return RecordingDb() if calls[0] == 1 else cls()
-
-    return _factory
+    """Every analytics Db is the failing kind."""
+    return lambda: cls()
 
 
 def occurrence_writes():
@@ -181,6 +167,8 @@ def install_answer_path(monkey, *, db_factory):
     monkey["current_policy"] = async_chat.current_policy
     monkey["load_config"] = async_chat.load_config
     monkey["Db"] = async_chat.Db
+    monkey["analytics_db"] = async_chat.analytics_db
+    monkey["analytics_supabase"] = async_chat.analytics_supabase
     monkey["enqueue"] = async_chat.jobs.enqueue
 
     async_chat._serving_enabled = lambda: True
@@ -191,7 +179,12 @@ def install_answer_path(monkey, *, db_factory):
         "policy_version": "policy_v3", "filters": {},
     }
     async_chat.load_config = lambda db: object()
-    async_chat.Db = db_factory
+    # The router's own _enqueue() gets a healthy Db; only the ANALYTICS
+    # factory is failed, so an observed failure is attributable to analytics
+    # and nothing else.
+    async_chat.Db = lambda *a, **k: RecordingDb()
+    async_chat.analytics_db = db_factory
+    async_chat.analytics_supabase = lambda: FakeSupabase()
     async_chat.jobs.enqueue = lambda *a, **k: {
         "reason": "created", "job": {"id": JOB_ID, "status": "queued", "outcome": None},
     }
@@ -204,6 +197,8 @@ def restore(monkey):
     async_chat.current_policy = monkey["current_policy"]
     async_chat.load_config = monkey["load_config"]
     async_chat.Db = monkey["Db"]
+    async_chat.analytics_db = monkey["analytics_db"]
+    async_chat.analytics_supabase = monkey["analytics_supabase"]
     async_chat.jobs.enqueue = monkey["enqueue"]
 
 
@@ -414,6 +409,79 @@ def main():
         consent_fn=consent_ok, key_fn=key_ok,
         db_factory=_second_call_only(AlwaysFailingMarkerDb),
     )
+
+    # ── Item 4: the analytics time budget ───────────────────────────────────
+
+    print("\nTIMEOUT -- the analytics path has a bounded budget (B7 item 4)")
+    import psycopg2.errors
+    from app.services.async_answers.db import Db as RealDb
+
+    check("budget is 5s, taken from pastors_notes.TAGGING_TIMEOUT's precedent",
+          recording.ANALYTICS_TIMEOUT_SECONDS == 5)
+    check("statement budget is the same number in ms",
+          recording.ANALYTICS_STATEMENT_TIMEOUT_MS == 5000)
+    check("analytics_db() carries the budget",
+          RealDb(statement_timeout_ms=recording.ANALYTICS_STATEMENT_TIMEOUT_MS)
+          ._statement_timeout_ms == 5000)
+    check("the WORKER's Db carries NO budget (generation must not inherit it)",
+          RealDb()._statement_timeout_ms is None)
+
+    # A statement timeout must behave exactly like any other analytics
+    # failure: no record, answer served, marker left.
+    run_scenario(
+        "STATEMENT TIMEOUT (server cancels the analytics query)",
+        consent_fn=consent_ok, key_fn=key_ok,
+        db_factory=failing_db_factory(
+            psycopg2.errors.QueryCanceled("canceling statement due to statement timeout")),
+    )
+    out = _outcome(consent_ok, key_ok,
+                   db_factory=occurrence_fails_marker_works(
+                       psycopg2.errors.QueryCanceled("timeout")))
+    check("a timeout is classed as a normal degraded outcome, not a special case",
+          out == recording.SKIPPED_WRITE_FAILED and out in recording.DEGRADED_OUTCOMES)
+    check("a timeout leaves the marker like any other failure",
+          len(marker_writes()) == 1)
+
+    # QueryCanceled subclasses OperationalError, which Db.run retries once.
+    # Without an explicit clause the budget would silently double.
+    attempts = [0]
+
+    class _CancelingConn:
+        def cursor(self, *a, **k):
+            outer = self
+
+            class _C:
+                def __enter__(_s):
+                    return _s
+
+                def __exit__(_s, *a):
+                    return False
+
+                def execute(_s, *a, **k):
+                    return None
+
+            return _C()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        closed = False
+
+    def _always_cancel(conn):
+        attempts[0] += 1
+        raise psycopg2.errors.QueryCanceled("canceling statement due to statement timeout")
+
+    db = RealDb(statement_timeout_ms=5000)
+    db._conn = _CancelingConn()
+    try:
+        db.run(_always_cancel)
+    except psycopg2.errors.QueryCanceled:
+        pass
+    check("a cancelled statement is NOT retried (budget cannot silently double)",
+          attempts[0] == 1, "attempts=%d" % attempts[0])
 
     print("\nSTRUCTURAL -- the answer path no longer references analytics directly")
     src = (ROOT / "backend" / "app" / "routers" / "async_chat.py").read_text()
