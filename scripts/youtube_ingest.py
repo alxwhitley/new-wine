@@ -316,6 +316,37 @@ _SPEAKER_NAME_FIXES = {
     "shabaka willliams": "Shabaka Williams",  # CLF Church playlist, 2026-08-29
 }
 
+# Resolution paths that PROVE the title-extracted string is a real, known
+# person: both mean the speaker text itself matched a `source_aliases` row.
+# 'channel_name'/'source_name' resolved from the CHANNEL instead, and 'MISS'
+# resolved to nothing — in those cases the speaker string is unverified and
+# must never become documents.author. See _verified_speaker().
+_SPEAKER_VERIFIED_VIA = frozenset({"title_speaker", "author"})
+
+
+def _verified_speaker(extracted_speaker: str, via: str) -> str:
+    """The speaker to record as documents.author, or '' if unverified.
+
+    Root cause this closes (audit 2026-08-31): `_extract_speaker()` matches any
+    run of two-or-more Title-Case words after a '|' or '-', which YouTube titles
+    produce constantly — "Do This Instead", "Your Porn Battle Plan". Five such
+    fragments reached `documents.author` as CITABLE under the Vlad Savchuk
+    source, entering the permitted-name set the answer writer may attribute
+    claims to.
+
+    The signal to prevent it was already being computed and then thrown away:
+    when the extracted string fails alias lookup, resolution falls back to the
+    channel name and `via` records that — yet the speaker was written as author
+    regardless.
+
+    Returning '' leaves documents.author NULL, and citation falls back to the
+    source name. That is not a degradation: it is the behavior already proven
+    correct on the 119 Savchuk documents whose titles yielded no speaker at all.
+    """
+    if not extracted_speaker:
+        return ""
+    return extracted_speaker if via in _SPEAKER_VERIFIED_VIA else ""
+
 
 def _extract_speaker(title: str) -> str:
     """Best-effort speaker extraction from a video title.
@@ -544,7 +575,14 @@ def ingest_video(
     video_id = extract_video_id(url)
     fname    = "{}_{}.txt".format(video_id, _slugify(video_title))
     tmp_path = CLEANED_DIR / fname
-    speaker  = _extract_speaker(video_title)
+    # Reuse step 1's already-resolved extraction rather than recomputing it:
+    # the recomputed value discarded `via`, which is exactly the evidence that
+    # says whether this string is a real person or title noise.
+    speaker  = _verified_speaker(extracted_speaker, via)
+    if extracted_speaker and not speaker:
+        print("  SPEAKER_UNVERIFIED  dropping author={!r} (resolved via={!r}); "
+              "attribution falls back to the source name".format(
+                  extracted_speaker, via))
     _write_transcript_file(tmp_path, video_title, speaker, channel_name, url, cleaned)
     print("  wrote: {}  (speaker={!r})".format(fname, speaker or "—"))
 
