@@ -52,10 +52,6 @@ CALIBRATION_MD = REVIEW_DIR / "calibration.md"
 RUN_LOG = REVIEW_DIR / "run.log"
 
 ROLE_NAME = "newwine_readonly_analysis"
-# Pre-rename name, still live until migration 096 is applied. Accepted by the
-# connection guard below so this script keeps working either side of that
-# apply. Drop once 096 has run and .env.readonly-analysis is updated.
-LEGACY_ROLE_NAME = "rhemata_readonly_analysis"
 
 # Progress heartbeat every N documents during the chunk-scan phase.
 PROGRESS_EVERY = 25
@@ -337,10 +333,9 @@ def connect_readonly():
         raise RuntimeError("READONLY_ANALYSIS_DB_URL not found in %s" % READONLY_ENV_PATH)
 
     # Refuse to use the main app URL even if someone swapped the file.
-    if ROLE_NAME not in url and LEGACY_ROLE_NAME not in url:
+    if ROLE_NAME not in url:
         raise RuntimeError(
-            "Connection string names neither %s nor %s — refusing to connect."
-            % (ROLE_NAME, LEGACY_ROLE_NAME)
+            "Connection string does not name %s — refusing to connect." % ROLE_NAME
         )
 
     p = urlparse(url)
