@@ -7,12 +7,12 @@ docs/plan-archive.md (history), and CLAUDE.md (invariants). Corpus, row, and
 table counts are NOT recorded here except as a dated, sourced snapshot from a
 specific live query — treat any count seen elsewhere as unverified.
 
-Last verified: 2026-08-31. **PLAN.md has one active blocker: B7, the
-fail-closed analytics → answer coupling — code complete, still OPEN.** The
-decoupling and the timeout are built and proven; the missing-data marker is
-built but **inert until migration 095 is applied**, and none of it is
-deployed. Also this session (attended): pushed five commits to `origin/main`,
-guarded then renamed the production-writing metering script
+Last verified: 2026-08-31. **PLAN.md has zero active blockers — B7 is DONE
+and live.** Migration 095 applied (attended, independently verified) and all
+four Railway services deployed at `6e0bb4a`; an analytics failure can no
+longer cost a user their answer, the path is time-bounded, and a skipped
+recording now leaves a trace. Also this session (attended): guarded then
+renamed the production-writing metering script
 (`scripts/verify_metering_live.py`). Earlier across
 2026-08-30/31: ruled the 15 held CLF recordings out permanently, cleared and
 ingested 7 of the 10 misclassified `unknown` rows (CLF YouTube 56 → 63),
@@ -60,21 +60,21 @@ deliberately **kept** — real searches, and the only evidence it works.
 Evidence and five still-unverified residuals:
 `docs/audits/2026-08/analytics_production_smoke_2026-08-31.md`.
 
-**Blocker B7 — analytics no longer costs a user their answer (code
-complete, NOT closed).** Alex's rule: when analytics cannot be reached or
-consent cannot be determined, do not record, answer anyway. Both privacy
-protections are preserved exactly — unknown consent never resolves to
-"consented," and nothing is written under a key `withdraw()` could not find;
-only the consequence of a refusal changed. A 5s budget now bounds the path
-(no timeout existed at all before). A degraded outcome stamps
-`answer_jobs.analytics_outcome`, so "analytics was down" stops being
-indistinguishable from "nobody searched" — read it with
-`scripts/analytics_health_report.py`. **Two attended steps remain and B7
-stays open until both are done: apply migration 095, then deploy.** Deploy
-order is safe either way — without the column the marker write is caught and
-degrades to a log line. 50 mutation-verified checks; PLAN.md B7 has the
-detail, `docs/audits/2026-08/analytics_answer_coupling_2026-08-31.md` the
-diagnosis.
+**B7 — DONE and live (2026-08-31).** Analytics can no longer cost a user
+their answer: when analytics is unreachable or consent undeterminable, the
+system does not record and answers anyway. Both privacy protections are
+preserved exactly — unknown consent never resolves to "consented," and
+nothing is written under a key `withdraw()` could not find; only the
+consequence of a refusal changed. A 5s budget bounds the path (none existed
+before). A degraded outcome stamps `answer_jobs.analytics_outcome`, so
+"analytics was down" stops being indistinguishable from "nobody searched" —
+read it with `scripts/analytics_health_report.py`. Migration 095 applied and
+independently verified; deployed at `6e0bb4a`; a real post-deploy submission
+returned `answered`. **Not claimed:** the marker has never fired in
+production, because nothing has degraded since it went live — its write path
+rests on the 50-check suite, not on an observed outage. PLAN.md B7 and
+`docs/audits/2026-08/analytics_answer_coupling_2026-08-31.md` hold the
+detail.
 
 **New Wine A2 — unchanged, still NOT ingestion-ready, still held by Alex, no
 next step selected.** Gates and resume options:
@@ -132,14 +132,7 @@ exclusion or an audio-confirmation step.**
 
 ## Next single item
 
-**Close B7 — two attended steps, both Alex's.** (1) `python3.12
-scripts/apply_migration_095.py --apply`, dry-run verified against the live
-database (0 columns added, nothing written). (2) Deploy. Until then the
-marker is inert and a degraded outcome leaves only a log line. The key-rotation
-exposure that previously gated this is closed — see CLAUDE.md's landmine; what
-remains there is a data risk, not an outage.
-
-Not started, behind B7:
+**None selected.** Candidates, none started:
 
 - **Guest-speaker attribution** — the live product question the 2026-08-31
   cleanup deliberately did not answer (Current state, above). Cheap to scope,

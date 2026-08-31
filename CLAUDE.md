@@ -1022,8 +1022,10 @@ different row, per the hard rule above.
   someone notices. Set `ANALYTICS_HMAC_SECRET_V{n+1}` BEFORE bumping the
   constant, never after. That silence is visible in
   `answer_jobs.analytics_outcome` (`skipped_key_unavailable`) via
-  `scripts/analytics_health_report.py` — **but only once migration 095 is
-  applied**; until then a rotation's fallout leaves nothing but a log line.
+  `scripts/analytics_health_report.py` — migration 095 is applied and
+  deployed as of 2026-08-31, so that check works today. **Run it after any
+  rotation**: a bump that quietly stopped all recording looks identical to a
+  quiet week until someone reads that column.
   Also unchanged and still load-bearing: `consent.withdraw()` finds rows by
   the current key plus every entry in `retired_subject_keys`, so a rotation
   that loses the outgoing key makes its rows undeletable — never write a

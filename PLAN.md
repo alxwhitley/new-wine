@@ -9,11 +9,11 @@ relevance are below the desired bar; re-enablement requires the Scheduled
 repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
-**Current item: B7 — fail-closed analytics → answer coupling.** Alex's
-decision 2026-08-31: must be resolved before real beta users. Items 2 and 4
-are built and proven; item 3 is built but **inert until migration 095 is
-applied**, and nothing is deployed. **Active blocker count: 1** — B7 stays
-open until 095 is applied and all three are live. Quote repair remains Scheduled, not an active Blocker.
+**Current item:** None — **B7 is DONE and live** (2026-08-31). Migration 095
+applied (attended, verified independently from a fresh connection), all four
+Railway services deployed at `6e0bb4a`, and the full path re-proved in
+production after the deploy. **Active blocker count: 0.** Quote repair remains
+Scheduled, not an active Blocker.
 
 **B6-F1 is DONE** (2026-08-26). The activation flag was flipped to `true` and
 its wiring code was found to have been drafted but never actually deployed
@@ -33,9 +33,9 @@ against accidental production writes (`--apply` required, import
 side-effect-free, proven by tripwiring every I/O entry point), commit
 `a395efb`, then renamed out of the `test_*.py` namespace on Alex's approval so
 it stops advertising itself to other plans as the pattern to copy. (3) The
-fail-closed coupling that the smoke surfaced was investigated and **promoted
-to Blocker B7 on Alex's decision**; a later same-day session built the fix
-(decoupling, marker, timeout) but B7 remains OPEN — see its entry.
+fail-closed coupling that the smoke surfaced was investigated, **promoted to
+Blocker B7 on Alex's decision**, then fixed, applied, and deployed the same
+day — decoupling, missing-data marker, and timeout, all live. B7 is closed.
 
 **B6 general answer-latency — DONE, live (2026-08-27), not a Blocker item.**
 Never promoted past `docs/roadmap.md`'s Scheduled B6 latency work; recorded
@@ -66,19 +66,35 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ### B7 — Fail-closed analytics → answer coupling
 
-**Status: STILL OPEN — code complete, NOT closed.** Items 2 and 4 are built,
-proven, and committed. **Item 3 is built but inert:** the marker cannot be
-written until migration 095 is applied, and it has not been. Nothing in this
-entry is deployed to Railway either. B7 closes when 095 is applied and the
-three items are live — not before.
+**Status: DONE and live (2026-08-31, attended).** All three items are
+deployed and verified in production.
 
-Remaining to close, both attended and both Alex's:
+Closing steps, both performed this session:
 
-1. `python3.12 scripts/apply_migration_095.py --apply` (dry-run verified
-   against the live database: 0 columns added, nothing written).
-2. Deploy. Order does not matter for safety — if the code ships first, the
-   marker write fails against the missing column, is caught, and degrades to
-   a log line; it never costs an answer.
+1. Migration 095 applied — its own script passed 9/9, then verified
+   INDEPENDENTLY from a fresh read-only connection: column present and
+   nullable, partial index present, CHECK enforcing the closed set, and all
+   47 pre-existing rows untouched (`marked=0`).
+2. Deployed. `6e0bb4a` pushed; `rhemata`, `answer-worker`,
+   `search-analytics-finalizer`, and `search-analytics-retention` all reached
+   `SUCCESS` on that commit. No frontend file changed in the four commits, so
+   Vercel was a genuine no-op rather than an unchecked assumption.
+
+Post-deploy production proof, not inference: a real submission through the
+live endpoint returned `200 {"reason":"created"}` and completed
+`outcome=answered` on `claude-sonnet-5` with a 2,654-char answer
+(`$0.062`) — so the rewritten `/submit` path serves answers on the deployed
+code. It was a guest submission, which also exercised the
+`SKIPPED_GUEST` branch live: `search_occurrences` stayed at 2 and no marker
+was written. `scripts/analytics_health_report.py` now runs against the live
+schema and reports both traffic hours as `healthy, 0 unrecorded` — the
+distinction that did not exist before this work.
+
+**One thing deliberately not claimed:** the marker has never actually fired
+in production, because nothing has degraded since it went live. Its write
+path is proven by the 50-check suite against the real code and its column and
+CHECK are verified live, but "observed marking a real outage" is not
+something this session could manufacture, and is not claimed.
 
 **Item 2 — decoupling. DONE (`f2ee6ff`).** When analytics cannot be reached,
 or consent state cannot be determined, the system does not record and answers
