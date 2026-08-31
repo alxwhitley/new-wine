@@ -43,12 +43,14 @@ FAILURES = []
 CHECKS = [0]
 
 
-def check(label, condition):
+def check(label, condition, detail=None):
     CHECKS[0] += 1
     if condition:
         print("  PASS  %s" % label)
     else:
         print("  FAIL  %s" % label)
+        if detail:
+            print("        %s" % detail)
         FAILURES.append(label)
 
 
@@ -96,14 +98,20 @@ class RecordingDb:
         # resolves. (Getting this wrong silently made the baseline observe
         # zero writes, which would have made every "nothing recorded"
         # assertion below vacuously true.)
+        # Both modules bind dict_cursor at import, so BOTH must be
+        # patched: occurrences.py writes the occurrence, recording.py
+        # writes the degradation marker. Patching only the first silently
+        # made every marker assertion fail.
         from app.services.search_analytics import occurrences as occ_mod
+        from app.services.search_analytics import recording as rec_mod
 
-        original = occ_mod.dict_cursor
+        originals = (occ_mod.dict_cursor, rec_mod.dict_cursor)
         occ_mod.dict_cursor = lambda conn: _Cur()
+        rec_mod.dict_cursor = lambda conn: _Cur()
         try:
             return fn(object())
         finally:
-            occ_mod.dict_cursor = original
+            occ_mod.dict_cursor, rec_mod.dict_cursor = originals
 
     def close(self):
         self.closed = True
@@ -123,6 +131,35 @@ def failing_db_factory(exc):
         if calls[0] == 1:
             return RecordingDb()
         raise exc
+
+    return _factory
+
+
+def occurrence_fails_marker_works(exc):
+    """For the direct record_search_occurrence() path (no router, so no
+    _enqueue consuming a call): the FIRST Db() is the occurrence write and
+    must fail, the SECOND is the marker write and must succeed -- which is
+    exactly what proves the marker still lands when the occurrence did
+    not."""
+    calls = [0]
+
+    def _factory():
+        calls[0] += 1
+        if calls[0] == 1:
+            raise exc
+        return RecordingDb()
+
+    return _factory
+
+
+def _second_call_only(cls):
+    """First Db() feeds the router's own _enqueue(); every later one is the
+    analytics path under test."""
+    calls = [0]
+
+    def _factory():
+        calls[0] += 1
+        return RecordingDb() if calls[0] == 1 else cls()
 
     return _factory
 
@@ -318,6 +355,65 @@ def main():
 
     print("\nCONTRACT -- record_search_occurrence never raises")
     check("every simulated failure returned a status instead of raising", True)
+
+    # ── Item 3: the degradation marker (migration 095) ──────────────────────
+
+    print("\nMARKER -- a skipped recording leaves a trace (B7 item 3)")
+
+    def marker_writes():
+        return [s for s in RecordingDb.statements
+                if "answer_jobs" in s and "analytics_outcome" in s]
+
+    _outcome(consent_raises, key_ok)
+    check("consent unreadable -> marker written", len(marker_writes()) == 1)
+
+    _outcome(consent_ok, key_raises)
+    check("key unavailable -> marker written", len(marker_writes()) == 1)
+
+    out = _outcome(consent_ok, key_ok,
+                   db_factory=occurrence_fails_marker_works(Tripwire("write failed")))
+    check("write failed -> marker written",
+          len(marker_writes()) == 1 and out == recording.SKIPPED_WRITE_FAILED,
+          "outcome=%s markers=%d" % (out, len(marker_writes())))
+
+    _outcome(consent_ok, key_ok)
+    check("HEALTHY recording -> NO marker (marker means degraded, not 'not recorded')",
+          marker_writes() == [])
+
+    _outcome(consent_not_given, key_ok)
+    check("not consented -> NO marker (an ordinary skip is not an outage)",
+          marker_writes() == [])
+
+    _outcome(consent_ok, key_ok, user_id=None)
+    check("guest -> NO marker", marker_writes() == [])
+
+    print("\nMARKER -- carries no user content and no account linkage")
+    marker_sql = None
+    _outcome(consent_raises, key_ok)
+    for s in RecordingDb.statements:
+        if "analytics_outcome" in s:
+            marker_sql = s
+    check("marker statement names only analytics_outcome and id",
+          marker_sql is not None
+          and "question" not in marker_sql
+          and "subject_key" not in marker_sql
+          and "fingerprint" not in marker_sql,
+          marker_sql)
+
+    print("\nMARKER -- its own failure still cannot cost the answer")
+
+    class AlwaysFailingMarkerDb(RecordingDb):
+        """Occurrence write fails AND the marker write fails -- the worst
+        case, and the one where a naive implementation would raise."""
+
+        def run(self, fn):
+            raise Tripwire("everything is down")
+
+    run_scenario(
+        "MARKER WRITE ALSO FAILS (occurrence AND marker both fail)",
+        consent_fn=consent_ok, key_fn=key_ok,
+        db_factory=_second_call_only(AlwaysFailingMarkerDb),
+    )
 
     print("\nSTRUCTURAL -- the answer path no longer references analytics directly")
     src = (ROOT / "backend" / "app" / "routers" / "async_chat.py").read_text()

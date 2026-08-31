@@ -52,6 +52,8 @@ import logging
 import uuid
 from typing import Optional
 
+from app.services.async_answers.db import dict_cursor
+
 from . import consent as consent_service
 from .occurrences import create_occurrence
 
@@ -123,6 +125,59 @@ def _deletable_subject_key(supabase, user_id: str):
     return key_state
 
 
+def _stamp_degraded(db_factory, job_id, outcome: str) -> bool:
+    """Mark this job's row as one whose analytics recording was skipped by a
+    FAILURE (migration 095). Returns True if the marker landed.
+
+    This is the trace Alex required: without it, "analytics was down for
+    these hours" and "nobody searched during these hours" are the same
+    observation -- the exact ambiguity that cost a phase of work in the
+    2026-08-31 smoke. An answer_jobs row is guaranteed to exist by now
+    (jobs.enqueue already succeeded over this same direct-Postgres
+    connection), so the marker always has somewhere to land.
+
+    Stamps the outcome only. No question, no fingerprint, no subject key --
+    and answer_jobs has no user_id column, so this creates no
+    account-to-search linkage. It must never reconstruct the occurrence the
+    privacy protections just refused to write.
+
+    Best-effort by construction, and last in the chain: if this fails there
+    is nothing further to fall back to except the log line, and it must
+    never be the reason an answer is lost."""
+    try:
+        db = db_factory()
+    except Exception:
+        logger.warning(
+            "analytics_degraded outcome=%s job_id=%s marker=unwritten "
+            "(no connection) -- log line is the only trace of this one",
+            outcome, job_id, exc_info=True,
+        )
+        return False
+
+    try:
+        def _write(conn):
+            with dict_cursor(conn) as cur:
+                cur.execute(
+                    "UPDATE answer_jobs SET analytics_outcome = %s WHERE id = %s",
+                    (outcome, job_id),
+                )
+
+        db.run(_write)
+        return True
+    except Exception:
+        logger.warning(
+            "analytics_degraded outcome=%s job_id=%s marker=unwritten "
+            "-- log line is the only trace of this one",
+            outcome, job_id, exc_info=True,
+        )
+        return False
+    finally:
+        try:
+            db.close()
+        except Exception:
+            logger.warning("search-analytics: marker connection close failed", exc_info=True)
+
+
 def record_search_occurrence(
     db_factory,
     supabase,
@@ -135,9 +190,31 @@ def record_search_occurrence(
     """Record one occurrence if -- and only if -- it is permitted and
     provably deletable. Returns an outcome string. NEVER raises.
 
+    A degraded outcome additionally leaves a marker on the job row, so the
+    gap is visible afterwards rather than silent.
+
     `db_factory` is a zero-arg callable returning a Db (injected rather
     than imported so a test can substitute one without patching module
     globals)."""
+    outcome = _resolve_and_write(
+        db_factory, supabase,
+        user_id=user_id, submission_id=submission_id,
+        job_id=job_id, question=question,
+    )
+    if outcome in DEGRADED_OUTCOMES:
+        _stamp_degraded(db_factory, job_id, outcome)
+    return outcome
+
+
+def _resolve_and_write(
+    db_factory,
+    supabase,
+    *,
+    user_id: Optional[str],
+    submission_id: Optional[str],
+    job_id,
+    question: str,
+) -> str:
     if not user_id:
         return SKIPPED_GUEST
 
