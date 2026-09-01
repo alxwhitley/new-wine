@@ -2,6 +2,7 @@
   "estimated_cost_usd": "0.00003642",
   "estimated_tokens": 1821,
   "packet_sha256": "a48f506a38db740d4d2cd8648c8de95ac7c25cb4550916e236a023738184a1e8",
+  "preview_payload_sha256": "4171181b7003317044edafb8eeb836de7596f795489ba1bc8faafac72d716237",
   "rendered_bytes": 5463,
   "sample_ids": ["G0010", "G0132", "G0223J", "G0009", "G0137", "G0494"],
   "selection": [

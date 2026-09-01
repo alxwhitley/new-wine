@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +22,11 @@ from tipnr_hidden_pilot_contract import (  # noqa: E402
     SELECTION_SHA256,
     build_pilot_packet,
     pilot_packet_report,
+)
+from preview_tipnr_hidden_pilot import (  # noqa: E402
+    build_pilot_preview,
+    main as preview_main,
+    write_new_pilot_preview,
 )
 
 
@@ -92,6 +99,43 @@ class PilotPacketTests(unittest.TestCase):
         report_text = repr(pilot_packet_report(self.packet)).lower()
         for excluded in ("briefest", "@brief", "@article", "@ambiguity", "relationship"):
             self.assertNotIn(excluded, report_text)
+
+
+class PilotPreviewTests(unittest.TestCase):
+    def test_preview_freezes_zero_effect_boundary(self) -> None:
+        report = build_pilot_preview(ROOT, _artifact())
+        self.assertIs(report["database_write_authorized"], False)
+        self.assertIs(report["external_model_call_authorized"], False)
+        self.assertEqual(report["counts"], {
+            "items": 20, "documents": 20, "chunks": 20,
+            "policy_rows": 20, "embedding_requests": 20,
+        })
+        self.assertEqual(report["maximum_spend_usd"], "0.01")
+        self.assertEqual(report["reconciliation"], {
+            "attempted": 20, "stored": 0, "errored": 0, "skipped": 20,
+            "reason": "preview_only",
+        })
+
+    def test_preview_main_never_opens_network(self) -> None:
+        with mock.patch("socket.socket", side_effect=AssertionError("network opened")):
+            with mock.patch("sys.stdout"):
+                self.assertEqual(preview_main(["--artifact", str(_artifact())]), 0)
+
+    def test_preview_writer_is_create_new_and_byte_identical_only(self) -> None:
+        local_root = ROOT / "local"
+        local_root.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local_root) as directory:
+            target = Path(directory) / "preview.json"
+            write_new_pilot_preview(target, b"same\n")
+            write_new_pilot_preview(target, b"same\n")
+            self.assertEqual(target.read_bytes(), b"same\n")
+            with self.assertRaises(FileExistsError):
+                write_new_pilot_preview(target, b"different\n")
+
+    def test_preview_rejects_effect_and_selection_flags(self) -> None:
+        for flag in ("--apply", "--limit", "--offset", "--entity-id"):
+            with self.subTest(flag=flag), self.assertRaises(SystemExit):
+                preview_main(["--artifact", str(_artifact()), flag, "1"])
 
 
 if __name__ == "__main__":
