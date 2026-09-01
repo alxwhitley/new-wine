@@ -192,7 +192,7 @@ def _write_packet(connection, packet: PilotPacket, vectors: list[list[float]]) -
             raise PilotApplyError("staged_policy_identity_mismatch")
         cursor.execute(
             """/* phase8:stamp_complete */
-            UPDATE documents SET ingest_completed_at = now() WHERE id = ANY(%s)""",
+            UPDATE documents SET ingest_completed_at = now() WHERE id = ANY(%s::uuid[])""",
             ([item.document["id"] for item in packet.items],),
         )
         if any(inspect_pilot_item(cursor, item).kind != "exact_complete" for item in packet.items):

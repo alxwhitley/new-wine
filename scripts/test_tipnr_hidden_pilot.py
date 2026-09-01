@@ -437,6 +437,19 @@ class PilotApplyTests(unittest.TestCase):
         self.assertEqual(len(connection.state), 20)
         self.assertTrue(all(row["document"]["ingest_completed_at"] == "set" for row in connection.state.values()))
 
+    def test_completion_stamp_casts_document_ids_to_uuid_array(self) -> None:
+        connection = _PilotWriteConnection(self.packet)
+        report = apply_pilot(
+            lambda mode: connection,
+            lambda text, **kwargs: [0.001] * 1536,
+            self.packet,
+            _approval(self.packet),
+            lambda: {"candidate_state": "all_clean"},
+        )
+
+        self.assertEqual(report["status"], "stored")
+        self.assertIn("ANY(%s::uuid[])", connection.stamp_sql)
+
     def test_post_commit_verifier_error_preserves_apply_evidence(self) -> None:
         apply_report = {
             "status": "stored",
@@ -579,6 +592,7 @@ class _PilotWriteCursor:
             row["policies"] = [{"id": policy_id, **dict(zip(self.POLICY_FIELDS, params))}]
             self.result = (policy_id,)
         elif "phase8:stamp_complete" in sql:
+            self.connection.stamp_sql = sql
             for document_id in params[0]:
                 self.connection.state[str(document_id)]["document"]["ingest_completed_at"] = "set"
             self.result = None
@@ -599,6 +613,7 @@ class _PilotWriteConnection:
         self.autocommit = None
         self.commit_count = 0
         self.rollback_count = 0
+        self.stamp_sql = ""
 
     def cursor(self):
         return _PilotWriteCursor(self)
