@@ -6,6 +6,7 @@ import ssl
 import unittest
 
 from source_ingest_queue.fetcher import (
+    CRAWLER_USER_AGENT,
     FetchRejected,
     FetchResult,
     FetchTransient,
@@ -216,7 +217,11 @@ class FetchPdfValidationTests(unittest.TestCase):
                     "GET",
                     "/library/Book%20Name.pdf?download=1",
                     None,
-                    {"Accept": "application/pdf", "Host": "example.com"},
+                    {
+                        "Accept": "application/pdf",
+                        "Host": "example.com",
+                        "User-Agent": CRAWLER_USER_AGENT,
+                    },
                 )
             ],
         )
@@ -524,6 +529,7 @@ class FetchHtmlValidationTests(unittest.TestCase):
                     {
                         "Accept": "text/html,application/xhtml+xml",
                         "Host": "example.com",
+                        "User-Agent": CRAWLER_USER_AGENT,
                     },
                 )
             ],

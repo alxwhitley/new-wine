@@ -36,6 +36,14 @@ export function verseId(ref: Extract<StudyReference, { type: "verse" }>): string
   return `${ref.code}.${ref.chapter}.${ref.verseStart}`;
 }
 
+export function verseIdToReferenceLabel(verseId: string): string | null {
+  const match = /^([A-Z0-9]{3})\.(\d+)\.(\d+)$/.exec(verseId.trim());
+  if (!match) return null;
+  const book = ABBREV_TO_NAME[match[1]];
+  if (!book) return null;
+  return `${book} ${match[2]}:${match[3]}`;
+}
+
 export function referenceLabel(ref: StudyReference): string {
   if (ref.type === "teacher") return ref.name;
   return ref.raw;

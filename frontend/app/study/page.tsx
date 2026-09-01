@@ -25,6 +25,7 @@ import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
 import { useCommentarySearch, type CommentaryResult } from "@/hooks/useCommentarySearch";
 import { formatCommentaryContent } from "@/lib/format-commentary-content";
 import { BOOK_MAP, ABBREV_TO_NAME } from "@/lib/generated/book-maps";
+import { verseIdToReferenceLabel } from "@/lib/study-reference";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -800,7 +801,12 @@ export default function StudyPage() {
   }, [verseRef, fetchVerseById]);
 
   useEffect(() => {
-    const parsed = parseRef(verseRef);
+    const requestedVerse = new URLSearchParams(window.location.search).get("verse");
+    const initialVerseRef = requestedVerse
+      ? (verseIdToReferenceLabel(requestedVerse) ?? requestedVerse)
+      : "John 1:1";
+    setVerseRef(initialVerseRef);
+    const parsed = parseRef(initialVerseRef);
     if (parsed) fetchVerseById(`${parsed.abbrev}.${parsed.chapter}.${parsed.verse}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

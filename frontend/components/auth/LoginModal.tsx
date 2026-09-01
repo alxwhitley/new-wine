@@ -70,6 +70,13 @@ export default function LoginModal({
   const [resetError, setResetError] = useState<string | null>(null);
 
   const titleId = useId();
+  const resetEmailId = `${titleId}-reset-email`;
+  const resetErrorId = `${titleId}-reset-error`;
+  const codeDescriptionId = `${titleId}-code-description`;
+  const codeErrorId = `${titleId}-code-error`;
+  const emailId = `${titleId}-email`;
+  const passwordId = `${titleId}-password`;
+  const authErrorId = `${titleId}-auth-error`;
   const cardRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
@@ -276,7 +283,7 @@ export default function LoginModal({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <X className="h-4 w-4" />
         </button>
@@ -317,17 +324,21 @@ export default function LoginModal({
           <>
             <p className="mb-6 text-sm text-muted-foreground">{subheading}</p>
             <form onSubmit={handleResetPassword} className="flex flex-col gap-3">
+              <label htmlFor={resetEmailId} className="sr-only">Email</label>
               <input
+                id={resetEmailId}
                 type="email"
                 name="email"
                 autoComplete="email"
                 placeholder="Email"
                 value={resetEmail}
+                aria-invalid={resetError ? true : undefined}
+                aria-describedby={resetError ? resetErrorId : undefined}
                 onChange={(e) => setResetEmail(e.target.value)}
                 required
                 className={FIELD}
               />
-              {resetError && <p className="text-sm text-destructive">{resetError}</p>}
+              {resetError && <p id={resetErrorId} role="alert" className="text-sm text-destructive">{resetError}</p>}
               <Button type="submit" disabled={resetSubmitting} className="mt-1 w-full text-background">
                 {resetSubmitting ? "Sending…" : "Send reset link"}
               </Button>
@@ -355,7 +366,7 @@ export default function LoginModal({
                   <label htmlFor={`${titleId}-code`} className="text-sm text-foreground">
                     Access code
                   </label>
-                  <p className="text-xs text-muted-foreground">
+                  <p id={codeDescriptionId} className="text-xs text-muted-foreground">
                     Enter the access code you were given. You&rsquo;ll only need this once on this device.
                   </p>
                   <input
@@ -367,6 +378,7 @@ export default function LoginModal({
                     placeholder="Access code"
                     value={code}
                     aria-invalid={codeError ? true : undefined}
+                    aria-describedby={codeError ? `${codeDescriptionId} ${codeErrorId}` : codeDescriptionId}
                     onChange={(e) => {
                       setCode(e.target.value);
                       setCodeError(null);
@@ -374,7 +386,7 @@ export default function LoginModal({
                     required
                     className={`${FIELD} mt-0.5`}
                   />
-                  {codeError && <p className="text-sm text-destructive">{codeError}</p>}
+                  {codeError && <p id={codeErrorId} role="alert" className="text-sm text-destructive">{codeError}</p>}
                 </div>
               )}
 
@@ -407,26 +419,36 @@ export default function LoginModal({
                 })}
               </div>
 
-              <input
-                ref={emailRef}
-                type="email"
-                name="email"
-                autoComplete="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className={FIELD}
-              />
+              <div>
+                <label htmlFor={emailId} className="sr-only">Email</label>
+                <input
+                  id={emailId}
+                  ref={emailRef}
+                  type="email"
+                  name="email"
+                  autoComplete="email"
+                  placeholder="Email"
+                  value={email}
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? authErrorId : undefined}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className={FIELD}
+                />
+              </div>
 
               <div className="flex flex-col gap-1">
+                <label htmlFor={passwordId} className="sr-only">Password</label>
                 <input
+                  id={passwordId}
                   ref={passwordRef}
                   type="password"
                   name="password"
                   autoComplete={mode === "signin" ? "current-password" : "new-password"}
                   placeholder="Password"
                   value={password}
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? authErrorId : undefined}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
@@ -451,7 +473,7 @@ export default function LoginModal({
 
               {error && (
                 <div className="flex flex-col items-start gap-1">
-                  <p className="text-sm text-destructive">{error.message}</p>
+                  <p id={authErrorId} role="alert" className="text-sm text-destructive">{error.message}</p>
                   {error.suggestSignIn && (
                     <button
                       type="button"

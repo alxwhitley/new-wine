@@ -87,6 +87,7 @@ APPROVED_TAB = "Approved Sites"
 WORKER_SCRIPT = ROOT / "scripts" / "source_ingest_worker.py"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(ROOT / "backend"))
 
 import ingestion_sheet_io as sheet_io  # noqa: E402
 from source_ingest_queue.byline_verify import verify_byline  # noqa: E402
@@ -101,6 +102,7 @@ from source_ingest_queue.link_discovery import (  # noqa: E402
     normalize_candidate_url,
     same_registrable_host,
 )
+from app.services.source_resolver import normalize_alias_key  # noqa: E402
 from sync_master_ingestion_queue import determine_default_submitted_by  # noqa: E402
 
 SHEET_PATH = sheet_io.TAB_FILES[APPROVED_TAB]
@@ -108,6 +110,12 @@ SHEET_PATH = sheet_io.TAB_FILES[APPROVED_TAB]
 load_dotenv(ROOT / "backend" / "app" / ".env")
 
 _TRUTHY = {"true", "yes", "1"}
+
+
+class SourceReadinessError(RuntimeError):
+    def __init__(self, code: str, detail: str):
+        self.code = code
+        super().__init__(f"{code}: {detail}")
 
 
 def db_connect():
@@ -207,6 +215,47 @@ def existing_urls_for_domain(cur, sample_url: str) -> set:
     }
 
 
+def validate_source_readiness(cur, attribute_to: str) -> dict:
+    """Prove the worker can resolve and admit this source before crawling.
+
+    The worker resolves declared attribution through the canonical alias key
+    and admits propositions only for licensed/unlicensed hidden sources. A
+    crawler run that cannot satisfy that same contract would spend network
+    traffic and queue rows only to fail later, so refuse it up front.
+    """
+    alias_key = normalize_alias_key(attribute_to)
+    cur.execute(
+        """
+        SELECT s.id::text AS id, s.name, s.license_status, s.visibility
+        FROM source_aliases AS a
+        JOIN sources AS s ON s.id = a.source_id
+        WHERE a.alias_key = %s
+        """,
+        (alias_key,),
+    )
+    rows = [dict(row) for row in cur.fetchall()]
+    if not rows:
+        raise SourceReadinessError(
+            "source_unresolved", f"attribute_to={attribute_to!r} has no canonical source alias"
+        )
+    if len(rows) != 1:
+        raise SourceReadinessError(
+            "source_ambiguous", f"attribute_to={attribute_to!r} resolved to {len(rows)} sources"
+        )
+    source = rows[0]
+    if source["license_status"] not in ("licensed", "unlicensed"):
+        raise SourceReadinessError(
+            "source_license_not_eligible",
+            f"source {source['name']!r} has license_status={source['license_status']!r}",
+        )
+    if source["visibility"] != "hidden":
+        raise SourceReadinessError(
+            "source_not_hidden",
+            f"source {source['name']!r} has visibility={source['visibility']!r}",
+        )
+    return source
+
+
 def check_candidate(url: str, declared_author: str) -> dict:
     """Fetch one candidate and run the byline gate. Never raises -- every
     outcome (fetch failure, extraction failure, mismatch, unconfirmed,
@@ -292,20 +341,35 @@ def run_for_site(site: dict, args: argparse.Namespace) -> int:
     blog_url = str(site["blog_url"]).strip()
     print(f"Site: {site['name']}  |  attribute_to: {declared_author}  |  blog_url: {blog_url}")
 
-    print(f"\nCrawling (max {args.max_pages} pages)...")
-    all_candidates = crawl_candidate_urls(blog_url, max_pages=args.max_pages)
-    print(f"  found {len(all_candidates)} same-domain post-shaped links")
-
     conn = db_connect()
     conn.autocommit = False
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    readiness_error = None
     try:
         cur.execute("BEGIN READ ONLY")
-        known = existing_urls_for_domain(cur, blog_url)
-        problems: list = []
-        submitted_by = determine_default_submitted_by(cur, problems)
+        try:
+            resolved_source = validate_source_readiness(cur, declared_author)
+        except SourceReadinessError as exc:
+            readiness_error = exc
+        if readiness_error is None:
+            known = existing_urls_for_domain(cur, blog_url)
+            problems: list = []
+            submitted_by = determine_default_submitted_by(cur, problems)
     finally:
         conn.rollback()
+
+    if readiness_error is not None:
+        print(f"  [refused] source readiness failed: {readiness_error}")
+        conn.close()
+        return 1
+
+    print(
+        f"  source ready: {resolved_source['name']} "
+        f"({resolved_source['license_status']}/{resolved_source['visibility']})"
+    )
+    print(f"\nCrawling (max {args.max_pages} pages)...")
+    all_candidates = crawl_candidate_urls(blog_url, max_pages=args.max_pages)
+    print(f"  found {len(all_candidates)} same-domain post-shaped links")
 
     unknown_candidates = [u for u in all_candidates if u not in known]
     check_budget = max(args.max_candidates * 4, args.max_candidates)

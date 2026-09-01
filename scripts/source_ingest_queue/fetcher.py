@@ -13,6 +13,9 @@ from typing import Callable, Optional, Tuple
 from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 
+CRAWLER_USER_AGENT = "NewWineIngestionCrawler/1.0"
+
+
 def _bounded_detail(detail: str) -> str:
     return " ".join(str(detail).split())[:240]
 
@@ -298,6 +301,7 @@ def _fetch_bounded(
                     headers={
                         "Accept": accept_header,
                         "Host": _host_header(parsed, port),
+                        "User-Agent": CRAWLER_USER_AGENT,
                     },
                 )
                 response = connection.getresponse()

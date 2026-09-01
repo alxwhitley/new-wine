@@ -150,6 +150,39 @@ with patch.object(site_ingest_crawler, "fetch_html", return_value=thin_candidate
 check("candidate with refused article extraction is not confirmed", thin_result["outcome"] == "extraction_failed")
 check("candidate extraction refusal retains the exact gate reason", str(thin_result.get("detail", "")).startswith("article_too_thin:"))
 
+
+class _SourceReadinessCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.params = None
+
+    def execute(self, sql, params):
+        self.params = params
+        check("source readiness joins aliases to sources", "JOIN sources" in sql)
+
+    def fetchall(self):
+        return self.rows
+
+
+ready_cursor = _SourceReadinessCursor(
+    [{"id": "source-1", "name": "Craig S. Keener", "license_status": "unlicensed", "visibility": "hidden"}]
+)
+ready = site_ingest_crawler.validate_source_readiness(ready_cursor, " Craig S. Keener ")
+check("source readiness normalizes the declared alias", ready_cursor.params == ("craig s. keener",))
+check("source readiness returns the resolved source", ready["id"] == "source-1")
+
+for label, rows, expected in (
+    ("missing alias fails closed", [], "source_unresolved"),
+    ("ambiguous alias fails closed", [{"id": "a", "name": "A", "license_status": "unlicensed", "visibility": "hidden"}, {"id": "b", "name": "B", "license_status": "unlicensed", "visibility": "hidden"}], "source_ambiguous"),
+    ("ineligible license fails closed", [{"id": "a", "name": "A", "license_status": "owned", "visibility": "hidden"}], "source_license_not_eligible"),
+    ("shown source fails closed", [{"id": "a", "name": "A", "license_status": "unlicensed", "visibility": "shown"}], "source_not_hidden"),
+):
+    try:
+        site_ingest_crawler.validate_source_readiness(_SourceReadinessCursor(rows), "A")
+        check(label, False)
+    except site_ingest_crawler.SourceReadinessError as exc:
+        check(label, exc.code == expected)
+
 # ---------------------------------------------------------------------------
 # link_discovery: same_registrable_host
 # ---------------------------------------------------------------------------

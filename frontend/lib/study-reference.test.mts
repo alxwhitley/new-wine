@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { detectVerseReferences } from "./study-reference.ts";
+import { detectVerseReferences, verseIdToReferenceLabel } from "./study-reference.ts";
+
+test("formats a canonical verse id for the study search field", () => {
+  assert.equal(verseIdToReferenceLabel("JHN.3.16"), "John 3:16");
+  assert.equal(verseIdToReferenceLabel("1CO.13.4"), "1 Corinthians 13:4");
+});
+
+test("rejects malformed or unknown canonical verse ids", () => {
+  assert.equal(verseIdToReferenceLabel("JHN.3"), null);
+  assert.equal(verseIdToReferenceLabel("UNKNOWN.3.16"), null);
+  assert.equal(verseIdToReferenceLabel("JHN.three.16"), null);
+});
 
 test("does not detect a valid book name embedded after an alphabetic prefix", () => {
   assert.deepEqual(detectVerseReferences("I Genesis 1:1"), []);

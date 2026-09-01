@@ -61,6 +61,25 @@ class ValidArticleTests(unittest.TestCase):
 
 
 class NavigationAndFooterRemovalTests(unittest.TestCase):
+    def test_keeps_primary_content_wrapper_with_sidebar_layout_class(self):
+        html = _wrap(
+            "<main id='main' class='cs-site-primary'>"
+            "<div class='cs-site-content cs-sidebar-enabled cs-sidebar-right'>"
+            "<article><h1>A Keener-style Post</h1>"
+            "<p>This primary content wrapper carries the real article body even "
+            "though its layout class says that a sidebar is enabled elsewhere on "
+            "the page. The wrapper itself must not be discarded as sidebar junk.</p>"
+            "<p>A second substantive paragraph makes the body long enough to clear "
+            "the article floor and proves that the nested article remains available "
+            "to the normal explicit-container selection logic after parsing.</p>"
+            "</article></div></main>"
+        )
+
+        result = extract_article_bounded(html.encode("utf-8"))
+
+        self.assertIn("primary content wrapper", result.text)
+        self.assertEqual(result.evidence["container"], "article")
+
     def test_strips_nav_header_footer_aside_script_and_style(self):
         html = _wrap(
             "<header><nav><a href='/'>Home</a><a href='/about'>About</a></nav></header>"

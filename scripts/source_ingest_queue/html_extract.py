@@ -139,6 +139,19 @@ _JUNK_REGION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Layout wrappers can truthfully advertise that a page has a sidebar without
+# being the sidebar themselves. Craig Keener's theme uses
+# `cs-site-content cs-sidebar-enabled cs-sidebar-right` around the primary
+# article; treating the substring "sidebar" as dispositive erased the whole
+# article tree. This exception applies only when the sole junk signal is a
+# sidebar layout marker and the same element identifies itself as primary
+# content. Real sidebar widgets still take the normal junk path.
+_PRIMARY_CONTENT_REGION_RE = re.compile(
+    r"(?:^|[-_\s])(?:main|primary|site-content|content-area)(?:$|[-_\s])",
+    re.IGNORECASE,
+)
+_SIDEBAR_ONLY_RE = re.compile(r"(?:sidebar|side-bar)", re.IGNORECASE)
+
 
 class _Node:
     __slots__ = ("tag", "attrs", "children", "parent")
@@ -154,7 +167,12 @@ def _is_junk_region(tag: str, attrs: Dict[str, Optional[str]]) -> bool:
     if tag not in _CONTAINER_CANDIDATE_TAGS:
         return False
     haystack = "%s %s" % (attrs.get("class") or "", attrs.get("id") or "")
-    return bool(_JUNK_REGION_RE.search(haystack))
+    match = _JUNK_REGION_RE.search(haystack)
+    if match is None:
+        return False
+    if _SIDEBAR_ONLY_RE.fullmatch(match.group(0)) and _PRIMARY_CONTENT_REGION_RE.search(haystack):
+        return False
+    return True
 
 
 class _ArticleTreeBuilder(HTMLParser):
