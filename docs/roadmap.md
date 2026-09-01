@@ -185,16 +185,21 @@ quarantine. No stage transfers automatically from one source to another.
    between candidate and approved quote; keep the 12 HelloAO missing
    book/commentary combinations quarantined unless a chapter-level contract is
    separately approved.
-4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–4 are
-   complete in repository scope in PR #3 (`c5ee5e0` through `a599812`): approved
-   rights/provenance manifests, source-use boundaries, deterministic hidden
-   TIPNR/OpenBible preview tooling, versioned passage-policy migration 097, and
-   the independently reviewed default-off routing/retrieval contract. Migration
-   097 remains unapplied; the feature flag remains off; protected and plural
-   source registries remain empty. Next is a separately bounded Phase 5 prompt
-   and generation-contract design. No registry assignment, migration apply,
-   feature enablement, live answer, deployment, or production write is
-   authorized by this roadmap status alone.
+4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–5 are
+   complete in repository scope in PR #3: approved rights/provenance manifests,
+   source-use boundaries, deterministic hidden TIPNR/OpenBible preview tooling,
+   versioned passage-policy migration 097, default-off routing/retrieval, and
+   the deterministic prompt/generation contract. The branch is reconciled with
+   current `main` at integration merge `c3fc8e3`; PR review and an explicit
+   merge/deployment decision remain. Migration 097 was applied attended on
+   2026-09-01 and independently verified from a fresh
+   `newwine_readonly_analysis` connection; the policy table contains zero rows.
+   `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains default-off, and both protected and
+   plural registries remain empty. After the PR decision, the next bounded item
+   is a design-only Phase 6 hidden single-slice ingestion-proof contract. No
+   registry assignment, source registration or ingestion, classification
+   batch, feature enablement, live answer, model spend, visibility change, or
+   further production write is authorized by this roadmap status alone.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication
    status per title; preserve edition/page provenance; quarantine OCR or
    structural failures; do not extract quotes from flat book chunks without
