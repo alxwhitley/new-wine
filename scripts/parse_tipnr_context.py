@@ -72,14 +72,21 @@ def _parse_references(value: str) -> list[str]:
     return references
 
 
-def _parse_form(line: str) -> dict[str, object] | None:
+def _meaningful_columns(line: str) -> list[str]:
     columns = line.split("\t")
+    while columns and not columns[-1]:
+        columns.pop()
+    return columns
+
+
+def _parse_form(line: str) -> dict[str, object] | None:
+    columns = _meaningful_columns(line)
     significance = columns[0].removeprefix("–").strip() if columns else ""
     if significance == "Total":
-        if len(columns) not in {4, 5}:
+        if len(columns) != 5:
             raise TipnrSchemaError("row_shape_changed")
         return None
-    if len(columns) != 6:
+    if len(columns) != 5:
         raise TipnrSchemaError("row_shape_changed")
     if significance not in _SIGNIFICANCE:
         raise TipnrSchemaError("unknown_significance")
@@ -100,7 +107,7 @@ def _parse_form(line: str) -> dict[str, object] | None:
         "dstrong": dstrong,
         "estrong": estrong,
         "source_script_form": source_script_form,
-        "osis_references": _parse_references(columns[5]),
+        "osis_references": _parse_references(columns[4]),
     }
 
 
@@ -112,7 +119,7 @@ def parse_tipnr_entity(
     if len(lines) < 3:
         raise TipnrItemError("entity_record_incomplete")
     entity_type = _entity_type(lines[0])
-    primary_columns = lines[1].split("\t")
+    primary_columns = _meaningful_columns(lines[1])
     if len(primary_columns) != 9:
         raise TipnrSchemaError("row_shape_changed")
 
