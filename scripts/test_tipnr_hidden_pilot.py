@@ -23,10 +23,15 @@ from tipnr_hidden_pilot_contract import (  # noqa: E402
     build_pilot_packet,
     pilot_packet_report,
 )
+from biblical_context_ingest_contract import build_aaron_projection  # noqa: E402
 from preview_tipnr_hidden_pilot import (  # noqa: E402
     build_pilot_preview,
     main as preview_main,
     write_new_pilot_preview,
+)
+from preflight_tipnr_hidden_pilot import (  # noqa: E402
+    PilotPreflightError,
+    preflight_pilot,
 )
 
 
@@ -136,6 +141,138 @@ class PilotPreviewTests(unittest.TestCase):
         for flag in ("--apply", "--limit", "--offset", "--entity-id"):
             with self.subTest(flag=flag), self.assertRaises(SystemExit):
                 preview_main(["--artifact", str(_artifact()), flag, "1"])
+
+
+class _PilotStateCursor:
+    def __init__(self, state):
+        self.state = state
+        self.result = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def execute(self, sql, params=()):
+        if "phase8:transaction_read_only" in sql:
+            self.result = (self.state.get("transaction_read_only", "on"),)
+        elif "phase8:current_user" in sql:
+            self.result = (self.state.get("current_user", "newwine_readonly_analysis"),)
+        else:
+            items = self.state.get("items", {})
+            if "phase8:chunk" in sql:
+                item_state = items.get(str(params[1]), {})
+            elif "phase8:policies" in sql:
+                item_state = next(
+                    (
+                        value for value in items.values()
+                        if value.get("chunk", {}).get("id") == str(params[0])
+                    ),
+                    {},
+                )
+            else:
+                item_state = items.get(str(params[0]), {})
+            if "phase8:document" in sql:
+                self.result = item_state.get("document")
+            elif "phase8:chunk" in sql:
+                self.result = item_state.get("chunk")
+            elif "phase8:policies" in sql:
+                self.result = item_state.get("policies", [])
+            elif "phase8:propositions" in sql:
+                self.result = (item_state.get("proposition_count", 0),)
+            else:
+                raise AssertionError(f"unexpected SQL: {sql}")
+
+    def fetchone(self):
+        return self.result
+
+    def fetchall(self):
+        return self.result if isinstance(self.result, list) else ([] if self.result is None else [self.result])
+
+
+class _PilotStateConnection:
+    def __init__(self, state):
+        self.state = state
+        self.session_calls = []
+        self.closed = False
+
+    def set_session(self, **kwargs):
+        self.session_calls.append(kwargs)
+
+    def cursor(self):
+        return _PilotStateCursor(self.state)
+
+    def close(self):
+        self.closed = True
+
+
+def _complete_item_state(item):
+    return {
+        "document": {**item.document, "ingest_completed_at": "set"},
+        "chunk": {**item.chunk, "embedding_dimensions": 1536},
+        "policies": [{"id": f"policy-{item.entity_id}", **item.policy}],
+        "proposition_count": 0,
+    }
+
+
+class PilotPreflightTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.packet = build_pilot_packet(ROOT, _artifact())
+
+    def _run(self, state):
+        connection = _PilotStateConnection(state)
+        proof_calls = []
+
+        def proof_verifier(identity_factory, retrieval_factory, proof):
+            proof_calls.append(proof.entity_id)
+            return {"status": "verified"}
+
+        report = preflight_pilot(
+            lambda mode: connection,
+            lambda mode: None,
+            self.packet,
+            build_aaron_projection(ROOT),
+            proof_verifier=proof_verifier,
+            invariant_checker=lambda: None,
+        )
+        self.assertEqual(proof_calls, ["H0175"])
+        self.assertEqual(connection.session_calls, [{"readonly": True, "autocommit": True}])
+        return report
+
+    def test_all_clean_requires_exact_h0175_verification(self) -> None:
+        report = self._run({})
+        self.assertEqual(report["candidate_state"], "all_clean")
+        self.assertEqual(report["counts"], {"clean": 20, "exact_complete": 0})
+        self.assertEqual(report["single_item_verification"]["status"], "verified")
+
+    def test_all_exact_complete_is_idempotent(self) -> None:
+        state = {"items": {
+            item.document["id"]: _complete_item_state(item)
+            for item in self.packet.items
+        }}
+        report = self._run(state)
+        self.assertEqual(report["candidate_state"], "all_exact_complete")
+        self.assertEqual(report["counts"], {"clean": 0, "exact_complete": 20})
+
+    def test_mixed_state_fails_closed(self) -> None:
+        state = {"items": {
+            self.packet.items[0].document["id"]: _complete_item_state(self.packet.items[0])
+        }}
+        with self.assertRaisesRegex(PilotPreflightError, "candidate_state_mixed"):
+            self._run(state)
+
+    def test_partial_or_proposition_state_fails_closed(self) -> None:
+        first = self.packet.items[0]
+        for item_state in (
+            {"document": {**first.document, "ingest_completed_at": None}},
+            {"proposition_count": 1},
+        ):
+            with self.subTest(item_state=item_state), self.assertRaisesRegex(
+                PilotPreflightError, "candidate_state_conflict"
+            ):
+                self._run({"items": {first.document["id"]: item_state}})
 
 
 if __name__ == "__main__":
