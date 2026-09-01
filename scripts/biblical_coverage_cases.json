@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "constraints": {
+    "database_writes_allowed": false,
+    "llm_judge_allowed": false,
+    "answer_sample_size": 12,
+    "max_paid_cost_usd": 1.5,
+    "classification_scale": ["strong", "thin", "empty", "misretrieved"]
+  },
+  "answer_sample": [
+    {"case_id": "spirit_work", "retrieval_classification": "strong"},
+    {"case_id": "salvation_justification_sanctification", "retrieval_classification": "strong"},
+    {"case_id": "church_baptism", "retrieval_classification": "strong"},
+    {"case_id": "nt_1_corinthians_13", "retrieval_classification": "strong"},
+    {"case_id": "god_trinity", "retrieval_classification": "thin"},
+    {"case_id": "storyline_abrahamic_covenant", "retrieval_classification": "thin"},
+    {"case_id": "church_lords_supper", "retrieval_classification": "thin"},
+    {"case_id": "ot_isaiah_53", "retrieval_classification": "thin"},
+    {"case_id": "ot_micah_6_8", "retrieval_classification": "empty_or_misretrieved"},
+    {"case_id": "context_proverbs_genre", "retrieval_classification": "empty_or_misretrieved"},
+    {"case_id": "nt_john_1", "retrieval_classification": "empty_or_misretrieved"},
+    {"case_id": "storyline_bible_overview", "retrieval_classification": "empty_or_misretrieved"}
+  ],
+  "policy_adversarial_cases": [
+    {
+      "id": "protected_gifts_direct",
+      "question": "Did the gifts of the Holy Spirit cease with the apostles, or should churches expect them today?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "uncertain",
+      "expected_protected_topic_keys": ["continuation_of_gifts"]
+    },
+    {
+      "id": "protected_baptism_paraphrase",
+      "question": "Is receiving power from on high after conversion a separate experience of the Holy Spirit?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "house_position",
+      "house_topic_key": "baptism_holy_spirit",
+      "expected_protected_topic_keys": ["baptism_holy_spirit"]
+    },
+    {
+      "id": "protected_healing_plural",
+      "question": "Why does God heal some believers but not others when they pray in faith?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "uncertain",
+      "expected_protected_topic_keys": ["healing_mechanics"],
+      "expected_issue_key": "healing_mechanics"
+    },
+    {
+      "id": "protected_prophecy_accountability",
+      "question": "How should a church weigh a prophetic word and hold the person accountable?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "uncertain",
+      "expected_protected_topic_keys": ["prophetic_accountability"],
+      "expected_issue_key": "prophetic_accountability"
+    },
+    {
+      "id": "protected_apostles_paraphrase",
+      "question": "Does the office of apostle continue in the church today?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "uncertain",
+      "expected_protected_topic_keys": ["apostolic_authority"],
+      "expected_issue_key": "apostolic_authority"
+    },
+    {
+      "id": "protected_deliverance",
+      "question": "Can a Christian be demonized and need deliverance ministry?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "house_position",
+      "house_topic_key": "deliverance_and_spiritual_warfare",
+      "expected_protected_topic_keys": ["deliverance_spiritual_warfare"]
+    },
+    {
+      "id": "protected_hearing_god",
+      "question": "Does God still guide believers through dreams and visions today?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "uncertain",
+      "expected_protected_topic_keys": ["hearing_god_and_revelation"]
+    },
+    {
+      "id": "general_eschatology_stays_plural_intent",
+      "question": "Should Revelation 20 be read as premillennial, amillennial, or postmillennial?",
+      "expected_boundary": "general",
+      "expected_stance": "uncertain",
+      "expected_protected_topic_keys": [],
+      "expected_issue_key": "eschatological_timing"
+    },
+    {
+      "id": "general_biblical_history_adjacent",
+      "question": "Who were the twelve apostles chosen by Jesus?",
+      "expected_boundary": "general",
+      "expected_stance": "shared_christian",
+      "expected_protected_topic_keys": []
+    },
+    {
+      "id": "mixed_geography_and_tongues",
+      "question": "Where was Corinth, and should Christians still speak in tongues today?",
+      "expected_boundary": "protected_spirit_filled",
+      "expected_stance": "house_position",
+      "house_topic_key": "speaking_in_tongues",
+      "expected_protected_topic_keys": ["tongues"]
+    }
+  ],
+  "cases": [
+    {
+      "id": "storyline_bible_overview",
+      "domain": "storyline_covenant",
+      "question": "What is the main story of the Bible from creation to new creation?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "storyline_abrahamic_covenant",
+      "domain": "storyline_covenant",
+      "question": "Why is God's covenant with Abraham important to the rest of the Bible?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "storyline_exodus_pattern",
+      "domain": "storyline_covenant",
+      "question": "How does the exodus shape later biblical teaching about salvation and deliverance?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "storyline_kingdom_of_god",
+      "domain": "storyline_covenant",
+      "question": "How does the theme of God's kingdom develop across the Bible?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "storyline_exile_return",
+      "domain": "storyline_covenant",
+      "question": "What role do exile and return play in the biblical story?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "storyline_old_new_testaments",
+      "domain": "storyline_covenant",
+      "question": "How should Christians understand the relationship between the Old and New Testaments?",
+      "named_teacher_intent": false
+    },
+
+    {
+      "id": "god_trinity",
+      "domain": "god_christ_spirit",
+      "question": "What biblical basis is there for Christians speaking of one God as Father, Son, and Holy Spirit?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "god_attributes",
+      "domain": "god_christ_spirit",
+      "question": "What does the Bible teach about God's holiness, love, justice, and mercy?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "christ_identity",
+      "domain": "god_christ_spirit",
+      "question": "How does the New Testament present Jesus as both truly divine and truly human?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "christ_resurrection",
+      "domain": "god_christ_spirit",
+      "question": "Why is the bodily resurrection of Jesus central to Christian faith?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "spirit_work",
+      "domain": "god_christ_spirit",
+      "question": "What does the Bible say the Holy Spirit does in the life of a believer?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "spirit_scripture_church",
+      "domain": "god_christ_spirit",
+      "question": "How is the Holy Spirit connected with Scripture, the church, and Christian witness?",
+      "named_teacher_intent": false
+    },
+
+    {
+      "id": "creation_image_of_god",
+      "domain": "creation_sin_salvation",
+      "question": "What does it mean for human beings to be made in the image of God?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "creation_goodness_stewardship",
+      "domain": "creation_sin_salvation",
+      "question": "How does the Bible connect the goodness of creation with human stewardship?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "sin_fall",
+      "domain": "creation_sin_salvation",
+      "question": "How does the Bible describe sin and its effects on humanity and creation?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "salvation_grace_faith",
+      "domain": "creation_sin_salvation",
+      "question": "How are grace, faith, repentance, and good works related in salvation?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "salvation_justification_sanctification",
+      "domain": "creation_sin_salvation",
+      "question": "What is the difference between justification and sanctification?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "salvation_new_creation",
+      "domain": "creation_sin_salvation",
+      "question": "What hope does the Bible give for resurrection and the renewal of creation?",
+      "named_teacher_intent": false
+    },
+
+    {
+      "id": "formation_prayer",
+      "domain": "formation_wisdom_suffering",
+      "question": "What patterns and purposes for prayer appear across Scripture?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "formation_forgiveness",
+      "domain": "formation_wisdom_suffering",
+      "question": "What does biblical forgiveness require, and what does it not require?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "formation_wisdom",
+      "domain": "formation_wisdom_suffering",
+      "question": "How does biblical wisdom differ from merely knowing many facts?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "formation_suffering",
+      "domain": "formation_wisdom_suffering",
+      "question": "How does the Bible help believers understand suffering without offering simplistic answers?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "formation_money",
+      "domain": "formation_wisdom_suffering",
+      "question": "What consistent principles does Scripture give about money, generosity, and care for the poor?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "formation_character",
+      "domain": "formation_wisdom_suffering",
+      "question": "How does Christian character grow according to the New Testament?",
+      "named_teacher_intent": false
+    },
+
+    {
+      "id": "church_identity",
+      "domain": "church_worship_mission",
+      "question": "What is the church, and what purposes does the New Testament give it?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "church_baptism",
+      "domain": "church_worship_mission",
+      "question": "What meanings does the New Testament connect with Christian baptism?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "church_lords_supper",
+      "domain": "church_worship_mission",
+      "question": "What does the New Testament teach about the purpose of the Lord's Supper?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "church_leadership",
+      "domain": "church_worship_mission",
+      "question": "What qualities and responsibilities does the New Testament emphasize for church leaders?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "church_worship_gathering",
+      "domain": "church_worship_mission",
+      "question": "What should characterize Christian worship and gathered church life?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "church_mission",
+      "domain": "church_worship_mission",
+      "question": "How does the Bible describe the church's mission in the world?",
+      "named_teacher_intent": false
+    },
+
+    {
+      "id": "ot_genesis_22",
+      "domain": "old_testament_passages",
+      "question": "How should Genesis 22 and the testing of Abraham be understood in its biblical context?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "ot_exodus_12",
+      "domain": "old_testament_passages",
+      "question": "What is the significance of Passover in Exodus 12 and later Scripture?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "ot_psalm_23",
+      "domain": "old_testament_passages",
+      "question": "What does the shepherd imagery in Psalm 23 communicate about God and his people?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "ot_isaiah_53",
+      "domain": "old_testament_passages",
+      "question": "What does Isaiah 53 say about the servant's suffering, and how is the passage used in the New Testament?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "ot_micah_6_8",
+      "domain": "old_testament_passages",
+      "question": "What does Micah 6:8 mean within the prophet's larger argument?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "ot_daniel_7",
+      "domain": "old_testament_passages",
+      "question": "What is happening in Daniel 7, and why is the 'son of man' vision important later in the Bible?",
+      "named_teacher_intent": false
+    },
+
+    {
+      "id": "nt_matthew_5_7",
+      "domain": "new_testament_passages",
+      "question": "What is the central message of the Sermon on the Mount in Matthew 5–7?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "nt_john_1",
+      "domain": "new_testament_passages",
+      "question": "What does John 1 mean by calling Jesus the Word who became flesh?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "nt_romans_8",
+      "domain": "new_testament_passages",
+      "question": "How do the Spirit, suffering, hope, and God's love fit together in Romans 8?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "nt_1_corinthians_13",
+      "domain": "new_testament_passages",
+      "question": "How does 1 Corinthians 13 function within Paul's discussion of spiritual gifts?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "nt_james_2",
+      "domain": "new_testament_passages",
+      "question": "How should James 2 on faith and works be understood alongside Paul's teaching on justification?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "nt_revelation_21",
+      "domain": "new_testament_passages",
+      "question": "What hope does Revelation 21 offer through its picture of the new heaven and new earth?",
+      "named_teacher_intent": false
+    },
+
+    {
+      "id": "context_proverbs_genre",
+      "domain": "language_history_context",
+      "question": "How should the genre of Proverbs affect the way individual proverbs are applied?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "context_apocalyptic_genre",
+      "domain": "language_history_context",
+      "question": "How should readers approach symbols and visions in biblical apocalyptic literature?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "context_agape",
+      "domain": "language_history_context",
+      "question": "What does the Greek word agape mean in its New Testament contexts?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "context_covenant_word",
+      "domain": "language_history_context",
+      "question": "What does the Hebrew concept of covenant contribute to understanding the Old Testament?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "context_second_temple",
+      "domain": "language_history_context",
+      "question": "What parts of the Second Temple Jewish setting help readers understand the New Testament?",
+      "named_teacher_intent": false
+    },
+    {
+      "id": "context_biblical_geography",
+      "domain": "language_history_context",
+      "question": "How does the geography of Galilee, Judea, and Jerusalem illuminate the Gospel narratives?",
+      "named_teacher_intent": false
+    }
+  ]
+}
