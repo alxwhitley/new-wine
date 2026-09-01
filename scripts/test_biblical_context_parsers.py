@@ -7,6 +7,7 @@ No network, database, model, embedding, retrieval, or answer-path access.
 from __future__ import annotations
 
 import copy
+import ast
 import json
 import sys
 import unittest
@@ -38,6 +39,13 @@ from parse_openbible_context import (  # noqa: E402
     OpenBibleSchemaError,
     parse_openbible_file,
     parse_openbible_place,
+)
+from preview_biblical_context_tooling import (  # noqa: E402
+    PreviewCollisionError,
+    PreviewPathError,
+    build_fixture_preview,
+    main as preview_main,
+    write_new_preview,
 )
 
 
@@ -423,6 +431,161 @@ class OpenBibleParserTests(unittest.TestCase):
         boolean_score["modern_associations"]["m39ac0b"]["score"] = True
         with self.assertRaisesRegex(OpenBibleItemError, "confidence_score_invalid"):
             parse_openbible_place(boolean_score, artifact_revision=self.REVISION)
+
+
+class PreviewCliTests(unittest.TestCase):
+    def test_fixture_preview_has_exact_reconciliation(self) -> None:
+        preview = build_fixture_preview(ROOT)
+
+        self.assertEqual(
+            preview["schema_version"], "biblical_context_phase2_preview.v1"
+        )
+        self.assertIs(preview["database_write_authorized"], False)
+        self.assertEqual(len(preview["registration_rows"]), 5)
+        self.assertTrue(
+            all(row["visibility"] == "hidden" for row in preview["registration_rows"])
+        )
+        self.assertEqual(
+            preview["single_item_verification"],
+            {"stepbible_tipnr": "passed", "openbible_geocoding": "passed"},
+        )
+        self.assertEqual(
+            preview["datasets"]["stepbible_tipnr"]["counts"],
+            {
+                "attempted": 3,
+                "previewed": 2,
+                "malformed": 0,
+                "duplicate": 0,
+                "skipped": 1,
+                "prohibited": 0,
+            },
+        )
+        self.assertEqual(
+            preview["datasets"]["openbible_structured_data:bible_geocoding"][
+                "counts"
+            ],
+            {
+                "attempted": 2,
+                "previewed": 2,
+                "malformed": 0,
+                "duplicate": 0,
+                "skipped": 0,
+                "prohibited": 0,
+            },
+        )
+        for dataset_key in (
+            "openbible_structured_data:cross_references",
+            "tyndale_open_resources:open_bible_dictionary",
+            "tyndale_open_resources:open_study_notes",
+        ):
+            self.assertEqual(
+                preview["datasets"][dataset_key]["counts"],
+                {
+                    "attempted": 1,
+                    "previewed": 0,
+                    "malformed": 0,
+                    "duplicate": 0,
+                    "skipped": 0,
+                    "prohibited": 1,
+                },
+            )
+        self.assertEqual(
+            preview["totals"],
+            {
+                "attempted": 8,
+                "previewed": 4,
+                "malformed": 0,
+                "duplicate": 0,
+                "skipped": 1,
+                "prohibited": 3,
+            },
+        )
+        checksum_input = dict(preview)
+        payload_sha256 = checksum_input.pop("payload_sha256")
+        self.assertEqual(payload_sha256, canonical_sha256(checksum_input))
+
+    def test_fixture_preview_is_byte_identical_across_runs(self) -> None:
+        first = canonical_json_bytes(build_fixture_preview(ROOT))
+        second = canonical_json_bytes(build_fixture_preview(ROOT))
+
+        self.assertEqual(first, second)
+
+    def test_local_preview_publication_is_create_new_and_collision_safe(self) -> None:
+        local_test_dir = Path(
+            self.enterContext(
+                __import__("tempfile").TemporaryDirectory(dir=ROOT / "local")
+            )
+        )
+        target = local_test_dir / "preview.json"
+        payload = b'{"safe":true}\n'
+
+        write_new_preview(target, payload)
+        self.assertEqual(target.read_bytes(), payload)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        write_new_preview(target, payload)
+        with self.assertRaisesRegex(PreviewCollisionError, "different_bytes"):
+            write_new_preview(target, b'{"safe":false}\n')
+
+        symlink = local_test_dir / "symlink.json"
+        symlink.symlink_to(target)
+        with self.assertRaisesRegex(PreviewCollisionError, "not_regular"):
+            write_new_preview(symlink, payload)
+
+    def test_preview_refuses_output_outside_repository_local_directory(self) -> None:
+        outside = Path(
+            self.enterContext(__import__("tempfile").TemporaryDirectory())
+        ) / "preview.json"
+
+        with self.assertRaisesRegex(PreviewPathError, "outside_local"):
+            write_new_preview(outside, b"{}\n")
+
+    def test_cli_has_no_apply_or_discovery_mode(self) -> None:
+        with self.assertRaises(SystemExit) as apply_exit:
+            preview_main(["--fixtures", "--apply"])
+        self.assertEqual(apply_exit.exception.code, 2)
+
+        with self.assertRaises(SystemExit) as url_exit:
+            preview_main(["--fixtures", "--url", "https://example.com"])
+        self.assertEqual(url_exit.exception.code, 2)
+
+    def test_phase2_modules_have_no_forbidden_imports_or_calls(self) -> None:
+        paths = (
+            SCRIPTS / "biblical_context_tooling.py",
+            SCRIPTS / "parse_tipnr_context.py",
+            SCRIPTS / "parse_openbible_context.py",
+            SCRIPTS / "preview_biblical_context_tooling.py",
+        )
+        forbidden = {
+            "supabase",
+            "psycopg",
+            "shared_ingest",
+            "embedding",
+            "proposition",
+            "retrieval",
+            "producer",
+            "answer_toolbox",
+        }
+
+        found: list[str] = []
+        for path in paths:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    found.extend(alias.name.lower() for alias in node.names)
+                elif isinstance(node, ast.ImportFrom):
+                    found.append((node.module or "").lower())
+                elif isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name):
+                        found.append(node.func.id.lower())
+                    elif isinstance(node.func, ast.Attribute):
+                        found.append(node.func.attr.lower())
+
+        violations = sorted(
+            value
+            for value in found
+            if any(blocked in value for blocked in forbidden)
+        )
+        self.assertEqual(violations, [])
 
 
 if __name__ == "__main__":
