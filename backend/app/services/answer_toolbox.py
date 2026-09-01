@@ -171,11 +171,15 @@ def partition_source_use_candidates(
             if kind in _ALWAYS_EXCLUDED_ANSWER_KINDS or source_id not in allowed_ids:
                 continue
             if issue is None:
-                doctrinal.append(chunk)
+                doctrinal.append(dict(chunk, _source_use_role="doctrinal"))
                 continue
             slot = _registered_slot_for_source(issue, source_id)
             if slot is not None:
-                reference.append(chunk)
+                reference.append(dict(
+                    chunk,
+                    _source_use_role="viewpoint",
+                    _viewpoint_slot=slot,
+                ))
                 evidence.append(ViewpointEvidence(slot, source_id))
         return SourceUseCandidatePartition(
             tuple(doctrinal), tuple(reference), tuple(evidence)
@@ -187,14 +191,14 @@ def partition_source_use_candidates(
             continue
         if kind not in _REFERENCE_SOURCE_KINDS:
             if issue is None:
-                doctrinal.append(chunk)
+                doctrinal.append(dict(chunk, _source_use_role="doctrinal"))
             continue
         policy = chunk.get("_source_policy")
         if not isinstance(policy, dict):
             continue
         if issue is None:
             if policy.get("policy_class") == "general_context":
-                reference.append(chunk)
+                reference.append(dict(chunk, _source_use_role="reference"))
             continue
         source_id = chunk.get("_source_id")
         viewpoint = policy.get("viewpoint_key")
@@ -204,11 +208,44 @@ def partition_source_use_candidates(
             and viewpoint in issue.viewpoint_slots
             and source_id in issue.registered_source_ids_for(viewpoint)
         ):
-            reference.append(chunk)
+            reference.append(dict(
+                chunk,
+                _source_use_role="viewpoint",
+                _viewpoint_slot=viewpoint,
+            ))
             evidence.append(ViewpointEvidence(viewpoint, source_id))
     return SourceUseCandidatePartition(
         tuple(doctrinal), tuple(reference), tuple(evidence)
     )
+
+
+def select_source_use_references(candidates, scores_by_id, issue_scoped, limit):
+    # type: (Tuple[dict, ...], Dict[str, float], bool, int) -> List[dict]
+    """Bound references without ranking every evidenced viewpoint out."""
+    ranked = sorted(
+        candidates,
+        key=lambda chunk: scores_by_id.get(chunk.get("id"), 0.0),
+        reverse=True,
+    )
+    if not issue_scoped:
+        return ranked[:limit]
+    selected = []  # type: List[dict]
+    selected_ids = set()
+    seen_slots = set()
+    for chunk in ranked:
+        slot = chunk.get("_viewpoint_slot")
+        if slot and slot not in seen_slots:
+            selected.append(chunk)
+            selected_ids.add(chunk.get("id"))
+            seen_slots.add(slot)
+            if len(selected) >= limit:
+                return selected
+    for chunk in ranked:
+        if chunk.get("id") not in selected_ids:
+            selected.append(chunk)
+            if len(selected) >= limit:
+                break
+    return selected
 
 
 def is_word_study_query(question: str) -> bool:
