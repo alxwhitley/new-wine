@@ -201,6 +201,19 @@ deterministic grounded `Source voice` label before reference verification.
 This orchestration is versioned as `policy_v3`, so older anonymous cached
 answers cannot bypass it.
 
+When the default-off biblical-context feature is enabled, `producer.py`
+appends a route-scoped generation contract derived from the finalized pre-
+writer policy. General-reference context remains visibly separate from the
+selected doctrinal voice; plural generation requires distinct labeled
+coverage of every registered evidence lane; protected routes retain their
+exact approved-source boundary; and a house paper remains silent fence
+context only. Deterministic validation shares the existing single retry budget
+and checks source-display coverage, reference separation, direct house-paper
+copying, permitted names, quotations, citations, and references. Failure after
+the retry serves fixed clean copy with no citations or quotes. Flag-off prompt
+and generation behavior remain unchanged, and enabled contract wording has
+its own reuse-key fingerprint.
+
 ---
 
 ## Position papers (fence + guarded retrieval)

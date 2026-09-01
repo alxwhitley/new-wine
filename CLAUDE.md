@@ -324,15 +324,16 @@ Landmines correction on that job for why).
     consensus than the corpus's full range of material would otherwise show —
     accepted, not an oversight. Do not build a corrective for either point
     without Alex revisiting it first.
-17. **If excluding every retrieved teacher would leave an empty answer, fall
-    back to the position paper's own voice — a sanctioned form under the
-    No-Oracle Rule — carrying the standard disclaimer** ("New Wine can make
-    mistakes. Please let us know if you see any."), appended deterministically
-    in code, never left to the model to phrase. This is the ONLY sanctioned
-    reason for this fallback: never thin retrieval, never a match failure,
-    never an error — those keep using the product's existing graceful-
-    degradation / clean-error handling, unchanged. Every time this fallback
-    fires is logged.
+17. **If excluding every retrieved teacher would leave an empty answer, behavior
+    depends on the biblical-context release state.** While
+    `BIBLICAL_CONTEXT_ANSWER_ENABLED=false`, the existing position-paper voice
+    fallback and deterministic disclaimer remain unchanged. When that flag is
+    separately approved and enabled, the fallback is disabled: the position paper
+    remains silent fence context only, and an empty independently eligible
+    evidence set returns clean no-material copy before generation. The enabled
+    path may never use the paper itself as answer substrate or supply the paper's
+    distinctive phrasing. This does not alter decision #16's contradiction
+    exclusion or authorize feature enablement.
 
 ## Settled product decisions (2026-08-08) — quote rail: human approval removed; do not reopen
 
