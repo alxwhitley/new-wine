@@ -185,20 +185,26 @@ quarantine. No stage transfers automatically from one source to another.
    between candidate and approved quote; keep the 12 HelloAO missing
    book/commentary combinations quarantined unless a chapter-level contract is
    separately approved.
-4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–6 are
-   complete through the attended hidden single-item production proof in PR #3.
-   Phase 6 registered `STEPBible TIPNR` as hidden and atomically stored TIPNR
-   entity `H0175` as exactly one attributed document, one embedded chunk, and
-   one current deterministic `general_context` policy row; no proposition was
-   written. Fresh exact-state reconciliation ran as
-   `newwine_readonly_analysis`; vector and full-text RPC probes ran through a
-   separate service connection forced read-only because the analysis role
-   cannot select the RPCs' `app_settings` dependency. Both retrieval counts
-   were zero, and reconciliation closed at attempted `1`, stored `1`, errored
-   `0`, skipped `0`. `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains default-off,
-   the source remains hidden, and protected/plural registries remain empty.
-   The next bounded item is an explicit decision whether to design Phase 7 as a
-   resumable TIPNR expansion packet; no batch, visibility change, feature
+4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–7 are
+   complete through full-artifact TIPNR inventory readiness in PR #3. Phase 6's
+   attended production proof remains exactly one hidden `H0175` document,
+   embedded chunk, and current `general_context` policy row with no proposition
+   and zero vector/FTS matches. Phase 7 made no live call or database change: it
+   verified the pinned 7,916,469-byte artifact, accounted for 4,262 structural
+   marker records as three documentation records plus 4,259 entity records,
+   and closed at eligible `3,959`, malformed `172`, skipped `115`, prohibited
+   `16`, duplicate `0`. The eligible checksum is
+   `1c7fdf4f7d587fdcfa7cf076732f913ef9b1066d50a0a5de9e227c7c1cf80cc2`;
+   the canonical inventory hash is
+   `edb6dece3a9d2772ec9dfb21a80d192225ec14878084e5b30cb38ea667b80040`.
+   The later embedding projection is 3,959 requests, 1,831,354 canonical UTF-8
+   bytes, a conservative 610,452-token estimate, estimated USD `0.01220904`,
+   and a proposed maximum ceiling of USD `0.02441808`; none of those figures
+   authorizes a request or batch. `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains
+   default-off, the source remains hidden, and protected/plural registries
+   remain empty. The next bounded item is a separately designed hidden batch
+   packet with dry run, single-item verification, attended cost/write approval,
+   reconciliation, and sampling; no batch, visibility change, feature
    enablement, live answer, deployment, doctrinal assignment, registry
    assignment, or PR merge is authorized by this status.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication

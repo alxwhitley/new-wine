@@ -13,8 +13,8 @@ rechecked in this session, and the integration branch itself was not deployed.
 
 ## Current state
 
-**Biblical-depth Phases 0–6 are complete through the attended hidden
-single-item production proof.** PR #3 contains the approved rights/provenance
+**Biblical-depth Phases 0–7 are complete through full-artifact TIPNR inventory
+readiness.** PR #3 contains the approved rights/provenance
 manifests, canonical source-use policy, hidden TIPNR/OpenBible preview tooling,
 deterministic passage classification, migration 097, default-off
 routing/retrieval, the Phase 5 prompt/generation contract, and the dedicated
@@ -31,6 +31,20 @@ one 1536-dimension `text-embedding-3-small` request under the `$0.01` ceiling,
 and one atomic `H0175` transaction. Production now contains that exact hidden
 projection and policy ID `4e3169db-2aaf-4f0f-91e0-fc7c3a234625`; no proposition
 exists for the document.
+
+Phase 7 made no model call or database connection. The exact pinned
+7,916,469-byte TIPNR artifact contains 4,262 structural marker records: three
+documentation records and 4,259 entity records. Deterministic classification
+closed at eligible `3,959`, malformed `172`, skipped `115`, prohibited `16`,
+and duplicate `0`; eligible people/places are `3,055`/`904`. The eligible
+checksum is
+`1c7fdf4f7d587fdcfa7cf076732f913ef9b1066d50a0a5de9e227c7c1cf80cc2`
+and canonical inventory hash is
+`edb6dece3a9d2772ec9dfb21a80d192225ec14878084e5b30cb38ea667b80040`.
+Three repeated runs were byte-identical. The cost projection is 3,959 later
+embedding requests over 1,831,354 canonical UTF-8 bytes, conservatively
+610,452 tokens, estimated USD `0.01220904`, with a proposed maximum ceiling of
+USD `0.02441808`; it is evidence for a later packet, not spend authority.
 
 The governing boundary remains unchanged:
 
@@ -80,31 +94,32 @@ remain preserved and outside PR #3.
 
 ## Session outcome and measures
 
-- Original outcome: **completed** — the exact hidden Phase 6 production proof
-  was authorized, atomically stored, and independently reconciled without
-  releasing it to retrieval or answers.
-- Acceptance: **passed** — 4/4 manifest contracts, 24/24 parser tests, all 61
-  Phase 3–5 policy/routing/generation tests, the no-cost Tier A fence, and 31/31
-  Phase 6 tests. Python compilation and diff checks pass. Live reconciliation
-  proved attempted `1`, stored `1`, errored `0`, skipped `0`, and zero vector or
-  FTS retrieval matches. The disclosed paid/live position-paper tiers were not
-  run.
-- Unplanned investigations started: **1** — the post-commit analysis-role/RPC
-  permission mismatch, resolved without a privilege or database change.
+- Original outcome: **completed** — the fixture/full-artifact parser gap is
+  closed and the exact pinned TIPNR corpus has a deterministic zero-effect
+  inventory and cost projection.
+- Acceptance: **passed** — 4/4 manifest contracts, 39/39 parser/inventory
+  tests including the exact full artifact, all 61 Phase 3–5
+  classification/policy/routing/generation tests, and 31/31 Phase 6 tests.
+  Three inventory runs were byte-identical and reconciliation closed at 4,262
+  attempted with every record in one terminal outcome.
+- Unplanned investigations started: **0**.
 - Findings promoted to Blocker: **0**.
-- Active critical-path item at close: **0**.
-- Scope changes approved by Alex: exact hidden source registration, one bounded
-  embedding, one atomic `H0175` transaction, repository-only reconciliation
-  remediation, and the governing-text replacement. No merge, deployment,
-  batch, registry assignment, visibility change, live answer, or feature
-  authority was added.
+- Active critical-path item at close: **1** — design the separately bounded
+  hidden TIPNR batch packet.
+- Scope changes approved by Alex: repository-only Phase 7 design, parser,
+  inventory, compact evidence, and the evidence-backed governing-text
+  replacement. No new model spend, database access, batch, merge, deployment,
+  registry assignment, visibility change, live answer, or feature authority
+  was added.
 
 ---
 
 ## Next single item
 
-**Explicitly approve or decline a bounded Phase 7 TIPNR expansion design.** The
-design must freeze inventory, cost, resumability, reconciliation, and sampling
-before any later batch. The completed Phase 6 proof is not batch authority.
-Visibility change, answer enablement, live answers, deployment, registry
-assignments, and PR #3 merge remain separate attended decisions.
+**Design one bounded hidden TIPNR batch packet from the frozen Phase 7
+inventory.** It must specify deterministic tranche selection, resumability,
+dry run, single-item verification, a named cost ceiling, attended write/spend
+approval, hard reconciliation, and sampled quality proof before execution.
+Phase 7 is not batch authority. Visibility change, answer enablement, live
+answers, deployment, registry assignments, and PR #3 merge remain separate
+attended decisions.
