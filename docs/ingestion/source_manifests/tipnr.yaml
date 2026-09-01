@@ -1,0 +1,108 @@
+schema_version: 1
+dataset_id: stepbible_tipnr
+official_name: Translators Individualised Proper Names with all References (TIPNR)
+official_url: https://github.com/STEPBible/STEPBible-Data
+rights_holder: STEP Bible
+reviewed_at: "2026-09-01"
+
+license:
+  spdx: CC-BY-4.0
+  url: https://creativecommons.org/licenses/by/4.0/legalcode.en
+  attribution_required: true
+  share_alike: false
+  modification_notice_required: true
+  required_credit: STEP Bible (www.stepbible.org)
+
+reviewed_artifacts:
+  - name: TIPNR data file
+    source_url: https://github.com/STEPBible/STEPBible-Data/tree/02843f07cbb5009e00999a7c0efead6430dbb6e7
+    revision: 02843f07cbb5009e00999a7c0efead6430dbb6e7
+    bytes: 7916469
+    sha256: 69f69d80d8a329576915a397d815bd6ff1849d8954d071c57b0ac4453aee180e
+    entity_records: 4263
+
+nested_rights:
+  status: field_level_exclusions_required
+  findings:
+    - Brief, short, and article descriptions are documented as generated with Claude 3 AI.
+    - Display-name variants are based partly on ESV, KJV, and NIV forms and retain translation provenance.
+    - Relationship assertions include explicit ambiguity markers that must never be flattened into certainty.
+  excluded_assets:
+    - AI-generated descriptions
+    - translation-specific prose and name-difference fields
+    - unqualified relationship assertions
+
+v1_policy:
+  ordinary_answer_eligible: true
+  study_mode_eligible: true
+  input_file: Proper Nouns/TIPNR - Translators Individualised Proper Names with all References - STEPBible.org CC BY.txt
+  record_grammar:
+    entity_start: A line beginning with `$==========` starts an entity record.
+    primary_row: The first tab-separated row after the marker.
+    form_row: A later tab-separated row whose first column is a significance marker; rows marked `Total` are excluded.
+    generated_prose: Lines beginning `@Briefest=`, `@Brief=`, `@Short=`, or `@Article=` are excluded.
+  allowed_raw_fields:
+    - raw_path: entity marker `$========== {PERSON(s)|PLACE|OTHER}`
+      output_field: entity_type
+      transform: closed mapping PERSON(s)->person, PLACE->place, OTHER->other; reject every other marker
+      provenance: TIPNR structural record marker
+    - raw_path: primary row column 1 `UnifiedName=uStrong`, substring after final `=`
+      output_field: entity_id
+      transform: retain only the source uStrong token; discard the translated-name and reference prefix
+      provenance: TIPNR uStrong identifier
+    - raw_path: non-Total form row column 3 `dStrong«eStrong=Heb/Grk`
+      output_field: original_language
+      transform: split exactly into dstrong, estrong, and source_script_form; reject a row that does not parse all three components
+      provenance: TIPNR disambiguated/electronic Strong identifiers and Hebrew/Greek form
+    - raw_path: non-Total form row column 5 `All Refs`
+      output_field: osis_references
+      transform: split source reference list; preserve subverse suffixes; reject abbreviations such as `ff` rather than expanding them
+      provenance: TIPNR exhaustive occurrence field
+  allowed_output_fields:
+    - entity_type
+    - entity_id
+    - original_language.dstrong
+    - original_language.estrong
+    - original_language.source_script_form
+    - osis_references
+  excluded_fields:
+    - brief description
+    - short description
+    - article description
+    - ESV/KJV/NIV comparison prose
+    - family and other relationships
+    - inferred doctrinal synthesis
+  uncertainty_rule: Preserve source ambiguity markers if any relationship field is considered in a later policy revision.
+  unknown_field_policy: reject
+  rationale: The allowlist is limited to structured identifiers, forms, and references that do not require a model to judge doctrinal prose.
+
+proposed_registration:
+  model: per_dataset
+  license_status: licensed
+  visibility: hidden
+  source_rows:
+    - name: STEPBible TIPNR
+      slug: stepbible-tipnr
+      visibility: hidden
+      source_kind: biblical_context
+      citation_mode: citable
+      aliases:
+        - stepbible tipnr
+  note: A dedicated hidden row avoids hiding or changing the existing STEPBible lexicon source during proof work.
+
+authorization:
+  source_registration_authorized: false
+  database_write_authorized: false
+  ingestion_authorized: false
+  visibility_change_authorized: false
+  passage_classification_authorized: false
+  retrieval_change_authorized: false
+  answer_path_change_authorized: false
+  deployment_authorized: false
+
+decision:
+  status: approved
+  approved_by: Alex Whitley
+  approved_at: "2026-09-01"
+  disposition: Approve the V1 field allowlist and future hidden dataset-registration proposal; no registration, parser execution, or ingestion is authorized now.
+  recommendation: Approve only the enumerated V1 field allowlist and a dedicated hidden dataset registration.
