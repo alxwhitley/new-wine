@@ -483,7 +483,20 @@ def _retrieve(
                 seen_ids.add(n["id"])
                 expanded.append(n)
         if explicit_source_id:
-            expanded = filter_chunks_to_source(expanded, explicit_source_id, db)
+            if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED:
+                routed_references = [
+                    chunk for chunk in expanded
+                    if chunk.get("_source_use_role") in {"reference", "viewpoint"}
+                ]
+                doctrinal_expanded = [
+                    chunk for chunk in expanded
+                    if chunk.get("_source_use_role") not in {"reference", "viewpoint"}
+                ]
+                expanded = filter_chunks_to_source(
+                    doctrinal_expanded, explicit_source_id, db
+                ) + routed_references
+            else:
+                expanded = filter_chunks_to_source(expanded, explicit_source_id, db)
 
     if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED:
         enriched_expanded = answer_toolbox.enrich_source_use_candidates(expanded, db)

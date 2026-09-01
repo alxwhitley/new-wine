@@ -50,6 +50,8 @@ class _Query:
         self.db = db
         self.table_name = table_name
         self.in_values = None
+        self.eq_filters = {}
+        self.limit_value = None
 
     def select(self, _columns):
         return self
@@ -58,16 +60,28 @@ class _Query:
         self.in_values = set(values)
         return self
 
-    def eq(self, _column, _value):
+    def eq(self, column, value):
+        self.eq_filters[column] = value
+        return self
+
+    def order(self, _column):
+        return self
+
+    def limit(self, value):
+        self.limit_value = value
         return self
 
     def execute(self):
         self.db.executed.append(self.table_name)
         rows = self.db.rows_by_table.get(self.table_name, [])
-        if self.in_values is None:
-            return _Result(rows)
-        key = "id" if self.table_name == "documents" else "chunk_id"
-        return _Result([row for row in rows if row.get(key) in self.in_values])
+        if self.in_values is not None:
+            key = "id" if self.table_name == "documents" else "chunk_id"
+            rows = [row for row in rows if row.get(key) in self.in_values]
+        for key, value in self.eq_filters.items():
+            rows = [row for row in rows if row.get(key) == value]
+        if self.limit_value is not None:
+            rows = rows[:self.limit_value]
+        return _Result(rows)
 
 
 class _DB:
@@ -363,6 +377,8 @@ class SourceUseRoutingTests(unittest.TestCase):
         )
 
     def test_retrieve_wiring_keeps_one_doctrinal_pool_and_eligible_reference(self):
+        from app.services import single_teacher_lock
+
         teacher = dict(
             _chunk("teacher", "d1", "sermon_transcript"),
             title="Sermon",
@@ -394,6 +410,8 @@ class SourceUseRoutingTests(unittest.TestCase):
             toolbox_module.fetch_neighbor_chunks_batch,
             producer_module.get_disabled_filters,
             producer_module.is_chunk_disabled,
+            single_teacher_lock.apply_explicit_teacher_lock,
+            single_teacher_lock.filter_chunks_to_source,
         )
         toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED = True
         toolbox_module.expand_query = lambda _question: (["historical context"], None)
@@ -412,6 +430,14 @@ class SourceUseRoutingTests(unittest.TestCase):
             "source_names": [],
         }
         producer_module.is_chunk_disabled = lambda *_args, **_kwargs: False
+        single_teacher_lock.apply_explicit_teacher_lock = (
+            lambda _question, collapsed, _db: (collapsed, SOURCE_A, True)
+        )
+        single_teacher_lock.filter_chunks_to_source = (
+            lambda chunks, _source_id, _db: [
+                chunk for chunk in chunks if chunk.get("id") == "teacher"
+            ]
+        )
         try:
             chunks, citations, citable_count, fallback = producer_module._retrieve(
                 db,
@@ -419,6 +445,7 @@ class SourceUseRoutingTests(unittest.TestCase):
                 query_policy=self.general,
                 protected_source_registry=ApprovedProtectedSourceRegistry({}),
                 issue_registry=self.issue_registry,
+                experimental_teacher_source_lock=True,
             )
         finally:
             (
@@ -429,6 +456,8 @@ class SourceUseRoutingTests(unittest.TestCase):
                 toolbox_module.fetch_neighbor_chunks_batch,
                 producer_module.get_disabled_filters,
                 producer_module.is_chunk_disabled,
+                single_teacher_lock.apply_explicit_teacher_lock,
+                single_teacher_lock.filter_chunks_to_source,
             ) = originals
         self.assertEqual([chunk["id"] for chunk in chunks], ["teacher", "context"])
         self.assertEqual(chunks[1]["_source_use_role"], "reference")
@@ -525,6 +554,54 @@ class SourceUseRoutingTests(unittest.TestCase):
         self.assertEqual(result.outcome, "no_material")
         self.assertEqual(seen["query_policy"].issue_key, "healing_mechanics")
         self.assertIn("protected_source_registry", seen)
+
+    def test_protected_background_context_uses_the_same_exact_source_allowlist(self):
+        from app.services import source_resolver
+
+        db = _DB(
+            {
+                "documents": [
+                    {"id": "d1", "source_id": SOURCE_A},
+                    {"id": "d2", "source_id": SOURCE_B},
+                ],
+                "chunks": [
+                    {"document_id": "d1", "chunk_index": 0, "content": "approved"},
+                    {"document_id": "d2", "chunk_index": 0, "content": "blocked"},
+                ],
+            }
+        )
+        originals = (
+            toolbox_module._ensure_background_topics,
+            toolbox_module.match_background_topics,
+            toolbox_module._background_topics,
+            source_resolver.is_source_servable,
+        )
+        toolbox_module._ensure_background_topics = lambda: None
+        toolbox_module.match_background_topics = lambda _question: ["one", "two"]
+        toolbox_module._background_topics = [
+            {"topic_key": "one", "document_id": "d1", "title": "Approved"},
+            {"topic_key": "two", "document_id": "d2", "title": "Blocked"},
+        ]
+        source_resolver.is_source_servable = lambda *_args: True
+        try:
+            parts, document_ids, _updated = producer_module._inject_background_topics(
+                db,
+                "question",
+                [],
+                {},
+                allowed_source_ids={SOURCE_A},
+            )
+        finally:
+            (
+                toolbox_module._ensure_background_topics,
+                toolbox_module.match_background_topics,
+                toolbox_module._background_topics,
+                source_resolver.is_source_servable,
+            ) = originals
+        self.assertEqual(document_ids, {"d1"})
+        self.assertEqual(len(parts), 1)
+        self.assertIn("approved", parts[0])
+        self.assertNotIn("blocked", parts[0])
 
 
 if __name__ == "__main__":
