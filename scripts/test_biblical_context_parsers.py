@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import copy
 import ast
+import hashlib
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,10 +32,14 @@ from biblical_context_tooling import (  # noqa: E402
     load_approved_manifests,
 )
 from parse_tipnr_context import (  # noqa: E402
+    TIPNR_ARTIFACT_BYTES,
+    TIPNR_ARTIFACT_SHA256,
     TipnrItemError,
     TipnrSchemaError,
     parse_tipnr_entity,
     parse_tipnr_file,
+    scan_tipnr_records,
+    verify_tipnr_artifact,
 )
 from parse_openbible_context import (  # noqa: E402
     OpenBibleItemError,
@@ -291,6 +298,102 @@ class TipnrParserTests(unittest.TestCase):
                 [lines[0], "too\tfew", lines[2]],
                 artifact_revision=self.REVISION,
             )
+
+
+class TipnrFullArtifactContractTests(unittest.TestCase):
+    def test_artifact_verifier_accepts_only_exact_pinned_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tipnr.txt"
+            path.write_bytes(b"pinned")
+            with (
+                mock.patch("parse_tipnr_context.TIPNR_ARTIFACT_BYTES", 6),
+                mock.patch(
+                    "parse_tipnr_context.TIPNR_ARTIFACT_SHA256",
+                    hashlib.sha256(b"pinned").hexdigest(),
+                ),
+            ):
+                self.assertEqual(verify_tipnr_artifact(path), b"pinned")
+                path.write_bytes(b"mutate")
+                with self.assertRaisesRegex(
+                    TipnrSchemaError, "artifact_sha256_mismatch"
+                ):
+                    verify_tipnr_artifact(path)
+
+    def test_artifact_verifier_checks_size_before_checksum(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tipnr.txt"
+            path.write_bytes(b"short")
+            with self.assertRaisesRegex(
+                TipnrSchemaError, "artifact_size_mismatch"
+            ):
+                verify_tipnr_artifact(path)
+
+        self.assertEqual(TIPNR_ARTIFACT_BYTES, 7_916_469)
+        self.assertEqual(
+            TIPNR_ARTIFACT_SHA256,
+            "69f69d80d8a329576915a397d815bd6ff1849d8954d071c57b0ac4453aee180e",
+        )
+
+    def test_scanner_preserves_every_marker_record_in_source_order(self) -> None:
+        text = "\n".join(
+            (
+                "$==========PERSON(s)",
+                "header",
+                "",
+                "$========== PERSON(s)",
+                "\t".join(("Name=H0001", "x", "x", "x", "x", "x", "x", "x", "x")),
+                "– Named\t\tH0001«H0001=א\t\tGen.1.1",
+            )
+        )
+
+        records = scan_tipnr_records(text)
+
+        self.assertEqual([row.ordinal for row in records], [1, 2])
+        self.assertEqual(records[0].marker_shape, "person_no_space")
+        self.assertEqual(records[0].marker_class, "documentation")
+        self.assertEqual(records[1].marker_shape, "person_spaced")
+        self.assertEqual(records[1].marker_class, "person")
+        self.assertEqual(records[1].form_shapes, (("Named", 5),))
+
+    def test_scanner_rejects_unknown_marker_and_directive(self) -> None:
+        with self.assertRaisesRegex(TipnrSchemaError, "unknown_entity_marker"):
+            scan_tipnr_records("$========== DOCTRINE\nrow")
+        with self.assertRaisesRegex(TipnrSchemaError, "unknown_directive"):
+            scan_tipnr_records(
+                "\n".join(
+                    (
+                        "$========== PERSON(s)",
+                        "Name=H0001\t\t\t\t\t\t\t\t",
+                        "@Doctrine=value",
+                    )
+                )
+            )
+
+    def test_scanner_rejects_unknown_entity_shapes(self) -> None:
+        marker = "$========== PERSON(s)"
+        primary = "\t".join(
+            ("Name=H0001", "x", "x", "x", "x", "x", "x", "x", "x")
+        )
+        with self.assertRaisesRegex(TipnrSchemaError, "unknown_significance"):
+            scan_tipnr_records(
+                "\n".join(
+                    (
+                        marker,
+                        primary,
+                        "– Relationship\t\tH0001«H0001=א\t\tGen.1.1",
+                    )
+                )
+            )
+        with self.assertRaisesRegex(TipnrSchemaError, "unknown_line_shape"):
+            scan_tipnr_records("\n".join((marker, primary, "Relationship")))
+        with self.assertRaisesRegex(TipnrSchemaError, "row_shape_changed"):
+            scan_tipnr_records("\n".join((marker, "Name=H0001\ttoo-few")))
+
+    def test_documentation_markers_are_bound_to_first_three_ordinals(self) -> None:
+        with self.assertRaisesRegex(
+            TipnrSchemaError, "documentation_record_sequence_changed"
+        ):
+            scan_tipnr_records("$==========PLACE\nheader")
 
 
 class OpenBibleParserTests(unittest.TestCase):
