@@ -185,21 +185,25 @@ quarantine. No stage transfers automatically from one source to another.
    between candidate and approved quote; keep the 12 HelloAO missing
    book/commentary combinations quarantined unless a chapter-level contract is
    separately approved.
-4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–5 are
-   complete in repository scope in PR #3: approved rights/provenance manifests,
-   source-use boundaries, deterministic hidden TIPNR/OpenBible preview tooling,
-   versioned passage-policy migration 097, default-off routing/retrieval, and
-   the deterministic prompt/generation contract. The branch is reconciled with
-   current `main` at integration merge `c3fc8e3`; PR review and an explicit
-   merge/deployment decision remain. Migration 097 was applied attended on
-   2026-09-01 and independently verified from a fresh
-   `newwine_readonly_analysis` connection; the policy table contains zero rows.
-   `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains default-off, and both protected and
-   plural registries remain empty. After the PR decision, the next bounded item
-   is a design-only Phase 6 hidden single-slice ingestion-proof contract. No
-   registry assignment, source registration or ingestion, classification
-   batch, feature enablement, live answer, model spend, visibility change, or
-   further production write is authorized by this roadmap status alone.
+4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–6 are
+   complete through the repository and zero-effect-preview boundary in PR #3:
+   approved rights/provenance manifests, source-use boundaries, deterministic
+   TIPNR/OpenBible parsing, versioned passage policy, default-off routing,
+   prompt/generation enforcement, and an approval-gated hidden single-item
+   writer/reconciler for TIPNR entity `H0175`. Phase 6's immutable preview
+   projects exactly one source, alias, document, chunk, and current
+   `general_context` policy row; hash
+   `4b58d2f3e2860cdbe002e32eba8e47febfbb23d2d5ed63dd630fdec383b33b65`.
+   It made no database or model call. Migration 097 remains applied with zero
+   policy rows at the last fresh production read. The source is not registered,
+   no content is ingested, `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains
+   default-off, and protected/plural registries remain empty. PR review and an
+   explicit merge/deployment decision remain. The next bounded item is a
+   separately approved attended Phase 6 operation: re-run read-only collisions,
+   authorize at most `$0.01` for one embedding, execute the one atomic hidden
+   transaction, and reconcile from `newwine_readonly_analysis`. No batch,
+   visibility change, feature enablement, live answer, deployment, doctrinal
+   assignment, or registry assignment is authorized by this roadmap status.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication
    status per title; preserve edition/page provenance; quarantine OCR or
    structural failures; do not extract quotes from flat book chunks without

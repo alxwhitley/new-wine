@@ -413,6 +413,8 @@ argument exists.
   `scripts/reconcile_biblical_context_batch.py`
   `scripts/test_biblical_context_ingest.py`
 - Create locally, never commit:
+  `local/2026-09/biblical_context_v1_proof.preview.json`
+- Create only after an approved production attempt, never commit:
   `local/2026-09/biblical_context_v1_proof.json`
 
 **Interfaces:**
@@ -435,9 +437,10 @@ tests pass.
 python3.12 scripts/test_biblical_source_manifests.py
 python3.12 scripts/test_biblical_context_parsers.py
 python3.12 scripts/test_source_use_policy.py
-python3.12 scripts/test_position_paper_routing.py
+python3.12 scripts/test_source_passage_classification.py
 python3.12 scripts/test_source_use_routing.py
-python3.12 scripts/test_biblical_context_generation.py
+python3.12 scripts/test_source_use_generation_contract.py
+python3.12 -c 'import scripts.test_position_paper_fence as t; t.test_disclaimer_text(); t.test_grouping_excludes_noncitable_and_lexicon(); assert not t.failures, t.failures'
 ```
 
 Expected: all pass without external model spend.
@@ -447,7 +450,7 @@ Expected: all pass without external model spend.
 ```bash
 python3.12 scripts/preview_biblical_context_ingest.py \
   --fixtures \
-  --output local/2026-09/biblical_context_v1_proof.json
+  --output local/2026-09/biblical_context_v1_proof.preview.json
 ```
 
 Expected: exact `1/1/1/1/1` projection, one predicted embedding request,

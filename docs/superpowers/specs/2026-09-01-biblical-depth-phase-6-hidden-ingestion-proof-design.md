@@ -251,6 +251,8 @@ After commit, the apply command closes the write connection and reconnects via
 - exact source, alias, document, chunk, and current-policy counts;
 - exact hashes, source attribution, license metadata, and hidden visibility;
 - exactly one 1536-dimension embedding and no propositions for the document;
+- the same four ordered OSIS references on both the document and its single
+  chunk;
 - no protected topics, issue, or viewpoint metadata;
 - no second current policy row;
 - no visibility or feature-flag change; and
@@ -268,7 +270,8 @@ The final report must be retained at
 - **Any identity or checksum conflict:** fail before model spend and write
   nothing.
 - **Embedding succeeds but transaction fails:** report the bounded spend and
-  errored `1`; database state remains unchanged.
+  errored `1`, then use a fresh read-only connection to distinguish clean
+  rollback from an ambiguous commit that actually landed.
 - **Fresh reconciliation fails after commit:** stop. Do not delete or rewrite
   append-only policy history. The hidden source and default-off feature contain
   the data while a separately approved remediation is designed.
