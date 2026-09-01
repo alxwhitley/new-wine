@@ -2,9 +2,9 @@
 
 **Date:** 2026-09-01
 
-**Status:** PROPOSED. Read-only diagnostics are complete. Retrieval and answer-
-path edits require Alex's explicit approval of this design and the governing-
-text replacements below.
+**Status:** APPROVED by Alex on 2026-09-01, including the exact governing-text
+replacements below. Repository implementation remains default-off; approval
+does not authorize feature enablement or any production operation.
 
 ## Outcome
 

@@ -55,15 +55,18 @@ later session makes deliberately).
 4. **The probabilistic claim-support checker is HELD, pending measurement.** Do
    not build one. Do not propose a model-based judge anywhere — that shape has
    failed five times (Open Decision #20).
-5. **Commentaries are excluded from answers; searchable only** (Alex's call,
-   1 Aug). **RESOLVED in code 2026-08-06/07** — answer retrieval hard-excludes
-   `source_kind`/`source_type` commentary at Step 2.6 (before collapse/rerank),
-   with a second strip after neighbor expansion. Soft down-weight +
-   `COMMENTARY_CONTEXT_CAP=3` retired. Study Mode (`/study/commentary`,
-   `match_commentary_*` RPCs) is unchanged and remains the searchable surface.
-   Helpers: `is_commentary_chunk` / `exclude_commentary_chunks` in
-   `backend/app/services/answer_toolbox.py` (moved out of the now-deleted
-   chat.py, 2026-08-07 mirror-unification job) — one implementation, not two.
+5. **Commentaries remain excluded from ordinary answers by default and remain
+   searchable in Study Mode.** The answer path retains its existing hard
+   exclusion whenever `BIBLICAL_CONTEXT_ANSWER_ENABLED=false`. When that flag is
+   separately approved and enabled, only a current migration-097
+   `general_context` passage may support a general shared-Christian route, or a
+   current registered `orthodox_viewpoint` passage may fill its exact issue-
+   scoped slot on a plural route. Protected routes never receive general
+   commentary/reference material; they admit only exact source IDs in Alex's
+   topic-scoped protected-source registry. `word_study` and Precept Austin remain
+   excluded. License, visibility, attribution, neighbor, citation, and reference
+   gates still apply. Enabling the flag is a separate attended release decision,
+   not implied by merging the implementation.
 6. **Paragraphs that cannot be tied to a specific statement still display** — not
    flagged, not logged, not blocked. Deliberate, to avoid drowning in false
    positives from connective prose. Alex will revisit.
