@@ -116,7 +116,9 @@ class MemoryCursor:
     def execute(self, sql, params=()):
         self.connection.events.append(sql.strip().splitlines()[0])
         state = self.connection.state
-        if "phase6:current_user" in sql:
+        if "phase6:transaction_read_only" in sql:
+            self.result = (state.get("transaction_read_only", "on"),)
+        elif "phase6:current_user" in sql:
             self.result = (state.get("current_user", "newwine_readonly_analysis"),)
         elif "phase6:retrieval_vector" in sql:
             self.result = (state.get("retrieval_vector_count", 0),)
@@ -610,16 +612,36 @@ class ReconcileTests(unittest.TestCase):
         self.proof = build_aaron_projection(ROOT)
 
     def test_fresh_readonly_reconciliation_verifies_exact_hidden_proof(self) -> None:
-        factory = ConnectionFactory(self.proof, exact_state(self.proof))
-        report = reconcile_single_proof(factory, self.proof)
-        connection = factory.connections[0]
-        self.assertEqual(factory.calls, ["reconcile"])
+        identity_factory = ConnectionFactory(self.proof, exact_state(self.proof))
+        retrieval_state = {
+            "current_user": "postgres",
+            "retrieval_vector_count": 0,
+            "retrieval_fts_count": 0,
+        }
+        retrieval_factory = ConnectionFactory(self.proof, retrieval_state)
+        report = reconcile_single_proof(
+            identity_factory, retrieval_factory, self.proof
+        )
+        identity_connection = identity_factory.connections[0]
+        retrieval_connection = retrieval_factory.connections[0]
+        self.assertEqual(identity_factory.calls, ["identity"])
+        self.assertEqual(retrieval_factory.calls, ["retrieval"])
         self.assertEqual(
-            connection.session_calls,
+            identity_connection.session_calls,
+            [{"readonly": True, "autocommit": True}],
+        )
+        self.assertEqual(
+            retrieval_connection.session_calls,
             [{"readonly": True, "autocommit": True}],
         )
         self.assertEqual(report["status"], "verified")
-        self.assertEqual(report["database_connection"], "newwine_readonly_analysis")
+        self.assertEqual(
+            report["database_connections"],
+            {
+                "identity": "newwine_readonly_analysis",
+                "retrieval": "postgres (read-only session)",
+            },
+        )
         self.assertEqual(
             report["reconciliation"],
             {"attempted": 1, "stored": 1, "errored": 0, "skipped": 0},
@@ -630,35 +652,108 @@ class ReconcileTests(unittest.TestCase):
         wrong_role = exact_state(self.proof)
         wrong_role["current_user"] = "postgres"
         with self.assertRaisesRegex(ReconciliationError, "readonly_role_mismatch"):
-            reconcile_single_proof(ConnectionFactory(self.proof, wrong_role), self.proof)
+            reconcile_single_proof(
+                ConnectionFactory(self.proof, wrong_role),
+                ConnectionFactory(self.proof),
+                self.proof,
+            )
 
-        leaked = exact_state(self.proof)
-        leaked["retrieval_vector_count"] = 1
+        leaked = {
+            "current_user": "postgres",
+            "retrieval_vector_count": 1,
+        }
         with self.assertRaisesRegex(ReconciliationError, "hidden_retrieval_leak"):
-            reconcile_single_proof(ConnectionFactory(self.proof, leaked), self.proof)
+            reconcile_single_proof(
+                ConnectionFactory(self.proof, exact_state(self.proof)),
+                ConnectionFactory(self.proof, leaked),
+                self.proof,
+            )
 
     def test_reconciliation_rejects_metadata_drift(self) -> None:
         drifted = exact_state(self.proof)
         drifted["source"]["visibility"] = "shown"
         with self.assertRaisesRegex(StateConflictError, "proof_state_conflict"):
-            reconcile_single_proof(ConnectionFactory(self.proof, drifted), self.proof)
+            reconcile_single_proof(
+                ConnectionFactory(self.proof, drifted),
+                ConnectionFactory(self.proof),
+                self.proof,
+            )
+
+    def test_reconciliation_rejects_retrieval_session_that_is_not_readonly(self) -> None:
+        retrieval_state = {
+            "current_user": "postgres",
+            "transaction_read_only": "off",
+        }
+        with self.assertRaisesRegex(
+            ReconciliationError, "retrieval_session_not_readonly"
+        ):
+            reconcile_single_proof(
+                ConnectionFactory(self.proof, exact_state(self.proof)),
+                ConnectionFactory(self.proof, retrieval_state),
+                self.proof,
+            )
 
     def test_attempt_audit_distinguishes_clean_rollback_and_exact_commit(self) -> None:
-        clean = reconcile_attempt(ConnectionFactory(self.proof), self.proof)
+        clean_identity = ConnectionFactory(self.proof)
+        unused_retrieval = ConnectionFactory(self.proof)
+        clean = reconcile_attempt(clean_identity, unused_retrieval, self.proof)
         self.assertEqual(clean["status"], "absent")
+        self.assertEqual(unused_retrieval.calls, [])
         self.assertEqual(
             clean["reconciliation"],
             {"attempted": 1, "stored": 0, "errored": 1, "skipped": 0},
         )
 
         committed = reconcile_attempt(
-            ConnectionFactory(self.proof, exact_state(self.proof)), self.proof
+            ConnectionFactory(self.proof, exact_state(self.proof)),
+            ConnectionFactory(self.proof, {"current_user": "postgres"}),
+            self.proof,
         )
         self.assertEqual(committed["status"], "verified")
         self.assertEqual(
             committed["reconciliation"],
             {"attempted": 1, "stored": 1, "errored": 0, "skipped": 0},
         )
+
+
+class ApplyReportTests(unittest.TestCase):
+    def test_post_commit_verifier_error_preserves_apply_result(self) -> None:
+        proof = build_aaron_projection(ROOT)
+        apply_factory = ConnectionFactory(proof)
+        embed = EmbedRecorder()
+        with tempfile.TemporaryDirectory() as directory:
+            approval_path = Path(directory) / "approval.json"
+            approval_path.write_text(json.dumps(valid_approval()), encoding="utf-8")
+            output = io.StringIO()
+            with (
+                patch(
+                    "ingest_biblical_context_batch._load_apply_dependencies",
+                    return_value=(apply_factory, embed),
+                ),
+                patch(
+                    "reconcile_biblical_context_batch._load_reconcile_dependencies",
+                    return_value=(ConnectionFactory(proof), ConnectionFactory(proof)),
+                ),
+                patch(
+                    "reconcile_biblical_context_batch.reconcile_attempt",
+                    side_effect=ReconciliationError("retrieval_permission_denied"),
+                ),
+                contextlib.redirect_stdout(output),
+            ):
+                exit_code = apply_main(["--approval-file", str(approval_path)])
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(report["status"], "committed_reconciliation_failed")
+        self.assertEqual(report["apply"]["status"], "stored")
+        self.assertEqual(
+            report["verification_error"],
+            {
+                "kind": "ReconciliationError",
+                "reason": "retrieval_permission_denied",
+            },
+        )
+        self.assertEqual(len(embed.calls), 1)
 
 
 class CliCapabilityTests(unittest.TestCase):

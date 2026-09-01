@@ -549,9 +549,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         reconcile_attempt,
     )
 
-    reconciliation = reconcile_attempt(
-        _load_reconcile_dependencies(), proof
-    )
+    identity_factory, retrieval_factory = _load_reconcile_dependencies()
+    try:
+        reconciliation = reconcile_attempt(
+            identity_factory, retrieval_factory, proof
+        )
+    except Exception as exc:
+        operation_status = (
+            "committed_reconciliation_failed"
+            if apply_report["status"] in {"stored", "skipped"}
+            else "commit_outcome_unknown_reconciliation_failed"
+        )
+        final_report = {
+            "schema_version": "biblical_context_phase6_proof.v1",
+            "status": operation_status,
+            "approval": approval,
+            "apply": apply_report,
+            "verification": None,
+            "verification_error": {
+                "kind": type(exc).__name__,
+                "reason": str(exc),
+            },
+        }
+        sys.stdout.write(canonical_json_bytes(final_report).decode("utf-8"))
+        return 1
     if apply_report["status"] == "failed":
         operation_status = (
             "commit_outcome_ambiguous_but_verified"

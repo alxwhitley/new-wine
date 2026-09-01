@@ -26,16 +26,25 @@ class ReconciliationError(RuntimeError):
     """Fresh read-only evidence does not prove the hidden proof contract."""
 
 
+def _require_readonly_session(cursor, boundary: str) -> None:
+    cursor.execute("/* phase6:transaction_read_only */ SHOW transaction_read_only")
+    row = cursor.fetchone()
+    if not row or row[0] != "on":
+        raise ReconciliationError(f"{boundary}_session_not_readonly")
+
+
 def reconcile_attempt(
-    connection_factory: Callable[[str], object],
+    identity_connection_factory: Callable[[str], object],
+    retrieval_connection_factory: Callable[[str], object],
     proof: ProofProjection,
 ) -> dict[str, object]:
-    """Classify a write attempt as cleanly absent or exactly committed."""
+    """Reconcile exact rows and retrieval exclusion in separate read-only sessions."""
 
-    connection = connection_factory("reconcile")
+    connection = identity_connection_factory("identity")
     try:
         connection.set_session(readonly=True, autocommit=True)
         with connection.cursor() as cursor:
+            _require_readonly_session(cursor, "identity")
             cursor.execute("/* phase6:current_user */ SELECT current_user")
             role_row = cursor.fetchone()
             role = role_row[0] if role_row else None
@@ -47,7 +56,10 @@ def reconcile_attempt(
                 return {
                     "schema_version": "biblical_context_phase6_reconciliation.v1",
                     "status": "absent",
-                    "database_connection": READONLY_ROLE,
+                    "database_connections": {
+                        "identity": READONLY_ROLE,
+                        "retrieval": None,
+                    },
                     "proof": projection_report(proof),
                     "policy_id": None,
                     "retrieval_matches": None,
@@ -58,6 +70,20 @@ def reconcile_attempt(
                         "skipped": 0,
                     },
                 }
+
+    finally:
+        connection.close()
+
+    retrieval_connection = retrieval_connection_factory("retrieval")
+    try:
+        retrieval_connection.set_session(readonly=True, autocommit=True)
+        with retrieval_connection.cursor() as cursor:
+            _require_readonly_session(cursor, "retrieval")
+            cursor.execute("/* phase6:current_user */ SELECT current_user")
+            retrieval_role_row = cursor.fetchone()
+            retrieval_role = retrieval_role_row[0] if retrieval_role_row else None
+            if not retrieval_role or retrieval_role == READONLY_ROLE:
+                raise ReconciliationError("retrieval_role_invalid")
 
             cursor.execute(
                 """/* phase6:retrieval_vector */
@@ -84,12 +110,15 @@ def reconcile_attempt(
             if vector_count != 0 or fts_count != 0:
                 raise ReconciliationError("hidden_retrieval_leak")
     finally:
-        connection.close()
+        retrieval_connection.close()
 
     return {
         "schema_version": "biblical_context_phase6_reconciliation.v1",
         "status": "verified",
-        "database_connection": READONLY_ROLE,
+        "database_connections": {
+            "identity": READONLY_ROLE,
+            "retrieval": f"{retrieval_role} (read-only session)",
+        },
         "proof": projection_report(proof),
         "policy_id": verdict.policy_id,
         "retrieval_matches": {"vector": vector_count, "fts": fts_count},
@@ -103,19 +132,22 @@ def reconcile_attempt(
 
 
 def reconcile_single_proof(
-    connection_factory: Callable[[str], object],
+    identity_connection_factory: Callable[[str], object],
+    retrieval_connection_factory: Callable[[str], object],
     proof: ProofProjection,
 ) -> dict[str, object]:
     """Require an exactly committed, hidden proof on a fresh read-only session."""
 
-    report = reconcile_attempt(connection_factory, proof)
+    report = reconcile_attempt(
+        identity_connection_factory, retrieval_connection_factory, proof
+    )
     if report["status"] != "verified":
         raise ReconciliationError("proof_not_complete")
     return report
 
 
 def _load_reconcile_dependencies():
-    """Return a factory backed only by the dedicated read-only credential."""
+    """Return separate identity and retrieval factories for read-only sessions."""
 
     sys.path.insert(0, str(ROOT / "backend"))
     from dotenv import load_dotenv
@@ -124,18 +156,27 @@ def _load_reconcile_dependencies():
         ROOT / "backend" / "app" / ".env.readonly-analysis",
         override=True,
     )
+    load_dotenv(ROOT / "backend" / "app" / ".env", override=True)
     import psycopg2
 
-    database_url = os.environ.get("READONLY_ANALYSIS_DB_URL")
-    if not database_url:
+    identity_database_url = os.environ.get("READONLY_ANALYSIS_DB_URL")
+    retrieval_database_url = os.environ.get("SUPABASE_DB_URL")
+    if not identity_database_url:
         raise RuntimeError("READONLY_ANALYSIS_DB_URL is not set")
+    if not retrieval_database_url:
+        raise RuntimeError("SUPABASE_DB_URL is not set")
 
-    def connection_factory(mode: str):
-        if mode != "reconcile":
-            raise ValueError("reconcile_connection_mode_invalid")
-        return psycopg2.connect(database_url)
+    def identity_connection_factory(mode: str):
+        if mode != "identity":
+            raise ValueError("identity_connection_mode_invalid")
+        return psycopg2.connect(identity_database_url)
 
-    return connection_factory
+    def retrieval_connection_factory(mode: str):
+        if mode != "retrieval":
+            raise ValueError("retrieval_connection_mode_invalid")
+        return psycopg2.connect(retrieval_database_url)
+
+    return identity_connection_factory, retrieval_connection_factory
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -146,9 +187,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.verify:
         parser.error("--verify is required")
+    identity_factory, retrieval_factory = _load_reconcile_dependencies()
     report = reconcile_single_proof(
-        _load_reconcile_dependencies(),
-        build_aaron_projection(ROOT),
+        identity_factory, retrieval_factory, build_aaron_projection(ROOT)
     )
     sys.stdout.write(canonical_json_bytes(report).decode("utf-8"))
     return 0
