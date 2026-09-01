@@ -190,6 +190,17 @@ def current_policy(supabase) -> Dict[str, Any]:
     source_use_policy = (
         "true" if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED else "false"
     )
+    effective_prompt_version = PROMPT_VERSION
+    source_use_generation_policy = ""
+    if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED:
+        from app.services.source_use_generation_contract import (
+            SOURCE_USE_PROMPT_FINGERPRINT,
+        )
+        effective_prompt_version = "%s:%s" % (
+            PROMPT_VERSION,
+            SOURCE_USE_PROMPT_FINGERPRINT,
+        )
+        source_use_generation_policy = ":source_use_generation=v1"
     snapshot = {
         "source_kinds": sorted(filters.get("source_kinds") or []),
         "source_names": sorted(filters.get("source_names") or []),
@@ -198,10 +209,15 @@ def current_policy(supabase) -> Dict[str, Any]:
     return {
         "filters": snapshot,
         "evidence_version": get_corpus_version(supabase),  # real shared signal (mig 079)
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": effective_prompt_version,
         "policy_version": (
-            "%s:quote_selection=%s:biblical_context_answer=%s"
-            % (POLICY_VERSION, quote_policy, source_use_policy)
+            "%s:quote_selection=%s:biblical_context_answer=%s%s"
+            % (
+                POLICY_VERSION,
+                quote_policy,
+                source_use_policy,
+                source_use_generation_policy,
+            )
         ),
     }
 
@@ -645,7 +661,15 @@ def _build_history(messages: List[Dict[str, Any]], context: str, question: str) 
 
 
 # ---- generation with usage capture (MIRROR of chat._stream_answer; DRIFT POINT) --
-def _generate_and_capture(history, permitted_names=None, trace=None, stage_name="generation", effort=None):
+def _generate_and_capture(
+    history,
+    permitted_names=None,
+    trace=None,
+    stage_name="generation",
+    effort=None,
+    source_use_contract=None,
+    source_use_failures=None,
+):
     from app.services import answer_toolbox
     system = answer_toolbox.ANSWER_SYSTEM_BLOCKS
     if permitted_names is not None:
@@ -666,6 +690,17 @@ def _generate_and_capture(history, permitted_names=None, trace=None, stage_name=
                 + " by full name at least once in the answer."
             )
         system = list(answer_toolbox.ANSWER_SYSTEM_BLOCKS) + [{"type": "text", "text": constraint}]
+
+    if source_use_contract is not None:
+        from app.services.source_use_generation_contract import render_generation_prompt
+        system = list(system) + [
+            {"type": "text", "text": render_generation_prompt(source_use_contract)}
+        ]
+    if source_use_failures:
+        from app.services.source_use_generation_contract import render_retry_constraint
+        system = list(system) + [
+            {"type": "text", "text": render_retry_constraint(source_use_failures)}
+        ]
 
     client = get_anthropic_client()
     model_used = get_generation_model()
@@ -881,6 +916,8 @@ def _produce(
     )
     messages = messages or []
     topics_established = topics_established or {}
+    source_use_contract = None
+    house_fence_text = None
 
     # Position-paper match (Alex's ruling, 2026-08-06 -- MIRROR of
     # chat.chat()'s matched_pillar_key comment; DRIFT POINT). A position
@@ -952,17 +989,19 @@ def _produce(
     # chat.py now uses -- see answer_toolbox.py's REBOUND-GLOBAL warning.
         if matched_pillar_key:
             pillar = answer_toolbox._PILLAR_BY_KEY.get(matched_pillar_key)
-            if pillar and pillar["document_id"] not in injected_doc_ids:
+            if pillar:
                 paper_body = get_paper_body(matched_pillar_key)
                 if paper_body:
-                    topic_context_parts.append(
-                        "[House Position] (citation_mode=silent_context) This is "
-                        "New Wine's own settled house position on %s. It bounds what "
-                        "this answer may claim — do not state anything that "
-                        "contradicts it. Never cite, name, quote, or copy its exact "
-                        "wording into your answer.\n\n%s" % (pillar["voice_topic_name"], paper_body)
-                    )
-                    injected_doc_ids.add(pillar["document_id"])
+                    house_fence_text = paper_body
+                    if pillar["document_id"] not in injected_doc_ids:
+                        topic_context_parts.append(
+                            "[House Position] (citation_mode=silent_context) This is "
+                            "New Wine's own settled house position on %s. It bounds what "
+                            "this answer may claim — do not state anything that "
+                            "contradicts it. Never cite, name, quote, or copy its exact "
+                            "wording into your answer.\n\n%s" % (pillar["voice_topic_name"], paper_body)
+                        )
+                        injected_doc_ids.add(pillar["document_id"])
 
     if stored_evidence_chunks:
         # Narrowed evidence path: skip normal _retrieve() entirely. Every
@@ -1042,6 +1081,17 @@ def _produce(
                 updated_topics=updated_topics,
             )
 
+    # Phase 5 fence-only contract: when biblical context is separately enabled,
+    # the house paper never becomes answer substrate. The legacy paper-voice
+    # fallback remains byte-for-byte available while the feature is off.
+    if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED and fallback_to_paper_voice:
+        return ProducerResult(
+            answer="I don't have strong material on that topic in my current library.",
+            outcome="no_material",
+            model="source_use_policy",
+            updated_topics=updated_topics,
+        )
+
     # Sanctioned No-Oracle-Rule fallback -- MIRROR of chat.chat()'s generate()
     # fallback_to_paper_voice branch. Fires ONLY when exclusion emptied a
     # non-empty retrieval; never for thin/empty retrieval, never on no match.
@@ -1085,6 +1135,30 @@ def _produce(
             outcome="no_material", updated_topics=updated_topics,
         )
 
+    if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED:
+        from app.services.source_use_generation_contract import (
+            SourceUseContractError,
+            build_generation_contract,
+        )
+        try:
+            source_use_contract = build_generation_contract(
+                question,
+                query_policy,
+                chunks,
+                house_fence_text=house_fence_text,
+            )
+        except SourceUseContractError as exc:
+            logger.warning(
+                "source_use_generation: contract construction failed closed | reason=%s",
+                exc,
+            )
+            return ProducerResult(
+                answer="I don't have strong material on that topic in my current library.",
+                outcome="no_material",
+                model="source_use_policy",
+                updated_topics=updated_topics,
+            )
+
     with _trace_span(trace, "context_build"):
         context = _build_context(chunks, citable_count, topic_context_parts)
         history = _build_history(messages, context, question)
@@ -1096,13 +1170,18 @@ def _produce(
             if answer_toolbox._is_citable(c) and (c.get("author") or "").strip()
         })
 
+    generation_contract_options = {}
+    if source_use_contract is not None:
+        generation_contract_options["source_use_contract"] = source_use_contract
     answer, raw_output, _sr, usage, model_used = _generate_and_capture(
         history, trace=trace, stage_name="generation.primary",
         effort=GENERATION_EFFORT,
+        **generation_contract_options,
     )
     total_usage = dict(usage)
 
     refused = False
+    source_use_failed = False
     with _trace_span(trace, "attribution_validation"):
         try:
             name_universe = build_name_universe(supabase)
@@ -1129,33 +1208,92 @@ def _produce(
                     return True
                 return False
 
-            needs_single_author = _missing_required_single_author(answer, permitted_names)
-            if _has_ungrounded(answer, raw_output) or needs_single_author:
+            single_author_names = permitted_names
+            if source_use_contract is not None:
+                single_author_names = sorted({
+                    (c.get("author") or "").strip()
+                    for c in chunks
+                    if c.get("_source_use_role") == "doctrinal"
+                    and answer_toolbox._is_citable(c)
+                    and (c.get("author") or "").strip()
+                })
+            source_use_failures = ()
+            if source_use_contract is not None:
+                from app.services.source_use_generation_contract import (
+                    validate_generated_answer,
+                )
+                source_use_failures = validate_generated_answer(
+                    answer, source_use_contract
+                )
+            needs_single_author = _missing_required_single_author(
+                answer, single_author_names
+            )
+            if (
+                _has_ungrounded(answer, raw_output)
+                or needs_single_author
+                or source_use_failures
+            ):
+                retry_contract_options = {}
+                if source_use_contract is not None:
+                    retry_contract_options["source_use_contract"] = (
+                        source_use_contract
+                    )
+                    retry_contract_options["source_use_failures"] = (
+                        source_use_failures
+                    )
                 answer2, raw2, _sr2, usage2, model_used = _generate_and_capture(
                     history,
                     permitted_names=permitted_names,
                     trace=trace,
                     stage_name="generation.attribution_retry",
                     effort=GENERATION_EFFORT,
+                    **retry_contract_options,
                 )
                 total_usage = _add_usage(total_usage, usage2)
                 if _has_ungrounded(answer2, raw2):
                     logger.warning("Producer regeneration still credits an ungrounded teacher -- clean refusal")
                     answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
                 else:
-                    answer, raw_output = answer2, raw2
-                    if _missing_required_single_author(answer, permitted_names):
+                    retry_source_use_failures = ()
+                    if source_use_contract is not None:
+                        retry_source_use_failures = validate_generated_answer(
+                            answer2, source_use_contract
+                        )
+                    if retry_source_use_failures:
+                        from app.services.source_use_generation_contract import (
+                            SOURCE_USE_PRESENTATION_FAILURE,
+                        )
+                        logger.warning(
+                            "source_use_generation: retry failed contract | failures=%s",
+                            retry_source_use_failures,
+                        )
+                        answer, raw_output = SOURCE_USE_PRESENTATION_FAILURE, ""
+                        source_use_failed = True
+                    else:
+                        answer, raw_output = answer2, raw2
+                    if (
+                        not source_use_failed
+                        and _missing_required_single_author(
+                            answer, single_author_names
+                        )
+                    ):
                         logger.warning(
                             "Producer regeneration omitted the sole citable author -- adding deterministic source label"
                         )
-                        answer = _ensure_single_author_label(answer, permitted_names)
+                        answer = _ensure_single_author_label(
+                            answer, single_author_names
+                        )
         except Exception:
             logger.exception("Producer attribution-resolution failed -- refusing cleanly (fail closed)")
             answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
 
     with _trace_span(trace, "reference_verification"):
         try:
-            verified_references = [] if refused else verify_references(answer, raw_output, supabase, grounding)
+            verified_references = (
+                []
+                if refused or source_use_failed
+                else verify_references(answer, raw_output, supabase, grounding)
+            )
         except Exception:
             logger.exception("Producer SP1 reference verification failed -- continuing without pointers")
             verified_references = []
@@ -1175,7 +1313,7 @@ def _produce(
     # errors; see its docstring).
     quote_ids = []  # type: List[str]
     with _trace_span(trace, "quote_selection"):
-        if not refused:
+        if not refused and not source_use_failed:
             try:
                 from app.services.quotes import quote_selection_enabled
                 if quote_selection_enabled():
@@ -1200,8 +1338,14 @@ def _produce(
 
     return ProducerResult(
         answer=answer,
-        outcome="refused_attribution" if refused else "answered",
-        citations=[] if refused else citations,
+        outcome=(
+            "no_material"
+            if source_use_failed
+            else "refused_attribution"
+            if refused
+            else "answered"
+        ),
+        citations=[] if refused or source_use_failed else citations,
         verified_references=verified_references,
         quote_ids=quote_ids,
         retrieved_chunk_ids=retrieved_chunk_ids,
