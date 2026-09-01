@@ -13,6 +13,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import asdict
 from pathlib import Path
 from unittest import mock
 
@@ -35,10 +36,15 @@ from parse_tipnr_context import (  # noqa: E402
     TIPNR_ARTIFACT_BYTES,
     TIPNR_ARTIFACT_SHA256,
     TipnrItemError,
+    TipnrRecordOutcome,
     TipnrSchemaError,
+    TipnrStructuralRecord,
+    classify_tipnr_record,
+    classify_tipnr_text,
     parse_tipnr_entity,
     parse_tipnr_file,
     scan_tipnr_records,
+    split_tipnr_records,
     verify_tipnr_artifact,
 )
 from parse_openbible_context import (  # noqa: E402
@@ -394,6 +400,150 @@ class TipnrFullArtifactContractTests(unittest.TestCase):
             TipnrSchemaError, "documentation_record_sequence_changed"
         ):
             scan_tipnr_records("$==========PLACE\nheader")
+
+
+class TipnrRecordOutcomeTests(unittest.TestCase):
+    REVISION = "02843f07cbb5009e00999a7c0efead6430dbb6e7"
+
+    @staticmethod
+    def _primary(identity: str, width: int) -> str:
+        return "\t".join((identity, *("x" for _ in range(width - 1))))
+
+    def _classify(self, text: str) -> TipnrRecordOutcome:
+        lines = split_tipnr_records(text)[0]
+        profile = scan_tipnr_records(text)[0]
+        return classify_tipnr_record(
+            lines,
+            profile,
+            artifact_revision=self.REVISION,
+        )
+
+    def test_documentation_and_noneligible_markers_are_explicit(self) -> None:
+        documentation = self._classify("$==========PERSON(s)\nheader")
+        combined = self._classify(
+            "\n".join(
+                (
+                    "$========== PERSON+PLACE",
+                    self._primary("Name=H0001", 8),
+                )
+            )
+        )
+        other = self._classify(
+            "\n".join(
+                (
+                    "$========== OTHER",
+                    self._primary("Name=H0002", 9),
+                )
+            )
+        )
+
+        self.assertEqual(
+            (documentation.status, documentation.reason),
+            ("skipped", "source_documentation"),
+        )
+        self.assertEqual(
+            (combined.status, combined.reason),
+            ("prohibited", "combined_entity_type"),
+        )
+        self.assertEqual(
+            (other.status, other.reason),
+            ("skipped", "not_v1_entity_type"),
+        )
+        self.assertIsNone(combined.projection)
+        self.assertIsNone(other.projection)
+
+    def test_group_form_projects_only_existing_allowlisted_fields(self) -> None:
+        outcome = self._classify(
+            "\n".join(
+                (
+                    "$========== PERSON(s)",
+                    self._primary("Name=H0001", 9),
+                    "– Group\tignored\tH0001«H0001=א\tignored\tGen.1.1",
+                    "– Total\tignored\tignored\tignored\tignored",
+                    "@Ambiguity=excluded relationship prose",
+                )
+            )
+        )
+
+        self.assertEqual(outcome.status, "eligible")
+        self.assertEqual(outcome.reason, "allowlisted_projection")
+        self.assertEqual(
+            set(outcome.projection or {}),
+            {
+                "dataset_id",
+                "artifact_revision",
+                "entity_id",
+                "entity_type",
+                "original_language_forms",
+                "record_sha256",
+            },
+        )
+        serialized = canonical_json_bytes(asdict(outcome)).decode("utf-8")
+        self.assertNotIn("excluded relationship prose", serialized)
+        self.assertNotIn("ignored", serialized)
+
+    def test_real_place_width_projects_without_fixture_widening(self) -> None:
+        outcome = self._classify(
+            "\n".join(
+                (
+                    "$========== PLACE",
+                    self._primary("Place=H0002", 8),
+                    "– Named\tignored\tH0002«H0002=ב\tignored\tExo.1.1",
+                    "– Total\tignored\tignored\tignored\tignored",
+                )
+            )
+        )
+
+        self.assertEqual(outcome.status, "eligible")
+        self.assertEqual((outcome.projection or {})["entity_type"], "place")
+        self.assertEqual((outcome.projection or {})["entity_id"], "H0002")
+
+    def test_duplicate_outcomes_are_symmetric_and_never_merged(self) -> None:
+        record = "\n".join(
+            (
+                "$========== PERSON(s)",
+                self._primary("Name=H0001", 9),
+                "– Named\tignored\tH0001«H0001=א\tignored\tGen.1.1",
+                "– Total\tignored\tignored\tignored\tignored",
+            )
+        )
+
+        outcomes = classify_tipnr_text(
+            f"{record}\n{record}\n", artifact_revision=self.REVISION
+        )
+
+        self.assertEqual([row.status for row in outcomes], ["duplicate", "duplicate"])
+        self.assertEqual(
+            [row.reason for row in outcomes],
+            ["duplicate_entity_id", "duplicate_entity_id"],
+        )
+        self.assertTrue(all(row.projection is None for row in outcomes))
+
+    def test_known_width_drift_is_malformed_not_a_partial_projection(self) -> None:
+        lines = (
+            "$========== PLACE",
+            self._primary("Place=H0002", 8),
+            "– Named\tignored\tH0002«H0002=ב\tignored\tExo.1.1\textra",
+        )
+        profile = TipnrStructuralRecord(
+            ordinal=3624,
+            marker_shape="place_spaced",
+            marker_class="place",
+            primary_width=8,
+            form_shapes=(("Named", 6),),
+            directive_keys=(),
+            line_shape_codes=(),
+        )
+
+        outcome = classify_tipnr_record(
+            lines,
+            profile,
+            artifact_revision=self.REVISION,
+        )
+
+        self.assertEqual((outcome.status, outcome.reason),
+                         ("malformed", "row_shape_changed"))
+        self.assertIsNone(outcome.projection)
 
 
 class OpenBibleParserTests(unittest.TestCase):

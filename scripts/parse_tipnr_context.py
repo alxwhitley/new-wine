@@ -108,6 +108,19 @@ class TipnrStructuralRecord:
     line_shape_codes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class TipnrRecordOutcome:
+    """One source-text-free classification outcome for an exact source record."""
+
+    ordinal: int
+    identity: str
+    status: str
+    reason: str
+    entity_type: str | None
+    projection: dict[str, object] | None
+    outcome_sha256: str
+
+
 def verify_tipnr_artifact(path: Path) -> bytes:
     """Return only the exact approved upstream artifact bytes."""
 
@@ -156,7 +169,7 @@ def _parse_form(line: str) -> dict[str, object] | None:
         return None
     if len(columns) != 5:
         raise TipnrSchemaError("row_shape_changed")
-    if significance not in _SIGNIFICANCE:
+    if significance not in _SIGNIFICANCE and significance != "Group":
         raise TipnrSchemaError("unknown_significance")
 
     identity = columns[2]
@@ -177,6 +190,191 @@ def _parse_form(line: str) -> dict[str, object] | None:
         "source_script_form": source_script_form,
         "osis_references": _parse_references(columns[4]),
     }
+
+
+def _record_outcome(
+    *,
+    ordinal: int,
+    identity: str,
+    status: str,
+    reason: str,
+    entity_type: str | None,
+    projection: dict[str, object] | None,
+) -> TipnrRecordOutcome:
+    payload = {
+        "ordinal": ordinal,
+        "identity": identity,
+        "status": status,
+        "reason": reason,
+        "entity_type": entity_type,
+        "projection": projection,
+    }
+    return TipnrRecordOutcome(
+        **payload,
+        outcome_sha256=canonical_sha256(payload),
+    )
+
+
+def _project_structural_entity(
+    lines: Sequence[str],
+    *,
+    marker_class: str,
+    artifact_revision: str,
+) -> dict[str, object]:
+    primary_columns = _meaningful_columns(lines[1])
+    expected_width = _ENTITY_PRIMARY_WIDTHS[marker_class]
+    if len(primary_columns) != expected_width:
+        raise TipnrItemError("row_shape_changed")
+
+    entity_identity = primary_columns[0]
+    if "=" not in entity_identity:
+        raise TipnrItemError("entity_identity_invalid")
+    entity_id = entity_identity.rsplit("=", 1)[1]
+    if _STRONG_RE.fullmatch(entity_id) is None:
+        raise TipnrItemError("entity_identity_invalid")
+
+    forms: list[dict[str, object]] = []
+    for line in lines[2:]:
+        if not line.strip():
+            continue
+        if line.startswith("@"):
+            key = line.split("=", 1)[0]
+            if key not in _STRUCTURAL_DIRECTIVE_KEYS:
+                raise TipnrSchemaError("unknown_directive")
+            continue
+        if not line.startswith("–"):
+            raise TipnrSchemaError("unknown_line_shape")
+        form = _parse_form(line)
+        if form is not None:
+            forms.append(form)
+    if not forms:
+        raise TipnrItemError("entity_forms_missing")
+
+    record: dict[str, object] = {
+        "dataset_id": "stepbible_tipnr",
+        "artifact_revision": artifact_revision,
+        "entity_id": entity_id,
+        "entity_type": marker_class,
+        "original_language_forms": forms,
+    }
+    record["record_sha256"] = canonical_sha256(record)
+    return record
+
+
+def classify_tipnr_record(
+    lines: Sequence[str],
+    profile: TipnrStructuralRecord,
+    *,
+    artifact_revision: str,
+) -> TipnrRecordOutcome:
+    """Classify one validated profile without retaining excluded source values."""
+
+    structural_identity = f"record:{profile.ordinal:06d}"
+    if profile.marker_class == "documentation":
+        return _record_outcome(
+            ordinal=profile.ordinal,
+            identity=structural_identity,
+            status="skipped",
+            reason="source_documentation",
+            entity_type=None,
+            projection=None,
+        )
+    if profile.line_shape_codes:
+        return _record_outcome(
+            ordinal=profile.ordinal,
+            identity=structural_identity,
+            status="prohibited",
+            reason="excluded_non_form_structure",
+            entity_type=profile.marker_class,
+            projection=None,
+        )
+    if profile.marker_class in {"other", "excluded_other"}:
+        return _record_outcome(
+            ordinal=profile.ordinal,
+            identity=structural_identity,
+            status="skipped",
+            reason="not_v1_entity_type",
+            entity_type=profile.marker_class,
+            projection=None,
+        )
+    if profile.marker_class == "person+place":
+        return _record_outcome(
+            ordinal=profile.ordinal,
+            identity=structural_identity,
+            status="prohibited",
+            reason="combined_entity_type",
+            entity_type=profile.marker_class,
+            projection=None,
+        )
+
+    expected_width = _ENTITY_PRIMARY_WIDTHS[profile.marker_class]
+    if profile.primary_width != expected_width or any(
+        width != 5 for _, width in profile.form_shapes
+    ):
+        return _record_outcome(
+            ordinal=profile.ordinal,
+            identity=structural_identity,
+            status="malformed",
+            reason="row_shape_changed",
+            entity_type=profile.marker_class,
+            projection=None,
+        )
+
+    try:
+        projection = _project_structural_entity(
+            lines,
+            marker_class=profile.marker_class,
+            artifact_revision=artifact_revision,
+        )
+    except TipnrItemError as exc:
+        return _record_outcome(
+            ordinal=profile.ordinal,
+            identity=structural_identity,
+            status="malformed",
+            reason=str(exc),
+            entity_type=profile.marker_class,
+            projection=None,
+        )
+    return _record_outcome(
+        ordinal=profile.ordinal,
+        identity=str(projection["entity_id"]),
+        status="eligible",
+        reason="allowlisted_projection",
+        entity_type=profile.marker_class,
+        projection=projection,
+    )
+
+
+def classify_tipnr_text(
+    text: str, *, artifact_revision: str
+) -> tuple[TipnrRecordOutcome, ...]:
+    """Classify every record and symmetrically quarantine duplicate identities."""
+
+    records = split_tipnr_records(text)
+    profiles = scan_tipnr_records(text)
+    outcomes = [
+        classify_tipnr_record(
+            lines,
+            profile,
+            artifact_revision=artifact_revision,
+        )
+        for lines, profile in zip(records, profiles, strict=True)
+    ]
+    identity_counts = Counter(
+        outcome.identity for outcome in outcomes if outcome.status == "eligible"
+    )
+    for index, outcome in enumerate(outcomes):
+        if outcome.status != "eligible" or identity_counts[outcome.identity] == 1:
+            continue
+        outcomes[index] = _record_outcome(
+            ordinal=outcome.ordinal,
+            identity=outcome.identity,
+            status="duplicate",
+            reason="duplicate_entity_id",
+            entity_type=outcome.entity_type,
+            projection=None,
+        )
+    return tuple(outcomes)
 
 
 def parse_tipnr_entity(
