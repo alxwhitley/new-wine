@@ -41,6 +41,11 @@ from apply_tipnr_hidden_pilot import (  # noqa: E402
     apply_pilot,
     validate_pilot_approval,
 )
+from reconcile_tipnr_hidden_pilot import (  # noqa: E402
+    PilotReconciliationError,
+    build_sample_report,
+    reconcile_pilot,
+)
 
 
 EXPECTED_SELECTION = (
@@ -167,6 +172,14 @@ class _PilotStateCursor:
             self.result = (self.state.get("transaction_read_only", "on"),)
         elif "phase8:current_user" in sql:
             self.result = (self.state.get("current_user", "newwine_readonly_analysis"),)
+        elif "phase8:retrieval_vector" in sql:
+            self.result = (self.state.get("retrieval_vector_count", 0),)
+        elif "phase8:retrieval_fts" in sql:
+            self.result = (self.state.get("retrieval_fts_count", 0),)
+        elif "phase8:source" in sql:
+            self.result = self.state.get("source_rows", [])
+        elif "phase8:alias" in sql:
+            self.result = self.state.get("alias_rows", [])
         else:
             items = self.state.get("items", {})
             if "phase8:chunk" in sql:
@@ -504,6 +517,68 @@ class _PilotWriteConnection:
 
     def close(self):
         pass
+
+
+class PilotReconciliationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.packet = build_pilot_packet(ROOT, _artifact())
+
+    def _identity_state(self):
+        return {
+            "source_rows": [dict(self.packet.source)],
+            "alias_rows": [dict(self.packet.alias)],
+            "items": {
+                item.document["id"]: _complete_item_state(item)
+                for item in self.packet.items
+            },
+        }
+
+    def test_verified_report_reconciles_every_item_and_probe(self) -> None:
+        identity = _PilotStateConnection(self._identity_state())
+        retrieval = _PilotStateConnection({"current_user": "postgres"})
+        report = reconcile_pilot(
+            lambda mode: identity,
+            lambda mode: retrieval,
+            self.packet,
+        )
+        self.assertEqual(report["reconciliation"], {
+            "attempted": 20, "stored": 20, "errored": 0, "skipped": 0,
+        })
+        self.assertEqual(report["retrieval_probes"], {
+            "vector_attempted": 20, "vector_matches": 0,
+            "fts_attempted": 20, "fts_matches": 0,
+        })
+
+    def test_one_retrieval_match_fails_closed(self) -> None:
+        with self.assertRaisesRegex(PilotReconciliationError, "hidden_retrieval_leak"):
+            reconcile_pilot(
+                lambda mode: _PilotStateConnection(self._identity_state()),
+                lambda mode: _PilotStateConnection({
+                    "current_user": "postgres", "retrieval_fts_count": 1,
+                }),
+                self.packet,
+            )
+
+    def test_absent_candidate_cannot_be_verified(self) -> None:
+        state = self._identity_state()
+        state["items"] = {}
+        with self.assertRaisesRegex(PilotReconciliationError, "candidate_not_complete"):
+            reconcile_pilot(
+                lambda mode: _PilotStateConnection(state),
+                lambda mode: _PilotStateConnection({"current_user": "postgres"}),
+                self.packet,
+            )
+
+    def test_sample_is_exact_first_middle_last_per_type(self) -> None:
+        sample = build_sample_report(self.packet)
+        self.assertEqual(
+            [row["entity_id"] for row in sample["items"]],
+            list(SAMPLE_IDS),
+        )
+        serialized = repr(sample).lower()
+        for excluded in ("briefest", "@brief", "@article", "@ambiguity", "relationship"):
+            self.assertNotIn(excluded, serialized)
 
 
 if __name__ == "__main__":
