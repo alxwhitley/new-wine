@@ -11,6 +11,7 @@ import ast
 import hashlib
 import io
 import json
+import os
 import socket
 import sys
 import tempfile
@@ -71,6 +72,7 @@ from inventory_tipnr_context import (  # noqa: E402
 FIXTURE_DIR = SCRIPTS / "fixtures" / "biblical_context"
 TIPNR_FIXTURE = FIXTURE_DIR / "tipnr_minimal.txt"
 TIPNR_META = FIXTURE_DIR / "tipnr_minimal.meta.json"
+TIPNR_FULL_EXPECTED = FIXTURE_DIR / "tipnr_full_inventory_expected.json"
 OPENBIBLE_FIXTURE = FIXTURE_DIR / "openbible_ancient_minimal.jsonl"
 OPENBIBLE_META = FIXTURE_DIR / "openbible_ancient_minimal.meta.json"
 
@@ -587,7 +589,16 @@ class TipnrInventoryTests(unittest.TestCase):
 
         self.assertEqual(inventory["structural_records"], 1)
         self.assertEqual(inventory["entity_records"], 1)
-        self.assertEqual(inventory["outcome_counts"], {"eligible": 1})
+        self.assertEqual(
+            inventory["outcome_counts"],
+            {
+                "duplicate": 0,
+                "eligible": 1,
+                "malformed": 0,
+                "prohibited": 0,
+                "skipped": 0,
+            },
+        )
         self.assertEqual(sum(inventory["outcome_counts"].values()), 1)
         self.assertIs(inventory["database_write_authorized"], False)
         self.assertIs(inventory["external_model_call_authorized"], False)
@@ -636,6 +647,30 @@ class TipnrInventoryTests(unittest.TestCase):
         report = json.loads(stdout.getvalue())
         self.assertIs(report["database_write_authorized"], False)
         self.assertIs(report["external_model_call_authorized"], False)
+
+    def test_full_pinned_artifact_matches_compact_independent_evidence(self) -> None:
+        artifact = os.environ.get("TIPNR_TEST_ARTIFACT")
+        if artifact is None:
+            self.skipTest("pinned TIPNR artifact unavailable")
+        inventory = build_tipnr_inventory(Path(artifact))
+        expected = json.loads(TIPNR_FULL_EXPECTED.read_text(encoding="utf-8"))
+        actual = {
+            key: inventory[key]
+            for key in (
+                "artifact",
+                "eligible_by_type",
+                "eligible_checksum",
+                "entity_records",
+                "outcome_counts",
+                "payload_sha256",
+                "reason_counts",
+                "rendering",
+                "structural_records",
+            )
+        }
+
+        self.assertEqual(actual, expected)
+        self.assertEqual(sum(actual["outcome_counts"].values()), 4262)
 
 
 class OpenBibleParserTests(unittest.TestCase):

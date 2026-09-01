@@ -1,0 +1,43 @@
+{
+  "artifact": {
+    "bytes": 7916469,
+    "revision": "02843f07cbb5009e00999a7c0efead6430dbb6e7",
+    "sha256": "69f69d80d8a329576915a397d815bd6ff1849d8954d071c57b0ac4453aee180e"
+  },
+  "eligible_by_type": {
+    "person": 3055,
+    "place": 904
+  },
+  "eligible_checksum": "1c7fdf4f7d587fdcfa7cf076732f913ef9b1066d50a0a5de9e227c7c1cf80cc2",
+  "entity_records": 4259,
+  "outcome_counts": {
+    "duplicate": 0,
+    "eligible": 3959,
+    "malformed": 172,
+    "prohibited": 16,
+    "skipped": 115
+  },
+  "payload_sha256": "edb6dece3a9d2772ec9dfb21a80d192225ec14878084e5b30cb38ea667b80040",
+  "reason_counts": {
+    "allowlisted_projection": 3959,
+    "combined_entity_type": 10,
+    "excluded_non_form_structure": 6,
+    "form_identity_invalid": 156,
+    "not_v1_entity_type": 112,
+    "osis_reference_invalid": 14,
+    "row_shape_changed": 2,
+    "source_documentation": 3
+  },
+  "rendering": {
+    "canonical_utf8_bytes": 1831354,
+    "conservative_token_estimate": 610452,
+    "embedding_request_count": 3959,
+    "estimated_cost_usd": "0.01220904",
+    "maximum_later_approval_ceiling_usd": "0.02441808",
+    "model": "text-embedding-3-small",
+    "price_per_million_input_tokens_usd": "0.02000000",
+    "price_reviewed_at": "2026-09-01",
+    "price_source": "https://developers.openai.com/api/docs/models/text-embedding-3-small"
+  },
+  "structural_records": 4262
+}

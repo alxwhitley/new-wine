@@ -78,7 +78,19 @@ def build_tipnr_inventory(path: Path) -> dict[str, object]:
     if len(profiles) != len(outcomes):
         raise tipnr.TipnrSchemaError("inventory_record_count_mismatch")
 
-    outcome_counts = Counter(outcome.status for outcome in outcomes)
+    outcome_counts = Counter(
+        {
+            status: 0
+            for status in (
+                "eligible",
+                "skipped",
+                "malformed",
+                "duplicate",
+                "prohibited",
+            )
+        }
+    )
+    outcome_counts.update(outcome.status for outcome in outcomes)
     reason_counts = Counter(outcome.reason for outcome in outcomes)
     eligible_by_type = Counter(
         outcome.entity_type for outcome in outcomes if outcome.status == "eligible"
