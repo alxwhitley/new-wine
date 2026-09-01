@@ -7,6 +7,7 @@ No network, database, model, embedding, retrieval, or answer-path access.
 from __future__ import annotations
 
 import copy
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -26,6 +27,17 @@ from biblical_context_tooling import (  # noqa: E402
     compile_registration_preview,
     load_approved_manifests,
 )
+from parse_tipnr_context import (  # noqa: E402
+    TipnrItemError,
+    TipnrSchemaError,
+    parse_tipnr_entity,
+    parse_tipnr_file,
+)
+
+
+FIXTURE_DIR = SCRIPTS / "fixtures" / "biblical_context"
+TIPNR_FIXTURE = FIXTURE_DIR / "tipnr_minimal.txt"
+TIPNR_META = FIXTURE_DIR / "tipnr_minimal.meta.json"
 
 
 class ManifestCompilerTests(unittest.TestCase):
@@ -140,6 +152,129 @@ class ManifestCompilerTests(unittest.TestCase):
         )
         self.assertEqual(canonical_sha256(value), canonical_sha256(value))
         self.assertRegex(canonical_sha256(value), r"^[0-9a-f]{64}$")
+
+
+class TipnrParserTests(unittest.TestCase):
+    REVISION = "02843f07cbb5009e00999a7c0efead6430dbb6e7"
+
+    def test_fixture_identity_matches_pinned_metadata(self) -> None:
+        metadata = json.loads(TIPNR_META.read_text(encoding="utf-8"))
+        self.assertEqual(metadata["revision"], self.REVISION)
+        self.assertEqual(metadata["fixture_bytes"], TIPNR_FIXTURE.stat().st_size)
+        self.assertEqual(
+            metadata["fixture_sha256"],
+            __import__("hashlib").sha256(TIPNR_FIXTURE.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(metadata["selected_entity_ids"], ["H0175", "H0071", "H0011"])
+
+    def test_single_person_item_projects_only_approved_fields(self) -> None:
+        lines = TIPNR_FIXTURE.read_text(encoding="utf-8").splitlines()
+        record = parse_tipnr_entity(lines[:9], artifact_revision=self.REVISION)
+
+        expected = {
+            "dataset_id": "stepbible_tipnr",
+            "artifact_revision": self.REVISION,
+            "entity_id": "H0175",
+            "entity_type": "person",
+            "original_language_forms": [
+                {
+                    "dstrong": "H0175",
+                    "estrong": "H0175",
+                    "source_script_form": "אַהֲרֹן",
+                    "osis_references": ["Exo.4.14", "Exo.4.27"],
+                },
+                {
+                    "dstrong": "G0002",
+                    "estrong": "G0002",
+                    "source_script_form": "Ἀαρών",
+                    "osis_references": ["Luk.1.5", "Act.7.40"],
+                },
+            ],
+        }
+        expected["record_sha256"] = canonical_sha256(expected)
+        self.assertEqual(record, expected)
+        serialized = canonical_json_bytes(record).decode("utf-8")
+        for excluded in ("High Priest", "Moses' brother", "STEP link", "Total"):
+            self.assertNotIn(excluded, serialized)
+
+    def test_file_previews_person_and_place_but_skips_other(self) -> None:
+        result = parse_tipnr_file(TIPNR_FIXTURE, artifact_revision=self.REVISION)
+
+        self.assertEqual(
+            result["counts"],
+            {
+                "attempted": 3,
+                "previewed": 2,
+                "malformed": 0,
+                "duplicate": 0,
+                "skipped": 1,
+                "prohibited": 0,
+            },
+        )
+        self.assertEqual(
+            [(row["entity_id"], row["entity_type"]) for row in result["records"]],
+            [("H0175", "person"), ("H0071", "place")],
+        )
+        self.assertEqual(result["reason_counts"], {"not_v1_entity_type": 1})
+        self.assertEqual(result["checksum"], canonical_sha256(result["records"]))
+        self.assertEqual(
+            canonical_json_bytes(result),
+            canonical_json_bytes(
+                parse_tipnr_file(TIPNR_FIXTURE, artifact_revision=self.REVISION)
+            ),
+        )
+
+    def test_place_preserves_both_source_forms_in_order(self) -> None:
+        lines = TIPNR_FIXTURE.read_text(encoding="utf-8").splitlines()
+        place = parse_tipnr_entity(lines[9:17], artifact_revision=self.REVISION)
+
+        self.assertEqual(place["entity_id"], "H0071")
+        self.assertEqual(
+            [form["dstrong"] for form in place["original_language_forms"]],
+            ["H0071", "H0549H"],
+        )
+
+    def test_duplicate_entities_are_refused_not_merged(self) -> None:
+        text = TIPNR_FIXTURE.read_text(encoding="utf-8")
+        first_record = "\n".join(text.splitlines()[:9])
+        duplicate_path = Path(self.enterContext(__import__("tempfile").TemporaryDirectory())) / "duplicate.txt"
+        duplicate_path.write_text(first_record + "\n" + first_record + "\n", encoding="utf-8")
+
+        result = parse_tipnr_file(duplicate_path, artifact_revision=self.REVISION)
+
+        self.assertEqual(result["counts"]["attempted"], 2)
+        self.assertEqual(result["counts"]["previewed"], 1)
+        self.assertEqual(result["counts"]["duplicate"], 1)
+        self.assertEqual(result["reason_counts"], {"duplicate_entity_id": 1})
+
+    def test_schema_and_item_mutations_fail_closed(self) -> None:
+        lines = TIPNR_FIXTURE.read_text(encoding="utf-8").splitlines()[:9]
+
+        with self.assertRaisesRegex(TipnrSchemaError, "unknown_entity_marker"):
+            parse_tipnr_entity(
+                ["$========== DOCTRINE", *lines[1:]],
+                artifact_revision=self.REVISION,
+            )
+        with self.assertRaisesRegex(TipnrSchemaError, "unknown_directive"):
+            parse_tipnr_entity(
+                [*lines, "@Doctrine= forbidden"],
+                artifact_revision=self.REVISION,
+            )
+        with self.assertRaisesRegex(TipnrItemError, "abbreviated_reference"):
+            parse_tipnr_entity(
+                [line.replace("Exo.4.14; Exo.4.27", "Exo.4.14ff") for line in lines],
+                artifact_revision=self.REVISION,
+            )
+        with self.assertRaisesRegex(TipnrItemError, "form_identity_invalid"):
+            parse_tipnr_entity(
+                [line.replace("H0175«H0175=", "H0175=") for line in lines],
+                artifact_revision=self.REVISION,
+            )
+        with self.assertRaisesRegex(TipnrSchemaError, "row_shape_changed"):
+            parse_tipnr_entity(
+                [lines[0], "too\tfew", lines[2]],
+                artifact_revision=self.REVISION,
+            )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,15 @@
+{
+  "adaptation_notice": "Selected from the pinned source artifact; long reference lists and excluded prose were reduced for a minimal parser fixture. New Wine changed no retained identifier, source-script form, or retained OSIS reference.",
+  "fixture_bytes": 1533,
+  "fixture_sha256": "6c4e586b64d1c6cc5835a14da9ec97d7f858f9a43f5641883c8213f3a885dcca",
+  "license": "CC-BY-4.0",
+  "required_credit": "STEP Bible (www.stepbible.org)",
+  "revision": "02843f07cbb5009e00999a7c0efead6430dbb6e7",
+  "selected_entity_ids": [
+    "H0175",
+    "H0071",
+    "H0011"
+  ],
+  "source_artifact_sha256": "69f69d80d8a329576915a397d815bd6ff1849d8954d071c57b0ac4453aee180e",
+  "source_url": "https://github.com/STEPBible/STEPBible-Data/tree/02843f07cbb5009e00999a7c0efead6430dbb6e7"
+}
