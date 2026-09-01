@@ -185,15 +185,16 @@ quarantine. No stage transfers automatically from one source to another.
    between candidate and approved quote; keep the 12 HelloAO missing
    book/commentary combinations quarantined unless a chapter-level contract is
    separately approved.
-4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–3 are
-   complete in repository scope in PR #3 (`c5ee5e0` through `35beb5f`): approved
+4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–4 are
+   complete in repository scope in PR #3 (`c5ee5e0` through `a599812`): approved
    rights/provenance manifests, source-use boundaries, deterministic hidden
-   TIPNR/OpenBible preview tooling, and versioned passage-policy migration 097.
-   Migration 097 remains unapplied and requires its own attended approval plus
-   fresh read-only verification. Next is Phase 4 query-routing/retrieval
-   contract design. No Phase 4 answer-path edit, source registration, ingestion
-   batch, visibility change, deployment, or production write is authorized by
-   this roadmap status alone.
+   TIPNR/OpenBible preview tooling, versioned passage-policy migration 097, and
+   the independently reviewed default-off routing/retrieval contract. Migration
+   097 remains unapplied; the feature flag remains off; protected and plural
+   source registries remain empty. Next is a separately bounded Phase 5 prompt
+   and generation-contract design. No registry assignment, migration apply,
+   feature enablement, live answer, deployment, or production write is
+   authorized by this roadmap status alone.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication
    status per title; preserve edition/page provenance; quarantine OCR or
    structural failures; do not extract quotes from flat book chunks without
