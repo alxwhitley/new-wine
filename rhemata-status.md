@@ -6,10 +6,9 @@ docs/roadmap.md, docs/plan-archive.md, and CLAUDE.md. Counts are NOT recorded
 here except as a dated snapshot from a specific live query; treat any count
 seen elsewhere as unverified.
 
-Last verified: 2026-08-31. **PLAN.md has zero active blockers.** `main` =
-`df2d5f9`, pushed. This session was frontend-only: the beta access code was
-found broken in production and fixed, then the sign-in flow was critiqued and
-rebuilt. No database writes, no backend changes.
+Last verified: 2026-09-01. **PLAN.md has zero active blockers.** `main` =
+`6e60486`, **ahead 1, NOT pushed**. This session was read-only analysis plus
+one repo-only backend build. No database writes, no deploy.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines.
 
@@ -17,137 +16,139 @@ rebuilt. No database writes, no backend changes.
 
 ## Current state
 
-**The beta access code was broken in production and is fixed (`5473265`).**
-The rename sweep `a6f1575` rewrote the gate's password literal along with the
-product name (`rhema` → `newwine`), so the code handed to testers was rejected
-from the moment the rename went live. The code is `rhema`, now alone in
-`frontend/lib/beta-access.ts` with a test asserting the literal. **Fifth
-casualty of that sweep, and the first to reach executable code** — CLAUDE.md's
-landmine is updated accordingly.
+**Prose-channel quotation guard built and committed, NOT deployed
+(`6e60486`).** An audit of the five stored baseline answers found the answer
+writer emits verbatim teacher quotations in ordinary prose and nothing checked
+the WORDING — 7 quotations, **4 defective**: one fabricated outright under a
+living minister's name, one crediting Wayne Grudem's words to the teacher who
+was quoting him, one altering Derek Prince and stripping his hedge, one
+truncating Kolenda's "the church that I pastor" to "the church".
+`backend/app/services/prose_quotation_guard.py` is deterministic (no model —
+Settled #4), wired as a third arm in `producer.py`'s existing
+`_has_ungrounded()` so it inherits regenerate-once-then-refuse. 23 checks, 5
+mutation proofs. On the five real answers: 3 flags, all true positives, zero
+false positives. Audit:
+`docs/audits/2026-08/scripture_and_quotation_fidelity_2026-08-31.md`.
 
-**Sign-in flow rebuilt (`df2d5f9`).** An impeccable critique scored it 19/40
-(snapshot in `.impeccable/critique/`, dated 2026-08-31) and found two
-structural causes, not polish problems: sign-in had no entry point anywhere
-in the product (every surface opened signup), and a successful sign-in was
-visually identical to cancelling. Now one card that is never replaced —
-`BetaGate.tsx` deleted and absorbed, the access code a field checked locally
-before any network call, a segmented Sign in / Sign up radiogroup above the
-fields, an in-modal success confirmation, plus dialog semantics, focus trap,
-Escape, focus restoration and a backdrop guard. Verified: tsc clean, eslint
-0 errors, 49/49 tests, build green, screenshotted at 1280 and 390.
+**One design fact worth not rediscovering.** Punctuation normalization is
+load-bearing, not cosmetic — Prince's genuine "'60s … '70s" is stored with
+curly `‘` and written with straight `'`, so a raw substring check rejects an
+ACCURATE quotation and the guard would have refused correct answers.
 
-**Beta access moved from per-tab `sessionStorage` to per-device
-`localStorage`** (`newwine_beta_access`). Sessions on the old `beta_access`
-key migrate in place. Code matching is now trimmed and case-insensitive —
-raised as a behavior change Alex did not ask for and **explicitly accepted by
-him 2026-08-31**, so do not revert it as unauthorized drift.
+**Deliberately NOT covered by that guard**, asserted as tests so it cannot be
+mistaken for coverage: nested quotation (Grudem-via-Kolenda passes, because
+the words genuinely are in the retrieved chunk), and Scripture entirely.
 
-**`hooks/useAuthGate.ts` is the single owner of auth-modal state**, replacing
-four hand-copied `openAuthGate` functions. Three copies of the same bypass bug
-surfaced and were fixed — `library/authors` and study's save-a-word prompt
-both called `setShowLogin(true)` directly, skipping the gate. Do not re-copy
-this logic into a page.
+**Scripture fidelity is unguarded and unchanged.**
+`reference_verifier.verify_verse_mention()` is an EXISTENCE check only. All 14
+verse references in the sample resolved and every attached claim was
+defensible — but 5 were rendered as direct quotations and none matched the WEB
+text `study.py` serves on click-through, and 2 Scripture quotations carried no
+reference at all (Matt 26:68, 1 Cor 14:31), which puts them outside every
+guard since the verifier only sees what the model DECLARES.
 
-**Not fixed, pre-existing, confirmed not ours:** a hydration mismatch on
-`<html>` from `next-themes`' `forcedTheme="dark"` (`providers.tsx`). Fires on
-a plain `/home` load with no modal in the DOM. Worth a separate look.
+**A parallel codex session ran in THIS working tree** on biblical coverage —
+`scripts/biblical_coverage_*` + its audit doc are uncommitted output **not
+reviewed by this session**. It did not touch `producer.py`. Sharing one
+worktree is why this session committed to `main` rather than branching.
 
-**Not run:** `/impeccable audit` (verify the a11y work against real code),
-`animate`, `polish` — unclassified, not blockers.
+**`scripts/sp1_answer_harness.py` does not exercise the real answer path.** It
+reimplements generation and never imports `producer.py`, bypassing the
+position-paper fence, stored-position evidence, the single-teacher lock and
+the single-author attribution contract. Any before/after quality comparison
+run through it measures a proxy — relevant to judging the depth work.
 
-**Every push to `main` deploys production.** All four Railway services
-rebuild (`watchPatterns: []`, so even docs-only commits redeploy). Treat
-backend pushes as attended gates. Setting watch patterns would stop docs
-commits redeploying — not done.
+**Auth flow rebuilt and live (`df2d5f9`, `5473265`).** Do not revert: beta
+access is per-device `localStorage` with trimmed, case-insensitive matching
+(Alex accepted 2026-08-31), and `hooks/useAuthGate.ts` is the single owner of
+auth-modal state — do not re-copy it into a page. Pre-existing, not ours: a
+hydration mismatch from `next-themes`' `forcedTheme="dark"`.
 
-**Two traps.** `/async-chat/result` is SSE with JSON spanning multiple
-`data:` lines — parse by EVENT, or an answer reads as zero-citation, exactly
-like an attribution-guard failure. Railway deployment meta populates
-progressively; mid-`BUILDING` `rootDirectory`/`configFile` read null.
+**Every push to `main` deploys production.** All four Railway services rebuild
+(`watchPatterns: []`, so even docs-only commits redeploy). Treat backend
+pushes as attended gates — including this session's unpushed commit.
 
-**Author attribution — 7 defects fixed 2026-08-31**, both halves
-(`docs/audits/2026-08/author_attribution_audit_2026-08-31.md`, `fe0718a` +
-`92f9633`). Citable author groups 55 → 48. Recorded so nobody "fixes" them:
-Savchuk documents with `author = NULL` correctly fall back to the source name
-— the HEALTHY state; `Jamieson, Fausset & Brown` is a genuine joint work.
+**Two traps.** `/async-chat/result` is SSE with JSON spanning multiple `data:`
+lines — parse by EVENT, or an answer reads as zero-citation, exactly like an
+attribution-guard failure. Railway deployment meta populates progressively;
+mid-`BUILDING` `rootDirectory`/`configFile` read null.
 
 **Decided, do not re-raise:** guest-speaker attribution stays as-is;
-`/corpus-inventory/export` stays public (re-confirmed at this session's
-close; now a CLAUDE.md landmine) — never extend it to chunk text, excerpts,
-or propositions. Privacy policy + ToS DEFERRED until
-Alex supplies legal entity, jurisdiction, and contact address; `POLICY_COPY`
-in `consent.py` is duplicated in `consent-gate.tsx` and they move together.
+`/corpus-inventory/export` stays public — never extend it to chunk text,
+excerpts, or propositions. Privacy/ToS DEFERRED pending legal entity,
+jurisdiction, contact; `POLICY_COPY` in `consent.py` is duplicated in
+`consent-gate.tsx` and they move together. Savchuk docs with `author = NULL`
+correctly fall back to the source name (HEALTHY); `Jamieson, Fausset & Brown`
+is a genuine joint work.
 
 **Quote rail still off (`QUOTE_SELECTION_ENABLED=false`).** CLF's 63 sermons
 are auto-transcribed audio under `sermon_transcript` with a confirmed
 mistranscription and nothing gates on transcript status — **before the flag
-flips back on, CLF needs quoting exclusion or audio confirmation.**
-
-**CLF Church — 63 YouTube documents, 0 duplicate URLs corpus-wide.** Plus 15
-non-YouTube CLF docs, so a bare `count(*)` reads 78 — filter `url ILIKE
-'%youtu%'`. Zero propositions (`owned` skips the license gate). 15 are
-`held_permanent` for content shape + pastoral privacy, **not runtime** — no
-trimming step may be built to salvage them.
+flips back on, CLF needs quoting exclusion or audio confirmation.** 15 further
+CLF recordings are `held_permanent` for content shape + pastoral privacy, not
+runtime — no trimming step may be built to salvage them.
 
 **Search analytics live; B7 done.** A degraded outcome stamps
 `answer_jobs.analytics_outcome` (`scripts/analytics_health_report.py`), but
 that marker has never fired. Five residuals unverified. **New Wine A2 is NOT
 ingestion-ready** — held by Alex, no live-call budget without a fresh ceiling.
 
-**Still on the old name deliberately:** applied migrations; this file's
-filename; the DB source row and the two code sites naming it;
-`rhemata_tracker.xlsx`; the Vercel project; `rhemata.app` (404 — redirect vs
-retire undecided); the API hostname `rhemata-production.up.railway.app` (the
-frontend's API base URL must move in lockstep); "manna"/"rhema" in corpus.
+**Still on the old name deliberately:** applied migrations; this filename; the
+DB source row + the two code sites naming it; `rhemata_tracker.xlsx`; the
+Vercel project; `rhemata.app` (404 — redirect vs retire undecided); the API
+hostname `rhemata-production.up.railway.app` (frontend API base URL must move
+in lockstep); "manna"/"rhema" in corpus.
 
 ---
 
 ## Findings surfaced, not yet acted on
 
+- **The prose-channel guard has never run on live traffic.** Its real
+  false-positive rate is unmeasured, and the 400-char attribution window and
+  surname matching are tuned from five answers. Deploying it alone (before or
+  after the biblical-depth work) is the clean way to read that number.
+- **Scripture claim fidelity and unreferenced Scripture quotation** — audit
+  findings 2 and 3, both unguarded. Exposure grows as scripture density rises.
 - **A served citation carried a dangling `chunk_id`** —
-  `0b9d1930-7103-4520-8e37-e382dc7b3227` matched zero of 186,944 `chunks`
-  rows while its document resolved normally. Either `chunk_id` does not
-  correspond to `chunks.id` at all, or a citation can point at unresolvable
-  evidence. Needs one check of how `producer.py` populates it.
+  `0b9d1930-7103-4520-8e37-e382dc7b3227` matched zero of 186,944 `chunks` rows
+  while its document resolved normally. Needs one check of how `producer.py`
+  populates it.
 - **The 301 missing local files and the 318 caption-duplication set are one
   decision, not two** — heavy overlap. One re-ingest fixes both, costs real
   money, needs a cost estimate. Parked; deferred by Alex 2026-08-29.
-- **`sources/` must never go in this repo** — the GitHub remote is PUBLIC.
-  Committing it would publish the magazine PDFs, Precept Austin, Derek Prince
-  scrapes and living ministers' transcripts, inverting the license gate,
-  safe_mode, hidden staging and the PA lockout irreversibly. **Same rule keeps
-  the 60 untracked `new_wine_issue_02_1973_review_*` dirs out of git.** Backup
-  is an iCloud copy (2026-08-30, verified) — sync, not versioned.
+- **`sources/` must never go in this repo** — the remote is PUBLIC. Committing
+  it would publish magazine PDFs, Precept Austin, Prince scrapes and living
+  ministers' transcripts, irreversibly inverting the license gate, safe_mode,
+  hidden staging and the PA lockout. **Same rule keeps the 60 untracked
+  `new_wine_issue_02_1973_review_*` dirs out of git.** Backup is an iCloud copy
+  (2026-08-30) — sync, not versioned.
 - **The house source row is still named "Rhemata"** —
-  `bf6d9e28-1cfd-4431-975b-df2ca1b9cfdf`, `owned`/`shown`, slug `rhemata`.
-  Publisher container for the 8 position papers + "The Gift of Prophecy":
-  9 documents, 70 chunks, **0 citable**, so it never appears in a citation,
-  but it is shown wherever sources are enumerated. Rename is display-only, and
-  needs `sources.name`, `sources.slug` and both alias columns moved together
-  (Invariant 6: `alias_key` → `new wine`). Attended DB write, not done.
+  `bf6d9e28-1cfd-4431-975b-df2ca1b9cfdf`, `owned`/`shown`. 0 citable, so it
+  never appears in a citation but shows wherever sources are enumerated.
+  Rename needs `sources.name`, `sources.slug` and both alias columns moved
+  together (Invariant 6: `alias_key` → `new wine`). Attended DB write.
 - **11 ingested CLF documents contain an offering appeal**, one an usher
-  direction, one a dismissal. Auditing them for named-congregant content is
-  open.
+  direction, one a dismissal. Named-congregant audit still open.
 - **`bible_refs.py` hallucinated 2 of 625 references (~0.3%)** on real sermon
   text — extended by the 2026-08-29 clean audit, not re-measured.
 - **Live account-deletion verification** — blocked, needs a real disposable
   test account from Alex first (Session Routing hard rule).
-- Carried, not re-checked: staging source reads `"Vlad Savchuk (web
-  staging)"`; Bonnke URL suspect; `newwine_readonly_analysis` has no grant on
-  PII/user tables (deliberate).
+- Carried, not re-checked: staging source reads `"Vlad Savchuk (web staging)"`;
+  Bonnke URL suspect; `newwine_readonly_analysis` has no grant on PII/user
+  tables (deliberate).
 
 ---
 
 ## Next single item
 
-**None designated — Alex picks.** The inherited contradiction is resolved:
-`/corpus-inventory/export` **stays public** (Alex, 2026-08-31), so "gate it
-behind authentication" is retired, not deferred. That ruling now lives in
-CLAUDE.md's Landmines rather than only here — it kept being re-raised because
-this file is overwritten every session.
+**None designated — Alex picks.** The one thing this session leaves in an
+incomplete state is the unpushed commit: `main` is ahead 1 with a guard on the
+live answer path that has never seen real traffic.
 
-Open, unordered, none started: the auth follow-up passes (`audit`, `animate`,
-`polish`); the `next-themes` hydration mismatch; the DB source row rename and
-remaining Vercel/domain/hostname identifiers; the 301/318 re-ingest (cost
-estimate first); New Wine A2 (fresh ceiling); quote accuracy/relevance repair;
-privacy/ToS drafts (blocked on legal entity, jurisdiction, contact).
+Open, unordered: push + deploy the quotation guard and measure its live
+false-positive rate; Scripture fidelity (audit findings 2/3); reconcile with
+the parallel biblical-depth work once its output is reviewed; the auth
+follow-up passes (`audit`, `animate`, `polish`); the `next-themes` hydration
+mismatch; the DB source row rename and remaining Vercel/domain/hostname
+identifiers; the 301/318 re-ingest (cost estimate first); New Wine A2 (fresh
+ceiling); quote accuracy/relevance repair; privacy/ToS drafts.

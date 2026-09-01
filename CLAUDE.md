@@ -998,6 +998,38 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **`QUOTE_SELECTION_ENABLED=false` does NOT stop quotations reaching users —
+  the PROSE channel emits them, and 4 of 7 in a real sample were defective
+  (2026-08-31).** Settled #30 turned off the quote RAIL; it never governed the
+  writer typing quotation marks in ordinary prose. Measured on the five stored
+  baseline answers: one quotation fabricated outright under a LIVING minister's
+  name ("one who declares something not his own", 0 occurrences corpus-wide),
+  one crediting Wayne Grudem's words to the teacher who was quoting him, one
+  altering Derek Prince's wording and dropping his own hedge, one closing a
+  quotation a clause early so "the church that I pastor" became "the church".
+  `reference_verifier` grounds the NAME, never the WORDING; `quote_verifier`
+  governs the verified-quote COMPONENT only; `system_prompt.txt:158` already
+  forbids verbatim reproduction and is demonstrably not holding — **a prompt
+  line is not a control.** Now guarded deterministically by
+  `backend/app/services/prose_quotation_guard.py`, wired into `producer.py`'s
+  `_has_ungrounded()` (`6e60486`), but **not deployed**, and nested quotation
+  is deliberately out of scope (the words genuinely are in the chunk). Its
+  punctuation normalization is load-bearing, not cosmetic: corpus text uses
+  curly quotes, the writer emits straight ones, so removing the fold makes the
+  guard reject ACCURATE quotations and refuse correct answers.
+
+- **Scripture references are verified for EXISTENCE only — never for what the
+  verse says.** `reference_verifier.verify_verse_mention()` confirms a `verses`
+  row exists and stops there; nothing compares the answer's claim, or its
+  quoted wording, to the verse text. It also only ever sees references the
+  model DECLARES in `<reference_mentions>`, so Scripture quoted with no
+  reference is invisible to every guard (two such cases in five answers).
+  Answers quote Scripture from training memory by design
+  (`system_prompt.txt:160`), so quoted verses routinely do not match the WEB
+  text `study.py` serves on click-through — 5 of 5 in the sample. Do not read a
+  passing `verify_references` as evidence a verse says what the answer claims.
+  Both findings: `docs/audits/2026-08/scripture_and_quotation_fidelity_2026-08-31.md`.
+
 - **A blanket product-name sweep corrupts four things that look like the
   product name and are not — proven by doing it, 2026-08-31.** The
   Rhemata -> New Wine rename (`a6f1575`) is done; what survives is the rule
