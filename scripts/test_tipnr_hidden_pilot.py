@@ -10,6 +10,8 @@ import unittest
 from collections import Counter
 from pathlib import Path
 from unittest import mock
+from datetime import date
+import json
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,6 +34,12 @@ from preview_tipnr_hidden_pilot import (  # noqa: E402
 from preflight_tipnr_hidden_pilot import (  # noqa: E402
     PilotPreflightError,
     preflight_pilot,
+)
+from apply_tipnr_hidden_pilot import (  # noqa: E402
+    PilotApplyError,
+    PilotApprovalError,
+    apply_pilot,
+    validate_pilot_approval,
 )
 
 
@@ -273,6 +281,229 @@ class PilotPreflightTests(unittest.TestCase):
                 PilotPreflightError, "candidate_state_conflict"
             ):
                 self._run({"items": {first.document["id"]: item_state}})
+
+
+def _approval(packet, operation_date="2026-09-01"):
+    return {
+        "schema_version": "biblical_context_tipnr_hidden_pilot_approval.v1",
+        "approved_by": "Alex Whitley",
+        "operation_date": operation_date,
+        "source_slug": "stepbible-tipnr",
+        "packet_sha256": packet.packet_sha256,
+        "selection_checksum": packet.selection_checksum,
+        "item_count": 20,
+        "embedding_model": "text-embedding-3-small",
+        "embedding_dimensions": 1536,
+        "maximum_embedding_requests": 20,
+        "maximum_spend_usd": "0.01",
+        "embedding_requests_authorized": True,
+        "single_database_transaction_authorized": True,
+    }
+
+
+class PilotApplyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.packet = build_pilot_packet(ROOT, _artifact())
+
+    def test_approval_must_match_exact_packet_and_day(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "approval.json"
+            expected = _approval(self.packet)
+            path.write_text(json.dumps(expected), encoding="utf-8")
+            self.assertEqual(
+                validate_pilot_approval(path, self.packet, date(2026, 9, 1)),
+                expected,
+            )
+            for key, wrong in (
+                ("packet_sha256", "0" * 64),
+                ("item_count", 19),
+                ("embedding_dimensions", 2),
+                ("operation_date", "2026-08-31"),
+                ("maximum_spend_usd", "1.00"),
+                ("embedding_requests_authorized", False),
+            ):
+                mutated = dict(expected)
+                mutated[key] = wrong
+                path.write_text(json.dumps(mutated), encoding="utf-8")
+                with self.subTest(key=key), self.assertRaisesRegex(
+                    PilotApprovalError, "approval_scope_mismatch"
+                ):
+                    validate_pilot_approval(path, self.packet, date(2026, 9, 1))
+
+    def test_all_vectors_finish_before_write_connection(self) -> None:
+        events = []
+
+        def embed(text, *, model, dimensions):
+            entity = text.split("Entity ID: ", 1)[1].splitlines()[0]
+            events.append(f"embed:{entity}")
+            return [0.001] * dimensions
+
+        def connection_factory(mode):
+            events.append(f"connect:{mode}")
+            raise RuntimeError("write unavailable")
+
+        report = apply_pilot(
+            connection_factory,
+            embed,
+            self.packet,
+            _approval(self.packet),
+            lambda: {"candidate_state": "all_clean"},
+        )
+        self.assertEqual(events[:20], [f"embed:{item.entity_id}" for item in self.packet.items])
+        self.assertEqual(events[20], "connect:write")
+        self.assertEqual(report["reconciliation"], {
+            "attempted": 20, "stored": 0, "errored": 20, "skipped": 0,
+        })
+
+    def test_embedding_failure_opens_no_write_connection(self) -> None:
+        connections = []
+        calls = []
+
+        def embed(text, **kwargs):
+            calls.append(text)
+            if len(calls) == 20:
+                raise RuntimeError("request failed")
+            return [0.001] * 1536
+
+        with self.assertRaisesRegex(PilotApplyError, "embedding_failed"):
+            apply_pilot(
+                lambda mode: connections.append(mode),
+                embed,
+                self.packet,
+                _approval(self.packet),
+                lambda: {"candidate_state": "all_clean"},
+            )
+        self.assertEqual(len(calls), 20)
+        self.assertEqual(connections, [])
+
+    def test_all_complete_skips_without_embedding_or_write(self) -> None:
+        events = []
+        report = apply_pilot(
+            lambda mode: events.append(f"connect:{mode}"),
+            lambda *args, **kwargs: events.append("embed"),
+            self.packet,
+            _approval(self.packet),
+            lambda: {"candidate_state": "all_exact_complete"},
+        )
+        self.assertEqual(events, [])
+        self.assertEqual(report["reconciliation"], {
+            "attempted": 20, "stored": 0, "errored": 0, "skipped": 20,
+        })
+
+    def test_atomic_writer_commits_all_sixty_rows_once(self) -> None:
+        connection = _PilotWriteConnection(self.packet)
+        report = apply_pilot(
+            lambda mode: connection,
+            lambda text, **kwargs: [0.001] * 1536,
+            self.packet,
+            _approval(self.packet),
+            lambda: {"candidate_state": "all_clean"},
+        )
+        self.assertEqual(connection.commit_count, 1)
+        self.assertEqual(connection.rollback_count, 0)
+        self.assertEqual(report["reconciliation"], {
+            "attempted": 20, "stored": 20, "errored": 0, "skipped": 0,
+        })
+        self.assertEqual(len(connection.state), 20)
+        self.assertTrue(all(row["document"]["ingest_completed_at"] == "set" for row in connection.state.values()))
+
+
+class _PilotWriteCursor:
+    DOCUMENT_FIELDS = (
+        "id", "title", "original_title", "author", "source_name", "source_type",
+        "source_kind", "citation_mode", "source", "topic_tags", "bible_references",
+        "file_path", "is_copyrighted", "full_text", "source_id", "url",
+    )
+    POLICY_FIELDS = (
+        "chunk_id", "policy_class", "protected_topic_keys", "issue_key",
+        "viewpoint_key", "classifier_kind", "rule_version", "model",
+        "prompt_fingerprint", "reason_codes", "is_current",
+    )
+
+    def __init__(self, connection):
+        self.connection = connection
+        self.result = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def _by_chunk(self, chunk_id):
+        return next((row for row in self.connection.state.values() if row.get("chunk", {}).get("id") == str(chunk_id)), None)
+
+    def execute(self, sql, params=()):
+        if sql.strip().startswith("SET LOCAL"):
+            self.result = None
+        elif "phase8:source" in sql:
+            self.result = [dict(self.connection.packet.source)]
+        elif "phase8:alias" in sql:
+            self.result = [dict(self.connection.packet.alias)]
+        elif "phase8:document" in sql:
+            row = self.connection.state.get(str(params[0]), {})
+            self.result = row.get("document")
+        elif "phase8:chunk" in sql:
+            row = self.connection.state.get(str(params[1]), {})
+            self.result = row.get("chunk")
+        elif "phase8:policies" in sql:
+            row = self._by_chunk(params[0]) or {}
+            self.result = row.get("policies", [])
+        elif "phase8:propositions" in sql:
+            self.result = (0,)
+        elif "phase8:insert_document" in sql:
+            document = dict(zip(self.DOCUMENT_FIELDS, params))
+            document["ingest_completed_at"] = None
+            self.connection.state[str(document["id"])] = {"document": document}
+            self.result = None
+        elif "phase8:insert_chunk" in sql:
+            row = self.connection.state[str(params[1])]
+            row["chunk"] = {
+                "id": params[0], "document_id": params[1], "content": params[2],
+                "chunk_index": params[4], "bible_references": params[5],
+                "embedding_dimensions": 1536,
+            }
+            self.result = None
+        elif "phase8:insert_policy" in sql:
+            row = self._by_chunk(params[0])
+            policy_id = f"policy-{len([x for x in self.connection.state.values() if x.get('policies')]) + 1:02d}"
+            row["policies"] = [{"id": policy_id, **dict(zip(self.POLICY_FIELDS, params))}]
+            self.result = (policy_id,)
+        elif "phase8:stamp_complete" in sql:
+            for document_id in params[0]:
+                self.connection.state[str(document_id)]["document"]["ingest_completed_at"] = "set"
+            self.result = None
+        else:
+            raise AssertionError(f"unexpected SQL: {sql}")
+
+    def fetchone(self):
+        return self.result
+
+    def fetchall(self):
+        return self.result if isinstance(self.result, list) else ([] if self.result is None else [self.result])
+
+
+class _PilotWriteConnection:
+    def __init__(self, packet):
+        self.packet = packet
+        self.state = {}
+        self.autocommit = None
+        self.commit_count = 0
+        self.rollback_count = 0
+
+    def cursor(self):
+        return _PilotWriteCursor(self)
+
+    def commit(self):
+        self.commit_count += 1
+
+    def rollback(self):
+        self.rollback_count += 1
+        self.state.clear()
+
+    def close(self):
+        pass
 
 
 if __name__ == "__main__":

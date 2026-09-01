@@ -66,7 +66,9 @@ def _unique(cursor, sql: str, params: tuple, fields: tuple[str, ...]):
     return _mapping(rows[0], fields) if rows else None
 
 
-def inspect_pilot_item(cursor, item: PilotItem) -> CandidateState:
+def inspect_pilot_item(
+    cursor, item: PilotItem, *, allow_unstamped: bool = False
+) -> CandidateState:
     """Classify one candidate as absent or exact-complete; reject all partial state."""
 
     document = _unique(
@@ -119,7 +121,7 @@ def inspect_pilot_item(cursor, item: PilotItem) -> CandidateState:
     policy_id = policy.pop("id") if policy is not None else None
     if (
         document == expected_document
-        and completed is not None
+        and (completed is not None or allow_unstamped)
         and chunk == expected_chunk
         and policy == item.policy
         and propositions == 0
