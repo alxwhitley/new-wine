@@ -9,7 +9,9 @@ from __future__ import annotations
 import copy
 import ast
 import hashlib
+import io
 import json
+import socket
 import sys
 import tempfile
 import unittest
@@ -59,6 +61,10 @@ from preview_biblical_context_tooling import (  # noqa: E402
     build_fixture_preview,
     main as preview_main,
     write_new_preview,
+)
+from inventory_tipnr_context import (  # noqa: E402
+    build_tipnr_inventory,
+    main as inventory_main,
 )
 
 
@@ -544,6 +550,92 @@ class TipnrRecordOutcomeTests(unittest.TestCase):
         self.assertEqual((outcome.status, outcome.reason),
                          ("malformed", "row_shape_changed"))
         self.assertIsNone(outcome.projection)
+
+
+class TipnrInventoryTests(unittest.TestCase):
+    @staticmethod
+    def _artifact_text() -> str:
+        primary = "\t".join(
+            ("Name=H0001", "x", "x", "x", "x", "x", "x", "x", "x")
+        )
+        return "\n".join(
+            (
+                "$========== PERSON(s)",
+                primary,
+                "– Named\tignored\tH0001«H0001=א\tignored\tGen.1.1",
+                "– Total\tignored\tignored\tignored\tignored",
+                "@Ambiguity=excluded relationship prose",
+            )
+        )
+
+    def _build(self) -> dict[str, object]:
+        payload = self._artifact_text().encode("utf-8")
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        path = Path(directory) / "tipnr.txt"
+        path.write_bytes(payload)
+        with (
+            mock.patch("parse_tipnr_context.TIPNR_ARTIFACT_BYTES", len(payload)),
+            mock.patch(
+                "parse_tipnr_context.TIPNR_ARTIFACT_SHA256",
+                hashlib.sha256(payload).hexdigest(),
+            ),
+        ):
+            return build_tipnr_inventory(path)
+
+    def test_inventory_has_one_outcome_per_structural_record(self) -> None:
+        inventory = self._build()
+
+        self.assertEqual(inventory["structural_records"], 1)
+        self.assertEqual(inventory["entity_records"], 1)
+        self.assertEqual(inventory["outcome_counts"], {"eligible": 1})
+        self.assertEqual(sum(inventory["outcome_counts"].values()), 1)
+        self.assertIs(inventory["database_write_authorized"], False)
+        self.assertIs(inventory["external_model_call_authorized"], False)
+        self.assertEqual(inventory["rendering"]["embedding_request_count"], 1)
+        serialized = canonical_json_bytes(inventory).decode("utf-8")
+        self.assertNotIn("excluded relationship prose", serialized)
+        self.assertNotIn("ignored", serialized)
+
+    def test_inventory_is_byte_stable(self) -> None:
+        first = canonical_json_bytes(self._build())
+        second = canonical_json_bytes(self._build())
+
+        self.assertEqual(first, second)
+
+    def test_cli_executes_with_network_and_late_import_tripwires(self) -> None:
+        payload = self._artifact_text().encode("utf-8")
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        path = Path(directory) / "tipnr.txt"
+        path.write_bytes(payload)
+        real_import = __import__
+
+        def guarded_import(name, *args, **kwargs):
+            if name.split(".", 1)[0] in {
+                "anthropic",
+                "httpx",
+                "openai",
+                "psycopg2",
+                "requests",
+                "supabase",
+            }:
+                raise AssertionError(f"forbidden late import: {name}")
+            return real_import(name, *args, **kwargs)
+
+        with (
+            mock.patch("parse_tipnr_context.TIPNR_ARTIFACT_BYTES", len(payload)),
+            mock.patch(
+                "parse_tipnr_context.TIPNR_ARTIFACT_SHA256",
+                hashlib.sha256(payload).hexdigest(),
+            ),
+            mock.patch("builtins.__import__", side_effect=guarded_import),
+            mock.patch.object(socket, "socket", side_effect=AssertionError("network")),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            self.assertEqual(inventory_main(["--artifact", str(path)]), 0)
+
+        report = json.loads(stdout.getvalue())
+        self.assertIs(report["database_write_authorized"], False)
+        self.assertIs(report["external_model_call_authorized"], False)
 
 
 class OpenBibleParserTests(unittest.TestCase):
