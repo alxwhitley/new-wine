@@ -13,8 +13,8 @@ rechecked in this session, and the integration branch itself was not deployed.
 
 ## Current state
 
-**Biblical-depth Phases 0–8 are complete through an execution-ready but
-unexecuted hidden TIPNR pilot.** PR #3 contains the approved rights/provenance
+**Biblical-depth Phases 0–8 are complete through a verified hidden TIPNR
+production pilot.** PR #3 contains the approved rights/provenance
 manifests, canonical source-use policy, hidden TIPNR/OpenBible preview tooling,
 deterministic passage classification, migration 097, default-off
 routing/retrieval, the Phase 5 prompt/generation contract, and the dedicated
@@ -68,8 +68,30 @@ write only one atomic 60-row transaction: 20 documents, 20 chunks, and 20
 current `general_context` policies. It does not insert or update the existing
 source, alias, or `H0175`, and has no proposition write path. Fresh
 reconciliation requires all 20 exact-complete rows, zero propositions, and
-zero matches across 20 vector plus 20 FTS probes. Phase 8 ran no production
-preflight, model call, embedding request, database connection/write, or batch.
+zero matches across 20 vector plus 20 FTS probes.
+
+The first authorized apply attempt produced no durable report and committed no
+database rows; a fresh read-only check found all 20 candidates clean. Because
+the failed process did not preserve request counters, its exact embedding count
+is unknown and conservatively bounded at 0–20 under its separate USD `0.01`
+ceiling. Build commit `643c9f1` added structured request counters and immutable,
+content-addressed attempt evidence. An authorized rollback-only probe then
+found a live UUID/text completion-stamp mismatch; build commit `59dd15d` casts
+the document IDs to `uuid[]`. The corrected rollback probe staged all 60 rows,
+made zero model requests, rolled back, and left all 20 candidates clean. Its
+evidence hash is
+`e57857768c8a398dce480dac6332c53f24a5dd765b641d0313c8a2e45f6983fc`.
+
+Alex separately authorized a fresh retry. It completed exactly 20 additional
+`text-embedding-3-small` requests under USD `0.01`, validated all vectors, and
+committed the exact atomic 60-row transaction. Both the coupled verifier and a
+fresh independent read-only reconciliation passed at attempted `20`, stored
+`20`, errored `0`, skipped `0`, with zero propositions and zero matches across
+all 20 vector and 20 FTS probes. The sample hash remains exact, the verification
+payload hash is
+`d50aa50a7d6493412fe66470f9afeb9f38be194f9926462edae86fb50a86ab9e`,
+and the immutable final evidence file hash is
+`d4ddf85fa2e79f037f15faf2555cc2ea60024fbf3aed520d66a150aabe0a6df5`.
 
 The governing boundary remains unchanged:
 
@@ -87,14 +109,16 @@ The governing boundary remains unchanged:
 **Migration 097 remains applied and verified in production.** Its table, RLS,
 closed-set and metadata-coupling constraints, one-current partial unique index,
 append-only trigger, and privilege boundaries remain unchanged. The table now
-contains the one approved `general_context` proof row.
+contains 21 current approved `general_context` rows: the `H0175` proof plus the
+20-item Phase 8 pilot.
 
 **The feature remains inactive and the proof remains hidden.**
 `BIBLICAL_CONTEXT_ANSWER_ENABLED` still defaults to false, so production retains
 the existing blanket commentary exclusion and does not read migration 097 on
 the answer path. Protected-source and plural-viewpoint registries remain empty.
-No batch or proposition process ran, no visibility changed, no live answer was
-requested, and no deployment or feature enablement occurred.
+No proposition process ran, no visibility changed, no live answer was
+requested, and no deployment or feature enablement occurred. The successful
+pilot does not authorize ingestion of the remaining 3,938 eligible TIPNR items.
 
 The initial post-commit verifier exposed a permission mismatch: the dedicated
 analysis role can execute the security-invoker retrieval RPCs but cannot select
@@ -119,32 +143,36 @@ remain preserved and outside PR #3.
 
 ## Session outcome and measures
 
-- Original outcome: **completed** — the bounded balanced 20-item Phase 8 packet,
-  zero-effect preview, read-only preflight, same-day approval gate, atomic
-  writer, fresh reconciler, and deterministic sampling are execution-ready.
-- Acceptance: **passed** — 21/21 Phase 8 tests, 4/4 manifest contracts, 39/39
+- Original outcome: **completed** — the exact balanced 20-item Phase 8 pilot
+  committed atomically and passed both coupled and independent reconciliation;
+  the biblical-depth foundation has met its ingestion-ready benchmark.
+- Acceptance: **passed** — 24/24 Phase 8 tests, 4/4 manifest contracts, 39/39
   parser/inventory tests, all 61 Phase 3–5 classification/policy/routing/
-  generation tests, and 31/31 Phase 6 tests. Two preview runs were
-  byte-identical; all execution-path tests used strict fakes and made no live
-  connection or model call.
-- Unplanned investigations started: **0**.
+  generation tests, and 31/31 Phase 6 tests. The corrected rollback probe
+  staged and rolled back all 60 rows with a clean postflight. The authorized
+  retry completed exactly 20 requests, stored 20/20 items with zero errors or
+  skips, and both fresh reconciliations found zero propositions and 40/40
+  retrieval probes with zero matches.
+- Unplanned investigations started: **1** — the failed first-attempt evidence
+  gap and rollback-probe UUID mismatch were diagnosed only to close the active
+  pilot safely.
 - Findings promoted to Blocker: **0**.
-- Active critical-path item at close: **1** — attended same-day decision on the
-  exact Phase 8 packet.
-- Scope changes approved by Alex: repository-only Phase 8 design, packet,
-  preview, preflight, approval gate, atomic writer, reconciler, tests, and this
-  evidence-backed governing-text replacement. No Phase 8 model spend, database
-  access/write, batch, merge, deployment, registry assignment, visibility
-  change, live answer, or feature authority was added.
+- Active critical-path item at close: **0** — any larger TIPNR ingestion remains
+  Scheduled work rather than an active blocker.
+- Scope changes approved by Alex: the exact preflight, initial apply attempt,
+  failure-evidence hardening, rollback probes and UUID fix, fresh 20-request
+  retry, atomic 60-row production transaction, and fresh reconciliation. No
+  full-corpus batch, merge, deployment, registry assignment, doctrinal
+  assignment, visibility change, live answer, or feature authority was added.
 
 ---
 
 ## Next single item
 
-**Make an attended same-day execute-or-defer decision on the exact Phase 8
-packet.** Execution, if separately approved, is limited to the frozen 20-item
-selection, at most 20 embedding requests under USD `0.01`, and one atomic
-60-row transaction followed by fresh 20-item/40-probe reconciliation. Phase 8
-readiness is not execution authority. Visibility change, answer enablement,
-live answers, deployment, registry assignments, and PR #3 merge remain
-separate attended decisions.
+**Decide whether to scope a later ingestion packet for the remaining 3,938
+eligible TIPNR items.** Any such packet requires a fresh design, exact selection
+and cost ceiling, rollback and reconciliation contract, and separate attended
+approval. The verified pilot supplies no automatic continuation authority.
+Visibility change, answer enablement, live answers, deployment, registry
+assignments, doctrinal assignments, and PR #3 merge remain separate attended
+decisions.
