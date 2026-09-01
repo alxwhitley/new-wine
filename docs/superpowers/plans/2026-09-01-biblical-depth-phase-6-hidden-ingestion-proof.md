@@ -132,8 +132,10 @@ def stable_uuid(kind: str, identity: str) -> str:
 ```
 
 Select Aaron from `parse_tipnr_file()` only after matching the exact revision,
-record checksum, entity type, and ID. Render a stable factual text block in a
-fixed order. Compute `rendered_sha256` from its UTF-8 bytes. Derive document and
+record checksum, entity type, and ID. Do not recover or store the excluded
+English label; title the record `STEPBible TIPNR person H0175`. Render a stable
+factual text block in a fixed order. Compute `rendered_sha256` from its UTF-8
+bytes. Derive document and
 chunk IDs from the immutable identity string
 `stepbible-tipnr:<revision>:H0175:<record_sha256>:<rendered_sha256>`.
 

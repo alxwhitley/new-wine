@@ -142,7 +142,7 @@ the raw TIPNR file directly. It selects the record only when all of these match:
 The canonical renderer has a fixed field order and emits only:
 
 1. dataset title and pinned revision;
-2. entity label, ID, and type;
+2. entity ID and type;
 3. each approved language identifier and original-language form in parser
    order; and
 4. each approved OSIS reference in parser order.
@@ -166,9 +166,11 @@ immutable identity strings. The policy row may use a generated UUID because its
 unique current-row identity is the deterministic chunk ID plus `is_current`,
 but the apply report must capture its resulting ID.
 
-The single document has:
+The English label “Aaron” is used only to identify the chosen fixture in this
+design. It is not present in the Phase 2 canonical record and must not be
+recovered from an excluded raw field or stored. The single document has:
 
-- title derived from the canonical entity label and TIPNR dataset name;
+- title derived only from the TIPNR dataset name, entity type, and `H0175`;
 - `source_name='STEPBible TIPNR'`;
 - `source_type='reference'`;
 - `source_kind='biblical_context'`;
