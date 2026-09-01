@@ -7,8 +7,8 @@ here except as a dated snapshot from a specific live query; treat any count
 seen elsewhere as unverified.
 
 Last verified: 2026-09-01. **PLAN.md has zero active blockers.** `main` =
-`6e60486`, **ahead 1, NOT pushed**. This session was read-only analysis plus
-one repo-only backend build. No database writes, no deploy.
+`c937b6d`, **ahead 4, NOT pushed**. This session was frontend work plus
+committing a parallel Codex session's output. No database writes, no deploy.
 
 **Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines.
 
@@ -16,57 +16,72 @@ one repo-only backend build. No database writes, no deploy.
 
 ## Current state
 
-**Prose-channel quotation guard built and committed, NOT deployed
-(`6e60486`).** An audit of the five stored baseline answers found the answer
-writer emits verbatim teacher quotations in ordinary prose and nothing checked
-the WORDING — 7 quotations, **4 defective**: one fabricated outright under a
-living minister's name, one crediting Wayne Grudem's words to the teacher who
-was quoting him, one altering Derek Prince and stripping his hedge, one
-truncating Kolenda's "the church that I pastor" to "the church".
-`backend/app/services/prose_quotation_guard.py` is deterministic (no model —
-Settled #4), wired as a third arm in `producer.py`'s existing
-`_has_ungrounded()` so it inherits regenerate-once-then-refuse. 23 checks, 5
-mutation proofs. On the five real answers: 3 flags, all true positives, zero
-false positives. Audit:
-`docs/audits/2026-08/scripture_and_quotation_fidelity_2026-08-31.md`.
+**Four commits, none pushed.** `1db7793` frontend, `2067dd1` biblical-depth
+Phase 0+1 (Codex), `41f498d` biblical coverage baseline (Codex, earlier
+session), `c937b6d` ingestion TSV review dispositions. Pushing deploys all four
+Railway services — attended gate.
 
-**One design fact worth not rediscovering.** Punctuation normalization is
-load-bearing, not cosmetic — Prince's genuine "'60s … '70s" is stored with
-curly `‘` and written with straight `'`, so a raw substring check rejects an
-ACCURATE quotation and the guard would have refused correct answers.
+**Codex delivered Phase 0 and Phase 1 of the biblical-depth plan, NOT Phase 2.**
+The session began on the belief Phase 2 was done; it is not. Verified absent:
+`scripts/parse_{tyndale,tipnr,openbible}_context.py`,
+`test_biblical_context_parsers.py`, `scripts/fixtures/biblical_context/`. What
+landed: four manifests + registration packet (Alex approved the dispositions
+2026-09-01, recorded in it) and `backend/app/services/source_use_policy.py` as
+the canonical protected registry. Both suites re-run here, not read: exit 0 (4
+manifests, 0 failures) and exit 0 (16 tests). **Nothing imports the policy
+module on a serving path — no answer behavior changed.** Plan:
+`docs/superpowers/plans/2026-09-01-biblical-depth-source-policy.md`.
 
-**Deliberately NOT covered by that guard**, asserted as tests so it cannot be
-mistaken for coverage: nested quotation (Grudem-via-Kolenda passes, because
-the words genuinely are in the retrieved chunk), and Scripture entirely.
+**The packet's governing-record change is NOT applied.** It carries proposed
+replacement text for CLAUDE.md Settled #5 and the implicated ARCHITECTURE
+section. Phase 0's own exit condition requires Alex's explicit approval of that
+diff before any answer-path work starts. Unapproved and unapplied.
 
-**Scripture fidelity is unguarded and unchanged.**
-`reference_verifier.verify_verse_mention()` is an EXISTENCE check only. All 14
-verse references in the sample resolved and every attached claim was
-defensible — but 5 were rendered as direct quotations and none matched the WEB
-text `study.py` serves on click-through, and 2 Scripture quotations carried no
-reference at all (Matt 26:68, 1 Cor 14:31), which puts them outside every
-guard since the verifier only sees what the model DECLARES.
+**Four Alex-directed frontend changes shipped (`1db7793`), all unverified in a
+browser** — typecheck and lint only.
 
-**A parallel codex session ran in THIS working tree** on biblical coverage —
-`scripts/biblical_coverage_*` + its audit doc are uncommitted output **not
-reviewed by this session**. It did not touch `producer.py`. Sharing one
-worktree is why this session committed to `main` rather than branching.
+1. **Chat input has no focus ring, deliberately.** Reverses the fix for
+   finding #8 of `docs/audits/2026-08/b6_accessibility_pass_2026-08-28.md`.
+   Alex was told it re-opens that WCAG 2.4.7 gap and chose it. The textarea
+   keeps `focus:outline-none`, so the product's most-used input has zero
+   visible focus indicator.
+2. **Answer `h2`/`h3` are pure white** for hierarchy; inline `strong` stays
+   `text-foreground` — two tiers, not three. `--ring` is still shadcn's blue
+   (`210 74.8% 49.8%`), the only blue token in a warm palette, on 40 sites.
+3. **STEPBible CC BY notice removed from four inline UI sites.** Still served
+   at `app/sources/page.tsx:72` — now its ONLY location. It must survive any
+   future edit of that page or the product falls out of CC BY compliance.
+4. **Precept Austin word studies now render in the inline Study Panel**,
+   reversing SP2's deliberate lexicon-only decision on Alex's call. "From the
+   Library" stays out; the standing PA exclusions (answer retrieval, quote
+   pipeline, paraphrase) are untouched. `/study/excerpt` is auth-gated, so
+   guests get an honest empty. No PA credit displays — the endpoint returns
+   `{"content"}` only, matching `/study`.
 
-**`scripts/sp1_answer_harness.py` does not exercise the real answer path.** It
-reimplements generation and never imports `producer.py`, bypassing the
-position-paper fence, stored-position evidence, the single-teacher lock and
-the single-author attribution contract. Any before/after quality comparison
-run through it measures a proxy — relevant to judging the depth work.
+**The `/study` word-search regression is live and unfixed.** Searching a word
+fetches its PA article into `wordStudyContent` (`app/study/page.tsx:954`) and
+never renders it — `WordStudyPanel` shows lexicon only. Dropped in `40cdb4c`;
+the orphaned fetch says accidental. Alex chose the panel over it. That page's
+`InlineWordPanel` (tap a token in a verse) does still show the excerpt.
 
-**Auth flow rebuilt and live (`df2d5f9`, `5473265`).** Do not revert: beta
-access is per-device `localStorage` with trimmed, case-insensitive matching
-(Alex accepted 2026-08-31), and `hooks/useAuthGate.ts` is the single owner of
-auth-modal state — do not re-copy it into a page. Pre-existing, not ours: a
-hydration mismatch from `next-themes`' `forcedTheme="dark"`.
+**Prose-channel quotation guard is live and unmeasured.** `6e60486` is pushed,
+so it runs on the real answer path via `producer.py`'s `_has_ungrounded()`. Its
+false-positive rate has never been measured on live traffic; the 400-char
+window and surname matching were tuned on five answers. Its punctuation
+normalization is load-bearing — corpus text uses curly quotes, the writer emits
+straight ones, so removing the fold makes it refuse ACCURATE answers.
+
+**Scripture fidelity is unguarded.** `verify_verse_mention()` is an EXISTENCE
+check only; nothing compares a claim or quoted wording to the verse text, and
+the verifier only sees references the model DECLARES, so unreferenced
+Scripture quotation is invisible to every guard.
+
+**Auth flow (`df2d5f9`, `5473265`) — do not revert.** Beta access is per-device
+`localStorage`, trimmed and case-insensitive; `hooks/useAuthGate.ts` is the sole
+owner of auth-modal state. Pre-existing: a `next-themes` hydration mismatch.
 
 **Every push to `main` deploys production.** All four Railway services rebuild
-(`watchPatterns: []`, so even docs-only commits redeploy). Treat backend
-pushes as attended gates — including this session's unpushed commit.
+(`watchPatterns: []`), so even docs-only commits redeploy.
 
 **Two traps.** `/async-chat/result` is SSE with JSON spanning multiple `data:`
 lines — parse by EVENT, or an answer reads as zero-citation, exactly like an
@@ -74,81 +89,67 @@ attribution-guard failure. Railway deployment meta populates progressively;
 mid-`BUILDING` `rootDirectory`/`configFile` read null.
 
 **Decided, do not re-raise:** guest-speaker attribution stays as-is;
-`/corpus-inventory/export` stays public — never extend it to chunk text,
-excerpts, or propositions. Privacy/ToS DEFERRED pending legal entity,
-jurisdiction, contact; `POLICY_COPY` in `consent.py` is duplicated in
-`consent-gate.tsx` and they move together. Savchuk docs with `author = NULL`
-correctly fall back to the source name (HEALTHY); `Jamieson, Fausset & Brown`
-is a genuine joint work.
+`/corpus-inventory/export` stays public. Privacy/ToS DEFERRED pending legal
+entity, jurisdiction, contact; `POLICY_COPY` in `consent.py` is duplicated in
+`consent-gate.tsx` and they move together.
 
 **Quote rail still off (`QUOTE_SELECTION_ENABLED=false`).** CLF's 63 sermons
 are auto-transcribed audio under `sermon_transcript` with a confirmed
 mistranscription and nothing gates on transcript status — **before the flag
 flips back on, CLF needs quoting exclusion or audio confirmation.** 15 further
-CLF recordings are `held_permanent` for content shape + pastoral privacy, not
-runtime — no trimming step may be built to salvage them.
+CLF recordings are `held_permanent` for content shape + pastoral privacy.
 
 **Search analytics live; B7 done.** A degraded outcome stamps
 `answer_jobs.analytics_outcome` (`scripts/analytics_health_report.py`), but
-that marker has never fired. Five residuals unverified. **New Wine A2 is NOT
-ingestion-ready** — held by Alex, no live-call budget without a fresh ceiling.
+that marker has never fired. **New Wine A2 is NOT ingestion-ready** — held by
+Alex, no live-call budget without a fresh ceiling.
 
 **Still on the old name deliberately:** applied migrations; this filename; the
-DB source row + the two code sites naming it; `rhemata_tracker.xlsx`; the
-Vercel project; `rhemata.app` (404 — redirect vs retire undecided); the API
-hostname `rhemata-production.up.railway.app` (frontend API base URL must move
-in lockstep); "manna"/"rhema" in corpus.
+DB source row and the two code sites naming it; `rhemata_tracker.xlsx`; the
+Vercel project; `rhemata.app` (404); the API hostname
+`rhemata-production.up.railway.app` (frontend API base URL moves in lockstep);
+"manna"/"rhema" in corpus. Full list: docs/roadmap.md Triggered.
 
 ---
 
 ## Findings surfaced, not yet acted on
 
-- **The prose-channel guard has never run on live traffic.** Its real
-  false-positive rate is unmeasured, and the 400-char attribution window and
-  surname matching are tuned from five answers. Deploying it alone (before or
-  after the biblical-depth work) is the clean way to read that number.
-- **Scripture claim fidelity and unreferenced Scripture quotation** — audit
-  findings 2 and 3, both unguarded. Exposure grows as scripture density rises.
+- **The biblical-depth workstream has no roadmap classification.** It now has
+  committed code but no entry in `docs/roadmap.md`. Classification is
+  chat-originated per the Project Knowledge Read Contract — Alex's call, not
+  the terminal's.
+- **Coverage baseline (`41f498d`):** of 48 retrieval questions, 14 strong, 19
+  thin, 2 empty, 13 misretrieved; weakest in OT passage interpretation,
+  biblical context, whole-Bible synthesis. More material alone will not fix
+  it — routing and source concentration shape the answer.
+- **`scripts/sp1_answer_harness.py` does not exercise the real answer path.**
+  It reimplements generation and never imports `producer.py`. Any before/after
+  comparison run through it measures a proxy — relevant to judging the depth
+  work.
 - **A served citation carried a dangling `chunk_id`** —
   `0b9d1930-7103-4520-8e37-e382dc7b3227` matched zero of 186,944 `chunks` rows
   while its document resolved normally. Needs one check of how `producer.py`
   populates it.
-- **The 301 missing local files and the 318 caption-duplication set are one
-  decision, not two** — heavy overlap. One re-ingest fixes both, costs real
-  money, needs a cost estimate. Parked; deferred by Alex 2026-08-29.
-- **`sources/` must never go in this repo** — the remote is PUBLIC. Committing
-  it would publish magazine PDFs, Precept Austin, Prince scrapes and living
-  ministers' transcripts, irreversibly inverting the license gate, safe_mode,
-  hidden staging and the PA lockout. **Same rule keeps the 60 untracked
-  `new_wine_issue_02_1973_review_*` dirs out of git.** Backup is an iCloud copy
-  (2026-08-30) — sync, not versioned.
-- **The house source row is still named "Rhemata"** —
-  `bf6d9e28-1cfd-4431-975b-df2ca1b9cfdf`, `owned`/`shown`. 0 citable, so it
-  never appears in a citation but shows wherever sources are enumerated.
-  Rename needs `sources.name`, `sources.slug` and both alias columns moved
-  together (Invariant 6: `alias_key` → `new wine`). Attended DB write.
-- **11 ingested CLF documents contain an offering appeal**, one an usher
+- **`sources/` must never go in this repo** — the remote is PUBLIC. Same rule
+  keeps the 60 untracked `new_wine_issue_02_1973_review_*` dirs out of git;
+  they were deliberately excluded from this session's commits, as were
+  `reference_grounding_review/` and `tasks/` (local scratch).
+- **The house source row is still named "Rhemata"** (`bf6d9e28-…`) — rename
+  moves `name`, `slug` and both alias columns together (Invariant 6). Attended.
+- **11 ingested CLF documents carry an offering appeal**, one an usher
   direction, one a dismissal. Named-congregant audit still open.
-- **`bible_refs.py` hallucinated 2 of 625 references (~0.3%)** on real sermon
-  text — extended by the 2026-08-29 clean audit, not re-measured.
-- **Live account-deletion verification** — blocked, needs a real disposable
-  test account from Alex first (Session Routing hard rule).
-- Carried, not re-checked: staging source reads `"Vlad Savchuk (web staging)"`;
-  Bonnke URL suspect; `newwine_readonly_analysis` has no grant on PII/user
-  tables (deliberate).
 
 ---
 
 ## Next single item
 
-**None designated — Alex picks.** The one thing this session leaves in an
-incomplete state is the unpushed commit: `main` is ahead 1 with a guard on the
-live answer path that has never seen real traffic.
+**None designated — Alex picks.** The session leaves four unpushed commits;
+pushing is a production deploy of all four services.
 
-Open, unordered: push + deploy the quotation guard and measure its live
-false-positive rate; Scripture fidelity (audit findings 2/3); reconcile with
-the parallel biblical-depth work once its output is reviewed; the auth
-follow-up passes (`audit`, `animate`, `polish`); the `next-themes` hydration
-mismatch; the DB source row rename and remaining Vercel/domain/hostname
-identifiers; the 301/318 re-ingest (cost estimate first); New Wine A2 (fresh
-ceiling); quote accuracy/relevance repair; privacy/ToS drafts.
+Open, unordered: push + deploy, then measure the quotation guard's live
+false-positive rate; Codex resuming biblical-depth Phase 2 (parsers); Alex
+ruling on the packet's governing-record diff; the `/study` word-search
+regression; browser verification of this session's four UI changes; Scripture
+fidelity; the dangling `chunk_id`; the DB source row rename; the 301/318
+re-ingest (cost estimate first); New Wine A2 (fresh ceiling); quote
+accuracy/relevance repair; privacy/ToS drafts.
