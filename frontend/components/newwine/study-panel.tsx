@@ -19,6 +19,9 @@ import { InterlinearBlocks } from "@/components/newwine/interlinear-blocks";
 import { useInterlinear } from "@/hooks/useInterlinear";
 import { WordDefinitionCard, type WordDefinition } from "@/components/newwine/word-definition-card";
 import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
+import { useWordStudyExcerpt } from "@/hooks/useWordStudyExcerpt";
+import { extractTeaser } from "@/lib/word-study-excerpt";
+import ReactMarkdown from "react-markdown";
 import { TeacherCard } from "@/components/newwine/teacher-card";
 
 // ── Verse text fetch ─────────────────────────────────────────────────────────
@@ -89,11 +92,29 @@ function useVerseText(ref: StudyReference | null): {
 
 // ── Word study view (SP2 Phase 8) ───────────────────────────────────────────
 // The panel's one back-button surface — reached only by tapping a word in the
-// Interlinear row. Lexicon-only (WordDefinitionCard), unlike the standalone
-// page's InlineWordPanel: no Precept Austin excerpt, no "From the Library"
-// corpus section, by design.
+// Interlinear row.
+//
+// SP2 built this lexicon-only, deliberately excluding the Precept Austin
+// excerpt that the standalone page's InlineWordPanel shows. Alex reversed that
+// on 2026-09-01: the excerpt now renders here too. What is NOT reversed — the
+// "From the Library" corpus section stays out of the panel, and the standing
+// Precept Austin exclusions (answer retrieval, quote pipeline, paraphrase
+// generation) are untouched by this. Study Mode remains the one searchable
+// surface for this material.
+//
+// Expansion is inline, matching CommentaryAccordionRow's decided pattern (no
+// screen change, no second Back link) rather than the standalone page's Sheet,
+// which would nest a sheet inside the mobile panel's own sheet.
 
-function WordStudyView({ definition, onBack }: { definition: WordDefinition | null; onBack: () => void }) {
+function WordStudyView({
+  definition,
+  accessToken,
+  onBack,
+}: {
+  definition: WordDefinition | null;
+  accessToken?: string | null;
+  onBack: () => void;
+}) {
   // SP2 Phase 9 (Fix 3, entry): this view fully replaces the row view's DOM
   // subtree on mount, so the tapped token's focus is gone by the time this
   // renders — land focus on Back, the one actionable element at the top of
@@ -115,9 +136,92 @@ function WordStudyView({ definition, onBack }: { definition: WordDefinition | nu
       <div className="mt-4">
         <WordDefinitionCard definition={definition} />
       </div>
-      <p className="text-xs text-muted-foreground mt-6">
-        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
+      <WordStudyExcerptSection
+        strongs={definition?.strongs ?? null}
+        accessToken={accessToken}
+      />
+    </div>
+  );
+}
+
+// Markdown map kept local and deliberately narrow: this renders third-party
+// word-study prose, so headings are stepped down to the panel's own scale
+// rather than inheriting document-level sizes.
+const excerptMarkdown = {
+  h1: ({ children }: { children?: React.ReactNode }) => (
+    <p className="mt-4 mb-1.5 text-sm font-semibold text-foreground">{children}</p>
+  ),
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <p className="mt-4 mb-1.5 text-sm font-semibold text-foreground">{children}</p>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <p className="mt-3 mb-1.5 text-sm font-semibold text-foreground">{children}</p>
+  ),
+  p: ({ children }: { children?: React.ReactNode }) => (
+    <p className="mb-3 text-sm leading-relaxed text-foreground">{children}</p>
+  ),
+  ul: ({ children }: { children?: React.ReactNode }) => (
+    <ul className="mb-3 ml-4 list-disc space-y-1 text-sm leading-relaxed text-foreground">{children}</ul>
+  ),
+  ol: ({ children }: { children?: React.ReactNode }) => (
+    <ol className="mb-3 ml-4 list-decimal space-y-1 text-sm leading-relaxed text-foreground">{children}</ol>
+  ),
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <blockquote className="mb-3 border-l-2 border-border pl-3 text-sm italic text-muted-foreground">{children}</blockquote>
+  ),
+};
+
+function WordStudyExcerptSection({
+  strongs,
+  accessToken,
+}: {
+  strongs: string | null;
+  accessToken?: string | null;
+}) {
+  const { content, loading } = useWordStudyExcerpt(strongs, accessToken ?? null);
+  const [expanded, setExpanded] = useState(false);
+
+  // Collapse when the word changes, so an expanded article never carries over
+  // to a different Strong's number.
+  const [resolvedStrongs, setResolvedStrongs] = useState(strongs);
+  if (strongs !== resolvedStrongs) {
+    setResolvedStrongs(strongs);
+    setExpanded(false);
+  }
+
+  if (loading) {
+    return (
+      <div className="mt-6 border-t border-border pt-4">
+        <div className="space-y-2 animate-pulse">
+          <div className="h-3 w-1/3 rounded bg-border" />
+          <div className="h-3 w-full rounded bg-border" />
+          <div className="h-3 w-4/5 rounded bg-border" />
+        </div>
+      </div>
+    );
+  }
+
+  // Honest empty: no excerpt for this word, or a guest with no token for the
+  // auth-gated endpoint. Render nothing rather than an error.
+  if (!content) return null;
+
+  return (
+    <div className="mt-6 border-t border-border pt-4">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Word Study
       </p>
+      {expanded ? (
+        <ReactMarkdown components={excerptMarkdown}>{content}</ReactMarkdown>
+      ) : (
+        <p className="text-sm leading-relaxed text-foreground">{extractTeaser(content)}</p>
+      )}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="mt-2 text-sm text-primary underline-offset-4 hover:underline"
+      >
+        {expanded ? "Show less" : "Full word study"}
+      </button>
     </div>
   );
 }
@@ -264,7 +368,7 @@ function PanelBody({
             region, so reaching max-scroll is what clears the indicator,
             not just a shorter box. */}
         <div className="flex-1 overflow-y-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <WordStudyView definition={wordDefinition} onBack={handleBackFromWordStudy} />
+          <WordStudyView definition={wordDefinition} accessToken={accessToken} onBack={handleBackFromWordStudy} />
         </div>
       </div>
     );

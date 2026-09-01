@@ -22,6 +22,7 @@ import { InterlinearBlocks, type WordToken } from "@/components/newwine/interlin
 import { useInterlinear } from "@/hooks/useInterlinear";
 import type { WordDefinition } from "@/components/newwine/word-definition-card";
 import { useLexiconDefinition } from "@/hooks/useLexiconDefinition";
+import { extractTeaser } from "@/lib/word-study-excerpt";
 import { useCommentarySearch, type CommentaryResult } from "@/hooks/useCommentarySearch";
 import { formatCommentaryContent } from "@/lib/format-commentary-content";
 import { BOOK_MAP, ABBREV_TO_NAME } from "@/lib/generated/book-maps";
@@ -187,21 +188,6 @@ const EXCERPT_COMPONENTS: React.ComponentProps<typeof ReactMarkdown>["components
   blockquote: ({ children }) => <blockquote className="border-l-2 border-border pl-3 text-sm text-muted-foreground italic mb-3">{children}</blockquote>,
 };
 
-function extractTeaser(content: string): string {
-  const plain = content
-    .split("\n")
-    .filter((line) => !line.trimStart().startsWith("#"))
-    .join(" ")
-    .replace(/\*\*(.+?)\*\*/g, "$1")
-    .replace(/\*(.+?)\*/g, "$1")
-    .replace(/_(.+?)_/g, "$1")
-    .replace(/`(.+?)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-  const sentences = plain.match(/[^.!?]+[.!?]+/g) ?? [];
-  return sentences.slice(0, 2).join(" ").trim();
-}
-
 interface ScriptureVerse { reference: string; text: string; }
 
 function WordStudyPanel({
@@ -275,9 +261,6 @@ function WordStudyPanel({
           </div>
         )}
       </div>
-      <p className="text-xs text-muted-foreground mt-6">
-        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
-      </p>
     </div>
   );
 }
@@ -536,9 +519,6 @@ function InlineWordPanel({
           ))}
         </div>
       )}
-      <p className="text-xs text-muted-foreground mt-6">
-        Data created by www.STEPBible.org based on work at Tyndale House Cambridge (CC BY 4.0)
-      </p>
     </div>
   );
 }

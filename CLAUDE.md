@@ -1002,6 +1002,29 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **Three frontend states look like bugs and are Alex's explicit 2026-09-01
+  decisions (`1db7793`).** (1) **The chat input has no focus ring on purpose.**
+  This deliberately reverses the fix for finding #8 of
+  `docs/audits/2026-08/b6_accessibility_pass_2026-08-28.md`; Alex was told it
+  re-opens that WCAG 2.4.7 gap and chose it. The textarea still carries
+  `focus:outline-none`, so the product's most-used input has zero visible focus
+  indicator — a future a11y pass will read this as the exact defect that audit
+  already logged. Do not re-add it without asking. (2) **The STEPBible CC BY
+  notice was removed from all four inline UI sites and now exists in exactly
+  one place, `app/sources/page.tsx:72`.** CC BY permits attribution "in any
+  reasonable manner," so a credits page satisfies it — but that line is now the
+  product's only compliance artifact for the interlinear/lexicon data. An edit
+  to that page that drops it puts New Wine out of license compliance, and no
+  test covers it. (3) **Precept Austin word-study excerpts now render in the
+  inline Study Panel**, reversing SP2's explicit lexicon-only decision and its
+  three verification tasks. Unchanged and not weakened by it: "From the
+  Library" stays out of the panel, and PA's exclusions from answer retrieval,
+  the quote pipeline, and paraphrase generation all still stand — Study Mode
+  was always PA's intended searchable surface. **The standalone `/study` word
+  SEARCH path is a separate, still-open regression** — `40cdb4c` left
+  `wordStudyContent` fetched and never rendered (`app/study/page.tsx:954`);
+  that one is accidental, not a decision.
+
 - **`QUOTE_SELECTION_ENABLED=false` does NOT stop quotations reaching users —
   the PROSE channel emits them, and 4 of 7 in a real sample were defective
   (2026-08-31).** Settled #30 turned off the quote RAIL; it never governed the
