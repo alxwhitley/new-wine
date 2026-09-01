@@ -313,6 +313,9 @@ class OpenBibleParserTests(unittest.TestCase):
         self.assertEqual(metadata["selected_place_ids"], ["aea17b7", "ab9a5ec"])
 
     def test_single_place_projects_only_approved_fields(self) -> None:
+        self.assertNotIn(
+            "modern_id", self.values[0]["modern_associations"]["m39ac0b"]
+        )
         record = parse_openbible_place(
             self.values[0], artifact_revision=self.REVISION
         )
