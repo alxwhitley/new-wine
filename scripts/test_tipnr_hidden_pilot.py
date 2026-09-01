@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -42,6 +43,7 @@ from apply_tipnr_hidden_pilot import (  # noqa: E402
     apply_pilot,
     validate_pilot_approval,
 )
+import apply_tipnr_hidden_pilot as pilot_apply  # noqa: E402
 from reconcile_tipnr_hidden_pilot import (  # noqa: E402
     PilotReconciliationError,
     build_sample_report,
@@ -370,26 +372,39 @@ class PilotApplyTests(unittest.TestCase):
             "attempted": 20, "stored": 0, "errored": 20, "skipped": 0,
         })
 
-    def test_embedding_failure_opens_no_write_connection(self) -> None:
-        connections = []
-        calls = []
+    def test_embedding_failure_reports_exact_progress_and_opens_no_write_connection(self) -> None:
+        for fail_at in (1, 20):
+            with self.subTest(fail_at=fail_at):
+                connections = []
+                calls = []
 
-        def embed(text, **kwargs):
-            calls.append(text)
-            if len(calls) == 20:
-                raise RuntimeError("request failed")
-            return [0.001] * 1536
+                def embed(text, **kwargs):
+                    calls.append(text)
+                    if len(calls) == fail_at:
+                        raise RuntimeError("request failed")
+                    return [0.001] * 1536
 
-        with self.assertRaisesRegex(PilotApplyError, "embedding_failed"):
-            apply_pilot(
-                lambda mode: connections.append(mode),
-                embed,
-                self.packet,
-                _approval(self.packet),
-                lambda: {"candidate_state": "all_clean"},
-            )
-        self.assertEqual(len(calls), 20)
-        self.assertEqual(connections, [])
+                report = apply_pilot(
+                    lambda mode: connections.append(mode),
+                    embed,
+                    self.packet,
+                    _approval(self.packet),
+                    lambda: {"candidate_state": "all_clean"},
+                )
+                self.assertEqual(report["status"], "failed")
+                self.assertEqual(report["reason"], "embedding_failed")
+                self.assertEqual(report["embedding"], {
+                    "requests_attempted": fail_at,
+                    "requests_completed": fail_at - 1,
+                    "requests_failed": 1,
+                    "model": "text-embedding-3-small",
+                    "dimensions": 1536,
+                    "maximum_spend_usd": "0.01",
+                })
+                self.assertEqual(report["reconciliation"], {
+                    "attempted": 20, "stored": 0, "errored": 20, "skipped": 0,
+                })
+                self.assertEqual(connections, [])
 
     def test_all_complete_skips_without_embedding_or_write(self) -> None:
         events = []
@@ -436,6 +451,70 @@ class PilotApplyTests(unittest.TestCase):
         self.assertEqual(final["apply"], apply_report)
         self.assertIsNone(final["verification"])
         self.assertEqual(final["verification_error"]["kind"], "RuntimeError")
+
+    def test_attempt_evidence_is_content_addressed_and_never_overwritten(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT / "local") as directory:
+            evidence_dir = Path(directory)
+            first_payload = b'{"status":"failed"}\n'
+            first = pilot_apply.write_pilot_attempt_evidence(
+                evidence_dir, first_payload
+            )
+            repeated = pilot_apply.write_pilot_attempt_evidence(
+                evidence_dir, first_payload
+            )
+            second = pilot_apply.write_pilot_attempt_evidence(
+                evidence_dir, b'{"status":"verified"}\n'
+            )
+
+            self.assertEqual(first, repeated)
+            self.assertEqual(
+                first.name,
+                "tipnr_hidden_pilot_attempt_"
+                "7fd0d3d434f0a0935c3b41f2e3a1f373bb10ee85dc2178c4e8c47e2f2e590ec6.json",
+            )
+            self.assertEqual(first.read_bytes(), first_payload)
+            self.assertNotEqual(first, second)
+            self.assertEqual(stat.S_IMODE(first.stat().st_mode), 0o600)
+
+    def test_finalize_persists_failed_attempt_before_returning(self) -> None:
+        apply_report = {
+            "status": "failed",
+            "reason": "write_connection_failed",
+            "embedding": {
+                "requests_attempted": 20,
+                "requests_completed": 20,
+                "requests_failed": 0,
+                "model": "text-embedding-3-small",
+                "dimensions": 1536,
+                "maximum_spend_usd": "0.01",
+            },
+            "reconciliation": {
+                "attempted": 20, "stored": 0, "errored": 20, "skipped": 0,
+            },
+        }
+
+        def failed_verifier():
+            raise RuntimeError("candidate_not_complete")
+
+        with tempfile.TemporaryDirectory(dir=ROOT / "local") as directory:
+            evidence_dir = Path(directory)
+            final, payload = (
+                pilot_apply.finalize_and_persist_pilot_apply(
+                    apply_report, failed_verifier, evidence_dir
+                )
+            )
+            evidence_paths = list(
+                evidence_dir.glob("tipnr_hidden_pilot_attempt_*.json")
+            )
+
+            self.assertEqual(
+                final["status"], "commit_outcome_unknown_reconciliation_failed"
+            )
+            self.assertEqual(final["apply"], apply_report)
+            self.assertEqual(len(evidence_paths), 1)
+            self.assertEqual(evidence_paths[0].read_bytes(), payload)
+            self.assertEqual(json.loads(payload), final)
+            self.assertEqual(stat.S_IMODE(evidence_paths[0].stat().st_mode), 0o600)
 
 
 class _PilotWriteCursor:

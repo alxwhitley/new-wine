@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -31,6 +32,15 @@ class PilotApprovalError(ValueError):
 
 class PilotApplyError(RuntimeError):
     """The vector or atomic write boundary failed."""
+
+
+def write_pilot_attempt_evidence(directory: Path, payload: bytes) -> Path:
+    """Persist one immutable report under a content-addressed local filename."""
+
+    digest = hashlib.sha256(payload).hexdigest()
+    path = directory / f"tipnr_hidden_pilot_attempt_{digest}.json"
+    write_new_preview(path, payload)
+    return path
 
 
 def _expected_approval(packet: PilotPacket, today: date) -> dict[str, object]:
@@ -211,12 +221,27 @@ def apply_pilot(
         raise PilotApplyError("preflight_not_clean")
 
     vectors: list[list[float]] = []
-    for item in packet.items:
+    for request_number, item in enumerate(packet.items, start=1):
         try:
             raw = embed_fn(item.text, model=EMBEDDING_MODEL, dimensions=EMBEDDING_DIMENSIONS)
+            vectors.append(_validate_vector(raw))
         except Exception as exc:
-            raise PilotApplyError("embedding_failed") from exc
-        vectors.append(_validate_vector(raw))
+            reason = "embedding_invalid" if isinstance(exc, PilotApplyError) else "embedding_failed"
+            return {
+                "status": "failed",
+                "reason": reason,
+                "embedding": {
+                    "requests_attempted": request_number,
+                    "requests_completed": len(vectors),
+                    "requests_failed": 1,
+                    "model": EMBEDDING_MODEL,
+                    "dimensions": EMBEDDING_DIMENSIONS,
+                    "maximum_spend_usd": packet.maximum_spend_usd,
+                },
+                "reconciliation": {
+                    "attempted": 20, "stored": 0, "errored": 20, "skipped": 0,
+                },
+            }
 
     try:
         connection = connection_factory("write")
@@ -282,6 +307,19 @@ def finalize_pilot_apply(
     }
 
 
+def finalize_and_persist_pilot_apply(
+    apply_report: Mapping[str, object],
+    reconcile_fn: Callable[[], Mapping[str, object]],
+    evidence_directory: Path,
+) -> tuple[dict[str, object], bytes]:
+    """Finalize one attempt and persist its exact report before returning."""
+
+    final_report = finalize_pilot_apply(apply_report, reconcile_fn)
+    payload = canonical_json_bytes(final_report)
+    write_pilot_attempt_evidence(evidence_directory, payload)
+    return final_report, payload
+
+
 def _load_apply_dependencies():
     sys.path.insert(0, str(ROOT / "backend"))
     from dotenv import load_dotenv
@@ -324,14 +362,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         connection_factory, embed_fn, packet, approval, lambda: preflight
     )
     from reconcile_tipnr_hidden_pilot import reconcile_pilot
-    final_report = finalize_pilot_apply(
+    evidence_directory = ROOT / "local" / "2026-09"
+    final_report, payload = finalize_and_persist_pilot_apply(
         apply_report,
         lambda: reconcile_pilot(identity_factory, retrieval_factory, packet),
+        evidence_directory,
     )
-    payload = canonical_json_bytes(final_report)
     if final_report["status"] == "verified":
         write_new_preview(
-            ROOT / "local" / "2026-09" / "tipnr_hidden_pilot_final.json",
+            evidence_directory / "tipnr_hidden_pilot_final.json",
             payload,
         )
     sys.stdout.buffer.write(payload)
