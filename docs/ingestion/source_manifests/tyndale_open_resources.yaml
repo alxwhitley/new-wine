@@ -1,0 +1,97 @@
+schema_version: 1
+dataset_id: tyndale_open_resources
+official_name: Tyndale Open Resources
+official_url: https://tyndaleopenresources.com/
+rights_holder: Tyndale House Publishers
+reviewed_at: "2026-09-01"
+
+license:
+  spdx: CC-BY-SA-4.0
+  url: https://creativecommons.org/licenses/by-sa/4.0/legalcode.en
+  attribution_required: true
+  share_alike: true
+  modification_notice_required: true
+  reviewed_notice: Copyright 2022–2023 Tyndale House Publishers; licensed CC BY-SA 4.0.
+
+reviewed_artifacts:
+  - name: Tyndale Open Study Notes archive
+    source_url: https://tyndaleopenresources.com/
+    bytes: 3065210
+    sha256: 7b4d5ae088449d5a6925170c4b89b978acee2f78f73dc6b8a278fa948a7e8498
+    reviewed_notice:
+      copyright: Copyright (C) 2022 by Tyndale House Publishers.
+      adaptation_credit: Adapted from Tyndale Open Study Notes. The original work by Tyndale House Publishers is available for free at http://www.tyndaleopenresources.com.
+    contents_reviewed:
+      - README license and attribution notice
+      - Profiles.xml
+      - BookIntros.xml
+  - name: Tyndale Open Bible Dictionary archive
+    source_url: https://tyndaleopenresources.com/
+    bytes: 24103432
+    sha256: 10758ea00dbea7540f9337e43e59c8e4000295c1261e3426bab6f31c31dcff5b
+    reviewed_notice:
+      copyright: Copyright (C) 2023 by Tyndale House Publishers.
+      adaptation_credit: Adapted from Tyndale Open Bible Dictionary. The original work by Tyndale House Publishers is available for free at http://www.tyndaleopenresources.com.
+    contents_reviewed:
+      - README license and attribution notice
+      - dictionary article XML
+      - archive inventory for maps and pictures
+
+nested_rights:
+  status: unresolved_for_complete_archive
+  findings:
+    - Pictures are expressly excluded from the open-resource grant when Tyndale is not the rights holder.
+    - Maps, charts, and other embedded media require asset-level rights review before use.
+    - Ordinary-answer transformation of CC-BY-SA prose needs a product-specific attribution and ShareAlike disposition.
+  excluded_assets:
+    - pictures
+    - maps
+    - charts
+    - embedded third-party media
+
+v1_policy:
+  ordinary_answer_eligible: false
+  study_mode_eligible: false
+  unknown_field_policy: reject
+  allowed_fields: []
+  excluded_fields:
+    - book introductions
+    - profiles
+    - theme articles
+    - study notes
+    - dictionary articles
+    - all media
+  rationale: The textual resources are interpretive prose, including doctrinal claims, and are outside the deterministic structured-context lane.
+  reconsideration_trigger: A separately approved commentary/reference-work policy plus resolved attribution, ShareAlike, and nested-rights handling.
+
+proposed_registration:
+  model: per_work
+  license_status: licensed
+  visibility: hidden
+  source_rows:
+    - name: Tyndale Open Study Notes
+      slug: tyndale-open-study-notes
+      visibility: hidden
+      ingestion_policy: prohibited_in_v1
+    - name: Tyndale Open Bible Dictionary
+      slug: tyndale-open-bible-dictionary
+      visibility: hidden
+      ingestion_policy: prohibited_in_v1
+  note: Separate hidden rows keep visibility, attribution, and future approval independently controllable.
+
+authorization:
+  source_registration_authorized: false
+  database_write_authorized: false
+  ingestion_authorized: false
+  visibility_change_authorized: false
+  passage_classification_authorized: false
+  retrieval_change_authorized: false
+  answer_path_change_authorized: false
+  deployment_authorized: false
+
+decision:
+  status: approved
+  approved_by: Alex Whitley
+  approved_at: "2026-09-01"
+  disposition: Approve the future hidden per-work registration proposal for provenance only; no registration, ingestion, or exposure is authorized now.
+  recommendation: Preserve separate hidden per-work rows as the proposal for a future explicitly authorized registration; keep all Tyndale content answer-ineligible.

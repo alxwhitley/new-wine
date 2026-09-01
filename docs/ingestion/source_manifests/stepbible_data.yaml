@@ -1,0 +1,67 @@
+schema_version: 1
+dataset_id: stepbible_data
+official_name: STEPBible Data Repository
+official_url: https://github.com/STEPBible/STEPBible-Data
+rights_holder: STEP Bible
+reviewed_at: "2026-09-01"
+
+license:
+  spdx: CC-BY-4.0
+  url: https://creativecommons.org/licenses/by/4.0/legalcode.en
+  attribution_required: true
+  share_alike: false
+  modification_notice_required: true
+  required_credit: STEP Bible (www.stepbible.org)
+
+reviewed_artifacts:
+  - name: STEPBible Data repository archive
+    source_url: https://github.com/STEPBible/STEPBible-Data/tree/02843f07cbb5009e00999a7c0efead6430dbb6e7
+    revision: 02843f07cbb5009e00999a7c0efead6430dbb6e7
+    bytes: 100592469
+    sha256: b5345a1db8f895d2dbf3a61f38e869d2f91cbffb8777b1a1b0aa85168f328463
+
+nested_rights:
+  status: mixed_by_dataset
+  findings:
+    - Individual dataset documentation may identify upstream sources or additional attribution requirements.
+    - Existing New Wine STEPBible records are labeled public_domain even though the reviewed repository declares CC BY 4.0.
+  excluded_assets:
+    - any dataset not covered by a field-level manifest and explicit allowlist
+
+v1_policy:
+  ordinary_answer_eligible: false
+  study_mode_eligible: false
+  unknown_field_policy: reject
+  allowed_fields: []
+  excluded_fields:
+    - repository-wide ingestion
+  rationale: The repository is a collection of datasets, not one uniform answer-safe corpus; each admitted dataset requires its own manifest and allowlist.
+  reconsideration_trigger: A dataset-specific manifest, dry run, single-item verification, and explicit release approval.
+
+proposed_registration:
+  model: rights_holder_plus_dataset_rows
+  license_status: licensed
+  visibility: shown
+  existing_source:
+    slug: stepbible
+    current_license_status: public_domain
+    proposed_license_status: licensed
+    preserve_visibility: shown
+  note: Correcting the existing row affects safe-mode retrieval and therefore requires a separate attended release decision; no database change is part of Phase 0.
+
+authorization:
+  source_registration_authorized: false
+  database_write_authorized: false
+  ingestion_authorized: false
+  visibility_change_authorized: false
+  passage_classification_authorized: false
+  retrieval_change_authorized: false
+  answer_path_change_authorized: false
+  deployment_authorized: false
+
+decision:
+  status: approved
+  approved_by: Alex Whitley
+  approved_at: "2026-09-01"
+  disposition: Approve the correction proposal in principle; the database write remains deferred until a separate attended retrieval-impact authorization.
+  recommendation: Correct the existing source metadata to licensed only in a separately approved attended operation, after evaluating the safe-mode retrieval impact.

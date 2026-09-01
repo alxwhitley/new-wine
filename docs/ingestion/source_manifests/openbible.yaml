@@ -1,0 +1,150 @@
+schema_version: 1
+dataset_id: openbible_structured_data
+official_name: OpenBible.info Structured Data
+official_url: https://openbible.info/
+rights_holder: OpenBible.info
+reviewed_at: "2026-09-01"
+
+license:
+  spdx: CC-BY-4.0
+  url: https://creativecommons.org/licenses/by/4.0/legalcode.en
+  attribution_required: true
+  share_alike: false
+  modification_notice_required: true
+  required_credit: OpenBible.info
+
+reviewed_artifacts:
+  - name: Bible Cross References archive
+    source_url: https://openbible.info/labs/cross-references/
+    snapshot_date: "2026-08-31"
+    bytes: 1982684
+    sha256: aafb5bbad45f9b70e9ad67aef393c1987e61950f266d62aba8823f222b6558bf
+    internal_file:
+      name: cross_references.txt
+      bytes: 8302197
+      sha256: 4128db12f674a054d4c9bc6381e591123ba288afa943f807af0ad4aa7ab265f4
+      lines_including_header: 344800
+  - name: Bible Geocoding Data repository archive
+    source_url: https://github.com/openbibleinfo/Bible-Geocoding-Data/tree/7eb18a5ee62f27b9b93bd6689ea272d76dd23b8f
+    revision: 7eb18a5ee62f27b9b93bd6689ea272d76dd23b8f
+    bytes: 33134819
+    sha256: c004a36feb81dade274e82e413177a290eab68da4946dc5ad9752805b4117c8c
+    reviewed_files:
+      - name: ancient.jsonl
+        bytes: 11550193
+        sha256: b8187aa4737e8517ccc090f765d2be11da4c548cd2a59d3cdcb62e952cb8c0f2
+        rows: 1341
+      - name: modern.jsonl
+        bytes: 3224520
+        sha256: da731f6e110bac4ea66a9f037a0a31cfb11c4f1efc1206aa9e109092b2c60087
+        rows: 1595
+
+nested_rights:
+  status: mixed_by_field_and_asset
+  findings:
+    - Geocoding data includes some OpenStreetMap-derived material under ODbL 1.0.
+    - Images have varying licenses and require asset-level review.
+    - Translation arrays and name counts carry translation provenance.
+    - Free-form linked-data descriptions may come from external sources.
+  excluded_assets:
+    - images and media
+    - OpenStreetMap-derived geometry and fields
+    - translation arrays and translation name counts
+    - free-form linked-data descriptions
+
+v1_policy:
+  ordinary_answer_eligible: partially
+  study_mode_eligible: partially
+  datasets:
+    bible_geocoding:
+      eligible: true
+      input_file: data/ancient.jsonl
+      allowed_raw_fields:
+        - raw_path: $.id
+          output_field: place_id
+          transform: copy exact string
+          provenance: OpenBible ancient-place dataset identifier
+        - raw_path: $.friendly_id
+          output_field: place_name
+          transform: copy exact dataset label; do not consult translation_name_counts, verses[].readable, linked_data, or extra
+          provenance: OpenBible ancient-place dataset label under the repository-level CC BY 4.0 grant; source-level scholarly provenance is not asserted
+        - raw_path: $.types[]
+          output_field: place_types
+          transform: copy exact strings from the documented closed type vocabulary
+          provenance: OpenBible ancient-place classification under the repository-level CC BY 4.0 grant
+        - raw_path: $.verses[].osis
+          output_field: osis_references
+          transform: copy only OSIS identifiers; discard every sibling key
+          provenance: OpenBible catalog of where the Bible text mentions the place
+        - raw_path: $.modern_associations.<key>
+          output_field: candidate_identifications[].modern_id
+          transform: copy the exact modern_associations mapping key; do not infer it from nested or excluded fields
+          provenance: OpenBible aggregate scholarly identification key; underlying sources are cataloged in data/source.jsonl
+        - raw_path: $.modern_associations.*.name
+          output_field: candidate_identifications[].name
+          transform: copy exact dataset label
+          provenance: OpenBible aggregate scholarly identification label under the repository-level CC BY 4.0 grant
+        - raw_path: $.modern_associations.*.score
+          output_field: candidate_identifications[].confidence_score
+          transform: copy integer without converting it to a probability or categorical fact
+          provenance: OpenBible aggregate confidence score computed from its cited-source voting model
+      allowed_output_fields:
+        - place_id
+        - place_name
+        - place_types
+        - osis_references
+        - candidate_identifications[].modern_id
+        - candidate_identifications[].name
+        - candidate_identifications[].confidence_score
+      excluded_fields:
+        - coordinates unless non-OpenStreetMap provenance is explicit
+        - geometry
+        - media
+        - translation arrays and counts
+        - free-form descriptions
+      uncertainty_rule: Candidate identifications and confidence scores must remain qualified and must not be converted into categorical claims.
+      unknown_field_policy: reject
+    cross_references:
+      eligible: false
+      unknown_field_policy: reject
+      allowed_fields: []
+      excluded_fields:
+        - from-verse/to-verse links
+        - vote scores
+      rationale: Cross-reference selection is interpretive and can become doctrinally load-bearing; it is outside the V1 neutral-context lane.
+  rationale: Only conservative structured place metadata is proposed for V1; cross references remain held.
+
+proposed_registration:
+  model: per_dataset
+  license_status: licensed
+  visibility: hidden
+  source_rows:
+    - name: OpenBible.info Bible Geocoding Data
+      slug: openbible-bible-geocoding
+      visibility: hidden
+      source_kind: biblical_context
+      citation_mode: citable
+      aliases:
+        - openbible geocoding
+    - name: OpenBible.info Cross References
+      slug: openbible-cross-references
+      visibility: hidden
+      ingestion_policy: prohibited_in_v1
+  note: Separate rows allow independent rights, visibility, and future release decisions.
+
+authorization:
+  source_registration_authorized: false
+  database_write_authorized: false
+  ingestion_authorized: false
+  visibility_change_authorized: false
+  passage_classification_authorized: false
+  retrieval_change_authorized: false
+  answer_path_change_authorized: false
+  deployment_authorized: false
+
+decision:
+  status: approved
+  approved_by: Alex Whitley
+  approved_at: "2026-09-01"
+  disposition: Approve the geocoding-only V1 boundary and future hidden per-dataset registration proposal; cross references remain prohibited and no registration or ingestion is authorized now.
+  recommendation: Approve the conservative geocoding allowlist for a hidden proof; keep cross references un-ingested and answer-ineligible.
