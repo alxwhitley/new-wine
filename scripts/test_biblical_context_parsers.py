@@ -33,11 +33,19 @@ from parse_tipnr_context import (  # noqa: E402
     parse_tipnr_entity,
     parse_tipnr_file,
 )
+from parse_openbible_context import (  # noqa: E402
+    OpenBibleItemError,
+    OpenBibleSchemaError,
+    parse_openbible_file,
+    parse_openbible_place,
+)
 
 
 FIXTURE_DIR = SCRIPTS / "fixtures" / "biblical_context"
 TIPNR_FIXTURE = FIXTURE_DIR / "tipnr_minimal.txt"
 TIPNR_META = FIXTURE_DIR / "tipnr_minimal.meta.json"
+OPENBIBLE_FIXTURE = FIXTURE_DIR / "openbible_ancient_minimal.jsonl"
+OPENBIBLE_META = FIXTURE_DIR / "openbible_ancient_minimal.meta.json"
 
 
 class ManifestCompilerTests(unittest.TestCase):
@@ -275,6 +283,146 @@ class TipnrParserTests(unittest.TestCase):
                 [lines[0], "too\tfew", lines[2]],
                 artifact_revision=self.REVISION,
             )
+
+
+class OpenBibleParserTests(unittest.TestCase):
+    REVISION = "7eb18a5ee62f27b9b93bd6689ea272d76dd23b8f"
+
+    def setUp(self) -> None:
+        self.values = [
+            json.loads(line)
+            for line in OPENBIBLE_FIXTURE.read_text(encoding="utf-8").splitlines()
+        ]
+
+    def test_fixture_identity_matches_pinned_metadata(self) -> None:
+        metadata = json.loads(OPENBIBLE_META.read_text(encoding="utf-8"))
+        self.assertEqual(metadata["revision"], self.REVISION)
+        self.assertEqual(metadata["fixture_bytes"], OPENBIBLE_FIXTURE.stat().st_size)
+        self.assertEqual(
+            metadata["fixture_sha256"],
+            __import__("hashlib").sha256(OPENBIBLE_FIXTURE.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(metadata["selected_place_ids"], ["aea17b7", "ab9a5ec"])
+
+    def test_single_place_projects_only_approved_fields(self) -> None:
+        record = parse_openbible_place(
+            self.values[0], artifact_revision=self.REVISION
+        )
+        expected = {
+            "dataset_id": "openbible_structured_data",
+            "artifact_revision": self.REVISION,
+            "place_id": "aea17b7",
+            "place_name": "Abana",
+            "place_types": ["river"],
+            "osis_references": ["2Kgs.5.12"],
+            "candidate_identifications": [
+                {
+                    "modern_id": "m39ac0b",
+                    "name": "Barada River",
+                    "confidence_score": 1000,
+                }
+            ],
+        }
+        expected["record_sha256"] = canonical_sha256(expected)
+        self.assertEqual(record, expected)
+
+        serialized = canonical_json_bytes(record).decode("utf-8")
+        for excluded in (
+            "geometry",
+            "translation",
+            "linked_data",
+            "media",
+            "readable",
+            "url_slug",
+            "identification_ids",
+            "extra",
+        ):
+            self.assertNotIn(excluded, serialized)
+
+    def test_association_free_place_is_preserved_without_invention(self) -> None:
+        record = parse_openbible_place(
+            self.values[1], artifact_revision=self.REVISION
+        )
+
+        self.assertEqual(record["place_id"], "ab9a5ec")
+        self.assertEqual(record["place_name"], "Azazel")
+        self.assertEqual(record["candidate_identifications"], [])
+        self.assertEqual(
+            record["osis_references"],
+            ["Lev.16.8", "Lev.16.10", "Lev.16.26"],
+        )
+
+    def test_file_reconciles_two_real_records_deterministically(self) -> None:
+        result = parse_openbible_file(
+            OPENBIBLE_FIXTURE, artifact_revision=self.REVISION
+        )
+
+        self.assertEqual(
+            result["counts"],
+            {
+                "attempted": 2,
+                "previewed": 2,
+                "malformed": 0,
+                "duplicate": 0,
+                "skipped": 0,
+                "prohibited": 0,
+            },
+        )
+        self.assertEqual(result["reason_counts"], {})
+        self.assertEqual(result["checksum"], canonical_sha256(result["records"]))
+        self.assertEqual(
+            canonical_json_bytes(result),
+            canonical_json_bytes(
+                parse_openbible_file(
+                    OPENBIBLE_FIXTURE, artifact_revision=self.REVISION
+                )
+            ),
+        )
+
+    def test_duplicate_place_ids_are_refused_not_merged(self) -> None:
+        duplicate_path = Path(
+            self.enterContext(__import__("tempfile").TemporaryDirectory())
+        ) / "duplicate.jsonl"
+        first = json.dumps(self.values[0], ensure_ascii=False, separators=(",", ":"))
+        duplicate_path.write_text(first + "\n" + first + "\n", encoding="utf-8")
+
+        result = parse_openbible_file(duplicate_path, artifact_revision=self.REVISION)
+
+        self.assertEqual(result["counts"]["attempted"], 2)
+        self.assertEqual(result["counts"]["previewed"], 1)
+        self.assertEqual(result["counts"]["duplicate"], 1)
+        self.assertEqual(result["reason_counts"], {"duplicate_place_id": 1})
+
+    def test_root_and_nested_schema_drift_fails_closed(self) -> None:
+        new_root = copy.deepcopy(self.values[0])
+        new_root["doctrinal_summary"] = "must not pass through"
+        with self.assertRaisesRegex(OpenBibleSchemaError, "unknown_root_field"):
+            parse_openbible_place(new_root, artifact_revision=self.REVISION)
+
+        new_verse_field = copy.deepcopy(self.values[0])
+        new_verse_field["verses"][0]["doctrine"] = "must not pass through"
+        with self.assertRaisesRegex(OpenBibleSchemaError, "unknown_verse_field"):
+            parse_openbible_place(new_verse_field, artifact_revision=self.REVISION)
+
+        new_association_field = copy.deepcopy(self.values[0])
+        new_association_field["modern_associations"]["m39ac0b"][
+            "description"
+        ] = "must not pass through"
+        with self.assertRaisesRegex(OpenBibleSchemaError, "unknown_association_field"):
+            parse_openbible_place(
+                new_association_field, artifact_revision=self.REVISION
+            )
+
+    def test_invalid_required_values_are_item_errors(self) -> None:
+        missing_id = copy.deepcopy(self.values[0])
+        del missing_id["id"]
+        with self.assertRaisesRegex(OpenBibleItemError, "place_id_invalid"):
+            parse_openbible_place(missing_id, artifact_revision=self.REVISION)
+
+        boolean_score = copy.deepcopy(self.values[0])
+        boolean_score["modern_associations"]["m39ac0b"]["score"] = True
+        with self.assertRaisesRegex(OpenBibleItemError, "confidence_score_invalid"):
+            parse_openbible_place(boolean_score, artifact_revision=self.REVISION)
 
 
 if __name__ == "__main__":
