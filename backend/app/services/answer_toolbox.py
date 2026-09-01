@@ -74,18 +74,70 @@ def _source_kind(chunk):
 def _valid_current_policy(row, chunk_id):
     # type: (object, str) -> bool
     """Validate database policy metadata at the retrieval trust boundary."""
+    from app.services.source_use_policy import PROTECTED_TOPIC_KEYS
+
     if not isinstance(row, dict) or row.get("chunk_id") != chunk_id:
         return False
-    if row.get("is_current") is not True or not str(row.get("rule_version") or "").strip():
+    rule_version = row.get("rule_version")
+    if (
+        row.get("is_current") is not True
+        or not isinstance(rule_version, str)
+        or not rule_version.strip()
+    ):
+        return False
+    protected_topics = row.get("protected_topic_keys")
+    if (
+        not isinstance(protected_topics, list)
+        or any(topic not in PROTECTED_TOPIC_KEYS for topic in protected_topics)
+    ):
+        return False
+    issue_key = row.get("issue_key")
+    viewpoint_key = row.get("viewpoint_key")
+    canonical_key = re.compile(r"^[a-z][a-z0-9_]*$")
+    if issue_key is not None and (
+        not isinstance(issue_key, str) or canonical_key.fullmatch(issue_key) is None
+    ):
+        return False
+    if viewpoint_key is not None and (
+        not isinstance(viewpoint_key, str)
+        or canonical_key.fullmatch(viewpoint_key) is None
+    ):
+        return False
+    classifier_kind = row.get("classifier_kind")
+    model = row.get("model")
+    prompt_fingerprint = row.get("prompt_fingerprint")
+    if classifier_kind == "deterministic":
+        if model is not None or prompt_fingerprint is not None:
+            return False
+    elif classifier_kind == "model":
+        if (
+            not isinstance(model, str)
+            or not model.strip()
+            or not isinstance(prompt_fingerprint, str)
+            or not prompt_fingerprint.strip()
+        ):
+            return False
+    else:
+        return False
+    reason_codes = row.get("reason_codes")
+    if (
+        not isinstance(reason_codes, list)
+        or not reason_codes
+        or any(reason is None for reason in reason_codes)
+    ):
         return False
     policy_class = row.get("policy_class")
     if policy_class == "general_context":
-        return not row.get("issue_key") and not row.get("viewpoint_key")
+        return not protected_topics and issue_key is None and viewpoint_key is None
     if policy_class == "orthodox_viewpoint":
-        return bool(row.get("issue_key") and row.get("viewpoint_key"))
-    return policy_class in {
-        "protected_spirit_filled", "mixed", "uncertain",
-    }
+        return not protected_topics and issue_key is not None and viewpoint_key is not None
+    if policy_class == "protected_spirit_filled":
+        return bool(protected_topics) and issue_key is None and viewpoint_key is None
+    return (
+        policy_class in {"mixed", "uncertain"}
+        and issue_key is None
+        and viewpoint_key is None
+    )
 
 
 def enrich_source_use_candidates(chunks, db):
@@ -115,7 +167,8 @@ def enrich_source_use_candidates(chunks, db):
                 db.table(_SOURCE_PASSAGE_POLICY_TABLE)
                 .select(
                     "chunk_id, policy_class, protected_topic_keys, issue_key, "
-                    "viewpoint_key, rule_version, is_current"
+                    "viewpoint_key, classifier_kind, rule_version, model, "
+                    "prompt_fingerprint, reason_codes, is_current"
                 )
                 .in_("chunk_id", batch)
                 .eq("is_current", True)
@@ -168,7 +221,11 @@ def partition_source_use_candidates(
         for chunk in chunks:
             kind = _source_kind(chunk)
             source_id = chunk.get("_source_id")
-            if kind in _ALWAYS_EXCLUDED_ANSWER_KINDS or source_id not in allowed_ids:
+            if (
+                kind in _ALWAYS_EXCLUDED_ANSWER_KINDS
+                or kind in _REFERENCE_SOURCE_KINDS
+                or source_id not in allowed_ids
+            ):
                 continue
             if issue is None:
                 doctrinal.append(dict(chunk, _source_use_role="doctrinal"))

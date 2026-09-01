@@ -187,6 +187,9 @@ def current_policy(supabase) -> Dict[str, Any]:
     # Quote attachment changes the delivered answer payload, so durable reuse
     # and single-flight identity must change with the effective gate state.
     quote_policy = "true" if quote_selection_enabled() else "false"
+    source_use_policy = (
+        "true" if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED else "false"
+    )
     snapshot = {
         "source_kinds": sorted(filters.get("source_kinds") or []),
         "source_names": sorted(filters.get("source_names") or []),
@@ -196,7 +199,10 @@ def current_policy(supabase) -> Dict[str, Any]:
         "filters": snapshot,
         "evidence_version": get_corpus_version(supabase),  # real shared signal (mig 079)
         "prompt_version": PROMPT_VERSION,
-        "policy_version": "%s:quote_selection=%s" % (POLICY_VERSION, quote_policy),
+        "policy_version": (
+            "%s:quote_selection=%s:biblical_context_answer=%s"
+            % (POLICY_VERSION, quote_policy, source_use_policy)
+        ),
     }
 
 
@@ -486,11 +492,15 @@ def _retrieve(
             if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED:
                 routed_references = [
                     chunk for chunk in expanded
-                    if chunk.get("_source_use_role") in {"reference", "viewpoint"}
+                    if (
+                        chunk.get("_source_use_role") in {"reference", "viewpoint"}
+                        or (chunk.get("source_kind") or chunk.get("source_type"))
+                        in {"biblical_context", "commentary"}
+                    )
                 ]
                 doctrinal_expanded = [
                     chunk for chunk in expanded
-                    if chunk.get("_source_use_role") not in {"reference", "viewpoint"}
+                    if chunk not in routed_references
                 ]
                 expanded = filter_chunks_to_source(
                     doctrinal_expanded, explicit_source_id, db
@@ -884,6 +894,11 @@ def _produce(
             if answer_toolbox.BIBLICAL_CONTEXT_ANSWER_ENABLED
             else None
         )
+        if query_policy is not None and query_policy.issue_key is not None:
+            # Registered debates outrank a coincidental semantic house-paper
+            # match. No house fence, contradiction exclusion, or paper-voice
+            # fallback may leak into a plural route.
+            matched_pillar_key = None
         # Deliberately empty until Alex separately approves exact topic-scoped
         # source UUID assignments. An enabled but unpopulated protected route
         # therefore fails closed instead of inferring approval from the corpus.
@@ -1046,6 +1061,21 @@ def _produce(
             # ceiling isn't blind to this rare fallback either.
             cost_usd=0.015,
             updated_topics=dict(topics_established),
+        )
+
+    # A house paper is a silent fence around independently approved evidence;
+    # it is never the answer substrate by itself. This also makes the initial
+    # empty protected registry fail closed before any writer call.
+    if (
+        query_policy is not None
+        and query_policy.source_boundary is SourceBoundary.PROTECTED_SPIRIT_FILLED
+        and not chunks
+    ):
+        return ProducerResult(
+            answer="I don't have strong material on that topic in my current library.",
+            outcome="no_material",
+            model="source_use_policy",
+            updated_topics=updated_topics,
         )
 
     # truly_empty short-circuit (chat.py generate() L1008): nothing to answer from.

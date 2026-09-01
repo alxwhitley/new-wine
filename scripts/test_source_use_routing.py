@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app.services.answer_toolbox import (  # noqa: E402
     BIBLICAL_CONTEXT_ANSWER_ENABLED,
+    _valid_current_policy,
     enrich_source_use_candidates,
     partition_source_use_candidates,
     select_source_use_references,
@@ -103,14 +104,21 @@ def _chunk(chunk_id, document_id, source_kind="commentary"):
     }
 
 
-def _policy(chunk_id, policy_class, issue_key=None, viewpoint_key=None):
+def _policy(
+    chunk_id, policy_class, issue_key=None, viewpoint_key=None,
+    protected_topic_keys=None,
+):
     return {
         "chunk_id": chunk_id,
         "policy_class": policy_class,
-        "protected_topic_keys": [],
+        "protected_topic_keys": list(protected_topic_keys or []),
         "issue_key": issue_key,
         "viewpoint_key": viewpoint_key,
         "rule_version": "biblical_context_v1",
+        "classifier_kind": "deterministic",
+        "model": None,
+        "prompt_fingerprint": None,
+        "reason_codes": ["fixture"],
         "is_current": True,
     }
 
@@ -177,6 +185,41 @@ class SourceUseRoutingTests(unittest.TestCase):
         enriched = enrich_source_use_candidates([_chunk("c1", "d1")], db)
         self.assertNotIn("_source_policy", enriched[0])
 
+    def test_policy_trust_boundary_rejects_absent_stale_and_malformed_rows(self):
+        malformed = [
+            dict(_policy("c1", "general_context"), protected_topic_keys=["tongues"]),
+            _policy("c1", "orthodox_viewpoint", "example_issue", None),
+            _policy("c1", "protected_spirit_filled"),
+            _policy("c1", "protected_spirit_filled", protected_topic_keys=["unknown"]),
+            dict(_policy("c1", "general_context"), classifier_kind="model"),
+            dict(_policy("c1", "general_context"), reason_codes=[]),
+            dict(_policy("c1", "general_context"), rule_version=" "),
+        ]
+        self.assertFalse(_valid_current_policy(None, "c1"))
+        stale = dict(_policy("c1", "general_context"), is_current=False)
+        self.assertFalse(_valid_current_policy(stale, "c1"))
+        for row in malformed:
+            with self.subTest(row=row):
+                self.assertFalse(_valid_current_policy(row, "c1"))
+
+    def test_mixed_and_uncertain_policy_rows_are_valid_but_never_answer_eligible(self):
+        candidates = []
+        for policy_class in ("mixed", "uncertain"):
+            row = _policy(policy_class, policy_class)
+            self.assertTrue(_valid_current_policy(row, policy_class))
+            candidates.append(dict(
+                _chunk(policy_class, "d-" + policy_class),
+                _source_id=SOURCE_A,
+                _source_policy=row,
+            ))
+        partition = partition_source_use_candidates(
+            candidates,
+            self.general,
+            ApprovedProtectedSourceRegistry({}),
+            self.issue_registry,
+        )
+        self.assertEqual(partition.reference, ())
+
     def test_general_route_separates_teacher_and_eligible_reference(self):
         candidates = [
             dict(_chunk("teacher", "d1", "sermon_transcript"), _source_id=SOURCE_A),
@@ -205,6 +248,9 @@ class SourceUseRoutingTests(unittest.TestCase):
             dict(_chunk("general", "d2", "biblical_context"), _source_id=SOURCE_B,
                  _source_policy=_policy("general", "general_context")),
             dict(_chunk("word", "d3", "word_study"), _source_id=SOURCE_A),
+            dict(_chunk("approved-reference", "d4", "commentary"),
+                 _source_id=SOURCE_A,
+                 _source_policy=_policy("approved-reference", "general_context")),
         ]
         partition = partition_source_use_candidates(
             candidates,
@@ -214,6 +260,44 @@ class SourceUseRoutingTests(unittest.TestCase):
         )
         self.assertEqual([c["id"] for c in partition.doctrinal], ["approved"])
         self.assertEqual(partition.reference, ())
+
+    def test_current_policy_identity_changes_with_source_routing_gate(self):
+        import types
+
+        quote_module_name = "app.services.quotes"
+        original_quote_module = sys.modules.get(quote_module_name)
+        fake_quotes = types.ModuleType(quote_module_name)
+        fake_quotes.quote_selection_enabled = lambda: False
+        sys.modules[quote_module_name] = fake_quotes
+        originals = (
+            toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED,
+            producer_module.get_disabled_filters,
+            producer_module.get_corpus_version,
+        )
+        producer_module.get_disabled_filters = lambda: {
+            "include_copyrighted": False,
+            "source_kinds": [],
+            "source_names": [],
+        }
+        producer_module.get_corpus_version = lambda _db: "corpus-v1"
+        try:
+            toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED = False
+            disabled = producer_module.current_policy(object())
+            toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED = True
+            enabled = producer_module.current_policy(object())
+        finally:
+            (
+                toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED,
+                producer_module.get_disabled_filters,
+                producer_module.get_corpus_version,
+            ) = originals
+            if original_quote_module is None:
+                del sys.modules[quote_module_name]
+            else:
+                sys.modules[quote_module_name] = original_quote_module
+        self.assertNotEqual(disabled["policy_version"], enabled["policy_version"])
+        self.assertIn("biblical_context_answer=false", disabled["policy_version"])
+        self.assertIn("biblical_context_answer=true", enabled["policy_version"])
 
     def test_empty_protected_registry_fails_closed(self):
         candidate = dict(
@@ -391,14 +475,22 @@ class SourceUseRoutingTests(unittest.TestCase):
             author="Reference Work",
             chunk_index=0,
         )
+        neighbor = dict(
+            _chunk("neighbor", "d3", "biblical_context"),
+            title="Neighbor Context",
+            author="Reference Work",
+            chunk_index=1,
+        )
         db = _DB(
             {
                 "documents": [
                     {"id": "d1", "source_id": SOURCE_A},
                     {"id": "d2", "source_id": SOURCE_B},
+                    {"id": "d3", "source_id": SOURCE_C},
                 ],
                 "source_passage_policy_versions": [
-                    _policy("context", "general_context")
+                    _policy("context", "general_context"),
+                    _policy("neighbor", "general_context"),
                 ],
             }
         )
@@ -423,7 +515,9 @@ class SourceUseRoutingTests(unittest.TestCase):
             [0.0],
         )
         toolbox_module._get_cohere = lambda: None
-        toolbox_module.fetch_neighbor_chunks_batch = lambda *_args, **_kwargs: []
+        toolbox_module.fetch_neighbor_chunks_batch = (
+            lambda *_args, **_kwargs: [neighbor]
+        )
         producer_module.get_disabled_filters = lambda: {
             "include_copyrighted": False,
             "source_kinds": [],
@@ -459,9 +553,16 @@ class SourceUseRoutingTests(unittest.TestCase):
                 single_teacher_lock.apply_explicit_teacher_lock,
                 single_teacher_lock.filter_chunks_to_source,
             ) = originals
-        self.assertEqual([chunk["id"] for chunk in chunks], ["teacher", "context"])
+        self.assertEqual(
+            [chunk["id"] for chunk in chunks],
+            ["teacher", "context", "neighbor"],
+        )
         self.assertEqual(chunks[1]["_source_use_role"], "reference")
-        self.assertEqual([citation["chunk_id"] for citation in citations], ["teacher", "context"])
+        self.assertEqual(chunks[2]["_source_use_role"], "reference")
+        self.assertEqual(
+            [citation["chunk_id"] for citation in citations],
+            ["teacher", "context", "neighbor"],
+        )
         self.assertEqual(citable_count, 2)
         self.assertFalse(fallback)
 
@@ -518,20 +619,25 @@ class SourceUseRoutingTests(unittest.TestCase):
         originals = (
             toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED,
             position_papers.match_position_paper,
+            position_papers.get_paper_body,
             stored_position_evidence.fetch_stored_position_evidence,
             producer_module._match_stored_position_for_answer,
             producer_module._inject_background_topics,
             producer_module._retrieve,
         )
         toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED = True
-        position_papers.match_position_paper = lambda _question: None
+        position_papers.match_position_paper = lambda _question: "divine_healing"
+        position_papers.get_paper_body = lambda *_args: (_ for _ in ()).throw(
+            AssertionError("registered issue reached the house-position fence")
+        )
         stored_position_evidence.fetch_stored_position_evidence = lambda *_args: None
         producer_module._match_stored_position_for_answer = lambda *_args: None
         producer_module._inject_background_topics = (
             lambda *_args, **_kwargs: ([], set(), {})
         )
 
-        def _empty_retrieve(*_args, **kwargs):
+        def _empty_retrieve(*args, **kwargs):
+            seen["matched_pillar_key"] = args[3]
             seen.update(kwargs)
             return [], [], 0, False
 
@@ -545,6 +651,7 @@ class SourceUseRoutingTests(unittest.TestCase):
             (
                 toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED,
                 position_papers.match_position_paper,
+                position_papers.get_paper_body,
                 stored_position_evidence.fetch_stored_position_evidence,
                 producer_module._match_stored_position_for_answer,
                 producer_module._inject_background_topics,
@@ -553,7 +660,51 @@ class SourceUseRoutingTests(unittest.TestCase):
         self.assertEqual(result.answer, _SOURCE_USE_CORPUS_GAP)
         self.assertEqual(result.outcome, "no_material")
         self.assertEqual(seen["query_policy"].issue_key, "healing_mechanics")
+        self.assertIsNone(seen["matched_pillar_key"])
         self.assertIn("protected_source_registry", seen)
+
+    def test_protected_house_route_never_generates_from_house_paper_alone(self):
+        from app.services import position_papers, stored_position_evidence
+
+        originals = (
+            toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED,
+            position_papers.match_position_paper,
+            position_papers.get_paper_body,
+            stored_position_evidence.fetch_stored_position_evidence,
+            producer_module._match_stored_position_for_answer,
+            producer_module._inject_background_topics,
+            producer_module._retrieve,
+            producer_module._generate_and_capture,
+        )
+        toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED = True
+        position_papers.match_position_paper = lambda _question: "speaking_in_tongues"
+        position_papers.get_paper_body = lambda _key: "approved house fence"
+        stored_position_evidence.fetch_stored_position_evidence = lambda *_args: None
+        producer_module._match_stored_position_for_answer = lambda *_args: None
+        producer_module._inject_background_topics = (
+            lambda *_args, **_kwargs: ([], set(), {})
+        )
+        producer_module._retrieve = lambda *_args, **_kwargs: ([], [], 0, False)
+        producer_module._generate_and_capture = lambda *_args, **_kwargs: (
+            _ for _ in ()
+        ).throw(AssertionError("house paper alone reached generation"))
+        try:
+            result = producer_module._produce(
+                object(), "What does New Wine believe about speaking in tongues?"
+            )
+        finally:
+            (
+                toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED,
+                position_papers.match_position_paper,
+                position_papers.get_paper_body,
+                stored_position_evidence.fetch_stored_position_evidence,
+                producer_module._match_stored_position_for_answer,
+                producer_module._inject_background_topics,
+                producer_module._retrieve,
+                producer_module._generate_and_capture,
+            ) = originals
+        self.assertEqual(result.outcome, "no_material")
+        self.assertEqual(result.model, "source_use_policy")
 
     def test_protected_background_context_uses_the_same_exact_source_allowlist(self):
         from app.services import source_resolver
