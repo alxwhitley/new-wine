@@ -186,24 +186,21 @@ quarantine. No stage transfers automatically from one source to another.
    book/commentary combinations quarantined unless a chapter-level contract is
    separately approved.
 4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–6 are
-   complete through the repository and zero-effect-preview boundary in PR #3:
-   approved rights/provenance manifests, source-use boundaries, deterministic
-   TIPNR/OpenBible parsing, versioned passage policy, default-off routing,
-   prompt/generation enforcement, and an approval-gated hidden single-item
-   writer/reconciler for TIPNR entity `H0175`. Phase 6's immutable preview
-   projects exactly one source, alias, document, chunk, and current
-   `general_context` policy row; hash
-   `4b58d2f3e2860cdbe002e32eba8e47febfbb23d2d5ed63dd630fdec383b33b65`.
-   It made no database or model call. Migration 097 remains applied with zero
-   policy rows at the last fresh production read. The source is not registered,
-   no content is ingested, `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains
-   default-off, and protected/plural registries remain empty. PR review and an
-   explicit merge/deployment decision remain. The next bounded item is a
-   separately approved attended Phase 6 operation: re-run read-only collisions,
-   authorize at most `$0.01` for one embedding, execute the one atomic hidden
-   transaction, and reconcile from `newwine_readonly_analysis`. No batch,
-   visibility change, feature enablement, live answer, deployment, doctrinal
-   assignment, or registry assignment is authorized by this roadmap status.
+   complete through the attended hidden single-item production proof in PR #3.
+   Phase 6 registered `STEPBible TIPNR` as hidden and atomically stored TIPNR
+   entity `H0175` as exactly one attributed document, one embedded chunk, and
+   one current deterministic `general_context` policy row; no proposition was
+   written. Fresh exact-state reconciliation ran as
+   `newwine_readonly_analysis`; vector and full-text RPC probes ran through a
+   separate service connection forced read-only because the analysis role
+   cannot select the RPCs' `app_settings` dependency. Both retrieval counts
+   were zero, and reconciliation closed at attempted `1`, stored `1`, errored
+   `0`, skipped `0`. `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains default-off,
+   the source remains hidden, and protected/plural registries remain empty.
+   The next bounded item is an explicit decision whether to design Phase 7 as a
+   resumable TIPNR expansion packet; no batch, visibility change, feature
+   enablement, live answer, deployment, doctrinal assignment, registry
+   assignment, or PR merge is authorized by this status.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication
    status per title; preserve edition/page provenance; quarantine OCR or
    structural failures; do not extract quotes from flat book chunks without

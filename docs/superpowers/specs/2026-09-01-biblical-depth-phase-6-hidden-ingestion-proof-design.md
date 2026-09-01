@@ -2,23 +2,20 @@
 
 **Date:** 2026-09-01
 
-**Status:** APPROVED by Alex on 2026-09-01. Approval authorizes repository
-design, planning, implementation, local tests, and a zero-write/zero-model-spend
-dry run. It does not authorize source registration, an embedding request,
-production database writes, visibility changes, feature enablement, live
-answers, deployment, or any larger batch.
+**Status:** COMPLETE through the attended hidden production proof. Alex
+separately approved the exact hidden `stepbible-tipnr` registration, one
+`text-embedding-3-small` request under `$0.01`, and one atomic `H0175`
+transaction on 2026-09-01. Alex then separately approved the repository-only
+reconciliation remediation and this governing-text replacement. No larger
+batch, visibility change, feature enablement, live answer, deployment, registry
+assignment, or PR merge is authorized.
 
 ## Outcome
 
-Build one attended, fail-closed ingestion proof for the already-approved
-STEPBible TIPNR structured-data boundary. The proof prepares exactly one
-eligible entity, Aaron (`H0175`), for an eventual atomic hidden write while
-keeping all retrieval and answer behavior unchanged.
-
-The repository deliverable ends at tested tooling and a dry-run report. A later
-production run requires Alex's separate explicit approval for all three external
-effects: registering the source, buying the single embedding, and committing the
-single database transaction.
+Build and execute one attended, fail-closed ingestion proof for the
+already-approved STEPBible TIPNR structured-data boundary. The proof stores
+exactly one eligible entity, Aaron (`H0175`), in one atomic hidden transaction
+while keeping all retrieval and answer behavior unchanged.
 
 ## Acceptance criteria
 
@@ -59,7 +56,7 @@ single database transaction.
 
 ## Non-goals
 
-- No production execution is authorized by this design or its implementation.
+- No additional production execution is authorized by the completed proof.
 - No OpenBible item, second TIPNR entity, full batch, backfill, or download.
 - No source visibility change, retrieval release, answer-path enablement, live
   answer, deployment, or attribution-surface release.
@@ -245,8 +242,13 @@ Any exception or mismatch before commit rolls back all six row families. The
 writer returns a hard reconciliation object with `attempted`, `stored`,
 `errored`, and `skipped`; it asserts that their sum equals `attempted`.
 
-After commit, the apply command closes the write connection and reconnects via
-`newwine_readonly_analysis`. It independently verifies:
+After commit, exact row and metadata reconciliation uses a fresh
+`newwine_readonly_analysis` connection. The two retrieval RPC probes use a
+separate fresh service-database connection because both security-invoker RPCs
+read `app_settings`, which the analysis role cannot select. Both
+connections call `set_session(readonly=True, autocommit=True)` before their
+first query and must independently observe `transaction_read_only='on'`.
+Together they verify:
 
 - exact source, alias, document, chunk, and current-policy counts;
 - exact hashes, source attribution, license metadata, and hidden visibility;
@@ -272,9 +274,30 @@ The final report must be retained at
 - **Embedding succeeds but transaction fails:** report the bounded spend and
   errored `1`, then use a fresh read-only connection to distinguish clean
   rollback from an ambiguous commit that actually landed.
-- **Fresh reconciliation fails after commit:** stop. Do not delete or rewrite
+- **Fresh reconciliation fails after commit:** emit a structured
+  `committed_reconciliation_failed` report that preserves the apply result,
+  stop, and never retry the embedding or transaction. Do not delete or rewrite
   append-only policy history. The hidden source and default-off feature contain
   the data while a separately approved remediation is designed.
+
+## Production proof result
+
+The approved operation committed exactly one hidden source, one alias, one
+attributed `biblical_context` document, one 1536-dimension chunk, and one
+current deterministic `general_context` policy row. The policy ID is
+`4e3169db-2aaf-4f0f-91e0-fc7c3a234625`; no proposition row exists for the
+document.
+
+The initial post-commit verifier stopped because `newwine_readonly_analysis`
+could execute the retrieval RPCs but could not read their security-invoker
+`app_settings` dependency. No write or embedding retry occurred. Build commit
+`494175e` split exact-state and retrieval verification across two enforced
+read-only sessions and preserved structured apply evidence on any future
+verifier failure. Fresh production reconciliation then passed with attempted
+`1`, stored `1`, errored `0`, skipped `0`; vector and full-text retrieval each
+returned zero. The canonical ignored reconciliation artifact is retained at
+`local/2026-09/biblical_context_v1_proof.json` with SHA-256
+`fc749e7b68db61c0984073a13ed298027d7ca775679f37130bd2959547de368f`.
 
 ## Test contract
 
