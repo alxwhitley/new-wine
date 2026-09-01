@@ -36,6 +36,7 @@ from preflight_tipnr_hidden_pilot import (  # noqa: E402
     preflight_pilot,
 )
 from apply_tipnr_hidden_pilot import (  # noqa: E402
+    finalize_pilot_apply,
     PilotApplyError,
     PilotApprovalError,
     apply_pilot,
@@ -420,6 +421,21 @@ class PilotApplyTests(unittest.TestCase):
         })
         self.assertEqual(len(connection.state), 20)
         self.assertTrue(all(row["document"]["ingest_completed_at"] == "set" for row in connection.state.values()))
+
+    def test_post_commit_verifier_error_preserves_apply_evidence(self) -> None:
+        apply_report = {
+            "status": "stored",
+            "reconciliation": {"attempted": 20, "stored": 20, "errored": 0, "skipped": 0},
+        }
+
+        def failed_verifier():
+            raise RuntimeError("fresh verification unavailable")
+
+        final = finalize_pilot_apply(apply_report, failed_verifier)
+        self.assertEqual(final["status"], "committed_reconciliation_failed")
+        self.assertEqual(final["apply"], apply_report)
+        self.assertIsNone(final["verification"])
+        self.assertEqual(final["verification_error"]["kind"], "RuntimeError")
 
 
 class _PilotWriteCursor:

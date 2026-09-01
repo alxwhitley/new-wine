@@ -16,6 +16,7 @@ from typing import Callable, Mapping, Sequence
 from biblical_context_ingest_contract import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, SOURCE_SLUG
 from biblical_context_tooling import canonical_json_bytes
 from preflight_tipnr_hidden_pilot import inspect_pilot_item
+from preview_biblical_context_tooling import write_new_preview
 from tipnr_hidden_pilot_contract import PilotPacket, build_pilot_packet
 
 
@@ -245,6 +246,42 @@ def apply_pilot(
     }
 
 
+def finalize_pilot_apply(
+    apply_report: Mapping[str, object],
+    reconcile_fn: Callable[[], Mapping[str, object]],
+) -> dict[str, object]:
+    """Preserve apply evidence while resolving the commit through fresh reads."""
+
+    try:
+        verification = dict(reconcile_fn())
+    except Exception as exc:
+        status = (
+            "committed_reconciliation_failed"
+            if apply_report.get("status") in {"stored", "skipped"}
+            else "commit_outcome_unknown_reconciliation_failed"
+        )
+        return {
+            "schema_version": "biblical_context_tipnr_hidden_pilot_final.v1",
+            "status": status,
+            "apply": dict(apply_report),
+            "verification": None,
+            "verification_error": {"kind": type(exc).__name__, "reason": str(exc)},
+        }
+    if verification.get("status") != "verified":
+        raise PilotApplyError("fresh_reconciliation_not_verified")
+    status = (
+        "verified"
+        if apply_report.get("status") in {"stored", "skipped"}
+        else "commit_outcome_ambiguous_but_verified"
+    )
+    return {
+        "schema_version": "biblical_context_tipnr_hidden_pilot_final.v1",
+        "status": status,
+        "apply": dict(apply_report),
+        "verification": verification,
+    }
+
+
 def _load_apply_dependencies():
     sys.path.insert(0, str(ROOT / "backend"))
     from dotenv import load_dotenv
@@ -283,9 +320,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         identity_factory, retrieval_factory, packet, build_aaron_projection(ROOT)
     )
     connection_factory, embed_fn = _load_apply_dependencies()
-    report = apply_pilot(connection_factory, embed_fn, packet, approval, lambda: preflight)
-    sys.stdout.buffer.write(canonical_json_bytes(report))
-    return 0 if report["status"] in {"stored", "skipped"} else 1
+    apply_report = apply_pilot(
+        connection_factory, embed_fn, packet, approval, lambda: preflight
+    )
+    from reconcile_tipnr_hidden_pilot import reconcile_pilot
+    final_report = finalize_pilot_apply(
+        apply_report,
+        lambda: reconcile_pilot(identity_factory, retrieval_factory, packet),
+    )
+    payload = canonical_json_bytes(final_report)
+    if final_report["status"] == "verified":
+        write_new_preview(
+            ROOT / "local" / "2026-09" / "tipnr_hidden_pilot_final.json",
+            payload,
+        )
+    sys.stdout.buffer.write(payload)
+    return 0 if final_report["status"] == "verified" else 1
 
 
 if __name__ == "__main__":
