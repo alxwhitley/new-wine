@@ -13,8 +13,8 @@ rechecked in this session, and the integration branch itself was not deployed.
 
 ## Current state
 
-**Biblical-depth Phases 0–7 are complete through full-artifact TIPNR inventory
-readiness.** PR #3 contains the approved rights/provenance
+**Biblical-depth Phases 0–8 are complete through an execution-ready but
+unexecuted hidden TIPNR pilot.** PR #3 contains the approved rights/provenance
 manifests, canonical source-use policy, hidden TIPNR/OpenBible preview tooling,
 deterministic passage classification, migration 097, default-off
 routing/retrieval, the Phase 5 prompt/generation contract, and the dedicated
@@ -45,6 +45,31 @@ Three repeated runs were byte-identical. The cost projection is 3,959 later
 embedding requests over 1,831,354 canonical UTF-8 bytes, conservatively
 610,452 tokens, estimated USD `0.01220904`, with a proposed maximum ceiling of
 USD `0.02441808`; it is evidence for a later packet, not spend authority.
+
+Phase 8 freezes exactly 20 additional items: the first 10 eligible people and
+first 10 eligible places by entity ID after excluding `H0175`. The selection
+checksum is
+`398fa80f93fc4c7464a22ca110d9a4546c60d4667f04ba2a3aebafb18ad8fb2b`,
+the complete packet hash is
+`a48f506a38db740d4d2cd8648c8de95ac7c25cb4550916e236a023738184a1e8`,
+and the zero-effect preview payload hash is
+`4171181b7003317044edafb8eeb836de7596f795489ba1bc8faafac72d716237`.
+The 20 rendered texts total 5,463 UTF-8 bytes, conservatively estimate 1,821
+tokens and USD `0.00003642`, and are capped at 20
+`text-embedding-3-small` requests and USD `0.01`. The fixed sample IDs are
+`G0010`, `G0132`, `G0223J`, `G0009`, `G0137`, and `G0494`; sample hash is
+`ad2299d96582635f151b885d59f09b722297a10ab00354a46ddd5145c4041515`.
+
+The Phase 8 preview has no network, database, or model capability. Read-only
+preflight requires exact H0175 verification and a unanimous all-clean or
+all-exact-complete 20-item state. The apply gate requires an exact same-day
+approval, validates all 20 vectors before opening a write connection, and can
+write only one atomic 60-row transaction: 20 documents, 20 chunks, and 20
+current `general_context` policies. It does not insert or update the existing
+source, alias, or `H0175`, and has no proposition write path. Fresh
+reconciliation requires all 20 exact-complete rows, zero propositions, and
+zero matches across 20 vector plus 20 FTS probes. Phase 8 ran no production
+preflight, model call, embedding request, database connection/write, or batch.
 
 The governing boundary remains unchanged:
 
@@ -94,32 +119,32 @@ remain preserved and outside PR #3.
 
 ## Session outcome and measures
 
-- Original outcome: **completed** — the fixture/full-artifact parser gap is
-  closed and the exact pinned TIPNR corpus has a deterministic zero-effect
-  inventory and cost projection.
-- Acceptance: **passed** — 4/4 manifest contracts, 39/39 parser/inventory
-  tests including the exact full artifact, all 61 Phase 3–5
-  classification/policy/routing/generation tests, and 31/31 Phase 6 tests.
-  Three inventory runs were byte-identical and reconciliation closed at 4,262
-  attempted with every record in one terminal outcome.
+- Original outcome: **completed** — the bounded balanced 20-item Phase 8 packet,
+  zero-effect preview, read-only preflight, same-day approval gate, atomic
+  writer, fresh reconciler, and deterministic sampling are execution-ready.
+- Acceptance: **passed** — 21/21 Phase 8 tests, 4/4 manifest contracts, 39/39
+  parser/inventory tests, all 61 Phase 3–5 classification/policy/routing/
+  generation tests, and 31/31 Phase 6 tests. Two preview runs were
+  byte-identical; all execution-path tests used strict fakes and made no live
+  connection or model call.
 - Unplanned investigations started: **0**.
 - Findings promoted to Blocker: **0**.
-- Active critical-path item at close: **1** — design the separately bounded
-  hidden TIPNR batch packet.
-- Scope changes approved by Alex: repository-only Phase 7 design, parser,
-  inventory, compact evidence, and the evidence-backed governing-text
-  replacement. No new model spend, database access, batch, merge, deployment,
-  registry assignment, visibility change, live answer, or feature authority
-  was added.
+- Active critical-path item at close: **1** — attended same-day decision on the
+  exact Phase 8 packet.
+- Scope changes approved by Alex: repository-only Phase 8 design, packet,
+  preview, preflight, approval gate, atomic writer, reconciler, tests, and this
+  evidence-backed governing-text replacement. No Phase 8 model spend, database
+  access/write, batch, merge, deployment, registry assignment, visibility
+  change, live answer, or feature authority was added.
 
 ---
 
 ## Next single item
 
-**Design one bounded hidden TIPNR batch packet from the frozen Phase 7
-inventory.** It must specify deterministic tranche selection, resumability,
-dry run, single-item verification, a named cost ceiling, attended write/spend
-approval, hard reconciliation, and sampled quality proof before execution.
-Phase 7 is not batch authority. Visibility change, answer enablement, live
-answers, deployment, registry assignments, and PR #3 merge remain separate
-attended decisions.
+**Make an attended same-day execute-or-defer decision on the exact Phase 8
+packet.** Execution, if separately approved, is limited to the frozen 20-item
+selection, at most 20 embedding requests under USD `0.01`, and one atomic
+60-row transaction followed by fresh 20-item/40-probe reconciliation. Phase 8
+readiness is not execution authority. Visibility change, answer enablement,
+live answers, deployment, registry assignments, and PR #3 merge remain
+separate attended decisions.

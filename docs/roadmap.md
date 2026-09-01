@@ -185,28 +185,48 @@ quarantine. No stage transfers automatically from one source to another.
    between candidate and approved quote; keep the 12 HelloAO missing
    book/commentary combinations quarantined unless a chapter-level contract is
    separately approved.
-4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–7 are
-   complete through full-artifact TIPNR inventory readiness in PR #3. Phase 6's
-   attended production proof remains exactly one hidden `H0175` document,
-   embedded chunk, and current `general_context` policy row with no proposition
-   and zero vector/FTS matches. Phase 7 made no live call or database change: it
-   verified the pinned 7,916,469-byte artifact, accounted for 4,262 structural
-   marker records as three documentation records plus 4,259 entity records,
-   and closed at eligible `3,959`, malformed `172`, skipped `115`, prohibited
-   `16`, duplicate `0`. The eligible checksum is
-   `1c7fdf4f7d587fdcfa7cf076732f913ef9b1066d50a0a5de9e227c7c1cf80cc2`;
-   the canonical inventory hash is
+4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–8 are
+   complete through execution-ready, explicitly unexecuted TIPNR hidden-pilot
+   tooling in PR #3. Phase 6's attended production proof remains exactly one
+   hidden `H0175` document, embedded chunk, and current `general_context` policy
+   row with no proposition and zero vector/FTS matches. Phase 7's frozen
+   full-artifact inventory remains eligible `3,959`, malformed `172`, skipped
+   `115`, prohibited `16`, duplicate `0`, with eligible checksum
+   `1c7fdf4f7d587fdcfa7cf076732f913ef9b1066d50a0a5de9e227c7c1cf80cc2`
+   and inventory hash
    `edb6dece3a9d2772ec9dfb21a80d192225ec14878084e5b30cb38ea667b80040`.
-   The later embedding projection is 3,959 requests, 1,831,354 canonical UTF-8
-   bytes, a conservative 610,452-token estimate, estimated USD `0.01220904`,
-   and a proposed maximum ceiling of USD `0.02441808`; none of those figures
-   authorizes a request or batch. `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains
-   default-off, the source remains hidden, and protected/plural registries
-   remain empty. The next bounded item is a separately designed hidden batch
-   packet with dry run, single-item verification, attended cost/write approval,
-   reconciliation, and sampling; no batch, visibility change, feature
-   enablement, live answer, deployment, doctrinal assignment, registry
-   assignment, or PR merge is authorized by this status.
+
+   Phase 8 deterministically selects the first 10 eligible people and first 10
+   eligible places by entity ID after excluding `H0175`. Its selection checksum
+   is `398fa80f93fc4c7464a22ca110d9a4546c60d4667f04ba2a3aebafb18ad8fb2b`;
+   packet hash is
+   `a48f506a38db740d4d2cd8648c8de95ac7c25cb4550916e236a023738184a1e8`;
+   zero-effect preview payload hash is
+   `4171181b7003317044edafb8eeb836de7596f795489ba1bc8faafac72d716237`.
+   The packet renders 5,463 UTF-8 bytes, conservatively estimates 1,821 tokens
+   and USD `0.00003642`, and freezes exactly 20
+   `text-embedding-3-small` requests under a USD `0.01` maximum ceiling. Its
+   fixed sample is `G0010`, `G0132`, `G0223J`, `G0009`, `G0137`, and `G0494`,
+   with sample hash
+   `ad2299d96582635f151b885d59f09b722297a10ab00354a46ddd5145c4041515`.
+
+   Preview is network/model/database-incapable. Read-only preflight requires
+   exact `H0175` verification plus a unanimous all-clean or all-exact-complete
+   candidate state. Apply requires an exact same-day approval, validates all 20
+   vectors before opening the write connection, and limits the write to one
+   atomic transaction containing 20 documents, 20 chunks, and 20 current
+   policies; it neither inserts nor updates the existing source, alias, or
+   `H0175`. Fresh reconciliation requires all 20 exact-complete rows, zero
+   propositions, and zero matches across 20 vector plus 20 FTS probes.
+
+   Phase 8 ran no production preflight, model call, embedding request, database
+   connection/write, or batch. `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains
+   default-off, the source remains hidden, protected/plural registries remain
+   empty, and Phase 4's routing, cache, neighbor, plural-source, and house-fence
+   boundaries remain unchanged. The next single item is an attended same-day
+   decision on this exact packet; visibility change, feature enablement, live
+   answers, deployment, doctrinal assignment, registry assignment, and PR #3
+   merge remain separately unauthorized.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication
    status per title; preserve edition/page provenance; quarantine OCR or
    structural failures; do not extract quotes from flat book chunks without
