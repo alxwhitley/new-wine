@@ -344,7 +344,7 @@ export function Sidebar({
       <div className={cn(
         "mt-auto pt-2 pb-4",
         isFullNavEnabled() ? "pb-drawer-footer-safe-tabbar" : "pb-drawer-footer-safe"
-      )}>
+      )} data-testid="sidebar-account-footer">
         {isLoggedIn ? (
           <button
             onClick={() => setAdminOpen(true)}
@@ -442,7 +442,7 @@ export function Sidebar({
           floating overlay) opens on its own z-layer above this; it must
           never collapse, translate, or resize in response to panel state. */}
       <aside
-        className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar px-4 pt-6"
+        className="hidden md:flex fixed left-0 top-0 z-40 h-dvh-safe w-64 flex-col bg-sidebar px-4 pt-6"
       >
         {sidebarContent}
       </aside>
