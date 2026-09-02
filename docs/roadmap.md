@@ -387,6 +387,11 @@ extraction-attempt history instrumentation; and `bible_refs.py`'s measured
 ~0.4% reference-hallucination rate (2 of 514 on real sermon text, 2026-08-29
 — the two bad rows were removed, the extractor itself was not changed).
 
+Also parked: the existing `next-themes` development hydration warning observed
+during the 2026-09-01 responsive WebKit pass. All 16 tested mobile/tablet
+journeys passed and no production failure was demonstrated; revisit only if it
+causes visible theme flicker, incorrect initial styling, or a production error.
+
 ### Historical YouTube caption duplication — needs a cost estimate first
 
 318 YouTube-sourced documents ingested before 2026-08-29 carry residual
