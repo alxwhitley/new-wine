@@ -43,6 +43,7 @@ const SUGGESTIONS = [
 ];
 
 export default function Home() {
+  const { inputFocused } = useChatFocus();
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
   // In-app surface: anyone already here has an account, so the bare entry
@@ -276,12 +277,70 @@ export default function Home() {
   // tokens never own scroll position after that; the reader does.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const appViewportRef = useRef<HTMLDivElement>(null);
   const scrollOnNextTurnRef = useRef(false);
   useEffect(() => {
     if (!scrollOnNextTurnRef.current || messages.length === 0) return;
     scrollOnNextTurnRef.current = false;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  // iOS Safari keeps the layout viewport behind its software keyboard. Size
+  // and position the app against the visible viewport instead, including
+  // toolbar motion and rotation changes that do not always update 100dvh.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    let animationFrame = 0;
+    const scheduleViewportSync = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        const shell = appViewportRef.current;
+        if (!shell) return;
+        shell.style.height = `${Math.round(viewport?.height ?? window.innerHeight)}px`;
+        shell.style.top = `${Math.round(viewport?.offsetTop ?? 0)}px`;
+        shell.style.bottom = "auto";
+      });
+    };
+
+    scheduleViewportSync();
+    viewport?.addEventListener("resize", scheduleViewportSync);
+    viewport?.addEventListener("scroll", scheduleViewportSync);
+    window.addEventListener("resize", scheduleViewportSync);
+    window.addEventListener("orientationchange", scheduleViewportSync);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      viewport?.removeEventListener("resize", scheduleViewportSync);
+      viewport?.removeEventListener("scroll", scheduleViewportSync);
+      window.removeEventListener("resize", scheduleViewportSync);
+      window.removeEventListener("orientationchange", scheduleViewportSync);
+    };
+  }, []);
+
+  // When a keyboard changes the visible height, keep the newest turn above
+  // the composer. This only runs while composing, so reading/streaming still
+  // leaves scroll ownership with the reader.
+  useEffect(() => {
+    if (!inputFocused || messages.length === 0) return;
+    const viewport = window.visualViewport;
+    let animationFrame = 0;
+    const keepLatestVisible = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ block: "nearest" });
+      });
+    };
+
+    keepLatestVisible();
+    viewport?.addEventListener("resize", keepLatestVisible);
+    viewport?.addEventListener("scroll", keepLatestVisible);
+    window.addEventListener("orientationchange", keepLatestVisible);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      viewport?.removeEventListener("resize", keepLatestVisible);
+      viewport?.removeEventListener("scroll", keepLatestVisible);
+      window.removeEventListener("orientationchange", keepLatestVisible);
+    };
+  }, [inputFocused, messages.length]);
 
   // / shortcut focuses the chat textarea
   useEffect(() => {
@@ -369,8 +428,6 @@ export default function Home() {
   }
 
   const isEmpty = messages.length === 0;
-  const { inputFocused } = useChatFocus();
-
   // Computed once via useState's lazy initializer, guaranteed to run
   // exactly once for this component instance's lifetime -- not in an
   // effect (react-hooks/set-state-in-effect) and not a bare call during
@@ -386,7 +443,7 @@ export default function Home() {
 
   return (
     // Outermost shell: sidebar tone, full viewport
-    <div className="fixed inset-0 flex h-dvh-safe overflow-hidden overscroll-none bg-sidebar">
+    <div ref={appViewportRef} className="fixed inset-0 flex h-dvh-safe overflow-hidden overscroll-none bg-sidebar">
       {/* Sidebar sits directly on this canvas */}
       <Sidebar
         conversations={conversations}

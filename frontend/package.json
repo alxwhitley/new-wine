@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types --test lib/*.test.mts",
-    "test:e2e:responsive": "playwright test tests/e2e/sidebar-viewport.spec.ts"
+    "test:e2e:responsive": "playwright test tests/e2e/sidebar-viewport.spec.ts tests/e2e/chat-composer.spec.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
