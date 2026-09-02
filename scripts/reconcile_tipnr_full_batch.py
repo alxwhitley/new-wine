@@ -109,8 +109,9 @@ def reconcile_batch(
 
     retrieval = probe_hidden_retrieval(retrieval_factory, batch)
 
-    # Derive stored from observed state rather than asserting the batch size, so
-    # the balance check below can actually fail.
+    # Derive stored from observed state rather than asserting the batch size.
+    # The prefix check above already raises on any non-exact state in this
+    # window, so the balance check below is defence in depth, not a live gate.
     window = states[completed_through - batch.size:completed_through]
     stored = len([state for state in window if state.kind == "exact_complete"])
     report = {
@@ -164,6 +165,9 @@ def probe_hidden_retrieval(
             row = cursor.fetchone()
             if not row or row[0] != "on":
                 raise FullBatchReconciliationError("retrieval_session_not_readonly")
+            # Session-level, not SET LOCAL: this session is autocommit, so a
+            # LOCAL setting would not survive past the statement that set it.
+            cursor.execute("SET statement_timeout = '120s'")
             # One probe per item, aggregated into a single round trip each.
             chunk_ids = [item.chunk["id"] for item in batch.items]
             terms = [item.entity_id for item in batch.items]

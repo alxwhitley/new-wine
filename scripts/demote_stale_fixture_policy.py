@@ -65,8 +65,13 @@ def demote_stale_policy(
     *,
     approved: bool,
     commit: bool = False,
+    verify_factory: Callable[[str], object] | None = None,
 ) -> dict[str, object]:
-    """Demote exactly one current fixture policy row inside one transaction."""
+    """Demote exactly one current fixture policy row inside one transaction.
+
+    A committed demotion is re-verified on a FRESH connection before evidence
+    is written, never on the writing session that performed it.
+    """
 
     if not approved:
         raise FixtureDemotionError("demotion_not_authorized")
@@ -128,6 +133,32 @@ def demote_stale_policy(
         raise
     connection.close()
 
+    fresh_verified = None
+    if committed and verify_factory is not None:
+        fresh = verify_factory("identity")
+        try:
+            fresh.set_session(readonly=True, autocommit=True)
+            with fresh.cursor() as cursor:
+                cursor.execute(
+                    "/* demote:fresh_readonly */ SHOW transaction_read_only"
+                )
+                row = cursor.fetchone()
+                if not row or row[0] != "on":
+                    raise FixtureDemotionError("verify_session_not_readonly")
+                if _current_policy(cursor, chunk_id):
+                    raise FixtureDemotionError("stale_policy_current_after_commit")
+                cursor.execute(
+                    """/* demote:fresh_history */
+                    SELECT count(*) FROM source_passage_policy_versions
+                    WHERE chunk_id = %s::uuid""",
+                    (chunk_id,),
+                )
+                if int(cursor.fetchone()[0]) != 1:
+                    raise FixtureDemotionError("stale_policy_history_changed")
+        finally:
+            fresh.close()
+        fresh_verified = True
+
     report = {
         "schema_version": "biblical_context_stale_fixture_demotion.v1",
         "status": "committed" if committed else "rolled_back",
@@ -137,6 +168,13 @@ def demote_stale_policy(
         "policy_id": policy_id,
         "rows_updated": 1,
         "history_rows_preserved": 1,
+        "fresh_connection_verified": fresh_verified,
+        "reversible": False,
+        "irreversibility_reason": (
+            "migration 097's append_only trigger permits only true->false; "
+            "a false->true flip raises, so recovery requires inserting a new "
+            "current policy row"
+        ),
         "transactions": {
             "opened": 1,
             "committed": 1 if committed else 0,
@@ -186,8 +224,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if approval.get("fixture_policy_chunk_id") != stale_fixture_identity()["chunk_id"]:
         raise FixtureDemotionError("demotion_chunk_identity_mismatch")
 
+    from preflight_tipnr_full_batch import _load_identity_factory
+
     report = demote_stale_policy(
-        _load_write_factory(), approved=True, commit=args.commit
+        _load_write_factory(),
+        approved=True,
+        commit=args.commit,
+        verify_factory=_load_identity_factory(),
     )
     payload = canonical_json_bytes(report)
     write_new_preview(

@@ -520,6 +520,9 @@ class _FakeCursor:
 
     def execute(self, sql, params=()):
         self.executed.append((sql, params))
+        if sql.strip().upper().startswith("SET "):
+            self._rows = []
+            return
         matches = [marker for marker in self.fixture if marker in sql]
         if not matches:
             raise AssertionError(f"unexpected query: {sql[:80]}")
@@ -1559,9 +1562,35 @@ class TipnrRetrievalProbeWiringTests(_PacketMixin):
         self.assertIn("hidden_retrieval_leak", str(caught.exception))
 
     def test_probe_covers_every_item_in_one_round_trip_each(self):
-        source = (ROOT / "scripts" / "reconcile_tipnr_full_batch.py").read_text("utf-8")
-        self.assertIn("CROSS JOIN LATERAL match_chunks", source)
-        self.assertIn("CROSS JOIN LATERAL search_chunks_fts", source)
+        """Every item must appear in the bind parameters, not just in the SQL."""
+
+        batch = self.packet.batches[0]
+        captured = []
+
+        class _CapturingConnection(_FakeConnection):
+            def cursor(self):
+                cursor = _FakeCursor(self.fixture)
+                inner = cursor.execute
+
+                def record(sql, params=()):
+                    captured.append((sql, params))
+                    return inner(sql, params)
+
+                cursor.execute = record
+                return cursor
+
+        reconcile_module.probe_hidden_retrieval(
+            lambda mode: _CapturingConnection(_CLEAN_RETRIEVAL), batch
+        )
+        vector = [p for sql, p in captured if "retrieval_vector" in sql]
+        fts = [p for sql, p in captured if "retrieval_fts" in sql]
+        self.assertEqual(len(vector), 1, "vector probe must be one round trip")
+        self.assertEqual(len(fts), 1, "fts probe must be one round trip")
+        self.assertEqual(list(vector[0][0]), [i.chunk["id"] for i in batch.items])
+        self.assertEqual(list(fts[0][0]), [i.entity_id for i in batch.items])
+        self.assertEqual(list(fts[0][1]), [i.document["id"] for i in batch.items])
+        self.assertEqual(len(vector[0][0]), 200)
+        self.assertEqual(len(fts[0][0]), 200)
 
     def test_apply_main_wires_the_retrieval_factory(self):
         source = (ROOT / "scripts" / "apply_tipnr_full_batch.py").read_text("utf-8")
@@ -1706,6 +1735,61 @@ class TipnrStaleFixtureDemotionTests(_PacketMixin):
                 approved=True,
             )
         self.assertIn("still_current", str(caught.exception))
+
+    def test_committed_demotion_is_verified_on_a_fresh_connection(self):
+        ledger = []
+        opened = []
+
+        def verify(mode):
+            opened.append(mode)
+            return _FakeConnection({
+                "demote:fresh_readonly": [("on",)],
+                "demote:current_policy": [],
+                "demote:fresh_history": [(1,)],
+            })
+
+        report = demote_stale_policy(
+            lambda mode: self._DemoteConnection(self._fixture(), ledger),
+            approved=True, commit=True, verify_factory=verify,
+        )
+        self.assertEqual(opened, ["identity"])
+        self.assertIs(report["fresh_connection_verified"], True)
+
+    def test_fresh_verification_rejects_a_still_current_policy(self):
+        def verify(mode):
+            return _FakeConnection({
+                "demote:fresh_readonly": [("on",)],
+                "demote:current_policy": [("id", "chunk", "general_context", True)],
+                "demote:fresh_history": [(1,)],
+            })
+
+        with self.assertRaises(FixtureDemotionError) as caught:
+            demote_stale_policy(
+                lambda mode: self._DemoteConnection(self._fixture(), []),
+                approved=True, commit=True, verify_factory=verify,
+            )
+        self.assertIn("current_after_commit", str(caught.exception))
+
+    def test_dry_run_does_not_open_a_verification_connection(self):
+        opened = []
+        demote_stale_policy(
+            lambda mode: self._DemoteConnection(self._fixture(), []),
+            approved=True, verify_factory=lambda mode: opened.append(mode),
+        )
+        self.assertEqual(opened, [])
+
+    def test_report_discloses_that_demotion_is_irreversible(self):
+        report = demote_stale_policy(
+            lambda mode: self._DemoteConnection(self._fixture(), []), approved=True
+        )
+        self.assertIs(report["reversible"], False)
+        self.assertIn("append_only", report["irreversibility_reason"])
+
+    def test_retrieval_probe_sets_a_statement_timeout(self):
+        source = (ROOT / "scripts" / "reconcile_tipnr_full_batch.py").read_text("utf-8")
+        probe = source.split("def probe_hidden_retrieval")[1].split("\ndef ")[0]
+        self.assertIn("SET statement_timeout", probe)
+        self.assertNotIn("SET LOCAL statement_timeout", probe)
 
     def test_approval_names_the_demotion_and_the_exact_chunk(self):
         approval = expected_approval(self.packet, date.today())
