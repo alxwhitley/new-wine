@@ -1,0 +1,27 @@
+$========== PERSON(s)
+Aaron@Exo.4.14-Heb=H0175	High Priest living at the time of Egypt and Wilderness	Amram@Exo.6.18-1Ch + Jochebed@Exo.6.20-Num	Moses@Exo.2.10-Rev, Miriam@Exo.15.20-Mic	Elisheba@Exo.6.23	Nadab@Exo.6.23-1Ch	Tribe of Levi	#Excluded summary	Male
+– Named	Aaron@Exo.4.14-Heb	H0175«H0175=אַהֲרֹן	Aaron	Exo.4.14; Exo.4.27
+– Greek	Aaron@Exo.4.14-Heb	G0002«G0002=Ἀαρών	Aaron	Luk.1.5; Act.7.40
+– Total	Aaron	H0175, G0002	Exo.4.14ff	4
+@Briefest= High Priest
+@Brief= Moses' brother, first high priest of Israel
+@Short= Aaron was Moses' older brother.
+@Article= Excluded generated prose.
+$========== PLACE
+Abana@2Ki.5.12=H0071	Abana			Excluded map URL			#Excluded summary	Place
+– Named	Abana@2Ki.5.12	H0071«H0071=אֲבָנָה	Abana	2Ki.5.12
+– (same ref[s] with Variant)	Amana|Abana@2Ki.5.12	H0549H«H0549=אֲמָנָה	Amana	2Ki.5.12
+– Total	Abana or Amana	H0071, H0549H	2Ki.5.12	1
+@Briefest=
+@Brief= A river of Damascus.
+@Short= Excluded generated prose.
+@Article= Excluded generated prose.
+$========== OTHER
+Abaddon@Job.26.6=H0011	A male deity/angel in the New Testament						#Excluded summary	Supernatural
+– Named	Abaddon@Job.26.6	H0011«H0011=אֲבַדּוֹן	Abaddon	Job.26.6; Job.28.22
+– Greek	Abaddon@Job.26.6	G0003«G0003=Ἀβαδδών	Abaddon	Rev.9.11a
+– Total	Abaddon	H0011, G0003	Job.26.6ff	3
+@Briefest=
+@Brief= The angel of the bottomless pit.
+@Short= Excluded generated prose.
+@Article= Excluded generated prose.

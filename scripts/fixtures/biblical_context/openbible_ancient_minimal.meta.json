@@ -1,0 +1,13 @@
+{
+  "fixture_bytes": 6088,
+  "fixture_sha256": "e277488914f531f26c9d5542547d25d8bfecb899c920754ec84d5e79c5d303b4",
+  "license": "CC-BY-4.0",
+  "required_credit": "OpenBible.info",
+  "revision": "7eb18a5ee62f27b9b93bd6689ea272d76dd23b8f",
+  "selected_place_ids": [
+    "aea17b7",
+    "ab9a5ec"
+  ],
+  "source_artifact_sha256": "b8187aa4737e8517ccc090f765d2be11da4c548cd2a59d3cdcb62e952cb8c0f2",
+  "source_url": "https://github.com/openbibleinfo/Bible-Geocoding-Data/blob/7eb18a5ee62f27b9b93bd6689ea272d76dd23b8f/data/ancient.jsonl"
+}

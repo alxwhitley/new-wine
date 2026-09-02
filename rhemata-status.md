@@ -1,155 +1,178 @@
 # New Wine — Live Status
 
-Point-in-time state only. Overwritten each session, never appended to, never
-durable truth — the durable records are the code, git history, PLAN.md,
-docs/roadmap.md, docs/plan-archive.md, and CLAUDE.md. Counts are NOT recorded
-here except as a dated snapshot from a specific live query; treat any count
-seen elsewhere as unverified.
+Point-in-time state only. Overwritten each session, never appended to. Durable
+truth lives in code, git history, `PLAN.md`, `docs/roadmap.md`,
+`docs/plan-archive.md`, and `CLAUDE.md`.
 
-Last verified: 2026-09-01. **PLAN.md has zero active blockers.** `main` =
-`c937b6d`, **ahead 4, NOT pushed**. This session was frontend work plus
-committing a parallel Codex session's output. No database writes, no deploy.
-
-**Session close:** `.claude/skills/session-close/SKILL.md`. Target ≤150 lines.
+Last verified: 2026-09-01. **PLAN.md has zero active blockers.**
+`origin/main` is `fa952da`. Biblical-depth PR #3 is reconciled with that main
+line at integration merge `c3fc8e3`; it is not merged. Deployment state was not
+rechecked in this session, and the integration branch itself was not deployed.
 
 ---
 
 ## Current state
 
-**Four commits, none pushed.** `1db7793` frontend, `2067dd1` biblical-depth
-Phase 0+1 (Codex), `41f498d` biblical coverage baseline (Codex, earlier
-session), `c937b6d` ingestion TSV review dispositions. Pushing deploys all four
-Railway services — attended gate.
+**Biblical-depth Phases 0–8 are complete through a verified hidden TIPNR
+production pilot.** PR #3 contains the approved rights/provenance
+manifests, canonical source-use policy, hidden TIPNR/OpenBible preview tooling,
+deterministic passage classification, migration 097, default-off
+routing/retrieval, the Phase 5 prompt/generation contract, and the dedicated
+Phase 6 writer/reconciler permanently limited to TIPNR entity `H0175`. The
+proof path does not add a general proposition bypass to shared ingestion.
 
-**Codex delivered Phase 0 and Phase 1 of the biblical-depth plan, NOT Phase 2.**
-The session began on the belief Phase 2 was done; it is not. Verified absent:
-`scripts/parse_{tyndale,tipnr,openbible}_context.py`,
-`test_biblical_context_parsers.py`, `scripts/fixtures/biblical_context/`. What
-landed: four manifests + registration packet (Alex approved the dispositions
-2026-09-01, recorded in it) and `backend/app/services/source_use_policy.py` as
-the canonical protected registry. Both suites re-run here, not read: exit 0 (4
-manifests, 0 failures) and exit 0 (16 tests). **Nothing imports the policy
-module on a serving path — no answer behavior changed.** Plan:
-`docs/superpowers/plans/2026-09-01-biblical-depth-source-policy.md`.
+The immutable preview projected exactly one hidden licensed source, one alias,
+one attributed `biblical_context` document, one chunk carrying four ordered
+OSIS references, and one deterministic current `general_context` policy row;
+its hash remains
+`4b58d2f3e2860cdbe002e32eba8e47febfbb23d2d5ed63dd630fdec383b33b65`.
+Alex separately approved and attended the exact `stepbible-tipnr` registration,
+one 1536-dimension `text-embedding-3-small` request under the `$0.01` ceiling,
+and one atomic `H0175` transaction. Production now contains that exact hidden
+projection and policy ID `4e3169db-2aaf-4f0f-91e0-fc7c3a234625`; no proposition
+exists for the document.
 
-**The packet's governing-record change is NOT applied.** It carries proposed
-replacement text for CLAUDE.md Settled #5 and the implicated ARCHITECTURE
-section. Phase 0's own exit condition requires Alex's explicit approval of that
-diff before any answer-path work starts. Unapproved and unapplied.
+Phase 7 made no model call or database connection. The exact pinned
+7,916,469-byte TIPNR artifact contains 4,262 structural marker records: three
+documentation records and 4,259 entity records. Deterministic classification
+closed at eligible `3,959`, malformed `172`, skipped `115`, prohibited `16`,
+and duplicate `0`; eligible people/places are `3,055`/`904`. The eligible
+checksum is
+`1c7fdf4f7d587fdcfa7cf076732f913ef9b1066d50a0a5de9e227c7c1cf80cc2`
+and canonical inventory hash is
+`edb6dece3a9d2772ec9dfb21a80d192225ec14878084e5b30cb38ea667b80040`.
+Three repeated runs were byte-identical. The cost projection is 3,959 later
+embedding requests over 1,831,354 canonical UTF-8 bytes, conservatively
+610,452 tokens, estimated USD `0.01220904`, with a proposed maximum ceiling of
+USD `0.02441808`; it is evidence for a later packet, not spend authority.
 
-**Four Alex-directed frontend changes shipped (`1db7793`), all unverified in a
-browser** — typecheck and lint only.
+Phase 8 freezes exactly 20 additional items: the first 10 eligible people and
+first 10 eligible places by entity ID after excluding `H0175`. The selection
+checksum is
+`398fa80f93fc4c7464a22ca110d9a4546c60d4667f04ba2a3aebafb18ad8fb2b`,
+the complete packet hash is
+`a48f506a38db740d4d2cd8648c8de95ac7c25cb4550916e236a023738184a1e8`,
+and the zero-effect preview payload hash is
+`4171181b7003317044edafb8eeb836de7596f795489ba1bc8faafac72d716237`.
+The 20 rendered texts total 5,463 UTF-8 bytes, conservatively estimate 1,821
+tokens and USD `0.00003642`, and are capped at 20
+`text-embedding-3-small` requests and USD `0.01`. The fixed sample IDs are
+`G0010`, `G0132`, `G0223J`, `G0009`, `G0137`, and `G0494`; sample hash is
+`ad2299d96582635f151b885d59f09b722297a10ab00354a46ddd5145c4041515`.
 
-1. **Chat input has no focus ring, deliberately.** Reverses the fix for
-   finding #8 of `docs/audits/2026-08/b6_accessibility_pass_2026-08-28.md`.
-   Alex was told it re-opens that WCAG 2.4.7 gap and chose it. The textarea
-   keeps `focus:outline-none`, so the product's most-used input has zero
-   visible focus indicator.
-2. **Answer `h2`/`h3` are pure white** for hierarchy; inline `strong` stays
-   `text-foreground` — two tiers, not three. `--ring` is still shadcn's blue
-   (`210 74.8% 49.8%`), the only blue token in a warm palette, on 40 sites.
-3. **STEPBible CC BY notice removed from four inline UI sites.** Still served
-   at `app/sources/page.tsx:72` — now its ONLY location. It must survive any
-   future edit of that page or the product falls out of CC BY compliance.
-4. **Precept Austin word studies now render in the inline Study Panel**,
-   reversing SP2's deliberate lexicon-only decision on Alex's call. "From the
-   Library" stays out; the standing PA exclusions (answer retrieval, quote
-   pipeline, paraphrase) are untouched. `/study/excerpt` is auth-gated, so
-   guests get an honest empty. No PA credit displays — the endpoint returns
-   `{"content"}` only, matching `/study`.
+The Phase 8 preview has no network, database, or model capability. Read-only
+preflight requires exact H0175 verification and a unanimous all-clean or
+all-exact-complete 20-item state. The apply gate requires an exact same-day
+approval, validates all 20 vectors before opening a write connection, and can
+write only one atomic 60-row transaction: 20 documents, 20 chunks, and 20
+current `general_context` policies. It does not insert or update the existing
+source, alias, or `H0175`, and has no proposition write path. Fresh
+reconciliation requires all 20 exact-complete rows, zero propositions, and
+zero matches across 20 vector plus 20 FTS probes.
 
-**The `/study` word-search regression is live and unfixed.** Searching a word
-fetches its PA article into `wordStudyContent` (`app/study/page.tsx:954`) and
-never renders it — `WordStudyPanel` shows lexicon only. Dropped in `40cdb4c`;
-the orphaned fetch says accidental. Alex chose the panel over it. That page's
-`InlineWordPanel` (tap a token in a verse) does still show the excerpt.
+The first authorized apply attempt produced no durable report and committed no
+database rows; a fresh read-only check found all 20 candidates clean. Because
+the failed process did not preserve request counters, its exact embedding count
+is unknown and conservatively bounded at 0–20 under its separate USD `0.01`
+ceiling. Build commit `643c9f1` added structured request counters and immutable,
+content-addressed attempt evidence. An authorized rollback-only probe then
+found a live UUID/text completion-stamp mismatch; build commit `59dd15d` casts
+the document IDs to `uuid[]`. The corrected rollback probe staged all 60 rows,
+made zero model requests, rolled back, and left all 20 candidates clean. Its
+evidence hash is
+`e57857768c8a398dce480dac6332c53f24a5dd765b641d0313c8a2e45f6983fc`.
 
-**Prose-channel quotation guard is live and unmeasured.** `6e60486` is pushed,
-so it runs on the real answer path via `producer.py`'s `_has_ungrounded()`. Its
-false-positive rate has never been measured on live traffic; the 400-char
-window and surname matching were tuned on five answers. Its punctuation
-normalization is load-bearing — corpus text uses curly quotes, the writer emits
-straight ones, so removing the fold makes it refuse ACCURATE answers.
+Alex separately authorized a fresh retry. It completed exactly 20 additional
+`text-embedding-3-small` requests under USD `0.01`, validated all vectors, and
+committed the exact atomic 60-row transaction. Both the coupled verifier and a
+fresh independent read-only reconciliation passed at attempted `20`, stored
+`20`, errored `0`, skipped `0`, with zero propositions and zero matches across
+all 20 vector and 20 FTS probes. The sample hash remains exact, the verification
+payload hash is
+`d50aa50a7d6493412fe66470f9afeb9f38be194f9926462edae86fb50a86ab9e`,
+and the immutable final evidence file hash is
+`d4ddf85fa2e79f037f15faf2555cc2ea60024fbf3aed520d66a150aabe0a6df5`.
 
-**Scripture fidelity is unguarded.** `verify_verse_mention()` is an EXISTENCE
-check only; nothing compares a claim or quoted wording to the verse text, and
-the verifier only sees references the model DECLARES, so unreferenced
-Scripture quotation is invisible to every guard.
+The governing boundary remains unchanged:
 
-**Auth flow (`df2d5f9`, `5473265`) — do not revert.** Beta access is per-device
-`localStorage`, trimmed and case-insensitive; `hooks/useAuthGate.ts` is the sole
-owner of auth-modal state. Pre-existing: a `next-themes` hydration mismatch.
+- protected Spirit-filled/charismatic topics admit only exact source IDs from
+  Alex-approved topic-scoped registries;
+- general biblical/history context remains separately labeled and may use only
+  current eligible structured-reference passages;
+- other orthodox disputes require two distinct registered and evidenced source
+  slots, never corpus-majority inference or adjudication;
+- every neighbor is rechecked, cache identities isolate effective policy state,
+  and a house paper remains fence-only on the enabled path;
+- mixed, uncertain, absent, malformed, stale, prohibited, and unknown passage
+  classifications fail closed.
 
-**Every push to `main` deploys production.** All four Railway services rebuild
-(`watchPatterns: []`), so even docs-only commits redeploy.
+**Migration 097 remains applied and verified in production.** Its table, RLS,
+closed-set and metadata-coupling constraints, one-current partial unique index,
+append-only trigger, and privilege boundaries remain unchanged. The table now
+contains 21 current approved `general_context` rows: the `H0175` proof plus the
+20-item Phase 8 pilot.
 
-**Two traps.** `/async-chat/result` is SSE with JSON spanning multiple `data:`
-lines — parse by EVENT, or an answer reads as zero-citation, exactly like an
-attribution-guard failure. Railway deployment meta populates progressively;
-mid-`BUILDING` `rootDirectory`/`configFile` read null.
+**The feature remains inactive and the proof remains hidden.**
+`BIBLICAL_CONTEXT_ANSWER_ENABLED` still defaults to false, so production retains
+the existing blanket commentary exclusion and does not read migration 097 on
+the answer path. Protected-source and plural-viewpoint registries remain empty.
+No proposition process ran, no visibility changed, no live answer was
+requested, and no deployment or feature enablement occurred. The successful
+pilot does not authorize ingestion of the remaining 3,938 eligible TIPNR items.
 
-**Decided, do not re-raise:** guest-speaker attribution stays as-is;
-`/corpus-inventory/export` stays public. Privacy/ToS DEFERRED pending legal
-entity, jurisdiction, contact; `POLICY_COPY` in `consent.py` is duplicated in
-`consent-gate.tsx` and they move together.
+The initial post-commit verifier exposed a permission mismatch: the dedicated
+analysis role can execute the security-invoker retrieval RPCs but cannot select
+their `app_settings` dependency. No write or embedding retry occurred. Alex
+approved build commit `494175e`, which keeps exact-state checks on
+`newwine_readonly_analysis`, runs only the two RPC probes through a separate
+service connection asserted read-only before queries, and preserves the apply
+result if post-commit verification fails. Fresh reconciliation passed at
+attempted `1`, stored `1`, errored `0`, skipped `0`, with vector `0` and FTS `0`.
+The ignored proof artifact hash is
+`fc749e7b68db61c0984073a13ed298027d7ca775679f37130bd2959547de368f`.
 
-**Quote rail still off (`QUOTE_SELECTION_ENABLED=false`).** CLF's 63 sermons
-are auto-transcribed audio under `sermon_transcript` with a confirmed
-mistranscription and nothing gates on transcript status — **before the flag
-flips back on, CLF needs quoting exclusion or audio confirmation.** 15 further
-CLF recordings are `held_permanent` for content shape + pastoral privacy.
-
-**Search analytics live; B7 done.** A degraded outcome stamps
-`answer_jobs.analytics_outcome` (`scripts/analytics_health_report.py`), but
-that marker has never fired. **New Wine A2 is NOT ingestion-ready** — held by
-Alex, no live-call budget without a fresh ceiling.
-
-**Still on the old name deliberately:** applied migrations; this filename; the
-DB source row and the two code sites naming it; `rhemata_tracker.xlsx`; the
-Vercel project; `rhemata.app` (404); the API hostname
-`rhemata-production.up.railway.app` (frontend API base URL moves in lockstep);
-"manna"/"rhema" in corpus. Full list: docs/roadmap.md Triggered.
+**Integration state.** Current `main` was merged into the Phase branch without
+rewriting history. The later Phase OpenBible contract was retained over main's
+earlier add/add draft: `modern_associations` identity comes from the mapping
+key, not a nonexistent nested `modern_id`. Main's newer frontend/product
+landmines and the approved Phase 5 governing invariants both remain in
+`CLAUDE.md`. The named Phase worktree's Alex-owned modified and untracked files
+remain preserved and outside PR #3.
 
 ---
 
-## Findings surfaced, not yet acted on
+## Session outcome and measures
 
-- **The biblical-depth workstream has no roadmap classification.** It now has
-  committed code but no entry in `docs/roadmap.md`. Classification is
-  chat-originated per the Project Knowledge Read Contract — Alex's call, not
-  the terminal's.
-- **Coverage baseline (`41f498d`):** of 48 retrieval questions, 14 strong, 19
-  thin, 2 empty, 13 misretrieved; weakest in OT passage interpretation,
-  biblical context, whole-Bible synthesis. More material alone will not fix
-  it — routing and source concentration shape the answer.
-- **`scripts/sp1_answer_harness.py` does not exercise the real answer path.**
-  It reimplements generation and never imports `producer.py`. Any before/after
-  comparison run through it measures a proxy — relevant to judging the depth
-  work.
-- **A served citation carried a dangling `chunk_id`** —
-  `0b9d1930-7103-4520-8e37-e382dc7b3227` matched zero of 186,944 `chunks` rows
-  while its document resolved normally. Needs one check of how `producer.py`
-  populates it.
-- **`sources/` must never go in this repo** — the remote is PUBLIC. Same rule
-  keeps the 60 untracked `new_wine_issue_02_1973_review_*` dirs out of git;
-  they were deliberately excluded from this session's commits, as were
-  `reference_grounding_review/` and `tasks/` (local scratch).
-- **The house source row is still named "Rhemata"** (`bf6d9e28-…`) — rename
-  moves `name`, `slug` and both alias columns together (Invariant 6). Attended.
-- **11 ingested CLF documents carry an offering appeal**, one an usher
-  direction, one a dismissal. Named-congregant audit still open.
+- Original outcome: **completed** — the exact balanced 20-item Phase 8 pilot
+  committed atomically and passed both coupled and independent reconciliation;
+  the biblical-depth foundation has met its ingestion-ready benchmark.
+- Acceptance: **passed** — 24/24 Phase 8 tests, 4/4 manifest contracts, 39/39
+  parser/inventory tests, all 61 Phase 3–5 classification/policy/routing/
+  generation tests, and 31/31 Phase 6 tests. The corrected rollback probe
+  staged and rolled back all 60 rows with a clean postflight. The authorized
+  retry completed exactly 20 requests, stored 20/20 items with zero errors or
+  skips, and both fresh reconciliations found zero propositions and 40/40
+  retrieval probes with zero matches.
+- Unplanned investigations started: **1** — the failed first-attempt evidence
+  gap and rollback-probe UUID mismatch were diagnosed only to close the active
+  pilot safely.
+- Findings promoted to Blocker: **0**.
+- Active critical-path item at close: **0** — any larger TIPNR ingestion remains
+  Scheduled work rather than an active blocker.
+- Scope changes approved by Alex: the exact preflight, initial apply attempt,
+  failure-evidence hardening, rollback probes and UUID fix, fresh 20-request
+  retry, atomic 60-row production transaction, and fresh reconciliation. No
+  full-corpus batch, merge, deployment, registry assignment, doctrinal
+  assignment, visibility change, live answer, or feature authority was added.
 
 ---
 
 ## Next single item
 
-**None designated — Alex picks.** The session leaves four unpushed commits;
-pushing is a production deploy of all four services.
-
-Open, unordered: push + deploy, then measure the quotation guard's live
-false-positive rate; Codex resuming biblical-depth Phase 2 (parsers); Alex
-ruling on the packet's governing-record diff; the `/study` word-search
-regression; browser verification of this session's four UI changes; Scripture
-fidelity; the dangling `chunk_id`; the DB source row rename; the 301/318
-re-ingest (cost estimate first); New Wine A2 (fresh ceiling); quote
-accuracy/relevance repair; privacy/ToS drafts.
+**Decide whether to scope a later ingestion packet for the remaining 3,938
+eligible TIPNR items.** Any such packet requires a fresh design, exact selection
+and cost ceiling, rollback and reconciliation contract, and separate attended
+approval. The verified pilot supplies no automatic continuation authority.
+Visibility change, answer enablement, live answers, deployment, registry
+assignments, doctrinal assignments, and PR #3 merge remain separate attended
+decisions.

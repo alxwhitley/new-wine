@@ -29,6 +29,7 @@ import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -42,6 +43,266 @@ from app.services.llm_client import get_guardrails_text
 from app.services.position_papers import PILLARS
 
 logger = logging.getLogger(__name__)
+
+
+# Default-off Phase 4 gate. Merging the routing contract must not alter the
+# current blanket commentary exclusion or query migration 097 in production.
+BIBLICAL_CONTEXT_ANSWER_ENABLED = (
+    os.environ.get("BIBLICAL_CONTEXT_ANSWER_ENABLED", "false").lower() == "true"
+)
+
+_SOURCE_PASSAGE_POLICY_TABLE = "source_passage_policy_versions"
+_SOURCE_POLICY_BATCH_SIZE = 50
+_REFERENCE_SOURCE_KINDS = frozenset({"biblical_context", "commentary"})
+_ALWAYS_EXCLUDED_ANSWER_KINDS = frozenset({"word_study"})
+
+
+@dataclass(frozen=True)
+class SourceUseCandidatePartition:
+    """Already-enriched candidates separated before teacher selection."""
+
+    doctrinal: Tuple[dict, ...]
+    reference: Tuple[dict, ...]
+    viewpoint_evidence: tuple
+
+
+def _source_kind(chunk):
+    # type: (dict) -> str
+    return chunk.get("source_kind") or chunk.get("source_type") or ""
+
+
+def _valid_current_policy(row, chunk_id):
+    # type: (object, str) -> bool
+    """Validate database policy metadata at the retrieval trust boundary."""
+    from app.services.source_use_policy import PROTECTED_TOPIC_KEYS
+
+    if not isinstance(row, dict) or row.get("chunk_id") != chunk_id:
+        return False
+    rule_version = row.get("rule_version")
+    if (
+        row.get("is_current") is not True
+        or not isinstance(rule_version, str)
+        or not rule_version.strip()
+    ):
+        return False
+    protected_topics = row.get("protected_topic_keys")
+    if (
+        not isinstance(protected_topics, list)
+        or any(topic not in PROTECTED_TOPIC_KEYS for topic in protected_topics)
+    ):
+        return False
+    issue_key = row.get("issue_key")
+    viewpoint_key = row.get("viewpoint_key")
+    canonical_key = re.compile(r"^[a-z][a-z0-9_]*$")
+    if issue_key is not None and (
+        not isinstance(issue_key, str) or canonical_key.fullmatch(issue_key) is None
+    ):
+        return False
+    if viewpoint_key is not None and (
+        not isinstance(viewpoint_key, str)
+        or canonical_key.fullmatch(viewpoint_key) is None
+    ):
+        return False
+    classifier_kind = row.get("classifier_kind")
+    model = row.get("model")
+    prompt_fingerprint = row.get("prompt_fingerprint")
+    if classifier_kind == "deterministic":
+        if model is not None or prompt_fingerprint is not None:
+            return False
+    elif classifier_kind == "model":
+        if (
+            not isinstance(model, str)
+            or not model.strip()
+            or not isinstance(prompt_fingerprint, str)
+            or not prompt_fingerprint.strip()
+        ):
+            return False
+    else:
+        return False
+    reason_codes = row.get("reason_codes")
+    if (
+        not isinstance(reason_codes, list)
+        or not reason_codes
+        or any(reason is None for reason in reason_codes)
+    ):
+        return False
+    policy_class = row.get("policy_class")
+    if policy_class == "general_context":
+        return not protected_topics and issue_key is None and viewpoint_key is None
+    if policy_class == "orthodox_viewpoint":
+        return not protected_topics and issue_key is not None and viewpoint_key is not None
+    if policy_class == "protected_spirit_filled":
+        return bool(protected_topics) and issue_key is None and viewpoint_key is None
+    return (
+        policy_class in {"mixed", "uncertain"}
+        and issue_key is None
+        and viewpoint_key is None
+    )
+
+
+def enrich_source_use_candidates(chunks, db):
+    # type: (List[dict], object) -> List[dict]
+    """Attach exact source and current passage-policy metadata in bounded reads.
+
+    Missing, malformed, duplicate, or unavailable metadata stays absent so the
+    route filter can drop the candidate. Input chunks are never mutated.
+    """
+    from app.services.single_teacher_lock import resolve_source_ids_for_documents
+
+    copied = [dict(chunk) for chunk in chunks]
+    doc_to_source = resolve_source_ids_for_documents(
+        db, [chunk.get("document_id", "") for chunk in copied]
+    )
+    for chunk in copied:
+        source_id = doc_to_source.get(chunk.get("document_id", ""))
+        if source_id:
+            chunk["_source_id"] = source_id
+
+    chunk_ids = sorted({chunk.get("id") for chunk in copied if chunk.get("id")})
+    rows_by_chunk = {}  # type: Dict[str, List[dict]]
+    try:
+        for offset in range(0, len(chunk_ids), _SOURCE_POLICY_BATCH_SIZE):
+            batch = chunk_ids[offset:offset + _SOURCE_POLICY_BATCH_SIZE]
+            result = (
+                db.table(_SOURCE_PASSAGE_POLICY_TABLE)
+                .select(
+                    "chunk_id, policy_class, protected_topic_keys, issue_key, "
+                    "viewpoint_key, classifier_kind, rule_version, model, "
+                    "prompt_fingerprint, reason_codes, is_current"
+                )
+                .in_("chunk_id", batch)
+                .eq("is_current", True)
+                .execute()
+            )
+            for row in (result.data or []):
+                chunk_id = row.get("chunk_id") if isinstance(row, dict) else None
+                if chunk_id in batch:
+                    rows_by_chunk.setdefault(chunk_id, []).append(row)
+    except Exception:
+        logger.exception(
+            "source_use_policy: current passage-policy lookup failed closed"
+        )
+        rows_by_chunk = {}
+
+    for chunk in copied:
+        matches = rows_by_chunk.get(chunk.get("id"), [])
+        if len(matches) == 1 and _valid_current_policy(matches[0], chunk.get("id")):
+            chunk["_source_policy"] = dict(matches[0])
+    return copied
+
+
+def _registered_slot_for_source(issue, source_id):
+    # type: (object, str) -> Optional[str]
+    slots = [
+        slot for slot in issue.viewpoint_slots
+        if source_id in issue.registered_source_ids_for(slot)
+    ]
+    return slots[0] if len(slots) == 1 else None
+
+
+def partition_source_use_candidates(
+    chunks, query_policy, protected_registry, issue_registry
+):
+    """Apply the Phase 4 route contract to enriched retrieval candidates."""
+    from app.services.source_use_policy import (
+        SourceBoundary,
+        ViewpointEvidence,
+    )
+
+    doctrinal = []  # type: List[dict]
+    reference = []  # type: List[dict]
+    evidence = []
+    issue = issue_registry.get(query_policy.issue_key) if query_policy.issue_key else None
+
+    if query_policy.source_boundary is SourceBoundary.PROTECTED_SPIRIT_FILLED:
+        allowed_ids = protected_registry.allowed_source_ids(
+            query_policy.protected_topic_keys
+        )
+        for chunk in chunks:
+            kind = _source_kind(chunk)
+            source_id = chunk.get("_source_id")
+            if (
+                kind in _ALWAYS_EXCLUDED_ANSWER_KINDS
+                or kind in _REFERENCE_SOURCE_KINDS
+                or source_id not in allowed_ids
+            ):
+                continue
+            if issue is None:
+                doctrinal.append(dict(chunk, _source_use_role="doctrinal"))
+                continue
+            slot = _registered_slot_for_source(issue, source_id)
+            if slot is not None:
+                reference.append(dict(
+                    chunk,
+                    _source_use_role="viewpoint",
+                    _viewpoint_slot=slot,
+                ))
+                evidence.append(ViewpointEvidence(slot, source_id))
+        return SourceUseCandidatePartition(
+            tuple(doctrinal), tuple(reference), tuple(evidence)
+        )
+
+    for chunk in chunks:
+        kind = _source_kind(chunk)
+        if kind in _ALWAYS_EXCLUDED_ANSWER_KINDS:
+            continue
+        if kind not in _REFERENCE_SOURCE_KINDS:
+            if issue is None:
+                doctrinal.append(dict(chunk, _source_use_role="doctrinal"))
+            continue
+        policy = chunk.get("_source_policy")
+        if not isinstance(policy, dict):
+            continue
+        if issue is None:
+            if policy.get("policy_class") == "general_context":
+                reference.append(dict(chunk, _source_use_role="reference"))
+            continue
+        source_id = chunk.get("_source_id")
+        viewpoint = policy.get("viewpoint_key")
+        if (
+            policy.get("policy_class") == "orthodox_viewpoint"
+            and policy.get("issue_key") == issue.issue_key
+            and viewpoint in issue.viewpoint_slots
+            and source_id in issue.registered_source_ids_for(viewpoint)
+        ):
+            reference.append(dict(
+                chunk,
+                _source_use_role="viewpoint",
+                _viewpoint_slot=viewpoint,
+            ))
+            evidence.append(ViewpointEvidence(viewpoint, source_id))
+    return SourceUseCandidatePartition(
+        tuple(doctrinal), tuple(reference), tuple(evidence)
+    )
+
+
+def select_source_use_references(candidates, scores_by_id, issue_scoped, limit):
+    # type: (Tuple[dict, ...], Dict[str, float], bool, int) -> List[dict]
+    """Bound references without ranking every evidenced viewpoint out."""
+    ranked = sorted(
+        candidates,
+        key=lambda chunk: scores_by_id.get(chunk.get("id"), 0.0),
+        reverse=True,
+    )
+    if not issue_scoped:
+        return ranked[:limit]
+    selected = []  # type: List[dict]
+    selected_ids = set()
+    seen_slots = set()
+    for chunk in ranked:
+        slot = chunk.get("_viewpoint_slot")
+        if slot and slot not in seen_slots:
+            selected.append(chunk)
+            selected_ids.add(chunk.get("id"))
+            seen_slots.add(slot)
+            if len(selected) >= limit:
+                return selected
+    for chunk in ranked:
+        if chunk.get("id") not in selected_ids:
+            selected.append(chunk)
+            if len(selected) >= limit:
+                break
+    return selected
 
 
 def is_word_study_query(question: str) -> bool:

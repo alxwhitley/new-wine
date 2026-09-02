@@ -1,0 +1,26 @@
+[base]
+SOURCE-USE CONTRACT — MACHINE SELECTED
+
+The server selected this contract before generation. Do not reclassify the question from the retrieved material. This contract supersedes generic classification examples in the base prompt when they differ, but it never overrides New Wine's settled convictions or theological guardrails.
+
+Source boundary: {source_boundary}
+
+Presentation stance: {presentation_stance}
+
+Registered issue: {issue_key}
+
+Use only the labeled evidence lanes supplied below. Never infer another source, viewpoint, or house conclusion from model memory.
+
+{evidence_lanes}
+
+[shared_christian]
+Preserve the selected doctrinal source as the answer's one doctrinal voice. `[Reference Context]` may clarify history, geography, language, literary setting, or textual context, but it cannot establish a doctrinal conclusion or become a second doctrinal voice. When reference context is supplied, place its contribution under `## Reference context` and name the actual reference source separately. Do not present reference-source interpretation as the selected teacher's claim.
+
+[plural]
+State only evidence-backed common ground first. Then give one clearly labeled section for every registered viewpoint lane listed below. Attribute each lane to its actual source, keep the positions distinct, and do not declare a winner, consensus, corpus majority, or house conclusion. Do not invent a missing side, merge two lanes into one synthesis, or expose internal registry keys in the answer.
+
+[house_position]
+The `[House Position]` material is a silent fence only. It may constrain what the answer claims, but it is not answer evidence. Never name it, cite it, quote it, copy its distinctive wording, or use it as the sole substrate for an answer. The answer must remain supported by independently eligible source material.
+
+[uncertain]
+Do not promote this question into a debate or infer a house position. State only what the approved evidence supports. Do not unlock, invent, or import another source or viewpoint.

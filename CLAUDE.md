@@ -55,15 +55,18 @@ later session makes deliberately).
 4. **The probabilistic claim-support checker is HELD, pending measurement.** Do
    not build one. Do not propose a model-based judge anywhere — that shape has
    failed five times (Open Decision #20).
-5. **Commentaries are excluded from answers; searchable only** (Alex's call,
-   1 Aug). **RESOLVED in code 2026-08-06/07** — answer retrieval hard-excludes
-   `source_kind`/`source_type` commentary at Step 2.6 (before collapse/rerank),
-   with a second strip after neighbor expansion. Soft down-weight +
-   `COMMENTARY_CONTEXT_CAP=3` retired. Study Mode (`/study/commentary`,
-   `match_commentary_*` RPCs) is unchanged and remains the searchable surface.
-   Helpers: `is_commentary_chunk` / `exclude_commentary_chunks` in
-   `backend/app/services/answer_toolbox.py` (moved out of the now-deleted
-   chat.py, 2026-08-07 mirror-unification job) — one implementation, not two.
+5. **Commentaries remain excluded from ordinary answers by default and remain
+   searchable in Study Mode.** The answer path retains its existing hard
+   exclusion whenever `BIBLICAL_CONTEXT_ANSWER_ENABLED=false`. When that flag is
+   separately approved and enabled, only a current migration-097
+   `general_context` passage may support a general shared-Christian route, or a
+   current registered `orthodox_viewpoint` passage may fill its exact issue-
+   scoped slot on a plural route. Protected routes never receive general
+   commentary/reference material; they admit only exact source IDs in Alex's
+   topic-scoped protected-source registry. `word_study` and Precept Austin remain
+   excluded. License, visibility, attribution, neighbor, citation, and reference
+   gates still apply. Enabling the flag is a separate attended release decision,
+   not implied by merging the implementation.
 6. **Paragraphs that cannot be tied to a specific statement still display** — not
    flagged, not logged, not blocked. Deliberate, to avoid drowning in false
    positives from connective prose. Alex will revisit.
@@ -321,15 +324,16 @@ Landmines correction on that job for why).
     consensus than the corpus's full range of material would otherwise show —
     accepted, not an oversight. Do not build a corrective for either point
     without Alex revisiting it first.
-17. **If excluding every retrieved teacher would leave an empty answer, fall
-    back to the position paper's own voice — a sanctioned form under the
-    No-Oracle Rule — carrying the standard disclaimer** ("New Wine can make
-    mistakes. Please let us know if you see any."), appended deterministically
-    in code, never left to the model to phrase. This is the ONLY sanctioned
-    reason for this fallback: never thin retrieval, never a match failure,
-    never an error — those keep using the product's existing graceful-
-    degradation / clean-error handling, unchanged. Every time this fallback
-    fires is logged.
+17. **If excluding every retrieved teacher would leave an empty answer, behavior
+    depends on the biblical-context release state.** While
+    `BIBLICAL_CONTEXT_ANSWER_ENABLED=false`, the existing position-paper voice
+    fallback and deterministic disclaimer remain unchanged. When that flag is
+    separately approved and enabled, the fallback is disabled: the position paper
+    remains silent fence context only, and an empty independently eligible
+    evidence set returns clean no-material copy before generation. The enabled
+    path may never use the paper itself as answer substrate or supply the paper's
+    distinctive phrasing. This does not alter decision #16's contradiction
+    exclusion or authorize feature enablement.
 
 ## Settled product decisions (2026-08-08) — quote rail: human approval removed; do not reopen
 

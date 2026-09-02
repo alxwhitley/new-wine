@@ -19,7 +19,9 @@ reviewed_artifacts:
     revision: 02843f07cbb5009e00999a7c0efead6430dbb6e7
     bytes: 7916469
     sha256: 69f69d80d8a329576915a397d815bd6ff1849d8954d071c57b0ac4453aee180e
-    entity_records: 4263
+    structural_marker_records: 4262
+    documentation_records: 3
+    entity_records: 4259
 
 nested_rights:
   status: field_level_exclusions_required
@@ -37,10 +39,12 @@ v1_policy:
   study_mode_eligible: true
   input_file: Proper Nouns/TIPNR - Translators Individualised Proper Names with all References - STEPBible.org CC BY.txt
   record_grammar:
-    entity_start: A line beginning with `$==========` starts an entity record.
-    primary_row: The first tab-separated row after the marker.
+    record_start: A line beginning with `$==========` starts a structural record.
+    documentation_records: The three no-space marker records at source ordinals 1–3 are source documentation and are never entity-eligible.
+    entity_markers: Spaced PERSON(s) and PLACE markers may be eligible; OTHER, EXCLUDED OTHER, and PERSON+PLACE receive explicit non-eligible outcomes.
+    primary_row: The first tab-separated row after an entity marker; approved person rows have nine meaningful columns and approved place rows have eight.
     form_row: A later tab-separated row whose first column is a significance marker; rows marked `Total` are excluded.
-    generated_prose: Lines beginning `@Briefest=`, `@Brief=`, `@Short=`, or `@Article=` are excluded.
+    generated_prose: Lines beginning `@Briefest=`, `@Brief=`, `@Short=`, `@Article=`, or `@Ambiguity=` are excluded without retaining their values.
   allowed_raw_fields:
     - raw_path: entity marker `$========== {PERSON(s)|PLACE|OTHER}`
       output_field: entity_type

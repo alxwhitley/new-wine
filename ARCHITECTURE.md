@@ -151,18 +151,25 @@ form can prefill on URL blur. Service-role-only RLS (no owning user).
 
 ### Retrieval
 
-Query expansion (3 variants via Groq) → vector + FTS per variant → RRF (K=60) →
-disabled-source filter → **hard-exclude commentary** (Settled decision #5;
-`is_commentary_chunk` / `exclude_commentary_chunks`, in
-`backend/app/services/answer_toolbox.py`) → top 30 with `SOURCE_KIND_FUSION_WEIGHTS` (book ×0.8, lexicon
-×0.5; commentary is not soft-weighted — it is removed earlier) → Cohere
-rerank → top 8 → neighbor expansion → second commentary strip (defense-in-depth).
+Query expansion (3 variants via Groq) → vector + FTS per variant → RRF
+(K=60) → disabled-source and existing license/visibility gates →
+route/passage-policy enrichment and filtering when the default-off biblical-
+context flag is enabled; otherwise the existing hard commentary exclusion →
+separate doctrinal and eligible-reference pools → one-teacher lock on the
+doctrinal pool → bounded ranking/rerank → neighbor expansion → enrichment and
+route-policy recheck of every neighbor. Protected routes require exact
+topic-approved source IDs. General reference passages require a current
+eligible migration-097 policy row. Plural routes require two distinct
+registered, evidenced issue slots or return deterministic corpus-gap copy.
+`word_study` and Precept Austin remain excluded from ordinary answers.
 
 - `match_chunks` — HNSW, `hnsw.ef_search=200`
 - `search_documents` — document-level FTS, ts_headline snippets
 - Neighbor expansion skips commentary/lexicon (`_NEIGHBOR_SKIP_KINDS`)
-- Commentaries never enter answer context (decision #5); Study Mode still
-  serves them via `match_commentary_*` / `GET /study/commentary`
+- Commentaries do not enter answer context while the biblical-context flag is
+  off. If separately enabled, only route-compatible, currently eligible policy
+  rows can enter general or registered-plural context; protected routes,
+  `word_study`, and Precept Austin remain excluded. Study Mode is unchanged.
 - FTS OR-fallback: on 0 results, retries OR-joined top-3 longest tokens (min 6
   chars, `_FTS_BROAD_TERMS` excluded)
 - `citable_count` gate counts post-Cohere, pre-neighbor top-8; sermon/citable
@@ -193,6 +200,19 @@ answer: one constrained regeneration is followed, only if needed, by a
 deterministic grounded `Source voice` label before reference verification.
 This orchestration is versioned as `policy_v3`, so older anonymous cached
 answers cannot bypass it.
+
+When the default-off biblical-context feature is enabled, `producer.py`
+appends a route-scoped generation contract derived from the finalized pre-
+writer policy. General-reference context remains visibly separate from the
+selected doctrinal voice; plural generation requires distinct labeled
+coverage of every registered evidence lane; protected routes retain their
+exact approved-source boundary; and a house paper remains silent fence
+context only. Deterministic validation shares the existing single retry budget
+and checks source-display coverage, reference separation, direct house-paper
+copying, permitted names, quotations, citations, and references. Failure after
+the retry serves fixed clean copy with no citations or quotes. Flag-off prompt
+and generation behavior remain unchanged, and enabled contract wording has
+its own reuse-key fingerprint.
 
 ---
 

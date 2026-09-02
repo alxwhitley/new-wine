@@ -54,7 +54,7 @@ OPENBIBLE_GEO_RAW_FIELDS = {
     "$.friendly_id",
     "$.types[]",
     "$.verses[].osis",
-    "$.modern_associations.*.modern_id",
+    "$.modern_associations.<key>",
     "$.modern_associations.*.name",
     "$.modern_associations.*.score",
 }
@@ -119,10 +119,10 @@ OPENBIBLE_GEO_FIELD_RECORDS = [
         "provenance": "OpenBible catalog of where the Bible text mentions the place",
     },
     {
-        "raw_path": "$.modern_associations.*.modern_id",
+        "raw_path": "$.modern_associations.<key>",
         "output_field": "candidate_identifications[].modern_id",
-        "transform": "copy exact string",
-        "provenance": "OpenBible aggregate scholarly identification; underlying sources are cataloged in data/source.jsonl",
+        "transform": "copy the exact modern_associations mapping key; do not infer it from nested or excluded fields",
+        "provenance": "OpenBible aggregate scholarly identification key; underlying sources are cataloged in data/source.jsonl",
     },
     {
         "raw_path": "$.modern_associations.*.name",

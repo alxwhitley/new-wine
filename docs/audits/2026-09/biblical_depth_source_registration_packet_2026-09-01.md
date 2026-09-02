@@ -1,7 +1,7 @@
 # Biblical Depth Source Registration Packet — 2026-09-01
 
-**Status:** APPROVED by Alex Whitley on 2026-09-01  
-**Scope:** Phase 0 provenance, rights, field boundaries, and governing text  
+**Status:** APPROVED by Alex Whitley on 2026-09-01
+**Scope:** Phase 0 provenance, rights, field boundaries, and governing text
 **Not authorized:** ingestion, database writes, source visibility changes,
 retrieval or answer-path changes, deployment, or doctrinal content changes
 
@@ -98,7 +98,7 @@ line are excluded.
 | `$.friendly_id` | `place_name` | Exact dataset label; never consult translations, linked data, or `extra` |
 | `$.types[]` | `place_types` | Exact strings from OpenBible's documented type vocabulary |
 | `$.verses[].osis` | `osis_references` | Copy OSIS only; discard every sibling field |
-| `$.modern_associations.*.modern_id` | `candidate_identifications[].modern_id` | Exact OpenBible aggregate identification target |
+| `$.modern_associations.<key>` | `candidate_identifications[].modern_id` | Exact OpenBible aggregate identification mapping key; the pinned artifact has no nested `modern_id` field |
 | `$.modern_associations.*.name` | `candidate_identifications[].name` | Exact OpenBible aggregate label |
 | `$.modern_associations.*.score` | `candidate_identifications[].confidence_score` | Preserve integer; never convert to a probability or categorical fact |
 
