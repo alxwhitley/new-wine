@@ -75,6 +75,21 @@ def _imported_modules(path: Path) -> set[str]:
     return names
 
 
+def _module_scope_imports(path: Path) -> set[str]:
+    """Return only the imports executed at import time, not deferred ones."""
+
+    import ast
+
+    tree = ast.parse(path.read_text("utf-8"))
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            names.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            names.add(node.module.split(".")[0])
+    return names
+
+
 _FORBIDDEN_IMPORTS = frozenset({
     "psycopg2", "openai", "requests", "httpx", "urllib", "urllib3",
     "socket", "boto3", "aiohttp",
@@ -793,6 +808,661 @@ class TipnrFullBatchPreflightTests(_PacketMixin):
     def test_preflight_requires_the_verify_flag(self):
         with self.assertRaises(SystemExit):
             preflight_module.main(["--artifact", str(self.artifact)])
+
+
+# ---------------------------------------------------------------------------
+# Packet 3 — approval, vector cache, atomic writer, probe, reconciliation
+# ---------------------------------------------------------------------------
+
+import tempfile  # noqa: E402
+from datetime import date, timedelta  # noqa: E402
+
+import apply_tipnr_full_batch as apply_module  # noqa: E402
+import reconcile_tipnr_full_batch as reconcile_module  # noqa: E402
+from apply_tipnr_full_batch import (  # noqa: E402
+    FullBatchApplyError,
+    FullBatchApprovalError,
+    apply_batch,
+    cache_identity,
+    expected_approval,
+    finalize_batch,
+    load_cached_vectors,
+    probe_batch,
+    resolve_batch_vectors,
+    store_cached_vectors,
+    validate_approval,
+)
+from reconcile_tipnr_full_batch import (  # noqa: E402
+    FullBatchReconciliationError,
+    reconcile_batch,
+)
+
+
+class _RecordingCursor(_FakeCursor):
+    """A cursor that records every statement and answers staging counts."""
+
+    def __init__(self, fixture, ledger):
+        super().__init__(fixture)
+        self.ledger = ledger
+
+    def execute(self, sql, params=()):
+        self.ledger.append(sql)
+        stripped = sql.strip()
+        if stripped.startswith("SET LOCAL"):
+            self._rows = []
+            return
+        if "insert_policy" in sql:
+            self._rows = [("00000000-0000-0000-0000-000000000001",)]
+            return
+        if "insert_document" in sql or "insert_chunk" in sql:
+            self._rows = []
+            return
+        if "precheck" in sql:
+            self._rows = [(0,)]
+            return
+        if "staged_" in sql:
+            self._rows = [(self.fixture["batch_size"],)]
+            return
+        if "stamp_complete" in sql:
+            self._rows = []
+            return
+        super().execute(sql, params)
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+
+class _WriteConnection:
+    def __init__(self, fixture, ledger, *, fail_on=None, fail_commit=False):
+        self.fixture = fixture
+        self.ledger = ledger
+        self.fail_on = fail_on
+        self.fail_commit = fail_commit
+        self.autocommit = True
+        self.commits = 0
+        self.rollbacks = 0
+        self.closed = False
+
+    def cursor(self):
+        cursor = _RecordingCursor(self.fixture, self.ledger)
+        if self.fail_on:
+            original = cursor.execute
+            marker = self.fail_on
+
+            def failing(sql, params=()):
+                if marker in sql:
+                    raise RuntimeError("staged failure")
+                return original(sql, params)
+
+            cursor.execute = failing
+        return cursor
+
+    def commit(self):
+        if self.fail_commit:
+            raise RuntimeError("commit failed")
+        self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
+
+    def close(self):
+        self.closed = True
+
+
+def _write_fixture(batch):
+    return {"batch_size": batch.size}
+
+
+class TipnrFullBatchApprovalTests(_PacketMixin):
+    """Approval equality covers every element of the authorized operation."""
+
+    def test_expected_approval_names_the_whole_operation(self):
+        approval = expected_approval(self.packet, date(2026, 9, 1))
+        self.assertEqual(approval["operation_date"], "2026-09-01")
+        self.assertEqual(approval["packet_sha256"], self.packet.packet_sha256)
+        self.assertEqual(approval["batch_sha256"],
+                         [b.batch_sha256 for b in self.packet.batches])
+        self.assertEqual(len(approval["batch_sha256"]), 20)
+        self.assertEqual(approval["item_count"], 3939)
+        self.assertEqual(approval["maximum_embedding_requests"], 3939)
+        self.assertEqual(approval["maximum_spend_usd"], "0.02441808")
+        self.assertEqual(approval["maximum_transactions"], 20)
+        self.assertEqual(approval["maximum_rows"], 11817)
+        self.assertEqual(approval["embedding_model"], "text-embedding-3-small")
+        self.assertEqual(approval["embedding_dimensions"], 1536)
+        self.assertIs(approval["rollback_probe_authorized"], True)
+        self.assertIs(approval["final_reconciliation_required"], True)
+        self.assertIn("osis_references", approval["disclosed_payload_categories"])
+        self.assertIn("generated_prose", approval["excluded_payload_categories"])
+
+    def _approval_file(self, value, directory):
+        path = Path(directory) / "approval.json"
+        path.write_text(json.dumps(value), encoding="utf-8")
+        return path
+
+    def test_exact_approval_is_accepted(self):
+        today = date.today()
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._approval_file(expected_approval(self.packet, today), directory)
+            self.assertEqual(validate_approval(path, self.packet, today),
+                             expected_approval(self.packet, today))
+
+    def test_stale_dated_approval_is_refused(self):
+        today = date.today()
+        stale = expected_approval(self.packet, today - timedelta(days=1))
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._approval_file(stale, directory)
+            with self.assertRaises(FullBatchApprovalError):
+                validate_approval(path, self.packet, today)
+
+    def test_any_field_drift_is_refused(self):
+        today = date.today()
+        for field, value in (
+            ("packet_sha256", "0" * 64),
+            ("maximum_spend_usd", "9.99"),
+            ("maximum_embedding_requests", 99999),
+            ("maximum_rows", 999999),
+            ("maximum_transactions", 99),
+            ("item_count", 3938),
+            ("embedding_model", "text-embedding-3-large"),
+            ("embedding_dimensions", 3072),
+        ):
+            drifted = expected_approval(self.packet, today)
+            drifted[field] = value
+            with tempfile.TemporaryDirectory() as directory:
+                path = self._approval_file(drifted, directory)
+                with self.assertRaises(FullBatchApprovalError, msg=field):
+                    validate_approval(path, self.packet, today)
+
+    def test_missing_and_oversized_approval_are_refused(self):
+        today = date.today()
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(FullBatchApprovalError):
+                validate_approval(Path(directory) / "absent.json", self.packet, today)
+            big = Path(directory) / "big.json"
+            big.write_text(" " * 20000, encoding="utf-8")
+            with self.assertRaises(FullBatchApprovalError):
+                validate_approval(big, self.packet, today)
+
+    def test_apply_refuses_a_mismatched_approval_before_any_dependency_loads(self):
+        batch = self.packet.batches[0]
+        drifted = expected_approval(self.packet, date.today())
+        drifted["maximum_spend_usd"] = "9.99"
+
+        def exploding_factory(mode):
+            raise AssertionError("write dependency must not load")
+
+        with self.assertRaises(FullBatchApprovalError):
+            apply_batch(exploding_factory, None, self.packet, batch, drifted,
+                        lambda: {"next_batch_index": 1})
+
+
+class TipnrFullBatchVectorCacheTests(_PacketMixin):
+    """The cache is identity-bound and fails closed on any mismatch."""
+
+    def _vectors(self, batch, value=0.5):
+        return [[value] * 1536 for _ in range(batch.size)]
+
+    def test_cache_identity_binds_model_dimensions_and_hashes(self):
+        batch = self.packet.batches[0]
+        identity = cache_identity(self.packet, batch)
+        self.assertEqual(identity["embedding_model"], "text-embedding-3-small")
+        self.assertEqual(identity["embedding_dimensions"], 1536)
+        self.assertEqual(identity["batch_sha256"], batch.batch_sha256)
+        self.assertEqual(identity["packet_sha256"], self.packet.packet_sha256)
+        self.assertEqual(identity["rendered_sha256"],
+                         [i.rendered_sha256 for i in batch.items])
+
+    def test_roundtrip_returns_the_exact_vectors(self):
+        batch = self.packet.batches[0]
+        vectors = self._vectors(batch)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "local" / "2026-09"
+            root.mkdir(parents=True)
+            original = apply_module.write_new_preview
+            apply_module.write_new_preview = lambda path, payload: path.write_bytes(payload)
+            try:
+                store_cached_vectors(root, self.packet, batch, vectors)
+                self.assertEqual(load_cached_vectors(root, self.packet, batch), vectors)
+            finally:
+                apply_module.write_new_preview = original
+
+    def test_absent_cache_returns_none(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(
+                load_cached_vectors(Path(directory), self.packet, self.packet.batches[0])
+            )
+
+    def test_tampered_cache_fails_closed_and_never_substitutes(self):
+        batch = self.packet.batches[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = apply_module.cache_path(root, self.packet, batch)
+            payload = dict(cache_identity(self.packet, batch))
+            payload["embedding_dimensions"] = 999
+            payload["vectors"] = self._vectors(batch)
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(FullBatchApplyError) as caught:
+                load_cached_vectors(root, self.packet, batch)
+            self.assertIn("vector_cache_mismatch", str(caught.exception))
+
+    def test_wrong_length_cache_fails_closed(self):
+        batch = self.packet.batches[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = apply_module.cache_path(root, self.packet, batch)
+            payload = dict(cache_identity(self.packet, batch))
+            payload["vectors"] = self._vectors(batch)[:10]
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(FullBatchApplyError):
+                load_cached_vectors(root, self.packet, batch)
+
+    def test_non_finite_and_wrong_dimension_vectors_are_refused(self):
+        batch = self.packet.batches[0]
+        for bad in ([float("nan")] * 1536, [0.0] * 1535, ["x"] * 1536, [True] * 1536):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                path = apply_module.cache_path(root, self.packet, batch)
+                payload = dict(cache_identity(self.packet, batch))
+                payload["vectors"] = [bad] + self._vectors(batch)[1:]
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaises(FullBatchApplyError):
+                    load_cached_vectors(root, self.packet, batch)
+
+    def test_cached_batch_makes_zero_provider_requests(self):
+        batch = self.packet.batches[0]
+        vectors = self._vectors(batch)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = apply_module.write_new_preview
+            apply_module.write_new_preview = lambda path, payload: path.write_bytes(payload)
+            try:
+                store_cached_vectors(root, self.packet, batch, vectors)
+            finally:
+                apply_module.write_new_preview = original
+
+            def exploding_embed(*args, **kwargs):
+                raise AssertionError("provider must not be called")
+
+            resolved, meta = resolve_batch_vectors(batch, self.packet,
+                                                   exploding_embed, root)
+            self.assertEqual(resolved, vectors)
+            self.assertEqual(meta["requests_attempted"], 0)
+            self.assertEqual(meta["source"], "cache")
+
+
+class TipnrFullBatchWriterTests(_PacketMixin):
+    """The writer is atomic, bounded, and touches nothing outside its batch."""
+
+    def _approval(self):
+        return expected_approval(self.packet, date.today())
+
+    def _preflight(self, batch):
+        return lambda: {
+            "next_batch_index": batch.index,
+            "next_batch_sha256": batch.batch_sha256,
+            "candidate_state": "all_clean",
+        }
+
+    def _cached(self, batch, directory):
+        original = apply_module.write_new_preview
+        apply_module.write_new_preview = lambda path, payload: path.write_bytes(payload)
+        try:
+            store_cached_vectors(directory, self.packet, batch,
+                                 [[0.25] * 1536 for _ in range(batch.size)])
+        finally:
+            apply_module.write_new_preview = original
+
+    def test_successful_batch_commits_once_and_writes_three_rows_per_item(self):
+        batch = self.packet.batches[0]
+        ledger = []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._cached(batch, root)
+            connection = _WriteConnection(_write_fixture(batch), ledger)
+            report = apply_batch(lambda mode: connection, None, self.packet, batch,
+                                 self._approval(), self._preflight(batch),
+                                 evidence_directory=root)
+        self.assertEqual(report["status"], "stored")
+        self.assertEqual(connection.commits, 1)
+        self.assertEqual(connection.rollbacks, 0)
+        self.assertTrue(connection.closed)
+        self.assertEqual(report["reconciliation"]["stored"], 200)
+        self.assertEqual(report["reconciliation"]["rows"], 600)
+        self.assertEqual(ledger.count(
+            [s for s in ledger if "insert_document" in s][0]), 200)
+        self.assertEqual(len([s for s in ledger if "insert_document" in s]), 200)
+        self.assertEqual(len([s for s in ledger if "insert_chunk" in s]), 200)
+        self.assertEqual(len([s for s in ledger if "insert_policy" in s]), 200)
+
+    def test_writer_sets_local_statement_and_lock_timeouts(self):
+        batch = self.packet.batches[0]
+        ledger = []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._cached(batch, root)
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), ledger),
+                        None, self.packet, batch, self._approval(),
+                        self._preflight(batch), evidence_directory=root)
+        self.assertTrue(any("statement_timeout" in s for s in ledger))
+        self.assertTrue(any("lock_timeout" in s for s in ledger))
+
+    def test_writer_touches_no_forbidden_table(self):
+        batch = self.packet.batches[0]
+        ledger = []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._cached(batch, root)
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), ledger),
+                        None, self.packet, batch, self._approval(),
+                        self._preflight(batch), evidence_directory=root)
+        written = " ".join(s for s in ledger
+                           if "INSERT" in s or "UPDATE" in s or "DELETE" in s)
+        for table in ("sources", "source_aliases", "propositions", "quotes",
+                      "conversations", "answer_jobs", "positions"):
+            self.assertNotIn(f" {table} ", written, table)
+        self.assertNotIn("DELETE", written)
+        self.assertIn("documents", written)
+        self.assertIn("chunks", written)
+        self.assertIn("source_passage_policy_versions", written)
+
+    def test_staging_failure_rolls_back_and_reports_counters(self):
+        batch = self.packet.batches[0]
+        for marker in ("insert_document", "insert_chunk", "insert_policy",
+                       "staged_documents", "stamp_complete"):
+            ledger = []
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self._cached(batch, root)
+                connection = _WriteConnection(_write_fixture(batch), ledger,
+                                              fail_on=marker)
+                report = apply_batch(lambda mode: connection, None, self.packet,
+                                     batch, self._approval(), self._preflight(batch),
+                                     evidence_directory=root)
+            self.assertEqual(report["status"], "failed", marker)
+            self.assertEqual(report["reason"], "staging_failed", marker)
+            self.assertEqual(connection.commits, 0, marker)
+            self.assertEqual(connection.rollbacks, 1, marker)
+            self.assertEqual(report["reconciliation"]["stored"], 0, marker)
+            self.assertEqual(report["reconciliation"]["errored"], batch.size, marker)
+
+    def test_commit_failure_is_reported_as_uncertain(self):
+        batch = self.packet.batches[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._cached(batch, root)
+            connection = _WriteConnection(_write_fixture(batch), [], fail_commit=True)
+            report = apply_batch(lambda mode: connection, None, self.packet, batch,
+                                 self._approval(), self._preflight(batch),
+                                 evidence_directory=root)
+        self.assertEqual(report["status"], "commit_uncertain")
+        self.assertEqual(connection.commits, 0)
+
+    def test_connection_failure_reports_zero_transactions(self):
+        batch = self.packet.batches[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._cached(batch, root)
+
+            def failing(mode):
+                raise RuntimeError("no connection")
+
+            report = apply_batch(failing, None, self.packet, batch, self._approval(),
+                                 self._preflight(batch), evidence_directory=root)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["reason"], "write_connection_failed")
+        self.assertEqual(report["transactions"]["opened"], 0)
+
+    def test_embedding_failure_positions_are_all_reported(self):
+        batch = self.packet.batches[0]
+        for position in (1, batch.size // 2, batch.size):
+            calls = {"n": 0}
+
+            def embed(text, *, model, dimensions):
+                calls["n"] += 1
+                if calls["n"] == position:
+                    raise RuntimeError("provider error")
+                return [0.1] * 1536
+
+            with tempfile.TemporaryDirectory() as directory:
+                report = apply_batch(
+                    lambda mode: _WriteConnection(_write_fixture(batch), []),
+                    embed, self.packet, batch, self._approval(),
+                    self._preflight(batch), evidence_directory=Path(directory),
+                )
+            self.assertEqual(report["status"], "failed", position)
+            self.assertEqual(report["reason"], "embedding_failed", position)
+            self.assertEqual(report["embedding"]["requests_attempted"], position)
+            self.assertEqual(report["embedding"]["requests_completed"], position - 1)
+            self.assertEqual(report["transactions"]["opened"], 0, position)
+
+    def test_preflight_batch_mismatch_is_refused(self):
+        batch = self.packet.batches[1]
+        with self.assertRaises(FullBatchApplyError):
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), []),
+                        None, self.packet, batch, self._approval(),
+                        lambda: {"next_batch_index": 5,
+                                 "next_batch_sha256": batch.batch_sha256,
+                                 "candidate_state": "all_clean"})
+
+    def test_preflight_identity_mismatch_is_refused(self):
+        batch = self.packet.batches[0]
+        with self.assertRaises(FullBatchApplyError):
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), []),
+                        None, self.packet, batch, self._approval(),
+                        lambda: {"next_batch_index": 1,
+                                 "next_batch_sha256": "0" * 64,
+                                 "candidate_state": "all_clean"})
+
+
+class TipnrFullBatchProbeTests(_PacketMixin):
+    """The rollback probe stages, verifies, and can never commit."""
+
+    def _postflight(self, state="all_clean", exact=0):
+        return lambda: {"candidate_state": state, "counts": {"exact_complete": exact}}
+
+    def test_probe_stages_600_rows_and_always_rolls_back(self):
+        batch = self.packet.batches[0]
+        ledger = []
+        connection = _WriteConnection(_write_fixture(batch), ledger)
+        report = probe_batch(lambda mode: connection, self.packet, batch,
+                             self._postflight())
+        self.assertEqual(report["status"], "verified")
+        self.assertEqual(report["staged_rows"], 600)
+        self.assertEqual(report["expected_rows"], 600)
+        self.assertEqual(report["staged_policy_rows"], 200)
+        self.assertEqual(connection.commits, 0)
+        self.assertEqual(connection.rollbacks, 1)
+        self.assertIs(report["committed"], False)
+        self.assertEqual(report["embedding_requests"], 0)
+        self.assertEqual(report["vectors"], "deterministic_zero")
+
+    def test_probe_makes_zero_model_requests(self):
+        batch = self.packet.batches[0]
+        signature = inspect.signature(probe_batch)
+        self.assertNotIn("embed_fn", signature.parameters)
+        source = inspect.getsource(probe_batch)
+        self.assertNotIn("embed", source.replace("embedding_requests", ""))
+
+    def test_probe_accepts_no_commit_like_option(self):
+        signature = inspect.signature(probe_batch)
+        for name in ("commit", "apply", "force", "dry_run", "write"):
+            self.assertNotIn(name, signature.parameters, name)
+        self.assertNotIn(".commit()", inspect.getsource(probe_batch))
+
+    def test_probe_fails_when_postflight_is_not_clean(self):
+        batch = self.packet.batches[0]
+        report = probe_batch(lambda mode: _WriteConnection(_write_fixture(batch), []),
+                             self.packet, batch,
+                             self._postflight("exact_complete_prefix", 200))
+        self.assertEqual(report["status"], "failed")
+
+    def test_probe_rolls_back_even_when_staging_raises(self):
+        batch = self.packet.batches[0]
+        connection = _WriteConnection(_write_fixture(batch), [],
+                                      fail_on="insert_chunk")
+        report = probe_batch(lambda mode: connection, self.packet, batch,
+                             self._postflight())
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(connection.commits, 0)
+        self.assertEqual(connection.rollbacks, 1)
+
+
+class TipnrFullBatchReconciliationTests(_PacketMixin):
+    """Per-batch reconciliation balances counters and proves hiddenness."""
+
+    def _fixture(self, completed):
+        source_id, alias_id = (str(self.packet.source["id"]),
+                               str(self.packet.alias["id"]))
+        fixture = _clean_fixture(source_id, alias_id)
+        items = self.packet.items[:completed]
+        fixture["fullbatch:documents"] = [
+            (i.document["id"], i.document["title"], i.document["original_title"],
+             i.document["author"], i.document["source_name"], i.document["source_type"],
+             i.document["source_kind"], i.document["citation_mode"], i.document["source"],
+             i.document["topic_tags"], i.document["bible_references"],
+             i.document["file_path"], i.document["is_copyrighted"],
+             i.document["full_text"], i.document["source_id"], i.document["url"],
+             "2026-09-01T00:00:00+00:00")
+            for i in items
+        ]
+        fixture["fullbatch:chunks"] = [
+            (i.chunk["id"], i.chunk["document_id"], i.chunk["content"],
+             i.chunk["chunk_index"], i.chunk["bible_references"], 1536)
+            for i in items
+        ]
+        fixture["fullbatch:policies"] = [
+            ("00000000-0000-0000-0000-%012d" % n, i.policy["chunk_id"],
+             i.policy["policy_class"], i.policy["protected_topic_keys"],
+             i.policy["issue_key"], i.policy["viewpoint_key"],
+             i.policy["classifier_kind"], i.policy["rule_version"],
+             i.policy["model"], i.policy["prompt_fingerprint"],
+             i.policy["reason_codes"], i.policy["is_current"])
+            for n, i in enumerate(items)
+        ]
+        fixture["fullbatch:reconcile_propositions"] = [(0,)]
+        return fixture
+
+    def test_first_batch_reconciles_with_balanced_counters(self):
+        batch = self.packet.batches[0]
+        report = reconcile_batch(lambda mode: _FakeConnection(self._fixture(200)),
+                                 self.packet, batch)
+        self.assertEqual(report["status"], "verified")
+        self.assertEqual(report["counts"]["completed_through"], 200)
+        self.assertEqual(report["reconciliation"], {
+            "attempted": 200, "stored": 200, "errored": 0, "skipped": 0, "rows": 600,
+        })
+        totals = report["reconciliation"]
+        self.assertEqual(totals["attempted"],
+                         totals["stored"] + totals["errored"] + totals["skipped"])
+
+    def test_short_prefix_is_rejected(self):
+        batch = self.packet.batches[0]
+        with self.assertRaises(FullBatchReconciliationError) as caught:
+            reconcile_batch(lambda mode: _FakeConnection(self._fixture(199)),
+                            self.packet, batch)
+        self.assertIn("committed_prefix_not_exact", str(caught.exception))
+
+    def test_propositions_block_reconciliation(self):
+        batch = self.packet.batches[0]
+        fixture = self._fixture(200)
+        fixture["fullbatch:reconcile_propositions"] = [(3,)]
+        with self.assertRaises(FullBatchReconciliationError) as caught:
+            reconcile_batch(lambda mode: _FakeConnection(fixture), self.packet, batch)
+        self.assertIn("propositions_present", str(caught.exception))
+
+    def test_hidden_retrieval_leak_is_rejected(self):
+        batch = self.packet.batches[0]
+        leaky = {
+            "transaction_read_only": [("on",)],
+            "retrieval_vector": [(1,)],
+            "retrieval_fts": [(0,)],
+        }
+        with self.assertRaises(FullBatchReconciliationError) as caught:
+            reconcile_module.probe_hidden_retrieval(
+                lambda mode: _FakeConnection(leaky), batch
+            )
+        self.assertIn("hidden_retrieval_leak", str(caught.exception))
+
+    def test_hidden_retrieval_requires_a_readonly_session(self):
+        batch = self.packet.batches[0]
+        writable = {
+            "transaction_read_only": [("off",)],
+            "retrieval_vector": [(0,)],
+            "retrieval_fts": [(0,)],
+        }
+        with self.assertRaises(FullBatchReconciliationError) as caught:
+            reconcile_module.probe_hidden_retrieval(
+                lambda mode: _FakeConnection(writable), batch
+            )
+        self.assertIn("not_readonly", str(caught.exception))
+
+    def test_finalize_preserves_evidence_when_reconciliation_fails(self):
+        batch = self.packet.batches[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = apply_module.write_new_preview
+            apply_module.write_new_preview = lambda path, payload: path.write_bytes(payload)
+            try:
+                report, payload = finalize_batch(
+                    {"status": "stored", "batch_index": batch.index},
+                    lambda: (_ for _ in ()).throw(RuntimeError("db down")),
+                    root,
+                )
+            finally:
+                apply_module.write_new_preview = original
+            self.assertEqual(report["status"], "committed_reconciliation_failed")
+            self.assertEqual(len(list(root.glob("tipnr_full_batch_attempt_*.json"))), 1)
+
+    def test_reconcile_module_uses_the_readonly_role_for_identity(self):
+        source = (ROOT / "scripts" / "reconcile_tipnr_full_batch.py").read_text("utf-8")
+        self.assertIn("READONLY_ANALYSIS_DB_URL", source)
+        self.assertIn("readonly=True", source)
+        for marker in ("INSERT INTO", "UPDATE ", "DELETE FROM", ".commit()"):
+            self.assertNotIn(marker, source, marker)
+
+
+class TipnrFullBatchApplyCapabilityTests(unittest.TestCase):
+    """The writer defers every credential until approval and preflight pass."""
+
+    def test_no_write_or_model_dependency_is_imported_at_module_scope(self):
+        """Credentials load only inside the deferred loader, never on import."""
+
+        path = ROOT / "scripts" / "apply_tipnr_full_batch.py"
+        module_scope = _module_scope_imports(path)
+        for forbidden in ("psycopg2", "dotenv", "openai"):
+            self.assertNotIn(forbidden, module_scope, forbidden)
+        # The dependency must still exist, deferred -- not merely absent.
+        deferred = _imported_modules(path) - module_scope
+        self.assertIn("psycopg2", deferred)
+        self.assertIn("dotenv", deferred)
+        source = inspect.getsource(apply_module._load_write_dependencies)
+        self.assertIn("psycopg2", source)
+        self.assertIn("embed_text", source)
+
+    def test_preflight_and_contract_defer_or_omit_credentials(self):
+        for name, must_omit in (
+            ("tipnr_full_batch_contract.py", True),
+            ("preview_tipnr_full_batch.py", True),
+            ("preflight_tipnr_full_batch.py", False),
+        ):
+            path = ROOT / "scripts" / name
+            module_scope = _module_scope_imports(path)
+            self.assertNotIn("psycopg2", module_scope, name)
+            self.assertNotIn("openai", _imported_modules(path), name)
+            if must_omit:
+                self.assertNotIn("psycopg2", _imported_modules(path), name)
+
+    def test_apply_registers_only_the_authorized_flags(self):
+        path = ROOT / "scripts" / "apply_tipnr_full_batch.py"
+        self.assertEqual(_declared_cli_flags(path),
+                         {"--artifact", "--approval-file", "--probe-only"})
+
+    def test_apply_never_deletes_or_changes_visibility(self):
+        source = (ROOT / "scripts" / "apply_tipnr_full_batch.py").read_text("utf-8")
+        self.assertNotIn("DELETE FROM", source)
+        self.assertNotIn("UPDATE sources", source)
+        self.assertNotIn("visibility", source.split("EXCLUDED_PAYLOAD")[0])
 
 
 if __name__ == "__main__":
