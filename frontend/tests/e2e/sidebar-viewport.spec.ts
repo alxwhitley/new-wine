@@ -6,7 +6,18 @@ for (const route of routes) {
   test(`account footer remains reachable on ${route}`, async ({ page }) => {
     await page.goto(route);
 
-    if ((page.viewportSize()?.width ?? 0) < 768) {
+    const viewportWidth = page.viewportSize()?.width ?? 0;
+    const tabletHeader = page.locator('[data-testid="tablet-app-header"]');
+    if (viewportWidth >= 768 && viewportWidth < 1024) {
+      await expect(tabletHeader).toBeVisible();
+      const mainBox = await page.locator("main").boundingBox();
+      expect(mainBox).not.toBeNull();
+      expect(mainBox?.x ?? 999).toBeLessThanOrEqual(10);
+    } else {
+      await expect(tabletHeader).toBeHidden();
+    }
+
+    if (viewportWidth < 1024) {
       await page
         .locator(
           'button[aria-label="Open sidebar"]:visible, button[aria-label="Open menu"]:visible',
@@ -18,6 +29,12 @@ for (const route of routes) {
     const footer = page.locator('[data-testid="sidebar-account-footer"]:visible');
     await expect(footer).toHaveCount(1);
     await expect(footer).toBeVisible();
+
+    if (viewportWidth < 1024) {
+      await expect
+        .poll(async () => (await footer.boundingBox())?.x ?? -999)
+        .toBeGreaterThanOrEqual(-1);
+    }
 
     const geometry = await footer.evaluate((element) => {
       const rect = element.getBoundingClientRect();

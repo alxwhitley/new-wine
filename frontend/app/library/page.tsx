@@ -537,6 +537,7 @@ export default function LibraryPage() {
     user,
     accessToken,
     isOpen: sidebarOpen,
+    onOpen: () => setSidebarOpen(true),
     onClose: () => setSidebarOpen(false),
     onNewChat: () => { window.location.href = "/"; },
     onSelectConversation: (id: string) => { window.location.href = `/?c=${id}`; },
@@ -549,10 +550,10 @@ export default function LibraryPage() {
     return (
       <div className="flex h-dvh-safe overflow-hidden bg-sidebar">
         <Sidebar {...sidebarProps} />
-        <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
+        <main className="lg:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
           <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
             <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30">
-              <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
+              <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground active:bg-accent active:text-foreground">
                 <Menu className="h-5 w-5" />
               </button>
               <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">New Wine</h1>
@@ -639,12 +640,12 @@ export default function LibraryPage() {
     <div className="flex h-dvh-safe overflow-hidden bg-sidebar">
       <Sidebar {...sidebarProps} />
 
-      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
+      <main className="lg:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
         <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
 
           {/* Top bar (mobile only) */}
           <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30 border-b border-border">
-            <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
+            <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground active:bg-accent active:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
             <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">New Wine</h1>
@@ -689,7 +690,7 @@ export default function LibraryPage() {
                       setFiltersOpen(true);
                     }}
                     className={cn(
-                      "min-h-[44px] min-w-[44px] rounded-lg border flex items-center justify-center gap-1.5 px-3 text-sm transition-colors",
+                      "min-h-[44px] min-w-[44px] rounded-lg border flex items-center justify-center gap-1.5 px-3 text-sm transition-colors active:bg-accent active:text-foreground",
                       activeFilterCount > 0
                         ? "border-primary text-primary"
                         : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -706,7 +707,7 @@ export default function LibraryPage() {
                     onClick={handleSearch}
                     disabled={loading}
                     aria-label="Search"
-                    className="min-h-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center gap-2 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    className="min-h-[44px] rounded-lg bg-primary text-primary-foreground px-4 flex items-center gap-2 text-sm font-medium hover:bg-primary/90 active:scale-[0.98] active:bg-primary/85 transition-all disabled:opacity-50"
                   >
                     <span className="hidden sm:inline">Search</span>
                     <Search className="h-4 w-4 sm:hidden" />
@@ -721,7 +722,7 @@ export default function LibraryPage() {
                         <button
                           key={s}
                           onClick={() => handleSuggestionClick(s)}
-                          className="rounded-full px-3 py-1 text-xs font-medium cursor-pointer text-primary bg-primary/10 border border-primary/25 hover:bg-primary/20 transition-colors"
+                          className="rounded-full px-3 py-1 text-xs font-medium cursor-pointer text-primary bg-primary/10 border border-primary/25 hover:bg-primary/20 active:bg-primary/25 transition-colors"
                         >
                           {s}
                         </button>

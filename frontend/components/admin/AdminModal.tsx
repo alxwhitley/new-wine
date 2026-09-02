@@ -810,7 +810,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex flex-col max-w-5xl w-full h-[85vh] p-0 gap-0 overflow-hidden"
+        className="flex h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:h-[85dvh]"
       >
         <DialogTitle className="sr-only">Account</DialogTitle>
 
@@ -823,18 +823,18 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
 
         {/* Two-column layout */}
         {panelReady && (
-          <div className="flex flex-1 min-h-0 overflow-hidden">
+          <div className="flex flex-1 min-h-0 flex-col overflow-hidden md:flex-row">
 
             {/* Left nav */}
-            <div className="w-[200px] shrink-0 bg-muted border-r border-border flex flex-col pt-6 pb-4 px-2">
-              <p className="px-2 mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="flex w-full shrink-0 flex-col border-b border-border bg-muted px-2 pb-2 pt-3 md:w-[200px] md:border-b-0 md:border-r md:pb-4 md:pt-6">
+              <p className="mb-3 hidden px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:block">
                 Account
               </p>
-              <nav className="flex flex-col gap-0.5">
+              <nav className="flex gap-1 overflow-x-auto overscroll-x-contain md:flex-col md:gap-0.5">
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start gap-2 text-sm font-medium",
+                    "min-h-11 shrink-0 justify-start gap-2 text-sm font-medium md:w-full",
                     activeTab === "profile" && "bg-accent text-accent-foreground"
                   )}
                   onClick={() => setActiveTab("profile")}
@@ -847,7 +847,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
                     key={tab.key}
                     variant="ghost"
                     className={cn(
-                      "w-full justify-start gap-2 text-sm font-medium",
+                      "min-h-11 shrink-0 justify-start gap-2 text-sm font-medium md:w-full",
                       activeTab === tab.key && "bg-accent text-accent-foreground"
                     )}
                     onClick={() => setActiveTab(tab.key)}
@@ -865,14 +865,14 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
             </div>
 
             {/* Right pane */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overscroll-contain overflow-y-auto p-4 sm:p-6">
 
               {/* ── Profile ─────────────────────────────────────── */}
               {activeTab === "profile" && (
                 <div role="tabpanel">
                   <div className="max-w-lg">
                     {/* Identity header */}
-                    <div className="flex items-start justify-between gap-4 pb-6">
+                    <div className="flex flex-col items-start justify-between gap-4 pb-6 sm:flex-row">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-lg font-semibold">
                           {(displayName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase()}
@@ -912,7 +912,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
                           </p>
                         </CardHeader>
                         <CardContent>
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row">
                             <Input
                               value={editDisplayName}
                               onChange={(e) => {
@@ -1016,7 +1016,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
 
                       <Card className="border-destructive/30">
                         <CardHeader>
-                          <div className="flex items-start justify-between gap-4">
+                          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
                             <div>
                               <CardTitle className="text-base font-semibold text-foreground">
                                 Delete account

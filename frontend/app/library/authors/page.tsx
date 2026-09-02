@@ -52,6 +52,7 @@ export default function AuthorsPage() {
         user={user}
         accessToken={accessToken}
         isOpen={sidebarOpen}
+        onOpen={() => setSidebarOpen(true)}
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}
         onSelectConversation={(id) => { window.location.href = `/?c=${id}`; }}
@@ -59,10 +60,10 @@ export default function AuthorsPage() {
         onSignInClick={() => openAuth("signin")}
       />
 
-      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
+      <main className="lg:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
         <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
           <div className="flex h-14 shrink-0 items-center px-4 md:px-6 z-30 border-b border-border">
-            <button aria-label="Open sidebar" onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
+            <button aria-label="Open sidebar" onClick={() => setSidebarOpen(true)} className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground active:bg-accent active:text-foreground">
               <Menu className="h-5 w-5" />
             </button>
             <h1 className="md:hidden flex-1 text-center font-sans text-lg font-semibold text-foreground">New Wine</h1>
