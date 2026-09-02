@@ -1002,6 +1002,31 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **Production's TIPNR Aaron (`H0175`) is a REDUCED TEST FIXTURE, not the real
+  record, and it is structurally undeletable — 2026-09-02.** Phase 6 built its
+  hidden-ingestion proof from `scripts/fixtures/biblical_context/tipnr_minimal.txt`,
+  whose own metadata says reference lists "were reduced for a minimal parser
+  fixture." So document `131a911e-4c87-5680-8439-a824f3351c85` holds 344
+  characters and **4 of Aaron's 352 OSIS references** (1.14%), with
+  `record_sha256` `78d6eff…` (fixture) rather than `c65994c…` (artifact). The
+  20-item Phase 8 pilot came from the real artifact and is fine — only the
+  Phase 6 proof used the fixture. **Never treat the corpus as holding 21
+  artifact-exact items; it holds 20.** Any plan asserting "3,938 remaining" is
+  working from that error — the artifact's Aaron was never stored, so the true
+  remainder is **3,939** (19×200 + 139 = 11,817 rows). Alex's ruling
+  (2026-09-02, "Correct Aaron"): ingest artifact-Aaron as an ordinary item and
+  retire the fixture row by **demoting** its policy, never deleting it.
+  **Deletion is impossible, not merely discouraged** — migration 097's
+  `append_only` trigger raises on DELETE and its `chunk_id` FK is
+  `ON DELETE RESTRICT`, so policy → chunk → document deletion is blocked
+  transitively; the trigger permits exactly one mutation, `is_current`
+  `true→false`, and that flip is **irreversible** (`false→true` raises). End
+  state is therefore 3,959 current policies over 3,960 documents/chunks, one
+  inert. Tooling: `scripts/demote_stale_fixture_policy.py`. General lesson,
+  which is the reason this entry exists: **a proof built from a trimmed fixture
+  writes a real row into the real corpus** — verify a proof's input is the
+  pinned artifact before its output becomes data.
+
 - **Three frontend states look like bugs and are Alex's explicit 2026-09-01
   decisions (`1db7793`).** (1) **The chat input has no focus ring on purpose.**
   This deliberately reverses the fix for finding #8 of
