@@ -59,6 +59,48 @@ _PROHIBITED_MARKERS = (
 )
 
 
+
+def _imported_modules(path: Path) -> set[str]:
+    """Return every top-level module name imported by a source file."""
+
+    import ast
+
+    tree = ast.parse(path.read_text("utf-8"))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            names.add(node.module.split(".")[0])
+    return names
+
+
+_FORBIDDEN_IMPORTS = frozenset({
+    "psycopg2", "openai", "requests", "httpx", "urllib", "urllib3",
+    "socket", "boto3", "aiohttp",
+})
+_WRITE_VERB_MARKERS = ("INSERT INTO", "UPDATE ", "DELETE FROM", ".commit()")
+
+
+def _declared_cli_flags(path: Path) -> set[str]:
+    """Return every flag literal actually registered with argparse."""
+
+    import ast
+
+    tree = ast.parse(path.read_text("utf-8"))
+    flags: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add_argument"
+        ):
+            for arg in node.args:
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    flags.add(arg.value)
+    return flags
+
+
 def _artifact() -> Path:
     value = os.environ.get("TIPNR_TEST_ARTIFACT")
     if not value:
@@ -394,15 +436,14 @@ class TipnrFullBatchCapabilityTests(unittest.TestCase):
     """The contract module must hold no external capability."""
 
     def test_module_imports_no_network_database_or_model_dependency(self):
-        source = (ROOT / "scripts" / "tipnr_full_batch_contract.py").read_text("utf-8")
-        for forbidden in ("psycopg2", "openai", "requests", "httpx", "urllib",
-                          "socket", "boto3", "dotenv"):
-            self.assertNotIn(forbidden, source, forbidden)
+        imported = _imported_modules(ROOT / "scripts" / "tipnr_full_batch_contract.py")
+        self.assertEqual(imported & _FORBIDDEN_IMPORTS, set())
+        self.assertNotIn("dotenv", imported)
 
     def test_module_defines_no_write_or_apply_entrypoint(self):
         source = (ROOT / "scripts" / "tipnr_full_batch_contract.py").read_text("utf-8")
-        for forbidden in ("INSERT", "UPDATE ", "DELETE", "--apply", "commit()"):
-            self.assertNotIn(forbidden, source, forbidden)
+        for marker in _WRITE_VERB_MARKERS:
+            self.assertNotIn(marker, source, marker)
 
 
 class TipnrFullBatchFixtureTests(_PacketMixin):
@@ -419,6 +460,339 @@ class TipnrFullBatchFixtureTests(_PacketMixin):
             self.skipTest("fixture not generated yet")
         expected = json.loads(FIXTURE.read_text("utf-8"))
         self.assertEqual(FIXTURE.read_bytes(), canonical_json_bytes(expected))
+
+
+# ---------------------------------------------------------------------------
+# Packet 2 — preview and preflight
+# ---------------------------------------------------------------------------
+
+import preview_tipnr_full_batch as preview_module  # noqa: E402
+import preflight_tipnr_full_batch as preflight_module  # noqa: E402
+from preflight_tipnr_full_batch import (  # noqa: E402
+    CandidateState,
+    FullBatchPreflightError,
+    _resolve_prefix,
+    classify_item,
+    preflight_full_batch,
+)
+from preview_tipnr_full_batch import build_full_batch_preview  # noqa: E402
+
+
+class _FakeCursor:
+    """A cursor that answers only the exact read-only preflight queries."""
+
+    def __init__(self, fixture):
+        self.fixture = fixture
+        self._rows = []
+        self.executed = []
+
+    def execute(self, sql, params=()):
+        self.executed.append((sql, params))
+        matches = [marker for marker in self.fixture if marker in sql]
+        if not matches:
+            raise AssertionError(f"unexpected query: {sql[:80]}")
+        marker = max(matches, key=len)
+        rows = self.fixture[marker]
+        self._rows = rows(params) if callable(rows) else list(rows)
+
+    def fetchall(self):
+        return list(self._rows)
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeConnection:
+    def __init__(self, fixture):
+        self.fixture = fixture
+        self.readonly = None
+        self.closed = False
+
+    def set_session(self, readonly=None, autocommit=None):
+        self.readonly = readonly
+
+    def cursor(self):
+        return _FakeCursor(self.fixture)
+
+    def close(self):
+        self.closed = True
+
+
+def _clean_fixture(source_id, alias_id):
+    return {
+        "transaction_read_only": [("on",)],
+        "current_user": [("newwine_readonly_analysis",)],
+        "097_table": [(True,)],
+        "097_constraints": [(name,) for name in preflight_module._EXPECTED_CONSTRAINTS],
+        "097_indexes": [(name,) for name in preflight_module._EXPECTED_INDEXES],
+        "097_triggers": [(name,) for name in preflight_module._EXPECTED_TRIGGERS],
+        "fullbatch:source": [(source_id, "STEPBible TIPNR", "licensed", "hidden")],
+        "fullbatch:alias": [(alias_id, "stepbible tipnr")],
+        "fullbatch:documents": [],
+        "fullbatch:chunks": [],
+        "fullbatch:policies": [],
+        "fullbatch:propositions": [],
+        "fullbatch:source_totals": [(0,)],
+        "fullbatch:source_propositions": [(0,)],
+    }
+
+
+class TipnrFullBatchPreviewTests(_PacketMixin):
+    """The preview is byte-stable, complete, and incapable of any effect."""
+
+    def test_preview_declares_every_authorization_false(self):
+        report = build_full_batch_preview(ROOT, self.artifact)
+        for key in ("database_write_authorized", "external_model_call_authorized",
+                    "deployment_authorized", "visibility_change_authorized",
+                    "feature_enablement_authorized"):
+            self.assertIs(report[key], False, key)
+
+    def test_preview_reports_exact_counts_and_ceilings(self):
+        report = build_full_batch_preview(ROOT, self.artifact)
+        self.assertEqual(report["counts"], {
+            "items": 3939, "documents": 3939, "chunks": 3939,
+            "policy_rows": 3939, "embedding_requests": 3939,
+            "transactions": 20, "rows_total": 11817,
+        })
+        packet = report["packet"]
+        self.assertEqual(packet["packet_sha256"], self.packet.packet_sha256)
+        self.assertEqual(len(packet["batches"]), 20)
+        self.assertEqual(packet["maximum_spend_usd"], "0.02441808")
+        self.assertEqual(packet["embedding_model"], "text-embedding-3-small")
+        self.assertEqual(packet["embedding_dimensions"], 1536)
+
+    def test_preview_discloses_payload_categories_and_exclusions(self):
+        report = build_full_batch_preview(ROOT, self.artifact)
+        disclosed = report["payload_categories"]["disclosed"]
+        self.assertIn("osis_references", disclosed)
+        self.assertIn("source_script_form", disclosed)
+        excluded = report["payload_categories"]["excluded"]
+        self.assertIn("generated_prose", excluded)
+        self.assertIn("translated_name_comparisons", excluded)
+        self.assertIn("relationships_and_relatives", excluded)
+
+    def test_preview_reconciliation_is_explicitly_zero_effect(self):
+        report = build_full_batch_preview(ROOT, self.artifact)
+        self.assertEqual(report["reconciliation"], {
+            "attempted": 3939, "stored": 0, "errored": 0,
+            "skipped": 3939, "reason": "preview_only",
+        })
+
+    def test_preview_samples_are_the_ten_frozen_ids(self):
+        report = build_full_batch_preview(ROOT, self.artifact)
+        self.assertEqual(sorted(report["samples"]), sorted(self.packet.sample_ids))
+
+    def test_preview_is_byte_stable(self):
+        first = canonical_json_bytes(build_full_batch_preview(ROOT, self.artifact))
+        second = canonical_json_bytes(build_full_batch_preview(ROOT, self.artifact))
+        self.assertEqual(first, second)
+
+    def test_preview_module_has_no_external_capability(self):
+        path = ROOT / "scripts" / "preview_tipnr_full_batch.py"
+        self.assertEqual(_imported_modules(path) & _FORBIDDEN_IMPORTS, set())
+        source = path.read_text("utf-8")
+        for marker in _WRITE_VERB_MARKERS:
+            self.assertNotIn(marker, source, marker)
+
+    def test_preview_registers_only_artifact_and_output_flags(self):
+        """No --apply, selection, limit, offset, URL, or entity override exists."""
+
+        path = ROOT / "scripts" / "preview_tipnr_full_batch.py"
+        self.assertEqual(_declared_cli_flags(path), {"--artifact", "--output"})
+
+    def test_preview_cli_rejects_selection_and_apply_flags(self):
+        for argv in (["--apply"], ["--limit", "5"], ["--offset", "10"],
+                     ["--entity", "H0175"], ["--url", "https://example.invalid"]):
+            with self.assertRaises(SystemExit):
+                preview_module.main([*argv, "--artifact", str(self.artifact)])
+
+
+class TipnrFullBatchPreflightTests(_PacketMixin):
+    """Prefix resumability, strict rejection, and read-only capability."""
+
+    def _source_ids(self):
+        return str(self.packet.source["id"]), str(self.packet.alias["id"])
+
+    def _run(self, fixture):
+        return preflight_full_batch(
+            lambda mode: _FakeConnection(fixture),
+            self.packet,
+            invariant_checker=lambda: {"biblical_context_answer_enabled": False},
+        )
+
+    def test_all_clean_state_reports_first_batch(self):
+        report = self._run(_clean_fixture(*self._source_ids()))
+        self.assertEqual(report["candidate_state"], "all_clean")
+        self.assertEqual(report["next_batch_index"], 1)
+        self.assertEqual(report["next_batch_sha256"],
+                         self.packet.batches[0].batch_sha256)
+        self.assertEqual(report["remaining_ceilings"], {
+            "embedding_requests": 3939, "rows": 11817, "transactions": 20,
+        })
+        self.assertIs(report["database_write_authorized"], False)
+        self.assertIs(report["external_model_call_authorized"], False)
+
+    def _completed_fixture(self, count):
+        """Simulate an exact-complete prefix of `count` items."""
+
+        source_id, alias_id = self._source_ids()
+        fixture = _clean_fixture(source_id, alias_id)
+        items = self.packet.items[:count]
+        fixture["fullbatch:documents"] = [
+            (i.document["id"], i.document["title"], i.document["original_title"],
+             i.document["author"], i.document["source_name"], i.document["source_type"],
+             i.document["source_kind"], i.document["citation_mode"], i.document["source"],
+             i.document["topic_tags"], i.document["bible_references"],
+             i.document["file_path"], i.document["is_copyrighted"],
+             i.document["full_text"], i.document["source_id"], i.document["url"],
+             "2026-09-01T00:00:00+00:00")
+            for i in items
+        ]
+        fixture["fullbatch:chunks"] = [
+            (i.chunk["id"], i.chunk["document_id"], i.chunk["content"],
+             i.chunk["chunk_index"], i.chunk["bible_references"], 1536)
+            for i in items
+        ]
+        fixture["fullbatch:policies"] = [
+            ("00000000-0000-0000-0000-%012d" % n, i.policy["chunk_id"],
+             i.policy["policy_class"], i.policy["protected_topic_keys"],
+             i.policy["issue_key"], i.policy["viewpoint_key"],
+             i.policy["classifier_kind"], i.policy["rule_version"],
+             i.policy["model"], i.policy["prompt_fingerprint"],
+             i.policy["reason_codes"], i.policy["is_current"])
+            for n, i in enumerate(items)
+        ]
+        fixture["fullbatch:source_totals"] = [(count,)]
+        return fixture
+
+    def test_whole_batch_prefix_reports_the_next_batch(self):
+        report = self._run(self._completed_fixture(400))
+        self.assertEqual(report["candidate_state"], "exact_complete_prefix")
+        self.assertEqual(report["counts"]["exact_complete"], 400)
+        self.assertEqual(report["counts"]["completed_batches"], 2)
+        self.assertEqual(report["next_batch_index"], 3)
+        self.assertEqual(report["remaining_ceilings"], {
+            "embedding_requests": 3539, "rows": 10617, "transactions": 18,
+        })
+
+    def test_all_exact_complete_reports_no_next_batch(self):
+        report = self._run(self._completed_fixture(3939))
+        self.assertEqual(report["candidate_state"], "all_exact_complete")
+        self.assertIsNone(report["next_batch_index"])
+        self.assertIsNone(report["next_batch_sha256"])
+        self.assertEqual(report["remaining_ceilings"], {
+            "embedding_requests": 0, "rows": 0, "transactions": 0,
+        })
+
+    def test_partial_batch_is_rejected(self):
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(self._completed_fixture(250))
+        self.assertIn("partial_batch", str(caught.exception))
+
+    def test_partial_item_is_rejected(self):
+        fixture = self._completed_fixture(200)
+        fixture["fullbatch:policies"] = fixture["fullbatch:policies"][:-1]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("policy_cardinality", str(caught.exception))
+
+    def test_unstamped_ingest_is_rejected(self):
+        fixture = self._completed_fixture(200)
+        fixture["fullbatch:documents"] = [
+            row[:-1] + (None,) for row in fixture["fullbatch:documents"]
+        ]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("ingest_not_stamped", str(caught.exception))
+
+    def test_projection_drift_is_rejected(self):
+        fixture = self._completed_fixture(200)
+        first = list(fixture["fullbatch:documents"][0])
+        first[1] = "tampered title"
+        fixture["fullbatch:documents"][0] = tuple(first)
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("document_projection_drift", str(caught.exception))
+
+    def test_proposition_presence_is_rejected(self):
+        fixture = self._completed_fixture(200)
+        fixture["fullbatch:source_propositions"] = [(1,)]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("propositions_present", str(caught.exception))
+
+    def test_visibility_drift_is_rejected(self):
+        source_id, alias_id = self._source_ids()
+        fixture = _clean_fixture(source_id, alias_id)
+        fixture["fullbatch:source"] = [
+            (source_id, "STEPBible TIPNR", "licensed", "shown")
+        ]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("visibility_drift", str(caught.exception))
+
+    def test_role_drift_is_rejected(self):
+        source_id, alias_id = self._source_ids()
+        fixture = _clean_fixture(source_id, alias_id)
+        fixture["current_user"] = [("postgres",)]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("readonly_role_mismatch", str(caught.exception))
+
+    def test_writable_session_is_rejected(self):
+        source_id, alias_id = self._source_ids()
+        fixture = _clean_fixture(source_id, alias_id)
+        fixture["transaction_read_only"] = [("off",)]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("not_readonly", str(caught.exception))
+
+    def test_migration_drift_is_rejected(self):
+        source_id, alias_id = self._source_ids()
+        for key, reason in (("097_triggers", "trigger_drift"),
+                            ("097_indexes", "index_drift"),
+                            ("097_constraints", "constraint_drift")):
+            fixture = _clean_fixture(source_id, alias_id)
+            fixture[key] = []
+            with self.assertRaises(FullBatchPreflightError) as caught:
+                self._run(fixture)
+            self.assertIn(reason, str(caught.exception), key)
+
+    def test_disabled_row_level_security_is_rejected(self):
+        source_id, alias_id = self._source_ids()
+        fixture = _clean_fixture(source_id, alias_id)
+        fixture["097_table"] = [(False,)]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            self._run(fixture)
+        self.assertIn("rls_disabled", str(caught.exception))
+
+    def test_out_of_order_completion_is_rejected(self):
+        states = [CandidateState("a", "clean"), CandidateState("b", "exact_complete")]
+        states += [CandidateState(str(n), "clean") for n in range(3937)]
+        with self.assertRaises(FullBatchPreflightError) as caught:
+            _resolve_prefix(self.packet, states)
+        self.assertIn("out_of_order", str(caught.exception))
+
+    def test_preflight_loads_no_write_or_embedding_dependency(self):
+        path = ROOT / "scripts" / "preflight_tipnr_full_batch.py"
+        imported = _imported_modules(path)
+        self.assertNotIn("openai", imported)
+        source = path.read_text("utf-8")
+        for marker in (*_WRITE_VERB_MARKERS, "SUPABASE_DB_URL"):
+            self.assertNotIn(marker, source, marker)
+        self.assertIn("READONLY_ANALYSIS_DB_URL", source)
+        self.assertEqual(_declared_cli_flags(path),
+                         {"--artifact", "--verify", "--output"})
+
+    def test_preflight_requires_the_verify_flag(self):
+        with self.assertRaises(SystemExit):
+            preflight_module.main(["--artifact", str(self.artifact)])
 
 
 if __name__ == "__main__":
