@@ -532,12 +532,12 @@ export const ChatMessage = memo(function ChatMessage({
         <ReactMarkdown
           components={{
             h2: ({ children }) => (
-              <h2 className="font-sans text-[1.1rem] font-semibold text-white mt-4 mb-2">
+              <h2 className="font-sans text-[1.1rem] font-medium text-accent-foreground mt-4 mb-2">
                 {children}
               </h2>
             ),
             h3: ({ children }) => (
-              <h3 className="font-sans text-base font-semibold text-white mt-4 mb-2">
+              <h3 className="font-sans text-base font-medium text-accent-foreground mt-4 mb-2">
                 {children}
               </h3>
             ),
