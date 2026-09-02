@@ -185,10 +185,11 @@ quarantine. No stage transfers automatically from one source to another.
    between candidate and approved quote; keep the 12 HelloAO missing
    book/commentary combinations quarantined unless a chapter-level contract is
    separately approved.
-4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–8 are
-   complete through a verified 20-item hidden TIPNR production pilot in PR #3;
-   the ingestion-ready foundation benchmark is met. Phase 6's attended
-   production proof remains exactly one
+4. **A4 — Reference datasets — IN PROGRESS.** Biblical-depth Phases 0–8 and the
+   verified 20-item hidden TIPNR production pilot merged through PR #3 at
+   `ff89ba5` and deployed successfully with the feature default-off; the
+   ingestion-ready foundation benchmark is met. Phase 6's attended production
+   proof remains exactly one
    hidden `H0175` document, embedded chunk, and current `general_context` policy
    row with no proposition and zero vector/FTS matches. Phase 7's frozen
    full-artifact inventory remains eligible `3,959`, malformed `172`, skipped
@@ -235,14 +236,16 @@ quarantine. No stage transfers automatically from one source to another.
    evidence file hash is
    `d4ddf85fa2e79f037f15faf2555cc2ea60024fbf3aed520d66a150aabe0a6df5`.
 
-   `BIBLICAL_CONTEXT_ANSWER_ENABLED` remains default-off, the source remains
-   hidden, protected/plural registries remain empty, and Phase 4's routing,
-   cache, neighbor, plural-source, and house-fence boundaries remain unchanged.
-   The remaining 3,938 eligible TIPNR items require a separately designed,
-   costed, reconciled, and attended packet; the pilot grants no automatic
-   authority. Visibility change, feature enablement, live answers, deployment,
-   doctrinal assignment, registry assignment, and PR #3 merge remain separately
-   unauthorized.
+   Deployment verification passed on `ff89ba5`: Vercel was Ready, all four
+   Railway services reported `SUCCESS`, the API and website smokes returned
+   HTTP 200, and `BIBLICAL_CONTEXT_ANSWER_ENABLED` remained unset on both the
+   API and answer worker. The source remains hidden, protected/plural registries
+   remain empty, and Phase 4's routing, cache, neighbor, plural-source, and
+   house-fence boundaries remain unchanged. The remaining 3,938 eligible TIPNR
+   items require a separately designed, costed, reconciled, and attended packet;
+   the pilot grants no automatic authority. Visibility change, feature
+   enablement, live answers, doctrinal assignment, and registry assignment
+   remain separately unauthorized.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication
    status per title; preserve edition/page provenance; quarantine OCR or
    structural failures; do not extract quotes from flat book chunks without
