@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 import inspect
 import json
 import os
@@ -73,6 +74,22 @@ def _imported_modules(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
             names.add(node.module.split(".")[0])
     return names
+
+
+def _sql_statements(path: Path) -> list[str]:
+    """Return every SQL string literal the module actually executes."""
+
+    import ast
+
+    tree = ast.parse(path.read_text("utf-8"))
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            text = node.value
+            if any(verb in text for verb in
+                   ("INSERT INTO", "UPDATE ", "DELETE FROM", "SELECT ")):
+                found.append(text)
+    return found
 
 
 def _module_scope_imports(path: Path) -> set[str]:
@@ -466,13 +483,13 @@ class TipnrFullBatchFixtureTests(_PacketMixin):
 
     def test_expected_fixture_matches_the_rebuilt_summary(self):
         if not FIXTURE.is_file():
-            self.skipTest("fixture not generated yet")
+            self.fail("committed fixture is missing")
         expected = json.loads(FIXTURE.read_text("utf-8"))
         self.assertEqual(expected, full_batch_summary(self.packet))
 
     def test_fixture_is_canonical_bytes(self):
         if not FIXTURE.is_file():
-            self.skipTest("fixture not generated yet")
+            self.fail("committed fixture is missing")
         expected = json.loads(FIXTURE.read_text("utf-8"))
         self.assertEqual(FIXTURE.read_bytes(), canonical_json_bytes(expected))
 
@@ -537,6 +554,13 @@ class _FakeConnection:
 
     def close(self):
         self.closed = True
+
+
+_CLEAN_RETRIEVAL = {
+    "transaction_read_only": [("on",)],
+    "retrieval_vector": [(0,)],
+    "retrieval_fts": [(0,)],
+}
 
 
 def _clean_fixture(source_id, alias_id):
@@ -1158,9 +1182,10 @@ class TipnrFullBatchWriterTests(_PacketMixin):
                         self._preflight(batch), evidence_directory=root)
         written = " ".join(s for s in ledger
                            if "INSERT" in s or "UPDATE" in s or "DELETE" in s)
-        for table in ("sources", "source_aliases", "propositions", "quotes",
-                      "conversations", "answer_jobs", "positions"):
-            self.assertNotIn(f" {table} ", written, table)
+        targets = set(re.findall(r"(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+([a-z_]+)",
+                                 written, re.IGNORECASE))
+        self.assertEqual(targets,
+                         {"documents", "chunks", "source_passage_policy_versions"})
         self.assertNotIn("DELETE", written)
         self.assertIn("documents", written)
         self.assertIn("chunks", written)
@@ -1197,6 +1222,13 @@ class TipnrFullBatchWriterTests(_PacketMixin):
                                  evidence_directory=root)
         self.assertEqual(report["status"], "commit_uncertain")
         self.assertEqual(connection.commits, 0)
+        # Under commit uncertainty the outcome is unknown, never fabricated.
+        counters = report["reconciliation"]
+        self.assertEqual(counters["attempted"], batch.size)
+        self.assertIsNone(counters["stored"])
+        self.assertIsNone(counters["errored"])
+        self.assertIsNone(counters["skipped"])
+        self.assertEqual(counters["resolved_by"], "fresh_reconciliation")
 
     def test_connection_failure_reports_zero_transactions(self):
         batch = self.packet.batches[0]
@@ -1261,12 +1293,19 @@ class TipnrFullBatchProbeTests(_PacketMixin):
     def _postflight(self, state="all_clean", exact=0):
         return lambda: {"candidate_state": state, "counts": {"exact_complete": exact}}
 
+    def _probe_preflight(self, batch):
+        return lambda: {
+            "candidate_state": "all_clean",
+            "next_batch_index": batch.index,
+            "next_batch_sha256": batch.batch_sha256,
+        }
+
     def test_probe_stages_600_rows_and_always_rolls_back(self):
         batch = self.packet.batches[0]
         ledger = []
         connection = _WriteConnection(_write_fixture(batch), ledger)
         report = probe_batch(lambda mode: connection, self.packet, batch,
-                             self._postflight())
+                             self._probe_preflight(batch), self._postflight())
         self.assertEqual(report["status"], "verified")
         self.assertEqual(report["staged_rows"], 600)
         self.assertEqual(report["expected_rows"], 600)
@@ -1293,7 +1332,7 @@ class TipnrFullBatchProbeTests(_PacketMixin):
     def test_probe_fails_when_postflight_is_not_clean(self):
         batch = self.packet.batches[0]
         report = probe_batch(lambda mode: _WriteConnection(_write_fixture(batch), []),
-                             self.packet, batch,
+                             self.packet, batch, self._probe_preflight(batch),
                              self._postflight("exact_complete_prefix", 200))
         self.assertEqual(report["status"], "failed")
 
@@ -1302,7 +1341,7 @@ class TipnrFullBatchProbeTests(_PacketMixin):
         connection = _WriteConnection(_write_fixture(batch), [],
                                       fail_on="insert_chunk")
         report = probe_batch(lambda mode: connection, self.packet, batch,
-                             self._postflight())
+                             self._probe_preflight(batch), self._postflight())
         self.assertEqual(report["status"], "failed")
         self.assertEqual(connection.commits, 0)
         self.assertEqual(connection.rollbacks, 1)
@@ -1346,6 +1385,7 @@ class TipnrFullBatchReconciliationTests(_PacketMixin):
     def test_first_batch_reconciles_with_balanced_counters(self):
         batch = self.packet.batches[0]
         report = reconcile_batch(lambda mode: _FakeConnection(self._fixture(200)),
+                                 lambda mode: _FakeConnection(_CLEAN_RETRIEVAL),
                                  self.packet, batch)
         self.assertEqual(report["status"], "verified")
         self.assertEqual(report["counts"]["completed_through"], 200)
@@ -1360,6 +1400,7 @@ class TipnrFullBatchReconciliationTests(_PacketMixin):
         batch = self.packet.batches[0]
         with self.assertRaises(FullBatchReconciliationError) as caught:
             reconcile_batch(lambda mode: _FakeConnection(self._fixture(199)),
+                            lambda mode: _FakeConnection(_CLEAN_RETRIEVAL),
                             self.packet, batch)
         self.assertIn("committed_prefix_not_exact", str(caught.exception))
 
@@ -1368,7 +1409,9 @@ class TipnrFullBatchReconciliationTests(_PacketMixin):
         fixture = self._fixture(200)
         fixture["fullbatch:reconcile_propositions"] = [(3,)]
         with self.assertRaises(FullBatchReconciliationError) as caught:
-            reconcile_batch(lambda mode: _FakeConnection(fixture), self.packet, batch)
+            reconcile_batch(lambda mode: _FakeConnection(fixture),
+                            lambda mode: _FakeConnection(_CLEAN_RETRIEVAL),
+                            self.packet, batch)
         self.assertIn("propositions_present", str(caught.exception))
 
     def test_hidden_retrieval_leak_is_rejected(self):
@@ -1462,7 +1505,229 @@ class TipnrFullBatchApplyCapabilityTests(unittest.TestCase):
         source = (ROOT / "scripts" / "apply_tipnr_full_batch.py").read_text("utf-8")
         self.assertNotIn("DELETE FROM", source)
         self.assertNotIn("UPDATE sources", source)
-        self.assertNotIn("visibility", source.split("EXCLUDED_PAYLOAD")[0])
+        # Inspect the real SQL, not a prefix of the file.
+        for statement in _sql_statements(ROOT / "scripts" / "apply_tipnr_full_batch.py"):
+            self.assertNotIn("visibility", statement.lower())
+            self.assertNotIn("safe_mode", statement.lower())
+
+
+# ---------------------------------------------------------------------------
+# Packet 4.1 review remediation
+# ---------------------------------------------------------------------------
+
+import demote_stale_fixture_policy as demote_module  # noqa: E402
+from demote_stale_fixture_policy import (  # noqa: E402
+    FixtureDemotionError,
+    demote_stale_policy,
+    stale_fixture_identity,
+)
+from reconcile_tipnr_full_batch import GlobalReconciliationBlocked  # noqa: E402
+
+
+class TipnrRetrievalProbeWiringTests(_PacketMixin):
+    """The hidden-retrieval probe must be unskippable, not optional."""
+
+    def test_reconcile_batch_requires_a_retrieval_factory(self):
+        """Omitting it must be a TypeError, never a silent skip."""
+
+        with self.assertRaises(TypeError):
+            reconcile_batch(lambda mode: _FakeConnection({}), self.packet,
+                            self.packet.batches[0])
+
+    def test_reconcile_batch_actually_invokes_the_probe(self):
+        batch = self.packet.batches[0]
+        calls = []
+
+        def retrieval(mode):
+            calls.append(mode)
+            return _FakeConnection(_CLEAN_RETRIEVAL)
+
+        fixture = TipnrFullBatchReconciliationTests._fixture(self, 200)
+        report = reconcile_batch(lambda mode: _FakeConnection(fixture), retrieval,
+                                 self.packet, batch)
+        self.assertEqual(calls, ["retrieval"])
+        self.assertEqual(report["hidden_retrieval"],
+                         {"items_probed": 200, "vector_matches": 0, "fts_matches": 0})
+
+    def test_a_leak_still_fails_through_the_wired_path(self):
+        batch = self.packet.batches[0]
+        leaky = dict(_CLEAN_RETRIEVAL, retrieval_fts=[(1,)])
+        fixture = TipnrFullBatchReconciliationTests._fixture(self, 200)
+        with self.assertRaises(FullBatchReconciliationError) as caught:
+            reconcile_batch(lambda mode: _FakeConnection(fixture),
+                            lambda mode: _FakeConnection(leaky), self.packet, batch)
+        self.assertIn("hidden_retrieval_leak", str(caught.exception))
+
+    def test_probe_covers_every_item_in_one_round_trip_each(self):
+        source = (ROOT / "scripts" / "reconcile_tipnr_full_batch.py").read_text("utf-8")
+        self.assertIn("CROSS JOIN LATERAL match_chunks", source)
+        self.assertIn("CROSS JOIN LATERAL search_chunks_fts", source)
+
+    def test_apply_main_wires_the_retrieval_factory(self):
+        source = (ROOT / "scripts" / "apply_tipnr_full_batch.py").read_text("utf-8")
+        self.assertIn("reconcile_batch(identity_factory, retrieval_factory", source)
+
+
+class TipnrProbePreflightTests(_PacketMixin):
+    """The probe must classify live state before opening a write connection."""
+
+    def _postflight(self):
+        return lambda: {"candidate_state": "all_clean",
+                        "counts": {"exact_complete": 0}}
+
+    def test_probe_refuses_to_connect_when_preflight_is_not_clean(self):
+        batch = self.packet.batches[0]
+
+        def exploding(mode):
+            raise AssertionError("write connection must not open")
+
+        with self.assertRaises(FullBatchApplyError) as caught:
+            probe_batch(exploding, self.packet, batch,
+                        lambda: {"candidate_state": "exact_complete_prefix",
+                                 "next_batch_index": batch.index,
+                                 "next_batch_sha256": batch.batch_sha256},
+                        self._postflight())
+        self.assertIn("probe_preflight_not_clean", str(caught.exception))
+
+    def test_probe_refuses_a_mismatched_batch_identity(self):
+        batch = self.packet.batches[0]
+
+        def exploding(mode):
+            raise AssertionError("write connection must not open")
+
+        with self.assertRaises(FullBatchApplyError):
+            probe_batch(exploding, self.packet, batch,
+                        lambda: {"candidate_state": "all_clean",
+                                 "next_batch_index": batch.index,
+                                 "next_batch_sha256": "0" * 64},
+                        self._postflight())
+
+    def test_main_classifies_state_before_loading_credentials(self):
+        source = (ROOT / "scripts" / "apply_tipnr_full_batch.py").read_text("utf-8")
+        preflight_at = source.index("state = preflight()")
+        credentials_at = source.index("connection_factory, embed_fn = _load_write")
+        self.assertLess(preflight_at, credentials_at)
+
+
+class TipnrStaleFixtureDemotionTests(_PacketMixin):
+    """The stale fixture policy is demoted, never deleted."""
+
+    def _fixture(self, current_rows=1, history=1):
+        return {
+            "demote:current_policy": [
+                ("aaaaaaaa-0000-0000-0000-000000000001",
+                 stale_fixture_identity()["chunk_id"], "general_context", True)
+            ] * current_rows,
+            "demote:history_preserved": [(history,)],
+        }
+
+    class _DemoteConnection(_WriteConnection):
+        def __init__(self, fixture, ledger, demoted_after_update=True):
+            super().__init__(fixture, ledger)
+            self.demoted_after_update = demoted_after_update
+
+        def cursor(self):
+            outer = self
+
+            class _Cursor(_FakeCursor):
+                def __init__(self):
+                    super().__init__(outer.fixture)
+                    self.updated = False
+                    self.rowcount = 0
+
+                def execute(self, sql, params=()):
+                    outer.ledger.append(sql)
+                    if sql.strip().startswith("SET LOCAL"):
+                        self._rows = []
+                        return
+                    if "set_not_current" in sql:
+                        self.updated = True
+                        self.rowcount = 1
+                        self._rows = []
+                        return
+                    if "current_policy" in sql:
+                        if self.updated and outer.demoted_after_update:
+                            self._rows = []
+                        else:
+                            self._rows = list(outer.fixture["demote:current_policy"])
+                        return
+                    super().execute(sql, params)
+
+            return _Cursor()
+
+    def test_demotion_requires_authorization(self):
+        with self.assertRaises(FixtureDemotionError) as caught:
+            demote_stale_policy(lambda mode: None, approved=False)
+        self.assertIn("not_authorized", str(caught.exception))
+
+    def test_dry_run_rolls_back_and_commits_nothing(self):
+        ledger = []
+        connection = self._DemoteConnection(self._fixture(), ledger)
+        report = demote_stale_policy(lambda mode: connection, approved=True)
+        self.assertEqual(report["status"], "rolled_back")
+        self.assertEqual(connection.commits, 0)
+        self.assertEqual(connection.rollbacks, 1)
+        self.assertEqual(report["rows_updated"], 1)
+
+    def test_commit_demotes_exactly_one_row(self):
+        ledger = []
+        connection = self._DemoteConnection(self._fixture(), ledger)
+        report = demote_stale_policy(lambda mode: connection, approved=True,
+                                     commit=True)
+        self.assertEqual(report["status"], "committed")
+        self.assertEqual(connection.commits, 1)
+        self.assertEqual(report["rows_updated"], 1)
+        self.assertEqual(report["history_rows_preserved"], 1)
+        self.assertIs(report["deletion_attempted"], False)
+
+    def test_demotion_never_issues_a_delete(self):
+        ledger = []
+        demote_stale_policy(
+            lambda mode: self._DemoteConnection(self._fixture(), ledger),
+            approved=True, commit=True,
+        )
+        joined = " ".join(ledger)
+        self.assertNotIn("DELETE", joined.upper())
+        self.assertIn("SET is_current = false", joined)
+
+    def test_demotion_refuses_when_the_row_is_not_uniquely_current(self):
+        for rows in (0, 2):
+            with self.assertRaises(FixtureDemotionError):
+                demote_stale_policy(
+                    lambda mode: self._DemoteConnection(self._fixture(rows), []),
+                    approved=True,
+                )
+
+    def test_demotion_refuses_if_the_row_is_still_current_after_update(self):
+        with self.assertRaises(FixtureDemotionError) as caught:
+            demote_stale_policy(
+                lambda mode: self._DemoteConnection(
+                    self._fixture(), [], demoted_after_update=False),
+                approved=True,
+            )
+        self.assertIn("still_current", str(caught.exception))
+
+    def test_approval_names_the_demotion_and_the_exact_chunk(self):
+        approval = expected_approval(self.packet, date.today())
+        self.assertIs(approval["fixture_policy_demotion_authorized"], True)
+        self.assertEqual(approval["fixture_policy_chunk_id"],
+                         stale_fixture_identity()["chunk_id"])
+
+    def test_demotion_targets_the_fixture_chunk_not_an_artifact_item(self):
+        identity = stale_fixture_identity()
+        self.assertEqual(identity["osis_reference_count"], "4")
+        artifact_chunk_ids = {i.chunk["id"] for i in self.packet.items}
+        self.assertNotIn(identity["chunk_id"], artifact_chunk_ids)
+
+
+class TipnrGlobalReconciliationEvidenceTests(unittest.TestCase):
+    """A blocked global reconciliation must still carry its evidence."""
+
+    def test_blocked_error_preserves_the_full_report(self):
+        report = {"status": "blocked", "problems": ["x"], "payload_sha256": "abc"}
+        error = GlobalReconciliationBlocked("global_reconciliation_failed:x", report)
+        self.assertEqual(error.report, report)
+        self.assertIsInstance(error, FullBatchReconciliationError)
 
 
 if __name__ == "__main__":

@@ -28,7 +28,11 @@ from biblical_context_ingest_contract import (
     SOURCE_SLUG,
 )
 from biblical_context_tooling import canonical_json_bytes, canonical_sha256
-from preview_biblical_context_tooling import write_new_preview
+from preview_biblical_context_tooling import (
+    PreviewCollisionError,
+    PreviewPathError,
+    write_new_preview,
+)
 from preview_tipnr_full_batch import (
     DISCLOSED_PAYLOAD_CATEGORIES,
     EXCLUDED_PAYLOAD_CATEGORIES,
@@ -63,6 +67,14 @@ class FullBatchApplyError(RuntimeError):
 # Approval
 # ---------------------------------------------------------------------------
 
+def stale_fixture_chunk_id() -> str:
+    """The chunk whose Phase 6 fixture policy must be demoted, not deleted."""
+
+    from biblical_context_ingest_contract import build_aaron_projection
+
+    return str(build_aaron_projection(ROOT).chunks[0]["id"])
+
+
 def expected_approval(packet: FullBatchPacket, today: date) -> dict[str, object]:
     """The one approval shape that authorizes this exact operation, today."""
 
@@ -82,6 +94,8 @@ def expected_approval(packet: FullBatchPacket, today: date) -> dict[str, object]
         "maximum_rows": EXPECTED_ROW_TOTAL,
         "disclosed_payload_categories": list(DISCLOSED_PAYLOAD_CATEGORIES),
         "excluded_payload_categories": list(EXCLUDED_PAYLOAD_CATEGORIES),
+        "fixture_policy_demotion_authorized": True,
+        "fixture_policy_chunk_id": stale_fixture_chunk_id(),
         "rollback_probe_authorized": True,
         "embedding_requests_authorized": True,
         "batch_transactions_authorized": True,
@@ -406,6 +420,16 @@ def apply_batch(
         vectors, embedding = resolve_batch_vectors(
             batch, packet, embed_fn, evidence_directory
         )
+    except (PreviewCollisionError, PreviewPathError) as exc:
+        return {
+            "status": "failed",
+            "reason": "evidence_collision",
+            "batch_index": batch.index,
+            "batch_sha256": batch.batch_sha256,
+            "error": {"kind": type(exc).__name__, "detail": str(exc)[:200]},
+            "transactions": {"opened": 0, "committed": 0, "rolled_back": 0},
+            "reconciliation": _counters(batch, stored=0, errored=batch.size, skipped=0),
+        }
     except FullBatchApplyError as exc:
         try:
             detail = json.loads(str(exc))
@@ -471,7 +495,14 @@ def apply_batch(
             "embedding": embedding,
             "error": {"kind": type(exc).__name__, "detail": str(exc)[:500]},
             "transactions": {"opened": 1, "committed": 0, "rolled_back": 1},
-            "reconciliation": _counters(batch, stored=0, errored=batch.size, skipped=0),
+            "reconciliation": {
+                "attempted": batch.size,
+                "stored": None,
+                "errored": None,
+                "skipped": None,
+                "rows": None,
+                "resolved_by": "fresh_reconciliation",
+            },
         }
     connection.close()
     return {
@@ -494,13 +525,24 @@ def probe_batch(
     connection_factory: Callable[[str], object],
     packet: FullBatchPacket,
     batch: FullBatch,
+    preflight_fn: Callable[[], Mapping[str, object]],
     postflight_fn: Callable[[], Mapping[str, object]],
 ) -> dict[str, object]:
     """Stage one batch with zero-vectors, always roll back, never commit.
 
     This function makes zero model requests and has no commit path at all;
     there is deliberately no option a caller could pass to make it commit.
+    A fresh read-only preflight must classify live state before the write
+    connection is opened.
     """
+
+    preflight = preflight_fn()
+    if preflight.get("candidate_state") != "all_clean":
+        raise FullBatchApplyError("probe_preflight_not_clean")
+    if preflight.get("next_batch_index") != batch.index:
+        raise FullBatchApplyError("probe_preflight_batch_index_mismatch")
+    if preflight.get("next_batch_sha256") != batch.batch_sha256:
+        raise FullBatchApplyError("probe_preflight_batch_identity_mismatch")
 
     zero_vectors = [[0.0] * EMBEDDING_DIMENSIONS for _ in range(batch.size)]
     connection = connection_factory("write")
@@ -542,6 +584,10 @@ def probe_batch(
         "transactions": {"opened": 1, "committed": 0, "rolled_back": 1},
         "committed": False,
         "error": error,
+        "preflight": {
+            "candidate_state": preflight.get("candidate_state"),
+            "next_batch_index": preflight.get("next_batch_index"),
+        },
         "postflight": dict(postflight),
     }
 
@@ -657,17 +703,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     def preflight():
         return preflight_full_batch(identity_factory, packet, pilot_packet=pilot)
 
-    connection_factory, embed_fn = _load_write_dependencies()
-
-    if args.probe_only:
-        report = probe_batch(connection_factory, packet, packet.batches[0], preflight)
-        payload = canonical_json_bytes(report)
-        write_attempt_evidence(EVIDENCE_DIRECTORY, payload)
-        sys.stdout.buffer.write(payload)
-        return 0 if report["status"] == "verified" else 1
-
-    from reconcile_tipnr_full_batch import reconcile_batch
-
+    # Classify live state BEFORE any write or embedding credential is loaded.
     state = preflight()
     index = state.get("next_batch_index")
     if index is None:
@@ -676,11 +712,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         ))
         return 0
     batch = packet.batches[index - 1]
+
+    connection_factory, embed_fn = _load_write_dependencies()
+
+    if args.probe_only:
+        report = probe_batch(
+            connection_factory, packet, batch, preflight, preflight
+        )
+        payload = canonical_json_bytes(report)
+        write_attempt_evidence(EVIDENCE_DIRECTORY, payload)
+        sys.stdout.buffer.write(payload)
+        return 0 if report["status"] == "verified" else 1
+
+    from reconcile_tipnr_full_batch import _load_factories, reconcile_batch
+
+    _, retrieval_factory = _load_factories()
     apply_report = apply_batch(
         connection_factory, embed_fn, packet, batch, approval, preflight
     )
     report, payload = finalize_batch(
-        apply_report, lambda: reconcile_batch(identity_factory, packet, batch)
+        apply_report,
+        lambda: reconcile_batch(identity_factory, retrieval_factory, packet, batch),
     )
     sys.stdout.buffer.write(payload)
     return 0 if report["status"] == "verified" else 1

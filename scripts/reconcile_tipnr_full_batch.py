@@ -24,6 +24,7 @@ from preflight_tipnr_full_batch import (
 )
 from tipnr_full_batch_contract import (
     ELIGIBLE_COUNT,
+    GLOBAL_CHUNKS,
     GLOBAL_CURRENT_POLICIES,
     GLOBAL_DOCUMENTS,
     REMAINING_COUNT,
@@ -42,6 +43,14 @@ class FullBatchReconciliationError(RuntimeError):
     """Fresh read-only evidence does not prove the committed contract."""
 
 
+class GlobalReconciliationBlocked(FullBatchReconciliationError):
+    """Global reconciliation failed; the full report is preserved as evidence."""
+
+    def __init__(self, message: str, report: dict[str, object]):
+        super().__init__(message)
+        self.report = report
+
+
 def _classify_all(cursor, items, source_id: str):
     documents, chunks, policies, propositions = _load_live_rows(
         cursor, items, source_id
@@ -54,17 +63,16 @@ def _classify_all(cursor, items, source_id: str):
 
 def reconcile_batch(
     identity_factory: Callable[[str], object],
+    retrieval_factory: Callable[[str], object],
     packet: FullBatchPacket,
     batch: FullBatch,
-    *,
-    retrieval_factory: Callable[[str], object] | None = None,
 ) -> dict[str, object]:
     """Require the committed prefix exact, the suffix clean, and zero propositions."""
 
-    completed_through = batch.index * 0
-    for candidate in packet.batches:
-        if candidate.index <= batch.index:
-            completed_through += candidate.size
+    completed_through = sum(
+        candidate.size for candidate in packet.batches
+        if candidate.index <= batch.index
+    )
 
     connection = identity_factory("identity")
     try:
@@ -99,11 +107,12 @@ def reconcile_batch(
     if propositions != 0:
         raise FullBatchReconciliationError("tipnr_propositions_present")
 
-    retrieval = None
-    if retrieval_factory is not None:
-        retrieval = probe_hidden_retrieval(retrieval_factory, batch)
+    retrieval = probe_hidden_retrieval(retrieval_factory, batch)
 
-    stored = batch.size
+    # Derive stored from observed state rather than asserting the batch size, so
+    # the balance check below can actually fail.
+    window = states[completed_through - batch.size:completed_through]
+    stored = len([state for state in window if state.kind == "exact_complete"])
     report = {
         "schema_version": "biblical_context_tipnr_full_batch_reconciliation.v1",
         "status": "verified",
@@ -120,7 +129,7 @@ def reconcile_batch(
         "reconciliation": {
             "attempted": batch.size,
             "stored": stored,
-            "errored": 0,
+            "errored": batch.size - stored,
             "skipped": 0,
             "rows": stored * ROWS_PER_ITEM,
         },
@@ -155,22 +164,28 @@ def probe_hidden_retrieval(
             row = cursor.fetchone()
             if not row or row[0] != "on":
                 raise FullBatchReconciliationError("retrieval_session_not_readonly")
-            for item in batch.items:
-                cursor.execute(
-                    """/* fullbatch:retrieval_vector */
-                    SELECT count(*) FROM match_chunks(
-                      (SELECT embedding FROM chunks WHERE id = %s), 20, true
-                    ) WHERE document_id = %s""",
-                    (item.chunk["id"], item.document["id"]),
-                )
-                vector_matches += int(cursor.fetchone()[0])
-                cursor.execute(
-                    """/* fullbatch:retrieval_fts */
-                    SELECT count(*) FROM search_chunks_fts(%s, 100, true)
-                    WHERE document_id = %s""",
-                    (item.entity_id, item.document["id"]),
-                )
-                fts_matches += int(cursor.fetchone()[0])
+            # One probe per item, aggregated into a single round trip each.
+            chunk_ids = [item.chunk["id"] for item in batch.items]
+            terms = [item.entity_id for item in batch.items]
+            document_ids = [item.document["id"] for item in batch.items]
+            cursor.execute(
+                """/* fullbatch:retrieval_vector */
+                SELECT count(*)
+                FROM chunks c
+                CROSS JOIN LATERAL match_chunks(c.embedding, 20, true) m
+                WHERE c.id = ANY(%s::uuid[]) AND m.document_id = c.document_id""",
+                (chunk_ids,),
+            )
+            vector_matches = int(cursor.fetchone()[0])
+            cursor.execute(
+                """/* fullbatch:retrieval_fts */
+                SELECT count(*)
+                FROM unnest(%s::text[], %s::uuid[]) AS q(term, document_id)
+                CROSS JOIN LATERAL search_chunks_fts(q.term, 100, true) f
+                WHERE f.document_id = q.document_id""",
+                (terms, document_ids),
+            )
+            fts_matches = int(cursor.fetchone()[0])
     finally:
         connection.close()
 
@@ -267,7 +282,7 @@ def reconcile_global(
         problems.append("current_policy_total_mismatch")
     if documents != GLOBAL_DOCUMENTS:
         problems.append("document_total_mismatch")
-    if chunks != GLOBAL_DOCUMENTS:
+    if chunks != GLOBAL_CHUNKS:
         problems.append("chunk_total_mismatch")
     if fixture_current_policies != 0:
         problems.append("stale_fixture_policy_still_current")
@@ -310,8 +325,8 @@ def reconcile_global(
     }
     report["payload_sha256"] = canonical_sha256(report)
     if problems:
-        raise FullBatchReconciliationError(
-            "global_reconciliation_failed:" + ",".join(problems)
+        raise GlobalReconciliationBlocked(
+            "global_reconciliation_failed:" + ",".join(problems), report
         )
     return report
 
@@ -329,11 +344,8 @@ def _load_factories():
     import psycopg2
 
     identity_url = os.environ.get("READONLY_ANALYSIS_DB_URL")
-    retrieval_url = os.environ.get("SUPABASE_DB_URL")
     if not identity_url:
         raise FullBatchReconciliationError("readonly_analysis_url_missing")
-    if not retrieval_url:
-        raise FullBatchReconciliationError("retrieval_url_missing")
 
     def identity_factory(mode: str):
         if mode != "identity":
@@ -343,6 +355,9 @@ def _load_factories():
     def retrieval_factory(mode: str):
         if mode != "retrieval":
             raise ValueError("retrieval_connection_mode_invalid")
+        retrieval_url = os.environ.get("SUPABASE_DB_URL")
+        if not retrieval_url:
+            raise FullBatchReconciliationError("retrieval_url_missing")
         return psycopg2.connect(retrieval_url)
 
     return identity_factory, retrieval_factory
@@ -362,7 +377,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     identity_factory, _ = _load_factories()
     if not args.run_global:
         parser.error("--global is required for a standalone run")
-    report = reconcile_global(identity_factory, packet, pilot)
+    try:
+        report = reconcile_global(identity_factory, packet, pilot)
+    except GlobalReconciliationBlocked as blocked:
+        payload = canonical_json_bytes(blocked.report)
+        if args.output is not None:
+            from preview_biblical_context_tooling import write_new_preview
+
+            write_new_preview(args.output, payload)
+        sys.stdout.buffer.write(payload)
+        return 1
     payload = canonical_json_bytes(report)
     if args.output is not None:
         from preview_biblical_context_tooling import write_new_preview
