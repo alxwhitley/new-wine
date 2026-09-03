@@ -11,11 +11,16 @@ Last verified: 2026-09-03. **PLAN.md has zero active blockers.**
 ## Current state
 
 **A frontend change shipped to production this session** — the first deploy
-since 2026-08-31. `main` is at `bad58f6`; Vercel production Ready (21s build),
-Railway `New Wine` settled Online with no builder drift, `/docs` and `/health`
-both 200, `newwine.app` 200. No outage; the API stayed Online throughout its
-rebuild. No database write, embedding purchase, or feature-flag change
-happened.
+since 2026-08-31. Production and `origin/main` remain at `bad58f6`; Vercel
+production Ready (21s build), Railway `New Wine` settled Online with no builder
+drift, `/docs` and `/health` both 200, `newwine.app` 200. No outage; the API
+stayed Online throughout its rebuild. No database write, embedding purchase,
+or feature-flag change happened.
+
+Local `main` now contains merge commit `4d6813e` and is ahead of `origin/main`.
+The reviewed default-off TIPNR execution tooling and its closeout records are
+integrated locally but have not been pushed, deployed, or used against
+production.
 
 **The answer-wait ring is replaced by a staged step list** (`bad58f6`, four
 files). `lib/loading-progress.ts` now exports `LOADING_STEPS` +
@@ -42,7 +47,7 @@ all seven claims held, no regression, no edits made. That validation is
 superseded by the replacement above but the method stands: the ring's own
 behaviour was never the problem.
 
-**Branch cleanup: 79 local branches → 7.** Deleted 23 fully-merged, 49
+**Branch cleanup: 79 local branches → 6.** Deleted 23 fully-merged, 49
 byte-identical `claude/beta-night1-*` duplicates (all the same two commits
 `2e654e6`/`295c0c2`), and 4 stale harness-era branches. No remote branch was
 touched. Tips saved before deletion; every deleted branch's commits remain
@@ -57,15 +62,14 @@ Remaining local branches and why:
 
 | Branch | State |
 |---|---|
-| `main` | at `bad58f6`, synced with origin |
-| `codex/biblical-ingestion-completion-queue` | ahead — TIPNR attended gate, unanswered |
+| `main` | contains local merge `4d6813e`, ahead of deployed `origin/main` |
 | `claude/harness-claude-cli-adapter` | 1 ahead — CLAUDE.md: not ready, needs 2nd review round |
 | 4 worktree-pinned | see above |
 
-**`codex/biblical-ingestion-completion-queue` now carries a redundant copy of
-the loader change** (`77b63d6`, committed there before it was cherry-picked to
-`main` as `bad58f6`). Harmless — git resolves it as already-applied — but do
-not read it later as a double-apply.
+**`codex/biblical-ingestion-completion-queue` was merged locally and deleted.**
+The remote branch remains untouched at `77b63d6`; local `main` preserves its
+two later closeout commits through `4d6813e`. The redundant loader patch on the
+branch resolved as already applied during the merge.
 
 **Tracked working-tree changes are committed at close.** Calendar-dependent
 approval fixtures now default to the actual execution day while the explicit
@@ -84,9 +88,10 @@ magazine-review artifacts under `docs/audits/2026-08/` and
 - Unplanned investigations started: **1** — the branch inventory surfaced the
   orphaned Discovery data below. Recorded, not acted on.
 - Findings promoted to Blocker: **0**.
-- Scope changes approved by Alex: the step-pacing re-tune, cherry-pick-to-main
-  over merging the whole branch, local-only branch deletion, and recording
-  (not extracting) the orphaned Discovery rows.
+- Scope changes approved by Alex: the step-pacing re-tune, the frontend-only
+  cherry-pick followed later by the verified local ingestion-branch merge,
+  local-only branch deletion, and recording (not extracting) the orphaned
+  Discovery rows.
 
 ---
 
