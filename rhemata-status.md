@@ -4,109 +4,106 @@ Point-in-time state only. Overwritten each session, never appended to. Durable
 truth lives in code, git history, `PLAN.md`, `docs/roadmap.md`,
 `docs/plan-archive.md`, and `CLAUDE.md`.
 
-Last verified: 2026-09-02. **PLAN.md has zero active blockers.**
+Last verified: 2026-09-03. **PLAN.md has zero active blockers.**
 
 ---
 
 ## Current state
 
-Production is unchanged. Biblical-depth Phases 0–8 remain merged and deployed
-default-off, TIPNR source hidden, `BIBLICAL_CONTEXT_ANSWER_ENABLED` absent on
-both Railway services, zero TIPNR propositions, registries empty. **No
-production write, embedding purchase, deployment, or feature change happened
-this session.** Branch `codex/biblical-ingestion-completion-queue` is pushed
-and current at `8c99ea1`; nothing merged to `main`.
+**A frontend change shipped to production this session** — the first deploy
+since 2026-08-31. `main` is at `bad58f6`; Vercel production Ready (21s build),
+Railway `New Wine` settled Online with no builder drift, `/docs` and `/health`
+both 200, `newwine.app` 200. No outage; the API stayed Online throughout its
+rebuild. No database write, embedding purchase, or feature-flag change
+happened.
 
-**The ingestion queue's central premise was wrong, and that is the session's
-main result.** The queue asserted 21 exact-complete TIPNR items with 3,938
-remaining. Only 20 are. Phase 6 ingested Aaron (`H0175`) from the reduced
-parser fixture, so production holds a 344-character document with **4 of
-Aaron's 352 OSIS references** and the artifact's real Aaron projection was
-never stored. Alex ruled **"Correct Aaron"**: artifact-Aaron joins the
-remaining set and the stale fixture row is retired by demotion. Full landmine
-entry in `CLAUDE.md`. Corrected, now-frozen arithmetic:
+**The answer-wait ring is replaced by a staged step list** (`bad58f6`, four
+files). `lib/loading-progress.ts` now exports `LOADING_STEPS` +
+`activeStepIndex()` over explicit `STEP_ONSETS_MS` (0 / 1.7 / 4.9 / 9.5 /
+18.4s); `estimateLoadingProgress()`, `loadingPhraseIndex()` and
+`LOADING_PHRASES` are deleted. Done rows carry a check, the active row a
+spinner, upcoming rows a dot at `opacity-60`. The last step never completes —
+answer arrival remains the only completion signal. The `<ol>` is `aria-hidden`
+with an `sr-only` node in `role="status"` carrying only the active step.
+`app/page.tsx` untouched. Re-paced on Alex's call so step 5 is active by
+~18.4s, inside the ~20s median; the prior curve did not reach it until 36.8s.
 
-| | queue asserted | actual |
-|---|---|---|
-| remaining items | 3,938 | **3,939** |
-| batch geometry | 19×200 + 138 | **19×200 + 139** |
-| rows | 11,814 | **11,817** |
-| after ingest | 3,959 docs/chunks/policies | **3,959 current policies; 3,960 docs/chunks** (1 inert) |
+Verified before deploy: 72/72 frontend tests (9 module + 6 component, each
+watched failing first), clean `tsc --noEmit`, zero lint findings, and a real
+Chromium run against a browser-level mocked delayed response with
+`NEXT_PUBLIC_API_URL` pointed at a dead port — transitions observed live at
+0.0/1.8/5.2/9.5/18.6s, step 5 active at 20s, single announcement, no digit
+rendered, `animationName: none` under reduced motion with the sequence still
+advancing, 0 of 32 requests reaching production. Re-verified on main's own base
+(58/58) before merging, because main's `page.tsx` differs by 73 lines.
 
-Packets 0–4.1 of `docs/superpowers/plans/2026-09-01-biblical-context-ingestion-completion-queue.md`
-are complete, in four build commits:
+**Prior to that, commit `0e4442a` (the ring) was validated and found correct** —
+all seven claims held, no regression, no edits made. That validation is
+superseded by the replacement above but the method stands: the ring's own
+behaviour was never the problem.
 
-- `6f64c4a` — full-corpus contract, 20 frozen batches, packet
-  `6ec7e6e9dead5ccd2bcc53d5e829a5b2fd4a60dde98a571eb2d24181ea8dc7d6`
-- `23bb16a` — zero-effect preview + prefix-resumable read-only preflight
-- `ad0ba57` — resolved four Required review findings
-- `8c99ea1` — closed review advisories
+**Branch cleanup: 79 local branches → 7.** Deleted 23 fully-merged, 49
+byte-identical `claude/beta-night1-*` duplicates (all the same two commits
+`2e654e6`/`295c0c2`), and 4 stale harness-era branches. No remote branch was
+touched. Tips saved before deletion; every deleted branch's commits remain
+reachable via reflog or origin. Four could not be deleted because Codex
+worktrees under `~/.codex/worktrees/` pin them: `codex/b6-answer-latency`,
+`codex/biblical-depth-phases-0-3`, `harness/quote-containment-and-staging`
+(all merged, safe to delete once released) and `codex/five-user-beta-fast-path`
+(stale duplicate). Those 8 Codex worktrees were left alone — not this
+session's to remove.
 
-Independent fresh-context review returned **ACCEPT** after one REVISE round.
-Its four Required findings were real and two were serious: the hidden-retrieval
-probe had **zero live call sites** while evidence still read `"verified"`, and
-global reconciliation was **arithmetically guaranteed to fail** only after the
-spend and all 11,817 writes completed. Both fixed and mutation-proven.
+Remaining local branches and why:
 
-Verification at close: 120 checks in the new suite plus all 159 existing
-biblical-depth checks green; twelve mutations across both rounds each caught
-with files restored byte-identical; preview byte-stable across three runs;
-packet and preview hashes unchanged through remediation. Live read-only
-preflight: **all_clean at 3,939**, 20 pilot exact-complete, 0 propositions,
-source hidden, migration 097 intact, next batch 1.
+| Branch | State |
+|---|---|
+| `main` | at `bad58f6`, synced with origin |
+| `codex/biblical-ingestion-completion-queue` | ahead — TIPNR attended gate, unanswered |
+| `claude/harness-claude-cli-adapter` | 1 ahead — CLAUDE.md: not ready, needs 2nd review round |
+| 4 worktree-pinned | see above |
 
-**One residual, disclosed not hidden:** the `CROSS JOIN LATERAL` retrieval
-probe SQL has never executed against a real database. The
-`newwine_readonly_analysis` role gets `InsufficientPrivilege` on `app_settings`
-inside `match_chunks`/`search_chunks_fts`, and the retrieval path needs the
-service credential, which was not authorized pre-gate. Both LATERAL shapes and
-both RPC signatures were verified read-only; the authorized rollback probe is
-its first real execution.
+**`codex/biblical-ingestion-completion-queue` now carries a redundant copy of
+the loader change** (`77b63d6`, committed there before it was cherry-picked to
+`main` as `bad58f6`). Harmless — git resolves it as already-applied — but do
+not read it later as a double-apply.
 
-Evidence (ignored, mode 0600) in `local/2026-09/`: `pkt0_census.json`,
-`pkt0_finding_h0175.json`, three inventory rebuilds, `pkt2_preflight.json`,
-`pkt4_gate_preflight.json`.
-
-Also pushed this session: Alex's parallel frontend work (`cc6ba97`, `73fa130`,
-`acdd971`, `04c178d`, `5de5ef7`) — heading hierarchy, responsive WebKit matrix,
-tablet navigation, mobile-keyboard composer. A physical-iPad composer check
-with the software keyboard open remains that track's open verification.
+**Tracked working-tree changes are committed at close.** Calendar-dependent
+approval fixtures now default to the actual execution day while the explicit
+historical-date assertion remains pinned (`17dea65`; verified 31/31 ingestion
+and 24/24 pilot checks with the TIPNR artifact). The pre-existing untracked
+magazine-review artifacts under `docs/audits/2026-08/` and
+`reference_grounding_review/` remain preserved and uncommitted.
 
 ---
 
 ## Session outcome and measures
 
-- Original outcome: **stopped at the queue's own attended gate, as designed** —
-  every repository-only, local, and read-only step is complete and reviewed.
-- Acceptance: **passed** — 120 + 159 checks, twelve mutation proofs, reviewer
-  verdict ACCEPT, live preflight all_clean.
-- Unplanned investigations started: **0**.
-- Findings promoted to Blocker: **0** (the H0175 defect blocks the A4 queue,
-  not beta; feature is off and the source is hidden, so there is no exposure).
-- Active critical-path item at close: **1** — ATTENDED GATE TIPNR, awaiting
-  Alex.
-- Scope changes approved by Alex: the "Correct Aaron" ruling, and the push +
-  session close.
+- Shipped: loader replacement, deployed and verified in production.
+- Acceptance: passed — 72/72 + 58/58 on main's base, mutation-style TDD (every
+  test observed red first), live browser proof, deploy confirmed via both CLIs.
+- Unplanned investigations started: **1** — the branch inventory surfaced the
+  orphaned Discovery data below. Recorded, not acted on.
+- Findings promoted to Blocker: **0**.
+- Scope changes approved by Alex: the step-pacing re-tune, cherry-pick-to-main
+  over merging the whole branch, local-only branch deletion, and recording
+  (not extracting) the orphaned Discovery rows.
 
 ---
 
 ## Next single item
 
-**Answer the TIPNR approval gate.** Five operations were presented as one
-consolidated request at commit `8c99ea1`; none is authorized yet:
-
-1. Rollback-only probe of batch 1 — 600 staged rows, always rolled back, zero
-   model calls.
-2. Paid embeddings — ≤ 3,939 requests, ≤ **$0.02441808** (est. $0.0086),
-   `text-embedding-3-small`, 1536 dimensions.
-3. Twenty batch transactions — 3,939 items, 11,817 rows.
-4. **Irreversible** one-row demotion of the stale Aaron policy, chunk
-   `77f1581b-3225-5110-887b-9b651ebf9adf` (migration 097 permits only
-   `true→false`; recovery needs a new policy row, not a reversal).
-5. Final fresh read-only reconciliation.
-
-Excluded from that request and still requiring separate approval: feature
-enablement, visibility change, protected/plural registry or doctrinal
-assignment, live paid answers, OpenBible or any other source, and
-merge/deploy. A staged "probe only" answer is available and runs operation 1
+**Answer the TIPNR approval gate** — unchanged from 2026-09-02, still
+unanswered. Five operations at commit `8c99ea1`: rollback-only probe of batch
+1; paid embeddings (≤3,939 requests, ≤$0.02441808); twenty batch transactions
+(3,939 items, 11,817 rows); the **irreversible** one-row demotion of the stale
+Aaron fixture policy (chunk `77f1581b-3225-5110-887b-9b651ebf9adf`); final
+fresh read-only reconciliation. A staged "probe only" answer runs operation 1
 alone.
+
+Also open, neither scheduled nor blocking:
+
+1. **Recover 75 orphaned Discovery candidates** from
+   `origin/cursor/discovery-arthur-hunt-0690` — see the CLAUDE.md landmine.
+   Git is currently the only copy.
+2. **`docs/roadmap.md` frontend-polish entry, paragraph 2** — the
+   feedback/Sources footer grouping — still undone. Paragraph 1 is now shipped.
