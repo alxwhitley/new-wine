@@ -723,7 +723,8 @@ class ApplyReportTests(unittest.TestCase):
         embed = EmbedRecorder()
         with tempfile.TemporaryDirectory() as directory:
             approval_path = Path(directory) / "approval.json"
-            approval_path.write_text(json.dumps(valid_approval()), encoding="utf-8")
+            same_day = {**valid_approval(), "operation_date": date.today().isoformat()}
+            approval_path.write_text(json.dumps(same_day), encoding="utf-8")
             output = io.StringIO()
             with (
                 patch(
