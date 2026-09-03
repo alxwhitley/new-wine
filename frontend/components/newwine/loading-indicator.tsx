@@ -1,19 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Check, Loader2 } from "lucide-react";
 
-import {
-  LOADING_PHRASES,
-  estimateLoadingProgress,
-  loadingPhraseIndex,
-} from "@/lib/loading-progress";
+import { cn } from "@/lib/utils";
+import { LOADING_STEPS, activeStepIndex } from "@/lib/loading-progress";
 
-const RADIUS = 15;
-const STROKE_WIDTH = 4;
-const CX = 20;
-const CY = 20;
-const SIZE = 40;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const TICK_MS = 250;
 
 export function LoadingIndicator() {
@@ -30,50 +22,45 @@ export function LoadingIndicator() {
     return () => clearInterval(interval);
   }, []);
 
-  const progress = estimateLoadingProgress(elapsedMs);
-  const phraseIndex = loadingPhraseIndex(progress);
-  const filledOffset = CIRCUMFERENCE * (1 - progress);
+  const active = activeStepIndex(elapsedMs);
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex items-center gap-3 text-left"
-    >
-      <svg
-        width={SIZE}
-        height={SIZE}
-        viewBox={`0 0 ${SIZE} ${SIZE}`}
-        style={{ transform: "rotate(-90deg)" }}
-        className="shrink-0"
-        aria-label="Estimated progress"
-      >
-        {/* Track: faint outline, always visible so the ring never looks empty */}
-        <circle
-          cx={CX}
-          cy={CY}
-          r={RADIUS}
-          fill="none"
-          stroke="hsl(var(--muted))"
-          strokeWidth={STROKE_WIDTH}
-        />
-        {/* Arc: estimated progress -- grows monotonically, caps before completion */}
-        <circle
-          cx={CX}
-          cy={CY}
-          r={RADIUS}
-          fill="none"
-          stroke="hsl(var(--foreground))"
-          strokeWidth={STROKE_WIDTH}
-          strokeLinecap="round"
-          strokeDasharray={CIRCUMFERENCE}
-          strokeDashoffset={filledOffset}
-          className="transition-[stroke-dashoffset] duration-300 ease-out motion-reduce:transition-none"
-        />
-      </svg>
-      <p className="text-sm text-muted-foreground italic">
-        {LOADING_PHRASES[phraseIndex]}
-      </p>
+    <div role="status" aria-live="polite" aria-atomic="true">
+      {/* The only thing announced. The visual list below repeats every step,
+          which a screen reader would re-read on each transition -- so the list
+          is hidden and this carries the active step alone. */}
+      <span className="sr-only">{LOADING_STEPS[active]}</span>
+
+      <ol aria-hidden="true" className="flex flex-col gap-1.5 text-sm">
+        {LOADING_STEPS.map((step, index) => {
+          const done = index < active;
+          const isActive = index === active;
+          return (
+            <li
+              key={step}
+              className={cn(
+                "flex items-center gap-2",
+                isActive && "text-foreground",
+                done && "text-muted-foreground",
+                // Upcoming: present but recessive, so the sequence reads as a
+                // plan rather than as work already claimed.
+                !done && !isActive && "text-muted-foreground opacity-60",
+              )}
+            >
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                {done ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : isActive ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                )}
+              </span>
+              {step}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
