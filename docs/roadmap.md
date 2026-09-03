@@ -45,6 +45,30 @@ This track may run concurrently with later corpus production after W8 passes.
    known non-blockers have consequences and revisit triggers; deployment still
    requires Alex's explicit approval.
 
+### Frontend polish — staged answer-loading treatment
+
+**DONE and live — the step list shipped 2026-09-03 (commit `bad58f6`).** The
+ring is replaced by a five-row list advancing through the answer path's real
+order of work; active row carries the spinner and emphasis, completed rows a
+check, upcoming rows a subdued dot. Time-paced via explicit `STEP_ONSETS_MS`
+(0 / 1.7 / 4.9 / 9.5 / 18.4s), re-tuned from the ring's curve so the final
+step is reached inside the ~20s median rather than at 36.8s. The last step
+never completes — answer arrival remains the only completion signal.
+Reduced-motion behavior, the error handoff, and the surrounding chat layout
+are preserved; `app/page.tsx` was not touched. One concise announcement at a
+time is achieved by hiding the visual list from assistive tech and exposing
+only the active step. No percentage, meter, or fabricated source count is
+rendered.
+
+**Still open — the footer half of this entry has not been built.** In the
+completed-answer footer, keep the thumbs-up/down controls left-aligned
+on their own row directly above the Sources disclosure. Treat feedback and
+Sources as one compact footer group: use a tight gap between those two rows,
+retain the existing usable touch targets, and let the larger separation occur
+between the answer content and the footer group. Do not place feedback opposite
+Sources in a shared horizontal row or leave the feedback controls floating in
+open vertical space.
+
 ### Remaining corpus track — A1-A6, after the web-article proof
 
 Production writes use deterministic, resumable scripts in an attended primary
@@ -386,6 +410,11 @@ cleanup; `jewish_perspectives`; the teacher-card refusal-copy question;
 extraction-attempt history instrumentation; and `bible_refs.py`'s measured
 ~0.4% reference-hallucination rate (2 of 514 on real sermon text, 2026-08-29
 — the two bad rows were removed, the extractor itself was not changed).
+
+Also parked: the existing `next-themes` development hydration warning observed
+during the 2026-09-01 responsive WebKit pass. All 16 tested mobile/tablet
+journeys passed and no production failure was demonstrated; revisit only if it
+causes visible theme flicker, incorrect initial styling, or a production error.
 
 ### Historical YouTube caption duplication — needs a cost estimate first
 

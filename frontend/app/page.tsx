@@ -43,6 +43,7 @@ const SUGGESTIONS = [
 ];
 
 export default function Home() {
+  const { inputFocused } = useChatFocus();
   const { user, accessToken, signIn, signUp, signOut } = useAuth();
   const { role: userRole } = useUserRole(accessToken);
   // In-app surface: anyone already here has an account, so the bare entry
@@ -276,12 +277,70 @@ export default function Home() {
   // tokens never own scroll position after that; the reader does.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const appViewportRef = useRef<HTMLDivElement>(null);
   const scrollOnNextTurnRef = useRef(false);
   useEffect(() => {
     if (!scrollOnNextTurnRef.current || messages.length === 0) return;
     scrollOnNextTurnRef.current = false;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  // iOS Safari keeps the layout viewport behind its software keyboard. Size
+  // and position the app against the visible viewport instead, including
+  // toolbar motion and rotation changes that do not always update 100dvh.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    let animationFrame = 0;
+    const scheduleViewportSync = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        const shell = appViewportRef.current;
+        if (!shell) return;
+        shell.style.height = `${Math.round(viewport?.height ?? window.innerHeight)}px`;
+        shell.style.top = `${Math.round(viewport?.offsetTop ?? 0)}px`;
+        shell.style.bottom = "auto";
+      });
+    };
+
+    scheduleViewportSync();
+    viewport?.addEventListener("resize", scheduleViewportSync);
+    viewport?.addEventListener("scroll", scheduleViewportSync);
+    window.addEventListener("resize", scheduleViewportSync);
+    window.addEventListener("orientationchange", scheduleViewportSync);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      viewport?.removeEventListener("resize", scheduleViewportSync);
+      viewport?.removeEventListener("scroll", scheduleViewportSync);
+      window.removeEventListener("resize", scheduleViewportSync);
+      window.removeEventListener("orientationchange", scheduleViewportSync);
+    };
+  }, []);
+
+  // When a keyboard changes the visible height, keep the newest turn above
+  // the composer. This only runs while composing, so reading/streaming still
+  // leaves scroll ownership with the reader.
+  useEffect(() => {
+    if (!inputFocused || messages.length === 0) return;
+    const viewport = window.visualViewport;
+    let animationFrame = 0;
+    const keepLatestVisible = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ block: "nearest" });
+      });
+    };
+
+    keepLatestVisible();
+    viewport?.addEventListener("resize", keepLatestVisible);
+    viewport?.addEventListener("scroll", keepLatestVisible);
+    window.addEventListener("orientationchange", keepLatestVisible);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      viewport?.removeEventListener("resize", keepLatestVisible);
+      viewport?.removeEventListener("scroll", keepLatestVisible);
+      window.removeEventListener("orientationchange", keepLatestVisible);
+    };
+  }, [inputFocused, messages.length]);
 
   // / shortcut focuses the chat textarea
   useEffect(() => {
@@ -369,8 +428,6 @@ export default function Home() {
   }
 
   const isEmpty = messages.length === 0;
-  const { inputFocused } = useChatFocus();
-
   // Computed once via useState's lazy initializer, guaranteed to run
   // exactly once for this component instance's lifetime -- not in an
   // effect (react-hooks/set-state-in-effect) and not a bare call during
@@ -386,7 +443,7 @@ export default function Home() {
 
   return (
     // Outermost shell: sidebar tone, full viewport
-    <div className="fixed inset-0 flex h-dvh-safe overflow-hidden overscroll-none bg-sidebar">
+    <div ref={appViewportRef} className="fixed inset-0 flex h-dvh-safe overflow-hidden overscroll-none bg-sidebar">
       {/* Sidebar sits directly on this canvas */}
       <Sidebar
         conversations={conversations}
@@ -396,6 +453,7 @@ export default function Home() {
         accessToken={accessToken}
         weeklyUsage={weeklyUsage}
         isOpen={sidebarOpen}
+        onOpen={() => setSidebarOpen(true)}
         onClose={closeSidebar}
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
@@ -403,14 +461,14 @@ export default function Home() {
         onSignInClick={() => openAuth("signin")}
       />
 
-      {/* Chat card wrapper — inset on desktop, full-bleed on mobile. The
-          sidebar NEVER collapses (md:ml-64 is constant); the card's own
+      {/* Chat card wrapper — inset when the fixed sidebar is present. The
+          sidebar stays fixed from landscape-tablet upward (lg:ml-64); the card's own
           outer bounds never move either, panel open or closed (geometry
           v3, replaces the old padding-right reservation) — only the split
           INSIDE the card between chat region and panel slot changes. */}
       <main
         className={cn(
-          "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 md:ml-64",
+          "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 lg:ml-64",
           // Chat-only beta: no tab bar to clear, so no keyboard-focus
           // toggle needed — just the real bottom safe-area (Phase 4 makes
           // env() non-zero). Flag on: unchanged, 56px reserved for the bar.
@@ -437,15 +495,18 @@ export default function Home() {
             ref={menuButtonRef}
             aria-label="Open sidebar"
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden absolute top-[calc(0.75rem+env(safe-area-inset-top))] left-3 z-30 h-11 w-11 flex items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground"
+            className="md:hidden absolute top-[calc(0.75rem+env(safe-area-inset-top))] left-3 z-30 h-11 w-11 flex items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:text-foreground active:bg-accent active:text-foreground"
           >
             <Menu className="h-5 w-5" />
           </button>
           {/* usage ring moved to drawer (Pass B) */}
 
+          {/* The shared tablet app bar is fixed above this structural spacer. */}
+          <div className="hidden h-14 shrink-0 md:block lg:hidden" aria-hidden="true" />
+
           {/* Top bar — desktop only (mobile uses floating button above).
               Pin dropdown is desktop-only in this phase — see Open Flags. */}
-          <div className="hidden md:flex h-14 shrink-0 items-center justify-end px-6 z-30 border-b border-border">
+          <div className="hidden lg:flex h-14 shrink-0 items-center justify-end px-6 z-30 border-b border-border">
             {isStudyPanelEnabled() && (
               <PinDropdown
                 pins={studyPins.map((p) => p.reference)}
@@ -457,20 +518,20 @@ export default function Home() {
 
           {isEmpty ? (
             /* Empty state — centred, full remaining height */
-            <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-12 overflow-hidden overscroll-none min-h-0">
+            <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-12 md:max-lg:pb-12 overflow-hidden overscroll-none min-h-0">
               <h2 suppressHydrationWarning className="font-sans text-2xl md:text-3xl font-semibold text-foreground text-center max-w-lg text-balance">
                 {greeting}
               </h2>
 
-              <div className="mt-8 w-full max-w-xl">
+              <div className="mt-8 w-full max-w-xl md:max-w-2xl lg:max-w-xl xl:max-w-2xl">
                 <ChatInput onSend={handleSend} disabled={chatLoading} embedded />
 
-                <div className="mt-2 flex w-full flex-col items-center gap-2">
+                <div className="mt-2 flex w-full flex-col items-center gap-2 md:max-lg:gap-3">
                   {SUGGESTIONS.map((s) => (
                     <button
                       key={s}
                       onClick={() => handleSend(s)}
-                      className="w-full min-h-[44px] text-left rounded-lg bg-popover px-4 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="w-full min-h-[44px] text-left rounded-lg bg-popover px-4 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent active:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       {s}
                     </button>

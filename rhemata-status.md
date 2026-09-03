@@ -4,105 +4,106 @@ Point-in-time state only. Overwritten each session, never appended to. Durable
 truth lives in code, git history, `PLAN.md`, `docs/roadmap.md`,
 `docs/plan-archive.md`, and `CLAUDE.md`.
 
-Last verified: 2026-09-01. **PLAN.md has zero active blockers.**
+Last verified: 2026-09-03. **PLAN.md has zero active blockers.**
 
 ---
 
 ## Current state
 
-**Biblical-depth Phases 0–8 are merged, deployed, and complete through a
-verified hidden TIPNR production pilot.** PR #3 merged into `main` as
-`ff89ba5`. Vercel is Ready and Railway reports `SUCCESS` for the New Wine API,
-answer worker, search-analytics finalizer, and search-analytics retention
-services on that exact revision. Production smoke checks returned HTTP 200 for
-the API root, API docs, and `newwine.app`.
+**A frontend change shipped to production this session** — the first deploy
+since 2026-08-31. `main` is at `bad58f6`; Vercel production Ready (21s build),
+Railway `New Wine` settled Online with no builder drift, `/docs` and `/health`
+both 200, `newwine.app` 200. No outage; the API stayed Online throughout its
+rebuild. No database write, embedding purchase, or feature-flag change
+happened.
 
-The release remains inert. `BIBLICAL_CONTEXT_ANSWER_ENABLED` is unset on both
-the API and answer worker and therefore defaults to false. The existing blanket
-commentary exclusion remains active, migration 097 is not read by the answer
-path, the TIPNR source remains hidden, and protected-source and plural-viewpoint
-registries remain empty. No feature activation, visibility change, live answer,
-registry assignment, doctrinal assignment, or new production data write
-occurred during deployment.
+**The answer-wait ring is replaced by a staged step list** (`bad58f6`, four
+files). `lib/loading-progress.ts` now exports `LOADING_STEPS` +
+`activeStepIndex()` over explicit `STEP_ONSETS_MS` (0 / 1.7 / 4.9 / 9.5 /
+18.4s); `estimateLoadingProgress()`, `loadingPhraseIndex()` and
+`LOADING_PHRASES` are deleted. Done rows carry a check, the active row a
+spinner, upcoming rows a dot at `opacity-60`. The last step never completes —
+answer arrival remains the only completion signal. The `<ol>` is `aria-hidden`
+with an `sr-only` node in `role="status"` carrying only the active step.
+`app/page.tsx` untouched. Re-paced on Alex's call so step 5 is active by
+~18.4s, inside the ~20s median; the prior curve did not reach it until 36.8s.
 
-Migration 097 remains applied and verified with its RLS, closed policy classes,
-metadata coupling, one-current uniqueness, append-only history, and restricted
-grants intact. Production contains 21 current approved `general_context` rows:
-the Phase 6 `H0175` proof plus the exact 20-item Phase 8 pilot. None has a
-proposition, and the hidden retrieval probes remain empty.
+Verified before deploy: 72/72 frontend tests (9 module + 6 component, each
+watched failing first), clean `tsc --noEmit`, zero lint findings, and a real
+Chromium run against a browser-level mocked delayed response with
+`NEXT_PUBLIC_API_URL` pointed at a dead port — transitions observed live at
+0.0/1.8/5.2/9.5/18.6s, step 5 active at 20s, single announcement, no digit
+rendered, `animationName: none` under reduced motion with the sequence still
+advancing, 0 of 32 requests reaching production. Re-verified on main's own base
+(58/58) before merging, because main's `page.tsx` differs by 73 lines.
 
-The Phase 8 packet remains frozen at 10 people plus 10 places after excluding
-`H0175`:
+**Prior to that, commit `0e4442a` (the ring) was validated and found correct** —
+all seven claims held, no regression, no edits made. That validation is
+superseded by the replacement above but the method stands: the ring's own
+behaviour was never the problem.
 
-- selection checksum:
-  `398fa80f93fc4c7464a22ca110d9a4546c60d4667f04ba2a3aebafb18ad8fb2b`;
-- packet hash:
-  `a48f506a38db740d4d2cd8648c8de95ac7c25cb4550916e236a023738184a1e8`;
-- zero-effect preview hash:
-  `4171181b7003317044edafb8eeb836de7596f795489ba1bc8faafac72d716237`;
-- sample hash:
-  `ad2299d96582635f151b885d59f09b722297a10ab00354a46ddd5145c4041515`.
+**Branch cleanup: 79 local branches → 7.** Deleted 23 fully-merged, 49
+byte-identical `claude/beta-night1-*` duplicates (all the same two commits
+`2e654e6`/`295c0c2`), and 4 stale harness-era branches. No remote branch was
+touched. Tips saved before deletion; every deleted branch's commits remain
+reachable via reflog or origin. Four could not be deleted because Codex
+worktrees under `~/.codex/worktrees/` pin them: `codex/b6-answer-latency`,
+`codex/biblical-depth-phases-0-3`, `harness/quote-containment-and-staging`
+(all merged, safe to delete once released) and `codex/five-user-beta-fast-path`
+(stale duplicate). Those 8 Codex worktrees were left alone — not this
+session's to remove.
 
-The successful retry made exactly 20 `text-embedding-3-small` requests under
-USD `0.01` and committed one atomic 60-row transaction: 20 documents, 20
-chunks, and 20 current policies. Coupled and independent fresh reconciliation
-both passed at attempted `20`, stored `20`, errored `0`, skipped `0`, with zero
-propositions and zero matches across 20 vector plus 20 FTS probes. The
-verification payload hash is
-`d50aa50a7d6493412fe66470f9afeb9f38be194f9926462edae86fb50a86ab9e`;
-the immutable final evidence file hash is
-`d4ddf85fa2e79f037f15faf2555cc2ea60024fbf3aed520d66a150aabe0a6df5`.
+Remaining local branches and why:
 
-The earlier failed apply committed no rows. Its exact embedding count remains
-unknown and conservatively bounded at 0–20 under its separate USD `0.01`
-ceiling. Build commit `643c9f1` added structured, immutable failure evidence;
-build commit `59dd15d` fixed the UUID-array completion stamp exposed by the
-authorized rollback probe. The corrected probe staged all 60 rows, made zero
-model calls, rolled back, and left all candidates clean. Its evidence hash is
-`e57857768c8a398dce480dac6332c53f24a5dd765b641d0313c8a2e45f6983fc`.
+| Branch | State |
+|---|---|
+| `main` | at `bad58f6`, synced with origin |
+| `codex/biblical-ingestion-completion-queue` | ahead — TIPNR attended gate, unanswered |
+| `claude/harness-claude-cli-adapter` | 1 ahead — CLAUDE.md: not ready, needs 2nd review round |
+| 4 worktree-pinned | see above |
 
-Pre-merge verification passed all 159 biblical-depth checks/contracts: Phase 8
-`24`, parser/inventory `39`, Phase 6 ingest `31`, manifests `4`, classification
-`7`, policy `16`, routing `21`, and generation `17`. All changed executable
-Python modules compiled under Python 3.12, Vercel preview passed, and the
-independent pre-merge reviewer returned `ACCEPT` with no blocking findings.
+**`codex/biblical-ingestion-completion-queue` now carries a redundant copy of
+the loader change** (`77b63d6`, committed there before it was cherry-picked to
+`main` as `bad58f6`). Harmless — git resolves it as already-applied — but do
+not read it later as a double-apply.
 
-The governing boundaries remain unchanged: protected charismatic topics need
-Alex-approved exact source IDs; plural disputes need two distinct registered
-and evidenced source slots; house papers are fence-only on the enabled path;
-neighbors are rechecked; cache identity includes effective policy state; and
-missing, stale, malformed, mixed, uncertain, prohibited, or unknown policy
-state fails closed.
-
-The Phase 7 inventory remains eligible `3,959`, malformed `172`, skipped `115`,
-prohibited `16`, and duplicate `0`. After `H0175` and the Phase 8 pilot, 3,938
-eligible TIPNR items remain. The ingestion-ready foundation benchmark is met,
-but those items are Scheduled work and have no automatic execution authority.
+**Tracked working-tree changes are committed at close.** Calendar-dependent
+approval fixtures now default to the actual execution day while the explicit
+historical-date assertion remains pinned (`17dea65`; verified 31/31 ingestion
+and 24/24 pilot checks with the TIPNR artifact). The pre-existing untracked
+magazine-review artifacts under `docs/audits/2026-08/` and
+`reference_grounding_review/` remain preserved and uncommitted.
 
 ---
 
 ## Session outcome and measures
 
-- Original outcome: **completed** — the exact Phase 8 pilot was safely retried,
-  committed, independently reconciled, merged, and deployed default-off.
-- Acceptance: **passed** — 159 deterministic checks/contracts, compile proof,
-  independent review, green Vercel/Railway deployments, and HTTP 200 production
-  smokes.
-- Unplanned investigations started: **1** — bounded diagnosis of the first
-  apply evidence gap and rollback-probe UUID mismatch.
+- Shipped: loader replacement, deployed and verified in production.
+- Acceptance: passed — 72/72 + 58/58 on main's base, mutation-style TDD (every
+  test observed red first), live browser proof, deploy confirmed via both CLIs.
+- Unplanned investigations started: **1** — the branch inventory surfaced the
+  orphaned Discovery data below. Recorded, not acted on.
 - Findings promoted to Blocker: **0**.
-- Active critical-path item at close: **0**.
-- Scope changes approved by Alex: exact pilot retry, PR #3 merge, default-off
-  deployment, production verification, and session close. No larger ingestion,
-  feature enablement, visibility change, registry assignment, doctrinal
-  assignment, or live-answer authority was added.
+- Scope changes approved by Alex: the step-pacing re-tune, cherry-pick-to-main
+  over merging the whole branch, local-only branch deletion, and recording
+  (not extracting) the orphaned Discovery rows.
 
 ---
 
 ## Next single item
 
-**Decide whether to scope a later ingestion packet for the remaining 3,938
-eligible TIPNR items.** It requires a fresh exact selection, cost ceiling,
-rollback and reconciliation contract, and separate attended approval. Feature
-activation, visibility changes, registry or doctrinal assignments, and live
-answer testing remain separate attended decisions.
+**Answer the TIPNR approval gate** — unchanged from 2026-09-02, still
+unanswered. Five operations at commit `8c99ea1`: rollback-only probe of batch
+1; paid embeddings (≤3,939 requests, ≤$0.02441808); twenty batch transactions
+(3,939 items, 11,817 rows); the **irreversible** one-row demotion of the stale
+Aaron fixture policy (chunk `77f1581b-3225-5110-887b-9b651ebf9adf`); final
+fresh read-only reconciliation. A staged "probe only" answer runs operation 1
+alone.
+
+Also open, neither scheduled nor blocking:
+
+1. **Recover 75 orphaned Discovery candidates** from
+   `origin/cursor/discovery-arthur-hunt-0690` — see the CLAUDE.md landmine.
+   Git is currently the only copy.
+2. **`docs/roadmap.md` frontend-polish entry, paragraph 2** — the
+   feedback/Sources footer grouping — still undone. Paragraph 1 is now shipped.

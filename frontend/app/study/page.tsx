@@ -297,7 +297,7 @@ function VerseSearch({
           onClick={onSubmit}
           disabled={loading}
           aria-label="Search verse or word"
-          className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+          className="min-h-[44px] min-w-[44px] rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium hover:bg-primary/90 active:scale-[0.98] active:bg-primary/85 transition-all disabled:opacity-50"
         >
           {loading ? (
             <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -312,7 +312,7 @@ function VerseSearch({
             <button
               key={name}
               onClick={() => { onChange(name + " "); inputRef.current?.focus(); }}
-              className="w-full text-left px-4 py-3 text-sm cursor-pointer text-foreground hover:bg-accent transition-colors border-b border-border last:border-b-0"
+              className="w-full text-left px-4 py-3 text-sm cursor-pointer text-foreground hover:bg-accent active:bg-accent transition-colors border-b border-border last:border-b-0"
             >
               {name}
             </button>
@@ -325,7 +325,7 @@ function VerseSearch({
             <button
               key={r.id}
               onClick={() => onWordStudySelect(r)}
-              className="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer hover:bg-accent border-b border-border last:border-b-0"
+              className="w-full text-left px-4 py-3 text-sm transition-colors cursor-pointer hover:bg-accent active:bg-accent border-b border-border last:border-b-0"
             >
               <span className="text-foreground font-medium">{r.word || r.transliteration}</span>
               <span className="text-muted-foreground">
@@ -1046,6 +1046,7 @@ export default function StudyPage() {
         user={user}
         accessToken={accessToken}
         isOpen={sidebarOpen}
+        onOpen={() => setSidebarOpen(true)}
         onClose={() => setSidebarOpen(false)}
         onNewChat={() => { window.location.href = "/"; }}
         onSignInClick={() => openAuth("signin")}
@@ -1054,7 +1055,7 @@ export default function StudyPage() {
         onSelectSavedWord={handleSidebarSavedWordSelect}
       />
 
-      <main className="md:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
+      <main className="lg:ml-64 flex flex-1 min-w-0 min-h-0 p-2 pb-24 md:pb-2">
         <div className="flex flex-col flex-1 min-h-0 bg-background rounded-xl border border-border overflow-hidden">
 
           {/* Top Bar */}
@@ -1062,7 +1063,7 @@ export default function StudyPage() {
             <button
               aria-label="Open sidebar"
               onClick={() => setSidebarOpen(true)}
-              className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+              className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground active:bg-accent active:text-foreground"
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -1071,11 +1072,11 @@ export default function StudyPage() {
               onClick={() => setSidebarOpen(true)}
               aria-label="Saved words"
               title="Saved words"
-              className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
+              className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded text-muted-foreground hover:text-foreground active:bg-accent active:text-foreground"
             >
               <Bookmark className="h-5 w-5" />
             </button>
-            <div className="hidden md:block flex-1" />
+            <div className="hidden lg:block flex-1" />
           </div>
 
           {/* ── Desktop: single-column scrollable ── */}

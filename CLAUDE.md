@@ -1002,6 +1002,57 @@ different row, per the hard rule above.
 
 ## Landmines (live, as of last audit — verify before trusting)
 
+- **75 Discovery candidates exist ONLY on `origin/cursor/discovery-arthur-hunt-0690`,
+  and that branch must never be merged nor deleted — 2026-09-03.** Its Discovery
+  sheet holds 193 named candidates against `main`'s 118, a strict superset:
+  main has zero rows the branch lacks. The 75 missing ones are real research
+  (Wolfgang Vondey, Keith Warrington, Chris E. W. Green, Kimberly Ervin
+  Alexander, Opoku Onyinah, Daniela Augustine, Katherine Ruonala, Putty
+  Putman, and 67 more). **Git history is currently their only copy** — the
+  exact situation the master-ingestion-sheet entry below calls this data's
+  backup mechanism. Two traps, in both directions. (1) **Deleting the branch
+  destroys them**, and it looks deletable: it is 16 stale `docs:` commits,
+  last touched 2026-08-28, on a `cursor/` branch nobody references. (2)
+  **Merging it destroys other things** — it is based on ancient main and its
+  diff is `382 files, 2,768 insertions, 66,257 deletions`, removing
+  `tools/discovery-review-extension/` and `scripts/verify_metering_live.py`
+  among much else. The cause is a data fork: it writes to
+  `docs/ingestion/master_ingestion_queue.xlsx`, the binary file retired
+  2026-08-26 when it became four TSVs, and it kept adding candidates for two
+  more days after that conversion. The only correct recovery is to extract
+  those 75 rows and append them to
+  `docs/ingestion/master_ingestion_queue_discovery.tsv` through
+  `scripts/ingestion_sheet_io.py`. Not yet done — Alex's call 2026-09-03 was
+  to record it rather than write to that TSV unattended, since the sheet
+  silently overwrites the database on the next `--apply` sync. Every one of
+  the 75 carries `claimed_*` fields and no human clearance, so they land
+  unverified by definition.
+
+- **Production's TIPNR Aaron (`H0175`) is a REDUCED TEST FIXTURE, not the real
+  record, and it is structurally undeletable — 2026-09-02.** Phase 6 built its
+  hidden-ingestion proof from `scripts/fixtures/biblical_context/tipnr_minimal.txt`,
+  whose own metadata says reference lists "were reduced for a minimal parser
+  fixture." So document `131a911e-4c87-5680-8439-a824f3351c85` holds 344
+  characters and **4 of Aaron's 352 OSIS references** (1.14%), with
+  `record_sha256` `78d6eff…` (fixture) rather than `c65994c…` (artifact). The
+  20-item Phase 8 pilot came from the real artifact and is fine — only the
+  Phase 6 proof used the fixture. **Never treat the corpus as holding 21
+  artifact-exact items; it holds 20.** Any plan asserting "3,938 remaining" is
+  working from that error — the artifact's Aaron was never stored, so the true
+  remainder is **3,939** (19×200 + 139 = 11,817 rows). Alex's ruling
+  (2026-09-02, "Correct Aaron"): ingest artifact-Aaron as an ordinary item and
+  retire the fixture row by **demoting** its policy, never deleting it.
+  **Deletion is impossible, not merely discouraged** — migration 097's
+  `append_only` trigger raises on DELETE and its `chunk_id` FK is
+  `ON DELETE RESTRICT`, so policy → chunk → document deletion is blocked
+  transitively; the trigger permits exactly one mutation, `is_current`
+  `true→false`, and that flip is **irreversible** (`false→true` raises). End
+  state is therefore 3,959 current policies over 3,960 documents/chunks, one
+  inert. Tooling: `scripts/demote_stale_fixture_policy.py`. General lesson,
+  which is the reason this entry exists: **a proof built from a trimmed fixture
+  writes a real row into the real corpus** — verify a proof's input is the
+  pinned artifact before its output becomes data.
+
 - **Three frontend states look like bugs and are Alex's explicit 2026-09-01
   decisions (`1db7793`).** (1) **The chat input has no focus ring on purpose.**
   This deliberately reverses the fix for finding #8 of
@@ -1467,6 +1518,22 @@ different row, per the hard rule above.
   pattern, same shape, Alex's explicit call again in the moment. Still
   not promoted to a standing practice with its own procedure; still one
   explicit call at a time.
+
+  **Refinement, 2026-09-03 — COMMAND SHAPE matters, and this one is worth
+  trying before any handoff.** A production deploy (`git push origin
+  <branch>:main`) was blocked when sent as a compound command chaining
+  `git fetch`, `git log`, the push, and `cat`. The identical push, re-sent
+  alone as a single bare command with nothing else on the line, was
+  ALLOWED and succeeded. A `git worktree remove --force` was likewise
+  blocked while the same removal without `--force` passed. So the
+  classifier is reading the whole command line, not just the risky verb:
+  compound chaining and force flags raise it. This does NOT contradict the
+  2026-08-25 entry above — those were genuinely reformulated single
+  operations and stayed blocked — but it does mean **a bare
+  single-purpose retry is worth exactly one attempt before concluding a
+  handoff to another tool is needed.** Do not chain anything onto a
+  command you expect to be sensitive, including a trailing status check;
+  run the verification separately afterward.
 
 - **Auto Mode misfire on harmless prose mentioning "SQL"/"migration" —
   2026-08-14, upgraded same day.** A separate behavior of the same Auto

@@ -299,7 +299,11 @@ class PilotPreflightTests(unittest.TestCase):
                 self._run({"items": {first.document["id"]: item_state}})
 
 
-def _approval(packet, operation_date="2026-09-01"):
+def _approval(packet, operation_date=None):
+    # Default to today: the apply path validates against date.today(),
+    # so a pinned date here would make these tests pass only on that day.
+    if operation_date is None:
+        operation_date = date.today().isoformat()
     return {
         "schema_version": "biblical_context_tipnr_hidden_pilot_approval.v1",
         "approved_by": "Alex Whitley",
@@ -325,7 +329,7 @@ class PilotApplyTests(unittest.TestCase):
     def test_approval_must_match_exact_packet_and_day(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "approval.json"
-            expected = _approval(self.packet)
+            expected = _approval(self.packet, "2026-09-01")
             path.write_text(json.dumps(expected), encoding="utf-8")
             self.assertEqual(
                 validate_pilot_approval(path, self.packet, date(2026, 9, 1)),

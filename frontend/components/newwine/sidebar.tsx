@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2, ChevronRight } from "lucide-react";
+import { Plus, MoreHorizontal, X, MessageSquare, Compass, BookOpen, Loader2, ChevronRight, Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ interface SidebarProps {
   accessToken?: string | null;
   weeklyUsage?: { used: number; limit: number } | null;
   isOpen: boolean;
+  onOpen: () => void;
   onClose: () => void;
   onNewChat: () => void;
   onSignInClick: () => void;
@@ -69,6 +70,7 @@ export function Sidebar({
   accessToken,
   weeklyUsage,
   isOpen,
+  onOpen,
   onClose,
   onNewChat,
   onSignInClick,
@@ -158,7 +160,7 @@ export function Sidebar({
 
   const sidebarContent = (
     <>
-      {/* Wordmark + close button (mobile) */}
+      {/* Wordmark + close button (drawer) */}
       <div className="flex items-center justify-between pb-4">
         <h1 className="font-sans text-2xl font-semibold text-foreground tracking-tight">
           New Wine
@@ -166,7 +168,7 @@ export function Sidebar({
         <button
           onClick={onClose}
           aria-label="Close sidebar"
-          className="rounded-md p-1 text-muted-foreground hover:text-foreground md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+          className="rounded-md p-1 text-muted-foreground hover:text-foreground lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
         >
           <X className="h-5 w-5" />
         </button>
@@ -193,7 +195,7 @@ export function Sidebar({
             href="/"
             onClick={onClose}
             className={cn(
-              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground",
               isChat && "bg-sidebar-accent text-sidebar-accent-foreground"
             )}
           >
@@ -204,7 +206,7 @@ export function Sidebar({
             href="/library"
             onClick={onClose}
             className={cn(
-              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground",
               isDiscover && "bg-sidebar-accent text-sidebar-accent-foreground"
             )}
           >
@@ -215,7 +217,7 @@ export function Sidebar({
             href="/study"
             onClick={onClose}
             className={cn(
-              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground",
               isStudy && "bg-sidebar-accent text-sidebar-accent-foreground"
             )}
           >
@@ -344,11 +346,11 @@ export function Sidebar({
       <div className={cn(
         "mt-auto pt-2 pb-4",
         isFullNavEnabled() ? "pb-drawer-footer-safe-tabbar" : "pb-drawer-footer-safe"
-      )}>
+      )} data-testid="sidebar-account-footer">
         {isLoggedIn ? (
           <button
             onClick={() => setAdminOpen(true)}
-            className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent transition-colors text-left"
+            className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent active:bg-accent transition-colors text-left"
           >
             {weeklyUsage && (
               <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
@@ -438,24 +440,55 @@ export function Sidebar({
 
   return (
     <>
-      {/* Desktop sidebar — fixed, never moves. The Study Panel (Phase 1: true
+      {/* Portrait-tablet app bar. Phones keep their compact page controls;
+          landscape tablets and desktops use the fixed sidebar. */}
+      <header
+        data-testid="tablet-app-header"
+        className="fixed left-2 right-2 top-2 z-40 hidden h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm md:flex lg:hidden"
+      >
+        <button
+          type="button"
+          aria-label="Open menu"
+          onClick={onOpen}
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-accent active:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 font-sans text-lg font-medium text-foreground">
+          New Wine
+        </p>
+        {isLoggedIn ? (
+          <button
+            type="button"
+            aria-label="Open Profile"
+            onClick={() => setAdminOpen(true)}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-border bg-muted text-sm font-medium text-foreground transition-colors hover:bg-accent active:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            {(displayName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase()}
+          </button>
+        ) : (
+          <div className="min-h-11 min-w-11" aria-hidden="true" />
+        )}
+      </header>
+
+      {/* Landscape-tablet and desktop sidebar — fixed, never moves. The Study Panel (Phase 1: true
           floating overlay) opens on its own z-layer above this; it must
           never collapse, translate, or resize in response to panel state. */}
       <aside
-        className="hidden md:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col bg-sidebar px-4 pt-6"
+        className="hidden lg:flex fixed left-0 top-0 z-40 h-dvh-safe w-64 flex-col bg-sidebar px-4 pt-6"
       >
         {sidebarContent}
       </aside>
 
-      {/* Mobile drawer overlay */}
+      {/* Phone and portrait-tablet drawer overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={onClose}
         />
       )}
 
-      {/* Mobile drawer — slides in from the left, matching its top-left
+      {/* Phone and portrait-tablet drawer — slides in from the left, matching its top-left
           trigger. pt uses the larger of
           the original 24px and the real inset (not additive) — identical
           24px on devices where the inset is smaller or zero, grows only
@@ -465,7 +498,7 @@ export function Sidebar({
         aria-hidden={!isOpen}
         inert={!isOpen}
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-dvh-safe w-full flex-col bg-sidebar px-4 pt-[max(1.5rem,env(safe-area-inset-top))] transition-transform duration-300 md:hidden",
+          "fixed left-0 top-0 z-50 flex h-dvh-safe w-full sm:w-80 flex-col bg-sidebar px-4 pt-[max(1.5rem,env(safe-area-inset-top))] transition-transform duration-300 lg:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
