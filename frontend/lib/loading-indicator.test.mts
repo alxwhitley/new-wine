@@ -7,9 +7,11 @@ const source = readFileSync(
   "utf8",
 );
 
-test("renders a row per approved step instead of one rotating phrase", () => {
-  assert.match(source, /LOADING_STEPS\.map\(/);
+test("renders only the active phase in one compact row", () => {
   assert.match(source, /activeStepIndex\(/);
+  assert.match(source, /\{LOADING_STEPS\[active\]\}/);
+  assert.doesNotMatch(source, /LOADING_STEPS\.map\(/);
+  assert.doesNotMatch(source, /<ol|<li/);
 });
 
 test("the active step carries motion that a reduced-motion preference disables", () => {
@@ -17,16 +19,17 @@ test("the active step carries motion that a reduced-motion preference disables",
   assert.match(source, /motion-reduce:animate-none/);
 });
 
-test("completed steps read as done and upcoming steps stay subdued", () => {
-  assert.match(source, /\bCheck\b/);
-  assert.match(source, /opacity-60/);
+test("completed and upcoming phases are not rendered", () => {
+  assert.doesNotMatch(source, /\bCheck\b/);
+  assert.doesNotMatch(source, /opacity-60/);
+  assert.doesNotMatch(source, /done|isActive/);
 });
 
-test("only the active step is announced, and the visual list is hidden from assistive tech", () => {
+test("the visible active phase is announced as one atomic status", () => {
   assert.match(source, /role="status"/);
-  assert.match(source, /aria-hidden="true"/);
-  assert.match(source, /sr-only/);
+  assert.match(source, /aria-live="polite"/);
   assert.match(source, /aria-atomic/);
+  assert.doesNotMatch(source, /sr-only/);
 });
 
 test("the circular ring and its progress machinery are gone", () => {
