@@ -67,12 +67,13 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ### B8 — Punctuation-induced answer refusals
 
-**Status: OPEN. Created by this repo's own 2026-09-04 re-ingest; classification
-awaiting Alex's confirmation.**
+**Status: OPEN. Created by this repo's own 2026-09-04 re-ingest; Alex approved
+repository implementation of the reviewed closure design on 2026-09-04.**
 
 Rebuilding 79 sermon documents from raw json3 captions (`b641898`) removed
-sentence punctuation — 20 of them are wholly unpunctuated, adding 391
-unpunctuated chunks to the 337 already present.
+sentence terminators from 20 of them, adding 391 chunks without sentence-ending
+punctuation to the 337 already present. Three of those documents contain none
+of `. , ; : ! ?` at all.
 `prose_quotation_guard.normalize_for_match()` folds quote characters, dashes,
 ellipsis and whitespace but **not sentence punctuation**, so a writer quoting
 those documents accurately and punctuating naturally fails the exact-substring
@@ -80,19 +81,32 @@ match and drives regenerate-once-then-refuse.
 
 **Evidence, verified live** against a rebuilt Kolenda chunk: quoted verbatim →
 passes; the same words with a comma and a full stop added → flagged ungrounded;
-with only a full stop added → flagged. Quotation appeared in 4 of 7 answers in
-an earlier real sample, so the path is common.
+with only a full stop added → flagged. An earlier audit found four defective
+quotations across five answers, establishing real use of this path but not its
+live refusal frequency.
 
 **Affected surface:** the core beta answer journey — correct answers refused.
 
-**Smallest closure condition:** fold sentence punctuation on both sides of that
-comparison, OR revert the unpunctuated documents. The first widens a safety
-guard and is Alex's call, not an executor's; punctuation can occasionally carry
-meaning.
+Review found that a global punctuation fold is too broad and that the current
+guard has a pre-existing author-scope defect: it concatenates all retrieved
+teachers' text, so teacher B's words can falsely ground a quotation attributed
+to teacher A.
+
+**Smallest closure condition:** preserve author identity at the guard boundary;
+match per same-author chunk; keep strict normalized matching first; allow a
+punctuation-insensitive fallback only for a same-author chunk with no sentence
+terminator; and resolve multiple nearby names to the nearest preceding teacher.
+Credential-free regressions must prove the punctuation pass, punctuated-source
+strictness, cross-author refusal, nearest-name behavior, preserved apostrophe/
+hyphen/word strictness, and every existing guard case. Production smoke and
+deployment remain separate attended gates.
+
+**Non-goals:** sermon passage filtering, Ravenhill corpus writes, transcript
+rewriting, deployment, and any model-based answer-path judge.
 
 **Promoted on the documented bar** (concrete failure, live evidence, named
 surface, named closure) with no current item to displace. Downgradeable by
-Alex. Full detail and six reviewer questions:
+Alex. Full detail and reviewed implementation stages:
 `docs/superpowers/specs/2026-09-04-sermon-passage-quality-design.md`.
 
 ### B7 — Fail-closed analytics → answer coupling

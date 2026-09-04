@@ -20,8 +20,17 @@ exact post-rerank, post-neighbour-expansion chunk set for every completed answer
 270 of them sermon transcripts. No retrieval had to be re-run and no money was
 spent on the diagnostic.
 
-30 sermon-transcript passages that had reached the **top 8** of a real answer's
-evidence set were drawn, stratified across teachers, and graded blind by Alex.
+30 sermon-transcript passages associated with chunks that had reached the
+**top 8** of a real answer's evidence set were drawn and stratified across
+teachers. Alex graded them without seeing the retrieval questions or any prior
+labels, but the teacher and title were visible; this was **not source-blind**.
+
+Eight of the 30 source chunks had been deleted by the same-day re-ingest before
+grading. For those eight, the displayed passage was the current chunk selected
+by word overlap with the deleted historical chunk, not the exact historical
+top-8 text. The baseline is therefore useful for qualitative discovery, but it
+is not an exact historical-exposure sample and cannot support a base-rate or
+before/after estimate.
 
 ---
 
@@ -81,9 +90,12 @@ questions. Full passages: `docs/audits/2026-09/sermon_passage_sample_2026-09-04.
 
 </details>
 
-**Source predicted the grades better than any measured text feature.** Alex has
-since ruled out excluding sources: CLF stays, so any solution must work per
-passage.
+**Grades clustered by source in this source-visible, stratified sample.** That
+is a diagnostic signal, not a source-effect estimate: source identity was
+visible, selection was not prevalence-weighted, and eight passages were
+post-rebuild replacements. Alex has ruled out excluding sources: CLF stays, so
+any solution must work per passage and must prove that it is not merely a
+source proxy.
 
 Ruled out by measurement, not assumption:
 
@@ -135,9 +147,10 @@ documents. Found by reading, not by a detector.
 refusals.**
 
 The old destructive cleaning pass produced punctuated prose. The correct json3
-path stores what the recogniser emits, which for these videos has **no sentence
-punctuation at all**. 20 of the 79 rebuilt documents are wholly unpunctuated;
-391 unpunctuated chunks were added to the 337 already present.
+path stores what the recogniser emits. 20 of the 79 rebuilt documents contain
+no sentence terminator; 391 chunks without sentence-ending punctuation were
+added to the 337 already present. Three of those documents contain none of
+`. , ; : ! ?` at all.
 
 `prose_quotation_guard.normalize_for_match()` folds quote characters, dashes,
 ellipsis and whitespace, and casefolds — but **not sentence punctuation**.
@@ -149,18 +162,42 @@ Verified live against a rebuilt Kolenda chunk:
 | same words, writer adds a comma and a full stop | **flagged ungrounded** |
 | same words, writer adds only a full stop | **flagged ungrounded** |
 
-A writer quoting *accurately* from these documents will punctuate naturally,
-fail the substring match, and drive regenerate-once-then-refuse. Quotation
-appeared in 4 of 7 answers in an earlier real sample, so this is not a rare
-path.
+A writer quoting *accurately* from these documents may punctuate naturally,
+fail the substring match, and drive regenerate-once-then-refuse. An earlier
+audit found four defective quotations across five answers, establishing real
+use of the guarded path but not its live refusal frequency.
 
-Not fixed unilaterally: it means changing a safety guard's matching rule, and
-punctuation can occasionally carry meaning. The narrow option is folding
-sentence punctuation on both sides of that comparison.
+The first proposed fix -- folding sentence punctuation globally inside
+`normalize_for_match()` -- is rejected. Punctuation can carry meaning, and the
+global normalizer is also used for attribution keys and windows.
 
-**Also open:** ~20 Leonard Ravenhill documents were rebuilt from captions that
+The review also found a more fundamental defect in the existing guard: the
+caller passes only a list of evidence strings, and the guard concatenates all
+teachers' evidence into one haystack. A quotation attributed to teacher A
+therefore passes when its words occur only in teacher B's retrieved chunk. A
+minimal offline reproduction attributed Michael Brown's words to Derek Prince
+and returned no violation. This is part of B8's closure, not a separate filter
+project.
+
+The approved narrow design is:
+
+1. Preserve the author with every evidence passage and match each quotation
+   only against evidence belonging to the attributed teacher.
+2. Match per chunk, never against a concatenation that can bridge chunks or
+   authors.
+3. Run the existing strict normalized substring comparison first.
+4. Only after strict matching fails, permit a punctuation-insensitive fallback
+   against a same-author evidence chunk that contains no sentence terminator.
+   Fold only `. , ; : ! ?` to spaces; preserve apostrophes, hyphens, quote
+   characters, word order, and contiguous token matching.
+5. When multiple permitted teachers occur in the attribution window, bind the
+   quotation to the nearest preceding teacher rather than the first name in
+   sorted order.
+
+**Also open:** 20 Leonard Ravenhill documents were rebuilt from captions that
 cannot transcribe 1960s tape ("the lowing of the auction" for "the lowing of
-the oxen"). Backups exist. These should probably be reverted.
+the oxen"). Backups exist, but a three-way transcription pilot must precede a
+restore, retranscribe, or removal decision.
 
 ---
 
@@ -182,55 +219,106 @@ filter at all.
 
 ---
 
-## 6. Proposed plan
+## 6. Approved implementation plan
 
 **Build no filter yet.** Four failed detectors and a 30-passage stratified
 sample are not grounds for changing what reaches the writer.
 
-1. **Fix the punctuation-induced refusals** (section 4). Highest priority: it is
-   live, self-inflicted, and causes wrong behaviour on real questions.
-2. **Revert the ~20 Ravenhill documents** to their backups. Accident repair, not
-   a gate.
-3. **Build a labelled set worth calibrating against** before anything else:
-   ~150 passages, **drawn retrieval-weighted** (from passages that actually
-   reached top-8, which is where exposure lives) and **oversampled on CLF** and
-   on every source that had only one passage. A uniform random draw from a
-   Prince-dominated corpus yields almost no kills and measures the corpus rather
-   than the exposure.
-4. **Only then** decide between deterministic rules and a narrow, logged,
-   model-scored classification — modelled on the authorised quote taste gate
-   (Settled #29) and the authorised pre-generation content filter (Settled #16),
-   with its own explicit sign-off and cost estimate. Corpus-scale cost is not
-   the obstacle: roughly $2–3 for the sermon corpus.
+### Stage 1 — close B8 in the repository
+
+Implement the author-scoped, strict-first punctuation design in section 4.
+Acceptance requires credential-free regressions proving all of the following:
+
+- a naturally punctuated quotation passes against a same-author chunk with no
+  sentence terminator;
+- the fallback does not apply to normally punctuated evidence;
+- another teacher's evidence cannot ground the quotation;
+- the nearest preceding teacher controls attribution when two names are near;
+- apostrophe, hyphen, word, and word-order changes still fail;
+- every pre-existing quotation-guard regression remains green.
+
+A production smoke is a separate attended operation after repository
+verification. No deployment or database write is authorized by this plan.
+
+### Stage 2 — resolve the Ravenhill source-quality accident
+
+Do not blindly restore the old backups: they contain the earlier
+model-cleaned, truncated text. Select three representative Ravenhill documents
+and compare (a) backup text, (b) current json3 captions, and (c) a forced
+Whisper transcription against short, human-checked audio spans. Choose one
+document policy from that evidence: restore, retranscribe, or remove from answer
+retrieval. Any production action requires Alex's attended approval and must use
+dry run -> one-document proof -> reconciliation -> bounded batch, including
+documents, chunks, propositions, position evidence, and rebuilt positions.
+Remeasure the punctuation exposure after the chosen repair.
+
+### Stage 3 — measure whether passage quality harms served answers
+
+Before building a classifier, audit the existing 20 distinct question groups,
+not all 74 repeated jobs as though they were independent exposure. For each
+question group, record whether a kill-grade sermon passage reached top 8 and
+whether it materially degraded the served answer. Report both numerators and
+denominators. Any theological error or teacher misrepresentation follows the
+Blocker promotion rule; ordinary weak-passage quality remains Scheduled. Stop
+after the answer-level exposure and harm rates are known and Alex has made the
+filter/no-filter decision.
+
+### Stage 4 — build calibration data only if Stage 3 authorizes it
+
+Do not precommit to 150 items. Choose the size from the measured kill base rate
+and the error bound needed for the decision. Keep prevalence estimation and
+classifier development distinct even if they share passages. The durable,
+redacted manifest must include chunk/document/source IDs, an immutable content
+hash or snapshot, corpus/policy version, top-8 position, exposure multiplicity,
+selection stratum and inclusion weight, label and rubric reason. Omit private
+question text.
+
+Randomize and mask teacher/source/title during grading. Freeze a holdout grouped
+by document so overlapping chunks cannot leak across train and validation; also
+report per-source results and a source-held-out challenge slice. Before any
+implementation, set maximum keep false-exclusion, minimum kill recall,
+no-material/coverage, and counterfactual answer-quality thresholds.
+
+### Stage 5 — compare mechanisms, then seek a separate release decision
+
+Compare at least: deterministic rules, hard passage exclusion, quality-aware
+neighbor admission or post-expansion selection, and a narrow logged model
+classifier modelled on Settled #29/#16. A naive pre-rerank soft weight remains
+rejected because unscored neighbor expansion bypasses it; soft selection as a
+whole is not rejected. Any model path needs its own sign-off, prompt/model
+fingerprint, cost estimate, reconstructable reason codes, shadow evaluation,
+and attended activation.
 
 **Explicitly rejected:** distilling sermons to propositions for the writer. It
 would strip exactly what Alex rewarded (the illustrations), risks ranked failure
 mode #3, collapses retrieval granularity, and intersects the single-voice /
 debate-topic classification work already scoped as its own project.
 
-**Explicitly rejected:** soft down-weighting instead of exclusion. Neighbour
-expansion runs *after* rerank and ignores ranking weights, so a clean chunk
-drags its neighbours into context regardless (`_NEIGHBOR_SKIP_KINDS` exists
-because the codebase already learned this for lexicon). The per-author cap of 3
-pulls weaker sources back in. Two independent models killed this idea for these
-reasons.
+**Explicitly rejected:** naive pre-rerank soft down-weighting with the current
+pipeline unchanged. Neighbour expansion runs after rerank and ignores those
+weights, so a clean chunk can drag its neighbours into context regardless.
+Quality-aware neighbor admission and post-expansion selection remain candidates
+for Stage 5 because the existing evidence does not test them.
 
 ---
 
-## 7. Questions for the reviewer
+## 7. Review decisions incorporated
 
-1. **Is the punctuation fix correct?** Folding sentence punctuation on both
-   sides of `normalize_for_match()` widens what the guard accepts. Does that
-   open a real misrepresentation path, or only close a false-positive one?
-2. **Is the 150-passage retrieval-weighted draw the right gate**, or is there a
-   cheaper measurement that would settle whether a filter is needed at all —
-   e.g. measuring how often killed-grade chunks actually land in served top-8s,
-   which nothing here measures?
-3. **Is "no filter yet" the right call**, or does 0/5 on CLF justify acting on
-   less evidence than I am asking for?
-4. **Was rebuilding 79 documents correct**, given it recovered 139,669 words but
-   introduced the refusal risk in section 4 and did not measurably improve
-   graded quality (62% keep on rebuilt passages vs 68% untouched)?
-5. **Is the Ravenhill revert right**, or should those documents be re-ingested
-   some other way, or dropped?
-6. Anything in section 5 that looks salvageable rather than abandoned?
+1. Global punctuation folding is not approved; Stage 1 uses an author-scoped,
+   strict-first fallback limited to evidence without sentence terminators.
+2. The 150-passage draw is not the first gate. Stage 3 measures answer-level
+   exposure and harm across distinct question groups first.
+3. No passage filter is authorized by 0/5 CLF in a source-visible,
+   non-prevalence sample.
+4. Recovering complete source text was directionally correct, but the 62% vs
+   68% comparison is not paired or causal and does not measure rebuild quality.
+   Future ingest verification must include downstream guard compatibility and
+   representative source-fidelity checks before a full batch.
+5. Ravenhill gets a three-way transcription pilot before restore/retranscribe/
+   removal is chosen.
+6. The failed detectors may be reused only as challenge-set strata and error-
+   analysis labels, never as production exclusion rules without new evidence.
+
+Correction to section 4's earlier wording: the prior audit found **4 of 7
+quotations defective across five answers**. It did not find quotations in 4 of
+7 answers, and it does not establish the live refusal frequency.

@@ -381,30 +381,47 @@ on a real coupling rather than on effort:
    3 residual frontend advisories all sit inside `next`'s own dependency tree
    and only clear with this bump. Revisit at the next planned Next.js upgrade.
 
-### Revert the Ravenhill documents rebuilt from unusable audio
+### Resolve Ravenhill documents rebuilt from unusable audio
 
-~20 Leonard Ravenhill documents were rebuilt on 2026-09-04 from captions that
+20 Leonard Ravenhill documents were rebuilt on 2026-09-04 from captions that
 cannot transcribe 1960s tape — "the lowing of the auction" for "the lowing of
 the oxen", "put up some wear it as a cheap suit alive". Backups exist at
-`local/2026-09/truncated_youtube_backup_*.json`. This is accident repair, not a
-gate: the existing `≥85%` coverage check measures caption *duration* against
-video length, not fidelity, so it cannot catch this class and nothing prevents
-a recurrence on other old-audio material.
+`local/2026-09/truncated_youtube_backup_*.json`, but those backups contain the
+earlier model-cleaned, truncated text and must not be treated as authoritative.
+First compare backup, current json3, and forced Whisper on three representative
+documents against human-checked audio spans. Then choose restore, retranscribe,
+or remove-from-retrieval. Any production operation is attended and follows dry
+run -> one-document proof -> reconciliation -> bounded batch, including derived
+propositions and positions. This is accident repair, not a gate: the existing
+`≥85%` coverage check measures caption *duration* against video length, not
+fidelity, so it cannot catch this class and nothing prevents recurrence on
+other old-audio material.
 
-### Labelled set for sermon passage quality — gates any filter work
+### Answer-level sermon exposure audit — gates any filter work
 
-Before any filter, down-weight, or model-scored quality gate on sermon
-passages, a labelled set is required: **~150 passages, drawn retrieval-weighted**
-(from passages that actually reached top-8, which is where exposure lives) and
-**oversampled on CLF Church** and on every source represented by a single
-passage in the 2026-09-04 baseline.
+Before any filter, down-weight, or model-scored quality gate on sermon passages,
+audit the existing **20 distinct question groups**, not all 74 repeated answer
+jobs as independent exposure. Record whether a kill-grade passage reached top
+8 and whether it materially degraded the served answer. Stop when both rates
+are known and Alex has made the filter/no-filter decision.
 
-Why the gate exists: the 2026-09-04 baseline of 30 was deliberately stratified
-across teachers, so it cannot give a base rate, and four mechanical detectors
-built on it all failed on inspection. A uniform random draw would not fix this
-— it yields almost no kills from a Prince-dominated corpus and measures the
-corpus rather than the exposure. Two independent cross-model reviews converged
-on this gate. Full evidence and the rejected options:
+Only if that decision authorizes classifier work, build a source-masked,
+randomized calibration set whose size is derived from the observed base rate
+and required error bound rather than precommitted at 150. Preserve a redacted
+manifest with immutable passage provenance, selection weights, labels and
+rubric reasons; group the holdout by document to prevent overlapping-chunk
+leakage; and report per-source plus source-held-out performance so a per-passage
+classifier cannot silently become the rejected source filter. Predeclare keep
+false-exclusion, kill recall, coverage/no-material, and counterfactual answer-
+quality gates.
+
+Why the gate exists: the 2026-09-04 baseline of 30 was deliberately stratified,
+source-visible, and included eight current passages re-selected by word overlap
+after their historical chunks were deleted. It cannot give a base rate or an
+exact historical-exposure estimate, and four mechanical detectors built on it
+all failed on inspection. Failed detectors may be reused as challenge-set
+strata, never as production rules without new evidence. Full evidence and the
+reviewed staged plan:
 `docs/superpowers/specs/2026-09-04-sermon-passage-quality-design.md`.
 
 ### Quote accuracy and relevance repair — before any re-enable
