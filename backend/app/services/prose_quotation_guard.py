@@ -4,31 +4,29 @@ Prose-channel quotation guard.
 The problem this exists for (audit:
 `docs/audits/2026-08/scripture_and_quotation_fidelity_2026-08-31.md`):
 the answer writer emits verbatim quotations in ordinary prose, attributed
-to named teachers, and nothing checked the WORDING. `reference_verifier`
-grounds the NAME -- it confirms that teacher's material was actually
-retrieved -- and the quote rail's authenticity machinery
-(`quote_verifier.py`) governs the verified-quote COMPONENT only. Neither
-looks at a pair of quotation marks in prose. Measured on the five stored
-baseline answers: 7 verbatim teacher quotations, of which one was
+to named teachers. `reference_verifier` grounds the NAME, while the quote
+rail's authenticity machinery (`quote_verifier.py`) governs the verified-
+quote COMPONENT only. Neither prevents quotation typography in ordinary
+prose. Measured on the five stored baseline answers: 7 verbatim teacher
+quotations, of which one was
 fabricated outright ("one who declares something not his own", credited to
 a living minister, zero occurrences corpus-wide), one re-credited another
 author's words to the teacher who was quoting him, and one silently
 altered a teacher's wording and stripped his own hedge.
 
-`system_prompt.txt:158` already forbids this ("Never reproduce quotes or
-lift phrasing verbatim, in any mode"). It is not holding. This module is
-the deterministic enforcement behind that instruction, and the control
-Settled decision #17 names as required: "the prose channel must be
-prevented from rendering quotation typography and verbatim-attribution
-language."
+The system prompt already forbids this ("Never reproduce quotes or lift
+phrasing verbatim, in any mode"). It is not holding. This module is the
+deterministic enforcement behind that instruction and Settled decision
+#17: verified-quote treatment belongs only to the verified-quote component;
+attributed quotations in ordinary prose are prohibited regardless of
+whether their wording appears in retrieved evidence.
 
 DESIGN CONSTRAINTS, all load-bearing:
 
   * DETERMINISTIC ONLY. No model call, no judge, no scoring. Settled #4 /
     Open Decision #20 -- a model-based judge on the answer path has failed
     five times and must not be built. Every check here is string work:
-    normalization, substring containment, position arithmetic. Same
-    posture as `quote_verifier.py`'s exact-substring authenticity check.
+    normalization and position arithmetic.
   * NARROW BY CONSTRUCTION. Only a quotation ATTRIBUTED to a permitted
     teacher name is checked. Scare quotes, terms of art, hypothetical
     non-quotations, and Scripture are deliberately out of scope. Settled
@@ -45,22 +43,16 @@ DESIGN CONSTRAINTS, all load-bearing:
     propagate into `producer.py`'s existing handler, which refuses cleanly
     (fail-closed) -- consistent with `_missing_required_single_author`.
 
-KNOWN AND DELIBERATE LIMITATION -- nested quotation. If a teacher is
-himself quoting someone else, that other person's words ARE present
-verbatim in the retrieved chunk, so this guard passes them. The measured
-Kolenda/Grudem case is exactly this shape. Detecting it requires resolving
-attribution INSIDE source text, which Settled #16 already classes as a
-hard, separate problem ("any unresolved nested quotation" is its own quote
-ineligibility category). This guard closes fabrication and alteration; it
-does not close nested misattribution, and must not be described as though
-it does.
+Nested quotation needs no special resolution here: because ordinary prose
+cannot render attributed teacher quotations at all, a teacher quoting a
+third party is rejected by the same deterministic rule.
 """
 from __future__ import annotations
 
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
 
 # --- Tuning constants, every one chosen from measured data in the audit,
 # --- not guessed. Changing one is a deliberate act; see the note on each.
@@ -101,8 +93,6 @@ _TRANSLATION[ord("…")] = "..."
 _TRANSLATION[ord(" ")] = " "
 
 _WHITESPACE_RE = re.compile(r"\s+")
-_SENTENCE_TERMINATOR_RE = re.compile(r"[.!?]")
-_FALLBACK_PUNCTUATION_RE = re.compile(r"[.,;:!?]")
 
 # A surname must be at least this long to be usable as an attribution key
 # on its own. Answers naturally introduce "Derek Prince" once and then
@@ -153,20 +143,7 @@ _NEGATED_INTRODUCTION_RE = re.compile(
 
 
 def normalize_for_match(text: str) -> str:
-    """Fold the punctuation and spacing variation that is NOT a
-    misrepresentation into a single comparable form.
-
-    This is load-bearing, not cosmetic. Proven against live corpus text:
-    Derek Prince's genuine "what brought success in the '60s brings death
-    in the '70s" is stored with curly U+2018 while the writer emits
-    straight U+0027, so a raw substring comparison REJECTS an accurate
-    quotation. Without this step the guard would regenerate and then
-    refuse correct answers -- worse than not having it.
-
-    Case is folded for the same reason: a quotation differing only in
-    capitalization is not a misrepresentation, and refusing over one would
-    be a pure false positive.
-    """
+    """Normalize teacher names and attribution windows for identity matching."""
     folded = unicodedata.normalize("NFKC", text).translate(_TRANSLATION)
     return _WHITESPACE_RE.sub(" ", folded).strip().casefold()
 
@@ -174,21 +151,11 @@ def normalize_for_match(text: str) -> str:
 @dataclass(frozen=True)
 class AttributedQuotation:
     """A double-quoted span in answer prose that a permitted teacher name
-    appears to attribute. `text` is the raw span as written; `normalized`
-    is what actually gets matched; `attributed_to` is the name that
-    qualified it."""
+    appears to attribute. `text` is the raw span as written and
+    `attributed_to` is the name that qualified it."""
     text: str
-    normalized: str
     attributed_to: str
     start: int
-
-
-@dataclass(frozen=True)
-class QuotationEvidence:
-    """One citable evidence passage with the teacher identity preserved."""
-
-    text: str
-    author: str
 
 
 def _word_count(span: str) -> int:
@@ -223,29 +190,6 @@ def _attribution_keys(raw_name: str) -> List[str]:
     if len(surname) >= MIN_SURNAME_CHARS and surname != full:
         keys.append(surname)
     return keys
-
-
-def _same_teacher(attributed_to: str, evidence_author: str) -> bool:
-    """Match canonical full names, with surname aliases only for short credits."""
-    attributed = normalize_for_match(attributed_to)
-    evidence = normalize_for_match(evidence_author)
-    if not attributed or not evidence:
-        return False
-    if attributed == evidence:
-        return True
-    if " " in attributed and " " in evidence:
-        # Two full names sharing a surname are not the same identity.
-        return False
-    return bool(
-        set(_attribution_keys(attributed_to))
-        & set(_attribution_keys(evidence_author))
-    )
-
-
-def _normalize_unpunctuated_fallback(text: str) -> str:
-    """Fold only sentence punctuation for the transcript-specific fallback."""
-    folded = _FALLBACK_PUNCTUATION_RE.sub(" ", normalize_for_match(text))
-    return _WHITESPACE_RE.sub(" ", folded).strip()
 
 
 def extract_attributed_quotations(
@@ -311,7 +255,6 @@ def extract_attributed_quotations(
         found.append(
             AttributedQuotation(
                 text=span,
-                normalized=normalize_for_match(span),
                 attributed_to=attributed_to,
                 start=match.start(),
             )
@@ -319,56 +262,13 @@ def extract_attributed_quotations(
     return found
 
 
-def ungrounded_prose_quotations(
+def prohibited_prose_quotations(
     answer_text: str,
-    evidence_passages: Iterable[QuotationEvidence],
     permitted_names: Sequence[str],
 ) -> List[AttributedQuotation]:
-    """The subset of attributed prose quotations that do NOT appear
-    verbatim in the retrieved evidence.
+    """Return attributed quotations prohibited in ordinary answer prose.
 
-    A returned non-empty list means the answer put words in a named
-    teacher's mouth that his retrieved material does not contain -- ranked
-    failure mode #2. The caller's remedy is regeneration, then refusal;
-    never a surgical edit of the prose.
-
-    Matching is per same-author passage. Exact containment after
-    `normalize_for_match` runs first. Only a passage with no sentence
-    terminator gets the narrow punctuation-insensitive fallback needed for
-    raw transcript text. Nothing is fuzzy and passages are never concatenated:
-    a word, word-order, apostrophe, or hyphen near-miss remains a failure.
+    Retrieved wording cannot authorize prose quotation typography. The caller
+    regenerates once and then refuses; it never edits the answer surgically.
     """
-    quotations = extract_attributed_quotations(answer_text, permitted_names)
-    if not quotations:
-        return []
-
-    passages = [
-        passage
-        for passage in evidence_passages
-        if passage.text and passage.author and passage.author.strip()
-    ]
-    if not passages:
-        # No evidence to check against: every attributed quotation is
-        # unsupported by construction. Fail closed -- this is the same
-        # posture as build_retrieval_grounding's `established` flag.
-        return quotations
-
-    unsupported: List[AttributedQuotation] = []
-    for quotation in quotations:
-        author_passages = [
-            normalize_for_match(passage.text)
-            for passage in passages
-            if _same_teacher(quotation.attributed_to, passage.author)
-        ]
-        if any(quotation.normalized in passage for passage in author_passages):
-            continue
-
-        fallback_quote = _normalize_unpunctuated_fallback(quotation.text)
-        fallback_match = any(
-            not _SENTENCE_TERMINATOR_RE.search(passage)
-            and fallback_quote in _normalize_unpunctuated_fallback(passage)
-            for passage in author_passages
-        )
-        if not fallback_match:
-            unsupported.append(quotation)
-    return unsupported
+    return extract_attributed_quotations(answer_text, permitted_names)

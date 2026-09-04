@@ -30,7 +30,7 @@ check. The producer preserves that by REUSING the live primitives:
   - the answer extraction imported from answer_toolbox._extract_answer_from_raw
   - the accuracy check imported from reference_verifier (build_retrieval_grounding,
     ungrounded_prose_teachers, verify_references) +
-    prose_quotation_guard.ungrounded_prose_quotations +
+    prose_quotation_guard.prohibited_prose_quotations +
     answer_toolbox._ungrounded_reference_teachers
 
 Two things remain DUPLICATED here rather than imported, because neither is
@@ -904,10 +904,7 @@ def _produce(
     from app.services.reference_verifier import (
         verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
     )
-    from app.services.prose_quotation_guard import (
-        QuotationEvidence,
-        ungrounded_prose_quotations,
-    )
+    from app.services.prose_quotation_guard import prohibited_prose_quotations
     from app.services.position_papers import match_position_paper, render_paper_voice_with_disclaimer, get_paper_body
     from app.services.stored_position_evidence import fetch_stored_position_evidence
     from app.services.source_use_policy import (
@@ -1189,31 +1186,19 @@ def _produce(
         try:
             name_universe = build_name_universe(supabase)
 
-            quotation_evidence = [
-                QuotationEvidence(
-                    text=c.get("content") or "",
-                    author=(c.get("author") or "").strip(),
-                )
-                for c in chunks
-                if answer_toolbox._is_citable(c)
-                and (c.get("author") or "").strip()
-            ]
-
             def _has_ungrounded(ans, raw):
                 if answer_toolbox._ungrounded_reference_teachers(ans, raw, grounding, supabase):
                     return True
                 if ungrounded_prose_teachers(ans, name_universe, grounding, supabase):
                     return True
-                # Prose-channel quotation wording. The two checks above ground
-                # the NAME; this grounds the WORDS put in that name's mouth.
+                # Verified-quote treatment belongs only to the verified quote
+                # component. Ordinary prose may not quote a named source.
                 # Deterministic, no model. See prose_quotation_guard.
-                bad_quotes = ungrounded_prose_quotations(
-                    ans, quotation_evidence, permitted_names
-                )
+                bad_quotes = prohibited_prose_quotations(ans, permitted_names)
                 if bad_quotes:
                     for q in bad_quotes:
                         logger.warning(
-                            "Ungrounded prose quotation attributed to %s: %r",
+                            "Prohibited prose quotation attributed to %s: %r",
                             q.attributed_to, q.text[:200],
                         )
                     return True
@@ -1262,7 +1247,10 @@ def _produce(
                 )
                 total_usage = _add_usage(total_usage, usage2)
                 if _has_ungrounded(answer2, raw2):
-                    logger.warning("Producer regeneration still credits an ungrounded teacher -- clean refusal")
+                    logger.warning(
+                        "Producer regeneration still contains prohibited or "
+                        "ungrounded attribution -- clean refusal"
+                    )
                     answer, raw_output, refused = answer_toolbox._ATTRIBUTION_REFUSAL, "", True
                 else:
                     retry_source_use_failures = ()

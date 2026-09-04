@@ -2,9 +2,8 @@
 """
 Regression suite for `app.services.prose_quotation_guard`.
 
-Credential-free and offline: every fixture below is REAL text -- the
-answer prose comes from `scripts/sp1_answer_quality_baseline.json`, the
-evidence comes from live `chunks` rows -- captured during the audit at
+Credential-free and offline: every answer fixture below comes from the real
+baseline or reproduces a measured boundary captured during the audit at
 `docs/audits/2026-08/scripture_and_quotation_fidelity_2026-08-31.md`. No
 database, no model, no network.
 
@@ -30,54 +29,12 @@ def check(label, condition, detail=""):
         FAILURES.append(label)
 
 
-# --- Real corpus evidence (verbatim, including original curly punctuation) ---
-
-KOLENDA_GRUDEM = (
-    'reformed, by the way, called The Gift of Prophecy in the New Testament and '
-    'today. And one of the most interesting parts in the book is when he talks '
-    'about the way that the word prophecy is used in the Greek. He says, "By the '
-    'time of the New Testament, the term prophetes in everyday use often simply '
-    'meant one who has supernatural knowledge, or one who predicts the future, or '
-    'even just spokesman without any connotations of divine authority."'
-)
-KOLENDA_WEIRD = (
-    "many times. It's not something weird; it's not something unusual in Full "
-    "Gospel circles. This kind of prophetic ministry is part of the normal, "
-    "ongoing, weekly life of the church that I pastor. When God speaks to you,"
-)
-PRINCE_LAMPSTAND = (
-    "I believe that the function that Don and I have in this conference is to "
-    "pipe the fresh oil into the lampstand. If you want to say that’s the "
-    "prophetic ministry, I will not say no."
-)
-# NOTE the curly U+2018 apostrophes -- this is exactly how the corpus stores it.
-PRINCE_DECADES = (
-    "ing it. But what brought success in the ‘60s brings death in the "
-    "‘70s. And what brings life in the ‘70s may we"
-)
-PRINCE_TIMING = (
-    "now. It’s the answer to the question, “What should we do at this "
-    "time? Should we build? Should we break down?"
-)
-BROWN_SIGN = (
-    "fts operate through them. However, it is the most common sign of the "
-    "baptism of the Spirit."
-)
-
-ALL_EVIDENCE = [
-    guard.QuotationEvidence(KOLENDA_GRUDEM, "Daniel Kolenda"),
-    guard.QuotationEvidence(KOLENDA_WEIRD, "Daniel Kolenda"),
-    guard.QuotationEvidence(PRINCE_LAMPSTAND, "Derek Prince"),
-    guard.QuotationEvidence(PRINCE_DECADES, "Derek Prince"),
-    guard.QuotationEvidence(PRINCE_TIMING, "Derek Prince"),
-    guard.QuotationEvidence(BROWN_SIGN, "Michael Brown"),
-]
 NAMES = ["Daniel Kolenda", "Derek Prince", "Michael Brown"]
 
 
-def flagged(answer, evidence=None, names=None):
-    return guard.ungrounded_prose_quotations(
-        answer, evidence if evidence is not None else ALL_EVIDENCE,
+def flagged(answer, names=None):
+    return guard.prohibited_prose_quotations(
+        answer,
         names if names is not None else NAMES,
     )
 
@@ -128,7 +85,7 @@ check(
 )
 
 
-print("\n=== 2. The measured CLEAN quotations must NOT be flagged ===")
+print("\n=== 2. Even exact-source teacher quotations are prohibited in prose ===")
 
 CLEAN_CASES = [
     (
@@ -138,7 +95,7 @@ CLEAN_CASES = [
         'unusual in Full Gospel circles."',
     ),
     (
-        "Prince decades quotation (STRAIGHT ' in answer vs CURLY ‘ in corpus)",
+        "Prince decades quotation",
         'Prince warns that "what brought success in the \'60s brings death in the '
         '\'70s" — the church needs continual fresh revelation.',
     ),
@@ -155,7 +112,11 @@ CLEAN_CASES = [
 ]
 for label, text in CLEAN_CASES:
     res = flagged(text)
-    check(f"clean: {label}", not res, f"falsely flagged {[q.text for q in res]}")
+    check(
+        f"prohibited despite exact source: {label}",
+        bool(res),
+        "an exact evidence match must not authorize prose quotation typography",
+    )
 
 
 print("\n=== 3. Deliberate non-targets must never fire ===")
@@ -228,10 +189,10 @@ check(
 print("\n=== 4. Fail-closed and boundary behaviour ===")
 
 check(
-    "no evidence at all => every attributed quotation is unsupported",
-    len(flagged(ALTERED, evidence=[])) == 1,
+    "an attributed quotation is prohibited without an evidence lookup",
+    len(flagged(ALTERED)) == 1,
 )
-check("empty answer returns nothing", not flagged("", evidence=ALL_EVIDENCE))
+check("empty answer returns nothing", not flagged(""))
 check("no permitted names returns nothing", not flagged(ALTERED, names=[]))
 check(
     "attribution beyond the window does not qualify",
@@ -239,7 +200,7 @@ check(
 )
 
 
-print("\n=== 5. KNOWN LIMITATION, asserted so it cannot be mistaken for coverage ===")
+print("\n=== 5. Nested quotations are prohibited rather than resolved ===")
 
 NESTED = (
     'As Kolenda points out, the term often meant simply "one who has supernatural '
@@ -247,10 +208,9 @@ NESTED = (
 )
 res = flagged(NESTED, names=["Kolenda"])
 check(
-    "nested quotation (Grudem's words credited to Kolenda) is NOT caught -- by design",
-    not res,
-    "if this now FAILS, the guard gained nested-attribution coverage; update the "
-    "module docstring and the audit before celebrating",
+    "nested quotation (Grudem's words credited to Kolenda) is rejected",
+    bool(res),
+    "evidence containment cannot authorize an unresolved nested quotation",
 )
 
 
@@ -260,14 +220,14 @@ print("\n=== 6. Mutation proofs -- each guard must be load-bearing ===")
 original_normalize = guard.normalize_for_match
 guard.normalize_for_match = lambda t: t  # identity == the near-bug
 res = flagged(
-    'Prince warns that "what brought success in the \'60s brings death in the '
-    '\'70s" today.'
+    'DEREK PRINCE warns that "what brought success in one decade brings death '
+    'in the next" today.'
 )
 guard.normalize_for_match = original_normalize
 check(
-    "MUTATION: without normalization, a CLEAN curly-quote citation is falsely flagged",
-    bool(res),
-    "normalization is not load-bearing -- the curly/straight fold did nothing",
+    "MUTATION: without name normalization, an attributed quotation is missed",
+    not res,
+    "name normalization is not load-bearing",
 )
 
 # M2: minimum length
@@ -316,67 +276,7 @@ check(
 )
 
 
-print("\n=== 7. Author scope and unpunctuated-transcript fallback ===")
-
-UNPUNCTUATED_BROWN = (
-    "the most common sign of the baptism of the Spirit even if it is not the "
-    "only sign"
-)
-NATURALLY_PUNCTUATED = (
-    'Michael Brown calls tongues "the most common sign of the baptism of the '
-    'Spirit, even if it is not the only sign."'
-)
-res = flagged(
-    NATURALLY_PUNCTUATED,
-    evidence=[guard.QuotationEvidence(UNPUNCTUATED_BROWN, "Michael Brown")],
-)
-check(
-    "natural sentence punctuation is tolerated for evidence with no terminator",
-    not res,
-    f"falsely flagged {[q.text for q in res]}",
-)
-
-res = flagged(
-    NATURALLY_PUNCTUATED,
-    evidence=[guard.QuotationEvidence(UNPUNCTUATED_BROWN + ".", "Michael Brown")],
-)
-check(
-    "punctuation fallback is disabled for normally punctuated evidence",
-    bool(res),
-    "punctuation-bearing evidence must retain strict comparison",
-)
-
-
-res = guard.ungrounded_prose_quotations(
-    'Derek Prince taught that tongues are "the most common sign of the '
-    'baptism of the Spirit."',
-    [
-        guard.QuotationEvidence(
-            "Derek Prince discussed spiritual gifts", "Derek Prince"
-        ),
-        guard.QuotationEvidence(UNPUNCTUATED_BROWN, "Michael Brown"),
-    ],
-    ["Derek Prince", "Michael Brown"],
-)
-check(
-    "another teacher's chunk cannot ground an attributed quotation",
-    bool(res),
-    f"got {[q.text for q in res]}",
-)
-
-res = guard.ungrounded_prose_quotations(
-    'Michael Brown taught that "faith grows through patient endurance."',
-    [
-        guard.QuotationEvidence("faith grows through", "Michael Brown"),
-        guard.QuotationEvidence("patient endurance", "Michael Brown"),
-    ],
-    ["Michael Brown"],
-)
-check(
-    "a quotation cannot bridge two same-author chunks",
-    bool(res),
-    f"got {[q.text for q in res]}",
-)
+print("\n=== 7. Attribution resolution ===")
 
 nearest = guard.extract_attributed_quotations(
     'Derek Prince introduced the topic. Michael Brown taught, "the most common '
@@ -398,35 +298,6 @@ check(
     not inside_only,
     f"got {[q.attributed_to for q in inside_only]}",
 )
-
-STRICT_VARIANTS = [
-    (
-        "apostrophe changes remain strict",
-        'Michael Brown said, "we can\'t treat this sign as the only evidence."',
-        "we cant treat this sign as the only evidence",
-    ),
-    (
-        "hyphen changes remain strict",
-        'Michael Brown described this as "a Spirit-given sign for every believer."',
-        "a Spirit given sign for every believer",
-    ),
-    (
-        "word-order changes remain strict",
-        'Michael Brown taught that "patient faith produces endurance in every trial."',
-        "faith produces patient endurance in every trial",
-    ),
-]
-for label, answer, evidence in STRICT_VARIANTS:
-    check(
-        label,
-        bool(
-            flagged(
-                answer,
-                evidence=[guard.QuotationEvidence(evidence, "Michael Brown")],
-            )
-        ),
-    )
-
 
 print(f"\n{'=' * 62}")
 if FAILURES:
