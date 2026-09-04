@@ -42,13 +42,20 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
+  overlayStyle,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /** The overlay is rendered here, so a caller cannot reach it any other way.
+   *  Used by the mobile Profile sheet to dim the backdrop in step with a
+   *  drag-to-dismiss gesture. */
+  overlayClassName?: string
+  overlayStyle?: React.CSSProperties
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} style={overlayStyle} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

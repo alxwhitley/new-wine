@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useSheetDrag } from "@/hooks/use-sheet-drag";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -311,6 +313,19 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
 
   // ── Navigation ─────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TopTab>("profile");
+
+  // ── Mobile drag-to-dismiss ─────────────────────────────────────
+  // Below md this dialog presents as a bottom sheet that follows the finger.
+  // Desktop keeps the ordinary centred dialog and gets no handlers at all.
+  const isMobile = useIsMobile();
+  const handleDismiss = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const sheet = useSheetDrag({ open, enabled: isMobile, onDismiss: handleDismiss });
+
+  // The scrolling pane hands downward drags to the sheet only while it is at
+  // its own top (see its touch-action below). Switching tabs resets its
+  // scroll, so this has to reset with it.
+  const [paneAtTop, setPaneAtTop] = useState(true);
+  useEffect(() => setPaneAtTop(true), [activeTab]);
   const [corpusSubView, setCorpusSubView] = useState<CorpusSubView>("documents");
 
   // ── Profile ────────────────────────────────────────────────────
@@ -810,9 +825,25 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={sheet.rootRef}
+        data-mobile-sheet=""
+        data-sheet-dragging={sheet.dragging ? "true" : undefined}
+        data-sheet-dismissing={sheet.dismissing ? "true" : undefined}
+        style={{ "--sheet-drag-y": `${sheet.offset}px` } as React.CSSProperties}
+        overlayStyle={{ opacity: sheet.overlayOpacity }}
         className="flex h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:h-[85dvh]"
+        {...sheet.dragHandlers}
       >
         <DialogTitle className="sr-only">Account</DialogTitle>
+
+        {/* Grab affordance. The whole sheet drags, not just this bar -- it is
+            here to say so, which is why it is aria-hidden and not a button. */}
+        <div
+          aria-hidden="true"
+          className="flex shrink-0 items-center justify-center pt-2 pb-1 md:hidden"
+        >
+          <span className="h-1 w-10 rounded-full bg-border" />
+        </div>
 
         {/* Loading / auth-check */}
         {!panelReady && (
@@ -830,7 +861,7 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
               <p className="mb-3 hidden px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:block">
                 Account
               </p>
-              <nav className="flex gap-1 overflow-x-auto overscroll-x-contain md:flex-col md:gap-0.5">
+              <nav className="flex gap-1 overflow-x-auto overscroll-x-contain touch-pan-x md:touch-auto md:flex-col md:gap-0.5">
                 <Button
                   variant="ghost"
                   className={cn(
@@ -865,7 +896,21 @@ export function AdminModal({ open, onOpenChange, onOpenContributor }: AdminModal
             </div>
 
             {/* Right pane */}
-            <div className="flex-1 overscroll-contain overflow-y-auto p-4 sm:p-6">
+            <div
+              className={cn(
+                "flex-1 overscroll-contain overflow-y-auto p-4 sm:p-6 md:touch-auto",
+                // touch-action: pan-up allows only UPWARD panning, so at the
+                // top of its scroll a downward drag never starts a native
+                // scroll and reaches the sheet gesture intact. Without this
+                // iOS begins scrolling and cancels the pointer stream
+                // mid-gesture, and the sheet just never moves.
+                isMobile && paneAtTop ? "touch-pan-up" : "touch-pan-y",
+              )}
+              onScroll={(event) => {
+                const atTop = event.currentTarget.scrollTop <= 0;
+                setPaneAtTop((prev) => (prev === atTop ? prev : atTop));
+              }}
+            >
 
               {/* ── Profile ─────────────────────────────────────── */}
               {activeTab === "profile" && (

@@ -33,7 +33,12 @@ test("Profile adapts to a phone-height viewport and tablet navigation", () => {
   assert.match(profileSource, /h-\[calc\(100dvh-1rem\)\]/);
   assert.match(profileSource, /sm:h-\[85dvh\]/);
   assert.match(profileSource, /flex-1 min-h-0 flex-col overflow-hidden md:flex-row/);
-  assert.match(profileSource, /overflow-x-auto overscroll-x-contain md:flex-col/);
+  // Two separate assertions, not one adjacency match: the nav strip's
+  // horizontal scrolling and its tablet-up column layout are independent
+  // facts, and pinning them as one literal broke when touch-action utilities
+  // were added between them without changing either behaviour.
+  assert.match(profileSource, /overflow-x-auto overscroll-x-contain/);
+  assert.match(profileSource, /md:flex-col md:gap-0\.5/);
   assert.match(profileSource, /p-4 sm:p-6/);
 });
 
