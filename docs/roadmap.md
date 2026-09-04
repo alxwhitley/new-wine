@@ -262,11 +262,38 @@ quarantine. No stage transfers automatically from one source to another.
    HTTP 200, and `BIBLICAL_CONTEXT_ANSWER_ENABLED` remained unset on both the
    API and answer worker. The source remains hidden, protected/plural registries
    remain empty, and Phase 4's routing, cache, neighbor, plural-source, and
-   house-fence boundaries remain unchanged. The remaining 3,938 eligible TIPNR
-   items require a separately designed, costed, reconciled, and attended packet;
-   the pilot grants no automatic authority. Visibility change, feature
-   enablement, live answers, doctrinal assignment, and registry assignment
-   remain separately unauthorized.
+   house-fence boundaries remain unchanged. The remaining **3,939** eligible
+   TIPNR items (not 3,938 — the Phase 6 `H0175` row is a reduced fixture, never
+   the artifact record; CLAUDE.md landmine, 2026-09-02) require a separately
+   designed, costed, reconciled, and attended packet; the pilot grants no
+   automatic authority. Visibility change, feature enablement, live answers,
+   doctrinal assignment, and registry assignment remain separately
+   unauthorized.
+
+   **Full-batch tooling residuals — Scheduled inside A4, from the 2026-09-03
+   working-tree review.** The writer now re-asserts the hidden, licensed
+   source on the writing cursor before staging any row (`2149239`); the
+   rollback-only probe must be re-run on that code before the first real
+   batch, since the 2026-09-03 probe predates it. Seven findings were not
+   fixed and none blocks the run, but two weaken the run's own reporting:
+   (a) `finalize_batch` labels a definitively zero-write failure (e.g. an
+   embedding error before any connection opens) as
+   `commit_outcome_unknown_reconciliation_failed`; (b)
+   `reconcile_tipnr_full_batch.py` validates `--global` only after loading
+   the DB factories and never passes `noneligible_document_ids`, so
+   `reconcile_global`'s `excluded_identity_present` check is unreachable from
+   the CLI — trust the independent read-only reconciliation counts, not the
+   apply script's own label, and treat the excluded-identity check as unrun.
+   The rest: preflight buckets fetched chunks by `document_id`, so an orphan
+   chunk carrying an expected id under another document reads as `clean`
+   (the write's own precheck/PK would still refuse it); the hidden-retrieval
+   probe's `CROSS JOIN LATERAL match_chunks(...)` depends on the planner
+   restricting `chunks` first, under a 120s timeout; `resolve_batch_vectors`
+   embeds 3,939 items one call at a time when `embed_batch` already
+   sub-batches 100; preflight refetches every source document's `full_text`
+   about five times per apply; and the 120-test suite skips wholesale when
+   `TIPNR_TEST_ARTIFACT` is unset, exiting 0 with zero coverage on any
+   machine without the untracked 7.9 MB artifact.
 5. **A5 — Public-domain books and Pentecostal archives.** Verify publication
    status per title; preserve edition/page provenance; quarantine OCR or
    structural failures; do not extract quotes from flat book chunks without
@@ -407,6 +434,17 @@ cleanup; `jewish_perspectives`; the teacher-card refusal-copy question;
 extraction-attempt history instrumentation; and `bible_refs.py`'s measured
 ~0.4% reference-hallucination rate (2 of 514 on real sermon text, 2026-08-29
 — the two bad rows were removed, the extractor itself was not changed).
+
+Also parked, from the 2026-09-03 working-tree review — static findings, none
+reproduced on a device, so none meets the Blocker evidence bar: `app/page.tsx`
+resizes the shell against `visualViewport` while the sidebar's fixed header/
+aside/drawer have no transformed ancestor and stay on the layout viewport
+(iOS keyboard + scroll); `keepLatestVisible` snaps the transcript to the
+bottom on every `visualViewport` scroll while the composer has focus, which
+would fight a pinch-zoom pan back to an earlier paragraph; AdminModal's
+edge-to-edge mobile tab strip sits under the 44×44 close button; and
+`loading-indicator.spec.ts`'s single-phase loop races the 4.9s step boundary
+on slow WebKit. A device reproduction of either `page.tsx` item promotes it.
 
 Also parked: the existing `next-themes` development hydration warning observed
 during the 2026-09-01 responsive WebKit pass. All 16 tested mobile/tablet

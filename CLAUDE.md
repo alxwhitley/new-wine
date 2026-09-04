@@ -1039,7 +1039,7 @@ different row, per the hard rule above.
   Phase 6 proof used the fixture. **Never treat the corpus as holding 21
   artifact-exact items; it holds 20.** Any plan asserting "3,938 remaining" is
   working from that error — the artifact's Aaron was never stored, so the true
-  remainder is **3,939** (19×200 + 139 = 11,817 rows). Alex's ruling
+  remainder is **3,939** items (19×200 + 139), i.e. 11,817 rows at 3 per item. Alex's ruling
   (2026-09-02, "Correct Aaron"): ingest artifact-Aaron as an ordinary item and
   retire the fixture row by **demoting** its policy, never deleting it.
   **Deletion is impossible, not merely discouraged** — migration 097's

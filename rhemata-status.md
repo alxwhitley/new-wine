@@ -10,55 +10,75 @@ Last verified: 2026-09-03. **PLAN.md has zero active blockers.**
 
 ## Current state
 
-**Two frontend refinements shipped to production.** The mobile drawer now
-groups its sign-in/profile action and informational links in one bordered
-utility footer with explicit safe-area/browser-chrome clearance (`642750e`).
-The answer loader now renders only its current phase in one compact status row
-instead of accumulating all five phases (`b666134`). Its existing truthful
-phase order and timing remain unchanged, and the visible phase is announced as
-one polite atomic status.
+**A working-tree code review ran, and four of its fifteen findings were fixed
+and committed; nothing was deployed and nothing touched the database.**
 
-Vercel deployment `dpl_6KK6ToNPDymtCtbe6xbwqcezvwp9` reached **Ready** and is
-aliased to `newwine.app` and `www.newwine.app`; the live root returned HTTP 200.
-The release was built from a clean archive of committed `HEAD`, containing only
-the tracked `frontend/` tree. Railway, production data, feature flags, and the
-answer-generation/retrieval path were not changed.
+`bfb6b0c` (frontend): `<AdminModal>` and the contributor `<Sheet>` are hoisted
+out of the twice-rendered `sidebarContent` so the tablet header's Open Profile
+button no longer opens two portalled dialogs with doubled admin fetches; the
+drawer-footer safe-area CSS now ends at 1023px to match the drawer's real
+`lg:hidden` breakpoint, so portrait tablets get the clearance (the e2e
+threshold that had been accepting 16px there moved with it). Proof: 74/74 unit
+tests including a new guard that fails against the old sidebar, clean
+TypeScript and ESLint, 16/16 responsive Playwright checks; reverting the CSS
+fails the two portrait-iPad projects.
 
-Fresh pre-deploy proof: 73/73 frontend unit tests, clean TypeScript, targeted
-ESLint with zero errors, successful Next.js production build, and 16/16
-responsive Playwright checks across mobile Safari and three iPad viewport
-profiles. The already-Parked `next-themes` development hydration warning still
-appeared; no production failure was demonstrated.
+`2149239` (TIPNR tooling): `_stage_batch` re-asserts the hidden, licensed
+source on the writing cursor before staging any row, via the canonical
+`assert_source()`, restoring what the Phase 8 pilot did in-transaction. Drift
+now aborts as `staging_failed` / `source_visibility_drift` (or
+`source_license_drift`) with 0 commits, 1 rollback. Four new tests, all of
+which fail with the line removed; 124/124 with `TIPNR_TEST_ARTIFACT` set.
 
-After this records-only closeout, local `main` is 21 commits ahead of
-`origin/main`: 18 pre-existing local TIPNR/frontend commits, the two UI commits
-above, and this closeout commit. Nothing was pushed, so the broader local
-history was not silently published. Pre-existing untracked audit, critique,
-reference-review, and task artifacts remain preserved and uncommitted.
+This closeout commit corrects the CLAUDE.md landmine's items-vs-rows
+arithmetic (3,939 items × 3 = 11,817 rows), fixes `docs/roadmap.md`'s stale
+"3,938 remaining", records the seven unfixed tooling findings as Scheduled
+inside A4, and parks the four unreproduced frontend findings.
+
+**Not deployed.** Vercel and Railway are unchanged from the 2026-09-03 morning
+release (`e45a86e`); production still runs the double-mounted dialog and the
+767px footer rule until the next frontend deploy. The TIPNR writer change is
+repo-only and needs no deploy — it runs from the terminal.
+
+One false alarm worth remembering: the first e2e run after the CSS fix failed
+with the pre-edit value because the Playwright-managed dev server served a
+stale Turbopack CSS chunk — exactly `frontend/CLAUDE.md`'s stale-CSS landmine.
+Curling the served chunk confirmed it; `rm -rf frontend/.next` and re-run
+passed. Not a code problem.
+
+After this closeout, local `main` is 24 commits ahead of `origin/main`; nothing
+was pushed. The pre-existing untracked audit, critique, reference-review, and
+task artifacts remain uncommitted, deliberately.
 
 ---
 
 ## Session outcome and measures
 
-- Shipped: compact mobile drawer utility footer and single-phase answer loader;
-  both deployed and verified in production.
-- Acceptance: passed — 73/73 unit tests, TypeScript, targeted lint, production
-  build, 16/16 responsive browser checks, Vercel Ready, live HTTP 200.
-- Unplanned investigations started: **0**.
-- Findings promoted to Blocker: **0**.
-- Scope changes approved by Alex: option 3 for the drawer footer, then the
-  single-visible-phase loader revision, commit, and production deployment.
+- Shipped: two code commits (frontend dialog/footer fix; TIPNR in-transaction
+  source assertion) and this records commit.
+- Acceptance: passed — every fix mutation-proven in both directions; 74/74
+  frontend unit, 16/16 responsive e2e, 124/124 TIPNR suite, 148/148 with the
+  pilot suite.
+- Unplanned investigations started: **0** (the stale-CSS diagnosis was inside
+  the approved fix's own verification).
+- Findings promoted to Blocker: **0**. Eleven findings classified: seven
+  Scheduled (A4 tooling residuals), four Parked (frontend, unreproduced).
+- Scope changes approved by Alex: the four fixes, then commit and close.
 - Original outcome completed: **yes**.
-- Active critical-path item count: **1** — the attended TIPNR execution remains
-  the separate terminal session's work.
+- Active critical-path item count: **1** — the attended TIPNR execution.
 
 ---
 
 ## Next single item
 
-**Continue the attended TIPNR execution in the terminal session.** The repo
-contains the reviewed default-off batch tooling and approval packet, but this
-frontend session performed no database write, embedding purchase, fixture
-demotion, or reconciliation. The completed-answer feedback/Sources footer
-grouping remains Scheduled in `docs/roadmap.md` and is not part of that next
-critical-path item.
+**Re-run the rollback-only TIPNR probe on `2149239`, then continue the attended
+execution in the terminal session.** The 2026-09-03 probe (batch 1 staged 600
+rows, 0 committed, 1 rolled back, `completed_batches: 0`) predates the
+in-transaction source assertion, so the new statement has not yet executed
+against the live database. The approval packet for 2026-09-03 exists in
+`local/2026-09/`; the packet and batch hashes are unaffected by the code
+change. Before trusting the run's own reports, read the two reporting caveats
+now recorded under A4 in `docs/roadmap.md` (zero-write failures mislabeled as
+unknown-commit; the CLI never reaches the global excluded-identity check).
+The completed-answer feedback/Sources footer grouping remains Scheduled and is
+not part of this item.
