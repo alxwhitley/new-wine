@@ -9,7 +9,7 @@ relevance are below the desired bar; re-enablement requires the Scheduled
 repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
-**Current item: B8 — punctuation-induced answer refusals** (promoted
+**Current item: B8 — prose quotation enforcement** (promoted
 2026-09-04, self-inflicted the same session). **Active blocker count: 1.**
 B7 is DONE and live (2026-08-31): migration 095 applied and independently
 verified from a fresh connection, all four Railway services deployed at
@@ -65,11 +65,11 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ## Active blocker sequence
 
-### B8 — Punctuation-induced answer refusals
+### B8 — Prose quotation enforcement
 
-**Status: REPOSITORY COMPLETE; attended production smoke and deployment
-pending. Created by this repo's own 2026-09-04 re-ingest; Alex approved the
-reviewed closure design on 2026-09-04.**
+**Status: POLICY REVISION APPROVED; repository update in progress. Created by
+this repo's own 2026-09-04 re-ingest; Alex approved the stricter closure design
+on 2026-09-04.**
 
 Rebuilding 79 sermon documents from raw json3 captions (`b641898`) removed
 sentence terminators from 20 of them, adding 391 chunks without sentence-ending
@@ -93,26 +93,30 @@ guard has a pre-existing author-scope defect: it concatenates all retrieved
 teachers' text, so teacher B's words can falsely ground a quotation attributed
 to teacher A.
 
-**Smallest closure condition:** preserve author identity at the guard boundary;
-match per same-author chunk; keep strict normalized matching first; allow a
-punctuation-insensitive fallback only for a same-author chunk with no sentence
-terminator; and resolve multiple nearby names to the nearest preceding teacher.
-Credential-free regressions must prove the punctuation pass, punctuated-source
-strictness, cross-author refusal, nearest-name behavior, preserved apostrophe/
-hyphen/word strictness, and every existing guard case. Production smoke and
-deployment remain separate attended gates.
+Alex chose the governing rule already recorded in `CLAUDE.md` Settled #17 over
+making source matching more permissive: verified-quote treatment belongs only
+to the verified-quote component. Ordinary answer prose may paraphrase teachers
+but may not render an attributed teacher quotation.
+
+**Smallest closure condition:** deterministically reject every double-quoted
+span of at least five words attributed to a permitted citable source, without
+consulting evidence text. Preserve the existing exclusions for Scripture,
+negated hypotheticals, short terms/scare quotes, and unattributed prose; bind
+multiple nearby names to the nearest preceding source. The existing
+regenerate-once-then-refuse remedy remains unchanged. Credential-free
+regressions must prove exact-source, punctuation-altered, nested, and fabricated
+teacher quotations are all rejected while every deliberate non-target remains
+excluded. Production smoke and deployment remain separate attended gates.
 
 **Non-goals:** sermon passage filtering, Ravenhill corpus writes, transcript
 rewriting, deployment, and any model-based answer-path judge.
 
-**Repository proof (2026-09-04, `1f775ac`):** the producer now passes only
-author-tagged citable passages; the guard matches within same-author individual
-chunks, keeps strict matching first, enables the punctuation fallback only for
-chunks without sentence terminators, and selects the nearest preceding teacher.
-Python 3.12 verification passed 32 quotation-guard checks, 17 generation-
-contract tests, 21 routing tests, and syntax compilation. B8 remains the active
-blocker until an explicitly approved production smoke and deployment verify the
-live answer path.
+**Superseded repository proof (2026-09-04, `1f775ac`):** author-scoped,
+strict-first matching passed 32 quotation-guard checks, 17 generation-contract
+tests, 21 routing tests, and syntax compilation. Before deployment, review found
+that this still contradicted Settled #17 and left nested quotations unresolved.
+Alex chose the stricter no-attributed-quotation policy; `1f775ac` remains useful
+history but is not the release candidate.
 
 **Promoted on the documented bar** (concrete failure, live evidence, named
 surface, named closure) with no current item to displace. Downgradeable by

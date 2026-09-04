@@ -179,20 +179,27 @@ minimal offline reproduction attributed Michael Brown's words to Derek Prince
 and returned no violation. This is part of B8's closure, not a separate filter
 project.
 
-The approved narrow design is:
+The initially approved author-scoped fallback was implemented in `1f775ac`,
+then superseded before deployment after a second review surfaced the governing
+policy mismatch. `CLAUDE.md` Settled #17 permits verified-quote treatment only
+through the verified-quote component and requires ordinary prose to be
+prevented from rendering quotation typography and verbatim attribution.
 
-1. Preserve the author with every evidence passage and match each quotation
-   only against evidence belonging to the attributed teacher.
-2. Match per chunk, never against a concatenation that can bridge chunks or
-   authors.
-3. Run the existing strict normalized substring comparison first.
-4. Only after strict matching fails, permit a punctuation-insensitive fallback
-   against a same-author evidence chunk that contains no sentence terminator.
-   Fold only `. , ; : ! ?` to spaces; preserve apostrophes, hyphens, quote
-   characters, word order, and contiguous token matching.
-5. When multiple permitted teachers occur in the attribution window, bind the
-   quotation to the nearest preceding teacher rather than the first name in
-   sorted order.
+Alex chose the stricter design:
+
+1. Detect a double-quoted span of at least five words attributed to a permitted
+   citable source and report it as prohibited without consulting evidence text.
+2. Keep the existing exclusions for Scripture, negated hypothetical quotations,
+   short terms/scare quotes, and quotations with no permitted attribution.
+3. When multiple permitted names occur in the attribution window, bind the
+   quotation to the nearest preceding name. A name appearing only inside the
+   quotation is not attribution.
+4. Preserve the existing regenerate-once-then-refuse remedy. Never rewrite the
+   answer surgically.
+
+This removes the punctuation ambiguity, cross-author concatenation, and nested
+quotation bypass together. It also removes author-tagged evidence from the
+guard boundary because evidence cannot authorize prose quotation typography.
 
 **Also open:** 20 Leonard Ravenhill documents were rebuilt from captions that
 cannot transcribe 1960s tape ("the lowing of the auction" for "the lowing of
@@ -226,15 +233,14 @@ sample are not grounds for changing what reaches the writer.
 
 ### Stage 1 — close B8 in the repository
 
-Implement the author-scoped, strict-first punctuation design in section 4.
+Implement the no-attributed-prose-quotation design in section 4.
 Acceptance requires credential-free regressions proving all of the following:
 
-- a naturally punctuated quotation passes against a same-author chunk with no
-  sentence terminator;
-- the fallback does not apply to normally punctuated evidence;
-- another teacher's evidence cannot ground the quotation;
+- an exact quotation present in retrieved evidence is rejected;
+- punctuation-altered, fabricated, and nested quotations are rejected;
 - the nearest preceding teacher controls attribution when two names are near;
-- apostrophe, hyphen, word, and word-order changes still fail;
+- Scripture, negated hypotheticals, short terms/scare quotes, and unattributed
+  prose remain excluded;
 - every pre-existing quotation-guard regression remains green.
 
 A production smoke is a separate attended operation after repository
@@ -304,8 +310,9 @@ for Stage 5 because the existing evidence does not test them.
 
 ## 7. Review decisions incorporated
 
-1. Global punctuation folding is not approved; Stage 1 uses an author-scoped,
-   strict-first fallback limited to evidence without sentence terminators.
+1. Global punctuation folding and the later author-scoped fallback are both
+   superseded. Stage 1 enforces Settled #17 by prohibiting attributed teacher
+   quotations in ordinary prose regardless of evidence wording.
 2. The 150-passage draw is not the first gate. Stage 3 measures answer-level
    exposure and harm across distinct question groups first.
 3. No passage filter is authorized by 0/5 CLF in a source-visible,

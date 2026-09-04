@@ -513,10 +513,12 @@ the 65 documents at 80–90% (consistent with correct filler removal, not loss),
 and 15 documents whose captions no longer exist and cannot be verified either
 way.
 
-**What the rebuild cost, recorded so it is weighed before any further
-re-ingest:** raw `json3` captions carry no sentence punctuation, which created
-Blocker B8 (accurate quotations now refused). Re-ingesting more of this corpus
-repeats that trade until B8 is closed.
+**What the rebuild exposed, recorded so it is weighed before any further
+re-ingest:** raw `json3` captions carry no sentence punctuation, which surfaced
+Blocker B8. Alex subsequently chose to enforce the existing no-attributed-
+quotation prose policy rather than make quotation matching punctuation-
+insensitive. The ingest still requires representative source-fidelity checks;
+Ravenhill shows that exact storage can faithfully preserve unusable captions.
 
 Three method traps, each of which produced a wrong conclusion before being
 caught — see the CLAUDE.md caption landmine for the full form. Briefly: the
