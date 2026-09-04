@@ -1090,11 +1090,18 @@ different row, per the hard rule above.
   forbids verbatim reproduction and is demonstrably not holding — **a prompt
   line is not a control.** Now guarded deterministically by
   `backend/app/services/prose_quotation_guard.py`, wired into `producer.py`'s
-  `_has_ungrounded()` (`6e60486`), but **not deployed**, and nested quotation
-  is deliberately out of scope (the words genuinely are in the chunk). Its
-  punctuation normalization is load-bearing, not cosmetic: corpus text uses
-  curly quotes, the writer emits straight ones, so removing the fold makes the
-  guard reject ACCURATE quotations and refuse correct answers.
+  `_has_ungrounded()` (`6e60486`), **deployed and unconditionally active** —
+  in `origin/main` since 2026-08-31, behind no flag, so it runs on every
+  answer. Nested quotation is deliberately out of scope (the words genuinely
+  are in the chunk). **It grounds quoted WORDING against the retrieved chunk
+  text, so it cannot catch a faithful quotation of text that is itself
+  wrong** — a garbled transcript phrase reproduced exactly PASSES, by design.
+  Closing fabrication this way makes stored-text accuracy MORE load-bearing,
+  not less: every quotation that now reaches a user is a verbatim copy of
+  whatever the corpus holds. Its punctuation normalization is load-bearing,
+  not cosmetic: corpus text uses curly quotes, the writer emits straight
+  ones, so removing the fold makes the guard reject ACCURATE quotations and
+  refuse correct answers.
 
 - **Scripture references are verified for EXISTENCE only — never for what the
   verse says.** `reference_verifier.verify_verse_mention()` confirms a `verses`
@@ -1217,7 +1224,37 @@ different row, per the hard rule above.
   located the fault in the model swap, not the code. Guards now in place:
   `scripts/test_youtube_caption_extraction.py` (mutation-proven) and a
   coverage gate requiring captions to span ≥85% of the real video duration or
-  fall back to Whisper rather than store short. **Deliberately left alone:**
+  fall back to Whisper rather than store short.
+
+  **Those guards protect NEW ingests only, and the pre-fix corpus is
+  measurably damaged — 2026-09-04. Do not read this entry as closed.** Only
+  the 49 CLF sermons were re-ingested; 318 other YouTube sermon documents
+  (Savchuk 126, Ravenhill 116, Poonen 50, Kolenda 11, Deere/Conlon/Brown/
+  Tomlinson 15) were not. Measured by re-fetching each video's real json3
+  captions and comparing word counts against the stored document: of 303
+  verifiable, **14 store under 55% of what was actually said** (worst 37%),
+  65 store 55-80%, 65 store 80-90%, 159 are intact; 15 no longer offer
+  captions and cannot be checked either way. Four of the severe and twelve
+  of the partial documents have already fed live answers. Three method
+  facts, each of which cost a wrong conclusion this session: (1) **the model
+  swap does NOT date this regression** — `youtube_ingest.py` carried
+  `llama-3.3-70b-versatile` continuously from before 2026-06-29 until
+  `39591f1` (2026-08-29), with no commits in between, so the gpt-oss window
+  was one day and cannot explain losses in June/July material; the cause is
+  unestablished, and reasoning from the commit log produced a confident,
+  wrong all-clear. (2) **A words-per-second proxy over-accuses** — one
+  Ravenhill document at 125 words per 38 minutes had in fact kept 83%; that
+  video genuinely has almost no captions. Only stored-text-vs-real-captions
+  is ground truth. (3) A document at 80-95% is consistent with correct
+  filler removal, so only the sub-80% bands are evidence of loss — and some
+  documents store MORE than the captions hold (118% observed), which is the
+  SRT triplication residue, not extra content. Re-ingesting is now safe
+  (json3 path plus coverage gate) but is a YouTube pipeline run and a
+  database write, so it stays an attended decision; Savchuk and Poonen are
+  ~61% of the propositions layer, so it ripples into propositions and
+  stored positions.
+
+  **Deliberately left alone:**
   `scripts/clean_transcripts.py`, a separate legacy script wired into
   `youtube_pipeline.sh`, still hardcodes the dead `llama-3.3-70b-versatile`
   AND performs the same destructive rewrite — it fails loudly on the dead
