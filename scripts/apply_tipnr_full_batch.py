@@ -28,6 +28,7 @@ from biblical_context_ingest_contract import (
     SOURCE_SLUG,
 )
 from biblical_context_tooling import canonical_json_bytes, canonical_sha256
+from preflight_tipnr_full_batch import assert_source
 from preview_biblical_context_tooling import (
     PreviewCollisionError,
     PreviewPathError,
@@ -284,11 +285,27 @@ _POLICY_COLUMNS = (
 )
 
 
-def _stage_batch(cursor, batch: FullBatch, vectors: Sequence[Sequence[float]]) -> list[str]:
+def _stage_batch(
+    cursor,
+    packet: FullBatchPacket,
+    batch: FullBatch,
+    vectors: Sequence[Sequence[float]],
+) -> list[str]:
     """Insert exactly three rows per item using parameterized SQL only."""
 
     cursor.execute("SET LOCAL statement_timeout = '120s'")
     cursor.execute("SET LOCAL lock_timeout = '5s'")
+
+    # Re-assert the hidden, licensed source on the WRITING session, inside this
+    # transaction, before any row is staged. preflight_full_batch already runs
+    # assert_source, but on a separate read-only connection that is opened and
+    # closed before this one exists -- so it cannot see a visibility or license
+    # flip that lands in between. This ingest's entire safety argument is that
+    # the material is unretrievable because the source is hidden, and that has
+    # to hold at COMMIT time, not merely at preflight time. This mirrors
+    # _verify_source_alias in apply_tipnr_hidden_pilot.py, which ran the same
+    # check as the first statement of its own write transaction.
+    assert_source(cursor, packet)
 
     document_ids = [item.document["id"] for item in batch.items]
     chunk_ids = [item.chunk["id"] for item in batch.items]
@@ -463,7 +480,7 @@ def apply_batch(
 
     try:
         with connection.cursor() as cursor:
-            policy_ids = _stage_batch(cursor, batch, vectors)
+            policy_ids = _stage_batch(cursor, packet, batch, vectors)
     except Exception as exc:
         try:
             connection.rollback()
@@ -552,7 +569,7 @@ def probe_batch(
     error: dict[str, object] | None = None
     try:
         with connection.cursor() as cursor:
-            policy_ids = _stage_batch(cursor, batch, zero_vectors)
+            policy_ids = _stage_batch(cursor, packet, batch, zero_vectors)
             staged_rows = batch.size * ROWS_PER_ITEM
     except Exception as exc:
         error = {"kind": type(exc).__name__, "detail": str(exc)[:500]}

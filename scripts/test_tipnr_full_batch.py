@@ -936,8 +936,25 @@ class _WriteConnection:
         self.closed = True
 
 
-def _write_fixture(batch):
-    return {"batch_size": batch.size}
+def _write_fixture(batch, packet, *, visibility=None, license_status=None):
+    """Answer the staging counts AND the in-transaction source assertion.
+
+    visibility/license_status override the source row so a test can simulate
+    drift landing between the read-only preflight and the write transaction.
+    """
+
+    source = packet.source
+    alias = packet.alias
+    return {
+        "batch_size": batch.size,
+        "fullbatch:source": [(
+            source["id"],
+            source["name"],
+            license_status or source["license_status"],
+            visibility or source["visibility"],
+        )],
+        "fullbatch:alias": [(alias["id"], alias["alias_key"])],
+    }
 
 
 class TipnrFullBatchApprovalTests(_PacketMixin):
@@ -1146,7 +1163,7 @@ class TipnrFullBatchWriterTests(_PacketMixin):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._cached(batch, root)
-            connection = _WriteConnection(_write_fixture(batch), ledger)
+            connection = _WriteConnection(_write_fixture(batch, self.packet), ledger)
             report = apply_batch(lambda mode: connection, None, self.packet, batch,
                                  self._approval(), self._preflight(batch),
                                  evidence_directory=root)
@@ -1168,7 +1185,7 @@ class TipnrFullBatchWriterTests(_PacketMixin):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._cached(batch, root)
-            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), ledger),
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch, self.packet), ledger),
                         None, self.packet, batch, self._approval(),
                         self._preflight(batch), evidence_directory=root)
         self.assertTrue(any("statement_timeout" in s for s in ledger))
@@ -1180,7 +1197,7 @@ class TipnrFullBatchWriterTests(_PacketMixin):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._cached(batch, root)
-            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), ledger),
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch, self.packet), ledger),
                         None, self.packet, batch, self._approval(),
                         self._preflight(batch), evidence_directory=root)
         written = " ".join(s for s in ledger
@@ -1202,7 +1219,7 @@ class TipnrFullBatchWriterTests(_PacketMixin):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 self._cached(batch, root)
-                connection = _WriteConnection(_write_fixture(batch), ledger,
+                connection = _WriteConnection(_write_fixture(batch, self.packet), ledger,
                                               fail_on=marker)
                 report = apply_batch(lambda mode: connection, None, self.packet,
                                      batch, self._approval(), self._preflight(batch),
@@ -1219,7 +1236,7 @@ class TipnrFullBatchWriterTests(_PacketMixin):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._cached(batch, root)
-            connection = _WriteConnection(_write_fixture(batch), [], fail_commit=True)
+            connection = _WriteConnection(_write_fixture(batch, self.packet), [], fail_commit=True)
             report = apply_batch(lambda mode: connection, None, self.packet, batch,
                                  self._approval(), self._preflight(batch),
                                  evidence_directory=root)
@@ -1261,7 +1278,7 @@ class TipnrFullBatchWriterTests(_PacketMixin):
 
             with tempfile.TemporaryDirectory() as directory:
                 report = apply_batch(
-                    lambda mode: _WriteConnection(_write_fixture(batch), []),
+                    lambda mode: _WriteConnection(_write_fixture(batch, self.packet), []),
                     embed, self.packet, batch, self._approval(),
                     self._preflight(batch), evidence_directory=Path(directory),
                 )
@@ -1274,7 +1291,7 @@ class TipnrFullBatchWriterTests(_PacketMixin):
     def test_preflight_batch_mismatch_is_refused(self):
         batch = self.packet.batches[1]
         with self.assertRaises(FullBatchApplyError):
-            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), []),
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch, self.packet), []),
                         None, self.packet, batch, self._approval(),
                         lambda: {"next_batch_index": 5,
                                  "next_batch_sha256": batch.batch_sha256,
@@ -1283,11 +1300,74 @@ class TipnrFullBatchWriterTests(_PacketMixin):
     def test_preflight_identity_mismatch_is_refused(self):
         batch = self.packet.batches[0]
         with self.assertRaises(FullBatchApplyError):
-            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch), []),
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch, self.packet), []),
                         None, self.packet, batch, self._approval(),
                         lambda: {"next_batch_index": 1,
                                  "next_batch_sha256": "0" * 64,
                                  "candidate_state": "all_clean"})
+
+
+    def _drift_report(self, batch, ledger, **drift):
+        """Run one batch whose source row drifted after the read-only preflight."""
+
+        fixture = _write_fixture(batch, self.packet, **drift)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._cached(batch, root)
+            connection = _WriteConnection(fixture, ledger)
+            report = apply_batch(lambda mode: connection, None, self.packet, batch,
+                                 self._approval(), self._preflight(batch),
+                                 evidence_directory=root)
+        return report, connection
+
+    def test_write_transaction_reasserts_the_source_before_staging_any_row(self):
+        """The read-only preflight's connection is closed by the time we write."""
+
+        batch = self.packet.batches[0]
+        ledger = []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._cached(batch, root)
+            apply_batch(lambda mode: _WriteConnection(_write_fixture(batch, self.packet), ledger),
+                        None, self.packet, batch, self._approval(),
+                        self._preflight(batch), evidence_directory=root)
+        self.assertTrue(any("fullbatch:source" in s for s in ledger))
+        self.assertTrue(any("fullbatch:alias" in s for s in ledger))
+        source_at = next(i for i, s in enumerate(ledger) if "fullbatch:source" in s)
+        first_write = next(i for i, s in enumerate(ledger) if "INSERT INTO" in s)
+        first_precheck = next(i for i, s in enumerate(ledger) if "precheck" in s)
+        self.assertLess(source_at, first_precheck)
+        self.assertLess(source_at, first_write)
+
+    def test_visibility_drift_after_preflight_aborts_the_write(self):
+        """A source flipped to shown mid-run must never receive these rows."""
+
+        batch = self.packet.batches[0]
+        ledger = []
+        report, connection = self._drift_report(batch, ledger, visibility="shown")
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["error"]["detail"], "source_visibility_drift")
+        self.assertEqual(connection.commits, 0)
+        self.assertEqual(connection.rollbacks, 1)
+        self.assertTrue(connection.closed)
+        self.assertEqual(report["reconciliation"]["stored"], 0)
+        self.assertEqual([s for s in ledger if "INSERT INTO" in s], [])
+
+    def test_license_drift_after_preflight_aborts_the_write(self):
+        batch = self.packet.batches[0]
+        ledger = []
+        report, connection = self._drift_report(batch, ledger,
+                                                license_status="unlicensed")
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["error"]["detail"], "source_license_drift")
+        self.assertEqual(connection.commits, 0)
+        self.assertEqual([s for s in ledger if "INSERT INTO" in s], [])
+
+    def test_staging_asserts_the_source_on_the_writing_cursor_not_a_read_copy(self):
+        """Mutation guard: dropping the in-transaction check must fail a test."""
+
+        source = inspect.getsource(apply_module._stage_batch)
+        self.assertIn("assert_source(cursor, packet)", source)
 
 
 class TipnrFullBatchProbeTests(_PacketMixin):
@@ -1306,7 +1386,7 @@ class TipnrFullBatchProbeTests(_PacketMixin):
     def test_probe_stages_600_rows_and_always_rolls_back(self):
         batch = self.packet.batches[0]
         ledger = []
-        connection = _WriteConnection(_write_fixture(batch), ledger)
+        connection = _WriteConnection(_write_fixture(batch, self.packet), ledger)
         report = probe_batch(lambda mode: connection, self.packet, batch,
                              self._probe_preflight(batch), self._postflight())
         self.assertEqual(report["status"], "verified")
@@ -1334,14 +1414,14 @@ class TipnrFullBatchProbeTests(_PacketMixin):
 
     def test_probe_fails_when_postflight_is_not_clean(self):
         batch = self.packet.batches[0]
-        report = probe_batch(lambda mode: _WriteConnection(_write_fixture(batch), []),
+        report = probe_batch(lambda mode: _WriteConnection(_write_fixture(batch, self.packet), []),
                              self.packet, batch, self._probe_preflight(batch),
                              self._postflight("exact_complete_prefix", 200))
         self.assertEqual(report["status"], "failed")
 
     def test_probe_rolls_back_even_when_staging_raises(self):
         batch = self.packet.batches[0]
-        connection = _WriteConnection(_write_fixture(batch), [],
+        connection = _WriteConnection(_write_fixture(batch, self.packet), [],
                                       fail_on="insert_chunk")
         report = probe_batch(lambda mode: connection, self.packet, batch,
                              self._probe_preflight(batch), self._postflight())
