@@ -904,7 +904,10 @@ def _produce(
     from app.services.reference_verifier import (
         verify_references, build_retrieval_grounding, build_name_universe, ungrounded_prose_teachers,
     )
-    from app.services.prose_quotation_guard import ungrounded_prose_quotations
+    from app.services.prose_quotation_guard import (
+        QuotationEvidence,
+        ungrounded_prose_quotations,
+    )
     from app.services.position_papers import match_position_paper, render_paper_voice_with_disclaimer, get_paper_body
     from app.services.stored_position_evidence import fetch_stored_position_evidence
     from app.services.source_use_policy import (
@@ -1186,7 +1189,15 @@ def _produce(
         try:
             name_universe = build_name_universe(supabase)
 
-            evidence_texts = [c.get("content") or "" for c in chunks]
+            quotation_evidence = [
+                QuotationEvidence(
+                    text=c.get("content") or "",
+                    author=(c.get("author") or "").strip(),
+                )
+                for c in chunks
+                if answer_toolbox._is_citable(c)
+                and (c.get("author") or "").strip()
+            ]
 
             def _has_ungrounded(ans, raw):
                 if answer_toolbox._ungrounded_reference_teachers(ans, raw, grounding, supabase):
@@ -1197,7 +1208,7 @@ def _produce(
                 # the NAME; this grounds the WORDS put in that name's mouth.
                 # Deterministic, no model. See prose_quotation_guard.
                 bad_quotes = ungrounded_prose_quotations(
-                    ans, evidence_texts, permitted_names
+                    ans, quotation_evidence, permitted_names
                 )
                 if bad_quotes:
                     for q in bad_quotes:

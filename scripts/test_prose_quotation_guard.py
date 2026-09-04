@@ -65,8 +65,12 @@ BROWN_SIGN = (
 )
 
 ALL_EVIDENCE = [
-    KOLENDA_GRUDEM, KOLENDA_WEIRD, PRINCE_LAMPSTAND,
-    PRINCE_DECADES, PRINCE_TIMING, BROWN_SIGN,
+    guard.QuotationEvidence(KOLENDA_GRUDEM, "Daniel Kolenda"),
+    guard.QuotationEvidence(KOLENDA_WEIRD, "Daniel Kolenda"),
+    guard.QuotationEvidence(PRINCE_LAMPSTAND, "Derek Prince"),
+    guard.QuotationEvidence(PRINCE_DECADES, "Derek Prince"),
+    guard.QuotationEvidence(PRINCE_TIMING, "Derek Prince"),
+    guard.QuotationEvidence(BROWN_SIGN, "Michael Brown"),
 ]
 NAMES = ["Daniel Kolenda", "Derek Prince", "Michael Brown"]
 
@@ -310,6 +314,118 @@ check(
     bool(res),
     "the negated-introduction exclusion is not load-bearing",
 )
+
+
+print("\n=== 7. Author scope and unpunctuated-transcript fallback ===")
+
+UNPUNCTUATED_BROWN = (
+    "the most common sign of the baptism of the Spirit even if it is not the "
+    "only sign"
+)
+NATURALLY_PUNCTUATED = (
+    'Michael Brown calls tongues "the most common sign of the baptism of the '
+    'Spirit, even if it is not the only sign."'
+)
+res = flagged(
+    NATURALLY_PUNCTUATED,
+    evidence=[guard.QuotationEvidence(UNPUNCTUATED_BROWN, "Michael Brown")],
+)
+check(
+    "natural sentence punctuation is tolerated for evidence with no terminator",
+    not res,
+    f"falsely flagged {[q.text for q in res]}",
+)
+
+res = flagged(
+    NATURALLY_PUNCTUATED,
+    evidence=[guard.QuotationEvidence(UNPUNCTUATED_BROWN + ".", "Michael Brown")],
+)
+check(
+    "punctuation fallback is disabled for normally punctuated evidence",
+    bool(res),
+    "punctuation-bearing evidence must retain strict comparison",
+)
+
+
+res = guard.ungrounded_prose_quotations(
+    'Derek Prince taught that tongues are "the most common sign of the '
+    'baptism of the Spirit."',
+    [
+        guard.QuotationEvidence(
+            "Derek Prince discussed spiritual gifts", "Derek Prince"
+        ),
+        guard.QuotationEvidence(UNPUNCTUATED_BROWN, "Michael Brown"),
+    ],
+    ["Derek Prince", "Michael Brown"],
+)
+check(
+    "another teacher's chunk cannot ground an attributed quotation",
+    bool(res),
+    f"got {[q.text for q in res]}",
+)
+
+res = guard.ungrounded_prose_quotations(
+    'Michael Brown taught that "faith grows through patient endurance."',
+    [
+        guard.QuotationEvidence("faith grows through", "Michael Brown"),
+        guard.QuotationEvidence("patient endurance", "Michael Brown"),
+    ],
+    ["Michael Brown"],
+)
+check(
+    "a quotation cannot bridge two same-author chunks",
+    bool(res),
+    f"got {[q.text for q in res]}",
+)
+
+nearest = guard.extract_attributed_quotations(
+    'Derek Prince introduced the topic. Michael Brown taught, "the most common '
+    'sign of the baptism of the Spirit."',
+    ["Derek Prince", "Michael Brown"],
+)
+check(
+    "the nearest preceding teacher controls attribution",
+    len(nearest) == 1 and nearest[0].attributed_to == "Michael Brown",
+    f"got {[q.attributed_to for q in nearest]}",
+)
+
+inside_only = guard.extract_attributed_quotations(
+    'The answer includes "Derek Prince offered these words to the whole church."',
+    ["Derek Prince"],
+)
+check(
+    "a teacher named only inside the quotation is not its attribution",
+    not inside_only,
+    f"got {[q.attributed_to for q in inside_only]}",
+)
+
+STRICT_VARIANTS = [
+    (
+        "apostrophe changes remain strict",
+        'Michael Brown said, "we can\'t treat this sign as the only evidence."',
+        "we cant treat this sign as the only evidence",
+    ),
+    (
+        "hyphen changes remain strict",
+        'Michael Brown described this as "a Spirit-given sign for every believer."',
+        "a Spirit given sign for every believer",
+    ),
+    (
+        "word-order changes remain strict",
+        'Michael Brown taught that "patient faith produces endurance in every trial."',
+        "faith produces patient endurance in every trial",
+    ),
+]
+for label, answer, evidence in STRICT_VARIANTS:
+    check(
+        label,
+        bool(
+            flagged(
+                answer,
+                evidence=[guard.QuotationEvidence(evidence, "Michael Brown")],
+            )
+        ),
+    )
 
 
 print(f"\n{'=' * 62}")

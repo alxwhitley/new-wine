@@ -101,6 +101,8 @@ _TRANSLATION[ord("…")] = "..."
 _TRANSLATION[ord(" ")] = " "
 
 _WHITESPACE_RE = re.compile(r"\s+")
+_SENTENCE_TERMINATOR_RE = re.compile(r"[.!?]")
+_FALLBACK_PUNCTUATION_RE = re.compile(r"[.,;:!?]")
 
 # A surname must be at least this long to be usable as an attribution key
 # on its own. Answers naturally introduce "Derek Prince" once and then
@@ -181,16 +183,24 @@ class AttributedQuotation:
     start: int
 
 
+@dataclass(frozen=True)
+class QuotationEvidence:
+    """One citable evidence passage with the teacher identity preserved."""
+
+    text: str
+    author: str
+
+
 def _word_count(span: str) -> int:
     return len([w for w in span.split() if w])
 
 
-def _contains_word(haystack: str, needle: str) -> bool:
-    """Word-boundary containment, so a surname never matches inside a
-    longer word."""
+def _last_word_start(haystack: str, needle: str) -> int | None:
+    """Start of the last whole-word occurrence, or None when absent."""
     if not needle:
-        return False
-    return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack) is not None
+        return None
+    matches = re.finditer(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack)
+    return max((match.start() for match in matches), default=None)
 
 
 def _attribution_keys(raw_name: str) -> List[str]:
@@ -213,6 +223,29 @@ def _attribution_keys(raw_name: str) -> List[str]:
     if len(surname) >= MIN_SURNAME_CHARS and surname != full:
         keys.append(surname)
     return keys
+
+
+def _same_teacher(attributed_to: str, evidence_author: str) -> bool:
+    """Match canonical full names, with surname aliases only for short credits."""
+    attributed = normalize_for_match(attributed_to)
+    evidence = normalize_for_match(evidence_author)
+    if not attributed or not evidence:
+        return False
+    if attributed == evidence:
+        return True
+    if " " in attributed and " " in evidence:
+        # Two full names sharing a surname are not the same identity.
+        return False
+    return bool(
+        set(_attribution_keys(attributed_to))
+        & set(_attribution_keys(evidence_author))
+    )
+
+
+def _normalize_unpunctuated_fallback(text: str) -> str:
+    """Fold only sentence punctuation for the transcript-specific fallback."""
+    folded = _FALLBACK_PUNCTUATION_RE.sub(" ", normalize_for_match(text))
+    return _WHITESPACE_RE.sub(" ", folded).strip()
 
 
 def extract_attributed_quotations(
@@ -245,7 +278,7 @@ def extract_attributed_quotations(
             continue
 
         window_start = max(0, match.start() - ATTRIBUTION_WINDOW_CHARS)
-        window = answer_text[window_start : match.end()]
+        window = answer_text[window_start : match.start()]
 
         scripture_window = answer_text[
             window_start : match.end() + TRAILING_CITATION_WINDOW_CHARS
@@ -257,14 +290,21 @@ def extract_attributed_quotations(
             continue
 
         normalized_window = normalize_for_match(window)
-        attributed_to = next(
-            (
-                raw
-                for raw, keys in normalized_names
-                if any(_contains_word(normalized_window, key) for key in keys)
-            ),
-            None,
-        )
+        nearest_attribution = None
+        for raw, keys in normalized_names:
+            position = max(
+                (
+                    start
+                    for key in keys
+                    if (start := _last_word_start(normalized_window, key)) is not None
+                ),
+                default=None,
+            )
+            if position is not None and (
+                nearest_attribution is None or position > nearest_attribution[0]
+            ):
+                nearest_attribution = (position, raw)
+        attributed_to = nearest_attribution[1] if nearest_attribution else None
         if attributed_to is None:
             continue
 
@@ -281,7 +321,7 @@ def extract_attributed_quotations(
 
 def ungrounded_prose_quotations(
     answer_text: str,
-    evidence_texts: Iterable[str],
+    evidence_passages: Iterable[QuotationEvidence],
     permitted_names: Sequence[str],
 ) -> List[AttributedQuotation]:
     """The subset of attributed prose quotations that do NOT appear
@@ -292,23 +332,43 @@ def ungrounded_prose_quotations(
     failure mode #2. The caller's remedy is regeneration, then refusal;
     never a surgical edit of the prose.
 
-    Matching is exact containment after `normalize_for_match`. Nothing
-    fuzzy, no similarity score, no threshold to tune: a near-miss IS the
-    failure (the measured Prince case altered "to pipe the fresh oil" into
-    "piping fresh oil" and dropped his hedge), so tolerating near-misses
-    would defeat the purpose.
+    Matching is per same-author passage. Exact containment after
+    `normalize_for_match` runs first. Only a passage with no sentence
+    terminator gets the narrow punctuation-insensitive fallback needed for
+    raw transcript text. Nothing is fuzzy and passages are never concatenated:
+    a word, word-order, apostrophe, or hyphen near-miss remains a failure.
     """
     quotations = extract_attributed_quotations(answer_text, permitted_names)
     if not quotations:
         return []
 
-    haystack = " \n ".join(
-        normalize_for_match(text) for text in evidence_texts if text
-    )
-    if not haystack:
+    passages = [
+        passage
+        for passage in evidence_passages
+        if passage.text and passage.author and passage.author.strip()
+    ]
+    if not passages:
         # No evidence to check against: every attributed quotation is
         # unsupported by construction. Fail closed -- this is the same
         # posture as build_retrieval_grounding's `established` flag.
         return quotations
 
-    return [q for q in quotations if q.normalized not in haystack]
+    unsupported: List[AttributedQuotation] = []
+    for quotation in quotations:
+        author_passages = [
+            normalize_for_match(passage.text)
+            for passage in passages
+            if _same_teacher(quotation.attributed_to, passage.author)
+        ]
+        if any(quotation.normalized in passage for passage in author_passages):
+            continue
+
+        fallback_quote = _normalize_unpunctuated_fallback(quotation.text)
+        fallback_match = any(
+            not _SENTENCE_TERMINATOR_RE.search(passage)
+            and fallback_quote in _normalize_unpunctuated_fallback(passage)
+            for passage in author_passages
+        )
+        if not fallback_match:
+            unsupported.append(quotation)
+    return unsupported

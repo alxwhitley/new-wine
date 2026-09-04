@@ -637,6 +637,15 @@ class ProducerIntegrationTests(unittest.TestCase):
             source_kind="biblical_context",
             citation_mode="citable",
         )
+        silent = dict(
+            _chunk(
+                "silent",
+                author="Silent Teacher",
+                content="Silent context must not ground a prose quotation.",
+            ),
+            source_kind="sermon_transcript",
+            citation_mode="silent_context",
+        )
         citations = [
             {
                 "chunk_id": row["id"],
@@ -654,11 +663,16 @@ class ProducerIntegrationTests(unittest.TestCase):
             "cache_write_tokens": 0,
         }
         calls = []
+        quotation_guard_calls = []
 
         def fake_generate(*args, **kwargs):
             calls.append((args, kwargs))
             answer = "## Answer\nCorinth was a Roman city."
             return answer, "<answer>%s</answer>" % answer, None, usage, "test-model"
+
+        def fake_quotation_guard(_answer, evidence, permitted_names):
+            quotation_guard_calls.append((evidence, permitted_names))
+            return []
 
         originals = (
             toolbox_module.BIBLICAL_CONTEXT_ANSWER_ENABLED,
@@ -681,7 +695,7 @@ class ProducerIntegrationTests(unittest.TestCase):
         producer_module._match_stored_position_for_answer = lambda *_args: None
         producer_module._inject_background_topics = lambda *_args, **_kwargs: ([], set(), {})
         producer_module._retrieve = lambda *_args, **_kwargs: (
-            [teacher, reference], citations, 2, False
+            [teacher, reference, silent], citations, 2, False
         )
         producer_module._generate_and_capture = fake_generate
         reference_verifier.build_retrieval_grounding = lambda *_args: object()
@@ -689,7 +703,7 @@ class ProducerIntegrationTests(unittest.TestCase):
         reference_verifier.ungrounded_prose_teachers = lambda *_args: []
         reference_verifier.verify_references = lambda *_args: []
         toolbox_module._ungrounded_reference_teachers = lambda *_args: []
-        prose_quotation_guard.ungrounded_prose_quotations = lambda *_args: []
+        prose_quotation_guard.ungrounded_prose_quotations = fake_quotation_guard
         try:
             result = producer_module._produce(object(), "Where was Corinth?")
         finally:
@@ -710,6 +724,16 @@ class ProducerIntegrationTests(unittest.TestCase):
             ) = originals
 
         self.assertEqual(len(calls), 2)
+        self.assertTrue(quotation_guard_calls)
+        evidence, permitted_names = quotation_guard_calls[0]
+        self.assertEqual(
+            [(passage.text, passage.author) for passage in evidence],
+            [
+                (teacher["content"], teacher["author"]),
+                (reference["content"], reference["author"]),
+            ],
+        )
+        self.assertEqual(permitted_names, ["Bible Atlas", "Teacher One"])
         self.assertEqual(result.outcome, "no_material")
         self.assertEqual(result.answer, SOURCE_USE_PRESENTATION_FAILURE)
         self.assertEqual(result.citations, [])
