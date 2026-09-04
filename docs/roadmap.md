@@ -465,6 +465,13 @@ procedure; test guest-limit abuse; recheck admin minimums and the quote verifier
 
 ### Recorded decisions and findings
 
+- **Two `search_chunks_fts` requests returned HTTP 500 during the 2026-09-04
+  B8 production smoke.** The answer path failed soft and the same guest job
+  completed normally with seven citations and a conforming answer. No user-
+  visible failure or B8 causal link was demonstrated, so this is Parked. Reopen
+  only if the error reproduces or causes missing evidence, refusal, or answer
+  failure.
+
 | ID | Item | Current default / closure trigger |
 |---|---|---|
 | 1 | Cold storage vs visibility gate | Use visibility; deletion remains parked until hardening or legal need |

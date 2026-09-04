@@ -9,8 +9,9 @@ relevance are below the desired bar; re-enablement requires the Scheduled
 repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
-**Current item: B8 — prose quotation enforcement** (promoted
-2026-09-04, self-inflicted the same session). **Active blocker count: 1.**
+**Current item: none. Active blocker count: 0.** B8 is DONE and live
+(2026-09-04): the API and answer worker were deployed from the isolated
+`d1ac57a` backend snapshot and the attended production answer smoke passed.
 B7 is DONE and live (2026-08-31): migration 095 applied and independently
 verified from a fresh connection, all four Railway services deployed at
 `6e0bb4a`, full path re-proved in production after the deploy. Quote repair
@@ -67,9 +68,9 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ### B8 — Prose quotation enforcement
 
-**Status: REPOSITORY COMPLETE; attended production smoke and deployment
-pending. Created by this repo's own 2026-09-04 re-ingest; Alex approved the
-stricter closure design on 2026-09-04.**
+**Status: DONE and live (2026-09-04, attended). Created by this repo's own
+2026-09-04 re-ingest; Alex approved the stricter closure design and the
+production deployment on 2026-09-04.**
 
 Rebuilding 79 sermon documents from raw json3 captions (`b641898`) removed
 sentence terminators from 20 of them, adding 391 chunks without sentence-ending
@@ -123,9 +124,23 @@ accepts evidence text and deterministically rejects attributed prose quotations
 whether exact, punctuation-altered, fabricated, or nested. The existing
 Scripture, negated-hypothetical, short-term/scare-quote, and unattributed-prose
 exclusions remain. Python 3.12 verification passed 25 quotation-guard checks,
-17 generation-contract tests, 21 routing tests, and syntax compilation. B8
-remains active until an explicitly approved production smoke and deployment
-verify the live answer path.
+17 generation-contract tests, 21 routing tests, and syntax compilation.
+
+**Production closure proof (2026-09-04, attended):** because local `main` was
+35 commits ahead of `origin/main`, Alex approved an isolated backend-only
+Railway deployment rather than publishing the unrelated Git/Vercel backlog.
+The API deployment `8d2a8c4e-961a-4c1a-872c-68164f75b133` and worker
+deployment `dc2d70d1-d1b5-4d4e-b3c0-247f935f728e` both reached `SUCCESS`;
+the public API health check returned `{"message":"New Wine API"}`. Guest job
+`e8d29d61-ec7d-4b28-a2e9-ab2513749579` asked the live answer path a question
+whose old baseline produced several teacher quotations. It completed
+`outcome=answered` with a 3,326-character answer, seven citations, and no
+attributed quotation of five or more words. An independent refetch passed the
+deployed answer through the repository guard with
+`prohibited_quotation_count = 0`. The first generation conformed, so the live
+retry branch did not fire; its deterministic behavior remains covered by the
+credential-free generation-contract tests. No Git push, Vercel deploy,
+migration, or corpus write occurred.
 
 **Promoted on the documented bar** (concrete failure, live evidence, named
 surface, named closure) with no current item to displace. Downgradeable by

@@ -248,7 +248,13 @@ verification. No deployment or database write is authorized by this plan.
 
 Repository implementation completed in `d1ac57a`: 25 quotation-guard checks,
 17 generation-contract tests, 21 routing tests, and Python 3.12 syntax
-compilation passed. Production smoke and deployment remain pending.
+compilation passed. Alex then approved an isolated backend-only Railway
+deployment because local `main` contained unrelated unpublished work. The API
+and answer worker reached `SUCCESS`, and guest job
+`e8d29d61-ec7d-4b28-a2e9-ab2513749579` completed with a 3,326-character,
+seven-citation answer whose independent guard refetch found zero prohibited
+quotations. Stage 1 is complete and live as of 2026-09-04; no Git push, Vercel
+deploy, migration, or corpus write was part of the release.
 
 ### Stage 2 — resolve the Ravenhill source-quality accident
 

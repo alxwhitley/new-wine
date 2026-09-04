@@ -1096,8 +1096,9 @@ different row, per the hard rule above.
   repository commit `d1ac57a` rejects every detected attributed prose
   quotation regardless of evidence wording, including nested quotations, and
   keeps the existing regenerate-once-then-refuse remedy. The verified-quote
-  component remains the only route to verified-quote treatment. `d1ac57a` is
-  not live until the attended B8 smoke and deployment recorded in `PLAN.md`.
+  component remains the only route to verified-quote treatment. `d1ac57a` was
+  deployed to the API and answer worker and passed the attended production
+  answer smoke on 2026-09-04; exact evidence is recorded in `PLAN.md` B8.
 
 - **Scripture references are verified for EXISTENCE only — never for what the
   verse says.** `reference_verifier.verify_verse_mention()` confirms a `verses`
@@ -1277,8 +1278,9 @@ different row, per the hard rule above.
   chunks corpus-wide. The deployed prose guard compares quoted wording and
   therefore refuses naturally punctuated copies of those chunks (verified live,
   three ways). Repository commit `d1ac57a` removes evidence matching entirely
-  and prohibits attributed prose quotations under Settled #17; it remains
-  pending the attended B8 smoke and deployment recorded in `PLAN.md`.
+  and prohibits attributed prose quotations under Settled #17. It was deployed
+  to the API and answer worker and passed the attended B8 production smoke on
+  2026-09-04; exact evidence is recorded in `PLAN.md`.
 - **New-provider structured-output integration must be mechanics-tested on a
   trivial dummy request before spending on the real large document —
   2026-08-29.** Testing Claude Opus 5 as an alternate New Wine segmentation
