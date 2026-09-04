@@ -26,7 +26,7 @@ for (const route of routes) {
         .click();
     }
 
-    const footer = page.locator('[data-testid="sidebar-account-footer"]:visible');
+    const footer = page.locator('[data-testid="sidebar-utility-footer"]:visible');
     await expect(footer).toHaveCount(1);
     await expect(footer).toBeVisible();
 
@@ -65,6 +65,14 @@ for (const route of routes) {
     const controlBox = await accountControl.boundingBox();
     expect(controlBox).not.toBeNull();
     expect(controlBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    const footerNav = footer.locator('nav[aria-label="Footer"]');
+    const footerNavBox = await footerNav.boundingBox();
+    expect(footerNavBox).not.toBeNull();
+    const footerNavBottom = (footerNavBox?.y ?? geometry.viewportBottom)
+      + (footerNavBox?.height ?? 0);
+    expect(geometry.viewportBottom - footerNavBottom)
+      .toBeGreaterThanOrEqual(viewportWidth < 768 ? 23 : 15);
 
     const hasDocumentOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,

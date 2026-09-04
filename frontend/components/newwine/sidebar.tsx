@@ -337,43 +337,40 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Footer — profile menu or sign-in. Bottom clearance is unconditional
-          (both flag states): this content was clipped by the iOS home
-          indicator regardless of nav state, and additionally sits under
-          the tab bar when it's present. pb-4 stays the source of truth
-          on desktop — the mobile-scoped classes below only take effect
-          under 768px, see globals.css. */}
+      {/* Bottom utility region — account action and informational navigation
+          stay together above browser chrome and the iOS home indicator. */}
       <div className={cn(
-        "mt-auto pt-2 pb-4",
+        "mt-auto -mx-4 shrink-0 border-t border-border px-4 pt-4 pb-4",
         isFullNavEnabled() ? "pb-drawer-footer-safe-tabbar" : "pb-drawer-footer-safe"
-      )} data-testid="sidebar-account-footer">
-        {isLoggedIn ? (
-          <button
-            onClick={() => setAdminOpen(true)}
-            className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent active:bg-accent transition-colors text-left"
-          >
-            {weeklyUsage && (
-              <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">
-                {displayName ?? user?.email ?? ""}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {user?.email ?? ""}
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
-        ) : (
-          <Button size="sm" className="min-h-11 w-full text-background" onClick={onSignInClick}>
-            Sign in
-          </Button>
-        )}
-      </div>
+      )} data-testid="sidebar-utility-footer">
+        <div data-testid="sidebar-account-footer">
+          {isLoggedIn ? (
+            <button
+              onClick={() => setAdminOpen(true)}
+              className="flex w-full items-center gap-3 rounded-md px-2 py-2 hover:bg-accent active:bg-accent transition-colors text-left"
+            >
+              {weeklyUsage && (
+                <UsageRing used={weeklyUsage.used} limit={weeklyUsage.limit} />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {displayName ?? user?.email ?? ""}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user?.email ?? ""}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
+          ) : (
+            <Button size="sm" className="min-h-11 w-full text-background" onClick={onSignInClick}>
+              Sign in
+            </Button>
+          )}
+        </div>
 
-      {/* Footer nav — bottom-left of the app shell */}
-      <FooterNav className="pb-2" />
+        <FooterNav className="mt-3 text-muted-foreground" />
+      </div>
 
       {/* Contributor request sheet */}
       <Sheet open={contributorOpen} onOpenChange={setContributorOpen}>

@@ -172,21 +172,19 @@ mark {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* ── Drawer footer bottom clearance ─────────────────────────────────────────
-   Sidebar footer (account row / sign-in button) is shared markup between
-   the desktop aside and the mobile drawer — unlike .pb-safe above, these
+/* ── Drawer utility-footer bottom clearance ─────────────────────────────────
+   The account action and footer links share markup between the desktop aside
+   and mobile drawer. Unlike .pb-safe above, these
    must stay scoped to the same 767px breakpoint as use-mobile.ts's
    MOBILE_BREAKPOINT, or the unlayered rule would beat the desktop aside's
-   plain pb-4 unconditionally (unlayered always wins, regardless of media
-   query match) and shrink its bottom padding too. 3.5rem matches the tab
-   bar's own min-h-[56px] tab links (mobile-tab-bar.tsx) — same value as
-   the chat page's pb-14, not a new guess.
+   plain pb-4 unconditionally. The base 1.5rem remains even when Safari reports
+   a zero safe-area inset; 3.5rem additionally clears the optional tab bar.
    ─────────────────────────────────────────────────────────────────────── */
 @media (max-width: 767px) {
   .pb-drawer-footer-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   }
   .pb-drawer-footer-safe-tabbar {
-    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
   }
 }

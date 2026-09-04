@@ -31,6 +31,15 @@ test("account footer has a stable responsive-test target in both auth states", (
   assert.match(sidebarSource, /data-testid="sidebar-account-footer"/);
 });
 
+test("account action and footer links share one safe-area utility block", () => {
+  assert.match(sidebarSource, /data-testid="sidebar-utility-footer"/);
+  assert.match(
+    sidebarSource,
+    /data-testid="sidebar-utility-footer"[\s\S]*data-testid="sidebar-account-footer"[\s\S]*<FooterNav/,
+  );
+  assert.match(sidebarSource, /pb-drawer-footer-safe/);
+});
+
 test("portrait tablets use the drawer while landscape tablets keep the fixed sidebar", () => {
   assert.match(
     sidebarSource,
