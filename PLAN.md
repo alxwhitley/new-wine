@@ -67,9 +67,9 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ### B8 — Prose quotation enforcement
 
-**Status: POLICY REVISION APPROVED; repository update in progress. Created by
-this repo's own 2026-09-04 re-ingest; Alex approved the stricter closure design
-on 2026-09-04.**
+**Status: REPOSITORY COMPLETE; attended production smoke and deployment
+pending. Created by this repo's own 2026-09-04 re-ingest; Alex approved the
+stricter closure design on 2026-09-04.**
 
 Rebuilding 79 sermon documents from raw json3 captions (`b641898`) removed
 sentence terminators from 20 of them, adding 391 chunks without sentence-ending
@@ -117,6 +117,15 @@ tests, 21 routing tests, and syntax compilation. Before deployment, review found
 that this still contradicted Settled #17 and left nested quotations unresolved.
 Alex chose the stricter no-attributed-quotation policy; `1f775ac` remains useful
 history but is not the release candidate.
+
+**Current repository proof (2026-09-04, `d1ac57a`):** the guard no longer
+accepts evidence text and deterministically rejects attributed prose quotations
+whether exact, punctuation-altered, fabricated, or nested. The existing
+Scripture, negated-hypothetical, short-term/scare-quote, and unattributed-prose
+exclusions remain. Python 3.12 verification passed 25 quotation-guard checks,
+17 generation-contract tests, 21 routing tests, and syntax compilation. B8
+remains active until an explicitly approved production smoke and deployment
+verify the live answer path.
 
 **Promoted on the documented bar** (concrete failure, live evidence, named
 surface, named closure) with no current item to displace. Downgradeable by

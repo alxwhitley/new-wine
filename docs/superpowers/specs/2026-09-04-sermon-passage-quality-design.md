@@ -246,6 +246,10 @@ Acceptance requires credential-free regressions proving all of the following:
 A production smoke is a separate attended operation after repository
 verification. No deployment or database write is authorized by this plan.
 
+Repository implementation completed in `d1ac57a`: 25 quotation-guard checks,
+17 generation-contract tests, 21 routing tests, and Python 3.12 syntax
+compilation passed. Production smoke and deployment remain pending.
+
 ### Stage 2 — resolve the Ravenhill source-quality accident
 
 Do not blindly restore the old backups: they contain the earlier

@@ -1076,11 +1076,11 @@ different row, per the hard rule above.
   `wordStudyContent` fetched and never rendered (`app/study/page.tsx:954`);
   that one is accidental, not a decision.
 
-- **`QUOTE_SELECTION_ENABLED=false` does NOT stop quotations reaching users —
-  the PROSE channel emits them, and 4 of 7 in a real sample were defective
-  (2026-08-31).** Settled #30 turned off the quote RAIL; it never governed the
-  writer typing quotation marks in ordinary prose. Measured on the five stored
-  baseline answers: one quotation fabricated outright under a LIVING minister's
+- **`QUOTE_SELECTION_ENABLED=false` did not by itself stop quotations reaching
+  users — the PROSE channel emitted them, and 4 of 7 in a real sample were
+  defective (2026-08-31).** Settled #30 turned off the quote RAIL; it never
+  governed the writer typing quotation marks in ordinary prose. Measured on the
+  five stored baseline answers: one quotation fabricated outright under a LIVING minister's
   name ("one who declares something not his own", 0 occurrences corpus-wide),
   one crediting Wayne Grudem's words to the teacher who was quoting him, one
   altering Derek Prince's wording and dropping his own hedge, one closing a
@@ -1088,20 +1088,16 @@ different row, per the hard rule above.
   `reference_verifier` grounds the NAME, never the WORDING; `quote_verifier`
   governs the verified-quote COMPONENT only; `system_prompt.txt:158` already
   forbids verbatim reproduction and is demonstrably not holding — **a prompt
-  line is not a control.** Now guarded deterministically by
-  `backend/app/services/prose_quotation_guard.py`, wired into `producer.py`'s
-  `_has_ungrounded()` (`6e60486`), **deployed and unconditionally active** —
-  in `origin/main` since 2026-08-31, behind no flag, so it runs on every
-  answer. Nested quotation is deliberately out of scope (the words genuinely
-  are in the chunk). **It grounds quoted WORDING against the retrieved chunk
-  text, so it cannot catch a faithful quotation of text that is itself
-  wrong** — a garbled transcript phrase reproduced exactly PASSES, by design.
-  Closing fabrication this way makes stored-text accuracy MORE load-bearing,
-  not less: every quotation that now reaches a user is a verbatim copy of
-  whatever the corpus holds. Its punctuation normalization is load-bearing,
-  not cosmetic: corpus text uses curly quotes, the writer emits straight
-  ones, so removing the fold makes the guard reject ACCURATE quotations and
-  refuse correct answers.
+  line is not a control.** The first deterministic guard (`6e60486`, deployed
+  2026-08-31) grounded quoted wording against retrieved text but still allowed
+  exact, nested, and faithfully reproduced mistranscribed quotations. A
+  punctuation-tolerant repair was implemented in `1f775ac` and superseded
+  before deployment. Alex then chose the stricter Settled #17 enforcement:
+  repository commit `d1ac57a` rejects every detected attributed prose
+  quotation regardless of evidence wording, including nested quotations, and
+  keeps the existing regenerate-once-then-refuse remedy. The verified-quote
+  component remains the only route to verified-quote treatment. `d1ac57a` is
+  not live until the attended B8 smoke and deployment recorded in `PLAN.md`.
 
 - **Scripture references are verified for EXISTENCE only — never for what the
   verse says.** `reference_verifier.verify_verse_mention()` confirms a `verses`
@@ -1278,11 +1274,11 @@ different row, per the hard rule above.
   but the only method that has ever identified one correctly is reading the
   document. (2) The `json3` path stores exactly what the recogniser emits,
   which for most of this material has NO sentence punctuation — 728 sermon
-  chunks corpus-wide. `prose_quotation_guard.normalize_for_match()` folds
-  quotes, dashes, ellipsis and whitespace but NOT sentence punctuation, so an
-  accurate quotation the writer punctuates naturally fails the exact-substring
-  match and refuses (verified live, three ways). Any further `json3`
-  re-ingest widens that exposure — see PLAN.md B8.
+  chunks corpus-wide. The deployed prose guard compares quoted wording and
+  therefore refuses naturally punctuated copies of those chunks (verified live,
+  three ways). Repository commit `d1ac57a` removes evidence matching entirely
+  and prohibits attributed prose quotations under Settled #17; it remains
+  pending the attended B8 smoke and deployment recorded in `PLAN.md`.
 - **New-provider structured-output integration must be mechanics-tested on a
   trivial dummy request before spending on the real large document —
   2026-08-29.** Testing Claude Opus 5 as an alternate New Wine segmentation
