@@ -47,18 +47,15 @@ This track may run concurrently with later corpus production after W8 passes.
 
 ### Frontend polish — staged answer-loading treatment
 
-**DONE and live — the step list shipped 2026-09-03 (commit `bad58f6`).** The
-ring is replaced by a five-row list advancing through the answer path's real
-order of work; active row carries the spinner and emphasis, completed rows a
-check, upcoming rows a subdued dot. Time-paced via explicit `STEP_ONSETS_MS`
-(0 / 1.7 / 4.9 / 9.5 / 18.4s), re-tuned from the ring's curve so the final
-step is reached inside the ~20s median rather than at 36.8s. The last step
-never completes — answer arrival remains the only completion signal.
-Reduced-motion behavior, the error handoff, and the surrounding chat layout
-are preserved; `app/page.tsx` was not touched. One concise announcement at a
-time is achieved by hiding the visual list from assistive tech and exposing
-only the active step. No percentage, meter, or fabricated source count is
-rendered.
+**DONE and live — the final single-phase treatment shipped 2026-09-03
+(`bad58f6`, revised by `b666134`).** The ring is replaced by one compact row
+that advances through five truthful phases in the answer path's real order of
+work. Only the active phase is rendered, with a reduced-motion-safe spinner;
+completed and upcoming phases do not accumulate on screen. Timing still uses
+explicit `STEP_ONSETS_MS` (0 / 1.7 / 4.9 / 9.5 / 18.4s), so the final phase is
+reached inside the ~20s median, and answer arrival remains the only completion
+signal. The visible phase is also the single polite, atomic status
+announcement. No percentage, meter, or fabricated source count is rendered.
 
 **Still open — the footer half of this entry has not been built.** In the
 completed-answer footer, keep the thumbs-up/down controls left-aligned

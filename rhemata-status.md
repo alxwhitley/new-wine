@@ -10,105 +10,55 @@ Last verified: 2026-09-03. **PLAN.md has zero active blockers.**
 
 ## Current state
 
-**A frontend change shipped to production this session** — the first deploy
-since 2026-08-31. Production and `origin/main` remain at `bad58f6`; Vercel
-production Ready (21s build), Railway `New Wine` settled Online with no builder
-drift, `/docs` and `/health` both 200, `newwine.app` 200. No outage; the API
-stayed Online throughout its rebuild. No database write, embedding purchase,
-or feature-flag change happened.
+**Two frontend refinements shipped to production.** The mobile drawer now
+groups its sign-in/profile action and informational links in one bordered
+utility footer with explicit safe-area/browser-chrome clearance (`642750e`).
+The answer loader now renders only its current phase in one compact status row
+instead of accumulating all five phases (`b666134`). Its existing truthful
+phase order and timing remain unchanged, and the visible phase is announced as
+one polite atomic status.
 
-Local `main` now contains merge commit `4d6813e` and is ahead of `origin/main`.
-The reviewed default-off TIPNR execution tooling and its closeout records are
-integrated locally but have not been pushed, deployed, or used against
-production.
+Vercel deployment `dpl_6KK6ToNPDymtCtbe6xbwqcezvwp9` reached **Ready** and is
+aliased to `newwine.app` and `www.newwine.app`; the live root returned HTTP 200.
+The release was built from a clean archive of committed `HEAD`, containing only
+the tracked `frontend/` tree. Railway, production data, feature flags, and the
+answer-generation/retrieval path were not changed.
 
-**The answer-wait ring is replaced by a staged step list** (`bad58f6`, four
-files). `lib/loading-progress.ts` now exports `LOADING_STEPS` +
-`activeStepIndex()` over explicit `STEP_ONSETS_MS` (0 / 1.7 / 4.9 / 9.5 /
-18.4s); `estimateLoadingProgress()`, `loadingPhraseIndex()` and
-`LOADING_PHRASES` are deleted. Done rows carry a check, the active row a
-spinner, upcoming rows a dot at `opacity-60`. The last step never completes —
-answer arrival remains the only completion signal. The `<ol>` is `aria-hidden`
-with an `sr-only` node in `role="status"` carrying only the active step.
-`app/page.tsx` untouched. Re-paced on Alex's call so step 5 is active by
-~18.4s, inside the ~20s median; the prior curve did not reach it until 36.8s.
+Fresh pre-deploy proof: 73/73 frontend unit tests, clean TypeScript, targeted
+ESLint with zero errors, successful Next.js production build, and 16/16
+responsive Playwright checks across mobile Safari and three iPad viewport
+profiles. The already-Parked `next-themes` development hydration warning still
+appeared; no production failure was demonstrated.
 
-Verified before deploy: 72/72 frontend tests (9 module + 6 component, each
-watched failing first), clean `tsc --noEmit`, zero lint findings, and a real
-Chromium run against a browser-level mocked delayed response with
-`NEXT_PUBLIC_API_URL` pointed at a dead port — transitions observed live at
-0.0/1.8/5.2/9.5/18.6s, step 5 active at 20s, single announcement, no digit
-rendered, `animationName: none` under reduced motion with the sequence still
-advancing, 0 of 32 requests reaching production. Re-verified on main's own base
-(58/58) before merging, because main's `page.tsx` differs by 73 lines.
-
-**Prior to that, commit `0e4442a` (the ring) was validated and found correct** —
-all seven claims held, no regression, no edits made. That validation is
-superseded by the replacement above but the method stands: the ring's own
-behaviour was never the problem.
-
-**Branch cleanup: 79 local branches → 6.** Deleted 23 fully-merged, 49
-byte-identical `claude/beta-night1-*` duplicates (all the same two commits
-`2e654e6`/`295c0c2`), and 4 stale harness-era branches. No remote branch was
-touched. Tips saved before deletion; every deleted branch's commits remain
-reachable via reflog or origin. Four could not be deleted because Codex
-worktrees under `~/.codex/worktrees/` pin them: `codex/b6-answer-latency`,
-`codex/biblical-depth-phases-0-3`, `harness/quote-containment-and-staging`
-(all merged, safe to delete once released) and `codex/five-user-beta-fast-path`
-(stale duplicate). Those 8 Codex worktrees were left alone — not this
-session's to remove.
-
-Remaining local branches and why:
-
-| Branch | State |
-|---|---|
-| `main` | contains local merge `4d6813e`, ahead of deployed `origin/main` |
-| `claude/harness-claude-cli-adapter` | 1 ahead — CLAUDE.md: not ready, needs 2nd review round |
-| 4 worktree-pinned | see above |
-
-**`codex/biblical-ingestion-completion-queue` was merged locally and deleted.**
-The remote branch remains untouched at `77b63d6`; local `main` preserves its
-two later closeout commits through `4d6813e`. The redundant loader patch on the
-branch resolved as already applied during the merge.
-
-**Tracked working-tree changes are committed at close.** Calendar-dependent
-approval fixtures now default to the actual execution day while the explicit
-historical-date assertion remains pinned (`17dea65`; verified 31/31 ingestion
-and 24/24 pilot checks with the TIPNR artifact). The pre-existing untracked
-magazine-review artifacts under `docs/audits/2026-08/` and
-`reference_grounding_review/` remain preserved and uncommitted.
+After this records-only closeout, local `main` is 21 commits ahead of
+`origin/main`: 18 pre-existing local TIPNR/frontend commits, the two UI commits
+above, and this closeout commit. Nothing was pushed, so the broader local
+history was not silently published. Pre-existing untracked audit, critique,
+reference-review, and task artifacts remain preserved and uncommitted.
 
 ---
 
 ## Session outcome and measures
 
-- Shipped: loader replacement, deployed and verified in production.
-- Acceptance: passed — 72/72 + 58/58 on main's base, mutation-style TDD (every
-  test observed red first), live browser proof, deploy confirmed via both CLIs.
-- Unplanned investigations started: **1** — the branch inventory surfaced the
-  orphaned Discovery data below. Recorded, not acted on.
+- Shipped: compact mobile drawer utility footer and single-phase answer loader;
+  both deployed and verified in production.
+- Acceptance: passed — 73/73 unit tests, TypeScript, targeted lint, production
+  build, 16/16 responsive browser checks, Vercel Ready, live HTTP 200.
+- Unplanned investigations started: **0**.
 - Findings promoted to Blocker: **0**.
-- Scope changes approved by Alex: the step-pacing re-tune, the frontend-only
-  cherry-pick followed later by the verified local ingestion-branch merge,
-  local-only branch deletion, and recording (not extracting) the orphaned
-  Discovery rows.
+- Scope changes approved by Alex: option 3 for the drawer footer, then the
+  single-visible-phase loader revision, commit, and production deployment.
+- Original outcome completed: **yes**.
+- Active critical-path item count: **1** — the attended TIPNR execution remains
+  the separate terminal session's work.
 
 ---
 
 ## Next single item
 
-**Answer the TIPNR approval gate** — unchanged from 2026-09-02, still
-unanswered. Five operations at commit `8c99ea1`: rollback-only probe of batch
-1; paid embeddings (≤3,939 requests, ≤$0.02441808); twenty batch transactions
-(3,939 items, 11,817 rows); the **irreversible** one-row demotion of the stale
-Aaron fixture policy (chunk `77f1581b-3225-5110-887b-9b651ebf9adf`); final
-fresh read-only reconciliation. A staged "probe only" answer runs operation 1
-alone.
-
-Also open, neither scheduled nor blocking:
-
-1. **Recover 75 orphaned Discovery candidates** from
-   `origin/cursor/discovery-arthur-hunt-0690` — see the CLAUDE.md landmine.
-   Git is currently the only copy.
-2. **`docs/roadmap.md` frontend-polish entry, paragraph 2** — the
-   feedback/Sources footer grouping — still undone. Paragraph 1 is now shipped.
+**Continue the attended TIPNR execution in the terminal session.** The repo
+contains the reviewed default-off batch tooling and approval packet, but this
+frontend session performed no database write, embedding purchase, fixture
+demotion, or reconciliation. The completed-answer feedback/Sources footer
+grouping remains Scheduled in `docs/roadmap.md` and is not part of that next
+critical-path item.
