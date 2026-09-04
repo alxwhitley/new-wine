@@ -4,81 +4,107 @@ Point-in-time state only. Overwritten each session, never appended to. Durable
 truth lives in code, git history, `PLAN.md`, `docs/roadmap.md`,
 `docs/plan-archive.md`, and `CLAUDE.md`.
 
-Last verified: 2026-09-03. **PLAN.md has zero active blockers.**
+Last verified: 2026-09-04. **PLAN.md has one active blocker (B8), promoted this
+session.**
 
 ---
 
 ## Current state
 
-**A working-tree code review ran, and four of its fifteen findings were fixed
-and committed; nothing was deployed and nothing touched the database.**
+**A read-only quality diagnostic turned into four production corpus changes, a
+graded quality baseline, and one self-inflicted live defect.** Four commits,
+nothing pushed; local `main` is 28 commits ahead of `origin/main`.
 
-`bfb6b0c` (frontend): `<AdminModal>` and the contributor `<Sheet>` are hoisted
-out of the twice-rendered `sidebarContent` so the tablet header's Open Profile
-button no longer opens two portalled dialogs with doubled admin fetches; the
-drawer-footer safe-area CSS now ends at 1023px to match the drawer's real
-`lg:hidden` breakpoint, so portrait tablets get the clearance (the e2e
-threshold that had been accepting 16px there moved with it). Proof: 74/74 unit
-tests including a new guard that fails against the old sidebar, clean
-TypeScript and ESLint, 16/16 responsive Playwright checks; reverting the CSS
-fails the two portrait-iPad projects.
+**What changed in the live corpus** (corpus data has no deploy step — all of
+this is serving now):
 
-`2149239` (TIPNR tooling): `_stage_batch` re-asserts the hidden, licensed
-source on the writing cursor before staging any row, via the canonical
-`assert_source()`, restoring what the Phase 8 pilot did in-transaction. Drift
-now aborts as `staging_failed` / `source_visibility_drift` (or
-`source_license_drift`) with 0 commits, 1 rollback. Four new tests, all of
-which fail with the line removed; 124/124 with `TIPNR_TEST_ARTIFACT` set.
+- `b641898` — **79 sermon documents rebuilt.** Re-fetching every pre-fix
+  video's real json3 captions and comparing against stored text found 14
+  documents holding under 55% of what was said (worst 37%) and 65 holding
+  55–80%. Rebuild recovered **+139,669 words (1.48x)**, 79/79 present, zero
+  duplicates. One document failed mid-run at the proposition step (which rolls
+  back after the old row is already deleted) and was retried successfully.
+- `b641898` — **four stored positions rebuilt** after 18 `position_evidence`
+  rows were removed with their truncated-text propositions. All four went from
+  10–12 evidence rows to 15, no scope change, prior versions retained.
+- `c852963` — **one guest interview silenced.** "The Truth About Nephilim,
+  Watchers, and Demons" is Savchuk-hosted with the guest's doctrinal claims
+  attributed to the host; now `silent_context`.
+- `bacbe84` — two stale CLAUDE.md landmines corrected (the prose quotation
+  guard is deployed, not pending; the caption defect is not closed).
 
-This closeout commit corrects the CLAUDE.md landmine's items-vs-rows
-arithmetic (3,939 items × 3 = 11,817 rows), fixes `docs/roadmap.md`'s stale
-"3,938 remaining", records the seven unfixed tooling findings as Scheduled
-inside A4, and parks the four unreproduced frontend findings.
+**The graded baseline.** 30 sermon passages that genuinely reached the top-8
+evidence pool of real answers, graded blind by Alex: **20 keep, 2 borderline,
+8 kill**. Source predicted the grades better than any measured text feature —
+Derek Prince 9/9 keep, CLF Church 0/5. Alex has ruled out excluding sources, so
+any future solution must work per passage. Full evidence and per-passage table:
+`docs/superpowers/specs/2026-09-04-sermon-passage-quality-design.md`.
 
-**Not deployed.** Vercel and Railway are unchanged from the 2026-09-03 morning
-release (`e45a86e`); production still runs the double-mounted dialog and the
-767px footer rule until the next frontend deploy. The TIPNR writer change is
-repo-only and needs no deploy — it runs from the terminal.
+**No filter was built, deliberately.** Four mechanical detectors were tried and
+all four failed, each with convincing in-sample numbers that dissolved on
+inspection. The `>>`-marker rule looked perfect (3 of 8 kills, 0 of 20 keeps)
+and is wrong — see the new CLAUDE.md landmine. Every real finding this session
+came from reading the material.
 
-One false alarm worth remembering: the first e2e run after the CSS fix failed
-with the pre-edit value because the Playwright-managed dev server served a
-stale Turbopack CSS chunk — exactly `frontend/CLAUDE.md`'s stale-CSS landmine.
-Curling the served chunk confirmed it; `rm -rf frontend/.next` and re-run
-passed. Not a code problem.
+**Two independent cross-model reviews** (one forming its own view from the
+evidence, one attacking the recommendation) converged on the same two
+conclusions: hard-exclude rather than soft down-weight, and build nothing until
+there is a retrieval-weighted, CLF-oversampled labelled set.
 
-After this closeout, local `main` is 24 commits ahead of `origin/main`; nothing
-was pushed. The pre-existing untracked audit, critique, reference-review, and
-task artifacts remain uncommitted, deliberately.
+**Not deployed.** Vercel and Railway are unchanged from the 2026-09-03 release.
+No code on the serving path changed this session; the corpus underneath it did.
 
 ---
 
 ## Session outcome and measures
 
-- Shipped: two code commits (frontend dialog/footer fix; TIPNR in-transaction
-  source assertion) and this records commit.
-- Acceptance: passed — every fix mutation-proven in both directions; 74/74
-  frontend unit, 16/16 responsive e2e, 124/124 TIPNR suite, 148/148 with the
-  pilot suite.
-- Unplanned investigations started: **0** (the stale-CSS diagnosis was inside
-  the approved fix's own verification).
-- Findings promoted to Blocker: **0**. Eleven findings classified: seven
-  Scheduled (A4 tooling residuals), four Parked (frontend, unreproduced).
-- Scope changes approved by Alex: the four fixes, then commit and close.
-- Original outcome completed: **yes**.
-- Active critical-path item count: **1** — the attended TIPNR execution.
+- Shipped: four commits — one ingest/repair build, one corpus fix, two docs.
+- Acceptance: passed for the rebuild (79/79 reconciled, zero duplicates, all
+  author damage repaired and verified) and the position rebuild (4/4, no scope
+  change). The original diagnostic question is answered.
+- Unplanned investigations started: **1** — the caption-retention measurement,
+  which began as a bounded check and became a 381-document probe plus a
+  79-document production rebuild. Alex approved each escalation explicitly.
+- Findings promoted to Blocker: **1** (B8, below). Two classified Scheduled
+  (Ravenhill revert; the labelled-set draw). One Parked (the repetition signal
+  — mostly genuine preaching repetition, not corruption).
+- Scope changes approved by Alex: the full measurement, the re-ingest, the
+  position rebuild, and the commits.
+- Original outcome completed: **yes**, and it produced more work than it closed.
+- Active critical-path item count: **1** — B8.
 
 ---
 
 ## Next single item
 
-**Re-run the rollback-only TIPNR probe on `2149239`, then continue the attended
-execution in the terminal session.** The 2026-09-03 probe (batch 1 staged 600
-rows, 0 committed, 1 rolled back, `completed_batches: 0`) predates the
-in-transaction source assertion, so the new statement has not yet executed
-against the live database. The approval packet for 2026-09-03 exists in
-`local/2026-09/`; the packet and batch hashes are unaffected by the code
-change. Before trusting the run's own reports, read the two reporting caveats
-now recorded under A4 in `docs/roadmap.md` (zero-write failures mislabeled as
-unknown-commit; the CLI never reaches the global excluded-identity check).
-The completed-answer feedback/Sources footer grouping remains Scheduled and is
-not part of this item.
+**B8 — the punctuation-induced refusal risk, which this session created.**
+
+Rebuilding from raw json3 captions removed sentence punctuation: 20 of the 79
+rebuilt documents are wholly unpunctuated, and 391 unpunctuated chunks were
+added to the 337 already present. `prose_quotation_guard.normalize_for_match()`
+folds quote characters, dashes, ellipsis and whitespace but **not sentence
+punctuation**, so a writer quoting accurately and punctuating naturally fails
+the substring match and drives regenerate-once-then-refuse.
+
+Verified live against a rebuilt Kolenda chunk: quoted verbatim it passes; the
+same words with a comma and a full stop added are flagged ungrounded; with only
+a full stop added, flagged. Quotation appeared in 4 of 7 answers in an earlier
+real sample, so this is not a rare path.
+
+Deliberately not fixed unilaterally — the narrow option is folding sentence
+punctuation on both sides of that comparison, which *widens* a safety guard and
+needs Alex's decision, not an executor's. **The classification itself is also
+Alex's to confirm:** it was promoted to Blocker this session on the documented
+bar (concrete failure, live evidence, affected beta surface, named closure
+condition) with no current item to displace, and can be downgraded.
+
+Then, in order: revert the ~20 Leonard Ravenhill documents rebuilt from
+captions that cannot transcribe 1960s tape ("the lowing of the auction" for
+"the lowing of the oxen") — backups exist; and the labelled-set draw that gates
+any future filter work.
+
+The review document at
+`docs/superpowers/specs/2026-09-04-sermon-passage-quality-design.md` is written
+for a fresh reviewer and carries six explicit questions, including whether the
+79-document rebuild was correct at all given it did not measurably improve
+graded quality (62% keep on rebuilt passages vs 68% untouched).

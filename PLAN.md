@@ -9,11 +9,12 @@ relevance are below the desired bar; re-enablement requires the Scheduled
 repair gate in `docs/roadmap.md` plus Alex's attended approval. Web-article
 ingestion remains an attended parallel track.
 
-**Current item:** None — **B7 is DONE and live** (2026-08-31). Migration 095
-applied (attended, verified independently from a fresh connection), all four
-Railway services deployed at `6e0bb4a`, and the full path re-proved in
-production after the deploy. **Active blocker count: 0.** Quote repair remains
-Scheduled, not an active Blocker.
+**Current item: B8 — punctuation-induced answer refusals** (promoted
+2026-09-04, self-inflicted the same session). **Active blocker count: 1.**
+B7 is DONE and live (2026-08-31): migration 095 applied and independently
+verified from a fresh connection, all four Railway services deployed at
+`6e0bb4a`, full path re-proved in production after the deploy. Quote repair
+remains Scheduled, not an active Blocker.
 
 **B6-F1 is DONE** (2026-08-26). The activation flag was flipped to `true` and
 its wiring code was found to have been drafted but never actually deployed
@@ -63,6 +64,36 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
   execution and a **$50 ceiling** unless Alex explicitly approves more.
 
 ## Active blocker sequence
+
+### B8 — Punctuation-induced answer refusals
+
+**Status: OPEN. Created by this repo's own 2026-09-04 re-ingest; classification
+awaiting Alex's confirmation.**
+
+Rebuilding 79 sermon documents from raw json3 captions (`b641898`) removed
+sentence punctuation — 20 of them are wholly unpunctuated, adding 391
+unpunctuated chunks to the 337 already present.
+`prose_quotation_guard.normalize_for_match()` folds quote characters, dashes,
+ellipsis and whitespace but **not sentence punctuation**, so a writer quoting
+those documents accurately and punctuating naturally fails the exact-substring
+match and drives regenerate-once-then-refuse.
+
+**Evidence, verified live** against a rebuilt Kolenda chunk: quoted verbatim →
+passes; the same words with a comma and a full stop added → flagged ungrounded;
+with only a full stop added → flagged. Quotation appeared in 4 of 7 answers in
+an earlier real sample, so the path is common.
+
+**Affected surface:** the core beta answer journey — correct answers refused.
+
+**Smallest closure condition:** fold sentence punctuation on both sides of that
+comparison, OR revert the unpunctuated documents. The first widens a safety
+guard and is Alex's call, not an executor's; punctuation can occasionally carry
+meaning.
+
+**Promoted on the documented bar** (concrete failure, live evidence, named
+surface, named closure) with no current item to displace. Downgradeable by
+Alex. Full detail and six reviewer questions:
+`docs/superpowers/specs/2026-09-04-sermon-passage-quality-design.md`.
 
 ### B7 — Fail-closed analytics → answer coupling
 

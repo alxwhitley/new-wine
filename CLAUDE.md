@@ -1259,6 +1259,30 @@ different row, per the hard rule above.
   `youtube_pipeline.sh`, still hardcodes the dead `llama-3.3-70b-versatile`
   AND performs the same destructive rewrite — it fails loudly on the dead
   model rather than corrupting anything.
+
+- **`>>` in stored chunk text is a caption cue artifact, NOT a speaker change,
+  and raw `json3` text carries no sentence punctuation — 2026-09-04.** Two
+  traps in the same data, both of which produced confident wrong conclusions
+  in one session. (1) 817 sermon chunks contain `>>` (638 CLF, 174 Savchuk).
+  It looks exactly like a speaker marker and reads as one in a diff. It is
+  not: in real passages it sits mid-sentence inside one person's continuous
+  thought ("...easier to hear him on the really big decisions, `>>` right?
+  When the big decisions are at play..."). A rule built on it separated 3
+  kills from 20 keeps perfectly in a 30-passage sample and was still wrong —
+  the feature had been discovered in that same sample. Three further
+  detectors for multi-speaker material failed the same way: short-turn ratio
+  plus assent tokens finds preaching repetition and congregational prayer
+  ("leave, / leave, / leave, / LEAVE."), and question-terminated turn pairs
+  find rhetorical questions. **Genuine guest interviews exist and are a real
+  ranked-failure-mode-2 exposure** (one confirmed and silenced, `c852963`),
+  but the only method that has ever identified one correctly is reading the
+  document. (2) The `json3` path stores exactly what the recogniser emits,
+  which for most of this material has NO sentence punctuation — 728 sermon
+  chunks corpus-wide. `prose_quotation_guard.normalize_for_match()` folds
+  quotes, dashes, ellipsis and whitespace but NOT sentence punctuation, so an
+  accurate quotation the writer punctuates naturally fails the exact-substring
+  match and refuses (verified live, three ways). Any further `json3`
+  re-ingest widens that exposure — see PLAN.md B8.
 - **New-provider structured-output integration must be mechanics-tested on a
   trivial dummy request before spending on the real large document —
   2026-08-29.** Testing Claude Opus 5 as an alternate New Wine segmentation

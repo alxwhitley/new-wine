@@ -381,6 +381,32 @@ on a real coupling rather than on effort:
    3 residual frontend advisories all sit inside `next`'s own dependency tree
    and only clear with this bump. Revisit at the next planned Next.js upgrade.
 
+### Revert the Ravenhill documents rebuilt from unusable audio
+
+~20 Leonard Ravenhill documents were rebuilt on 2026-09-04 from captions that
+cannot transcribe 1960s tape — "the lowing of the auction" for "the lowing of
+the oxen", "put up some wear it as a cheap suit alive". Backups exist at
+`local/2026-09/truncated_youtube_backup_*.json`. This is accident repair, not a
+gate: the existing `≥85%` coverage check measures caption *duration* against
+video length, not fidelity, so it cannot catch this class and nothing prevents
+a recurrence on other old-audio material.
+
+### Labelled set for sermon passage quality — gates any filter work
+
+Before any filter, down-weight, or model-scored quality gate on sermon
+passages, a labelled set is required: **~150 passages, drawn retrieval-weighted**
+(from passages that actually reached top-8, which is where exposure lives) and
+**oversampled on CLF Church** and on every source represented by a single
+passage in the 2026-09-04 baseline.
+
+Why the gate exists: the 2026-09-04 baseline of 30 was deliberately stratified
+across teachers, so it cannot give a base rate, and four mechanical detectors
+built on it all failed on inspection. A uniform random draw would not fix this
+— it yields almost no kills from a Prince-dominated corpus and measures the
+corpus rather than the exposure. Two independent cross-model reviews converged
+on this gate. Full evidence and the rejected options:
+`docs/superpowers/specs/2026-09-04-sermon-passage-quality-design.md`.
+
 ### Quote accuracy and relevance repair — before any re-enable
 
 Alex disabled the user-facing chat quote rail on 2026-08-25 because served
@@ -451,23 +477,35 @@ during the 2026-09-01 responsive WebKit pass. All 16 tested mobile/tablet
 journeys passed and no production failure was demonstrated; revisit only if it
 causes visible theme flicker, incorrect initial styling, or a production error.
 
-### Historical YouTube caption duplication — needs a cost estimate first
+### Historical YouTube caption defect — 79 documents rebuilt, remainder left alone
 
-318 YouTube-sourced documents ingested before 2026-08-29 carry residual
-caption duplication left by the retired `llama-3.3-70b-versatile` cleaning
-pass: Ravenhill 117, Savchuk 126, Poonen 50, Kolenda 11, Deere 6, Conlon 6.
-Unlike the CLF defect fixed that day, **content is complete** — that model
-preserved everything and merely left duplicate fragments behind, roughly 6%
-of positions at worst. Re-ingesting through the `json3` path would make the
-whole YouTube corpus properly verbatim, which matters for the quote
-architecture's exact-substring matching against stored chunk text.
+**This entry's former premise was measured and found false, 2026-09-04.** It
+previously asserted "content is complete — that model preserved everything and
+merely left duplicate fragments behind." Re-fetching every pre-fix video's real
+`json3` captions and comparing word counts against stored text showed
+otherwise: of 303 verifiable pre-fix documents, **14 held under 55% of what was
+said** (worst 37%) and 65 held 55–80%.
 
-Deferred by Alex's explicit choice, 2026-08-29. Not schedulable as-is: these
-sources are licensed/unlicensed, so re-ingestion regenerates the propositions
-layer (Invariant 10/11 provenance machinery) and needs a real cost estimate
-against the $50 ceiling before anyone starts. The mechanism already exists and
-is proven — `scripts/reingest_clf_youtube_2026-08-29.py` is the working
-pattern, including the `removed_urls` trap it deliberately avoids.
+**Done** (`b641898`): the 79 documents under 80% were rebuilt, recovering
+139,669 words (1.48x), 79/79 reconciled, zero duplicates. Total cost $0.19.
+Four wrong author values the re-ingest introduced were repaired, and four
+stored positions whose evidence cited truncated-text propositions were rebuilt.
+
+**Deliberately not touched, and this is a decision rather than an omission:**
+the 65 documents at 80–90% (consistent with correct filler removal, not loss),
+and 15 documents whose captions no longer exist and cannot be verified either
+way.
+
+**What the rebuild cost, recorded so it is weighed before any further
+re-ingest:** raw `json3` captions carry no sentence punctuation, which created
+Blocker B8 (accurate quotations now refused). Re-ingesting more of this corpus
+repeats that trade until B8 is closed.
+
+Three method traps, each of which produced a wrong conclusion before being
+caught — see the CLAUDE.md caption landmine for the full form. Briefly: the
+Groq model swap does not date the regression; a words-per-second proxy
+over-accuses; and triplication *inflates* word count, so a stuttered document
+scores as intact.
 
 ### Horizon — requires a fresh specification
 
