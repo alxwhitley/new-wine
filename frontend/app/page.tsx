@@ -297,7 +297,11 @@ export default function Home() {
         const shell = appViewportRef.current;
         if (!shell) return;
         shell.style.height = `${Math.round(viewport?.height ?? window.innerHeight)}px`;
-        shell.style.top = `${Math.round(viewport?.offsetTop ?? 0)}px`;
+        // Clamped at 0: a rubber-band fires visualViewport 'scroll' with a
+        // negative offsetTop, and writing it back made the shell ride the
+        // bounce instead of staying put. The listener itself is load-bearing
+        // for iOS toolbar motion, so only the negative excursion is dropped.
+        shell.style.top = `${Math.max(0, Math.round(viewport?.offsetTop ?? 0))}px`;
         shell.style.bottom = "auto";
       });
     };
@@ -554,7 +558,7 @@ export default function Home() {
             /* Chat thread */
             <>
               {/* Scrollable message list — panel corners never clipped */}
-              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
+              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain min-h-0">
                 {/* Scroll fade: messages dissolve into background as they pass the top */}
                 <div className="pointer-events-none sticky top-0 z-10 h-14 md:h-8 bg-gradient-to-b from-background to-transparent" />
                 <div className="mx-auto max-w-2xl px-4 md:px-12 pt-4 md:pt-2 pb-8">

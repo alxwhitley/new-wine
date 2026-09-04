@@ -106,6 +106,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Document-level overscroll containment ──────────────────────────────────
+   Safari rubber-bands the ROOT scroller. `overscroll-none` on the app shell
+   (app/page.tsx) is on a `fixed` element and cannot reach it -- only a
+   declaration on html/body can. Without this, dragging the thread past its own
+   top translated the entire viewport. Pairs with `overscroll-contain` on the
+   message list, which stops the chaining at its source; both are needed.
+   ─────────────────────────────────────────────────────────────────────── */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 mark {
   background: transparent;
   color: hsl(var(--primary));
