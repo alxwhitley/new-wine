@@ -371,67 +371,6 @@ export function Sidebar({
 
         <FooterNav className="mt-3 text-muted-foreground" />
       </div>
-
-      {/* Contributor request sheet */}
-      <Sheet open={contributorOpen} onOpenChange={setContributorOpen}>
-        <SheetContent side="right" className="flex flex-col">
-          <SheetHeader>
-            <SheetTitle>Apply to contribute</SheetTitle>
-            <SheetDescription>
-              Contributors can write pastoral notes attached to Bible verses. We review each application before granting access.
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="flex-1 px-4">
-            {requestStatus === "success" ? (
-              <p className="text-sm text-muted-foreground">
-                Application submitted. We&apos;ll be in touch.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-xs text-muted-foreground">
-                    Message <span className="text-muted-foreground">(optional)</span>
-                  </p>
-                  <Textarea
-                    placeholder="Tell us a bit about yourself..."
-                    value={requestMessage}
-                    onChange={(e) => setRequestMessage(e.target.value)}
-                    className="resize-none"
-                    rows={4}
-                  />
-                </div>
-                {requestStatus === "error" && requestError && (
-                  <p className="text-xs text-destructive">{requestError}</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {requestStatus !== "success" && (
-            <SheetFooter>
-              <Button
-                onClick={handleSubmitRequest}
-                disabled={requestStatus === "loading"}
-                className="w-full"
-              >
-                {requestStatus === "loading" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Submit"
-                )}
-              </Button>
-            </SheetFooter>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      {/* Admin modal — also hosts Profile for every authenticated user */}
-      <AdminModal
-        open={adminOpen}
-        onOpenChange={setAdminOpen}
-        onOpenContributor={handleOpenContributor}
-      />
     </>
   );
 
@@ -501,6 +440,72 @@ export function Sidebar({
       >
         {sidebarContent}
       </aside>
+
+      {/* Portalled overlays — rendered ONCE, outside sidebarContent.
+          sidebarContent is mounted twice (desktop aside + drawer), so a
+          dialog living inside it would mount twice too; Radix portals to
+          document.body, which escapes both the aside's display:none and
+          the drawer's inert, giving two live dialogs and doubled fetches. */}
+      {/* Contributor request sheet */}
+      <Sheet open={contributorOpen} onOpenChange={setContributorOpen}>
+        <SheetContent side="right" className="flex flex-col">
+          <SheetHeader>
+            <SheetTitle>Apply to contribute</SheetTitle>
+            <SheetDescription>
+              Contributors can write pastoral notes attached to Bible verses. We review each application before granting access.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 px-4">
+            {requestStatus === "success" ? (
+              <p className="text-sm text-muted-foreground">
+                Application submitted. We&apos;ll be in touch.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs text-muted-foreground">
+                    Message <span className="text-muted-foreground">(optional)</span>
+                  </p>
+                  <Textarea
+                    placeholder="Tell us a bit about yourself..."
+                    value={requestMessage}
+                    onChange={(e) => setRequestMessage(e.target.value)}
+                    className="resize-none"
+                    rows={4}
+                  />
+                </div>
+                {requestStatus === "error" && requestError && (
+                  <p className="text-xs text-destructive">{requestError}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {requestStatus !== "success" && (
+            <SheetFooter>
+              <Button
+                onClick={handleSubmitRequest}
+                disabled={requestStatus === "loading"}
+                className="w-full"
+              >
+                {requestStatus === "loading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Submit"
+                )}
+              </Button>
+            </SheetFooter>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Admin modal — also hosts Profile for every authenticated user */}
+      <AdminModal
+        open={adminOpen}
+        onOpenChange={setAdminOpen}
+        onOpenContributor={handleOpenContributor}
+      />
     </>
   );
 }

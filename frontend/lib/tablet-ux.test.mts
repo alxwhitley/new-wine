@@ -36,3 +36,30 @@ test("Profile adapts to a phone-height viewport and tablet navigation", () => {
   assert.match(profileSource, /overflow-x-auto overscroll-x-contain md:flex-col/);
   assert.match(profileSource, /p-4 sm:p-6/);
 });
+
+test("portalled dialogs mount once, not once per sidebarContent render", () => {
+  // sidebarContent is rendered twice -- in the desktop aside and in the
+  // drawer. Radix portals to document.body, so a dialog declared inside it
+  // escapes both the aside's display:none and the drawer's inert, producing
+  // two live dialogs, two focus traps, and doubled admin fetches the moment
+  // the tablet header's Open Profile button sets adminOpen.
+  const contentStart = sidebarSource.indexOf("const sidebarContent = (");
+  assert.ok(contentStart > 0, "sidebarContent must exist");
+  const returnStart = sidebarSource.indexOf("\n  return (", contentStart);
+  assert.ok(returnStart > contentStart, "component return must follow it");
+  const sidebarContent = sidebarSource.slice(contentStart, returnStart);
+
+  assert.ok(
+    !sidebarContent.includes("<AdminModal"),
+    "AdminModal must not be declared inside the twice-rendered sidebarContent",
+  );
+  assert.ok(
+    !sidebarContent.includes("<Sheet "),
+    "the contributor Sheet must not be declared inside sidebarContent",
+  );
+
+  // Still rendered -- hoisted, not dropped, and exactly once each.
+  assert.equal(sidebarSource.split("<AdminModal").length - 1, 1);
+  assert.equal(sidebarSource.split("<Sheet ").length - 1, 1);
+  assert.equal(sidebarSource.split("{sidebarContent}").length - 1, 2);
+});

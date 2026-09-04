@@ -72,7 +72,10 @@ for (const route of routes) {
     const footerNavBottom = (footerNavBox?.y ?? geometry.viewportBottom)
       + (footerNavBox?.height ?? 0);
     expect(geometry.viewportBottom - footerNavBottom)
-      .toBeGreaterThanOrEqual(viewportWidth < 768 ? 23 : 15);
+      // Below lg (1024px) the drawer is what renders, so the safe-area
+      // clearance applies; at and above it only the desktop aside shows,
+      // which keeps plain pb-4 (16px).
+      .toBeGreaterThanOrEqual(viewportWidth < 1024 ? 23 : 15);
 
     const hasDocumentOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
