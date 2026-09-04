@@ -67,8 +67,9 @@ Full trail: `docs/audits/2026-08/b6_answer_latency_session_2026-08-25.md`.
 
 ### B8 — Punctuation-induced answer refusals
 
-**Status: OPEN. Created by this repo's own 2026-09-04 re-ingest; Alex approved
-repository implementation of the reviewed closure design on 2026-09-04.**
+**Status: REPOSITORY COMPLETE; attended production smoke and deployment
+pending. Created by this repo's own 2026-09-04 re-ingest; Alex approved the
+reviewed closure design on 2026-09-04.**
 
 Rebuilding 79 sermon documents from raw json3 captions (`b641898`) removed
 sentence terminators from 20 of them, adding 391 chunks without sentence-ending
@@ -103,6 +104,15 @@ deployment remain separate attended gates.
 
 **Non-goals:** sermon passage filtering, Ravenhill corpus writes, transcript
 rewriting, deployment, and any model-based answer-path judge.
+
+**Repository proof (2026-09-04, `1f775ac`):** the producer now passes only
+author-tagged citable passages; the guard matches within same-author individual
+chunks, keeps strict matching first, enables the punctuation fallback only for
+chunks without sentence terminators, and selects the nearest preceding teacher.
+Python 3.12 verification passed 32 quotation-guard checks, 17 generation-
+contract tests, 21 routing tests, and syntax compilation. B8 remains the active
+blocker until an explicitly approved production smoke and deployment verify the
+live answer path.
 
 **Promoted on the documented bar** (concrete failure, live evidence, named
 surface, named closure) with no current item to displace. Downgradeable by
