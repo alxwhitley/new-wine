@@ -83,8 +83,12 @@ export function ChatInput({
   };
 
   return (
+    // No background of its own: in the thread view this floats over the
+    // .composer-fade gradient, and an opaque fill here would reinstate the
+    // hard edge the fade exists to remove. In the empty state the parent is
+    // already bg-background, so dropping it changes nothing there.
     <div className={cn(
-      "shrink-0 bg-background",
+      "shrink-0",
       embedded ? undefined : "px-4 pb-2 md:px-12 md:pb-6",
     )}>
       <form

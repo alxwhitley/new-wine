@@ -278,6 +278,8 @@ export default function Home() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const appViewportRef = useRef<HTMLDivElement>(null);
+  const chatRegionRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const scrollOnNextTurnRef = useRef(false);
   useEffect(() => {
     if (!scrollOnNextTurnRef.current || messages.length === 0) return;
@@ -330,7 +332,14 @@ export default function Home() {
     const keepLatestVisible = () => {
       cancelAnimationFrame(animationFrame);
       animationFrame = requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ block: "nearest" });
+        // Explicit scroll-to-end rather than scrollIntoView({ block: "nearest" }).
+        // "nearest" aligns to the SCROLLPORT's bottom edge, which the floating
+        // composer now overlays -- it would park the newest turn underneath it.
+        // The scroller's own bottom-padding reservation (--composer-h, below)
+        // means scrolling fully
+        // to the end lands the last turn exactly against the composer's top.
+        const scroller = scrollContainerRef.current;
+        if (scroller) scroller.scrollTop = scroller.scrollHeight;
       });
     };
 
@@ -345,6 +354,28 @@ export default function Home() {
       window.removeEventListener("orientationchange", keepLatestVisible);
     };
   }, [inputFocused, messages.length]);
+
+  // The composer floats over the thread, so the scroller has to reserve the
+  // composer's REAL height as bottom padding -- composerMaxHeight() lets the
+  // textarea grow, so a fixed reservation clips the last line of an answer.
+  // Published as --composer-h on the chat region; the scroller's padding and
+  // .composer-fade's height both read it.
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    const composer = composerRef.current;
+    const region = chatRegionRef.current;
+    if (!composer || !region) return;
+    const sync = () => {
+      region.style.setProperty(
+        "--composer-h",
+        `${Math.round(composer.getBoundingClientRect().height)}px`,
+      );
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(composer);
+    return () => observer.disconnect();
+  }, [hasMessages]);
 
   // / shortcut focuses the chat textarea
   useEffect(() => {
@@ -473,10 +504,11 @@ export default function Home() {
       <main
         className={cn(
           "flex flex-1 min-w-0 min-h-0 md:p-2 md:pb-2 lg:ml-64",
-          // Chat-only beta: no tab bar to clear, so no keyboard-focus
-          // toggle needed — just the real bottom safe-area (Phase 4 makes
-          // env() non-zero). Flag on: unchanged, 56px reserved for the bar.
-          isFullNavEnabled() ? (inputFocused ? "pb-0" : "pb-14") : "pb-safe"
+          // Chat-only beta: pb-safe has MOVED onto the floating composer
+          // below, so the card now reaches the physical bottom edge and
+          // answers can fade through the safe area instead of stopping short
+          // of it. Flag on: unchanged, 56px reserved for the tab bar.
+          isFullNavEnabled() ? (inputFocused ? "pb-0" : "pb-14") : undefined
         )}
       >
         {/* The chat card — bordered on desktop, full-bleed on mobile. Row on
@@ -488,7 +520,7 @@ export default function Home() {
         <div className="relative flex flex-col md:flex-row flex-1 min-h-0 bg-background md:rounded-xl md:border md:border-border overflow-hidden">
           {/* Chat region — was the card's own direct content; now its own
               flex-column so it can sit beside the panel slot on desktop. */}
-          <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
+          <div ref={chatRegionRef} className="relative flex flex-col flex-1 min-w-0 min-h-0">
 
           {/* Mobile floating menu button — replaces full-width bar on mobile.
               LOAD-BEARING once the tab bar is gated off: this is the only
@@ -558,7 +590,10 @@ export default function Home() {
             /* Chat thread */
             <>
               {/* Scrollable message list — panel corners never clipped */}
-              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain min-h-0">
+              <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto overscroll-contain min-h-0 pb-[calc(var(--composer-h,5rem)+1rem)]"
+              >
                 {/* Scroll fade: messages dissolve into background as they pass the top */}
                 <div className="pointer-events-none sticky top-0 z-10 h-14 md:h-8 bg-gradient-to-b from-background to-transparent" />
                 <div className="mx-auto max-w-2xl px-4 md:px-12 pt-4 md:pt-2 pb-8">
@@ -633,8 +668,30 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Fixed input area — stays at panel bottom */}
-              <ChatInput onSend={handleSend} disabled={chatLoading || !!weeklyLimitDetail} />
+              {/* Bottom fade — sits between the thread and the composer so
+                  answers dissolve into the background as they pass beneath it,
+                  rather than terminating at a hard edge. Opaque gradient, not a
+                  mask on the scroller; see .composer-fade in globals.css. */}
+              <div
+                aria-hidden="true"
+                className="composer-fade pointer-events-none absolute inset-x-0 bottom-0 z-10"
+              />
+
+              {/* Floating composer — overlays the thread instead of sitting
+                  below it. Measured by the ResizeObserver above, which is what
+                  drives both the fade's height and the scroller's clearance. */}
+              <div
+                ref={composerRef}
+                className={cn(
+                  "absolute inset-x-0 bottom-0 z-20",
+                  // The card only reaches the physical bottom edge in the
+                  // chat-only beta; with full nav on, main's pb-14 already
+                  // lifts it clear of the tab bar.
+                  isFullNavEnabled() ? undefined : "pb-safe",
+                )}
+              >
+                <ChatInput onSend={handleSend} disabled={chatLoading || !!weeklyLimitDetail} />
+              </div>
             </>
           )}
           </div>

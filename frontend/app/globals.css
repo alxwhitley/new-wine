@@ -179,6 +179,26 @@ mark {
   }
 }
 
+/* ── Floating-composer bottom fade ──────────────────────────────────────────
+   The composer overlays the thread (app/page.tsx) so answers dissolve beneath
+   it instead of stopping at a hard edge against an opaque bar. Deliberately a
+   gradient overlay and NOT `mask-image` on the scroller: the backdrop is
+   bg-background, so fading to that colour is visually identical to fading to
+   alpha-zero, and it keeps a compositing layer off a scrolling element -- a
+   real scroll cost on iOS. --composer-h is published by a ResizeObserver on
+   the composer itself, because composerMaxHeight() lets the textarea grow and
+   a fixed height would under-cover it.
+   ─────────────────────────────────────────────────────────────────────── */
+.composer-fade {
+  height: calc(var(--composer-h, 5rem) + 4rem);
+  background-image: linear-gradient(
+    to top,
+    hsl(var(--background)) 0,
+    hsl(var(--background)) var(--composer-h, 5rem),
+    transparent 100%
+  );
+}
+
 /* Safe-area bottom clearance — used by MobileTabBar for iOS home indicator */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
