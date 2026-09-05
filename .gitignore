@@ -48,3 +48,4 @@ scripts/prose_scan_live_results.json
 # recovery mechanism for a failed/retried write, not a source of truth)
 scripts/eligible_ids_cache.json
 eligibility_dryrun_*.log
+.vercel

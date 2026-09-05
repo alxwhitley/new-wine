@@ -55,18 +55,21 @@ rather than costing every session at the repo root.
   checking: the minifier collapses `top/right/bottom/left` into `inset:auto 0
   0`, and Tailwind 4 emits `touch-pan-up` as `--tw-pan-y:pan-up` rather than a
   literal `touch-action:pan-up`, so a strict regex reports a false MISSING.
-- **`frontend/.vercel/project.json` points at the retired `rhemata` Vercel
-  project, not `newwine` — 2026-09-05.** The live project is `newwine`, whose
-  Root Directory is `frontend/`, so **the Vercel CLI must be run from the repo
-  root**, never from `frontend/`. Running it from `frontend/` picks up that
-  stale link and targets the wrong project entirely: it does not error in a way
-  that names the real problem, it fails with `The specified Root Directory
-  "frontend/" does not exist`, and it creates a failed Production deployment in
-  the retired project's history (one exists from this session). A repo-root
-  deploy also needs `--archive=tgz`, since the uncompressed upload exceeds
-  Vercel's 15,000-file limit — but there is no `.vercelignore`, so that archive
-  packs ~549MB of `node_modules`. Prefer `vercel redeploy <url> --target
-  production` from the repo root over a fresh CLI upload.
+- **Run the Vercel CLI from the REPO ROOT, never from `frontend/` —
+  2026-09-05.** The project's Root Directory setting is `frontend/`, so from
+  that directory Vercel resolves `frontend/frontend/` and fails with `The
+  specified Root Directory "frontend/" does not exist`, which names the
+  symptom and not the cause. A repo-root CLI upload additionally needs
+  `--archive=tgz` (the file count exceeds Vercel's 15,000 limit) but there is
+  no `.vercelignore`, so that archive packs ~549MB of `node_modules` — prefer
+  `vercel redeploy <url> --target production` over a fresh upload.
+  **Cosmetic trap, not a second project:** `frontend/.vercel/project.json`
+  still records `"projectName":"rhemata"` while the repo root records
+  `"newwine"`. The `projectId` is IDENTICAL in both
+  (`prj_xmdIiKIMF4nL0YFoo65GcWpYUon9`) — it is one project that was renamed,
+  and the stale display name only changes how `vercel ls` labels it depending
+  on which directory you run it from. Do not go looking for a second Vercel
+  project or try to "migrate" between them; there is only one.
 - **Tailwind scans code comments AND markdown under `frontend/`, so
   class-shaped prose ships as real CSS — 2026-09-05, hit twice in one
   session.** Neither instance is visible in a source diff, which is why they

@@ -77,9 +77,10 @@ No active Blocker. Two carried items, neither scheduled:
    bounce survives, the agreed next step is dropping the `top` write from the
    `visualViewport` scroll listener — Alex's standing instruction is to stop
    and ask before doing it, not to apply it pre-emptively.
-2. `frontend/.vercel/project.json` still points at the retired **`rhemata`**
-   Vercel project, not `newwine`. A CLI deploy run from `frontend/` targets the
-   wrong project; one failed deployment was created there this session.
+2. The Vercel CLI must be run from the **repo root**, never `frontend/` (the
+   project's Root Directory is `frontend/`). `frontend/.vercel/project.json`
+   caches the pre-rename name `rhemata`, but the `projectId` matches the root's
+   `newwine` exactly — one project, stale label only.
 
 The next authorized Scheduled item remains the representative Ravenhill
 source-quality comparison in `docs/roadmap.md`; any production corpus action
