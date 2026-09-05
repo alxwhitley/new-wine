@@ -44,7 +44,7 @@ rather than costing every session at the repo root.
   `globals.css` content**: that file had genuinely changed and was still served
   stale, so touching it again (a comment, a whitespace edit) does not bust it.
   Two things follow. (1) **Verify by bytes, not by status.** Run a clean local
-  `npm run build` and compare the served chunk's size and contents against
+  `npm run build` and compare the served chunk's size and rules against
   `.next/static/**/*.css` — the discrepancy here was 113,839 vs 114,949, and
   the 1,110-byte gap was exactly the three missing blocks. Grepping for a rule
   is enough; do not infer presence from a green check or from other rules in
@@ -67,3 +67,16 @@ rather than costing every session at the repo root.
   Vercel's 15,000-file limit — but there is no `.vercelignore`, so that archive
   packs ~549MB of `node_modules`. Prefer `vercel redeploy <url> --target
   production` from the repo root over a fresh CLI upload.
+- **Tailwind scans code comments AND markdown under `frontend/`, so
+  class-shaped prose ships as real CSS — 2026-09-05, hit twice in one
+  session.** Neither instance is visible in a source diff, which is why they
+  reach production. (1) A comment in `app/page.tsx` referring to the scroller's
+  padding by its utility name — a `pb-` prefix with an arbitrary value in
+  brackets — was extracted as a candidate and emitted as a real rule whose
+  declaration was **invalid CSS** (a bare custom-property name as a value).
+  Caught only by grepping the built bundle. (2) Writing the plain word
+  "contents" in this very file generated `.contents` (harmless, 27 bytes, but
+  it proves markdown here is scanned). Rule: never write a utility-shaped token
+  in a comment or a doc — describe it in words instead — and diff the generated
+  CSS after any change that touches comments or `frontend/*.md`, not just after
+  changes to class attributes.
