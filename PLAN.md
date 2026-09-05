@@ -12,6 +12,12 @@ ingestion remains an attended parallel track.
 **Current item: none. Active blocker count: 0.** B8 is DONE and live
 (2026-09-04): the API and answer worker were deployed from the isolated
 `d1ac57a` backend snapshot and the attended production answer smoke passed.
+**The isolated-release posture that entry describes ended 2026-09-05** — on
+Alex's explicit direction the full 36-commit Git/Vercel backlog was published,
+so `origin/main` is now level with local `main` and Vercel builds the whole
+tree. Three mobile UI items shipped with it (`3d7649c`..`4fdf39b`,
+`docs/superpowers/specs/2026-09-04-mobile-chat-gestures-design.md`); their two
+gesture behaviours are live but not yet verified on a physical device.
 B7 is DONE and live (2026-08-31): migration 095 applied and independently
 verified from a fresh connection, all four Railway services deployed at
 `6e0bb4a`, full path re-proved in production after the deploy. Quote repair

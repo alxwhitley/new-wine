@@ -4,51 +4,83 @@ Point-in-time state only. Overwritten each session, never appended to. Durable
 truth lives in code, git history, `PLAN.md`, `docs/roadmap.md`,
 `docs/plan-archive.md`, and `CLAUDE.md`.
 
-Last verified: 2026-09-04. **PLAN.md has no active blockers.**
+Last verified: 2026-09-05. **PLAN.md has no active blockers.**
 
 ---
 
 ## Current state
 
-**B8 is DONE and live.** Repository commit `d1ac57a` enforces Settled #17 by
-rejecting attributed prose quotations of five or more words while preserving
-the existing Scripture, hypothetical, short-term/scare-quote, and unattributed-
-prose exclusions. The existing regenerate-once-then-refuse behavior remains.
+**Three mobile UI items are DONE and live** (commits `3d7649c`..`4fdf39b`,
+design doc `docs/superpowers/specs/2026-09-04-mobile-chat-gestures-design.md`):
 
-Alex approved an attended, isolated backend-only Railway release because local
-`main` was 35 commits ahead of `origin/main` with unrelated unpublished work.
-The API deployment `8d2a8c4e-961a-4c1a-872c-68164f75b133` and answer-worker
-deployment `dc2d70d1-d1b5-4d4e-b3c0-247f935f728e` both reached `SUCCESS`.
-The public API health check passed. No Git push, Vercel deployment, migration,
-or corpus write occurred.
+1. **Overscroll containment.** Dragging the thread past its own top translated
+   the whole viewport. Three independent causes, all live at once: no
+   `overscroll-contain` on the message list, no `overscroll-behavior` on
+   `html`/`body` (the existing `overscroll-none` sits on a `fixed` element and
+   cannot reach the root scroller), and the `visualViewport` sync writing a
+   negative `offsetTop` back to the shell so it rode the bounce.
+2. **Floating composer with a bottom fade.** The composer now overlays the
+   thread and a gradient dissolves text beneath it. Deliberately a gradient
+   overlay, not `mask-image` on the scroller. Clearance tracks the composer's
+   measured height via `ResizeObserver` → `--composer-h`.
+3. **Profile drag-to-dismiss** (`hooks/use-sheet-drag.ts`, `lib/sheet-drag.ts`).
+   Mobile only, touch/pen only, dismiss on distance or flick, spring back
+   otherwise, backdrop dims with the drag.
 
-The attended guest smoke job `e8d29d61-ec7d-4b28-a2e9-ab2513749579`
-completed `outcome=answered` with 3,326 characters and seven citations. An
-independent refetch ran the served answer through the repository guard and
-found zero prohibited quotations. The first generation conformed, so the live
-retry branch did not activate; deterministic retry/refusal behavior remains
-covered by the 17 generation-contract tests.
+**The Git/Vercel backlog is published — this supersedes the previous entry's
+posture.** Alex was shown that local `main` was 36 commits ahead of
+`origin/main` with work he had deliberately declined to publish one session
+earlier, and directed a full push anyway. `origin/main` is now level with local
+`main` at `4fdf39b`. The isolated backend-only release described previously is
+no longer the state; the whole backlog is on `origin/main` and built by Vercel.
+The public API health check passes after the push.
 
-Two `search_chunks_fts` calls logged HTTP 500 during retrieval, but the path
-failed soft and completed normally. With no demonstrated user-visible failure
-or B8 causal link, this is Parked in `docs/roadmap.md` rather than promoted.
+**A green Vercel deploy shipped stale CSS — caught and fixed, not by the build
+status.** The first production build reported success in 24s while omitting all
+three of this session's `globals.css` blocks; Tailwind utilities from
+`page.tsx` shipped, so the page rendered a floating composer with no fade and
+no mobile sheet, worse than before the change. Found by byte-comparing the
+served bundle against a clean local build (113,839 vs 114,949). Fixed by
+setting `VERCEL_FORCE_NO_BUILD_CACHE=1` (Production scope, project `newwine`)
+and redeploying; the served bundle is now byte-identical to the clean local
+build and every rule was re-verified live. Full mechanism recorded as a landmine
+in `frontend/CLAUDE.md`.
+
+**Verification status, stated plainly.** 98/98 frontend unit tests, 20/20
+Playwright e2e across four device profiles, lint clean apart from two
+pre-existing `/study` warnings. The floating composer's geometry is covered by
+a new stubbed-thread e2e spec (`frontend/tests/e2e/chat-fade.spec.ts`) and the
+fade was confirmed visually from a captured screenshot. **The two gesture
+items — overscroll and the Profile swipe — have NOT been verified on a physical
+device.** They are live and unproven on real hardware.
 
 ---
 
 ## Session outcome and measures
 
-- Original outcome completed: **yes** — B8 was deployed and verified live.
-- Unplanned investigations started: **0**.
-- Findings promoted to Blocker: **0**; one adjacent observation classified
-  Parked.
-- Scope changes approved by Alex: isolated backend-only Railway deployment in
-  place of publishing the unrelated Git/Vercel backlog.
+- Original outcome completed: **yes** — all three requested UI items shipped,
+  deployed, and independently verified live.
+- Unplanned investigations started: **1** — the stale-CSS deploy, which was a
+  real production defect introduced by this session's own deploy.
+- Findings promoted to Blocker: **0**.
+- Scope changes approved by Alex: publishing the full 41-commit backlog to
+  `origin/main`, reversing the prior session's isolated-release decision.
 - Active critical-path item count: **0**.
 
 ---
 
 ## Next single item
 
-No active Blocker. The next authorized Scheduled item is the representative
-Ravenhill source-quality comparison in `docs/roadmap.md`; any production corpus
-action remains an attended gate.
+No active Blocker. Two carried items, neither scheduled:
+
+1. **Device verification** of the overscroll fix and the Profile swipe. If the
+   bounce survives, the agreed next step is dropping the `top` write from the
+   `visualViewport` scroll listener — Alex's standing instruction is to stop
+   and ask before doing it, not to apply it pre-emptively.
+2. `frontend/.vercel/project.json` still points at the retired **`rhemata`**
+   Vercel project, not `newwine`. A CLI deploy run from `frontend/` targets the
+   wrong project; one failed deployment was created there this session.
+
+The next authorized Scheduled item remains the representative Ravenhill
+source-quality comparison in `docs/roadmap.md`; any production corpus action
+remains an attended gate.

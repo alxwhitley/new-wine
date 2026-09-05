@@ -32,3 +32,38 @@ rather than costing every session at the repo root.
   a real browser must `rm -rf frontend/.next` before restarting `next dev`,
   not just kill and relaunch the process — a plain restart looks like it
   worked (fresh PID, "Ready" banner) but silently isn't.
+- **A green Vercel deploy can ship stale compiled CSS — the build status is not
+  evidence your `globals.css` changes are live, 2026-09-05.** This is the
+  entry above's Turbopack cache defect, but on Vercel's restored build cache
+  rather than the local dev server, and it reached production. A push added
+  three new blocks to `globals.css` plus new Tailwind utilities in
+  `app/page.tsx`. The build reported success in 24s; the served bundle
+  contained the new **utilities** but none of the three `globals.css` blocks,
+  so the page rendered a floating composer with no fade and no mobile sheet —
+  visibly worse than before the change. **The cache is not keyed on
+  `globals.css` content**: that file had genuinely changed and was still served
+  stale, so touching it again (a comment, a whitespace edit) does not bust it.
+  Two things follow. (1) **Verify by bytes, not by status.** Run a clean local
+  `npm run build` and compare the served chunk's size and contents against
+  `.next/static/**/*.css` — the discrepancy here was 113,839 vs 114,949, and
+  the 1,110-byte gap was exactly the three missing blocks. Grepping for a rule
+  is enough; do not infer presence from a green check or from other rules in
+  the same file being present. (2) The fix is disabling the build cache —
+  `VERCEL_FORCE_NO_BUILD_CACHE=1` is now set on the `newwine` project
+  (Production scope); a cache-free build takes ~52s against ~24s. If that
+  variable is ever removed, this failure returns silently. Two traps while
+  checking: the minifier collapses `top/right/bottom/left` into `inset:auto 0
+  0`, and Tailwind 4 emits `touch-pan-up` as `--tw-pan-y:pan-up` rather than a
+  literal `touch-action:pan-up`, so a strict regex reports a false MISSING.
+- **`frontend/.vercel/project.json` points at the retired `rhemata` Vercel
+  project, not `newwine` — 2026-09-05.** The live project is `newwine`, whose
+  Root Directory is `frontend/`, so **the Vercel CLI must be run from the repo
+  root**, never from `frontend/`. Running it from `frontend/` picks up that
+  stale link and targets the wrong project entirely: it does not error in a way
+  that names the real problem, it fails with `The specified Root Directory
+  "frontend/" does not exist`, and it creates a failed Production deployment in
+  the retired project's history (one exists from this session). A repo-root
+  deploy also needs `--archive=tgz`, since the uncompressed upload exceeds
+  Vercel's 15,000-file limit — but there is no `.vercelignore`, so that archive
+  packs ~549MB of `node_modules`. Prefer `vercel redeploy <url> --target
+  production` from the repo root over a fresh CLI upload.
