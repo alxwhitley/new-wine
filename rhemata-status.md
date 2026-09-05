@@ -54,6 +54,28 @@ fade was confirmed visually from a captured screenshot. **The two gesture
 items — overscroll and the Profile swipe — have NOT been verified on a physical
 device.** They are live and unproven on real hardware.
 
+**TIPNR ingestion is paused mid-gate, one operation in.** Packets 0–4 are
+merged to `main` (`8c99ea1` is an ancestor). Of the five approved operations
+only **operation 1 ran**: the rollback-only probe, verified 2026-09-02 — 600
+rows staged, 1 transaction opened, 1 rolled back, **0 committed**, 0 embedding
+requests. **Operations 2–5 have not started**: no embeddings purchased, no
+batch written, Aaron's stale fixture policy not demoted, no final
+reconciliation. Live state re-verified 2026-09-05: `next_batch_index 1`,
+`completed_batches 0`, 3,939 clean, 0 TIPNR propositions, source hidden,
+`biblical_context_answer_enabled false`, both registries empty.
+
+Three things a resuming session needs. (1) **The pinned artifact is not tracked
+in git** — it was absent from this machine entirely on 2026-09-02 and was
+re-downloaded to `sources/stepbible/` (gitignored) from revision `02843f07…`;
+confirm it is present and hashes to `69f69d80…e180e` before anything else,
+because 16 full-batch and 10 pilot checks silently skip without
+`TIPNR_TEST_ARTIFACT` set. (2) **Approvals are same-day.** The 2026-09-02 and
+2026-09-03 artifacts in `local/2026-09/` are expired; a fresh one needs Alex's
+explicit authorization, never a carry-forward. (3) **The classifier refuses
+these writes from inside a session** — the probe ran only when Alex invoked it
+himself with `!`, and an opaque `bash <script>.sh` invocation was refused where
+an explicit `python3.12 scripts/…` command was allowed.
+
 ---
 
 ## Session outcome and measures
@@ -71,13 +93,19 @@ device.** They are live and unproven on real hardware.
 
 ## Next single item
 
-No active Blocker. Two carried items, neither scheduled:
+No active Blocker. Three carried items, none scheduled:
 
-1. **Device verification** of the overscroll fix and the Profile swipe. If the
+1. **Resume TIPNR at operation 2**, if and when Alex authorizes it. The probe
+   has already passed; the remaining sequence is embeddings → 20 batches →
+   Aaron demotion → reconciliation, run one explicit command at a time by Alex
+   via `!`, each invocation selecting its own next batch. Requires a fresh
+   same-day approval artifact first.
+
+2. **Device verification** of the overscroll fix and the Profile swipe. If the
    bounce survives, the agreed next step is dropping the `top` write from the
    `visualViewport` scroll listener — Alex's standing instruction is to stop
    and ask before doing it, not to apply it pre-emptively.
-2. The Vercel CLI must be run from the **repo root**, never `frontend/` (the
+3. The Vercel CLI must be run from the **repo root**, never `frontend/` (the
    project's Root Directory is `frontend/`). `frontend/.vercel/project.json`
    caches the pre-rename name `rhemata`, but the `projectId` matches the root's
    `newwine` exactly — one project, stale label only.
